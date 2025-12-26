@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Title,
@@ -11,8 +12,23 @@ import {
   Skeleton,
   Progress,
   ThemeIcon,
+  RingProgress,
+  Select,
+  Stack,
+  Code,
+  Tooltip,
 } from '@mantine/core';
-import { IconServer, IconCheck, IconX, IconClock } from '@tabler/icons-react';
+import {
+  IconServer,
+  IconCheck,
+  IconX,
+  IconClock,
+  IconRefresh,
+  IconHeartbeat,
+  IconDatabase,
+  IconFiles,
+  IconNetwork,
+} from '@tabler/icons-react';
 import { adminApi } from '../api/client';
 
 interface NodeInfo {
@@ -48,22 +64,30 @@ function formatBytes(bytes: number): string {
 }
 
 export function ClusterPage() {
+  const [refreshInterval, setRefreshInterval] = useState(5000);
+
   const { data: clusterStatus, isLoading: clusterLoading } = useQuery({
     queryKey: ['cluster-status'],
     queryFn: () => adminApi.getClusterStatus().then((res) => res.data as ClusterInfo),
-    refetchInterval: 5000, // Refresh every 5 seconds
+    refetchInterval: refreshInterval,
   });
 
   const { data: nodes, isLoading: nodesLoading } = useQuery({
     queryKey: ['cluster-nodes'],
     queryFn: () => adminApi.listNodes().then((res) => res.data as NodeInfo[]),
-    refetchInterval: 5000,
+    refetchInterval: refreshInterval,
   });
 
   const { data: storageInfo, isLoading: storageLoading } = useQuery({
     queryKey: ['storage-info'],
     queryFn: () => adminApi.getStorageInfo().then((res) => res.data),
-    refetchInterval: 10000,
+    refetchInterval: refreshInterval,
+  });
+
+  const { data: raftState, isLoading: raftLoading } = useQuery({
+    queryKey: ['raft-state'],
+    queryFn: () => adminApi.getRaftState().then((res) => res.data),
+    refetchInterval: refreshInterval,
   });
 
   const isLoading = clusterLoading || nodesLoading || storageLoading;
@@ -84,107 +108,325 @@ export function ClusterPage() {
     }
   };
 
+  const getRaftStateColor = (state: string): string => {
+    switch (state?.toLowerCase()) {
+      case 'leader':
+        return 'blue';
+      case 'follower':
+        return 'green';
+      case 'candidate':
+        return 'yellow';
+      default:
+        return 'gray';
+    }
+  };
+
+  // Calculate total storage stats
+  const totalStorage = nodes?.reduce(
+    (acc, node) => {
+      if (node.storage_info) {
+        acc.total += node.storage_info.total_bytes;
+        acc.used += node.storage_info.used_bytes;
+        acc.objects += node.storage_info.object_count;
+      }
+      return acc;
+    },
+    { total: 0, used: 0, objects: 0 }
+  ) || { total: 0, used: 0, objects: 0 };
+
+  const storageUsagePercent = totalStorage.total > 0
+    ? Math.round((totalStorage.used / totalStorage.total) * 100)
+    : 0;
+
+  const healthyNodes = nodes?.filter((n) => n.status === 'healthy').length || 0;
+  const totalNodes = nodes?.length || 1;
+
   return (
     <div>
-      <Title order={2} mb="lg">
-        Cluster Management
-      </Title>
+      <Group justify="space-between" mb="lg">
+        <Title order={2}>Cluster Management</Title>
+        <Group>
+          <Select
+            value={String(refreshInterval)}
+            onChange={(value) => setRefreshInterval(Number(value))}
+            data={[
+              { value: '2000', label: '2s refresh' },
+              { value: '5000', label: '5s refresh' },
+              { value: '10000', label: '10s refresh' },
+              { value: '30000', label: '30s refresh' },
+            ]}
+            size="xs"
+            w={120}
+          />
+          <Badge color="green" variant="light" leftSection={<IconRefresh size={12} />}>
+            Live
+          </Badge>
+        </Group>
+      </Group>
 
+      {/* Status Cards */}
       <Grid mb="lg">
-        {/* Cluster Status Card */}
-        <Grid.Col span={{ base: 12, md: 6 }}>
+        {/* Cluster Health */}
+        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
           <Card withBorder radius="md" p="lg" h="100%">
-            <Group justify="space-between" mb="md">
-              <Text fw={500} size="lg">
-                Cluster Status
+            <Group justify="space-between" mb="xs">
+              <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+                Cluster Health
               </Text>
-              {isLoading ? (
-                <Skeleton circle height={24} width={24} />
-              ) : (
-                <Badge color={getStatusColor(clusterStatus?.raft_state || '')} size="lg">
-                  {clusterStatus?.raft_state || 'Unknown'}
-                </Badge>
-              )}
+              <ThemeIcon color={healthyNodes === totalNodes ? 'green' : 'yellow'} variant="light" size="sm">
+                <IconHeartbeat size={14} />
+              </ThemeIcon>
             </Group>
-
             {isLoading ? (
-              <Skeleton height={100} />
+              <Skeleton height={60} />
             ) : (
-              <div>
-                <Group mb="xs">
-                  <Text c="dimmed" size="sm" w={120}>
-                    Cluster ID:
-                  </Text>
-                  <Text size="sm" style={{ wordBreak: 'break-all' }}>
-                    {clusterStatus?.cluster_id || 'N/A'}
-                  </Text>
-                </Group>
-                <Group mb="xs">
-                  <Text c="dimmed" size="sm" w={120}>
-                    Leader:
-                  </Text>
-                  <Text size="sm">{clusterStatus?.leader_address || 'N/A'}</Text>
-                </Group>
-                <Group mb="xs">
-                  <Text c="dimmed" size="sm" w={120}>
-                    Total Nodes:
-                  </Text>
-                  <Text size="sm">{nodes?.length || 1}</Text>
-                </Group>
-                <Group>
-                  <Text c="dimmed" size="sm" w={120}>
-                    Is Leader:
-                  </Text>
-                  <Badge color={storageInfo?.is_leader ? 'green' : 'blue'} variant="light">
-                    {storageInfo?.is_leader ? 'Yes' : 'No'}
-                  </Badge>
-                </Group>
-              </div>
+              <>
+                <Text fw={700} size="xl">
+                  {healthyNodes} / {totalNodes}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  nodes healthy
+                </Text>
+                <Progress
+                  value={(healthyNodes / totalNodes) * 100}
+                  color={healthyNodes === totalNodes ? 'green' : 'yellow'}
+                  size="sm"
+                  mt="md"
+                />
+              </>
             )}
           </Card>
         </Grid.Col>
 
-        {/* Storage Overview Card */}
-        <Grid.Col span={{ base: 12, md: 6 }}>
+        {/* Storage Usage */}
+        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
           <Card withBorder radius="md" p="lg" h="100%">
-            <Text fw={500} size="lg" mb="md">
-              Storage Overview
-            </Text>
-
+            <Group justify="space-between" mb="xs">
+              <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+                Storage Used
+              </Text>
+              <ThemeIcon
+                color={storageUsagePercent > 90 ? 'red' : storageUsagePercent > 70 ? 'yellow' : 'blue'}
+                variant="light"
+                size="sm"
+              >
+                <IconDatabase size={14} />
+              </ThemeIcon>
+            </Group>
             {storageLoading ? (
-              <Skeleton height={100} />
+              <Skeleton height={60} />
             ) : (
-              <div>
-                <Group mb="xs">
-                  <Text c="dimmed" size="sm" w={120}>
-                    Total Capacity:
-                  </Text>
-                  <Text size="sm">10 GB</Text>
-                </Group>
-                <Group mb="xs">
-                  <Text c="dimmed" size="sm" w={120}>
-                    Used:
-                  </Text>
-                  <Text size="sm">3.5 GB (35%)</Text>
-                </Group>
-                <Group mb="md">
-                  <Text c="dimmed" size="sm" w={120}>
-                    Available:
-                  </Text>
-                  <Text size="sm">6.5 GB</Text>
-                </Group>
-                <Progress value={35} size="lg" radius="md" />
-              </div>
+              <>
+                <Text fw={700} size="xl">
+                  {storageUsagePercent}%
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {formatBytes(totalStorage.used)} of {formatBytes(totalStorage.total)}
+                </Text>
+                <Progress
+                  value={storageUsagePercent}
+                  color={storageUsagePercent > 90 ? 'red' : storageUsagePercent > 70 ? 'yellow' : 'blue'}
+                  size="sm"
+                  mt="md"
+                />
+              </>
+            )}
+          </Card>
+        </Grid.Col>
+
+        {/* Object Count */}
+        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+          <Card withBorder radius="md" p="lg" h="100%">
+            <Group justify="space-between" mb="xs">
+              <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+                Total Objects
+              </Text>
+              <ThemeIcon color="violet" variant="light" size="sm">
+                <IconFiles size={14} />
+              </ThemeIcon>
+            </Group>
+            {storageLoading ? (
+              <Skeleton height={60} />
+            ) : (
+              <>
+                <Text fw={700} size="xl">
+                  {totalStorage.objects.toLocaleString()}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  objects stored
+                </Text>
+              </>
+            )}
+          </Card>
+        </Grid.Col>
+
+        {/* Raft State */}
+        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+          <Card withBorder radius="md" p="lg" h="100%">
+            <Group justify="space-between" mb="xs">
+              <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+                Raft State
+              </Text>
+              <ThemeIcon color={getRaftStateColor(clusterStatus?.raft_state || '')} variant="light" size="sm">
+                <IconNetwork size={14} />
+              </ThemeIcon>
+            </Group>
+            {clusterLoading ? (
+              <Skeleton height={60} />
+            ) : (
+              <>
+                <Badge size="lg" color={getRaftStateColor(clusterStatus?.raft_state || '')} variant="light">
+                  {clusterStatus?.raft_state || 'Unknown'}
+                </Badge>
+                <Text size="xs" c="dimmed" mt="xs">
+                  {storageInfo?.is_leader ? 'This node is the leader' : 'Following the leader'}
+                </Text>
+              </>
             )}
           </Card>
         </Grid.Col>
       </Grid>
 
+      {/* Cluster Details */}
+      <Grid mb="lg">
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <Card withBorder radius="md" p="lg" h="100%">
+            <Text fw={500} size="lg" mb="md">
+              Cluster Information
+            </Text>
+            {clusterLoading ? (
+              <Skeleton height={150} />
+            ) : (
+              <Stack gap="sm">
+                <Group>
+                  <Text c="dimmed" size="sm" w={140}>
+                    Cluster ID:
+                  </Text>
+                  <Code style={{ wordBreak: 'break-all', fontSize: '12px' }}>
+                    {clusterStatus?.cluster_id || 'N/A'}
+                  </Code>
+                </Group>
+                <Group>
+                  <Text c="dimmed" size="sm" w={140}>
+                    Leader Address:
+                  </Text>
+                  <Text size="sm" fw={500}>
+                    {clusterStatus?.leader_address || 'N/A'}
+                  </Text>
+                </Group>
+                <Group>
+                  <Text c="dimmed" size="sm" w={140}>
+                    Total Nodes:
+                  </Text>
+                  <Badge variant="light">{totalNodes}</Badge>
+                </Group>
+                <Group>
+                  <Text c="dimmed" size="sm" w={140}>
+                    Healthy Nodes:
+                  </Text>
+                  <Badge color="green" variant="light">
+                    {healthyNodes}
+                  </Badge>
+                </Group>
+              </Stack>
+            )}
+          </Card>
+        </Grid.Col>
+
+        {/* Raft State Details */}
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <Card withBorder radius="md" p="lg" h="100%">
+            <Text fw={500} size="lg" mb="md">
+              Raft Consensus State
+            </Text>
+            {raftLoading ? (
+              <Skeleton height={150} />
+            ) : (
+              <Stack gap="sm">
+                <Group>
+                  <Text c="dimmed" size="sm" w={140}>
+                    Current Term:
+                  </Text>
+                  <Badge variant="light">{raftState?.term || 0}</Badge>
+                </Group>
+                <Group>
+                  <Text c="dimmed" size="sm" w={140}>
+                    Commit Index:
+                  </Text>
+                  <Text size="sm">{raftState?.commit_index || 0}</Text>
+                </Group>
+                <Group>
+                  <Text c="dimmed" size="sm" w={140}>
+                    Applied Index:
+                  </Text>
+                  <Text size="sm">{raftState?.applied_index || 0}</Text>
+                </Group>
+                <Group>
+                  <Text c="dimmed" size="sm" w={140}>
+                    Voters:
+                  </Text>
+                  <Badge variant="light">{raftState?.voters || 1}</Badge>
+                </Group>
+              </Stack>
+            )}
+          </Card>
+        </Grid.Col>
+      </Grid>
+
+      {/* Storage Visualization */}
+      <Card withBorder radius="md" p="lg" mb="lg">
+        <Text fw={500} size="lg" mb="md">
+          Storage Distribution
+        </Text>
+        {storageLoading ? (
+          <Skeleton height={100} />
+        ) : nodes?.length ? (
+          <Group justify="center" gap="xl">
+            {nodes.map((node) => {
+              const nodeUsage = node.storage_info
+                ? (node.storage_info.used_bytes / node.storage_info.total_bytes) * 100
+                : 0;
+              return (
+                <div key={node.id} style={{ textAlign: 'center' }}>
+                  <RingProgress
+                    sections={[{ value: nodeUsage, color: nodeUsage > 90 ? 'red' : nodeUsage > 70 ? 'yellow' : 'blue' }]}
+                    label={
+                      <Text ta="center" size="sm" fw={700}>
+                        {Math.round(nodeUsage)}%
+                      </Text>
+                    }
+                    size={100}
+                    thickness={8}
+                  />
+                  <Text size="sm" fw={500} mt="xs">
+                    {node.name || node.id.slice(0, 8)}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {node.storage_info
+                      ? `${formatBytes(node.storage_info.used_bytes)} / ${formatBytes(node.storage_info.total_bytes)}`
+                      : 'N/A'}
+                  </Text>
+                </div>
+              );
+            })}
+          </Group>
+        ) : (
+          <Text c="dimmed" ta="center">
+            Single-node mode - no distribution data available
+          </Text>
+        )}
+      </Card>
+
       {/* Nodes Table */}
       <Paper withBorder>
         <Group p="md" justify="space-between">
           <Text fw={500}>Cluster Nodes</Text>
-          <Badge variant="light">{nodes?.length || 1} node(s)</Badge>
+          <Group gap="xs">
+            <Badge variant="light" color="green">
+              {healthyNodes} healthy
+            </Badge>
+            <Badge variant="light">{totalNodes} total</Badge>
+          </Group>
         </Group>
 
         {nodesLoading ? (
@@ -198,6 +440,7 @@ export function ClusterPage() {
                 <Table.Th>Role</Table.Th>
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Storage</Table.Th>
+                <Table.Th>Objects</Table.Th>
                 <Table.Th>Last Heartbeat</Table.Th>
               </Table.Tr>
             </Table.Thead>
@@ -211,19 +454,24 @@ export function ClusterPage() {
                       </ThemeIcon>
                       <div>
                         <Text size="sm" fw={500}>
-                          {node.name || node.id}
+                          {node.name || node.id.slice(0, 8)}
                         </Text>
-                        <Text size="xs" c="dimmed">
-                          {node.id}
-                        </Text>
+                        <Tooltip label={node.id}>
+                          <Text size="xs" c="dimmed" style={{ cursor: 'pointer' }}>
+                            {node.id.slice(0, 12)}...
+                          </Text>
+                        </Tooltip>
                       </div>
                     </Group>
                   </Table.Td>
                   <Table.Td>
-                    <Text size="sm">{node.address}</Text>
+                    <Code size="sm">{node.address}</Code>
                   </Table.Td>
                   <Table.Td>
-                    <Badge variant="light" color={node.role === 'gateway' ? 'blue' : 'violet'}>
+                    <Badge
+                      variant="light"
+                      color={node.role === 'leader' ? 'blue' : node.role === 'gateway' ? 'violet' : 'gray'}
+                    >
                       {node.role || 'gateway'}
                     </Badge>
                   </Table.Td>
@@ -259,6 +507,11 @@ export function ClusterPage() {
                         N/A
                       </Text>
                     )}
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm">
+                      {node.storage_info?.object_count?.toLocaleString() || 'N/A'}
+                    </Text>
                   </Table.Td>
                   <Table.Td>
                     <Group gap="xs">
