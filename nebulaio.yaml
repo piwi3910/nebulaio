@@ -1,0 +1,33 @@
+# NebulaIO Configuration for Local Development
+node_name: "local-dev"
+
+data_dir: "./data"
+
+# Network ports
+s3_port: 9000
+admin_port: 9001
+console_port: 9002
+
+# Cluster configuration
+cluster:
+  bootstrap: true
+  advertise_address: "127.0.0.1"
+  raft_port: 9003
+  gossip_port: 9004
+  node_role: "storage"
+  cluster_name: "nebulaio-dev"
+  expect_nodes: 1
+
+# Storage configuration
+storage:
+  backend: "fs"
+  default_storage_class: "STANDARD"
+
+# Auth configuration
+auth:
+  root_user: "admin"
+  root_password: "Admin1234"
+  token_expiry: 60
+  refresh_token_expiry: 168
+
+log_level: "debug"

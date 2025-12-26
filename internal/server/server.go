@@ -74,12 +74,17 @@ func New(cfg *config.Config) (*Server, error) {
 	log.Info().Str("node_id", cfg.NodeID).Msg("Metrics initialized")
 
 	// Initialize metadata store (Raft-backed)
+	// Use advertise address for raft binding if specified, otherwise use localhost for single-node
+	raftBindAddr := cfg.Cluster.AdvertiseAddress
+	if raftBindAddr == "" {
+		raftBindAddr = "127.0.0.1"
+	}
 	var err error
 	srv.metaStore, err = metadata.NewRaftStore(metadata.RaftConfig{
 		NodeID:    cfg.NodeID,
 		DataDir:   cfg.DataDir,
 		Bootstrap: cfg.Cluster.Bootstrap,
-		RaftBind:  fmt.Sprintf(":%d", cfg.Cluster.RaftPort),
+		RaftBind:  fmt.Sprintf("%s:%d", raftBindAddr, cfg.Cluster.RaftPort),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize metadata store: %w", err)
