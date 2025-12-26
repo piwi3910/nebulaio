@@ -1,0 +1,429 @@
+package admin
+
+import (
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/piwi3910/nebulaio/internal/cluster"
+	"github.com/piwi3910/nebulaio/internal/metadata"
+)
+
+// ClusterHandler handles cluster-related admin API requests
+type ClusterHandler struct {
+	discovery *cluster.Discovery
+	store     *metadata.RaftStore
+}
+
+// NewClusterHandler creates a new cluster handler
+func NewClusterHandler(discovery *cluster.Discovery, store *metadata.RaftStore) *ClusterHandler {
+	return &ClusterHandler{
+		discovery: discovery,
+		store:     store,
+	}
+}
+
+// RegisterClusterRoutes registers cluster-related routes
+func (h *ClusterHandler) RegisterClusterRoutes(r chi.Router) {
+	r.Get("/cluster/nodes", h.ListNodes)
+	r.Post("/cluster/nodes", h.AddNode)
+	r.Delete("/cluster/nodes/{id}", h.RemoveNode)
+	r.Get("/cluster/leader", h.GetLeader)
+	r.Post("/cluster/transfer-leadership", h.TransferLeadership)
+	r.Get("/cluster/config", h.GetRaftConfiguration)
+	r.Get("/cluster/stats", h.GetRaftStats)
+	r.Post("/cluster/snapshot", h.TriggerSnapshot)
+	r.Get("/cluster/health", h.GetClusterHealth)
+}
+
+// NodeResponse represents a node in API responses
+type NodeResponse struct {
+	NodeID     string    `json:"node_id"`
+	RaftAddr   string    `json:"raft_addr"`
+	S3Addr     string    `json:"s3_addr"`
+	AdminAddr  string    `json:"admin_addr"`
+	GossipAddr string    `json:"gossip_addr,omitempty"`
+	Role       string    `json:"role"`
+	Version    string    `json:"version,omitempty"`
+	Status     string    `json:"status"`
+	IsLeader   bool      `json:"is_leader"`
+	IsVoter    bool      `json:"is_voter"`
+	JoinedAt   time.Time `json:"joined_at,omitempty"`
+	LastSeen   time.Time `json:"last_seen,omitempty"`
+}
+
+// ListNodesResponse represents the response for listing nodes
+type ListNodesResponse struct {
+	Nodes        []*NodeResponse `json:"nodes"`
+	TotalNodes   int             `json:"total_nodes"`
+	HealthyNodes int             `json:"healthy_nodes"`
+	LeaderID     string          `json:"leader_id"`
+}
+
+// ListNodes returns all cluster nodes
+func (h *ClusterHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
+	var nodes []*NodeResponse
+	var healthyCount int
+
+	// Get leader ID
+	leaderID := ""
+	if h.discovery != nil {
+		leaderID = h.discovery.LeaderID()
+	}
+
+	// Get Raft configuration to determine voters
+	voterMap := make(map[string]bool)
+	if h.store != nil {
+		if config, err := h.store.GetConfiguration(); err == nil {
+			for _, server := range config.Servers {
+				voterMap[string(server.ID)] = server.Suffrage.String() == "Voter"
+			}
+		}
+	}
+
+	// Get nodes from discovery
+	if h.discovery != nil {
+		for _, member := range h.discovery.Members() {
+			isLeader := member.NodeID == leaderID
+			isVoter := voterMap[member.NodeID]
+
+			node := &NodeResponse{
+				NodeID:     member.NodeID,
+				RaftAddr:   member.RaftAddr,
+				S3Addr:     member.S3Addr,
+				AdminAddr:  member.AdminAddr,
+				GossipAddr: member.GossipAddr,
+				Role:       member.Role,
+				Version:    member.Version,
+				Status:     member.Status,
+				IsLeader:   isLeader,
+				IsVoter:    isVoter,
+				JoinedAt:   member.JoinedAt,
+				LastSeen:   member.LastSeen,
+			}
+			nodes = append(nodes, node)
+
+			if member.Status == "alive" {
+				healthyCount++
+			}
+		}
+	}
+
+	response := &ListNodesResponse{
+		Nodes:        nodes,
+		TotalNodes:   len(nodes),
+		HealthyNodes: healthyCount,
+		LeaderID:     leaderID,
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// AddNodeRequest represents a request to add a node
+type AddNodeRequest struct {
+	NodeID   string `json:"node_id"`
+	RaftAddr string `json:"raft_addr"`
+	AsVoter  bool   `json:"as_voter"` // true for voter, false for non-voter
+}
+
+// AddNode adds a new node to the cluster
+func (h *ClusterHandler) AddNode(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	if !h.store.IsLeader() {
+		leaderAddr := h.store.LeaderAddress()
+		writeJSON(w, http.StatusTemporaryRedirect, map[string]string{
+			"error":   "not leader",
+			"leader":  leaderAddr,
+			"message": "Request must be sent to the leader",
+		})
+		return
+	}
+
+	var req AddNodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.NodeID == "" || req.RaftAddr == "" {
+		writeError(w, "node_id and raft_addr are required", http.StatusBadRequest)
+		return
+	}
+
+	var err error
+	if req.AsVoter {
+		err = h.store.AddVoter(req.NodeID, req.RaftAddr)
+	} else {
+		err = h.store.AddNonvoter(req.NodeID, req.RaftAddr)
+	}
+
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Node added successfully",
+		"node_id": req.NodeID,
+	})
+}
+
+// RemoveNode removes a node from the cluster
+func (h *ClusterHandler) RemoveNode(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	if !h.store.IsLeader() {
+		leaderAddr := h.store.LeaderAddress()
+		writeJSON(w, http.StatusTemporaryRedirect, map[string]string{
+			"error":   "not leader",
+			"leader":  leaderAddr,
+			"message": "Request must be sent to the leader",
+		})
+		return
+	}
+
+	nodeID := chi.URLParam(r, "id")
+	if nodeID == "" {
+		writeError(w, "node_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.store.RemoveServer(nodeID); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Node removed successfully",
+		"node_id": nodeID,
+	})
+}
+
+// LeaderResponse represents the leader information
+type LeaderResponse struct {
+	LeaderID   string `json:"leader_id"`
+	LeaderAddr string `json:"leader_addr"`
+	IsLocal    bool   `json:"is_local"`
+}
+
+// GetLeader returns the current cluster leader
+func (h *ClusterHandler) GetLeader(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	leaderAddr := h.store.LeaderAddress()
+	leaderID := ""
+	isLocal := h.store.IsLeader()
+
+	if h.discovery != nil {
+		leaderID = h.discovery.LeaderID()
+	}
+
+	response := &LeaderResponse{
+		LeaderID:   leaderID,
+		LeaderAddr: leaderAddr,
+		IsLocal:    isLocal,
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// TransferLeadershipRequest represents a request to transfer leadership
+type TransferLeadershipRequest struct {
+	TargetID string `json:"target_id"`
+}
+
+// TransferLeadership transfers leadership to another node
+func (h *ClusterHandler) TransferLeadership(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	if !h.store.IsLeader() {
+		writeError(w, "Not the leader", http.StatusBadRequest)
+		return
+	}
+
+	var req TransferLeadershipRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.TargetID == "" {
+		writeError(w, "target_id is required", http.StatusBadRequest)
+		return
+	}
+
+	// Get target address from configuration
+	config, err := h.store.GetConfiguration()
+	if err != nil {
+		writeError(w, "Failed to get configuration", http.StatusInternalServerError)
+		return
+	}
+
+	var targetAddr string
+	for _, server := range config.Servers {
+		if string(server.ID) == req.TargetID {
+			targetAddr = string(server.Address)
+			break
+		}
+	}
+
+	if targetAddr == "" {
+		writeError(w, "Target node not found in cluster", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.store.TransferLeadership(req.TargetID, targetAddr); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message":   "Leadership transfer initiated",
+		"target_id": req.TargetID,
+	})
+}
+
+// RaftServerInfo represents a Raft server in the configuration
+type RaftServerInfo struct {
+	ID       string `json:"id"`
+	Address  string `json:"address"`
+	Suffrage string `json:"suffrage"` // Voter, Nonvoter, Staging
+}
+
+// RaftConfigResponse represents the Raft configuration
+type RaftConfigResponse struct {
+	Servers []RaftServerInfo `json:"servers"`
+}
+
+// GetRaftConfiguration returns the current Raft configuration
+func (h *ClusterHandler) GetRaftConfiguration(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	config, err := h.store.GetConfiguration()
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	servers := make([]RaftServerInfo, 0, len(config.Servers))
+	for _, server := range config.Servers {
+		servers = append(servers, RaftServerInfo{
+			ID:       string(server.ID),
+			Address:  string(server.Address),
+			Suffrage: server.Suffrage.String(),
+		})
+	}
+
+	response := &RaftConfigResponse{
+		Servers: servers,
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// GetRaftStats returns Raft statistics
+func (h *ClusterHandler) GetRaftStats(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	stats := h.store.Stats()
+	writeJSON(w, http.StatusOK, stats)
+}
+
+// TriggerSnapshot triggers a manual Raft snapshot
+func (h *ClusterHandler) TriggerSnapshot(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := h.store.Snapshot(); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Snapshot triggered successfully",
+	})
+}
+
+// ClusterHealthResponse represents the cluster health status
+type ClusterHealthResponse struct {
+	Healthy      bool   `json:"healthy"`
+	State        string `json:"state"`
+	IsLeader     bool   `json:"is_leader"`
+	LeaderID     string `json:"leader_id"`
+	TotalNodes   int    `json:"total_nodes"`
+	HealthyNodes int    `json:"healthy_nodes"`
+	LastIndex    uint64 `json:"last_index"`
+	AppliedIndex uint64 `json:"applied_index"`
+	CommitIndex  uint64 `json:"commit_index"`
+}
+
+// GetClusterHealth returns the cluster health status
+func (h *ClusterHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	stats := h.store.Stats()
+	state := stats["state"]
+	isLeader := h.store.IsLeader()
+
+	// Count healthy nodes
+	var totalNodes, healthyNodes int
+	var leaderID string
+
+	if h.discovery != nil {
+		members := h.discovery.Members()
+		totalNodes = len(members)
+		for _, m := range members {
+			if m.Status == "alive" {
+				healthyNodes++
+			}
+		}
+		leaderID = h.discovery.LeaderID()
+	}
+
+	// Determine if cluster is healthy
+	// Healthy if: has a leader, majority of nodes are alive
+	healthy := leaderID != "" && healthyNodes > totalNodes/2
+
+	response := &ClusterHealthResponse{
+		Healthy:      healthy,
+		State:        state,
+		IsLeader:     isLeader,
+		LeaderID:     leaderID,
+		TotalNodes:   totalNodes,
+		HealthyNodes: healthyNodes,
+		LastIndex:    h.store.LastIndex(),
+		AppliedIndex: h.store.AppliedIndex(),
+	}
+
+	statusCode := http.StatusOK
+	if !healthy {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	writeJSON(w, statusCode, response)
+}

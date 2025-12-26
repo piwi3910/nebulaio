@@ -465,7 +465,7 @@ export function ClusterPage() {
                     </Group>
                   </Table.Td>
                   <Table.Td>
-                    <Code size="sm">{node.address}</Code>
+                    <Code fz="sm">{node.address}</Code>
                   </Table.Td>
                   <Table.Td>
                     <Badge

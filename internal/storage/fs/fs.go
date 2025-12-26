@@ -318,7 +318,10 @@ func (b *Backend) GetPart(ctx context.Context, bucket, key, uploadID string, par
 	return file, nil
 }
 
-// CompleteParts combines parts into the final object
+// streamingBufferSize is the buffer size for streaming large files (8MB)
+const streamingBufferSize = 8 * 1024 * 1024
+
+// CompleteParts combines parts into the final object using streaming to handle large files efficiently
 func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID string, parts []int) (*backend.PutResult, error) {
 	objectPath := b.objectPath(bucket, key)
 
@@ -333,35 +336,52 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+
+	// Ensure cleanup on error
+	success := false
+	defer func() {
+		if !success {
+			tmpFile.Close()
+			os.Remove(tmpPath)
+		}
+	}()
 
 	// Sort parts
 	sort.Ints(parts)
 
-	// Combine parts
+	// Use a buffered writer for better performance with large files
+	bufWriter := io.Writer(tmpFile)
 	hash := md5.New()
-	writer := io.MultiWriter(tmpFile, hash)
+	writer := io.MultiWriter(bufWriter, hash)
 	var totalSize int64
 
+	// Allocate buffer once for reuse across all parts
+	buffer := make([]byte, streamingBufferSize)
+
 	for _, partNum := range parts {
+		// Check for context cancellation to support cancellable operations
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		partPath := b.partPath(bucket, key, uploadID, partNum)
 		partFile, err := os.Open(partPath)
 		if err != nil {
-			tmpFile.Close()
 			return nil, fmt.Errorf("failed to open part %d: %w", partNum, err)
 		}
 
-		written, err := io.Copy(writer, partFile)
+		// Stream the part using the preallocated buffer
+		written, err := io.CopyBuffer(writer, partFile, buffer)
 		partFile.Close()
 		if err != nil {
-			tmpFile.Close()
 			return nil, fmt.Errorf("failed to copy part %d: %w", partNum, err)
 		}
 		totalSize += written
 	}
 
 	if err := tmpFile.Sync(); err != nil {
-		tmpFile.Close()
 		return nil, fmt.Errorf("failed to sync object: %w", err)
 	}
 
@@ -374,9 +394,15 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 		return nil, fmt.Errorf("failed to rename object: %w", err)
 	}
 
-	// Clean up upload directory
+	// Mark success before cleanup
+	success = true
+
+	// Clean up upload directory and parts
 	uploadPath := b.uploadPath(bucket, key, uploadID)
 	os.RemoveAll(uploadPath)
+
+	// Clean up empty parent directories in uploads dir
+	b.cleanEmptyDirs(filepath.Dir(uploadPath), b.uploadsDir)
 
 	etag := hex.EncodeToString(hash.Sum(nil))
 
@@ -387,17 +413,47 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 	}, nil
 }
 
-// AbortMultipartUpload cleans up a multipart upload
+// AbortMultipartUpload cleans up a multipart upload and all its parts
 func (b *Backend) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	uploadPath := b.uploadPath(bucket, key, uploadID)
+
+	// Check if upload directory exists
+	if _, err := os.Stat(uploadPath); os.IsNotExist(err) {
+		// Already cleaned up or never existed - not an error
+		return nil
+	}
+
+	// Remove all parts and the upload directory
 	if err := os.RemoveAll(uploadPath); err != nil {
 		return fmt.Errorf("failed to remove upload directory: %w", err)
 	}
 
-	// Clean up empty parent directories
+	// Clean up empty parent directories (bucket/key path within uploads)
 	b.cleanEmptyDirs(filepath.Dir(uploadPath), b.uploadsDir)
 
 	return nil
+}
+
+// ListParts returns the paths of all parts for a multipart upload
+func (b *Backend) ListParts(ctx context.Context, bucket, key, uploadID string) ([]string, error) {
+	uploadPath := b.uploadPath(bucket, key, uploadID)
+
+	entries, err := os.ReadDir(uploadPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("upload not found: %s", uploadID)
+		}
+		return nil, fmt.Errorf("failed to read upload directory: %w", err)
+	}
+
+	var parts []string
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == "" {
+			parts = append(parts, filepath.Join(uploadPath, entry.Name()))
+		}
+	}
+
+	return parts, nil
 }
 
 // cleanEmptyDirs removes empty directories up to the stop directory

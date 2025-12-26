@@ -13,6 +13,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
+	"github.com/piwi3910/nebulaio/internal/audit"
 	"github.com/rs/zerolog/log"
 )
 
@@ -167,6 +168,246 @@ func (s *RaftStore) LeaderAddress() string {
 	return string(s.raft.Leader())
 }
 
+// GetRaft returns the underlying Raft instance
+func (s *RaftStore) GetRaft() *raft.Raft {
+	return s.raft
+}
+
+// State returns the current Raft state
+func (s *RaftStore) State() raft.RaftState {
+	return s.raft.State()
+}
+
+// Stats returns Raft statistics
+func (s *RaftStore) Stats() map[string]string {
+	return s.raft.Stats()
+}
+
+// JoinCluster joins an existing Raft cluster by contacting the leader
+// This is called by a non-bootstrap node to join the cluster
+func (s *RaftStore) JoinCluster(leaderAddr, nodeID, raftAddr string) error {
+	log.Info().
+		Str("leader_addr", leaderAddr).
+		Str("node_id", nodeID).
+		Str("raft_addr", raftAddr).
+		Msg("Requesting to join Raft cluster")
+
+	// The actual joining is done via the leader's AddVoter call
+	// This method is called by the leader to add a new voter
+	return nil
+}
+
+// AddVoter adds a new voting member to the cluster
+// This must be called on the leader
+func (s *RaftStore) AddVoter(nodeID, raftAddr string) error {
+	if s.raft.State() != raft.Leader {
+		return fmt.Errorf("not the leader, current leader: %s", s.raft.Leader())
+	}
+
+	log.Info().
+		Str("node_id", nodeID).
+		Str("raft_addr", raftAddr).
+		Msg("Adding voter to Raft cluster")
+
+	future := s.raft.AddVoter(
+		raft.ServerID(nodeID),
+		raft.ServerAddress(raftAddr),
+		0,
+		30*time.Second,
+	)
+
+	if err := future.Error(); err != nil {
+		return fmt.Errorf("failed to add voter: %w", err)
+	}
+
+	log.Info().
+		Str("node_id", nodeID).
+		Msg("Successfully added voter to Raft cluster")
+
+	return nil
+}
+
+// AddNonvoter adds a new non-voting member to the cluster
+// Non-voters receive log replication but don't vote in elections
+func (s *RaftStore) AddNonvoter(nodeID, raftAddr string) error {
+	if s.raft.State() != raft.Leader {
+		return fmt.Errorf("not the leader, current leader: %s", s.raft.Leader())
+	}
+
+	log.Info().
+		Str("node_id", nodeID).
+		Str("raft_addr", raftAddr).
+		Msg("Adding non-voter to Raft cluster")
+
+	future := s.raft.AddNonvoter(
+		raft.ServerID(nodeID),
+		raft.ServerAddress(raftAddr),
+		0,
+		30*time.Second,
+	)
+
+	if err := future.Error(); err != nil {
+		return fmt.Errorf("failed to add non-voter: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveServer removes a server from the cluster
+func (s *RaftStore) RemoveServer(nodeID string) error {
+	if s.raft.State() != raft.Leader {
+		return fmt.Errorf("not the leader, current leader: %s", s.raft.Leader())
+	}
+
+	log.Info().
+		Str("node_id", nodeID).
+		Msg("Removing server from Raft cluster")
+
+	future := s.raft.RemoveServer(
+		raft.ServerID(nodeID),
+		0,
+		30*time.Second,
+	)
+
+	if err := future.Error(); err != nil {
+		return fmt.Errorf("failed to remove server: %w", err)
+	}
+
+	log.Info().
+		Str("node_id", nodeID).
+		Msg("Successfully removed server from Raft cluster")
+
+	return nil
+}
+
+// DemoteVoter demotes a voter to a non-voter
+func (s *RaftStore) DemoteVoter(nodeID string) error {
+	if s.raft.State() != raft.Leader {
+		return fmt.Errorf("not the leader, current leader: %s", s.raft.Leader())
+	}
+
+	// Get current configuration to find the address
+	configFuture := s.raft.GetConfiguration()
+	if err := configFuture.Error(); err != nil {
+		return fmt.Errorf("failed to get configuration: %w", err)
+	}
+
+	var raftAddr raft.ServerAddress
+	for _, server := range configFuture.Configuration().Servers {
+		if server.ID == raft.ServerID(nodeID) {
+			raftAddr = server.Address
+			break
+		}
+	}
+
+	if raftAddr == "" {
+		return fmt.Errorf("node not found in configuration: %s", nodeID)
+	}
+
+	log.Info().
+		Str("node_id", nodeID).
+		Msg("Demoting voter to non-voter")
+
+	future := s.raft.DemoteVoter(
+		raft.ServerID(nodeID),
+		0,
+		30*time.Second,
+	)
+
+	return future.Error()
+}
+
+// TransferLeadership transfers leadership to another server
+func (s *RaftStore) TransferLeadership(targetID, targetAddr string) error {
+	if s.raft.State() != raft.Leader {
+		return fmt.Errorf("not the leader")
+	}
+
+	log.Info().
+		Str("target_id", targetID).
+		Str("target_addr", targetAddr).
+		Msg("Transferring leadership")
+
+	future := s.raft.LeadershipTransferToServer(
+		raft.ServerID(targetID),
+		raft.ServerAddress(targetAddr),
+	)
+
+	return future.Error()
+}
+
+// GetConfiguration returns the current Raft configuration
+func (s *RaftStore) GetConfiguration() (raft.Configuration, error) {
+	future := s.raft.GetConfiguration()
+	if err := future.Error(); err != nil {
+		return raft.Configuration{}, err
+	}
+	return future.Configuration(), nil
+}
+
+// GetServers returns the list of servers in the cluster
+func (s *RaftStore) GetServers() ([]raft.Server, error) {
+	config, err := s.GetConfiguration()
+	if err != nil {
+		return nil, err
+	}
+	return config.Servers, nil
+}
+
+// WaitForLeader waits for a leader to be elected
+func (s *RaftStore) WaitForLeader(timeout time.Duration) error {
+	timeoutCh := time.After(timeout)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeoutCh:
+			return fmt.Errorf("timeout waiting for leader")
+		case <-ticker.C:
+			if s.raft.Leader() != "" {
+				return nil
+			}
+		}
+	}
+}
+
+// LeaderCh returns a channel that signals leadership changes
+func (s *RaftStore) LeaderCh() <-chan bool {
+	return s.raft.LeaderCh()
+}
+
+// ForwardToLeader is a helper that returns the leader address for forwarding
+// Returns empty string if this node is the leader
+func (s *RaftStore) ForwardToLeader() string {
+	if s.IsLeader() {
+		return ""
+	}
+	return string(s.raft.Leader())
+}
+
+// Barrier is used to wait for all pending operations to complete
+func (s *RaftStore) Barrier(timeout time.Duration) error {
+	future := s.raft.Barrier(timeout)
+	return future.Error()
+}
+
+// Snapshot triggers a manual snapshot
+func (s *RaftStore) Snapshot() error {
+	future := s.raft.Snapshot()
+	return future.Error()
+}
+
+// LastIndex returns the last index in the log
+func (s *RaftStore) LastIndex() uint64 {
+	return s.raft.LastIndex()
+}
+
+// AppliedIndex returns the last applied index
+func (s *RaftStore) AppliedIndex() uint64 {
+	return s.raft.AppliedIndex()
+}
+
 // apply sends a command through Raft
 func (s *RaftStore) apply(cmd *command) error {
 	if !s.IsLeader() {
@@ -232,25 +473,29 @@ func (s *RaftStore) scan(prefix []byte) ([][]byte, error) {
 type commandType string
 
 const (
-	cmdCreateBucket          commandType = "create_bucket"
-	cmdDeleteBucket          commandType = "delete_bucket"
-	cmdUpdateBucket          commandType = "update_bucket"
-	cmdPutObjectMeta         commandType = "put_object_meta"
-	cmdDeleteObjectMeta      commandType = "delete_object_meta"
-	cmdCreateMultipartUpload commandType = "create_multipart_upload"
-	cmdAbortMultipartUpload  commandType = "abort_multipart_upload"
+	cmdCreateBucket            commandType = "create_bucket"
+	cmdDeleteBucket            commandType = "delete_bucket"
+	cmdUpdateBucket            commandType = "update_bucket"
+	cmdPutObjectMeta           commandType = "put_object_meta"
+	cmdDeleteObjectMeta        commandType = "delete_object_meta"
+	cmdPutObjectMetaVersioned  commandType = "put_object_meta_versioned"
+	cmdDeleteObjectVersion     commandType = "delete_object_version"
+	cmdCreateMultipartUpload   commandType = "create_multipart_upload"
+	cmdAbortMultipartUpload    commandType = "abort_multipart_upload"
 	cmdCompleteMultipartUpload commandType = "complete_multipart_upload"
-	cmdAddUploadPart         commandType = "add_upload_part"
-	cmdCreateUser            commandType = "create_user"
-	cmdUpdateUser            commandType = "update_user"
-	cmdDeleteUser            commandType = "delete_user"
-	cmdCreateAccessKey       commandType = "create_access_key"
-	cmdDeleteAccessKey       commandType = "delete_access_key"
-	cmdCreatePolicy          commandType = "create_policy"
-	cmdUpdatePolicy          commandType = "update_policy"
-	cmdDeletePolicy          commandType = "delete_policy"
-	cmdAddNode               commandType = "add_node"
-	cmdRemoveNode            commandType = "remove_node"
+	cmdAddUploadPart           commandType = "add_upload_part"
+	cmdCreateUser              commandType = "create_user"
+	cmdUpdateUser              commandType = "update_user"
+	cmdDeleteUser              commandType = "delete_user"
+	cmdCreateAccessKey         commandType = "create_access_key"
+	cmdDeleteAccessKey         commandType = "delete_access_key"
+	cmdCreatePolicy            commandType = "create_policy"
+	cmdUpdatePolicy            commandType = "update_policy"
+	cmdDeletePolicy            commandType = "delete_policy"
+	cmdAddNode                 commandType = "add_node"
+	cmdRemoveNode              commandType = "remove_node"
+	cmdStoreAuditEvent         commandType = "store_audit_event"
+	cmdDeleteAuditEvent        commandType = "delete_audit_event"
 )
 
 type command struct {
@@ -260,14 +505,16 @@ type command struct {
 
 // Key prefixes for BadgerDB
 const (
-	prefixBucket    = "bucket:"
-	prefixObject    = "object:"
-	prefixMultipart = "multipart:"
-	prefixUser      = "user:"
-	prefixUsername  = "username:"
-	prefixAccessKey = "accesskey:"
-	prefixPolicy    = "policy:"
-	prefixNode      = "node:"
+	prefixBucket        = "bucket:"
+	prefixObject        = "object:"
+	prefixObjectVersion = "objver:"
+	prefixMultipart     = "multipart:"
+	prefixUser          = "user:"
+	prefixUsername      = "username:"
+	prefixAccessKey     = "accesskey:"
+	prefixPolicy        = "policy:"
+	prefixNode          = "node:"
+	prefixAudit         = "audit:"
 )
 
 // fsm implements raft.FSM for the metadata store
@@ -320,6 +567,27 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 			return err
 		}
 		return f.applyDeleteObjectMeta(data.Bucket, data.Key)
+
+	case cmdPutObjectMetaVersioned:
+		var data struct {
+			Meta                *ObjectMeta `json:"meta"`
+			PreserveOldVersions bool        `json:"preserve_old_versions"`
+		}
+		if err := json.Unmarshal(cmd.Data, &data); err != nil {
+			return err
+		}
+		return f.applyPutObjectMetaVersioned(data.Meta, data.PreserveOldVersions)
+
+	case cmdDeleteObjectVersion:
+		var data struct {
+			Bucket    string `json:"bucket"`
+			Key       string `json:"key"`
+			VersionID string `json:"version_id"`
+		}
+		if err := json.Unmarshal(cmd.Data, &data); err != nil {
+			return err
+		}
+		return f.applyDeleteObjectVersion(data.Bucket, data.Key, data.VersionID)
 
 	case cmdCreateUser:
 		var user User
@@ -431,6 +699,20 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 			return err
 		}
 		return f.applyRemoveNode(nodeID)
+
+	case cmdStoreAuditEvent:
+		var event audit.AuditEvent
+		if err := json.Unmarshal(cmd.Data, &event); err != nil {
+			return err
+		}
+		return f.applyStoreAuditEvent(&event)
+
+	case cmdDeleteAuditEvent:
+		var eventID string
+		if err := json.Unmarshal(cmd.Data, &eventID); err != nil {
+			return err
+		}
+		return f.applyDeleteAuditEvent(eventID)
 	}
 
 	return fmt.Errorf("unknown command type: %s", cmd.Type)
@@ -491,6 +773,135 @@ func (f *fsm) applyDeleteObjectMeta(bucket, objKey string) error {
 	return f.db.Update(func(txn *badger.Txn) error {
 		key := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, objKey))
 		return txn.Delete(key)
+	})
+}
+
+func (f *fsm) applyPutObjectMetaVersioned(meta *ObjectMeta, preserveOldVersions bool) error {
+	return f.db.Update(func(txn *badger.Txn) error {
+		// Current object key (for latest version pointer)
+		currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, meta.Bucket, meta.Key))
+
+		if preserveOldVersions {
+			// Get current version and mark it as not latest
+			item, err := txn.Get(currentKey)
+			if err == nil {
+				var oldMeta ObjectMeta
+				err = item.Value(func(val []byte) error {
+					return json.Unmarshal(val, &oldMeta)
+				})
+				if err == nil && oldMeta.VersionID != "" {
+					// Mark old version as not latest
+					oldMeta.IsLatest = false
+					oldData, err := json.Marshal(&oldMeta)
+					if err != nil {
+						return err
+					}
+
+					// Store old version with compound key: objver:{bucket}/{key}#{versionID}
+					oldVersionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID))
+					if err := txn.Set(oldVersionKey, oldData); err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		// Mark new version as latest
+		meta.IsLatest = true
+
+		// Store new version in version history if it has a version ID
+		if meta.VersionID != "" {
+			versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, meta.Bucket, meta.Key, meta.VersionID))
+			versionData, err := json.Marshal(meta)
+			if err != nil {
+				return err
+			}
+			if err := txn.Set(versionKey, versionData); err != nil {
+				return err
+			}
+		}
+
+		// Store/update current version pointer
+		data, err := json.Marshal(meta)
+		if err != nil {
+			return err
+		}
+		return txn.Set(currentKey, data)
+	})
+}
+
+func (f *fsm) applyDeleteObjectVersion(bucket, objKey, versionID string) error {
+	return f.db.Update(func(txn *badger.Txn) error {
+		// Delete the specific version
+		versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID))
+		if err := txn.Delete(versionKey); err != nil && err != badger.ErrKeyNotFound {
+			return err
+		}
+
+		// Check if this was the current/latest version
+		currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, objKey))
+		item, err := txn.Get(currentKey)
+		if err != nil {
+			if err == badger.ErrKeyNotFound {
+				return nil
+			}
+			return err
+		}
+
+		var currentMeta ObjectMeta
+		err = item.Value(func(val []byte) error {
+			return json.Unmarshal(val, &currentMeta)
+		})
+		if err != nil {
+			return err
+		}
+
+		// If we deleted the current version, we need to find the next latest version
+		if currentMeta.VersionID == versionID {
+			// Find the most recent remaining version
+			prefix := []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, objKey))
+			opts := badger.DefaultIteratorOptions
+			opts.Prefix = prefix
+			opts.Reverse = true // Get newest first (ULIDs are sortable)
+
+			it := txn.NewIterator(opts)
+			defer it.Close()
+
+			it.Seek(append(prefix, 0xFF)) // Seek to end of prefix range
+
+			if it.ValidForPrefix(prefix) {
+				// Found another version, make it the current
+				item := it.Item()
+				val, err := item.ValueCopy(nil)
+				if err != nil {
+					return err
+				}
+
+				var newLatest ObjectMeta
+				if err := json.Unmarshal(val, &newLatest); err != nil {
+					return err
+				}
+
+				newLatest.IsLatest = true
+				data, err := json.Marshal(&newLatest)
+				if err != nil {
+					return err
+				}
+
+				// Update version store
+				if err := txn.Set(item.KeyCopy(nil), data); err != nil {
+					return err
+				}
+
+				// Update current pointer
+				return txn.Set(currentKey, data)
+			}
+
+			// No more versions, delete the current pointer
+			return txn.Delete(currentKey)
+		}
+
+		return nil
 	})
 }
 
@@ -665,6 +1076,46 @@ func (f *fsm) applyRemoveNode(nodeID string) error {
 	return f.db.Update(func(txn *badger.Txn) error {
 		key := []byte(prefixNode + nodeID)
 		return txn.Delete(key)
+	})
+}
+
+func (f *fsm) applyStoreAuditEvent(event *audit.AuditEvent) error {
+	return f.db.Update(func(txn *badger.Txn) error {
+		// Use timestamp + ID as key for time-based ordering
+		key := []byte(fmt.Sprintf("%s%s:%s", prefixAudit, event.Timestamp.Format(time.RFC3339Nano), event.ID))
+		data, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
+		return txn.Set(key, data)
+	})
+}
+
+func (f *fsm) applyDeleteAuditEvent(eventID string) error {
+	// We need to find and delete by event ID since we don't have the timestamp
+	return f.db.Update(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = []byte(prefixAudit)
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			val, err := item.ValueCopy(nil)
+			if err != nil {
+				continue
+			}
+
+			var event audit.AuditEvent
+			if err := json.Unmarshal(val, &event); err != nil {
+				continue
+			}
+
+			if event.ID == eventID {
+				return txn.Delete(item.KeyCopy(nil))
+			}
+		}
+		return nil
 	})
 }
 

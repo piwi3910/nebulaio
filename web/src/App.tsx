@@ -5,10 +5,13 @@ import { DashboardLayout } from './components/DashboardLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { BucketsPage } from './pages/BucketsPage';
 import { BucketBrowserPage } from './pages/BucketBrowserPage';
+import { BucketSettingsPage } from './pages/BucketSettingsPage';
 import { UsersPage } from './pages/UsersPage';
 import { AccessKeysPage } from './pages/AccessKeysPage';
 import { ClusterPage } from './pages/ClusterPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { PoliciesPage } from './pages/PoliciesPage';
+import { AuditLogsPage } from './pages/AuditLogsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -67,6 +70,14 @@ export default function App() {
           }
         />
         <Route
+          path="policies"
+          element={
+            <AdminRoute>
+              <PoliciesPage />
+            </AdminRoute>
+          }
+        />
+        <Route
           path="cluster"
           element={
             <AdminRoute>
@@ -74,9 +85,18 @@ export default function App() {
             </AdminRoute>
           }
         />
+        <Route
+          path="audit-logs"
+          element={
+            <AdminRoute>
+              <AuditLogsPage />
+            </AdminRoute>
+          }
+        />
 
         {/* User routes */}
         <Route path="buckets" element={<BucketsPage />} />
+        <Route path="buckets/:bucketName/settings" element={<BucketSettingsPage />} />
         <Route path="buckets/:bucketName/*" element={<BucketBrowserPage />} />
         <Route path="access-keys" element={<AccessKeysPage />} />
         <Route path="settings" element={<SettingsPage />} />

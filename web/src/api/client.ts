@@ -3,6 +3,50 @@ import { useAuthStore } from '../stores/auth';
 
 const API_BASE_URL = '/api/v1';
 
+// Types for bucket settings
+export interface LifecycleRule {
+  id: string;
+  prefix: string;
+  enabled: boolean;
+  expiration_days?: number;
+  noncurrent_expiration_days?: number;
+  transitions?: {
+    days: number;
+    storage_class: string;
+  }[];
+}
+
+export interface CorsRule {
+  allowed_origins: string[];
+  allowed_methods: string[];
+  allowed_headers: string[];
+  expose_headers?: string[];
+  max_age_seconds?: number;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  event_type: string;
+  user_id: string;
+  username: string;
+  bucket?: string;
+  object_key?: string;
+  source_ip: string;
+  user_agent: string;
+  request_id: string;
+  status_code: number;
+  details: Record<string, unknown>;
+}
+
+export interface Policy {
+  name: string;
+  description: string;
+  document: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -88,6 +132,10 @@ export const adminApi = {
   updatePolicy: (name: string, data: { description: string; document: string }) =>
     apiClient.put(`/admin/policies/${name}`, data),
   deletePolicy: (name: string) => apiClient.delete(`/admin/policies/${name}`),
+  attachPolicyToUser: (policyName: string, userId: string) =>
+    apiClient.post(`/admin/policies/${policyName}/attach`, { user_id: userId }),
+  detachPolicyFromUser: (policyName: string, userId: string) =>
+    apiClient.post(`/admin/policies/${policyName}/detach`, { user_id: userId }),
 
   // Buckets
   listBuckets: () => apiClient.get('/admin/buckets'),
@@ -96,12 +144,49 @@ export const adminApi = {
   getBucket: (name: string) => apiClient.get(`/admin/buckets/${name}`),
   deleteBucket: (name: string) => apiClient.delete(`/admin/buckets/${name}`),
 
+  // Bucket Settings
+  getBucketVersioning: (name: string) => apiClient.get(`/admin/buckets/${name}/versioning`),
+  setBucketVersioning: (name: string, enabled: boolean) =>
+    apiClient.put(`/admin/buckets/${name}/versioning`, { enabled }),
+  getBucketLifecycle: (name: string) => apiClient.get(`/admin/buckets/${name}/lifecycle`),
+  setBucketLifecycle: (name: string, rules: LifecycleRule[]) =>
+    apiClient.put(`/admin/buckets/${name}/lifecycle`, { rules }),
+  deleteBucketLifecycle: (name: string) => apiClient.delete(`/admin/buckets/${name}/lifecycle`),
+  getBucketCors: (name: string) => apiClient.get(`/admin/buckets/${name}/cors`),
+  setBucketCors: (name: string, rules: CorsRule[]) =>
+    apiClient.put(`/admin/buckets/${name}/cors`, { rules }),
+  deleteBucketCors: (name: string) => apiClient.delete(`/admin/buckets/${name}/cors`),
+  getBucketPolicy: (name: string) => apiClient.get(`/admin/buckets/${name}/policy`),
+  setBucketPolicy: (name: string, policy: string) =>
+    apiClient.put(`/admin/buckets/${name}/policy`, { policy }),
+  deleteBucketPolicy: (name: string) => apiClient.delete(`/admin/buckets/${name}/policy`),
+  getBucketTags: (name: string) => apiClient.get(`/admin/buckets/${name}/tags`),
+  setBucketTags: (name: string, tags: Record<string, string>) =>
+    apiClient.put(`/admin/buckets/${name}/tags`, { tags }),
+  deleteBucketTags: (name: string) => apiClient.delete(`/admin/buckets/${name}/tags`),
+
   // Cluster
   getClusterStatus: () => apiClient.get('/admin/cluster/status'),
   listNodes: () => apiClient.get('/admin/cluster/nodes'),
+  getNodeMetrics: (nodeId: string) => apiClient.get(`/admin/cluster/nodes/${nodeId}/metrics`),
+  getRaftState: () => apiClient.get('/admin/cluster/raft'),
 
   // Storage
   getStorageInfo: () => apiClient.get('/admin/storage/info'),
+  getStorageMetrics: () => apiClient.get('/admin/storage/metrics'),
+
+  // Audit Logs
+  listAuditLogs: (params?: {
+    bucket?: string;
+    user_id?: string;
+    event_type?: string;
+    start_date?: string;
+    end_date?: string;
+    page?: number;
+    page_size?: number;
+  }) => apiClient.get('/admin/audit/logs', { params }),
+  getAuditLog: (id: string) => apiClient.get(`/admin/audit/logs/${id}`),
+  getAuditEventTypes: () => apiClient.get('/admin/audit/event-types'),
 };
 
 // Console API (user-facing)
@@ -126,7 +211,7 @@ export const consoleApi = {
   listBucketObjects: (bucket: string, params?: { prefix?: string; delimiter?: string; max_keys?: number; page_token?: string }) =>
     apiClient.get(`/console/buckets/${bucket}/objects`, { params }),
   getObjectInfo: (bucket: string, key: string) =>
-    apiClient.get(`/console/buckets/${bucket}/objects/${key}`),
+    apiClient.get(`/console/buckets/${bucket}/objects/${encodeURIComponent(key)}/info`),
   uploadObject: (bucket: string, file: File, path?: string) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -137,6 +222,53 @@ export const consoleApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  uploadObjectWithProgress: (
+    bucket: string,
+    file: File,
+    path: string | undefined,
+    onProgress: (progress: number) => void
+  ) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (path) {
+      formData.append('path', path);
+    }
+    return apiClient.post(`/console/buckets/${bucket}/objects`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(percent);
+        }
+      },
+    });
+  },
+  createFolder: (bucket: string, folderPath: string) => {
+    // Create an empty object with trailing slash to represent a folder
+    const formData = new FormData();
+    const emptyBlob = new Blob([''], { type: 'application/x-directory' });
+    const normalizedPath = folderPath.endsWith('/') ? folderPath : `${folderPath}/`;
+    formData.append('file', emptyBlob, '');
+    formData.append('key', normalizedPath);
+    return apiClient.post(`/console/buckets/${bucket}/objects`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   deleteObject: (bucket: string, key: string) =>
-    apiClient.delete(`/console/buckets/${bucket}/objects/${key}`),
+    apiClient.delete(`/console/buckets/${bucket}/objects/${encodeURIComponent(key)}`),
+  getPresignedUrl: (bucket: string, key: string, expiresIn?: number) =>
+    apiClient.get(`/console/buckets/${bucket}/objects/${encodeURIComponent(key)}/presigned`, {
+      params: { expires_in: expiresIn || 3600 },
+    }),
+  getPresignedDownloadUrl: (bucket: string, key: string, expiresIn?: number) =>
+    apiClient.get(`/console/buckets/${bucket}/objects/${encodeURIComponent(key)}/download-url`, {
+      params: { expires_in: expiresIn || 3600 },
+    }),
+  getObjectContent: (bucket: string, key: string) =>
+    apiClient.get(`/console/buckets/${bucket}/objects/${encodeURIComponent(key)}/content`, {
+      responseType: 'blob',
+    }),
+
+  // Bucket Settings (user-facing)
+  getBucketSettings: (bucket: string) => apiClient.get(`/console/buckets/${bucket}/settings`),
 };

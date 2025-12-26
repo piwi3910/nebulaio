@@ -25,6 +25,8 @@ import {
   IconSun,
   IconMoon,
   IconCloud,
+  IconShieldCheck,
+  IconClipboardList,
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/auth';
 
@@ -39,8 +41,10 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', icon: <IconDashboard size={20} />, path: '/dashboard', adminOnly: true },
   { label: 'Buckets', icon: <IconBucket size={20} />, path: '/buckets' },
   { label: 'Users', icon: <IconUsers size={20} />, path: '/users', adminOnly: true },
+  { label: 'Policies', icon: <IconShieldCheck size={20} />, path: '/policies', adminOnly: true },
   { label: 'Access Keys', icon: <IconKey size={20} />, path: '/access-keys' },
   { label: 'Cluster', icon: <IconServer size={20} />, path: '/cluster', adminOnly: true },
+  { label: 'Audit Logs', icon: <IconClipboardList size={20} />, path: '/audit-logs', adminOnly: true },
   { label: 'Settings', icon: <IconSettings size={20} />, path: '/settings' },
 ];
 

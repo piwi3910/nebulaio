@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -40,14 +41,36 @@ type ClusterConfig struct {
 	// Bootstrap indicates if this node should bootstrap a new cluster
 	Bootstrap bool `mapstructure:"bootstrap"`
 
-	// JoinAddresses is a list of existing cluster nodes to join
+	// JoinAddresses is a list of existing cluster nodes to join (gossip addresses)
 	JoinAddresses []string `mapstructure:"join_addresses"`
 
 	// AdvertiseAddress is the address advertised to other nodes
+	// If empty, the system will try to detect the outbound IP
 	AdvertiseAddress string `mapstructure:"advertise_address"`
 
 	// RaftPort is the port used for Raft consensus
 	RaftPort int `mapstructure:"raft_port"`
+
+	// GossipPort is the port used for gossip-based node discovery
+	GossipPort int `mapstructure:"gossip_port"`
+
+	// NodeRole is the role of this node: "gateway" or "storage"
+	// Gateway nodes handle S3 requests, storage nodes store data
+	// Default is "storage" which does both
+	NodeRole string `mapstructure:"node_role"`
+
+	// ClusterName is an optional name for the cluster
+	ClusterName string `mapstructure:"cluster_name"`
+
+	// ExpectNodes is the expected number of nodes for initial cluster formation
+	// Only used during bootstrap to wait for the expected number of nodes
+	ExpectNodes int `mapstructure:"expect_nodes"`
+
+	// RetryJoinMaxAttempts is the maximum number of join attempts
+	RetryJoinMaxAttempts int `mapstructure:"retry_join_max_attempts"`
+
+	// RetryJoinInterval is the interval between join attempts
+	RetryJoinInterval time.Duration `mapstructure:"retry_join_interval"`
 }
 
 // StorageConfig holds storage-related configuration
@@ -164,12 +187,18 @@ func setDefaults(v *viper.Viper) {
 	// Cluster defaults
 	v.SetDefault("cluster.bootstrap", true)
 	v.SetDefault("cluster.raft_port", 9003)
+	v.SetDefault("cluster.gossip_port", 9004)
+	v.SetDefault("cluster.node_role", "storage")
+	v.SetDefault("cluster.cluster_name", "nebulaio")
+	v.SetDefault("cluster.expect_nodes", 1)
+	v.SetDefault("cluster.retry_join_max_attempts", 10)
+	v.SetDefault("cluster.retry_join_interval", 5*time.Second)
 
 	// Storage defaults
 	v.SetDefault("storage.backend", "fs")
 	v.SetDefault("storage.default_storage_class", "STANDARD")
 	v.SetDefault("storage.max_object_size", 5*1024*1024*1024*1024) // 5TB
-	v.SetDefault("storage.multipart_part_size", 64*1024*1024)       // 64MB
+	v.SetDefault("storage.multipart_part_size", 64*1024*1024)      // 64MB
 
 	// Auth defaults
 	v.SetDefault("auth.root_user", "admin")

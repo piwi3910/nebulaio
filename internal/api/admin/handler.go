@@ -3,10 +3,12 @@ package admin
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/piwi3910/nebulaio/internal/audit"
 	"github.com/piwi3910/nebulaio/internal/auth"
 	"github.com/piwi3910/nebulaio/internal/bucket"
 	"github.com/piwi3910/nebulaio/internal/metadata"
@@ -76,6 +78,12 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 		// Storage
 		r.Get("/storage/info", h.GetStorageInfo)
+
+		// Presigned URLs
+		r.Post("/presign", h.GeneratePresignedURL)
+
+		// Audit logs
+		r.Get("/audit-logs", h.ListAuditLogs)
 	})
 }
 
@@ -591,6 +599,117 @@ func (h *Handler) GetStorageInfo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Presigned URL handlers
+
+// PresignRequest is the request body for generating a presigned URL
+type PresignRequest struct {
+	Method     string            `json:"method"`     // HTTP method: GET, PUT, DELETE, HEAD
+	Bucket     string            `json:"bucket"`     // Bucket name
+	Key        string            `json:"key"`        // Object key
+	Expiration int               `json:"expiration"` // Expiration in seconds (max 604800 = 7 days)
+	Headers    map[string]string `json:"headers"`    // Optional headers to sign
+}
+
+// PresignResponse is the response containing the presigned URL
+type PresignResponse struct {
+	URL       string    `json:"url"`
+	Method    string    `json:"method"`
+	Bucket    string    `json:"bucket"`
+	Key       string    `json:"key"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// GeneratePresignedURL generates a presigned URL for S3 operations
+func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := r.Header.Get("X-User-ID")
+
+	var req PresignRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.Bucket == "" {
+		writeError(w, "Bucket is required", http.StatusBadRequest)
+		return
+	}
+	if req.Method == "" {
+		req.Method = "GET"
+	}
+
+	// Validate method
+	validMethods := map[string]bool{"GET": true, "PUT": true, "DELETE": true, "HEAD": true}
+	if !validMethods[strings.ToUpper(req.Method)] {
+		writeError(w, "Invalid method. Allowed: GET, PUT, DELETE, HEAD", http.StatusBadRequest)
+		return
+	}
+	req.Method = strings.ToUpper(req.Method)
+
+	// Validate bucket exists
+	if _, err := h.bucket.GetBucket(ctx, req.Bucket); err != nil {
+		writeError(w, "Bucket not found", http.StatusNotFound)
+		return
+	}
+
+	// Set default expiration (1 hour)
+	if req.Expiration <= 0 {
+		req.Expiration = 3600
+	}
+	// Max 7 days
+	if req.Expiration > 604800 {
+		req.Expiration = 604800
+	}
+
+	// Get user's access key
+	keys, err := h.store.ListAccessKeys(ctx, userID)
+	if err != nil || len(keys) == 0 {
+		writeError(w, "No access keys found for user", http.StatusBadRequest)
+		return
+	}
+
+	// Use the first enabled access key
+	var accessKey *metadata.AccessKey
+	for _, k := range keys {
+		if k.Enabled {
+			accessKey = k
+			break
+		}
+	}
+	if accessKey == nil {
+		writeError(w, "No enabled access keys found", http.StatusBadRequest)
+		return
+	}
+
+	// Generate the presigned URL
+	generator := auth.NewPresignedURLGenerator("us-east-1", "")
+	presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
+		Method:      req.Method,
+		Bucket:      req.Bucket,
+		Key:         req.Key,
+		Expiration:  time.Duration(req.Expiration) * time.Second,
+		AccessKeyID: accessKey.AccessKeyID,
+		SecretKey:   accessKey.SecretAccessKey,
+		Region:      "us-east-1",
+		Headers:     req.Headers,
+	})
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := PresignResponse{
+		URL:       presignedURL,
+		Method:    req.Method,
+		Bucket:    req.Bucket,
+		Key:       req.Key,
+		ExpiresAt: time.Now().Add(time.Duration(req.Expiration) * time.Second),
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 // Helper functions
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
@@ -601,4 +720,62 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 
 func writeError(w http.ResponseWriter, message string, status int) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+// Audit log handlers
+
+// ListAuditLogs lists audit events with filtering
+func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Parse query parameters
+	filter := audit.AuditFilter{}
+
+	// Parse start_time
+	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			filter.StartTime = t
+		}
+	}
+
+	// Parse end_time
+	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			filter.EndTime = t
+		}
+	}
+
+	// Parse bucket filter
+	filter.Bucket = r.URL.Query().Get("bucket")
+
+	// Parse user filter
+	filter.User = r.URL.Query().Get("user")
+
+	// Parse event_type filter
+	filter.EventType = r.URL.Query().Get("event_type")
+
+	// Parse result filter
+	filter.Result = r.URL.Query().Get("result")
+
+	// Parse limit
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
+			filter.MaxResults = limit
+		}
+	}
+	if filter.MaxResults <= 0 {
+		filter.MaxResults = 100
+	}
+
+	// Parse next_token for pagination
+	filter.NextToken = r.URL.Query().Get("next_token")
+
+	// Get audit events
+	result, err := h.store.ListAuditEvents(ctx, filter)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }

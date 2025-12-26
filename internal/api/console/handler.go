@@ -19,14 +19,16 @@ type Handler struct {
 	auth   *auth.Service
 	bucket *bucket.Service
 	object *object.Service
+	store  metadata.Store
 }
 
 // NewHandler creates a new Console API handler
-func NewHandler(authService *auth.Service, bucketService *bucket.Service, objectService *object.Service) *Handler {
+func NewHandler(authService *auth.Service, bucketService *bucket.Service, objectService *object.Service, store metadata.Store) *Handler {
 	return &Handler{
 		auth:   authService,
 		bucket: bucketService,
 		object: objectService,
+		store:  store,
 	}
 }
 
@@ -52,6 +54,10 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	// File operations (based on permissions)
 	r.Post("/buckets/{bucket}/objects", h.UploadObject)
 	r.Delete("/buckets/{bucket}/objects/{key:.*}", h.DeleteObject)
+
+	// Presigned URLs for downloads
+	r.Get("/buckets/{bucket}/objects/{key:.*}/download-url", h.GetDownloadURL)
+	r.Post("/presign", h.GeneratePresignedURL)
 }
 
 // Auth middleware
@@ -116,6 +122,7 @@ type UpdatePasswordRequest struct {
 }
 
 func (h *Handler) UpdateMyPassword(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	userID := r.Header.Get("X-User-ID")
 
 	var req UpdatePasswordRequest
@@ -124,8 +131,21 @@ func (h *Handler) UpdateMyPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Verify current password before updating
-	if err := h.auth.UpdatePassword(r.Context(), userID, req.NewPassword); err != nil {
+	// Validate current password before updating
+	user, err := h.auth.GetUserByID(ctx, userID)
+	if err != nil {
+		writeError(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	// Verify current password matches
+	if err := auth.VerifyPassword(user.PasswordHash, req.CurrentPassword); err != nil {
+		writeError(w, "Current password is incorrect", http.StatusUnauthorized)
+		return
+	}
+
+	// Update password
+	if err := h.auth.UpdatePassword(ctx, userID, req.NewPassword); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -144,8 +164,28 @@ type AccessKeyResponse struct {
 }
 
 func (h *Handler) ListMyAccessKeys(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement - fetch from auth service
-	writeJSON(w, http.StatusOK, []AccessKeyResponse{})
+	ctx := r.Context()
+	userID := r.Header.Get("X-User-ID")
+
+	// Fetch access keys from store
+	keys, err := h.store.ListAccessKeys(ctx, userID)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Transform to response format (without exposing secrets)
+	var response []AccessKeyResponse
+	for _, key := range keys {
+		response = append(response, AccessKeyResponse{
+			AccessKeyID: key.AccessKeyID,
+			Description: key.Description,
+			Enabled:     key.Enabled,
+			CreatedAt:   key.CreatedAt,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 type CreateAccessKeyRequest struct {
@@ -179,9 +219,27 @@ func (h *Handler) CreateMyAccessKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteMyAccessKey(w http.ResponseWriter, r *http.Request) {
-	// TODO: Verify the key belongs to the current user
+	ctx := r.Context()
+	userID := r.Header.Get("X-User-ID")
 	accessKeyID := chi.URLParam(r, "accessKeyId")
-	_ = accessKeyID
+
+	// Verify the key exists and belongs to the current user
+	key, err := h.store.GetAccessKey(ctx, accessKeyID)
+	if err != nil {
+		writeError(w, "Access key not found", http.StatusNotFound)
+		return
+	}
+
+	if key.UserID != userID {
+		writeError(w, "Access denied: key does not belong to current user", http.StatusForbidden)
+		return
+	}
+
+	// Delete the access key
+	if err := h.store.DeleteAccessKey(ctx, accessKeyID); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Access key deleted"})
 }
@@ -189,13 +247,13 @@ func (h *Handler) DeleteMyAccessKey(w http.ResponseWriter, r *http.Request) {
 // Bucket browsing handlers
 
 type BucketSummary struct {
-	Name         string    `json:"name"`
-	CreatedAt    time.Time `json:"created_at"`
-	ObjectCount  int       `json:"object_count"`
-	TotalSize    int64     `json:"total_size"`
-	CanRead      bool      `json:"can_read"`
-	CanWrite     bool      `json:"can_write"`
-	CanDelete    bool      `json:"can_delete"`
+	Name        string    `json:"name"`
+	CreatedAt   time.Time `json:"created_at"`
+	ObjectCount int       `json:"object_count"`
+	TotalSize   int64     `json:"total_size"`
+	CanRead     bool      `json:"can_read"`
+	CanWrite    bool      `json:"can_write"`
+	CanDelete   bool      `json:"can_delete"`
 }
 
 func (h *Handler) ListMyBuckets(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +399,37 @@ func (h *Handler) GetObjectInfo(w http.ResponseWriter, r *http.Request) {
 		VersionID:    meta.VersionID,
 		Metadata:     meta.Metadata,
 		Tags:         meta.Tags,
-		// TODO: Generate presigned URL
+	}
+
+	// Generate presigned URL if user has access keys
+	userID := r.Header.Get("X-User-ID")
+	keys, err := h.store.ListAccessKeys(ctx, userID)
+	if err == nil && len(keys) > 0 {
+		// Find first enabled key
+		var accessKey *metadata.AccessKey
+		for _, k := range keys {
+			if k.Enabled {
+				accessKey = k
+				break
+			}
+		}
+
+		// Generate presigned URL if we have an enabled key
+		if accessKey != nil {
+			generator := auth.NewPresignedURLGenerator("us-east-1", "")
+			presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
+				Method:      "GET",
+				Bucket:      bucketName,
+				Key:         key,
+				Expiration:  3600 * time.Second, // 1 hour default
+				AccessKeyID: accessKey.AccessKeyID,
+				SecretKey:   accessKey.SecretAccessKey,
+				Region:      "us-east-1",
+			})
+			if err == nil {
+				response.DownloadURL = presignedURL
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -413,12 +501,224 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.object.DeleteObject(ctx, bucketName, key); err != nil {
+	if _, err := h.object.DeleteObject(ctx, bucketName, key); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Presigned URL handlers
+
+// DownloadURLResponse contains the presigned download URL
+type DownloadURLResponse struct {
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// GetDownloadURL generates a presigned download URL for an object
+func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+	key := chi.URLParam(r, "key")
+	userID := r.Header.Get("X-User-ID")
+
+	// Verify object exists
+	if _, err := h.object.HeadObject(ctx, bucketName, key); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, "Object not found", http.StatusNotFound)
+			return
+		}
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Get user's access key
+	keys, err := h.store.ListAccessKeys(ctx, userID)
+	if err != nil || len(keys) == 0 {
+		writeError(w, "No access keys found for user. Please create an access key first.", http.StatusBadRequest)
+		return
+	}
+
+	// Use the first enabled access key
+	var accessKey *metadata.AccessKey
+	for _, k := range keys {
+		if k.Enabled {
+			accessKey = k
+			break
+		}
+	}
+	if accessKey == nil {
+		writeError(w, "No enabled access keys found", http.StatusBadRequest)
+		return
+	}
+
+	// Get expiration from query param (default 1 hour, max 7 days)
+	expirationStr := r.URL.Query().Get("expiration")
+	expiration := 3600 // 1 hour default
+	if expirationStr != "" {
+		if exp, err := strconv.Atoi(expirationStr); err == nil && exp > 0 {
+			expiration = exp
+		}
+	}
+	if expiration > 604800 { // 7 days max
+		expiration = 604800
+	}
+
+	// Generate the presigned URL
+	generator := auth.NewPresignedURLGenerator("us-east-1", "")
+	presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
+		Method:      "GET",
+		Bucket:      bucketName,
+		Key:         key,
+		Expiration:  time.Duration(expiration) * time.Second,
+		AccessKeyID: accessKey.AccessKeyID,
+		SecretKey:   accessKey.SecretAccessKey,
+		Region:      "us-east-1",
+	})
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := DownloadURLResponse{
+		URL:       presignedURL,
+		ExpiresAt: time.Now().Add(time.Duration(expiration) * time.Second),
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// ConsolePresignRequest is the request body for generating a presigned URL from console
+type ConsolePresignRequest struct {
+	Method     string            `json:"method"`     // HTTP method: GET, PUT, DELETE, HEAD
+	Bucket     string            `json:"bucket"`     // Bucket name
+	Key        string            `json:"key"`        // Object key
+	Expiration int               `json:"expiration"` // Expiration in seconds (max 604800 = 7 days)
+	Headers    map[string]string `json:"headers"`    // Optional headers to sign
+}
+
+// ConsolePresignResponse is the response containing the presigned URL
+type ConsolePresignResponse struct {
+	URL       string    `json:"url"`
+	Method    string    `json:"method"`
+	Bucket    string    `json:"bucket"`
+	Key       string    `json:"key"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// GeneratePresignedURL generates a presigned URL for user's own buckets
+func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := r.Header.Get("X-User-ID")
+	role := metadata.UserRole(r.Header.Get("X-User-Role"))
+
+	var req ConsolePresignRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.Bucket == "" {
+		writeError(w, "Bucket is required", http.StatusBadRequest)
+		return
+	}
+	if req.Method == "" {
+		req.Method = "GET"
+	}
+
+	// Validate method
+	validMethods := map[string]bool{"GET": true, "PUT": true, "DELETE": true, "HEAD": true}
+	if !validMethods[strings.ToUpper(req.Method)] {
+		writeError(w, "Invalid method. Allowed: GET, PUT, DELETE, HEAD", http.StatusBadRequest)
+		return
+	}
+	req.Method = strings.ToUpper(req.Method)
+
+	// Check write permission for PUT
+	if req.Method == "PUT" && role == metadata.RoleReadOnly {
+		writeError(w, "Permission denied: read-only user cannot create upload URLs", http.StatusForbidden)
+		return
+	}
+
+	// Check delete permission for DELETE
+	if req.Method == "DELETE" && (role == metadata.RoleReadOnly || role == metadata.RoleUser) {
+		writeError(w, "Permission denied: cannot create delete URLs", http.StatusForbidden)
+		return
+	}
+
+	// Validate bucket exists and user has access
+	bucket, err := h.bucket.GetBucket(ctx, req.Bucket)
+	if err != nil {
+		writeError(w, "Bucket not found", http.StatusNotFound)
+		return
+	}
+
+	// For non-admin users, verify they own the bucket
+	if role != metadata.RoleSuperAdmin && role != metadata.RoleAdmin {
+		if bucket.Owner != userID {
+			writeError(w, "Access denied to bucket", http.StatusForbidden)
+			return
+		}
+	}
+
+	// Set default expiration (1 hour)
+	if req.Expiration <= 0 {
+		req.Expiration = 3600
+	}
+	// Max 7 days
+	if req.Expiration > 604800 {
+		req.Expiration = 604800
+	}
+
+	// Get user's access key
+	keys, err := h.store.ListAccessKeys(ctx, userID)
+	if err != nil || len(keys) == 0 {
+		writeError(w, "No access keys found for user. Please create an access key first.", http.StatusBadRequest)
+		return
+	}
+
+	// Use the first enabled access key
+	var accessKey *metadata.AccessKey
+	for _, k := range keys {
+		if k.Enabled {
+			accessKey = k
+			break
+		}
+	}
+	if accessKey == nil {
+		writeError(w, "No enabled access keys found", http.StatusBadRequest)
+		return
+	}
+
+	// Generate the presigned URL
+	generator := auth.NewPresignedURLGenerator("us-east-1", "")
+	presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
+		Method:      req.Method,
+		Bucket:      req.Bucket,
+		Key:         req.Key,
+		Expiration:  time.Duration(req.Expiration) * time.Second,
+		AccessKeyID: accessKey.AccessKeyID,
+		SecretKey:   accessKey.SecretAccessKey,
+		Region:      "us-east-1",
+		Headers:     req.Headers,
+	})
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := ConsolePresignResponse{
+		URL:       presignedURL,
+		Method:    req.Method,
+		Bucket:    req.Bucket,
+		Key:       req.Key,
+		ExpiresAt: time.Now().Add(time.Duration(req.Expiration) * time.Second),
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 // Helper functions
