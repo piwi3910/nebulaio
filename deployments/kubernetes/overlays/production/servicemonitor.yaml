@@ -1,0 +1,100 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nebulaio
+  namespace: nebulaio-production
+  labels:
+    app.kubernetes.io/name: nebulaio
+    release: prometheus  # Match your Prometheus operator label selector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nebulaio
+  namespaceSelector:
+    matchNames:
+      - nebulaio-production
+  endpoints:
+    - port: admin
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      scheme: http
+      honorLabels: true
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: 'go_.*'
+          action: drop  # Optional: drop Go runtime metrics to reduce cardinality
+
+---
+# PrometheusRule for alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nebulaio-alerts
+  namespace: nebulaio-production
+  labels:
+    app.kubernetes.io/name: nebulaio
+    release: prometheus
+spec:
+  groups:
+    - name: nebulaio.rules
+      rules:
+        # Cluster health
+        - alert: NebulaIOClusterUnhealthy
+          expr: nebulaio_cluster_healthy == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "NebulaIO cluster is unhealthy"
+            description: "Cluster {{ $labels.cluster }} has been unhealthy for 5 minutes"
+
+        # No leader elected
+        - alert: NebulaIONoLeader
+          expr: sum(nebulaio_raft_is_leader) == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "No Raft leader elected"
+            description: "NebulaIO cluster has no leader for over 1 minute"
+
+        # Pod not ready
+        - alert: NebulaIOPodNotReady
+          expr: kube_pod_status_ready{namespace="nebulaio-production", pod=~"nebulaio-.*"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "NebulaIO pod not ready"
+            description: "Pod {{ $labels.pod }} has been not ready for 5 minutes"
+
+        # High request latency
+        - alert: NebulaIOHighLatency
+          expr: histogram_quantile(0.99, sum(rate(nebulaio_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High request latency on NebulaIO"
+            description: "99th percentile latency is above 1s for 10 minutes"
+
+        # Storage space running low
+        - alert: NebulaIOStorageLow
+          expr: (nebulaio_storage_available_bytes / nebulaio_storage_total_bytes) < 0.1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "NebulaIO storage space low"
+            description: "Less than 10% storage space remaining"
+
+        # High error rate
+        - alert: NebulaIOHighErrorRate
+          expr: sum(rate(nebulaio_http_requests_total{status=~"5.."}[5m])) / sum(rate(nebulaio_http_requests_total[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High error rate on NebulaIO"
+            description: "Error rate is above 5% for 5 minutes"

@@ -1,0 +1,42 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nebulaio
+  namespace: nebulaio
+  labels:
+    app.kubernetes.io/name: nebulaio
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nebulaio
+  namespace: nebulaio
+  labels:
+    app.kubernetes.io/name: nebulaio
+rules:
+  # Allow pods to discover other pods for cluster formation
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nebulaio
+  namespace: nebulaio
+  labels:
+    app.kubernetes.io/name: nebulaio
+subjects:
+  - kind: ServiceAccount
+    name: nebulaio
+    namespace: nebulaio
+roleRef:
+  kind: Role
+  name: nebulaio
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,283 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: nebulaios.storage.nebulaio.io
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+spec:
+  group: storage.nebulaio.io
+  names:
+    kind: NebulaIO
+    listKind: NebulaIOList
+    plural: nebulaios
+    singular: nebulaio
+    shortNames:
+      - nio
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Replicas
+          type: integer
+          jsonPath: .spec.replicas
+        - name: Ready
+          type: integer
+          jsonPath: .status.readyReplicas
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: NebulaIO is the Schema for the nebulaios API
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              description: NebulaIOSpec defines the desired state of NebulaIO
+              required:
+                - replicas
+              properties:
+                replicas:
+                  type: integer
+                  minimum: 1
+                  maximum: 99
+                  description: Number of NebulaIO nodes
+                image:
+                  type: object
+                  description: Image configuration
+                  properties:
+                    repository:
+                      type: string
+                      default: ghcr.io/piwi3910/nebulaio
+                    tag:
+                      type: string
+                      default: latest
+                    pullPolicy:
+                      type: string
+                      enum: [Always, IfNotPresent, Never]
+                      default: IfNotPresent
+                cluster:
+                  type: object
+                  description: Cluster configuration
+                  properties:
+                    name:
+                      type: string
+                      description: Cluster name
+                      default: nebulaio-cluster
+                    nodeRole:
+                      type: string
+                      enum: [storage, management, hybrid]
+                      default: storage
+                      description: Role of nodes in this cluster
+                auth:
+                  type: object
+                  description: Authentication configuration
+                  properties:
+                    rootUser:
+                      type: string
+                      default: admin
+                    rootPasswordSecretRef:
+                      type: object
+                      description: Reference to secret containing root password
+                      required:
+                        - name
+                        - key
+                      properties:
+                        name:
+                          type: string
+                        key:
+                          type: string
+                          default: password
+                storage:
+                  type: object
+                  description: Storage configuration
+                  properties:
+                    storageClassName:
+                      type: string
+                      description: Storage class for persistent volumes
+                    size:
+                      type: string
+                      default: 10Gi
+                      description: Size of persistent volume per node
+                    backend:
+                      type: string
+                      enum: [fs]
+                      default: fs
+                resources:
+                  type: object
+                  description: Resource requirements
+                  properties:
+                    requests:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                          default: 100m
+                        memory:
+                          type: string
+                          default: 256Mi
+                    limits:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                          default: 2000m
+                        memory:
+                          type: string
+                          default: 2Gi
+                service:
+                  type: object
+                  description: Service configuration
+                  properties:
+                    type:
+                      type: string
+                      enum: [ClusterIP, NodePort, LoadBalancer]
+                      default: ClusterIP
+                    annotations:
+                      type: object
+                      additionalProperties:
+                        type: string
+                ingress:
+                  type: object
+                  description: Ingress configuration
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: false
+                    className:
+                      type: string
+                      default: nginx
+                    annotations:
+                      type: object
+                      additionalProperties:
+                        type: string
+                    s3Host:
+                      type: string
+                    adminHost:
+                      type: string
+                    consoleHost:
+                      type: string
+                    tls:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                          default: false
+                        secretName:
+                          type: string
+                monitoring:
+                  type: object
+                  description: Monitoring configuration
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: true
+                    serviceMonitor:
+                      type: boolean
+                      default: false
+                      description: Create ServiceMonitor for Prometheus Operator
+                    prometheusRules:
+                      type: boolean
+                      default: false
+                      description: Create PrometheusRule for alerting
+                podDisruptionBudget:
+                  type: object
+                  description: Pod Disruption Budget configuration
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: true
+                    minAvailable:
+                      type: integer
+                    maxUnavailable:
+                      type: integer
+                affinity:
+                  type: object
+                  description: Pod affinity/anti-affinity rules
+                  x-kubernetes-preserve-unknown-fields: true
+                tolerations:
+                  type: array
+                  description: Pod tolerations
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                nodeSelector:
+                  type: object
+                  description: Node selector
+                  additionalProperties:
+                    type: string
+            status:
+              type: object
+              description: NebulaIOStatus defines the observed state of NebulaIO
+              properties:
+                phase:
+                  type: string
+                  description: Current phase of the cluster
+                  enum:
+                    - Pending
+                    - Creating
+                    - Running
+                    - Updating
+                    - Failed
+                    - Deleting
+                replicas:
+                  type: integer
+                  description: Total number of desired replicas
+                readyReplicas:
+                  type: integer
+                  description: Number of ready replicas
+                currentReplicas:
+                  type: integer
+                  description: Number of current replicas
+                leader:
+                  type: string
+                  description: Current Raft leader node
+                conditions:
+                  type: array
+                  description: Conditions of the NebulaIO cluster
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                nodes:
+                  type: array
+                  description: Status of individual nodes
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      ready:
+                        type: boolean
+                      role:
+                        type: string
+                      address:
+                        type: string

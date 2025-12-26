@@ -1,0 +1,71 @@
+---
+# One-time backup to S3
+apiVersion: storage.nebulaio.io/v1alpha1
+kind: NebulaIOBackup
+metadata:
+  name: nebulaio-backup-manual
+  namespace: nebulaio
+spec:
+  clusterRef:
+    name: nebulaio-ha
+  destination:
+    type: s3
+    s3:
+      endpoint: https://s3.amazonaws.com
+      bucket: nebulaio-backups
+      prefix: manual/
+      region: us-east-1
+      credentialsSecretRef:
+        name: backup-s3-credentials
+        accessKeyKey: access-key
+        secretKeyKey: secret-key
+  retention:
+    keepLast: 10
+---
+# Scheduled daily backup
+apiVersion: storage.nebulaio.io/v1alpha1
+kind: NebulaIOBackup
+metadata:
+  name: nebulaio-backup-daily
+  namespace: nebulaio
+spec:
+  clusterRef:
+    name: nebulaio-ha
+  schedule: "0 2 * * *"  # Every day at 2 AM
+  destination:
+    type: s3
+    s3:
+      endpoint: https://s3.amazonaws.com
+      bucket: nebulaio-backups
+      prefix: daily/
+      region: us-east-1
+      credentialsSecretRef:
+        name: backup-s3-credentials
+        accessKeyKey: access-key
+        secretKeyKey: secret-key
+  retention:
+    keepLast: 7
+    maxAge: 30d
+---
+# Backup to PVC
+apiVersion: storage.nebulaio.io/v1alpha1
+kind: NebulaIOBackup
+metadata:
+  name: nebulaio-backup-pvc
+  namespace: nebulaio
+spec:
+  clusterRef:
+    name: nebulaio-ha
+  destination:
+    type: pvc
+    pvc:
+      claimName: nebulaio-backup-storage
+      subPath: backups/
+  retention:
+    keepLast: 5
+  includeBuckets:
+    - important-data
+    - critical-configs
+  excludeBuckets:
+    - temp-bucket
+    - test-bucket

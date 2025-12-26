@@ -1,0 +1,139 @@
+---
+# Single-node NebulaIO instance
+apiVersion: storage.nebulaio.io/v1alpha1
+kind: NebulaIO
+metadata:
+  name: nebulaio-single
+  namespace: nebulaio
+spec:
+  replicas: 1
+  image:
+    repository: ghcr.io/piwi3910/nebulaio
+    tag: latest
+  cluster:
+    name: nebulaio-single
+    nodeRole: storage
+  auth:
+    rootUser: admin
+    rootPasswordSecretRef:
+      name: nebulaio-credentials
+      key: password
+  storage:
+    size: 50Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  monitoring:
+    enabled: true
+---
+# HA NebulaIO cluster (3 nodes)
+apiVersion: storage.nebulaio.io/v1alpha1
+kind: NebulaIO
+metadata:
+  name: nebulaio-ha
+  namespace: nebulaio
+spec:
+  replicas: 3
+  image:
+    repository: ghcr.io/piwi3910/nebulaio
+    tag: latest
+  cluster:
+    name: nebulaio-ha
+    nodeRole: storage
+  auth:
+    rootUser: admin
+    rootPasswordSecretRef:
+      name: nebulaio-credentials
+      key: password
+  storage:
+    storageClassName: fast-ssd
+    size: 100Gi
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: true
+    className: nginx
+    s3Host: s3.example.com
+    adminHost: admin.example.com
+    consoleHost: console.example.com
+    tls:
+      enabled: true
+      secretName: nebulaio-tls
+  monitoring:
+    enabled: true
+    serviceMonitor: true
+    prometheusRules: true
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+---
+# Production NebulaIO cluster (5 nodes)
+apiVersion: storage.nebulaio.io/v1alpha1
+kind: NebulaIO
+metadata:
+  name: nebulaio-production
+  namespace: nebulaio-production
+spec:
+  replicas: 5
+  image:
+    repository: ghcr.io/piwi3910/nebulaio
+    tag: v1.0.0
+    pullPolicy: Always
+  cluster:
+    name: nebulaio-production
+    nodeRole: storage
+  auth:
+    rootUser: admin
+    rootPasswordSecretRef:
+      name: nebulaio-production-credentials
+      key: password
+  storage:
+    storageClassName: fast-ssd
+    size: 500Gi
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 8000m
+      memory: 16Gi
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: "5g"
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    s3Host: s3.production.example.com
+    adminHost: admin.production.example.com
+    consoleHost: console.production.example.com
+    tls:
+      enabled: true
+      secretName: nebulaio-production-tls
+  monitoring:
+    enabled: true
+    serviceMonitor: true
+    prometheusRules: true
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 3
+  nodeSelector:
+    node-role.kubernetes.io/storage: "true"
+  tolerations:
+    - key: node-role.kubernetes.io/storage
+      operator: Exists
+      effect: NoSchedule

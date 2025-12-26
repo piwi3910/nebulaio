@@ -1,0 +1,109 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production deployment (5 replicas, resource limits, anti-affinity)
+# Usage: kubectl apply -k deployments/kubernetes/overlays/production
+
+namespace: nebulaio-production
+
+resources:
+  - ../../base
+  - ingress.yaml
+  - servicemonitor.yaml
+  - network-policy.yaml
+
+# 5 replicas for production HA
+replicas:
+  - name: nebulaio
+    count: 5
+
+# Use production namespace
+namePrefix: prod-
+
+# Production labels
+labels:
+  - pairs:
+      environment: production
+      app.kubernetes.io/instance: production
+
+patches:
+  # Production resource limits
+  - target:
+      kind: StatefulSet
+      name: nebulaio
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: NEBULAIO_CLUSTER_EXPECT_NODES
+          value: "5"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "1Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "4Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "4000m"
+
+  # Production storage
+  - target:
+      kind: StatefulSet
+      name: nebulaio
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "100Gi"
+      - op: add
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: fast-ssd
+
+  # Strict anti-affinity for production
+  - target:
+      kind: StatefulSet
+      name: nebulaio
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/affinity
+        value:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: nebulaio
+                topologyKey: kubernetes.io/hostname
+          nodeAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                preference:
+                  matchExpressions:
+                    - key: node-type
+                      operator: In
+                      values:
+                        - storage
+
+  # Production PDB
+  - target:
+      kind: PodDisruptionBudget
+      name: nebulaio
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 3
+      - op: remove
+        path: /spec/maxUnavailable
+
+# Secret generator for production
+secretGenerator:
+  - name: nebulaio-secrets
+    behavior: replace
+    literals:
+      - root-user=admin
+      # In production, use external secrets management
+      # - root-password=<from-vault-or-sealed-secrets>
+    options:
+      disableNameSuffixHash: true

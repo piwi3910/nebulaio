@@ -1,0 +1,81 @@
+---
+# Headless service for StatefulSet DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: nebulaio-headless
+  namespace: nebulaio
+  labels:
+    app.kubernetes.io/name: nebulaio
+    app.kubernetes.io/component: headless
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: nebulaio
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: s3
+    - name: admin
+      port: 9001
+      targetPort: admin
+    - name: console
+      port: 9002
+      targetPort: console
+    - name: raft
+      port: 9003
+      targetPort: raft
+    - name: gossip
+      port: 9004
+      targetPort: gossip
+
+---
+# ClusterIP service for client access
+apiVersion: v1
+kind: Service
+metadata:
+  name: nebulaio
+  namespace: nebulaio
+  labels:
+    app.kubernetes.io/name: nebulaio
+    app.kubernetes.io/component: service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: nebulaio
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: s3
+    - name: admin
+      port: 9001
+      targetPort: admin
+    - name: console
+      port: 9002
+      targetPort: console
+
+---
+# LoadBalancer service (optional, for external access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nebulaio-lb
+  namespace: nebulaio
+  labels:
+    app.kubernetes.io/name: nebulaio
+    app.kubernetes.io/component: loadbalancer
+  annotations:
+    # Cloud provider annotations can be added here
+    # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: nebulaio
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: s3
+    - name: admin
+      port: 9001
+      targetPort: admin

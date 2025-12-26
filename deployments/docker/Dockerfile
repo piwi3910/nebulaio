@@ -1,5 +1,11 @@
 # Build stage for Go backend
-FROM golang:1.23-alpine AS go-builder
+# Multi-architecture build support via TARGETARCH
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS go-builder
+
+ARG TARGETARCH
+ARG TARGETOS=linux
+ARG VERSION=dev
+ARG COMMIT=none
 
 RUN apk add --no-cache git make
 
@@ -12,9 +18,9 @@ RUN go mod download
 # Copy source
 COPY . .
 
-# Build binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags="-w -s -X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo dev) -X main.commit=$(git rev-parse --short HEAD 2>/dev/null || echo none)" \
+# Build binary for target architecture
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+    -ldflags="-w -s -X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o /nebulaio ./cmd/nebulaio
 
 # Build stage for web console

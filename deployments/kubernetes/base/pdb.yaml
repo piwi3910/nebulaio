@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nebulaio
+  namespace: nebulaio
+  labels:
+    app.kubernetes.io/name: nebulaio
+spec:
+  # For HA clusters, allow only 1 pod to be unavailable
+  # This maintains quorum for Raft consensus
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nebulaio

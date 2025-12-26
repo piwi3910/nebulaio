@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-binaries:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            extension: .exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build web console
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - name: Build binary
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          BUILD_VERSION: ${{ steps.version.outputs.version }}
+          BUILD_COMMIT: ${{ steps.version.outputs.commit }}
+        run: |
+          mkdir -p dist
+          go build \
+            -ldflags="-w -s -X main.version=${BUILD_VERSION} -X main.commit=${BUILD_COMMIT}" \
+            -o dist/nebulaio${{ matrix.extension }} \
+            ./cmd/nebulaio
+
+      - name: Package binary (Unix)
+        if: matrix.goos != 'windows'
+        working-directory: dist
+        run: |
+          tar -czvf nebulaio-${{ matrix.suffix }}.tar.gz nebulaio
+
+      - name: Package binary (Windows)
+        if: matrix.goos == 'windows'
+        working-directory: dist
+        run: |
+          zip nebulaio-${{ matrix.suffix }}.zip nebulaio.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nebulaio-${{ matrix.suffix }}
+          path: dist/nebulaio-${{ matrix.suffix }}.*
+
+  create-release:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: artifacts
+        run: |
+          sha256sum nebulaio-* > checksums.txt
+          cat checksums.txt
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "${PREV_TAG}" ]; then
+            git log --pretty=format:"- %s" "${PREV_TAG}..HEAD" > changelog.txt
+          else
+            git log --pretty=format:"- %s" HEAD~10..HEAD > changelog.txt
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        with:
+          name: NebulaIO ${{ steps.version.outputs.version }}
+          body_path: changelog.txt
+          files: |
+            artifacts/nebulaio-*.tar.gz
+            artifacts/nebulaio-*.zip
+            artifacts/checksums.txt
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}

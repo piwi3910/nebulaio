@@ -1,0 +1,63 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# HA Cluster deployment (3 replicas)
+# Usage: kubectl apply -k deployments/kubernetes/overlays/ha-cluster
+
+namespace: nebulaio
+
+resources:
+  - ../../base
+
+# 3 replicas for HA (odd number required for Raft quorum)
+replicas:
+  - name: nebulaio
+    count: 3
+
+patches:
+  # Add expect_nodes for HA cluster
+  - target:
+      kind: StatefulSet
+      name: nebulaio
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: NEBULAIO_CLUSTER_EXPECT_NODES
+          value: "3"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "512Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "2Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "200m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "2000m"
+
+  # Update PDB for HA
+  - target:
+      kind: PodDisruptionBudget
+      name: nebulaio
+    patch: |-
+      - op: replace
+        path: /spec/maxUnavailable
+        value: 1
+
+  # Add anti-affinity to spread across nodes
+  - target:
+      kind: StatefulSet
+      name: nebulaio
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/affinity
+        value:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: nebulaio
+                topologyKey: kubernetes.io/hostname

@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Single-node deployment overlay
+# Usage: kubectl apply -k deployments/kubernetes/overlays/single-node
+
+namespace: nebulaio
+
+resources:
+  - ../../base
+
+# Override replicas to 1 for single node
+replicas:
+  - name: nebulaio
+    count: 1
+
+# Patch to enable bootstrap mode
+patches:
+  - target:
+      kind: StatefulSet
+      name: nebulaio
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: NEBULAIO_CLUSTER_BOOTSTRAP
+          value: "true"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "256Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "1Gi"
+
+# Remove LoadBalancer service for single node (optional)
+# patchesStrategicMerge:
+#   - remove-lb-service.yaml
