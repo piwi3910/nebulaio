@@ -2,9 +2,22 @@
 
 This document provides a comprehensive comparison between NebulaIO and MinIO, highlighting feature parity and differences.
 
+**Last Updated**: December 2025
+
 ## Executive Summary
 
-NebulaIO now implements **99%+ feature parity** with MinIO's enterprise capabilities, including all core S3 operations, enterprise security features, advanced data management capabilities, and AI/ML integration features. The only remaining feature on the roadmap is S3 over RDMA, planned for 2025.
+NebulaIO implements **~95% feature parity** with MinIO's enterprise capabilities. MinIO released several new features in 2025 that NebulaIO should target:
+
+| New MinIO Features (2025) | NebulaIO Status |
+|--------------------------|-----------------|
+| S3 Express API | ❌ Not implemented |
+| Native Iceberg Tables | ❌ Not implemented |
+| MCP Server for Agents | ❌ Not implemented |
+| GPUDirect Storage | ❌ Not implemented |
+| BlueField-3 DPU Support | ❌ Not implemented |
+| S3 over RDMA (Production) | 🔄 Phase 1 Complete |
+
+NebulaIO maintains full parity on core S3 operations, enterprise security, data management, and existing AI/ML features.
 
 ## Feature Comparison Matrix
 
@@ -284,6 +297,29 @@ NebulaIO now implements **99%+ feature parity** with MinIO's enterprise capabili
 | Streaming responses | ✅ | ✅ | Full |
 | Embeddings generation | ✅ | ✅ | Full |
 
+### MinIO 2025 Features (Gap Analysis)
+
+| Feature | MinIO | NebulaIO | Notes |
+|---------|-------|----------|-------|
+| **S3 Express API (May 2025)** |
+| Accelerated PUT (20% faster) | ✅ | ❌ | Streamlined API for AI workloads |
+| Accelerated LIST (447% faster TTFB) | ✅ | ❌ | Optimized list operations |
+| Atomic/Exclusive Append | ✅ | ❌ | Direct object modification |
+| Lightweight ETags | ✅ | ❌ | No digest computation needed |
+| Streaming LIST | ✅ | ❌ | Direct from storage nodes |
+| **Native Iceberg Tables (Sept 2025)** |
+| Built-in Iceberg Catalog | ✅ | ❌ | REST catalog API native to storage |
+| Spark/Trino/Dremio integration | ✅ | ❌ | Query engine compatibility |
+| ACID transactions | ✅ | ❌ | Table-level transactions |
+| **AI Infrastructure** |
+| MCP Server for Agents | ✅ | ❌ | Model Context Protocol |
+| GPUDirect Storage (GDS) | ✅ | ❌ | Direct GPU-to-storage transfers |
+| BlueField-3 DPU support | ✅ | ❌ | SmartNIC offload |
+| NIM Microservices integration | ✅ | ❌ | NVIDIA inference integration |
+| **Performance** |
+| S3 over RDMA (Production) | ✅ | 🔄 | [Phase 1 Complete](roadmap/S3_OVER_RDMA.md) |
+| Sub-10ms latency | ✅ | ✅ | Comparable performance |
+
 ### Features In Progress
 
 | Feature | MinIO | NebulaIO | Notes |
@@ -337,32 +373,83 @@ NebulaIO now implements **99%+ feature parity** with MinIO's enterprise capabili
 
 ### MinIO Advantages
 1. **Mature Product** - Years of production hardening
-2. **Larger Community** - More contributors and users
+2. **Larger Community** - More contributors and users (2B+ Docker pulls, 50K+ GitHub stars)
 3. **Commercial Support** - Enterprise support with SLAs
-4. **S3 over RDMA** - Ultra-low latency with RDMA hardware (NebulaIO has roadmap for 2025)
+4. **S3 Express API** - Streamlined API with atomic appends (May 2025)
+5. **Native Iceberg Tables** - Built-in Iceberg catalog (Sept 2025)
+6. **GPUDirect/BlueField** - Hardware-accelerated AI infrastructure
+7. **S3 over RDMA** - Production-ready ultra-low latency
 
-### Feature Parity Score: 99%+
+### Feature Parity Score: ~95%
 
-NebulaIO now implements virtually all of MinIO's enterprise features:
-- ✅ DRAM Cache with ARC eviction and ML prefetching
-- ✅ Data Firewall with rate limiting and QoS
-- ✅ S3 Select for CSV/JSON/Parquet
-- ✅ Batch Replication for disaster recovery
-- ✅ Enhanced Audit Logging with compliance modes
-- ✅ Full S3 API compatibility
-- ✅ Erasure coding and compression
-- ✅ Multi-site replication
-- ✅ External identity (LDAP/OIDC)
-- ✅ KMS integration (Vault/AWS/GCP/Azure)
-- ✅ S3 Catalog (S3 Inventory API) with CSV/Parquet/JSON/ORC export
-- ✅ Object Lambda with built-in transformers (PII redaction, filtering, conversion)
-- ✅ promptObject API with OpenAI, Anthropic, and Ollama integration
-- 🔄 S3 over RDMA (Phase 1 complete, hardware integration in progress)
+NebulaIO implements core and enterprise features:
+
+**✅ Full Parity:**
+- DRAM Cache with ARC eviction and ML prefetching
+- Data Firewall with rate limiting and QoS
+- S3 Select for CSV/JSON/Parquet
+- Batch Replication for disaster recovery
+- Enhanced Audit Logging with compliance modes
+- Full S3 API compatibility
+- Erasure coding and compression
+- Multi-site replication
+- External identity (LDAP/OIDC)
+- KMS integration (Vault/AWS/GCP/Azure)
+- S3 Catalog (S3 Inventory API) with CSV/Parquet/JSON/ORC export
+- Object Lambda with built-in transformers
+- promptObject API with OpenAI, Anthropic, and Ollama integration
+
+**🔄 In Progress:**
+- S3 over RDMA (Phase 1 complete, hardware integration in progress)
+
+**❌ Gaps (MinIO 2025 Features):**
+- S3 Express API (atomic appends, accelerated PUT/LIST)
+- Native Iceberg Tables (built-in catalog)
+- MCP Server for AI agents
+- GPUDirect Storage / BlueField-3 DPU support
+
+## Recommended Roadmap for NebulaIO
+
+Based on MinIO's 2025 feature releases, the following features should be prioritized:
+
+### High Priority (Q1-Q2 2026)
+1. **S3 Express API** - Competitive requirement for AI workloads
+   - Atomic/exclusive append operations
+   - Accelerated PUT and LIST operations
+   - Streaming LIST from storage nodes
+
+2. **S3 over RDMA Phase 2** - Complete hardware integration
+   - libibverbs integration
+   - Production benchmarking
+   - GPUDirect compatibility
+
+### Medium Priority (Q2-Q3 2026)
+3. **Native Iceberg Tables** - Critical for data lakehouse use cases
+   - Built-in Iceberg REST Catalog
+   - Spark/Trino/Dremio compatibility
+   - ACID transaction support
+
+4. **MCP Server** - Important for AI agent ecosystems
+   - Model Context Protocol implementation
+   - Agentic workflow support
+
+### Lower Priority (Q3-Q4 2026)
+5. **GPUDirect Storage** - Specialized AI infrastructure
+   - Direct GPU-to-storage data path
+   - NVIDIA ecosystem integration
+
+6. **BlueField DPU Support** - SmartNIC offload
+   - Arm-based storage processing
+   - Network acceleration
 
 ## Sources
 
 - [MinIO Official Website](https://www.min.io)
 - [MinIO Product Overview](https://min.io/product/overview)
 - [MinIO S3 Compatibility](https://www.min.io/product/aistor/s3-compatibility)
+- [MinIO S3 API Documentation](https://docs.min.io/enterprise/aistor-object-store/developers/s3-api-compatibility/)
 - [MinIO GitHub Repository](https://github.com/minio/minio)
-- [MinIO AIStor Announcement](https://blocksandfiles.com/2024/11/13/minio-releases-aistor-with-gpudirect-like-s3-over-rdma/)
+- [MinIO S3 Express API Announcement](https://blog.min.io/s3-express-api-added-to-aistor/) (May 2025)
+- [MinIO Iceberg Tables Announcement](https://blog.min.io/apache-iceberg-as-the-foundation-for-enterprise-ai-data-why-minio-made-tables-native-in-aistor/) (Sept 2025)
+- [MinIO BlueField-3 DPU Integration](https://blog.min.io/aistor-nvidia-bluefield-3-dpus/)
+- [MinIO AIStor Overview](https://www.min.io/product/aistor)
