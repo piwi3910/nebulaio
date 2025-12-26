@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Title,
@@ -20,7 +21,7 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
-import { IconPlus, IconTrash, IconDotsVertical, IconEdit, IconKey } from '@tabler/icons-react';
+import { IconPlus, IconTrash, IconDotsVertical, IconEdit, IconKey, IconLock } from '@tabler/icons-react';
 import { adminApi } from '../api/client';
 
 interface User {
@@ -37,7 +38,9 @@ export function UsersPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<User | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [passwordTarget, setPasswordTarget] = useState<User | null>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
@@ -107,6 +110,27 @@ export function UsersPage() {
     },
   });
 
+  const passwordMutation = useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) =>
+      adminApi.updatePassword(id, password),
+    onSuccess: () => {
+      setPasswordTarget(null);
+      passwordForm.reset();
+      notifications.show({
+        title: 'Password updated',
+        message: 'The user password has been updated successfully',
+        color: 'green',
+      });
+    },
+    onError: () => {
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to update password',
+        color: 'red',
+      });
+    },
+  });
+
   const createForm = useForm({
     initialValues: {
       username: '',
@@ -126,6 +150,18 @@ export function UsersPage() {
       email: '',
       role: 'user',
       enabled: true,
+    },
+  });
+
+  const passwordForm = useForm({
+    initialValues: {
+      password: '',
+      confirmPassword: '',
+    },
+    validate: {
+      password: (value) => (value.length < 8 ? 'Password must be at least 8 characters' : null),
+      confirmPassword: (value, values) =>
+        value !== values.password ? 'Passwords do not match' : null,
     },
   });
 
@@ -206,7 +242,21 @@ export function UsersPage() {
                         >
                           Edit
                         </Menu.Item>
-                        <Menu.Item leftSection={<IconKey size={14} />}>Access Keys</Menu.Item>
+                        <Menu.Item
+                          leftSection={<IconKey size={14} />}
+                          onClick={() => navigate(`/users/${user.id}/access-keys`)}
+                        >
+                          Access Keys
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<IconLock size={14} />}
+                          onClick={() => {
+                            passwordForm.reset();
+                            setPasswordTarget(user);
+                          }}
+                        >
+                          Change Password
+                        </Menu.Item>
                         <Menu.Divider />
                         <Menu.Item
                           color="red"
@@ -341,6 +391,42 @@ export function UsersPage() {
             Delete
           </Button>
         </Group>
+      </Modal>
+
+      {/* Change Password Modal */}
+      <Modal
+        opened={passwordTarget !== null}
+        onClose={() => setPasswordTarget(null)}
+        title={`Change Password: ${passwordTarget?.username}`}
+      >
+        <form
+          onSubmit={passwordForm.onSubmit((values) =>
+            passwordMutation.mutate({ id: passwordTarget!.id, password: values.password })
+          )}
+        >
+          <Stack>
+            <PasswordInput
+              label="New Password"
+              placeholder="Enter new password"
+              required
+              {...passwordForm.getInputProps('password')}
+            />
+            <PasswordInput
+              label="Confirm Password"
+              placeholder="Confirm new password"
+              required
+              {...passwordForm.getInputProps('confirmPassword')}
+            />
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setPasswordTarget(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={passwordMutation.isPending}>
+                Update Password
+              </Button>
+            </Group>
+          </Stack>
+        </form>
       </Modal>
     </div>
   );

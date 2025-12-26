@@ -8,6 +8,7 @@ import { BucketBrowserPage } from './pages/BucketBrowserPage';
 import { BucketSettingsPage } from './pages/BucketSettingsPage';
 import { UsersPage } from './pages/UsersPage';
 import { AccessKeysPage } from './pages/AccessKeysPage';
+import { UserAccessKeysPage } from './pages/UserAccessKeysPage';
 import { ClusterPage } from './pages/ClusterPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { PoliciesPage } from './pages/PoliciesPage';
@@ -66,6 +67,14 @@ export default function App() {
           element={
             <AdminRoute>
               <UsersPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="users/:userId/access-keys"
+          element={
+            <AdminRoute>
+              <UserAccessKeysPage />
             </AdminRoute>
           }
         />

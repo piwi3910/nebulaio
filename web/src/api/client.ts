@@ -184,9 +184,7 @@ export const adminApi = {
     end_date?: string;
     page?: number;
     page_size?: number;
-  }) => apiClient.get('/admin/audit/logs', { params }),
-  getAuditLog: (id: string) => apiClient.get(`/admin/audit/logs/${id}`),
-  getAuditEventTypes: () => apiClient.get('/admin/audit/event-types'),
+  }) => apiClient.get('/admin/audit-logs', { params }),
 };
 
 // Console API (user-facing)

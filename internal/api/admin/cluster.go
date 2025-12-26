@@ -25,8 +25,9 @@ func NewClusterHandler(discovery *cluster.Discovery, store *metadata.RaftStore) 
 }
 
 // RegisterClusterRoutes registers cluster-related routes
+// Note: Some cluster routes (/cluster/nodes, /cluster/nodes/{nodeId}/metrics) are registered
+// in Handler with auth middleware, so they're not duplicated here.
 func (h *ClusterHandler) RegisterClusterRoutes(r chi.Router) {
-	r.Get("/cluster/nodes", h.ListNodes)
 	r.Post("/cluster/nodes", h.AddNode)
 	r.Delete("/cluster/nodes/{id}", h.RemoveNode)
 	r.Get("/cluster/leader", h.GetLeader)
@@ -426,4 +427,69 @@ func (h *ClusterHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request
 	}
 
 	writeJSON(w, statusCode, response)
+}
+
+// NodeMetricsResponse represents metrics for a specific node
+type NodeMetricsResponse struct {
+	NodeID        string                 `json:"node_id"`
+	Name          string                 `json:"name,omitempty"`
+	Address       string                 `json:"address"`
+	Role          string                 `json:"role"`
+	Status        string                 `json:"status"`
+	IsLeader      bool                   `json:"is_leader"`
+	IsVoter       bool                   `json:"is_voter"`
+	JoinedAt      time.Time              `json:"joined_at"`
+	LastHeartbeat time.Time              `json:"last_heartbeat"`
+	Storage       map[string]interface{} `json:"storage,omitempty"`
+}
+
+// GetNodeMetrics returns metrics for a specific node
+func (h *ClusterHandler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) {
+	nodeID := chi.URLParam(r, "nodeId")
+
+	if h.discovery == nil {
+		writeError(w, "Discovery not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Get leader ID
+	leaderID := h.discovery.LeaderID()
+
+	// Get Raft configuration to determine voters
+	voterMap := make(map[string]bool)
+	if h.store != nil {
+		if config, err := h.store.GetConfiguration(); err == nil {
+			for _, server := range config.Servers {
+				voterMap[string(server.ID)] = server.Suffrage.String() == "Voter"
+			}
+		}
+	}
+
+	// Find the specific node
+	var targetMember *cluster.NodeInfo
+	for _, member := range h.discovery.Members() {
+		if member.NodeID == nodeID {
+			targetMember = member
+			break
+		}
+	}
+
+	if targetMember == nil {
+		writeError(w, "Node not found", http.StatusNotFound)
+		return
+	}
+
+	// Build metrics response
+	response := &NodeMetricsResponse{
+		NodeID:        targetMember.NodeID,
+		Address:       targetMember.RaftAddr,
+		Role:          targetMember.Role,
+		Status:        targetMember.Status,
+		IsLeader:      targetMember.NodeID == leaderID,
+		IsVoter:       voterMap[targetMember.NodeID],
+		JoinedAt:      targetMember.JoinedAt,
+		LastHeartbeat: targetMember.LastSeen,
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }

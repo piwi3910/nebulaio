@@ -80,11 +80,23 @@ export function AuditLogsPage() {
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Fetch event types for filter dropdown
-  const { data: eventTypes } = useQuery({
-    queryKey: ['audit-event-types'],
-    queryFn: () => adminApi.getAuditEventTypes().then((res) => res.data as string[]),
-  });
+  // Static event types for filter dropdown
+  const eventTypes = [
+    'object:upload',
+    'object:download',
+    'object:delete',
+    'bucket:create',
+    'bucket:delete',
+    'user:login',
+    'user:logout',
+    'user:create',
+    'user:delete',
+    'policy:create',
+    'policy:update',
+    'policy:delete',
+    'key:create',
+    'key:delete',
+  ];
 
   // Fetch audit logs
   const { data, isLoading, refetch } = useQuery({
@@ -214,12 +226,10 @@ export function AuditLogsPage() {
                   setFilters({ ...filters, event_type: value || undefined });
                   setPage(1);
                 }}
-                data={
-                  eventTypes?.map((type: string) => ({
-                    value: type,
-                    label: formatEventType(type),
-                  })) || []
-                }
+                data={eventTypes.map((type) => ({
+                  value: type,
+                  label: formatEventType(type),
+                }))}
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>

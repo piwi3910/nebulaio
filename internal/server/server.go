@@ -232,7 +232,7 @@ func (s *Server) setupAdminServer() {
 	r.Handle("/metrics", promhttp.Handler())
 
 	// Admin API handlers
-	adminHandler := admin.NewHandler(s.authService, s.bucketService, s.objectService, s.metaStore)
+	adminHandler := admin.NewHandler(s.authService, s.bucketService, s.objectService, s.metaStore, s.discovery)
 	r.Route("/api/v1/admin", func(r chi.Router) {
 		adminHandler.RegisterRoutes(r)
 		// Detailed health endpoint under admin API

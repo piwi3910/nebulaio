@@ -194,7 +194,12 @@ export function BucketsPage() {
                         </Menu.Item>
                         {isAdmin && (
                           <>
-                            <Menu.Item leftSection={<IconSettings size={14} />}>Settings</Menu.Item>
+                            <Menu.Item
+                              leftSection={<IconSettings size={14} />}
+                              onClick={() => navigate(`/buckets/${bucket.name}/settings`)}
+                            >
+                              Settings
+                            </Menu.Item>
                             <Menu.Divider />
                             <Menu.Item
                               color="red"

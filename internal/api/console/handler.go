@@ -2,6 +2,7 @@ package console
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -55,9 +56,15 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/buckets/{bucket}/objects", h.UploadObject)
 	r.Delete("/buckets/{bucket}/objects/{key:.*}", h.DeleteObject)
 
+	// Object content
+	r.Get("/buckets/{bucket}/objects/{key:.*}/content", h.GetObjectContent)
+
 	// Presigned URLs for downloads
 	r.Get("/buckets/{bucket}/objects/{key:.*}/download-url", h.GetDownloadURL)
 	r.Post("/presign", h.GeneratePresignedURL)
+
+	// Bucket settings (read-only for console users)
+	r.Get("/buckets/{bucket}/settings", h.GetBucketSettings)
 }
 
 // Auth middleware
@@ -430,6 +437,99 @@ func (h *Handler) GetObjectInfo(w http.ResponseWriter, r *http.Request) {
 				response.DownloadURL = presignedURL
 			}
 		}
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// GetObjectContent streams the object content directly to the client
+func (h *Handler) GetObjectContent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+	key := chi.URLParam(r, "key")
+
+	// Get object metadata first
+	meta, err := h.object.HeadObject(ctx, bucketName, key)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, "Object not found", http.StatusNotFound)
+			return
+		}
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Get object content
+	reader, objMeta, err := h.object.GetObject(ctx, bucketName, key)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	// Set response headers
+	w.Header().Set("Content-Type", meta.ContentType)
+	w.Header().Set("Content-Length", strconv.FormatInt(objMeta.Size, 10))
+	w.Header().Set("ETag", meta.ETag)
+	w.Header().Set("Last-Modified", meta.ModifiedAt.UTC().Format(time.RFC1123))
+
+	// Stream content to response
+	w.WriteHeader(http.StatusOK)
+	_, _ = copyBuffer(w, reader)
+}
+
+// copyBuffer copies from src to dst using a buffer
+func copyBuffer(dst http.ResponseWriter, src interface{ Read([]byte) (int, error) }) (int64, error) {
+	buf := make([]byte, 32*1024) // 32KB buffer
+	var written int64
+	for {
+		nr, rerr := src.Read(buf)
+		if nr > 0 {
+			nw, werr := dst.Write(buf[0:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if werr != nil {
+				return written, werr
+			}
+		}
+		if rerr != nil {
+			if rerr == io.EOF {
+				return written, nil
+			}
+			return written, rerr
+		}
+	}
+}
+
+// BucketSettingsResponse contains bucket settings for console users
+type BucketSettingsResponse struct {
+	Name         string `json:"name"`
+	Region       string `json:"region"`
+	Versioning   string `json:"versioning"`
+	StorageClass string `json:"storage_class"`
+}
+
+// GetBucketSettings returns bucket settings (read-only for console users)
+func (h *Handler) GetBucketSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	bucket, err := h.bucket.GetBucket(ctx, bucketName)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, "Bucket not found", http.StatusNotFound)
+			return
+		}
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := BucketSettingsResponse{
+		Name:         bucket.Name,
+		Region:       bucket.Region,
+		Versioning:   string(bucket.Versioning),
+		StorageClass: bucket.StorageClass,
 	}
 
 	writeJSON(w, http.StatusOK, response)
