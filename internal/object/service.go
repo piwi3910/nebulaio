@@ -179,6 +179,11 @@ func NewService(store metadata.Store, storage StorageBackend, bucketService Buck
 // PutObjectOptions contains optional parameters for PutObject
 type PutObjectOptions struct {
 	Tags map[string]string
+
+	// Object Lock settings
+	ObjectLockMode            string     // "GOVERNANCE" or "COMPLIANCE"
+	ObjectLockRetainUntilDate *time.Time // Retention period end date
+	ObjectLockLegalHoldStatus string     // "ON" or "OFF"
 }
 
 // PutObject stores an object
@@ -242,6 +247,41 @@ func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, 
 		StorageInfo: &metadata.ObjectStorageInfo{
 			Path: result.Path,
 		},
+	}
+
+	// Apply object lock settings if bucket has object lock enabled
+	if bucketInfo.ObjectLockEnabled {
+		// Apply default retention from bucket configuration
+		if err := s.ApplyDefaultRetention(ctx, bucket, meta); err != nil {
+			// Rollback: delete the stored object
+			_ = s.storage.DeleteObject(ctx, bucket, key)
+			return nil, fmt.Errorf("failed to apply default retention: %w", err)
+		}
+
+		// Apply explicit retention from options if provided
+		if opts != nil && opts.ObjectLockMode != "" {
+			if err := ValidateRetentionMode(opts.ObjectLockMode); err != nil {
+				_ = s.storage.DeleteObject(ctx, bucket, key)
+				return nil, err
+			}
+			meta.ObjectLockMode = opts.ObjectLockMode
+		}
+
+		if opts != nil && opts.ObjectLockRetainUntilDate != nil {
+			if err := ValidateRetentionDate(*opts.ObjectLockRetainUntilDate); err != nil {
+				_ = s.storage.DeleteObject(ctx, bucket, key)
+				return nil, err
+			}
+			meta.ObjectLockRetainUntilDate = opts.ObjectLockRetainUntilDate
+		}
+
+		if opts != nil && opts.ObjectLockLegalHoldStatus != "" {
+			if err := ValidateLegalHoldStatus(opts.ObjectLockLegalHoldStatus); err != nil {
+				_ = s.storage.DeleteObject(ctx, bucket, key)
+				return nil, err
+			}
+			meta.ObjectLockLegalHoldStatus = opts.ObjectLockLegalHoldStatus
+		}
 	}
 
 	// Store metadata with versioning support
@@ -313,6 +353,11 @@ func (s *Service) DeleteObject(ctx context.Context, bucket, key string) (*Delete
 
 // DeleteObjectVersion deletes a specific version of an object or creates a delete marker
 func (s *Service) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) (*DeleteObjectResult, error) {
+	return s.DeleteObjectVersionWithOptions(ctx, bucket, key, versionID, nil)
+}
+
+// DeleteObjectVersionWithOptions deletes a specific version with options for bypassing governance
+func (s *Service) DeleteObjectVersionWithOptions(ctx context.Context, bucket, key, versionID string, opts *ObjectLockCheckOptions) (*DeleteObjectResult, error) {
 	// Get bucket info for versioning status
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
 	if err != nil {
@@ -327,6 +372,11 @@ func (s *Service) DeleteObjectVersion(ctx context.Context, bucket, key, versionI
 		meta, err := s.store.GetObjectVersion(ctx, bucket, key, versionID)
 		if err != nil {
 			return nil, fmt.Errorf("version not found: %w", err)
+		}
+
+		// Check object lock status before deletion
+		if err := s.CheckObjectLock(ctx, meta, opts); err != nil {
+			return nil, err
 		}
 
 		// Delete the version from metadata
@@ -364,6 +414,15 @@ func (s *Service) DeleteObjectVersion(ctx context.Context, bucket, key, versionI
 	}
 
 	// Versioning disabled or suspended - permanently delete the object
+	// First check if object has lock (even without versioning, lock should be enforced)
+	meta, metaErr := s.store.GetObjectMeta(ctx, bucket, key)
+	if metaErr == nil && meta != nil {
+		// Check object lock status before deletion
+		if err := s.CheckObjectLock(ctx, meta, opts); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := s.storage.DeleteObject(ctx, bucket, key); err != nil {
 		// Ignore "not found" errors for storage layer
 		if !strings.Contains(err.Error(), "not found") {
