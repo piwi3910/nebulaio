@@ -1,5 +1,6 @@
 # Binaries
 bin/
+nebulaio
 *.exe
 *.exe~
 *.dll
@@ -35,6 +36,7 @@ web/dist/
 # Local config
 *.local.yaml
 *.local.json
+test-config.yaml
 .env
 .env.*
 
