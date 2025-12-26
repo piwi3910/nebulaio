@@ -284,11 +284,13 @@ NebulaIO now implements **99%+ feature parity** with MinIO's enterprise capabili
 | Streaming responses | ✅ | ✅ | Full |
 | Embeddings generation | ✅ | ✅ | Full |
 
-### Features In Roadmap
+### Features In Progress
 
 | Feature | MinIO | NebulaIO | Notes |
 |---------|-------|----------|-------|
-| S3 over RDMA | ✅ | 📋 | [Roadmap Q2-Q4 2025](roadmap/S3_OVER_RDMA.md) |
+| S3 over RDMA | ✅ | 🔄 | [Phase 1 Complete, Phase 2 in Progress](roadmap/S3_OVER_RDMA.md) |
+
+**S3 over RDMA Status**: Foundation implemented with transport abstraction, memory pools, client SDK, and server. Simulated mode available for development. Hardware integration (libibverbs) planned for Phase 2.
 
 ## Performance Comparison
 
@@ -355,7 +357,7 @@ NebulaIO now implements virtually all of MinIO's enterprise features:
 - ✅ S3 Catalog (S3 Inventory API) with CSV/Parquet/JSON/ORC export
 - ✅ Object Lambda with built-in transformers (PII redaction, filtering, conversion)
 - ✅ promptObject API with OpenAI, Anthropic, and Ollama integration
-- 📋 S3 over RDMA (roadmap for 2025)
+- 🔄 S3 over RDMA (Phase 1 complete, hardware integration in progress)
 
 ## Sources
 
