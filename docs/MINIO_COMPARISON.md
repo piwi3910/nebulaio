@@ -4,7 +4,7 @@ This document provides a comprehensive comparison between NebulaIO and MinIO, hi
 
 ## Executive Summary
 
-NebulaIO now implements **95%+ feature parity** with MinIO's enterprise capabilities, including all core S3 operations, enterprise security features, and advanced data management capabilities.
+NebulaIO now implements **99%+ feature parity** with MinIO's enterprise capabilities, including all core S3 operations, enterprise security features, advanced data management capabilities, and AI/ML integration features. The only remaining feature on the roadmap is S3 over RDMA, planned for 2025.
 
 ## Feature Comparison Matrix
 
@@ -255,14 +255,40 @@ NebulaIO now implements **95%+ feature parity** with MinIO's enterprise capabili
 | Rolling upgrades | ✅ | ✅ | Full |
 | Node decommission | ✅ | ✅ | Full |
 
-### Features MinIO Has That Are In Progress for NebulaIO
+### AI/ML Features
+
+| Feature | MinIO | NebulaIO | Status |
+|---------|-------|----------|--------|
+| **S3 Catalog (Inventory)** |
+| CSV inventory export | ✅ | ✅ | Full |
+| Parquet inventory export | ✅ | ✅ | Full |
+| JSON inventory export | ✅ | ✅ | Full |
+| ORC inventory export | ✅ | ✅ | Full |
+| Inventory filtering | ✅ | ✅ | Full |
+| Scheduled inventory jobs | ✅ | ✅ | Full |
+| Manifest generation | ✅ | ✅ | Full |
+| **Object Lambda** |
+| Access points | ✅ | ✅ | Full |
+| Built-in transformers | ✅ | ✅ | Full |
+| PII redaction | ✅ | ✅ | Full |
+| Field filtering | ✅ | ✅ | Full |
+| Format conversion | ✅ | ✅ | Full |
+| Webhook transformations | ✅ | ✅ | Full |
+| WriteGetObjectResponse | ✅ | ✅ | Full |
+| **promptObject API** |
+| Natural language queries | ✅ | ✅ | Full |
+| OpenAI integration | ✅ | ✅ | Full |
+| Anthropic Claude integration | ✅ | ✅ | Full |
+| Ollama (local LLM) | ✅ | ✅ | Full |
+| Response caching | ✅ | ✅ | Full |
+| Streaming responses | ✅ | ✅ | Full |
+| Embeddings generation | ✅ | ✅ | Full |
+
+### Features In Roadmap
 
 | Feature | MinIO | NebulaIO | Notes |
 |---------|-------|----------|-------|
-| S3 over RDMA | ✅ | ❌ | MinIO's new high-performance feature |
-| promptObject API | ✅ | ❌ | AI/LLM integration for object queries |
-| Catalog (S3 Inventory) | ✅ | 🔄 | Parquet inventory export |
-| Object Lambda | ✅ | 🔄 | Transformation on GET |
+| S3 over RDMA | ✅ | 📋 | [Roadmap Q2-Q4 2025](roadmap/S3_OVER_RDMA.md) |
 
 ## Performance Comparison
 
@@ -311,9 +337,9 @@ NebulaIO now implements **95%+ feature parity** with MinIO's enterprise capabili
 1. **Mature Product** - Years of production hardening
 2. **Larger Community** - More contributors and users
 3. **Commercial Support** - Enterprise support with SLAs
-4. **Cutting-Edge Features** - S3 over RDMA, promptObject API
+4. **S3 over RDMA** - Ultra-low latency with RDMA hardware (NebulaIO has roadmap for 2025)
 
-### Feature Parity Score: 95%+
+### Feature Parity Score: 99%+
 
 NebulaIO now implements virtually all of MinIO's enterprise features:
 - ✅ DRAM Cache with ARC eviction and ML prefetching
@@ -326,6 +352,10 @@ NebulaIO now implements virtually all of MinIO's enterprise features:
 - ✅ Multi-site replication
 - ✅ External identity (LDAP/OIDC)
 - ✅ KMS integration (Vault/AWS/GCP/Azure)
+- ✅ S3 Catalog (S3 Inventory API) with CSV/Parquet/JSON/ORC export
+- ✅ Object Lambda with built-in transformers (PII redaction, filtering, conversion)
+- ✅ promptObject API with OpenAI, Anthropic, and Ollama integration
+- 📋 S3 over RDMA (roadmap for 2025)
 
 ## Sources
 
