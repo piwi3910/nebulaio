@@ -578,21 +578,6 @@ type AccelerateConfiguration struct {
 	Status  string   `xml:"Status,omitempty"`
 }
 
-// IntelligentTieringConfiguration represents intelligent tiering config
-type IntelligentTieringConfiguration struct {
-	XMLName xml.Name `xml:"IntelligentTieringConfiguration"`
-	Id      string   `xml:"Id"`
-	Status  string   `xml:"Status"`
-	Filter  *struct {
-		Prefix string `xml:"Prefix,omitempty"`
-		Tag    *Tag   `xml:"Tag,omitempty"`
-	} `xml:"Filter,omitempty"`
-	Tierings []struct {
-		AccessTier string `xml:"AccessTier"`
-		Days       int    `xml:"Days"`
-	} `xml:"Tiering"`
-}
-
 // AnalyticsConfiguration represents analytics config
 type AnalyticsConfiguration struct {
 	XMLName              xml.Name `xml:"AnalyticsConfiguration"`

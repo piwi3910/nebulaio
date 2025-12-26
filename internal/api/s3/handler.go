@@ -203,6 +203,10 @@ func (h *Handler) handleBucketPut(w http.ResponseWriter, r *http.Request) {
 		h.PutBucketAccelerateConfiguration(w, r)
 		return
 	}
+	if _, ok := query["intelligent-tiering"]; ok {
+		h.PutBucketIntelligentTieringConfiguration(w, r)
+		return
+	}
 
 	// Default: create bucket
 	h.CreateBucket(w, r)
@@ -247,6 +251,10 @@ func (h *Handler) handleBucketDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, ok := query["ownershipControls"]; ok {
 		h.DeleteBucketOwnershipControls(w, r)
+		return
+	}
+	if _, ok := query["intelligent-tiering"]; ok {
+		h.DeleteBucketIntelligentTieringConfiguration(w, r)
 		return
 	}
 
@@ -329,6 +337,15 @@ func (h *Handler) handleBucketGet(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, ok := query["accelerate"]; ok {
 		h.GetBucketAccelerateConfiguration(w, r)
+		return
+	}
+	if _, ok := query["intelligent-tiering"]; ok {
+		// Check if id parameter is present for single config
+		if id := query.Get("id"); id != "" {
+			h.GetBucketIntelligentTieringConfiguration(w, r)
+		} else {
+			h.ListBucketIntelligentTieringConfigurations(w, r)
+		}
 		return
 	}
 
@@ -459,6 +476,12 @@ func (h *Handler) handleObjectPut(w http.ResponseWriter, r *http.Request) {
 // handleObjectGet handles GET requests on objects (get object or object subresources)
 func (h *Handler) handleObjectGet(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
+
+	// Check for object attributes (GetObjectAttributes)
+	if _, ok := query["attributes"]; ok {
+		h.GetObjectAttributes(w, r)
+		return
+	}
 
 	// Check for object tagging
 	if _, ok := query["tagging"]; ok {
@@ -839,9 +862,21 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// handleObjectPost handles POST requests on objects (multipart operations)
+// handleObjectPost handles POST requests on objects (multipart operations, select, restore)
 func (h *Handler) handleObjectPost(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
+
+	// Check for S3 Select
+	if _, ok := query["select"]; ok {
+		h.SelectObjectContent(w, r)
+		return
+	}
+
+	// Check for restore from GLACIER/DEEP_ARCHIVE
+	if _, ok := query["restore"]; ok {
+		h.RestoreObject(w, r)
+		return
+	}
 
 	if _, ok := query["uploads"]; ok {
 		h.CreateMultipartUpload(w, r)
