@@ -582,23 +582,27 @@ done:
 		return
 	}
 
-	// Update job as completed
-	s.jobMu.Lock()
-	job.Status = JobStatusCompleted
+	// Update job as completed (only if not already cancelled)
 	now := time.Now()
-	job.CompletedAt = &now
-	job.ManifestKey = manifestKey
-	job.Progress.TotalObjects = totalObjects
-	job.Progress.ProcessedObjects = totalObjects
-	job.Progress.TotalBytes = totalBytes
-	job.Progress.ProcessedBytes = totalBytes
-	job.Progress.FilesGenerated = len(files)
+	s.jobMu.Lock()
+	if job.Status != JobStatusCancelled {
+		job.Status = JobStatusCompleted
+		job.CompletedAt = &now
+		job.ManifestKey = manifestKey
+		job.Progress.TotalObjects = totalObjects
+		job.Progress.ProcessedObjects = totalObjects
+		job.Progress.TotalBytes = totalBytes
+		job.Progress.ProcessedBytes = totalBytes
+		job.Progress.FilesGenerated = len(files)
+	}
 	s.jobMu.Unlock()
 
-	// Update config last run
-	s.configMu.Lock()
-	cfg.LastRun = &now
-	s.configMu.Unlock()
+	// Update config last run (only if job completed successfully)
+	if job.Status == JobStatusCompleted {
+		s.configMu.Lock()
+		cfg.LastRun = &now
+		s.configMu.Unlock()
+	}
 }
 
 // matchesFilter checks if an object matches the filter criteria
@@ -876,10 +880,14 @@ func (s *CatalogService) updateJobProgress(job *InventoryJob, objects, bytes int
 }
 
 // updateJobError sets the job to failed with an error
+// If the job was already cancelled, it preserves the cancelled status
 func (s *CatalogService) updateJobError(job *InventoryJob, errMsg string) {
 	s.jobMu.Lock()
-	job.Status = JobStatusFailed
-	job.Error = errMsg
+	// Don't overwrite cancelled status - CancelInventoryJob already set it
+	if job.Status != JobStatusCancelled {
+		job.Status = JobStatusFailed
+		job.Error = errMsg
+	}
 	now := time.Now()
 	job.CompletedAt = &now
 	s.jobMu.Unlock()
