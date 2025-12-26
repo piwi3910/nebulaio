@@ -520,3 +520,377 @@ func MatchCORSOrigin(allowedOrigins []string, origin string) (string, bool) {
 	}
 	return "", false
 }
+
+// GetLocation returns the bucket's region/location
+func (s *Service) GetLocation(ctx context.Context, name string) (string, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return "", s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+	return bucket.Region, nil
+}
+
+// GetBucketACL returns the bucket's ACL
+func (s *Service) GetBucketACL(ctx context.Context, name string) (*metadata.BucketACL, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	// If no ACL set, return default (owner has FULL_CONTROL)
+	if bucket.ACL == nil {
+		return &metadata.BucketACL{
+			OwnerID:          bucket.Owner,
+			OwnerDisplayName: bucket.Owner,
+			Grants: []metadata.ACLGrant{
+				{
+					GranteeType: "CanonicalUser",
+					GranteeID:   bucket.Owner,
+					DisplayName: bucket.Owner,
+					Permission:  "FULL_CONTROL",
+				},
+			},
+		}, nil
+	}
+	return bucket.ACL, nil
+}
+
+// SetBucketACL sets the bucket's ACL
+func (s *Service) SetBucketACL(ctx context.Context, name string, acl *metadata.BucketACL) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.ACL = acl
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set bucket ACL: " + err.Error())
+	}
+	return nil
+}
+
+// GetEncryption returns the bucket's encryption configuration
+func (s *Service) GetEncryption(ctx context.Context, name string) (*metadata.EncryptionConfig, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+	if bucket.Encryption == nil {
+		return nil, s3errors.ErrServerSideEncryptionConfigurationNotFoundError.WithResource(name)
+	}
+	return bucket.Encryption, nil
+}
+
+// SetEncryption sets the bucket's encryption configuration
+func (s *Service) SetEncryption(ctx context.Context, name string, config *metadata.EncryptionConfig) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.Encryption = config
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set encryption configuration: " + err.Error())
+	}
+	return nil
+}
+
+// DeleteEncryption deletes the bucket's encryption configuration
+func (s *Service) DeleteEncryption(ctx context.Context, name string) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.Encryption = nil
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to delete encryption configuration: " + err.Error())
+	}
+	return nil
+}
+
+// GetWebsite returns the bucket's website configuration
+func (s *Service) GetWebsite(ctx context.Context, name string) (*metadata.WebsiteConfig, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+	if bucket.Website == nil {
+		return nil, s3errors.ErrNoSuchWebsiteConfiguration.WithResource(name)
+	}
+	return bucket.Website, nil
+}
+
+// SetWebsite sets the bucket's website configuration
+func (s *Service) SetWebsite(ctx context.Context, name string, config *metadata.WebsiteConfig) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.Website = config
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set website configuration: " + err.Error())
+	}
+	return nil
+}
+
+// DeleteWebsite deletes the bucket's website configuration
+func (s *Service) DeleteWebsite(ctx context.Context, name string) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.Website = nil
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to delete website configuration: " + err.Error())
+	}
+	return nil
+}
+
+// GetLogging returns the bucket's logging configuration
+func (s *Service) GetLogging(ctx context.Context, name string) (*metadata.LoggingConfig, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+	// Logging returns empty config if not set (S3 behavior)
+	if bucket.Logging == nil {
+		return &metadata.LoggingConfig{}, nil
+	}
+	return bucket.Logging, nil
+}
+
+// SetLogging sets the bucket's logging configuration
+func (s *Service) SetLogging(ctx context.Context, name string, config *metadata.LoggingConfig) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	// Validate target bucket exists if logging is enabled
+	if config != nil && config.TargetBucket != "" {
+		if _, err := s.store.GetBucket(ctx, config.TargetBucket); err != nil {
+			return s3errors.ErrInvalidTargetBucketForLogging.WithResource(config.TargetBucket)
+		}
+	}
+
+	bucket.Logging = config
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set logging configuration: " + err.Error())
+	}
+	return nil
+}
+
+// GetNotification returns the bucket's notification configuration
+func (s *Service) GetNotification(ctx context.Context, name string) (*metadata.NotificationConfig, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+	// Notification returns empty config if not set (S3 behavior)
+	if bucket.Notification == nil {
+		return &metadata.NotificationConfig{}, nil
+	}
+	return bucket.Notification, nil
+}
+
+// SetNotification sets the bucket's notification configuration
+func (s *Service) SetNotification(ctx context.Context, name string, config *metadata.NotificationConfig) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.Notification = config
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set notification configuration: " + err.Error())
+	}
+	return nil
+}
+
+// GetReplication returns the bucket's replication configuration
+func (s *Service) GetReplication(ctx context.Context, name string) (*metadata.ReplicationConfig, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+	if bucket.Replication == nil {
+		return nil, s3errors.ErrReplicationConfigurationNotFoundError.WithResource(name)
+	}
+	return bucket.Replication, nil
+}
+
+// SetReplication sets the bucket's replication configuration
+func (s *Service) SetReplication(ctx context.Context, name string, config *metadata.ReplicationConfig) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	// Versioning must be enabled for replication
+	if bucket.Versioning != metadata.VersioningEnabled {
+		return s3errors.ErrInvalidBucketState.WithMessage("versioning must be enabled for replication")
+	}
+
+	bucket.Replication = config
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set replication configuration: " + err.Error())
+	}
+	return nil
+}
+
+// DeleteReplication deletes the bucket's replication configuration
+func (s *Service) DeleteReplication(ctx context.Context, name string) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.Replication = nil
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to delete replication configuration: " + err.Error())
+	}
+	return nil
+}
+
+// GetObjectLockConfiguration returns the bucket's object lock configuration
+func (s *Service) GetObjectLockConfiguration(ctx context.Context, name string) (*metadata.ObjectLockConfig, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+	if bucket.ObjectLockConfig == nil {
+		return nil, s3errors.ErrNoSuchObjectLockConfiguration.WithResource(name)
+	}
+	return bucket.ObjectLockConfig, nil
+}
+
+// SetObjectLockConfiguration sets the bucket's object lock configuration
+func (s *Service) SetObjectLockConfiguration(ctx context.Context, name string, config *metadata.ObjectLockConfig) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	// Object lock can only be enabled on bucket creation or if already enabled
+	if !bucket.ObjectLockEnabled && config.ObjectLockEnabled == "Enabled" {
+		return s3errors.ErrInvalidBucketState.WithMessage("object lock can only be enabled at bucket creation")
+	}
+
+	bucket.ObjectLockConfig = config
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set object lock configuration: " + err.Error())
+	}
+	return nil
+}
+
+// GetPublicAccessBlock returns the bucket's public access block configuration
+func (s *Service) GetPublicAccessBlock(ctx context.Context, name string) (*metadata.PublicAccessBlockConfig, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+	if bucket.PublicAccessBlock == nil {
+		return nil, s3errors.ErrNoSuchPublicAccessBlockConfiguration.WithResource(name)
+	}
+	return bucket.PublicAccessBlock, nil
+}
+
+// SetPublicAccessBlock sets the bucket's public access block configuration
+func (s *Service) SetPublicAccessBlock(ctx context.Context, name string, config *metadata.PublicAccessBlockConfig) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.PublicAccessBlock = config
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set public access block configuration: " + err.Error())
+	}
+	return nil
+}
+
+// DeletePublicAccessBlock deletes the bucket's public access block configuration
+func (s *Service) DeletePublicAccessBlock(ctx context.Context, name string) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.PublicAccessBlock = nil
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to delete public access block configuration: " + err.Error())
+	}
+	return nil
+}
+
+// GetOwnershipControls returns the bucket's ownership controls
+func (s *Service) GetOwnershipControls(ctx context.Context, name string) (*metadata.OwnershipControlsConfig, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+	if bucket.OwnershipControls == nil {
+		return nil, s3errors.ErrOwnershipControlsNotFoundError.WithResource(name)
+	}
+	return bucket.OwnershipControls, nil
+}
+
+// SetOwnershipControls sets the bucket's ownership controls
+func (s *Service) SetOwnershipControls(ctx context.Context, name string, config *metadata.OwnershipControlsConfig) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.OwnershipControls = config
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set ownership controls: " + err.Error())
+	}
+	return nil
+}
+
+// DeleteOwnershipControls deletes the bucket's ownership controls
+func (s *Service) DeleteOwnershipControls(ctx context.Context, name string) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	bucket.OwnershipControls = nil
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to delete ownership controls: " + err.Error())
+	}
+	return nil
+}
+
+// GetAccelerate returns the bucket's accelerate configuration
+func (s *Service) GetAccelerate(ctx context.Context, name string) (string, error) {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return "", s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+	// Return empty string if not set (means disabled)
+	return bucket.Accelerate, nil
+}
+
+// SetAccelerate sets the bucket's accelerate configuration
+func (s *Service) SetAccelerate(ctx context.Context, name string, status string) error {
+	bucket, err := s.store.GetBucket(ctx, name)
+	if err != nil {
+		return s3errors.ErrNoSuchBucket.WithResource(name)
+	}
+
+	// Validate status
+	if status != "" && status != "Enabled" && status != "Suspended" {
+		return s3errors.ErrInvalidArgument.WithMessage("invalid accelerate status")
+	}
+
+	bucket.Accelerate = status
+	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set accelerate configuration: " + err.Error())
+	}
+	return nil
+}

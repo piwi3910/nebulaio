@@ -92,6 +92,36 @@ type Bucket struct {
 	Policy            string            `json:"policy,omitempty"` // JSON policy document
 	CORS              []CORSRule        `json:"cors,omitempty"`
 	Lifecycle         []LifecycleRule   `json:"lifecycle,omitempty"`
+
+	// ACL configuration
+	ACL *BucketACL `json:"acl,omitempty"`
+
+	// Encryption configuration
+	Encryption *EncryptionConfig `json:"encryption,omitempty"`
+
+	// Website configuration
+	Website *WebsiteConfig `json:"website,omitempty"`
+
+	// Logging configuration
+	Logging *LoggingConfig `json:"logging,omitempty"`
+
+	// Notification configuration
+	Notification *NotificationConfig `json:"notification,omitempty"`
+
+	// Replication configuration
+	Replication *ReplicationConfig `json:"replication,omitempty"`
+
+	// Object Lock configuration
+	ObjectLockConfig *ObjectLockConfig `json:"object_lock_config,omitempty"`
+
+	// Public Access Block configuration
+	PublicAccessBlock *PublicAccessBlockConfig `json:"public_access_block,omitempty"`
+
+	// Ownership Controls
+	OwnershipControls *OwnershipControlsConfig `json:"ownership_controls,omitempty"`
+
+	// Accelerate configuration
+	Accelerate string `json:"accelerate,omitempty"` // "Enabled" or "Suspended"
 }
 
 // VersioningStatus represents bucket versioning state
@@ -128,6 +158,158 @@ type LifecycleTransition struct {
 	StorageClass string `json:"storage_class"`
 }
 
+// ACLGrant represents an ACL grant
+type ACLGrant struct {
+	GranteeType  string `json:"grantee_type"`  // "CanonicalUser", "AmazonCustomerByEmail", "Group"
+	GranteeID    string `json:"grantee_id"`    // Canonical user ID or email
+	GranteeURI   string `json:"grantee_uri"`   // For group grants (e.g., "http://acs.amazonaws.com/groups/global/AllUsers")
+	DisplayName  string `json:"display_name"`
+	Permission   string `json:"permission"`    // "FULL_CONTROL", "WRITE", "WRITE_ACP", "READ", "READ_ACP"
+}
+
+// BucketACL represents a bucket's access control list
+type BucketACL struct {
+	OwnerID          string     `json:"owner_id"`
+	OwnerDisplayName string     `json:"owner_display_name"`
+	Grants           []ACLGrant `json:"grants"`
+}
+
+// EncryptionRule represents a server-side encryption rule
+type EncryptionRule struct {
+	SSEAlgorithm     string `json:"sse_algorithm"`      // "AES256" or "aws:kms"
+	KMSMasterKeyID   string `json:"kms_master_key_id"`
+	BucketKeyEnabled bool   `json:"bucket_key_enabled"`
+}
+
+// EncryptionConfig represents bucket encryption configuration
+type EncryptionConfig struct {
+	Rules []EncryptionRule `json:"rules"`
+}
+
+// WebsiteRoutingRule represents a website routing rule
+type WebsiteRoutingRule struct {
+	Condition struct {
+		KeyPrefixEquals             string `json:"key_prefix_equals"`
+		HttpErrorCodeReturnedEquals string `json:"http_error_code_returned_equals"`
+	} `json:"condition"`
+	Redirect struct {
+		Protocol             string `json:"protocol"`
+		HostName             string `json:"host_name"`
+		ReplaceKeyPrefixWith string `json:"replace_key_prefix_with"`
+		ReplaceKeyWith       string `json:"replace_key_with"`
+		HttpRedirectCode     string `json:"http_redirect_code"`
+	} `json:"redirect"`
+}
+
+// WebsiteConfig represents bucket website configuration
+type WebsiteConfig struct {
+	IndexDocument         string               `json:"index_document"`
+	ErrorDocument         string               `json:"error_document"`
+	RedirectAllRequestsTo struct {
+		HostName string `json:"host_name"`
+		Protocol string `json:"protocol"`
+	} `json:"redirect_all_requests_to,omitempty"`
+	RoutingRules []WebsiteRoutingRule `json:"routing_rules,omitempty"`
+}
+
+// LoggingConfig represents bucket logging configuration
+type LoggingConfig struct {
+	TargetBucket string     `json:"target_bucket"`
+	TargetPrefix string     `json:"target_prefix"`
+	TargetGrants []ACLGrant `json:"target_grants,omitempty"`
+}
+
+// NotificationFilterRule represents a notification filter rule
+type NotificationFilterRule struct {
+	Name  string `json:"name"`  // "prefix" or "suffix"
+	Value string `json:"value"`
+}
+
+// TopicNotification represents an SNS topic notification
+type TopicNotification struct {
+	ID          string                   `json:"id"`
+	TopicArn    string                   `json:"topic_arn"`
+	Events      []string                 `json:"events"`
+	FilterRules []NotificationFilterRule `json:"filter_rules,omitempty"`
+}
+
+// QueueNotification represents an SQS queue notification
+type QueueNotification struct {
+	ID          string                   `json:"id"`
+	QueueArn    string                   `json:"queue_arn"`
+	Events      []string                 `json:"events"`
+	FilterRules []NotificationFilterRule `json:"filter_rules,omitempty"`
+}
+
+// LambdaNotification represents a Lambda function notification
+type LambdaNotification struct {
+	ID          string                   `json:"id"`
+	LambdaArn   string                   `json:"lambda_arn"`
+	Events      []string                 `json:"events"`
+	FilterRules []NotificationFilterRule `json:"filter_rules,omitempty"`
+}
+
+// NotificationConfig represents bucket notification configuration
+type NotificationConfig struct {
+	TopicConfigurations  []TopicNotification  `json:"topic_configurations,omitempty"`
+	QueueConfigurations  []QueueNotification  `json:"queue_configurations,omitempty"`
+	LambdaConfigurations []LambdaNotification `json:"lambda_configurations,omitempty"`
+}
+
+// ReplicationDestinationConfig represents replication destination
+type ReplicationDestinationConfig struct {
+	Bucket       string `json:"bucket"`
+	StorageClass string `json:"storage_class,omitempty"`
+	Account      string `json:"account,omitempty"`
+}
+
+// ReplicationRuleConfig represents a replication rule
+type ReplicationRuleConfig struct {
+	ID                      string                       `json:"id"`
+	Priority                int                          `json:"priority"`
+	Status                  string                       `json:"status"` // "Enabled" or "Disabled"
+	Prefix                  string                       `json:"prefix,omitempty"`
+	Destination             ReplicationDestinationConfig `json:"destination"`
+	DeleteMarkerReplication string                       `json:"delete_marker_replication,omitempty"` // "Enabled" or "Disabled"
+}
+
+// ReplicationConfig represents bucket replication configuration
+type ReplicationConfig struct {
+	Role  string                  `json:"role"`
+	Rules []ReplicationRuleConfig `json:"rules"`
+}
+
+// ObjectLockRetention represents default retention for object lock
+type ObjectLockRetention struct {
+	Mode  string `json:"mode"`  // "GOVERNANCE" or "COMPLIANCE"
+	Days  int    `json:"days,omitempty"`
+	Years int    `json:"years,omitempty"`
+}
+
+// ObjectLockConfig represents bucket object lock configuration
+type ObjectLockConfig struct {
+	ObjectLockEnabled string               `json:"object_lock_enabled"` // "Enabled"
+	DefaultRetention  *ObjectLockRetention `json:"default_retention,omitempty"`
+}
+
+// PublicAccessBlockConfig represents public access block configuration
+type PublicAccessBlockConfig struct {
+	BlockPublicAcls       bool `json:"block_public_acls"`
+	IgnorePublicAcls      bool `json:"ignore_public_acls"`
+	BlockPublicPolicy     bool `json:"block_public_policy"`
+	RestrictPublicBuckets bool `json:"restrict_public_buckets"`
+}
+
+// OwnershipControlsConfig represents ownership controls configuration
+type OwnershipControlsConfig struct {
+	Rules []OwnershipControlsRule `json:"rules"`
+}
+
+// OwnershipControlsRule represents an ownership controls rule
+type OwnershipControlsRule struct {
+	ObjectOwnership string `json:"object_ownership"` // "BucketOwnerPreferred", "ObjectWriter", "BucketOwnerEnforced"
+}
+
 // ObjectMeta represents object metadata
 type ObjectMeta struct {
 	Bucket       string            `json:"bucket"`
@@ -147,6 +329,21 @@ type ObjectMeta struct {
 
 	// Storage location info (for distributed storage)
 	StorageInfo *ObjectStorageInfo `json:"storage_info,omitempty"`
+
+	// Object Lock fields
+	ObjectLockMode            string     `json:"object_lock_mode,omitempty"`              // "GOVERNANCE" or "COMPLIANCE"
+	ObjectLockRetainUntilDate *time.Time `json:"object_lock_retain_until_date,omitempty"`
+	ObjectLockLegalHoldStatus string     `json:"object_lock_legal_hold_status,omitempty"` // "ON" or "OFF"
+
+	// ACL for object
+	ACL *ObjectACL `json:"acl,omitempty"`
+}
+
+// ObjectACL represents an object's access control list
+type ObjectACL struct {
+	OwnerID          string     `json:"owner_id"`
+	OwnerDisplayName string     `json:"owner_display_name"`
+	Grants           []ACLGrant `json:"grants"`
 }
 
 // ObjectStorageInfo contains information about where object data is stored

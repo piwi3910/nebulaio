@@ -622,6 +622,97 @@ var (
 		Message:    "Object is locked and cannot be overwritten or deleted",
 		StatusCode: http.StatusForbidden,
 	}
+
+	// ErrNoSuchObjectLockConfiguration is returned when object lock configuration does not exist.
+	ErrNoSuchObjectLockConfiguration = S3Error{
+		Code:       "ObjectLockConfigurationNotFoundError",
+		Message:    "Object Lock configuration does not exist for this bucket",
+		StatusCode: http.StatusNotFound,
+	}
+)
+
+// Encryption Errors
+var (
+	// ErrServerSideEncryptionConfigurationNotFoundError is returned when the encryption configuration was not found.
+	ErrServerSideEncryptionConfigurationNotFoundError = S3Error{
+		Code:       "ServerSideEncryptionConfigurationNotFoundError",
+		Message:    "The server side encryption configuration was not found",
+		StatusCode: http.StatusNotFound,
+	}
+)
+
+// Logging Errors
+var (
+	// ErrNoLoggingConfiguration is returned when the logging configuration does not exist.
+	ErrNoLoggingConfiguration = S3Error{
+		Code:       "NoLoggingConfiguration",
+		Message:    "The logging configuration does not exist",
+		StatusCode: http.StatusNotFound,
+	}
+)
+
+// Notification Errors
+var (
+	// ErrNoSuchNotificationConfiguration is returned when the notification configuration does not exist.
+	ErrNoSuchNotificationConfiguration = S3Error{
+		Code:       "NoSuchNotificationConfiguration",
+		Message:    "The notification configuration does not exist",
+		StatusCode: http.StatusNotFound,
+	}
+)
+
+// Public Access Block Errors
+var (
+	// ErrNoSuchPublicAccessBlockConfiguration is returned when the public access block configuration does not exist.
+	ErrNoSuchPublicAccessBlockConfiguration = S3Error{
+		Code:       "NoSuchPublicAccessBlockConfiguration",
+		Message:    "The public access block configuration does not exist",
+		StatusCode: http.StatusNotFound,
+	}
+)
+
+// Ownership Controls Errors
+var (
+	// ErrOwnershipControlsNotFoundError is returned when ownership controls do not exist.
+	ErrOwnershipControlsNotFoundError = S3Error{
+		Code:       "OwnershipControlsNotFoundError",
+		Message:    "The ownership controls do not exist for this bucket",
+		StatusCode: http.StatusNotFound,
+	}
+)
+
+// Analytics/Inventory/Metrics Errors
+var (
+	// ErrNoSuchAnalyticsConfiguration is returned when the analytics configuration does not exist.
+	ErrNoSuchAnalyticsConfiguration = S3Error{
+		Code:       "NoSuchConfiguration",
+		Message:    "The analytics configuration does not exist",
+		StatusCode: http.StatusNotFound,
+	}
+
+	// ErrNoSuchInventoryConfiguration is returned when the inventory configuration does not exist.
+	ErrNoSuchInventoryConfiguration = S3Error{
+		Code:       "NoSuchConfiguration",
+		Message:    "The inventory configuration does not exist",
+		StatusCode: http.StatusNotFound,
+	}
+
+	// ErrNoSuchMetricsConfiguration is returned when the metrics configuration does not exist.
+	ErrNoSuchMetricsConfiguration = S3Error{
+		Code:       "NoSuchConfiguration",
+		Message:    "The metrics configuration does not exist",
+		StatusCode: http.StatusNotFound,
+	}
+)
+
+// Intelligent Tiering Errors
+var (
+	// ErrNoSuchIntelligentTieringConfiguration is returned when the intelligent tiering configuration does not exist.
+	ErrNoSuchIntelligentTieringConfiguration = S3Error{
+		Code:       "NoSuchConfiguration",
+		Message:    "The intelligent tiering configuration does not exist",
+		StatusCode: http.StatusNotFound,
+	}
 )
 
 // Select Errors

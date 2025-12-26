@@ -163,6 +163,46 @@ func (h *Handler) handleBucketPut(w http.ResponseWriter, r *http.Request) {
 		h.PutBucketLifecycle(w, r)
 		return
 	}
+	if _, ok := query["acl"]; ok {
+		h.PutBucketAcl(w, r)
+		return
+	}
+	if _, ok := query["encryption"]; ok {
+		h.PutBucketEncryption(w, r)
+		return
+	}
+	if _, ok := query["website"]; ok {
+		h.PutBucketWebsite(w, r)
+		return
+	}
+	if _, ok := query["logging"]; ok {
+		h.PutBucketLogging(w, r)
+		return
+	}
+	if _, ok := query["notification"]; ok {
+		h.PutBucketNotificationConfiguration(w, r)
+		return
+	}
+	if _, ok := query["replication"]; ok {
+		h.PutBucketReplication(w, r)
+		return
+	}
+	if _, ok := query["object-lock"]; ok {
+		h.PutObjectLockConfiguration(w, r)
+		return
+	}
+	if _, ok := query["publicAccessBlock"]; ok {
+		h.PutPublicAccessBlock(w, r)
+		return
+	}
+	if _, ok := query["ownershipControls"]; ok {
+		h.PutBucketOwnershipControls(w, r)
+		return
+	}
+	if _, ok := query["accelerate"]; ok {
+		h.PutBucketAccelerateConfiguration(w, r)
+		return
+	}
 
 	// Default: create bucket
 	h.CreateBucket(w, r)
@@ -187,6 +227,26 @@ func (h *Handler) handleBucketDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, ok := query["lifecycle"]; ok {
 		h.DeleteBucketLifecycle(w, r)
+		return
+	}
+	if _, ok := query["encryption"]; ok {
+		h.DeleteBucketEncryption(w, r)
+		return
+	}
+	if _, ok := query["website"]; ok {
+		h.DeleteBucketWebsite(w, r)
+		return
+	}
+	if _, ok := query["replication"]; ok {
+		h.DeleteBucketReplication(w, r)
+		return
+	}
+	if _, ok := query["publicAccessBlock"]; ok {
+		h.DeletePublicAccessBlock(w, r)
+		return
+	}
+	if _, ok := query["ownershipControls"]; ok {
+		h.DeleteBucketOwnershipControls(w, r)
 		return
 	}
 
@@ -225,6 +285,50 @@ func (h *Handler) handleBucketGet(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, ok := query["versions"]; ok {
 		h.ListObjectVersions(w, r)
+		return
+	}
+	if _, ok := query["location"]; ok {
+		h.GetBucketLocation(w, r)
+		return
+	}
+	if _, ok := query["acl"]; ok {
+		h.GetBucketAcl(w, r)
+		return
+	}
+	if _, ok := query["encryption"]; ok {
+		h.GetBucketEncryption(w, r)
+		return
+	}
+	if _, ok := query["website"]; ok {
+		h.GetBucketWebsite(w, r)
+		return
+	}
+	if _, ok := query["logging"]; ok {
+		h.GetBucketLogging(w, r)
+		return
+	}
+	if _, ok := query["notification"]; ok {
+		h.GetBucketNotificationConfiguration(w, r)
+		return
+	}
+	if _, ok := query["replication"]; ok {
+		h.GetBucketReplication(w, r)
+		return
+	}
+	if _, ok := query["object-lock"]; ok {
+		h.GetObjectLockConfiguration(w, r)
+		return
+	}
+	if _, ok := query["publicAccessBlock"]; ok {
+		h.GetPublicAccessBlock(w, r)
+		return
+	}
+	if _, ok := query["ownershipControls"]; ok {
+		h.GetBucketOwnershipControls(w, r)
+		return
+	}
+	if _, ok := query["accelerate"]; ok {
+		h.GetBucketAccelerateConfiguration(w, r)
 		return
 	}
 
@@ -318,6 +422,24 @@ func (h *Handler) handleObjectPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for object ACL
+	if _, ok := query["acl"]; ok {
+		h.PutObjectAcl(w, r)
+		return
+	}
+
+	// Check for object retention
+	if _, ok := query["retention"]; ok {
+		h.PutObjectRetention(w, r)
+		return
+	}
+
+	// Check for object legal-hold
+	if _, ok := query["legal-hold"]; ok {
+		h.PutObjectLegalHold(w, r)
+		return
+	}
+
 	// Check for multipart upload part
 	if partNumberStr := query.Get("partNumber"); partNumberStr != "" {
 		h.UploadPart(w, r)
@@ -341,6 +463,24 @@ func (h *Handler) handleObjectGet(w http.ResponseWriter, r *http.Request) {
 	// Check for object tagging
 	if _, ok := query["tagging"]; ok {
 		h.GetObjectTagging(w, r)
+		return
+	}
+
+	// Check for object ACL
+	if _, ok := query["acl"]; ok {
+		h.GetObjectAcl(w, r)
+		return
+	}
+
+	// Check for object retention
+	if _, ok := query["retention"]; ok {
+		h.GetObjectRetention(w, r)
+		return
+	}
+
+	// Check for object legal-hold
+	if _, ok := query["legal-hold"]; ok {
+		h.GetObjectLegalHold(w, r)
 		return
 	}
 
@@ -1624,6 +1764,1044 @@ func (h *Handler) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeXML(w, http.StatusOK, response)
+}
+
+// GetBucketLocation returns the bucket's region/location
+func (h *Handler) GetBucketLocation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	location, err := h.bucket.GetLocation(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	// AWS returns empty LocationConstraint for us-east-1
+	response := s3types.LocationConstraint{}
+	if location != "us-east-1" {
+		response.Location = location
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// GetBucketAcl returns the bucket's ACL
+func (h *Handler) GetBucketAcl(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	acl, err := h.bucket.GetBucketACL(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	response := s3types.AccessControlPolicy{
+		Owner: s3types.Owner{
+			ID:          acl.OwnerID,
+			DisplayName: acl.OwnerDisplayName,
+		},
+	}
+
+	for _, grant := range acl.Grants {
+		g := s3types.Grant{
+			Permission: grant.Permission,
+			Grantee: s3types.Grantee{
+				Type:        grant.GranteeType,
+				ID:          grant.GranteeID,
+				DisplayName: grant.DisplayName,
+				URI:         grant.GranteeURI,
+			},
+		}
+		response.AccessControlList.Grant = append(response.AccessControlList.Grant, g)
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutBucketAcl sets the bucket's ACL
+func (h *Handler) PutBucketAcl(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	// Check for canned ACL header
+	cannedACL := r.Header.Get("x-amz-acl")
+	if cannedACL != "" {
+		// Handle canned ACL
+		owner := middleware.GetOwnerID(ctx)
+		acl := &metadata.BucketACL{
+			OwnerID:          owner,
+			OwnerDisplayName: owner,
+		}
+
+		switch cannedACL {
+		case "private":
+			acl.Grants = []metadata.ACLGrant{
+				{GranteeType: "CanonicalUser", GranteeID: owner, DisplayName: owner, Permission: "FULL_CONTROL"},
+			}
+		case "public-read":
+			acl.Grants = []metadata.ACLGrant{
+				{GranteeType: "CanonicalUser", GranteeID: owner, DisplayName: owner, Permission: "FULL_CONTROL"},
+				{GranteeType: "Group", GranteeURI: "http://acs.amazonaws.com/groups/global/AllUsers", Permission: "READ"},
+			}
+		case "public-read-write":
+			acl.Grants = []metadata.ACLGrant{
+				{GranteeType: "CanonicalUser", GranteeID: owner, DisplayName: owner, Permission: "FULL_CONTROL"},
+				{GranteeType: "Group", GranteeURI: "http://acs.amazonaws.com/groups/global/AllUsers", Permission: "READ"},
+				{GranteeType: "Group", GranteeURI: "http://acs.amazonaws.com/groups/global/AllUsers", Permission: "WRITE"},
+			}
+		case "authenticated-read":
+			acl.Grants = []metadata.ACLGrant{
+				{GranteeType: "CanonicalUser", GranteeID: owner, DisplayName: owner, Permission: "FULL_CONTROL"},
+				{GranteeType: "Group", GranteeURI: "http://acs.amazonaws.com/groups/global/AuthenticatedUsers", Permission: "READ"},
+			}
+		default:
+			writeS3Error(w, "InvalidArgument", "Invalid canned ACL: "+cannedACL, http.StatusBadRequest)
+			return
+		}
+
+		if err := h.bucket.SetBucketACL(ctx, bucketName, acl); err != nil {
+			writeS3ErrorTypedWithResource(w, r, err, bucketName)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Parse XML body
+	var aclPolicy s3types.AccessControlPolicy
+	if err := xml.NewDecoder(r.Body).Decode(&aclPolicy); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	acl := &metadata.BucketACL{
+		OwnerID:          aclPolicy.Owner.ID,
+		OwnerDisplayName: aclPolicy.Owner.DisplayName,
+	}
+
+	for _, grant := range aclPolicy.AccessControlList.Grant {
+		acl.Grants = append(acl.Grants, metadata.ACLGrant{
+			GranteeType: grant.Grantee.Type,
+			GranteeID:   grant.Grantee.ID,
+			GranteeURI:  grant.Grantee.URI,
+			DisplayName: grant.Grantee.DisplayName,
+			Permission:  grant.Permission,
+		})
+	}
+
+	if err := h.bucket.SetBucketACL(ctx, bucketName, acl); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// GetBucketEncryption returns the bucket's encryption configuration
+func (h *Handler) GetBucketEncryption(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	config, err := h.bucket.GetEncryption(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	response := s3types.ServerSideEncryptionConfiguration{}
+	for _, rule := range config.Rules {
+		sseRule := s3types.ServerSideEncryptionRule{
+			BucketKeyEnabled: rule.BucketKeyEnabled,
+		}
+		sseRule.ApplyServerSideEncryptionByDefault.SSEAlgorithm = rule.SSEAlgorithm
+		sseRule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID = rule.KMSMasterKeyID
+		response.Rule = append(response.Rule, sseRule)
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutBucketEncryption sets the bucket's encryption configuration
+func (h *Handler) PutBucketEncryption(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	var sseConfig s3types.ServerSideEncryptionConfiguration
+	if err := xml.NewDecoder(r.Body).Decode(&sseConfig); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	config := &metadata.EncryptionConfig{}
+	for _, rule := range sseConfig.Rule {
+		config.Rules = append(config.Rules, metadata.EncryptionRule{
+			SSEAlgorithm:     rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm,
+			KMSMasterKeyID:   rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID,
+			BucketKeyEnabled: rule.BucketKeyEnabled,
+		})
+	}
+
+	if err := h.bucket.SetEncryption(ctx, bucketName, config); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// DeleteBucketEncryption deletes the bucket's encryption configuration
+func (h *Handler) DeleteBucketEncryption(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	if err := h.bucket.DeleteEncryption(ctx, bucketName); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetBucketWebsite returns the bucket's website configuration
+func (h *Handler) GetBucketWebsite(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	config, err := h.bucket.GetWebsite(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	response := s3types.WebsiteConfiguration{}
+	if config.RedirectAllRequestsTo.HostName != "" {
+		response.RedirectAllRequestsTo = &s3types.RedirectAllRequestsTo{
+			HostName: config.RedirectAllRequestsTo.HostName,
+			Protocol: config.RedirectAllRequestsTo.Protocol,
+		}
+	} else {
+		if config.IndexDocument != "" {
+			response.IndexDocument = &s3types.IndexDocument{Suffix: config.IndexDocument}
+		}
+		if config.ErrorDocument != "" {
+			response.ErrorDocument = &s3types.ErrorDocument{Key: config.ErrorDocument}
+		}
+		if len(config.RoutingRules) > 0 {
+			response.RoutingRules = &struct {
+				RoutingRule []s3types.RoutingRule `xml:"RoutingRule"`
+			}{}
+			for _, rule := range config.RoutingRules {
+				response.RoutingRules.RoutingRule = append(response.RoutingRules.RoutingRule, s3types.RoutingRule{
+					Condition: s3types.RoutingRuleCondition{
+						KeyPrefixEquals:             rule.Condition.KeyPrefixEquals,
+						HttpErrorCodeReturnedEquals: rule.Condition.HttpErrorCodeReturnedEquals,
+					},
+					Redirect: s3types.RoutingRuleRedirect{
+						Protocol:             rule.Redirect.Protocol,
+						HostName:             rule.Redirect.HostName,
+						ReplaceKeyPrefixWith: rule.Redirect.ReplaceKeyPrefixWith,
+						ReplaceKeyWith:       rule.Redirect.ReplaceKeyWith,
+						HttpRedirectCode:     rule.Redirect.HttpRedirectCode,
+					},
+				})
+			}
+		}
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutBucketWebsite sets the bucket's website configuration
+func (h *Handler) PutBucketWebsite(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	var websiteConfig s3types.WebsiteConfiguration
+	if err := xml.NewDecoder(r.Body).Decode(&websiteConfig); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	config := &metadata.WebsiteConfig{}
+	if websiteConfig.RedirectAllRequestsTo != nil {
+		config.RedirectAllRequestsTo.HostName = websiteConfig.RedirectAllRequestsTo.HostName
+		config.RedirectAllRequestsTo.Protocol = websiteConfig.RedirectAllRequestsTo.Protocol
+	} else {
+		if websiteConfig.IndexDocument != nil {
+			config.IndexDocument = websiteConfig.IndexDocument.Suffix
+		}
+		if websiteConfig.ErrorDocument != nil {
+			config.ErrorDocument = websiteConfig.ErrorDocument.Key
+		}
+		if websiteConfig.RoutingRules != nil {
+			for _, rule := range websiteConfig.RoutingRules.RoutingRule {
+				config.RoutingRules = append(config.RoutingRules, metadata.WebsiteRoutingRule{
+					Condition: struct {
+						KeyPrefixEquals             string `json:"key_prefix_equals"`
+						HttpErrorCodeReturnedEquals string `json:"http_error_code_returned_equals"`
+					}{
+						KeyPrefixEquals:             rule.Condition.KeyPrefixEquals,
+						HttpErrorCodeReturnedEquals: rule.Condition.HttpErrorCodeReturnedEquals,
+					},
+					Redirect: struct {
+						Protocol             string `json:"protocol"`
+						HostName             string `json:"host_name"`
+						ReplaceKeyPrefixWith string `json:"replace_key_prefix_with"`
+						ReplaceKeyWith       string `json:"replace_key_with"`
+						HttpRedirectCode     string `json:"http_redirect_code"`
+					}{
+						Protocol:             rule.Redirect.Protocol,
+						HostName:             rule.Redirect.HostName,
+						ReplaceKeyPrefixWith: rule.Redirect.ReplaceKeyPrefixWith,
+						ReplaceKeyWith:       rule.Redirect.ReplaceKeyWith,
+						HttpRedirectCode:     rule.Redirect.HttpRedirectCode,
+					},
+				})
+			}
+		}
+	}
+
+	if err := h.bucket.SetWebsite(ctx, bucketName, config); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// DeleteBucketWebsite deletes the bucket's website configuration
+func (h *Handler) DeleteBucketWebsite(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	if err := h.bucket.DeleteWebsite(ctx, bucketName); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetBucketLogging returns the bucket's logging configuration
+func (h *Handler) GetBucketLogging(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	config, err := h.bucket.GetLogging(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	response := s3types.BucketLoggingStatus{}
+	if config.TargetBucket != "" {
+		response.LoggingEnabled = &s3types.LoggingEnabled{
+			TargetBucket: config.TargetBucket,
+			TargetPrefix: config.TargetPrefix,
+		}
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutBucketLogging sets the bucket's logging configuration
+func (h *Handler) PutBucketLogging(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	var loggingStatus s3types.BucketLoggingStatus
+	if err := xml.NewDecoder(r.Body).Decode(&loggingStatus); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var config *metadata.LoggingConfig
+	if loggingStatus.LoggingEnabled != nil {
+		config = &metadata.LoggingConfig{
+			TargetBucket: loggingStatus.LoggingEnabled.TargetBucket,
+			TargetPrefix: loggingStatus.LoggingEnabled.TargetPrefix,
+		}
+	}
+
+	if err := h.bucket.SetLogging(ctx, bucketName, config); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// GetBucketNotificationConfiguration returns the bucket's notification configuration
+func (h *Handler) GetBucketNotificationConfiguration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	config, err := h.bucket.GetNotification(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	response := s3types.NotificationConfiguration{}
+	for _, topic := range config.TopicConfigurations {
+		response.TopicConfiguration = append(response.TopicConfiguration, s3types.TopicConfiguration{
+			Id:    topic.ID,
+			Topic: topic.TopicArn,
+			Event: topic.Events,
+		})
+	}
+	for _, queue := range config.QueueConfigurations {
+		response.QueueConfiguration = append(response.QueueConfiguration, s3types.QueueConfiguration{
+			Id:    queue.ID,
+			Queue: queue.QueueArn,
+			Event: queue.Events,
+		})
+	}
+	for _, lambda := range config.LambdaConfigurations {
+		response.LambdaFunctionConfiguration = append(response.LambdaFunctionConfiguration, s3types.LambdaFunctionConfiguration{
+			Id:             lambda.ID,
+			LambdaFunction: lambda.LambdaArn,
+			Event:          lambda.Events,
+		})
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutBucketNotificationConfiguration sets the bucket's notification configuration
+func (h *Handler) PutBucketNotificationConfiguration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	var notifConfig s3types.NotificationConfiguration
+	if err := xml.NewDecoder(r.Body).Decode(&notifConfig); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	config := &metadata.NotificationConfig{}
+	for _, topic := range notifConfig.TopicConfiguration {
+		config.TopicConfigurations = append(config.TopicConfigurations, metadata.TopicNotification{
+			ID:       topic.Id,
+			TopicArn: topic.Topic,
+			Events:   topic.Event,
+		})
+	}
+	for _, queue := range notifConfig.QueueConfiguration {
+		config.QueueConfigurations = append(config.QueueConfigurations, metadata.QueueNotification{
+			ID:       queue.Id,
+			QueueArn: queue.Queue,
+			Events:   queue.Event,
+		})
+	}
+	for _, lambda := range notifConfig.LambdaFunctionConfiguration {
+		config.LambdaConfigurations = append(config.LambdaConfigurations, metadata.LambdaNotification{
+			ID:        lambda.Id,
+			LambdaArn: lambda.LambdaFunction,
+			Events:    lambda.Event,
+		})
+	}
+
+	if err := h.bucket.SetNotification(ctx, bucketName, config); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// GetBucketReplication returns the bucket's replication configuration
+func (h *Handler) GetBucketReplication(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	config, err := h.bucket.GetReplication(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	response := s3types.ReplicationConfiguration{
+		Role: config.Role,
+	}
+	for _, rule := range config.Rules {
+		replRule := s3types.ReplicationRule{
+			ID:     rule.ID,
+			Status: rule.Status,
+			Prefix: rule.Prefix,
+			Destination: s3types.ReplicationDestination{
+				Bucket:       rule.Destination.Bucket,
+				StorageClass: rule.Destination.StorageClass,
+				Account:      rule.Destination.Account,
+			},
+		}
+		if rule.DeleteMarkerReplication != "" {
+			replRule.DeleteMarkerReplication = &s3types.DeleteMarkerReplication{
+				Status: rule.DeleteMarkerReplication,
+			}
+		}
+		response.Rule = append(response.Rule, replRule)
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutBucketReplication sets the bucket's replication configuration
+func (h *Handler) PutBucketReplication(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	var replConfig s3types.ReplicationConfiguration
+	if err := xml.NewDecoder(r.Body).Decode(&replConfig); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	config := &metadata.ReplicationConfig{
+		Role: replConfig.Role,
+	}
+	for _, rule := range replConfig.Rule {
+		replRule := metadata.ReplicationRuleConfig{
+			ID:       rule.ID,
+			Priority: rule.Priority,
+			Status:   rule.Status,
+			Prefix:   rule.Prefix,
+			Destination: metadata.ReplicationDestinationConfig{
+				Bucket:       rule.Destination.Bucket,
+				StorageClass: rule.Destination.StorageClass,
+				Account:      rule.Destination.Account,
+			},
+		}
+		if rule.DeleteMarkerReplication != nil {
+			replRule.DeleteMarkerReplication = rule.DeleteMarkerReplication.Status
+		}
+		config.Rules = append(config.Rules, replRule)
+	}
+
+	if err := h.bucket.SetReplication(ctx, bucketName, config); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// DeleteBucketReplication deletes the bucket's replication configuration
+func (h *Handler) DeleteBucketReplication(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	if err := h.bucket.DeleteReplication(ctx, bucketName); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetObjectLockConfiguration returns the bucket's object lock configuration
+func (h *Handler) GetObjectLockConfiguration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	config, err := h.bucket.GetObjectLockConfiguration(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	response := s3types.ObjectLockConfiguration{
+		ObjectLockEnabled: config.ObjectLockEnabled,
+	}
+	if config.DefaultRetention != nil {
+		response.Rule = &s3types.ObjectLockRule{
+			DefaultRetention: &struct {
+				Mode  string `xml:"Mode"`
+				Days  int    `xml:"Days,omitempty"`
+				Years int    `xml:"Years,omitempty"`
+			}{
+				Mode:  config.DefaultRetention.Mode,
+				Days:  config.DefaultRetention.Days,
+				Years: config.DefaultRetention.Years,
+			},
+		}
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutObjectLockConfiguration sets the bucket's object lock configuration
+func (h *Handler) PutObjectLockConfiguration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	var lockConfig s3types.ObjectLockConfiguration
+	if err := xml.NewDecoder(r.Body).Decode(&lockConfig); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	config := &metadata.ObjectLockConfig{
+		ObjectLockEnabled: lockConfig.ObjectLockEnabled,
+	}
+	if lockConfig.Rule != nil && lockConfig.Rule.DefaultRetention != nil {
+		config.DefaultRetention = &metadata.ObjectLockRetention{
+			Mode:  lockConfig.Rule.DefaultRetention.Mode,
+			Days:  lockConfig.Rule.DefaultRetention.Days,
+			Years: lockConfig.Rule.DefaultRetention.Years,
+		}
+	}
+
+	if err := h.bucket.SetObjectLockConfiguration(ctx, bucketName, config); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// GetPublicAccessBlock returns the bucket's public access block configuration
+func (h *Handler) GetPublicAccessBlock(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	config, err := h.bucket.GetPublicAccessBlock(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	response := s3types.PublicAccessBlockConfiguration{
+		BlockPublicAcls:       config.BlockPublicAcls,
+		IgnorePublicAcls:      config.IgnorePublicAcls,
+		BlockPublicPolicy:     config.BlockPublicPolicy,
+		RestrictPublicBuckets: config.RestrictPublicBuckets,
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutPublicAccessBlock sets the bucket's public access block configuration
+func (h *Handler) PutPublicAccessBlock(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	var pabConfig s3types.PublicAccessBlockConfiguration
+	if err := xml.NewDecoder(r.Body).Decode(&pabConfig); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	config := &metadata.PublicAccessBlockConfig{
+		BlockPublicAcls:       pabConfig.BlockPublicAcls,
+		IgnorePublicAcls:      pabConfig.IgnorePublicAcls,
+		BlockPublicPolicy:     pabConfig.BlockPublicPolicy,
+		RestrictPublicBuckets: pabConfig.RestrictPublicBuckets,
+	}
+
+	if err := h.bucket.SetPublicAccessBlock(ctx, bucketName, config); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// DeletePublicAccessBlock deletes the bucket's public access block configuration
+func (h *Handler) DeletePublicAccessBlock(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	if err := h.bucket.DeletePublicAccessBlock(ctx, bucketName); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetBucketOwnershipControls returns the bucket's ownership controls
+func (h *Handler) GetBucketOwnershipControls(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	config, err := h.bucket.GetOwnershipControls(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	response := s3types.OwnershipControls{}
+	for _, rule := range config.Rules {
+		response.Rules = append(response.Rules, struct {
+			ObjectOwnership string `xml:"ObjectOwnership"`
+		}{
+			ObjectOwnership: rule.ObjectOwnership,
+		})
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutBucketOwnershipControls sets the bucket's ownership controls
+func (h *Handler) PutBucketOwnershipControls(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	var ownershipConfig s3types.OwnershipControls
+	if err := xml.NewDecoder(r.Body).Decode(&ownershipConfig); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	config := &metadata.OwnershipControlsConfig{}
+	for _, rule := range ownershipConfig.Rules {
+		config.Rules = append(config.Rules, metadata.OwnershipControlsRule{
+			ObjectOwnership: rule.ObjectOwnership,
+		})
+	}
+
+	if err := h.bucket.SetOwnershipControls(ctx, bucketName, config); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// DeleteBucketOwnershipControls deletes the bucket's ownership controls
+func (h *Handler) DeleteBucketOwnershipControls(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	if err := h.bucket.DeleteOwnershipControls(ctx, bucketName); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetBucketAccelerateConfiguration returns the bucket's accelerate configuration
+func (h *Handler) GetBucketAccelerateConfiguration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	status, err := h.bucket.GetAccelerate(ctx, bucketName)
+	if err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	response := s3types.AccelerateConfiguration{
+		Status: status,
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutBucketAccelerateConfiguration sets the bucket's accelerate configuration
+func (h *Handler) PutBucketAccelerateConfiguration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+
+	var accelConfig s3types.AccelerateConfiguration
+	if err := xml.NewDecoder(r.Body).Decode(&accelConfig); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := h.bucket.SetAccelerate(ctx, bucketName, accelConfig.Status); err != nil {
+		writeS3ErrorTypedWithResource(w, r, err, bucketName)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// GetObjectAcl returns the object's ACL
+func (h *Handler) GetObjectAcl(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+	key := chi.URLParam(r, "key")
+
+	meta, err := h.object.HeadObject(ctx, bucketName, key)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
+			return
+		}
+		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return default ACL if none set
+	acl := meta.ACL
+	if acl == nil {
+		acl = &metadata.ObjectACL{
+			OwnerID:          meta.Owner,
+			OwnerDisplayName: meta.Owner,
+			Grants: []metadata.ACLGrant{
+				{
+					GranteeType: "CanonicalUser",
+					GranteeID:   meta.Owner,
+					DisplayName: meta.Owner,
+					Permission:  "FULL_CONTROL",
+				},
+			},
+		}
+	}
+
+	response := s3types.AccessControlPolicy{
+		Owner: s3types.Owner{
+			ID:          acl.OwnerID,
+			DisplayName: acl.OwnerDisplayName,
+		},
+	}
+	for _, grant := range acl.Grants {
+		response.AccessControlList.Grant = append(response.AccessControlList.Grant, s3types.Grant{
+			Permission: grant.Permission,
+			Grantee: s3types.Grantee{
+				Type:        grant.GranteeType,
+				ID:          grant.GranteeID,
+				DisplayName: grant.DisplayName,
+				URI:         grant.GranteeURI,
+			},
+		})
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutObjectAcl sets the object's ACL
+func (h *Handler) PutObjectAcl(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+	key := chi.URLParam(r, "key")
+
+	meta, err := h.object.HeadObject(ctx, bucketName, key)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
+			return
+		}
+		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Check for canned ACL header
+	cannedACL := r.Header.Get("x-amz-acl")
+	if cannedACL != "" {
+		acl := &metadata.ObjectACL{
+			OwnerID:          meta.Owner,
+			OwnerDisplayName: meta.Owner,
+		}
+
+		switch cannedACL {
+		case "private":
+			acl.Grants = []metadata.ACLGrant{
+				{GranteeType: "CanonicalUser", GranteeID: meta.Owner, DisplayName: meta.Owner, Permission: "FULL_CONTROL"},
+			}
+		case "public-read":
+			acl.Grants = []metadata.ACLGrant{
+				{GranteeType: "CanonicalUser", GranteeID: meta.Owner, DisplayName: meta.Owner, Permission: "FULL_CONTROL"},
+				{GranteeType: "Group", GranteeURI: "http://acs.amazonaws.com/groups/global/AllUsers", Permission: "READ"},
+			}
+		case "public-read-write":
+			acl.Grants = []metadata.ACLGrant{
+				{GranteeType: "CanonicalUser", GranteeID: meta.Owner, DisplayName: meta.Owner, Permission: "FULL_CONTROL"},
+				{GranteeType: "Group", GranteeURI: "http://acs.amazonaws.com/groups/global/AllUsers", Permission: "READ"},
+				{GranteeType: "Group", GranteeURI: "http://acs.amazonaws.com/groups/global/AllUsers", Permission: "WRITE"},
+			}
+		case "authenticated-read":
+			acl.Grants = []metadata.ACLGrant{
+				{GranteeType: "CanonicalUser", GranteeID: meta.Owner, DisplayName: meta.Owner, Permission: "FULL_CONTROL"},
+				{GranteeType: "Group", GranteeURI: "http://acs.amazonaws.com/groups/global/AuthenticatedUsers", Permission: "READ"},
+			}
+		case "bucket-owner-read":
+			acl.Grants = []metadata.ACLGrant{
+				{GranteeType: "CanonicalUser", GranteeID: meta.Owner, DisplayName: meta.Owner, Permission: "FULL_CONTROL"},
+			}
+		case "bucket-owner-full-control":
+			acl.Grants = []metadata.ACLGrant{
+				{GranteeType: "CanonicalUser", GranteeID: meta.Owner, DisplayName: meta.Owner, Permission: "FULL_CONTROL"},
+			}
+		default:
+			writeS3Error(w, "InvalidArgument", "Invalid canned ACL: "+cannedACL, http.StatusBadRequest)
+			return
+		}
+
+		if err := h.object.SetObjectACL(ctx, bucketName, key, acl); err != nil {
+			writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Parse XML body
+	var aclPolicy s3types.AccessControlPolicy
+	if err := xml.NewDecoder(r.Body).Decode(&aclPolicy); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	acl := &metadata.ObjectACL{
+		OwnerID:          aclPolicy.Owner.ID,
+		OwnerDisplayName: aclPolicy.Owner.DisplayName,
+	}
+	for _, grant := range aclPolicy.AccessControlList.Grant {
+		acl.Grants = append(acl.Grants, metadata.ACLGrant{
+			GranteeType: grant.Grantee.Type,
+			GranteeID:   grant.Grantee.ID,
+			GranteeURI:  grant.Grantee.URI,
+			DisplayName: grant.Grantee.DisplayName,
+			Permission:  grant.Permission,
+		})
+	}
+
+	if err := h.object.SetObjectACL(ctx, bucketName, key, acl); err != nil {
+		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// GetObjectRetention returns the object's retention configuration
+func (h *Handler) GetObjectRetention(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+	key := chi.URLParam(r, "key")
+	versionID := r.URL.Query().Get("versionId")
+
+	var meta *metadata.ObjectMeta
+	var err error
+	if versionID != "" {
+		meta, err = h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
+	} else {
+		meta, err = h.object.HeadObject(ctx, bucketName, key)
+	}
+
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
+			return
+		}
+		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if meta.ObjectLockMode == "" || meta.ObjectLockRetainUntilDate == nil {
+		writeS3Error(w, "NoSuchObjectLockConfiguration", "The object lock configuration does not exist", http.StatusNotFound)
+		return
+	}
+
+	response := s3types.ObjectRetention{
+		Mode:            meta.ObjectLockMode,
+		RetainUntilDate: meta.ObjectLockRetainUntilDate.Format(time.RFC3339),
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutObjectRetention sets the object's retention configuration
+func (h *Handler) PutObjectRetention(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+	key := chi.URLParam(r, "key")
+	versionID := r.URL.Query().Get("versionId")
+
+	var retention s3types.ObjectRetention
+	if err := xml.NewDecoder(r.Body).Decode(&retention); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	retainUntil, err := time.Parse(time.RFC3339, retention.RetainUntilDate)
+	if err != nil {
+		writeS3Error(w, "InvalidArgument", "Invalid RetainUntilDate format", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.object.SetObjectRetention(ctx, bucketName, key, versionID, retention.Mode, retainUntil); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
+			return
+		}
+		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// GetObjectLegalHold returns the object's legal hold status
+func (h *Handler) GetObjectLegalHold(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+	key := chi.URLParam(r, "key")
+	versionID := r.URL.Query().Get("versionId")
+
+	var meta *metadata.ObjectMeta
+	var err error
+	if versionID != "" {
+		meta, err = h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
+	} else {
+		meta, err = h.object.HeadObject(ctx, bucketName, key)
+	}
+
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
+			return
+		}
+		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	status := "OFF"
+	if meta.ObjectLockLegalHoldStatus == "ON" {
+		status = "ON"
+	}
+
+	response := s3types.LegalHold{
+		Status: status,
+	}
+
+	writeXML(w, http.StatusOK, response)
+}
+
+// PutObjectLegalHold sets the object's legal hold status
+func (h *Handler) PutObjectLegalHold(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucketName := chi.URLParam(r, "bucket")
+	key := chi.URLParam(r, "key")
+	versionID := r.URL.Query().Get("versionId")
+
+	var legalHold s3types.LegalHold
+	if err := xml.NewDecoder(r.Body).Decode(&legalHold); err != nil {
+		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if legalHold.Status != "ON" && legalHold.Status != "OFF" {
+		writeS3Error(w, "InvalidArgument", "Legal hold status must be ON or OFF", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.object.SetObjectLegalHold(ctx, bucketName, key, versionID, legalHold.Status); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
+			return
+		}
+		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // Helper functions

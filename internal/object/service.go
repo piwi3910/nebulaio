@@ -1096,3 +1096,85 @@ func generateVersionID() string {
 func generateUploadID() string {
 	return uuid.New().String()
 }
+
+// SetObjectACL sets the ACL for an object
+func (s *Service) SetObjectACL(ctx context.Context, bucket, key string, acl *metadata.ObjectACL) error {
+	// Get the object metadata
+	meta, err := s.store.GetObjectMeta(ctx, bucket, key)
+	if err != nil {
+		return fmt.Errorf("object not found: %w", err)
+	}
+
+	// Update the ACL
+	meta.ACL = acl
+
+	// Save the updated metadata using PutObjectMeta
+	if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+		return fmt.Errorf("failed to update object ACL: %w", err)
+	}
+
+	return nil
+}
+
+// SetObjectRetention sets the retention configuration for an object
+func (s *Service) SetObjectRetention(ctx context.Context, bucket, key, versionID, mode string, retainUntilDate time.Time) error {
+	var meta *metadata.ObjectMeta
+	var err error
+
+	if versionID != "" {
+		meta, err = s.store.GetObjectVersion(ctx, bucket, key, versionID)
+	} else {
+		meta, err = s.store.GetObjectMeta(ctx, bucket, key)
+	}
+
+	if err != nil {
+		return fmt.Errorf("object not found: %w", err)
+	}
+
+	// Validate mode
+	if mode != "GOVERNANCE" && mode != "COMPLIANCE" {
+		return fmt.Errorf("invalid retention mode: %s", mode)
+	}
+
+	// Validate retain until date
+	if retainUntilDate.Before(time.Now()) {
+		return fmt.Errorf("retain until date must be in the future")
+	}
+
+	// Update retention settings
+	meta.ObjectLockMode = mode
+	meta.ObjectLockRetainUntilDate = &retainUntilDate
+
+	// Save the updated metadata using PutObjectMeta
+	if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+		return fmt.Errorf("failed to update object retention: %w", err)
+	}
+
+	return nil
+}
+
+// SetObjectLegalHold sets the legal hold status for an object
+func (s *Service) SetObjectLegalHold(ctx context.Context, bucket, key, versionID, status string) error {
+	var meta *metadata.ObjectMeta
+	var err error
+
+	if versionID != "" {
+		meta, err = s.store.GetObjectVersion(ctx, bucket, key, versionID)
+	} else {
+		meta, err = s.store.GetObjectMeta(ctx, bucket, key)
+	}
+
+	if err != nil {
+		return fmt.Errorf("object not found: %w", err)
+	}
+
+	// Update legal hold status
+	meta.ObjectLockLegalHoldStatus = status
+
+	// Save the updated metadata using PutObjectMeta
+	if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+		return fmt.Errorf("failed to update object legal hold: %w", err)
+	}
+
+	return nil
+}
