@@ -17,6 +17,20 @@ services:
       - NEBULAIO_LOG_LEVEL=info
       - NEBULAIO_AUTH_ROOT_USER=admin
       - NEBULAIO_AUTH_ROOT_PASSWORD=admin123
+      # Enterprise DRAM Cache (uncomment to enable)
+      # - NEBULAIO_CACHE_ENABLED=true
+      # - NEBULAIO_CACHE_MAX_SIZE=8589934592
+      # - NEBULAIO_CACHE_EVICTION_POLICY=arc
+      # - NEBULAIO_CACHE_PREFETCH_ENABLED=true
+      # Data Firewall (uncomment to enable)
+      # - NEBULAIO_FIREWALL_ENABLED=true
+      # - NEBULAIO_FIREWALL_RATE_LIMIT_RPS=1000
+      # - NEBULAIO_FIREWALL_BANDWIDTH_MAX_BPS=1073741824
+      # S3 Select (enabled by default)
+      - NEBULAIO_S3SELECT_ENABLED=true
+      # Audit Logging (enabled by default)
+      - NEBULAIO_AUDIT_ENABLED=true
+      - NEBULAIO_AUDIT_FILE_PATH=/data/audit/audit.log
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health/ready"]

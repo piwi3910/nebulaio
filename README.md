@@ -4,12 +4,41 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 
 ## Features
 
+### Core Features
 - **Full S3 API Compatibility** - Works with existing S3 SDKs and tools (AWS CLI, boto3, etc.)
 - **Web Console** - Modern React-based admin and user portals
 - **Distributed Metadata** - Raft consensus for high availability (works single-node too)
 - **Scalable Storage** - Start with local filesystem, scale to erasure-coded distributed storage
 - **IAM** - Users, groups, policies, and S3-compatible access keys
 - **Multi-tenant** - Role-based access control with admin and user portals
+
+### Enterprise Features
+
+#### Data Durability
+- **Erasure Coding** - Reed-Solomon encoding with configurable data/parity shards (default: 10+4)
+- **Data Compression** - Support for Zstandard, LZ4, and Gzip compression with automatic content-type detection
+
+#### Replication
+- **Bucket Replication** - Async replication with configurable rules and filtering
+- **Site Replication** - Active-Active multi-datacenter sync with IAM/policy synchronization
+
+#### Identity & Security
+- **LDAP/Active Directory** - Enterprise identity integration with user sync and group-to-policy mapping
+- **OIDC/SSO** - OpenID Connect support for single sign-on (Keycloak, Okta, Auth0, etc.)
+- **KMS Integration** - Envelope encryption with HashiCorp Vault, AWS KMS, or local key management
+- **Object Lock (WORM)** - GOVERNANCE and COMPLIANCE modes with legal hold support
+
+#### Operations
+- **Event Notifications** - Webhook, Kafka, RabbitMQ, NATS, Redis, AWS SNS/SQS targets
+- **Storage Tiering** - Hot/Warm/Cold/Archive tiers with LRU caching and policy-based transitions
+- **CLI Tool** - Full-featured command-line interface for all operations
+
+#### S3 API Extensions
+- **Object Versioning** - Full version management including delete markers
+- **Lifecycle Policies** - Automated object expiration and transition rules
+- **Multipart Uploads** - Large file support with resumable uploads
+- **S3 Select** - SQL queries on CSV/JSON/Parquet files
+- **GetObjectAttributes** - Efficient metadata retrieval without downloading content
 
 ## Architecture
 
@@ -110,12 +139,73 @@ cluster:
   raft_port: 9003
 
 storage:
-  backend: fs
+  backend: erasure  # fs | erasure
+  compression: zstd  # none | zstd | lz4 | gzip
   default_storage_class: STANDARD
+  erasure:
+    data_shards: 10
+    parity_shards: 4
 
 auth:
   root_user: admin
   root_password: changeme
+
+# LDAP Authentication (optional)
+identity:
+  ldap:
+    enabled: false
+    server_url: ldap://ldap.example.com:389
+    bind_dn: cn=admin,dc=example,dc=com
+    bind_password: secret
+    user_search_base: ou=users,dc=example,dc=com
+    user_search_filter: "(uid={username})"
+    group_search_base: ou=groups,dc=example,dc=com
+    tls: false
+  oidc:
+    enabled: false
+    issuer_url: https://auth.example.com
+    client_id: nebulaio
+    client_secret: secret
+    redirect_url: http://localhost:9001/callback
+    scopes: ["openid", "profile", "email"]
+
+# KMS Integration (optional)
+kms:
+  provider: local  # local | vault | aws | gcp | azure
+  vault:
+    address: https://vault.example.com:8200
+    token: hvs.xxxxx
+    mount: transit
+    key_name: nebulaio-master
+
+# Replication (optional)
+replication:
+  enabled: true
+  sites:
+    - name: site2
+      endpoint: https://site2.example.com:9000
+      access_key: AKIAXXXXXXXX
+      secret_key: xxxxx
+
+# Event Notifications (optional)
+events:
+  targets:
+    - name: webhook1
+      type: webhook
+      url: https://events.example.com/s3
+    - name: kafka1
+      type: kafka
+      brokers: ["kafka1:9092", "kafka2:9092"]
+      topic: s3-events
+
+# Storage Tiering (optional)
+tiering:
+  enabled: true
+  hot_cache_size: 10GB
+  cold_storage:
+    type: s3
+    endpoint: https://s3.amazonaws.com
+    bucket: nebulaio-cold-tier
 ```
 
 ## API Endpoints
@@ -150,6 +240,43 @@ User-facing API for self-service:
 GET    /api/v1/console/me             # Current user
 GET    /api/v1/console/buckets        # My buckets
 GET    /api/v1/console/me/keys        # My access keys
+```
+
+## Using the NebulaIO CLI
+
+NebulaIO includes a native CLI tool (`nebulaio-cli`) for managing storage:
+
+```bash
+# Build the CLI
+make build-cli
+
+# Configure
+nebulaio-cli config set endpoint http://localhost:9000
+nebulaio-cli config set access-key YOUR_ACCESS_KEY
+nebulaio-cli config set secret-key YOUR_SECRET_KEY
+
+# Bucket operations
+nebulaio-cli bucket list                    # List all buckets
+nebulaio-cli bucket create my-bucket        # Create bucket
+nebulaio-cli bucket delete my-bucket        # Delete bucket
+nebulaio-cli mb s3://my-bucket              # Create (short form)
+nebulaio-cli rb s3://my-bucket              # Delete (short form)
+
+# Object operations
+nebulaio-cli object put file.txt s3://my-bucket/file.txt    # Upload
+nebulaio-cli object get s3://my-bucket/file.txt ./local.txt # Download
+nebulaio-cli object list s3://my-bucket                     # List objects
+nebulaio-cli cp file.txt s3://my-bucket/                    # Copy (short form)
+nebulaio-cli ls s3://my-bucket                              # List (short form)
+nebulaio-cli rm s3://my-bucket/file.txt                     # Remove (short form)
+nebulaio-cli cat s3://my-bucket/file.txt                    # View contents
+
+# Admin operations
+nebulaio-cli admin versioning enable my-bucket    # Enable versioning
+nebulaio-cli admin versioning status my-bucket    # Check versioning status
+nebulaio-cli admin policy set my-bucket policy.json # Set bucket policy
+nebulaio-cli admin lifecycle set my-bucket rules.json # Set lifecycle rules
+nebulaio-cli admin replication set my-bucket config.json # Set replication
 ```
 
 ## Using with AWS CLI
@@ -189,20 +316,33 @@ for bucket in response['Buckets']:
 
 ```
 nebulaio/
-├── cmd/nebulaio/           # Main binary
+├── cmd/
+│   ├── nebulaio/           # Main server binary
+│   └── nebulaio-cli/       # CLI tool
 ├── internal/
 │   ├── api/s3/             # S3 API handlers
 │   ├── api/admin/          # Admin API handlers
 │   ├── api/console/        # Console API handlers
 │   ├── auth/               # Authentication & IAM
+│   │   ├── ldap/           # LDAP provider
+│   │   └── oidc/           # OIDC provider
 │   ├── bucket/             # Bucket service
-│   ├── object/             # Object service
+│   ├── object/             # Object service (with retention/lock)
 │   ├── storage/            # Storage backends
+│   │   ├── erasure/        # Erasure coding
+│   │   └── compression/    # Compression (zstd, lz4, gzip)
+│   ├── replication/        # Bucket & site replication
+│   │   └── site/           # Multi-datacenter sync
+│   ├── kms/                # KMS providers (vault, aws, gcp, azure, local)
+│   ├── encryption/         # Envelope encryption
+│   ├── events/             # Event notifications
+│   │   └── targets/        # Webhook, Kafka, AMQP, NATS, Redis, AWS
+│   ├── tiering/            # Storage tiering & caching
 │   ├── metadata/           # Raft + BadgerDB
 │   └── config/             # Configuration
 ├── pkg/s3types/            # Public S3 types
 ├── web/                    # React frontend
-├── deployments/            # Docker, K8s
+├── deployments/            # Docker, K8s, Helm, Operator
 └── docs/                   # Documentation
 ```
 
@@ -225,9 +365,13 @@ make test
 ## Roadmap
 
 - [x] Phase 1: Core S3 operations, basic IAM, web console
-- [ ] Phase 2: Multipart uploads, versioning, lifecycle policies
-- [ ] Phase 3: Multi-node clustering, erasure coding
-- [ ] Phase 4: Cross-cluster replication, encryption at rest
+- [x] Phase 2: Multipart uploads, versioning, lifecycle policies
+- [x] Phase 3: Multi-node clustering, erasure coding, data compression
+- [x] Phase 4: Cross-cluster replication, encryption at rest (KMS integration)
+- [x] Phase 5: Enterprise identity (LDAP, OIDC/SSO)
+- [x] Phase 6: Event notifications, storage tiering, caching
+- [x] Phase 7: Object Lock (WORM compliance), CLI tool
+- [ ] Phase 8: S3 Select for Parquet, advanced analytics
 
 ## License
 

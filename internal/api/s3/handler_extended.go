@@ -1,8 +1,6 @@
 package s3
 
 import (
-	"encoding/csv"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -13,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/piwi3910/nebulaio/internal/api/middleware"
+	"github.com/piwi3910/nebulaio/internal/s3select"
 	"github.com/piwi3910/nebulaio/internal/metadata"
 	"github.com/piwi3910/nebulaio/pkg/s3types"
 )
@@ -130,7 +129,7 @@ func parseObjectAttributesHeader(header string) []string {
 }
 
 // SelectObjectContent executes SQL queries on object content (CSV, JSON, Parquet)
-// This is a simplified implementation that supports basic SELECT queries
+// Supports full SQL SELECT with projections, WHERE filters, aggregates (COUNT, SUM, AVG, MIN, MAX)
 func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -144,8 +143,8 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate input format
-	if selectReq.InputSerialization.CSV == nil && selectReq.InputSerialization.JSON == nil {
-		writeS3Error(w, "InvalidRequest", "InputSerialization must specify CSV or JSON format", http.StatusBadRequest)
+	if selectReq.InputSerialization.CSV == nil && selectReq.InputSerialization.JSON == nil && selectReq.InputSerialization.Parquet == nil {
+		writeS3Error(w, "InvalidRequest", "InputSerialization must specify CSV, JSON, or Parquet format", http.StatusBadRequest)
 		return
 	}
 
@@ -164,14 +163,15 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Execute the query based on format
-	var result []byte
-	if selectReq.InputSerialization.CSV != nil {
-		result, err = executeCSVSelect(content, selectReq.Expression, selectReq.OutputSerialization)
-	} else if selectReq.InputSerialization.JSON != nil {
-		result, err = executeJSONSelect(content, selectReq.Expression, selectReq.OutputSerialization)
-	}
+	// Build input format configuration
+	inputFormat := buildInputFormat(selectReq.InputSerialization)
 
+	// Build output format configuration
+	outputFormat := buildOutputFormat(selectReq.OutputSerialization)
+
+	// Create S3 Select engine and execute query
+	engine := s3select.NewEngine(inputFormat, outputFormat)
+	result, err := engine.Execute(content, selectReq.Expression)
 	if err != nil {
 		writeS3Error(w, "InvalidRequest", "Query execution failed: "+err.Error(), http.StatusBadRequest)
 		return
@@ -183,13 +183,13 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	// Write records message
-	recordsMsg := createSelectEventMessage("Records", result)
+	recordsMsg := createSelectEventMessage("Records", result.Records)
 	_, _ = w.Write(recordsMsg)
 
 	// Write stats message
 	statsMsg := createSelectEventMessage("Stats", []byte(fmt.Sprintf(
 		`<Stats><BytesScanned>%d</BytesScanned><BytesProcessed>%d</BytesProcessed><BytesReturned>%d</BytesReturned></Stats>`,
-		len(content), len(content), len(result),
+		result.BytesScanned, result.BytesProcessed, result.BytesReturned,
 	)))
 	_, _ = w.Write(statsMsg)
 
@@ -198,110 +198,86 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(endMsg)
 }
 
-// executeCSVSelect executes a SQL query on CSV data
-func executeCSVSelect(data []byte, query string, outputFormat s3types.OutputSerialization) ([]byte, error) {
-	// Parse CSV
-	reader := csv.NewReader(strings.NewReader(string(data)))
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse CSV: %w", err)
-	}
+// buildInputFormat converts S3 InputSerialization to s3select.InputFormat
+func buildInputFormat(input s3types.InputSerialization) s3select.InputFormat {
+	format := s3select.InputFormat{}
 
-	if len(records) == 0 {
-		return nil, nil
-	}
-
-	// Simple SELECT * implementation
-	// A full implementation would parse the SQL and apply projections/filters
-	query = strings.TrimSpace(strings.ToLower(query))
-	if !strings.HasPrefix(query, "select") {
-		return nil, fmt.Errorf("only SELECT queries are supported")
-	}
-
-	// For now, return all records
-	var result strings.Builder
-	for _, record := range records {
-		if outputFormat.JSON != nil {
-			// Output as JSON
-			jsonBytes, _ := json.Marshal(record)
-			result.Write(jsonBytes)
-			result.WriteString("\n")
-		} else {
-			// Output as CSV
-			for i, field := range record {
-				if i > 0 {
-					result.WriteString(",")
-				}
-				result.WriteString(field)
-			}
-			result.WriteString("\n")
+	if input.CSV != nil {
+		format.Type = "CSV"
+		format.CSVConfig = &s3select.CSVConfig{
+			FileHeaderInfo:  input.CSV.FileHeaderInfo,
+			Comments:        input.CSV.Comments,
+			QuoteCharacter:  input.CSV.QuoteCharacter,
+			FieldDelimiter:  input.CSV.FieldDelimiter,
+			RecordDelimiter: input.CSV.RecordDelimiter,
 		}
+		if format.CSVConfig.FileHeaderInfo == "" {
+			format.CSVConfig.FileHeaderInfo = "USE"
+		}
+		if format.CSVConfig.FieldDelimiter == "" {
+			format.CSVConfig.FieldDelimiter = ","
+		}
+		if format.CSVConfig.RecordDelimiter == "" {
+			format.CSVConfig.RecordDelimiter = "\n"
+		}
+	} else if input.JSON != nil {
+		format.Type = "JSON"
+		format.JSONConfig = &s3select.JSONConfig{
+			Type: input.JSON.Type,
+		}
+		if format.JSONConfig.Type == "" {
+			format.JSONConfig.Type = "LINES"
+		}
+	} else if input.Parquet != nil {
+		format.Type = "Parquet"
+		format.ParquetConfig = &s3select.ParquetConfig{}
 	}
 
-	return []byte(result.String()), nil
+	if input.CompressionType != "" {
+		format.CompressionType = input.CompressionType
+	}
+
+	return format
 }
 
-// executeJSONSelect executes a SQL query on JSON data
-func executeJSONSelect(data []byte, query string, outputFormat s3types.OutputSerialization) ([]byte, error) {
-	// Parse JSON (assume JSON Lines format)
-	lines := strings.Split(string(data), "\n")
-	var records []map[string]interface{}
+// buildOutputFormat converts S3 OutputSerialization to s3select.OutputFormat
+func buildOutputFormat(output s3types.OutputSerialization) s3select.OutputFormat {
+	format := s3select.OutputFormat{}
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+	if output.CSV != nil {
+		format.Type = "CSV"
+		format.CSVConfig = &s3select.CSVOutputConfig{
+			QuoteFields:     output.CSV.QuoteFields,
+			FieldDelimiter:  output.CSV.FieldDelimiter,
+			RecordDelimiter: output.CSV.RecordDelimiter,
+			QuoteCharacter:  output.CSV.QuoteCharacter,
 		}
-
-		var record map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &record); err != nil {
-			// Try parsing as array element
-			var arr []interface{}
-			if err := json.Unmarshal([]byte(line), &arr); err != nil {
-				continue
-			}
-			for _, item := range arr {
-				if rec, ok := item.(map[string]interface{}); ok {
-					records = append(records, rec)
-				}
-			}
-			continue
+		if format.CSVConfig.FieldDelimiter == "" {
+			format.CSVConfig.FieldDelimiter = ","
 		}
-		records = append(records, record)
-	}
-
-	// If input is a single JSON object or array
-	if len(records) == 0 {
-		var singleRecord map[string]interface{}
-		if err := json.Unmarshal(data, &singleRecord); err == nil {
-			records = append(records, singleRecord)
-		} else {
-			var arr []interface{}
-			if err := json.Unmarshal(data, &arr); err == nil {
-				for _, item := range arr {
-					if rec, ok := item.(map[string]interface{}); ok {
-						records = append(records, rec)
-					}
-				}
-			}
+		if format.CSVConfig.RecordDelimiter == "" {
+			format.CSVConfig.RecordDelimiter = "\n"
+		}
+		if format.CSVConfig.QuoteFields == "" {
+			format.CSVConfig.QuoteFields = "ASNEEDED"
+		}
+	} else if output.JSON != nil {
+		format.Type = "JSON"
+		format.JSONConfig = &s3select.JSONOutputConfig{
+			RecordDelimiter: output.JSON.RecordDelimiter,
+		}
+		if format.JSONConfig.RecordDelimiter == "" {
+			format.JSONConfig.RecordDelimiter = "\n"
+		}
+	} else {
+		// Default to JSON output
+		format.Type = "JSON"
+		format.JSONConfig = &s3select.JSONOutputConfig{
+			RecordDelimiter: "\n",
 		}
 	}
 
-	// Simple SELECT * implementation
-	query = strings.TrimSpace(strings.ToLower(query))
-	if !strings.HasPrefix(query, "select") {
-		return nil, fmt.Errorf("only SELECT queries are supported")
-	}
-
-	// For now, return all records as JSON
-	var result strings.Builder
-	for _, record := range records {
-		jsonBytes, _ := json.Marshal(record)
-		result.Write(jsonBytes)
-		result.WriteString("\n")
-	}
-
-	return []byte(result.String()), nil
+	return format
 }
 
 // createSelectEventMessage creates an S3 Select event stream message

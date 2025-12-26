@@ -23,10 +23,175 @@ data:
       node_role: storage
       cluster_name: nebulaio-k8s
 
+    # Storage configuration
     storage:
-      backend: fs
+      backend: fs  # fs | erasure
       path: /data/objects
       default_storage_class: STANDARD
 
+      # Compression (uncomment to enable)
+      # compression: zstd  # none | zstd | lz4 | gzip
+      # compression_level: 3
+
+      # Erasure coding (when backend: erasure)
+      # erasure:
+      #   data_shards: 10
+      #   parity_shards: 4
+
+    # Identity providers (configure via secrets)
+    # identity:
+    #   ldap:
+    #     enabled: false
+    #     server_url: ldap://ldap.example.com:389
+    #     bind_dn: cn=admin,dc=example,dc=com
+    #     bind_password: ${LDAP_BIND_PASSWORD}
+    #     user_search_base: ou=users,dc=example,dc=com
+    #     user_search_filter: "(uid={username})"
+    #     group_search_base: ou=groups,dc=example,dc=com
+    #     tls: true
+    #
+    #   oidc:
+    #     enabled: false
+    #     issuer_url: https://auth.example.com
+    #     client_id: nebulaio
+    #     client_secret: ${OIDC_CLIENT_SECRET}
+    #     redirect_url: https://console.example.com/callback
+    #     scopes: ["openid", "profile", "email"]
+
+    # KMS Integration (configure via secrets)
+    # kms:
+    #   provider: vault  # local | vault | aws | gcp | azure
+    #   vault:
+    #     address: https://vault.example.com:8200
+    #     token: ${VAULT_TOKEN}
+    #     mount: transit
+    #     key_name: nebulaio-master
+
+    # Replication (for multi-site deployments)
+    # replication:
+    #   enabled: false
+    #   sites:
+    #     - name: site2
+    #       endpoint: https://site2.example.com:9000
+    #       access_key: ${SITE2_ACCESS_KEY}
+    #       secret_key: ${SITE2_SECRET_KEY}
+
+    # Event Notifications
+    # events:
+    #   enabled: false
+    #   targets:
+    #     - name: kafka
+    #       type: kafka
+    #       brokers: ["kafka:9092"]
+    #       topic: s3-events
+
+    # Storage Tiering
+    # tiering:
+    #   enabled: false
+    #   cache:
+    #     enabled: true
+    #     max_size: 10737418240  # 10GB
+    #   cold_storage:
+    #     - name: glacier
+    #       type: s3
+    #       endpoint: https://s3.amazonaws.com
+    #       bucket: my-cold-tier
+
+    # Enterprise DRAM Cache
+    # High-performance in-memory cache for AI/ML workloads
+    # cache:
+    #   enabled: false
+    #   max_size: 8589934592       # 8GB maximum cache size
+    #   shard_count: 256           # Lock sharding for concurrency
+    #   entry_max_size: 268435456  # 256MB max single entry
+    #   ttl: 3600                  # Default TTL in seconds
+    #   eviction_policy: arc       # lru | lfu | arc
+    #   prefetch_enabled: true     # ML-optimized prefetching
+    #   prefetch_threshold: 2      # Sequential reads before prefetch
+    #   prefetch_ahead: 4          # Chunks to prefetch
+    #   zero_copy_enabled: true    # Zero-copy reads
+    #   distributed_mode: false    # Distributed cache across nodes
+
+    # Data Firewall
+    # QoS, rate limiting, bandwidth throttling, access control
+    # firewall:
+    #   enabled: false
+    #   default_policy: allow      # allow | deny
+    #   audit_enabled: true
+    #   rate_limiting:
+    #     enabled: true
+    #     requests_per_second: 1000
+    #     burst_size: 100
+    #     per_user: true
+    #     per_ip: true
+    #     per_bucket: false
+    #   bandwidth:
+    #     enabled: true
+    #     max_bytes_per_second: 1073741824      # 1GB/s global
+    #     max_bytes_per_second_per_user: 104857600  # 100MB/s per user
+    #     max_bytes_per_second_per_bucket: 524288000  # 500MB/s per bucket
+    #   connections:
+    #     enabled: true
+    #     max_connections: 10000
+    #     max_connections_per_ip: 100
+    #     max_connections_per_user: 500
+    #   ip_allowlist: []
+    #   ip_blocklist: []
+    #   rules: []
+
+    # S3 Select
+    # SQL queries on CSV/JSON/Parquet without full download
+    # s3_select:
+    #   enabled: true
+    #   max_record_size: 1048576   # 1MB
+    #   max_results_size: 268435456  # 256MB
+    #   timeout: 300               # Query timeout seconds
+    #   worker_pool_size: 10
+
+    # Batch Replication
+    # Bulk data migration and disaster recovery
+    # batch_replication:
+    #   enabled: false
+    #   max_concurrent_jobs: 5
+    #   default_concurrency: 10
+    #   max_retries: 3
+    #   retry_delay: 5s
+    #   history_limit: 100
+    #   checkpoint_interval: 1000
+
+    # Enhanced Audit Logging
+    # Compliance-ready audit trails with cryptographic integrity
+    # audit:
+    #   enabled: true
+    #   compliance_mode: none      # none | soc2 | pci | hipaa | gdpr | fedramp
+    #   file_path: /data/audit/audit.log
+    #   retention_days: 90
+    #   buffer_size: 10000
+    #   integrity_enabled: true    # Cryptographic integrity chain
+    #   mask_sensitive_data: true
+    #   sensitive_fields:
+    #     - password
+    #     - secret
+    #     - token
+    #     - credential
+    #     - key
+    #   rotation:
+    #     enabled: true
+    #     max_size_mb: 100
+    #     max_age_days: 7
+    #     max_backups: 10
+    #     compress: true
+    #   webhook:
+    #     enabled: false
+    #     url: ""
+    #     batch_size: 100
+    #     flush_interval: 5s
+    #     retry_count: 3
+
     log_level: info
     log_format: json
+
+    metrics:
+      enabled: true
+      port: 9090
+      path: /metrics

@@ -8,6 +8,7 @@ Welcome to the NebulaIO documentation. This guide covers everything from getting
 - [Quick Start Guide](getting-started/quick-start.md) - Get NebulaIO running in minutes
 - [Configuration Reference](getting-started/configuration.md) - All configuration options explained
 - [First Steps](getting-started/first-steps.md) - Create your first bucket and upload objects
+- [CLI Tool](getting-started/cli.md) - Using the nebulaio-cli command-line tool
 
 ### Deployment Guides
 - [Standalone Deployment](deployment/standalone.md) - Single binary installation
@@ -21,6 +22,18 @@ Welcome to the NebulaIO documentation. This guide covers everything from getting
 - [Clustering & HA](architecture/clustering.md) - Distributed deployment patterns
 - [Storage Backend](architecture/storage.md) - Storage layer details
 - [Security Model](architecture/security.md) - Authentication and authorization
+
+### Enterprise Features
+- [Erasure Coding](enterprise/erasure-coding.md) - Data durability with Reed-Solomon encoding
+- [Data Compression](enterprise/compression.md) - Zstandard, LZ4, and Gzip compression
+- [Bucket Replication](enterprise/replication.md) - Async bucket replication configuration
+- [Site Replication](enterprise/site-replication.md) - Multi-datacenter Active-Active sync
+- [LDAP Integration](enterprise/ldap.md) - LDAP/Active Directory authentication
+- [OIDC/SSO](enterprise/oidc.md) - OpenID Connect single sign-on
+- [KMS Integration](enterprise/kms.md) - Key Management System integration
+- [Event Notifications](enterprise/events.md) - Webhook, Kafka, and messaging integration
+- [Storage Tiering](enterprise/tiering.md) - Hot/Cold storage with caching
+- [Object Lock](enterprise/object-lock.md) - WORM compliance and legal holds
 
 ### Operations
 - [Monitoring](operations/monitoring.md) - Prometheus metrics and alerting
