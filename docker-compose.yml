@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  nebulaio:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+    container_name: nebulaio
+    ports:
+      - "9000:9000"  # S3 API
+      - "9001:9001"  # Admin/Console API
+      - "9002:9002"  # Web Console
+    volumes:
+      - nebulaio-data:/data
+    environment:
+      - NEBULAIO_DATA_DIR=/data
+      - NEBULAIO_LOG_LEVEL=info
+      - NEBULAIO_AUTH_ROOT_USER=admin
+      - NEBULAIO_AUTH_ROOT_PASSWORD=admin123
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  nebulaio-data:
+    driver: local
+
+# Example multi-node configuration (uncomment for cluster mode):
+#
+# services:
+#   nebulaio-1:
+#     build:
+#       context: .
+#       dockerfile: deployments/docker/Dockerfile
+#     container_name: nebulaio-1
+#     ports:
+#       - "9000:9000"
+#       - "9001:9001"
+#     volumes:
+#       - nebulaio-data-1:/data
+#     environment:
+#       - NEBULAIO_NODE_NAME=node-1
+#       - NEBULAIO_CLUSTER_BOOTSTRAP=true
+#       - NEBULAIO_CLUSTER_ADVERTISE_ADDRESS=nebulaio-1:9003
+#     networks:
+#       - nebulaio-cluster
+#
+#   nebulaio-2:
+#     build:
+#       context: .
+#       dockerfile: deployments/docker/Dockerfile
+#     container_name: nebulaio-2
+#     ports:
+#       - "9100:9000"
+#       - "9101:9001"
+#     volumes:
+#       - nebulaio-data-2:/data
+#     environment:
+#       - NEBULAIO_NODE_NAME=node-2
+#       - NEBULAIO_CLUSTER_BOOTSTRAP=false
+#       - NEBULAIO_CLUSTER_JOIN_ADDRESSES=nebulaio-1:9003
+#       - NEBULAIO_CLUSTER_ADVERTISE_ADDRESS=nebulaio-2:9003
+#     depends_on:
+#       - nebulaio-1
+#     networks:
+#       - nebulaio-cluster
+#
+#   nebulaio-3:
+#     build:
+#       context: .
+#       dockerfile: deployments/docker/Dockerfile
+#     container_name: nebulaio-3
+#     ports:
+#       - "9200:9000"
+#       - "9201:9001"
+#     volumes:
+#       - nebulaio-data-3:/data
+#     environment:
+#       - NEBULAIO_NODE_NAME=node-3
+#       - NEBULAIO_CLUSTER_BOOTSTRAP=false
+#       - NEBULAIO_CLUSTER_JOIN_ADDRESSES=nebulaio-1:9003
+#       - NEBULAIO_CLUSTER_ADVERTISE_ADDRESS=nebulaio-3:9003
+#     depends_on:
+#       - nebulaio-1
+#     networks:
+#       - nebulaio-cluster
+#
+# volumes:
+#   nebulaio-data-1:
+#   nebulaio-data-2:
+#   nebulaio-data-3:
+#
+# networks:
+#   nebulaio-cluster:
+#     driver: bridge

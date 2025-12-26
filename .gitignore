@@ -1,0 +1,43 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build artifacts
+release/
+coverage.out
+coverage.html
+
+# Data directory
+data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node modules
+web/node_modules/
+web/dist/
+
+# Logs
+*.log
+
+# Local config
+*.local.yaml
+*.local.json
+.env
+.env.*
+
+# Temporary files
+tmp/
+temp/

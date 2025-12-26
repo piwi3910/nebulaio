@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+bin/
+release/
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data directory
+data/
+
+# Node modules (will be installed in build)
+web/node_modules/
+
+# Local config
+*.local.yaml
+*.local.json
+.env.local
+
+# Documentation
+docs/
+*.md
+!README.md
