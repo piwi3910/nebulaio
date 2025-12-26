@@ -126,11 +126,33 @@ type PartInfo struct {
 
 // ListPartsResult is the response for ListParts
 type ListPartsResult struct {
-	XMLName  xml.Name   `xml:"ListPartsResult"`
-	Bucket   string     `xml:"Bucket"`
-	Key      string     `xml:"Key"`
-	UploadId string     `xml:"UploadId"`
-	Part     []PartInfo `xml:"Part"`
+	XMLName              xml.Name   `xml:"ListPartsResult"`
+	Bucket               string     `xml:"Bucket"`
+	Key                  string     `xml:"Key"`
+	UploadId             string     `xml:"UploadId"`
+	Initiator            *Owner     `xml:"Initiator,omitempty"`
+	Owner                *Owner     `xml:"Owner,omitempty"`
+	StorageClass         string     `xml:"StorageClass,omitempty"`
+	PartNumberMarker     int        `xml:"PartNumberMarker"`
+	NextPartNumberMarker int        `xml:"NextPartNumberMarker,omitempty"`
+	MaxParts             int        `xml:"MaxParts"`
+	IsTruncated          bool       `xml:"IsTruncated"`
+	Part                 []PartInfo `xml:"Part"`
+}
+
+// ListPartsRequest represents query parameters for ListParts API
+type ListPartsRequest struct {
+	Bucket           string
+	Key              string
+	UploadId         string
+	MaxParts         int
+	PartNumberMarker int
+}
+
+// AbortMultipartUploadResult is an empty response for AbortMultipartUpload
+// S3 returns 204 No Content on success, but we define this for consistency
+type AbortMultipartUploadResult struct {
+	XMLName xml.Name `xml:"AbortMultipartUploadResult"`
 }
 
 // VersioningConfiguration represents bucket versioning configuration
@@ -146,12 +168,15 @@ type Tag struct {
 	Value string `xml:"Value"`
 }
 
+// TagSet represents a set of tags
+type TagSet struct {
+	Tag []Tag `xml:"Tag"`
+}
+
 // Tagging represents object or bucket tagging
 type Tagging struct {
 	XMLName xml.Name `xml:"Tagging"`
-	TagSet  struct {
-		Tag []Tag `xml:"Tag"`
-	} `xml:"TagSet"`
+	TagSet  TagSet   `xml:"TagSet"`
 }
 
 // CORSRule represents a CORS rule
@@ -169,18 +194,67 @@ type CORSConfiguration struct {
 	CORSRule []CORSRule `xml:"CORSRule"`
 }
 
+// LifecycleTag represents a tag filter in lifecycle rules
+type LifecycleTag struct {
+	Key   string `xml:"Key"`
+	Value string `xml:"Value"`
+}
+
+// LifecycleAnd combines multiple filter conditions
+type LifecycleAnd struct {
+	Prefix string         `xml:"Prefix,omitempty"`
+	Tag    []LifecycleTag `xml:"Tag,omitempty"`
+}
+
+// LifecycleFilter specifies which objects the rule applies to
+type LifecycleFilter struct {
+	Prefix string        `xml:"Prefix,omitempty"`
+	Tag    *LifecycleTag `xml:"Tag,omitempty"`
+	And    *LifecycleAnd `xml:"And,omitempty"`
+}
+
+// LifecycleExpiration specifies when objects should be deleted
+type LifecycleExpiration struct {
+	Days                      int    `xml:"Days,omitempty"`
+	Date                      string `xml:"Date,omitempty"`
+	ExpiredObjectDeleteMarker bool   `xml:"ExpiredObjectDeleteMarker,omitempty"`
+}
+
+// LifecycleTransition specifies when objects should transition to a different storage class
+type LifecycleTransition struct {
+	Days         int    `xml:"Days,omitempty"`
+	Date         string `xml:"Date,omitempty"`
+	StorageClass string `xml:"StorageClass"`
+}
+
+// NoncurrentVersionExpiration specifies when noncurrent versions should be deleted
+type NoncurrentVersionExpiration struct {
+	NoncurrentDays          int `xml:"NoncurrentDays,omitempty"`
+	NewerNoncurrentVersions int `xml:"NewerNoncurrentVersions,omitempty"`
+}
+
+// NoncurrentVersionTransition specifies when noncurrent versions should transition
+type NoncurrentVersionTransition struct {
+	NoncurrentDays int    `xml:"NoncurrentDays"`
+	StorageClass   string `xml:"StorageClass"`
+}
+
+// AbortIncompleteMultipartUpload specifies when to abort incomplete multipart uploads
+type AbortIncompleteMultipartUpload struct {
+	DaysAfterInitiation int `xml:"DaysAfterInitiation"`
+}
+
 // LifecycleRule represents a lifecycle rule
 type LifecycleRule struct {
-	ID         string `xml:"ID,omitempty"`
-	Status     string `xml:"Status"`
-	Prefix     string `xml:"Prefix"`
-	Expiration struct {
-		Days int `xml:"Days,omitempty"`
-	} `xml:"Expiration,omitempty"`
-	Transition []struct {
-		Days         int    `xml:"Days"`
-		StorageClass string `xml:"StorageClass"`
-	} `xml:"Transition,omitempty"`
+	ID                             string                          `xml:"ID,omitempty"`
+	Status                         string                          `xml:"Status"`
+	Filter                         *LifecycleFilter                `xml:"Filter,omitempty"`
+	Prefix                         string                          `xml:"Prefix,omitempty"` // Deprecated, use Filter
+	Expiration                     *LifecycleExpiration            `xml:"Expiration,omitempty"`
+	Transition                     []LifecycleTransition           `xml:"Transition,omitempty"`
+	NoncurrentVersionExpiration    *NoncurrentVersionExpiration    `xml:"NoncurrentVersionExpiration,omitempty"`
+	NoncurrentVersionTransition    []NoncurrentVersionTransition   `xml:"NoncurrentVersionTransition,omitempty"`
+	AbortIncompleteMultipartUpload *AbortIncompleteMultipartUpload `xml:"AbortIncompleteMultipartUpload,omitempty"`
 }
 
 // LifecycleConfiguration represents bucket lifecycle configuration
@@ -189,28 +263,40 @@ type LifecycleConfiguration struct {
 	Rule    []LifecycleRule `xml:"Rule"`
 }
 
+// DeleteObjectRequest represents an object to delete in a batch request
+type DeleteObjectRequest struct {
+	Key       string `xml:"Key"`
+	VersionId string `xml:"VersionId,omitempty"`
+}
+
 // DeleteRequest represents a batch delete request
 type DeleteRequest struct {
-	XMLName xml.Name `xml:"Delete"`
-	Quiet   bool     `xml:"Quiet"`
-	Object  []struct {
-		Key       string `xml:"Key"`
-		VersionId string `xml:"VersionId,omitempty"`
-	} `xml:"Object"`
+	XMLName xml.Name              `xml:"Delete"`
+	Quiet   bool                  `xml:"Quiet"`
+	Object  []DeleteObjectRequest `xml:"Object"`
+}
+
+// DeletedObject represents a successfully deleted object
+type DeletedObject struct {
+	Key                   string `xml:"Key"`
+	VersionId             string `xml:"VersionId,omitempty"`
+	DeleteMarker          bool   `xml:"DeleteMarker,omitempty"`
+	DeleteMarkerVersionId string `xml:"DeleteMarkerVersionId,omitempty"`
+}
+
+// DeleteError represents a delete error for a specific object
+type DeleteError struct {
+	Key       string `xml:"Key"`
+	VersionId string `xml:"VersionId,omitempty"`
+	Code      string `xml:"Code"`
+	Message   string `xml:"Message"`
 }
 
 // DeleteResult represents a batch delete response
 type DeleteResult struct {
-	XMLName xml.Name `xml:"DeleteResult"`
-	Deleted []struct {
-		Key       string `xml:"Key"`
-		VersionId string `xml:"VersionId,omitempty"`
-	} `xml:"Deleted"`
-	Error []struct {
-		Key     string `xml:"Key"`
-		Code    string `xml:"Code"`
-		Message string `xml:"Message"`
-	} `xml:"Error,omitempty"`
+	XMLName xml.Name        `xml:"DeleteResult"`
+	Deleted []DeletedObject `xml:"Deleted,omitempty"`
+	Error   []DeleteError   `xml:"Error,omitempty"`
 }
 
 // ObjectVersion represents an object version
@@ -239,6 +325,7 @@ type ListVersionsResult struct {
 	XMLName             xml.Name        `xml:"ListVersionsResult"`
 	Name                string          `xml:"Name"`
 	Prefix              string          `xml:"Prefix,omitempty"`
+	Delimiter           string          `xml:"Delimiter,omitempty"`
 	KeyMarker           string          `xml:"KeyMarker,omitempty"`
 	VersionIdMarker     string          `xml:"VersionIdMarker,omitempty"`
 	NextKeyMarker       string          `xml:"NextKeyMarker,omitempty"`
@@ -247,4 +334,5 @@ type ListVersionsResult struct {
 	IsTruncated         bool            `xml:"IsTruncated"`
 	Version             []ObjectVersion `xml:"Version,omitempty"`
 	DeleteMarker        []DeleteMarker  `xml:"DeleteMarker,omitempty"`
+	CommonPrefixes      []CommonPrefix  `xml:"CommonPrefixes,omitempty"`
 }

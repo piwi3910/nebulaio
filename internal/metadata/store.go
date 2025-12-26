@@ -3,6 +3,8 @@ package metadata
 import (
 	"context"
 	"time"
+
+	"github.com/piwi3910/nebulaio/internal/audit"
 )
 
 // Store is the interface for the metadata store
@@ -32,7 +34,9 @@ type Store interface {
 
 	// Version operations
 	GetObjectVersion(ctx context.Context, bucket, key, versionID string) (*ObjectMeta, error)
-	ListObjectVersions(ctx context.Context, bucket, prefix string, maxKeys int) ([]*ObjectMeta, error)
+	ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (*VersionListing, error)
+	DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error
+	PutObjectMetaVersioned(ctx context.Context, meta *ObjectMeta, preserveOldVersions bool) error
 
 	// Multipart upload operations
 	CreateMultipartUpload(ctx context.Context, upload *MultipartUpload) error
@@ -68,6 +72,11 @@ type Store interface {
 	AddNode(ctx context.Context, node *NodeInfo) error
 	RemoveNode(ctx context.Context, nodeID string) error
 	ListNodes(ctx context.Context) ([]*NodeInfo, error)
+
+	// Audit operations
+	StoreAuditEvent(ctx context.Context, event *audit.AuditEvent) error
+	ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error)
+	DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error)
 }
 
 // Bucket represents a storage bucket
@@ -105,12 +114,12 @@ type CORSRule struct {
 
 // LifecycleRule represents a lifecycle management rule
 type LifecycleRule struct {
-	ID                             string                          `json:"id"`
-	Enabled                        bool                            `json:"enabled"`
-	Prefix                         string                          `json:"prefix"`
-	ExpirationDays                 int                             `json:"expiration_days,omitempty"`
-	NoncurrentVersionExpirationDays int                            `json:"noncurrent_version_expiration_days,omitempty"`
-	Transitions                    []LifecycleTransition           `json:"transitions,omitempty"`
+	ID                              string                `json:"id"`
+	Enabled                         bool                  `json:"enabled"`
+	Prefix                          string                `json:"prefix"`
+	ExpirationDays                  int                   `json:"expiration_days,omitempty"`
+	NoncurrentVersionExpirationDays int                   `json:"noncurrent_version_expiration_days,omitempty"`
+	Transitions                     []LifecycleTransition `json:"transitions,omitempty"`
 }
 
 // LifecycleTransition represents a storage class transition
@@ -124,6 +133,7 @@ type ObjectMeta struct {
 	Bucket       string            `json:"bucket"`
 	Key          string            `json:"key"`
 	VersionID    string            `json:"version_id,omitempty"`
+	IsLatest     bool              `json:"is_latest,omitempty"`
 	Size         int64             `json:"size"`
 	ETag         string            `json:"etag"`
 	ContentType  string            `json:"content_type"`
@@ -164,14 +174,27 @@ type ObjectListing struct {
 	NextContinuationToken string        `json:"next_continuation_token,omitempty"`
 }
 
+// VersionListing represents a list of object versions
+type VersionListing struct {
+	Versions            []*ObjectMeta `json:"versions"`
+	DeleteMarkers       []*ObjectMeta `json:"delete_markers"`
+	CommonPrefixes      []string      `json:"common_prefixes"`
+	IsTruncated         bool          `json:"is_truncated"`
+	NextKeyMarker       string        `json:"next_key_marker,omitempty"`
+	NextVersionIDMarker string        `json:"next_version_id_marker,omitempty"`
+}
+
 // MultipartUpload represents an in-progress multipart upload
 type MultipartUpload struct {
-	Bucket    string       `json:"bucket"`
-	Key       string       `json:"key"`
-	UploadID  string       `json:"upload_id"`
-	Initiator string       `json:"initiator"`
-	CreatedAt time.Time    `json:"created_at"`
-	Parts     []UploadPart `json:"parts"`
+	Bucket       string            `json:"bucket"`
+	Key          string            `json:"key"`
+	UploadID     string            `json:"upload_id"`
+	Initiator    string            `json:"initiator"`
+	ContentType  string            `json:"content_type"`
+	StorageClass string            `json:"storage_class,omitempty"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	CreatedAt    time.Time         `json:"created_at"`
+	Parts        []UploadPart      `json:"parts"`
 }
 
 // UploadPart represents a single part of a multipart upload
