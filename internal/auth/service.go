@@ -588,9 +588,7 @@ func (s *Service) evaluateUserPolicies(ctx context.Context, user *metadata.User,
 // - arn:aws:s3:::bucket/prefix/key
 func parseResourceARN(resourceARN string) (bucket, key string) {
 	// Remove the ARN prefix if present
-	if strings.HasPrefix(resourceARN, "arn:aws:s3:::") {
-		resourceARN = strings.TrimPrefix(resourceARN, "arn:aws:s3:::")
-	}
+	resourceARN = strings.TrimPrefix(resourceARN, "arn:aws:s3:::")
 
 	// Split bucket and key
 	parts := strings.SplitN(resourceARN, "/", 2)
@@ -606,18 +604,18 @@ func parseResourceARN(resourceARN string) (bucket, key string) {
 
 func generateID(prefix string) string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(b))
 }
 
 func generateAccessKeyID() string {
 	b := make([]byte, 10)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	return "AKIA" + strings.ToUpper(hex.EncodeToString(b))[:16]
 }
 
 func generateSecretAccessKey() string {
 	b := make([]byte, 30)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)[:40]
 }
