@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -72,17 +73,37 @@ var (
 	RaftState = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_raft_state",
-			Help: "Raft state (1=leader, 0=follower/candidate)",
+			Help: "Current Raft state (1=leader, 0=follower/candidate)",
 		},
-		[]string{"node_id", "state"},
+		[]string{"shard_id"},
 	)
 
 	// RaftIsLeader indicates if this node is the Raft leader
-	RaftIsLeader = promauto.NewGauge(
+	RaftIsLeader = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_raft_is_leader",
-			Help: "Whether this node is the Raft leader (1=yes, 0=no)",
+			Help: "Whether this node is the Raft leader",
 		},
+		[]string{"shard_id"},
+	)
+
+	// RaftProposalLatency tracks latency of Raft proposals
+	RaftProposalLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "nebulaio_raft_proposal_latency_seconds",
+			Help:    "Latency of Raft proposals",
+			Buckets: prometheus.ExponentialBuckets(0.0001, 2, 15),
+		},
+		[]string{"shard_id"},
+	)
+
+	// RaftProposalsTotal tracks total number of Raft proposals
+	RaftProposalsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_raft_proposals_total",
+			Help: "Total number of Raft proposals",
+		},
+		[]string{"shard_id", "status"},
 	)
 
 	// MultipartUploadsActive tracks number of active multipart uploads
@@ -171,21 +192,25 @@ func RecordError(operation, errorType string) {
 	ErrorsTotal.WithLabelValues(operation, errorType).Inc()
 }
 
-// SetRaftLeader sets whether this node is the Raft leader
-func SetRaftLeader(isLeader bool) {
+// SetRaftLeader sets whether this node is the Raft leader for a specific shard
+func SetRaftLeader(shardID string, isLeader bool) {
 	if isLeader {
-		RaftIsLeader.Set(1)
+		RaftIsLeader.WithLabelValues(shardID).Set(1)
+		RaftState.WithLabelValues(shardID).Set(1)
 	} else {
-		RaftIsLeader.Set(0)
+		RaftIsLeader.WithLabelValues(shardID).Set(0)
+		RaftState.WithLabelValues(shardID).Set(0)
 	}
 }
 
-// SetRaftState sets the Raft state for a node
-func SetRaftState(nodeID, state string) {
-	// Reset all states for this node
-	RaftState.Reset()
-	// Set current state
-	RaftState.WithLabelValues(nodeID, state).Set(1)
+// RecordRaftProposal records a Raft proposal with its duration and status
+func RecordRaftProposal(shardID string, duration time.Duration, success bool) {
+	status := "success"
+	if !success {
+		status = "failure"
+	}
+	RaftProposalLatency.WithLabelValues(shardID).Observe(duration.Seconds())
+	RaftProposalsTotal.WithLabelValues(shardID, status).Inc()
 }
 
 // IncrementActiveConnections increments active connections counter
@@ -247,5 +272,41 @@ func statusCodeToString(status int) string {
 		return "5xx"
 	default:
 		return "unknown"
+	}
+}
+
+// DragonboatStore is an interface to avoid circular dependencies
+// This should match the relevant methods from internal/metadata.DragonboatStore
+type DragonboatStore interface {
+	GetNodeHost() interface{} // Returns *dragonboat.NodeHost
+	IsLeader() bool
+}
+
+// DragonboatNodeHost is an interface for the Dragonboat NodeHost methods we need
+type DragonboatNodeHost interface {
+	GetLeaderID(shardID uint64) (uint64, uint64, error)
+}
+
+// CollectDragonboatMetrics collects and updates Raft metrics from a DragonboatStore
+// This function should be called periodically to update Raft metrics
+func CollectDragonboatMetrics(shardID uint64, nodeHost DragonboatNodeHost, replicaID uint64) {
+	shardLabel := fmt.Sprintf("%d", shardID)
+
+	leaderID, _, err := nodeHost.GetLeaderID(shardID)
+	if err != nil {
+		// If we can't get leader info, set metrics to 0
+		RaftState.WithLabelValues(shardLabel).Set(0)
+		RaftIsLeader.WithLabelValues(shardLabel).Set(0)
+		return
+	}
+
+	isLeader := leaderID == replicaID
+
+	if isLeader {
+		RaftState.WithLabelValues(shardLabel).Set(1)
+		RaftIsLeader.WithLabelValues(shardLabel).Set(1)
+	} else {
+		RaftState.WithLabelValues(shardLabel).Set(0)
+		RaftIsLeader.WithLabelValues(shardLabel).Set(0)
 	}
 }
