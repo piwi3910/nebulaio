@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -612,12 +613,12 @@ func (h *Handler) ListNodes(w http.ResponseWriter, r *http.Request) {
 	// Get leader ID
 	leaderID := h.discovery.LeaderID()
 
-	// Get Raft configuration to determine voters
+	// Get cluster configuration to determine voters
 	voterMap := make(map[string]bool)
-	if raftStore, ok := h.store.(*metadata.RaftStore); ok {
-		if config, err := raftStore.GetConfiguration(); err == nil {
+	if dbStore, ok := h.store.(*metadata.DragonboatStore); ok {
+		if config, err := dbStore.GetClusterConfiguration(); err == nil {
 			for _, server := range config.Servers {
-				voterMap[string(server.ID)] = server.Suffrage.String() == "Voter"
+				voterMap[fmt.Sprintf("%d", server.ID)] = server.IsVoter
 			}
 		}
 	}
