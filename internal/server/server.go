@@ -507,20 +507,6 @@ func (s *Server) MetaStore() *metadata.DragonboatStore {
 	return s.metaStore
 }
 
-// hashNodeID generates a numeric replica ID from a string node ID
-// This is a simple hash function for converting node IDs to uint64 replica IDs
-func hashNodeID(nodeID string) uint64 {
-	var hash uint64 = 5381
-	for _, c := range nodeID {
-		hash = ((hash << 5) + hash) + uint64(c)
-	}
-	// Ensure we get a non-zero value
-	if hash == 0 {
-		hash = 1
-	}
-	return hash
-}
-
 // lifecycleObjectService adapts object.Service to lifecycle.ObjectService interface
 type lifecycleObjectService struct {
 	svc *object.Service

@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
@@ -48,8 +47,6 @@ type DragonboatStore struct {
 	shardID  uint64
 	nodeID   uint64
 	badger   *badger.DB
-
-	_mu sync.RWMutex // Reserved for future thread-safe operations
 }
 
 // NewDragonboatStore creates a new Dragonboat-backed metadata store
@@ -88,7 +85,7 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	// Create NodeHost
 	nh, err := dragonboat.NewNodeHost(nhConfig)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to create nodehost: %w", err)
 	}
 
@@ -121,7 +118,7 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 		// Bootstrap a new cluster
 		if err := nh.StartReplica(cfg.InitialMembers, false, smFactory, rc); err != nil {
 			nh.Close()
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("failed to start replica: %w", err)
 		}
 		log.Info().
@@ -132,7 +129,7 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 		// Join existing cluster
 		if err := nh.StartReplica(nil, true, smFactory, rc); err != nil {
 			nh.Close()
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("failed to start replica: %w", err)
 		}
 		log.Info().

@@ -13,9 +13,7 @@ import (
 
 // stateMachine implements statemachine.IStateMachine for Dragonboat
 type stateMachine struct {
-	shardID uint64
-	nodeID  uint64
-	db      *badger.DB
+	db *badger.DB
 }
 
 // newStateMachine creates a new state machine instance
@@ -60,7 +58,7 @@ func (sm *stateMachine) Update(entry statemachine.Entry) (statemachine.Result, e
 	}
 
 	// Update applied index
-	sm.updateAppliedIndex(entry.Index)
+	_ = sm.updateAppliedIndex(entry.Index)
 
 	return statemachine.Result{Value: 0}, nil // Success
 }
