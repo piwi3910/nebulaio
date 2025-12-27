@@ -1,0 +1,576 @@
+# Storage Architecture
+
+NebulaIO's storage layer is designed for durability, performance, and flexibility. This document covers the internals of how objects are stored, protected, and managed on disk.
+
+## Storage Layer Overview
+
+The storage subsystem consists of multiple components that work together to provide reliable, high-performance object storage.
+
+```
+                              ┌──────────────────────────────────────────────────────────┐
+                              │                    Storage Layer                         │
+                              ├──────────────────────────────────────────────────────────┤
+                              │                                                          │
+                              │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐      │
+                              │  │   DRAM      │  │ Compression │  │ Encryption  │      │
+                              │  │   Cache     │  │   Layer     │  │   Layer     │      │
+                              │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘      │
+                              │         │                │                │              │
+                              │         └────────────────┼────────────────┘              │
+                              │                          │                               │
+                              │                  ┌───────▼───────┐                       │
+                              │                  │ Erasure Coding│                       │
+                              │                  │  Reed-Solomon │                       │
+                              │                  └───────┬───────┘                       │
+                              │                          │                               │
+                              │  ┌───────────────────────┼───────────────────────┐      │
+                              │  │                       │                       │      │
+                              │  ▼                       ▼                       ▼      │
+                              │ ┌────────┐          ┌────────┐          ┌────────┐     │
+                              │ │ Shard 1│   ...    │ Shard N│   ...    │Shard M │     │
+                              │ │ (Data) │          │ (Data) │          │(Parity)│     │
+                              │ └────┬───┘          └────┬───┘          └────┬───┘     │
+                              │      │                   │                   │          │
+                              └──────┼───────────────────┼───────────────────┼──────────┘
+                                     │                   │                   │
+                              ┌──────▼───────┐   ┌───────▼──────┐   ┌───────▼──────┐
+                              │   Disk 1     │   │   Disk N     │   │   Disk M     │
+                              │   /dev/sda   │   │   /dev/sdn   │   │   /dev/sdm   │
+                              └──────────────┘   └──────────────┘   └──────────────┘
+```
+
+---
+
+## File System Backend
+
+NebulaIO's primary storage backend uses the local filesystem. This provides portability across different storage media (NVMe, SSD, HDD) and works with any POSIX-compliant filesystem.
+
+### Directory Structure
+
+```
+/data
+├── metadata/                     # Raft and metadata storage
+│   ├── raft/                     # Raft consensus logs
+│   │   ├── logs/                 # Write-ahead log entries
+│   │   └── snapshots/            # Periodic state snapshots
+│   └── kv/                       # Key-value metadata store
+│       ├── buckets.db            # Bucket definitions
+│       ├── objects.db            # Object metadata index
+│       └── users.db              # User and IAM data
+│
+├── objects/                      # Object data storage
+│   └── {bucket-hash}/            # 2-char hash prefix for distribution
+│       └── {bucket-name}/
+│           └── {key-hash}/       # 4-char hash for key distribution
+│               └── {version}/    # Version ID (or "null" for unversioned)
+│                   ├── data      # Object content (or shard references)
+│                   ├── meta.json # Object metadata
+│                   └── parts/    # Multipart upload parts
+│
+├── shards/                       # Erasure coded shards
+│   └── {shard-set-id}/
+│       ├── shard.0              # Data shard 0
+│       ├── shard.1              # Data shard 1
+│       ├── ...
+│       ├── shard.N              # Data shard N
+│       └── shard.P              # Parity shards
+│
+└── temp/                         # Temporary upload staging
+    └── {upload-id}/
+        └── parts/
+```
+
+### Backend Interface
+
+The storage backend implements a clean interface for pluggability:
+
+```go
+type Backend interface {
+    Init(ctx context.Context) error
+    Close() error
+    PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*PutResult, error)
+    GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error)
+    DeleteObject(ctx context.Context, bucket, key string) error
+    ObjectExists(ctx context.Context, bucket, key string) (bool, error)
+    CreateBucket(ctx context.Context, bucket string) error
+    DeleteBucket(ctx context.Context, bucket string) error
+    BucketExists(ctx context.Context, bucket string) (bool, error)
+    GetStorageInfo(ctx context.Context) (*StorageInfo, error)
+}
+```
+
+---
+
+## Object Storage Format
+
+Each object is stored with its content and metadata in a structured format.
+
+### Object Metadata (meta.json)
+
+```json
+{
+  "bucket": "my-bucket",
+  "key": "documents/report.pdf",
+  "version_id": "v2024123456789",
+  "size": 1048576,
+  "content_type": "application/pdf",
+  "etag": "d41d8cd98f00b204e9800998ecf8427e",
+  "created_at": "2024-01-15T10:30:00Z",
+  "modified_at": "2024-01-15T10:30:00Z",
+  "storage_class": "STANDARD",
+  "user_metadata": {
+    "x-amz-meta-author": "John Doe"
+  },
+  "encryption": {
+    "algorithm": "AES256-GCM",
+    "key_id": "arn:aws:kms:us-east-1:123:key/abc"
+  },
+  "compression": {
+    "algorithm": "zstd",
+    "original_size": 2097152
+  },
+  "erasure": {
+    "data_shards": 10,
+    "parity_shards": 4,
+    "shard_size": 104858,
+    "shard_set_id": "abc123def456"
+  }
+}
+```
+
+---
+
+## Erasure Coding Implementation
+
+NebulaIO uses Reed-Solomon erasure coding to protect data against disk failures without full replication.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Reed-Solomon Erasure Coding                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Original Data (1 MB)                                                       │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ ██████████████████████████████████████████████████████████████████  │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                        │
+│                                    ▼                                        │
+│  Split into Data Shards (10 x 102.4 KB each)                               │
+│  ┌────┐┌────┐┌────┐┌────┐┌────┐┌────┐┌────┐┌────┐┌────┐┌────┐             │
+│  │ D0 ││ D1 ││ D2 ││ D3 ││ D4 ││ D5 ││ D6 ││ D7 ││ D8 ││ D9 │             │
+│  └────┘└────┘└────┘└────┘└────┘└────┘└────┘└────┘└────┘└────┘             │
+│                                    │                                        │
+│                                    ▼                                        │
+│  Generate Parity Shards (4 x 102.4 KB each)                                │
+│  ┌────┐┌────┐┌────┐┌────┐                                                  │
+│  │ P0 ││ P1 ││ P2 ││ P3 │  ← Computed from D0-D9 using GF(2^8) math       │
+│  └────┘└────┘└────┘└────┘                                                  │
+│                                                                             │
+│  Total: 14 shards (10 data + 4 parity) = 1.43 MB (43% overhead)            │
+│  Can lose ANY 4 shards and still recover data                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Configuration Presets
+
+| Preset   | Data Shards | Parity Shards | Total | Max Failures | Overhead |
+|----------|-------------|---------------|-------|--------------|----------|
+| Minimal  | 4           | 2             | 6     | 2            | 50%      |
+| Standard | 10          | 4             | 14    | 4            | 40%      |
+| Maximum  | 8           | 8             | 16    | 8            | 100%     |
+
+### Encoding Process
+
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐     ┌──────────────┐
+│  Read Data  │────►│ Pad to Even  │────►│   Split     │────►│  RS Encode   │
+│  Stream     │     │  Shard Size  │     │  into N     │     │  Add Parity  │
+└─────────────┘     └──────────────┘     │  Shards     │     └──────┬───────┘
+                                         └─────────────┘            │
+                                                                    ▼
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐     ┌──────────────┐
+│   Verify    │◄────│  Distribute  │◄────│  Checksum   │◄────│   14 Total   │
+│   Storage   │     │  to Disks    │     │  Each Shard │     │   Shards     │
+└─────────────┘     └──────────────┘     └─────────────┘     └──────────────┘
+```
+
+### Decoding Process
+
+When reading an object, only the data shards are needed if all are available. If any shards are missing or corrupted, the Reed-Solomon decoder reconstructs them:
+
+```
+Available Shards:  D0 D1 D2 __ D4 D5 __ D7 D8 D9 P0 __ P2 P3
+                            ↑       ↑          ↑
+                        D3 missing  D6 missing  P1 missing
+
+Step 1: Verify checksums of available shards
+Step 2: Reconstruct D3 and D6 using P0, P2, P3
+Step 3: Concatenate D0-D9 to recover original data
+Step 4: Remove padding and return data
+```
+
+---
+
+## Data Sharding and Distribution
+
+### Shard Placement Strategy
+
+Shards are distributed across available storage devices using a placement algorithm that ensures:
+
+1. **No two shards on the same disk** - Maximizes fault tolerance
+2. **Even distribution** - Balances storage utilization
+3. **Locality awareness** - Considers rack/zone topology
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Cluster Topology                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Zone A                    Zone B                    Zone C             │
+│  ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐ │
+│  │ Rack 1          │      │ Rack 1          │      │ Rack 1          │ │
+│  │ ┌─────┐ ┌─────┐ │      │ ┌─────┐ ┌─────┐ │      │ ┌─────┐ ┌─────┐ │ │
+│  │ │Node1│ │Node2│ │      │ │Node5│ │Node6│ │      │ │Node9│ │NodeA│ │ │
+│  │ │D0,P1│ │D1,P2│ │      │ │D4,P0│ │D5   │ │      │ │D8   │ │D9,P3│ │ │
+│  │ └─────┘ └─────┘ │      │ └─────┘ └─────┘ │      │ └─────┘ └─────┘ │ │
+│  │ ┌─────┐ ┌─────┐ │      │ ┌─────┐ ┌─────┐ │      │ ┌─────┐ ┌─────┐ │ │
+│  │ │Node3│ │Node4│ │      │ │Node7│ │Node8│ │      │ │NodeB│ │NodeC│ │ │
+│  │ │D2   │ │D3   │ │      │ │D6   │ │D7   │ │      │ │     │ │     │ │ │
+│  │ └─────┘ └─────┘ │      │ └─────┘ └─────┘ │      │ └─────┘ └─────┘ │ │
+│  └─────────────────┘      └─────────────────┘      └─────────────────┘ │
+│                                                                         │
+│  Distribution ensures zone failure tolerance: Any zone can fail        │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Placement Algorithm
+
+```go
+// Simplified placement logic
+func PlaceShards(shards []Shard, topology ClusterTopology) []Placement {
+    placements := make([]Placement, len(shards))
+    usedNodes := make(map[string]bool)
+
+    for i, shard := range shards {
+        // Select node in least-used zone that hasn't been used
+        node := selectOptimalNode(topology, usedNodes)
+        placements[i] = Placement{
+            ShardIndex: i,
+            NodeID:     node.ID,
+            DiskPath:   node.SelectDisk(),
+        }
+        usedNodes[node.ID] = true
+    }
+    return placements
+}
+```
+
+---
+
+## Compression
+
+NebulaIO supports transparent compression to reduce storage costs and improve throughput for compressible data.
+
+### Supported Algorithms
+
+| Algorithm | Speed     | Ratio    | Use Case                    |
+|-----------|-----------|----------|-----------------------------|
+| Zstandard | Fast      | Excellent| Default, balanced           |
+| LZ4       | Very Fast | Good     | High-throughput workloads   |
+| Gzip      | Moderate  | Good     | Maximum compatibility       |
+
+### Compression Levels
+
+| Level   | Speed Impact | Compression Ratio |
+|---------|--------------|-------------------|
+| Fastest | Minimal      | Lower             |
+| Default | Balanced     | Balanced          |
+| Best    | Significant  | Maximum           |
+
+### Compression Decision Flow
+
+```
+┌──────────────┐     ┌────────────────┐     ┌───────────────┐
+│ Object Write │────►│ Check Size     │────►│ Check Content │
+│              │     │ >= 1KB ?       │     │ Type          │
+└──────────────┘     └───────┬────────┘     └───────┬───────┘
+                             │                      │
+                     No ─────┤                      │
+                             │              Excluded ────────┐
+                     Yes ────▼                      │        │
+               ┌─────────────────────┐      Yes ────┘        │
+               │ Compress with       │                       │
+               │ selected algorithm  │                       ▼
+               └──────────┬──────────┘            ┌──────────────────┐
+                          │                       │ Store Uncompressed│
+                          ▼                       └──────────────────┘
+               ┌─────────────────────┐
+               │ Compressed < Original│
+               │ ?                    │
+               └──────────┬──────────┘
+                          │
+                  No ─────┤
+                          │
+                  Yes ────▼
+               ┌─────────────────────┐
+               │ Store Compressed    │
+               │ + Metadata          │
+               └─────────────────────┘
+```
+
+### Excluded Content Types
+
+The following content types are not compressed (already compressed):
+
+- Images: `image/jpeg`, `image/png`, `image/gif`, `image/webp`
+- Video: `video/mp4`, `video/webm`, `video/mpeg`
+- Audio: `audio/mpeg`, `audio/mp4`, `audio/ogg`
+- Archives: `application/zip`, `application/gzip`, `application/x-7z-compressed`
+
+---
+
+## Encryption at Rest
+
+NebulaIO implements envelope encryption for data protection.
+
+### Encryption Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Envelope Encryption                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  KMS (Key Management Service)                                               │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  Master Key (KEK - Key Encryption Key)                               │  │
+│  │  - Stored securely in KMS (Vault, AWS KMS, local)                    │  │
+│  │  - Never leaves KMS boundary                                          │  │
+│  │  - Used to wrap/unwrap Data Encryption Keys                          │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                        │
+│                                    │ Wraps/Unwraps                         │
+│                                    ▼                                        │
+│  Data Encryption Key (DEK)                                                  │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  - Generated per object or set of objects                            │  │
+│  │  - Wrapped (encrypted) by KEK before storage                         │  │
+│  │  - Plaintext DEK cached briefly, then cleared from memory            │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                        │
+│                                    │ Encrypts                              │
+│                                    ▼                                        │
+│  Object Data                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  Plaintext ──► AES-256-GCM ──► Ciphertext + Auth Tag                 │  │
+│  │                    or                                                 │  │
+│  │  Plaintext ──► ChaCha20-Poly1305 ──► Ciphertext + Auth Tag           │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Supported Algorithms
+
+| Algorithm         | Key Size | Block Size | Authentication |
+|-------------------|----------|------------|----------------|
+| AES-256-GCM       | 256 bits | 128 bits   | GHASH          |
+| ChaCha20-Poly1305 | 256 bits | Stream     | Poly1305       |
+
+### Key Rotation
+
+```
+┌────────────────┐     ┌────────────────┐     ┌────────────────┐
+│  Current DEK   │     │  New DEK       │     │  Object        │
+│  (wrapped)     │     │  (generated)   │     │  Re-encrypted  │
+└───────┬────────┘     └───────┬────────┘     └───────┬────────┘
+        │                      │                      │
+        ▼                      ▼                      ▼
+   Decrypt data          Encrypt data           Store new
+   with old DEK          with new DEK           wrapped DEK
+```
+
+---
+
+## Storage Pools and Tiering
+
+NebulaIO supports multiple storage tiers for cost optimization.
+
+### Tier Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Storage Tiers                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  HOT TIER (DRAM Cache)                                               │  │
+│  │  ┌──────────┐                                                        │  │
+│  │  │ ARC Cache│  Latency: < 50us   Capacity: 1-256 GB                 │  │
+│  │  └──────────┘  Use: Frequently accessed objects                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                          │ Cache Miss                                       │
+│                          ▼                                                  │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  WARM TIER (Primary Storage - NVMe/SSD)                              │  │
+│  │  ┌──────────┐                                                        │  │
+│  │  │ FS Store │  Latency: < 1ms    Capacity: TBs                      │  │
+│  │  └──────────┘  Use: Active data, recent uploads                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                          │ Policy Transition                                │
+│                          ▼                                                  │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  COLD TIER (HDD / Network Storage)                                   │  │
+│  │  ┌──────────┐                                                        │  │
+│  │  │Cold Store│  Latency: 10-100ms Capacity: PBs                      │  │
+│  │  └──────────┘  Use: Infrequently accessed, cost-sensitive            │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                          │ Policy Transition                                │
+│                          ▼                                                  │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  ARCHIVE TIER (Tape / Glacier-like)                                  │  │
+│  │  ┌──────────┐                                                        │  │
+│  │  │ Archive  │  Latency: Hours    Capacity: Unlimited                │  │
+│  │  └──────────┘  Use: Compliance, long-term retention                  │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Transition Policies
+
+```yaml
+tiering:
+  enabled: true
+  policies:
+    - name: archive-old-logs
+      filters:
+        - field: key_prefix
+          operator: prefix
+          value: "logs/"
+        - field: age_days
+          operator: gt
+          value: 90
+      target_tier: cold
+
+    - name: archive-after-year
+      filters:
+        - field: age_days
+          operator: gt
+          value: 365
+      target_tier: archive
+```
+
+---
+
+## Garbage Collection
+
+NebulaIO implements background garbage collection to reclaim storage from deleted objects.
+
+### GC Process
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Garbage Collection                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Mark Phase                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  - Scan metadata for deleted objects                                 │  │
+│  │  - Identify orphaned shards (no object references)                   │  │
+│  │  - Mark expired multipart uploads                                    │  │
+│  │  - Respect delete markers for versioned buckets                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                        │
+│                                    ▼                                        │
+│  2. Grace Period                                                            │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  - Wait for configured grace period (default: 24 hours)              │  │
+│  │  - Allows recovery from accidental deletion                          │  │
+│  │  - Ensures all in-flight operations complete                         │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                        │
+│                                    ▼                                        │
+│  3. Sweep Phase                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  - Delete marked object data files                                   │  │
+│  │  - Remove orphaned shards from all nodes                             │  │
+│  │  - Clean up temporary upload directories                             │  │
+│  │  - Update storage metrics                                            │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### GC Configuration
+
+```yaml
+storage:
+  gc:
+    enabled: true
+    interval: 1h              # Run every hour
+    grace_period: 24h         # Wait 24 hours before deletion
+    batch_size: 1000          # Process 1000 objects per cycle
+    max_workers: 4            # Parallel deletion workers
+```
+
+---
+
+## Performance Considerations
+
+### I/O Optimization
+
+| Optimization | Description | Impact |
+|--------------|-------------|--------|
+| Direct I/O | Bypass kernel page cache for large objects | Reduced memory pressure |
+| Read-ahead | Prefetch sequential data | Improved throughput |
+| Write coalescing | Batch small writes | Reduced IOPS |
+| Shard parallelism | Read/write shards concurrently | 10-14x parallelism |
+
+### Tuning Parameters
+
+```yaml
+storage:
+  backend:
+    type: fs
+    path: /data
+
+  performance:
+    # Buffer sizes
+    read_buffer_size: 1MB
+    write_buffer_size: 4MB
+
+    # Concurrency
+    max_concurrent_uploads: 100
+    max_concurrent_downloads: 200
+    shard_io_workers: 32
+
+    # I/O settings
+    use_direct_io: true         # For objects > 64MB
+    sync_writes: false          # Use fsync on commit
+    prefetch_enabled: true
+
+  erasure:
+    preset: standard            # 10+4 configuration
+    shard_size: 1MB
+```
+
+### Performance Metrics
+
+| Metric | Description | Target |
+|--------|-------------|--------|
+| Write latency (p99) | Time to write and confirm | < 50ms |
+| Read latency (p99) | Time to first byte | < 10ms |
+| Throughput | Sustained transfer rate | > 10 GB/s aggregate |
+| IOPS | Small object operations | > 50,000 ops/sec |
+
+---
+
+## Next Steps
+
+- [Clustering & HA](clustering.md) - Distributed deployment patterns
+- [Security Model](security.md) - Authentication and authorization
+- [Performance Tuning](../PERFORMANCE_TUNING.md) - Optimization guide

@@ -1127,5 +1127,5 @@ If you cannot resolve an issue using this guide:
 
 - [Performance Tuning Guide](./PERFORMANCE_TUNING.md)
 - [API Reference](./api/openapi.yaml)
-- [Deployment Guide](./DEPLOYMENT.md)
-- [Security Best Practices](./SECURITY.md)
+- [Deployment Guides](./README.md#deployment-guides)
+- [Security Best Practices](./architecture/security.md)

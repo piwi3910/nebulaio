@@ -8,11 +8,15 @@ This section documents the advanced features available in NebulaIO for productio
 
 | Feature | Description | Status |
 |---------|-------------|--------|
+| [Erasure Coding](erasure-coding.md) | Reed-Solomon data protection with configurable redundancy | Production |
+| [Storage Tiering](tiering.md) | Hot/Warm/Cold/Archive tiers with lifecycle policies | Production |
 | [DRAM Cache](dram-cache.md) | High-performance in-memory cache for AI/ML workloads | Production |
 | [S3 Select](s3-select.md) | SQL queries on CSV/JSON data without full download | Production |
 | [Data Firewall](data-firewall.md) | QoS, rate limiting, and access control | Production |
 | [Batch Replication](batch-replication.md) | Bulk data migration and disaster recovery | Production |
+| [Site Replication](site-replication.md) | Multi-datacenter active-active replication | Production |
 | [Audit Logging](audit-logging.md) | Compliance-ready audit trails with integrity | Production |
+| [Event Notifications](events.md) | S3 event notifications to webhooks, Kafka, AMQP, Redis, NATS | Production |
 
 ### Security Features
 
@@ -217,10 +221,14 @@ See [Audit Logging](audit-logging.md) for compliance configuration details.
 
 ### Core Features
 
+- [Configure erasure coding for data protection](erasure-coding.md)
+- [Set up storage tiering for cost optimization](tiering.md)
 - [Configure DRAM Cache for AI/ML](dram-cache.md)
 - [Set up compliance audit logging](audit-logging.md)
 - [Configure data firewall rules](data-firewall.md)
 - [Plan disaster recovery with batch replication](batch-replication.md)
+- [Set up multi-datacenter site replication](site-replication.md)
+- [Configure S3 event notifications](events.md)
 
 ### AI/ML Features
 

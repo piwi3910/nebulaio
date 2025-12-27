@@ -455,5 +455,5 @@ These security features support compliance with:
 
 - [Configure Audit Logging](audit-logging.md)
 - [Set up Data Firewall](data-firewall.md)
-- [Enable DLP Features](dlp.md)
-- [Configure Secret Scanning](secret-scanning.md)
+- [Security Architecture](../architecture/security.md)
+- [KMS Integration](kms.md)

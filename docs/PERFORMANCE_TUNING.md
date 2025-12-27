@@ -793,4 +793,4 @@ nebulaio diag report --output=diag-$(date +%Y%m%d).tar.gz
 - [NebulaIO Documentation](../README.md)
 - [Troubleshooting Guide](./TROUBLESHOOTING.md)
 - [API Reference](./api/openapi.yaml)
-- [Deployment Guide](./DEPLOYMENT.md)
+- [Deployment Guides](./README.md#deployment-guides)
