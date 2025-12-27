@@ -4,9 +4,13 @@ version: '3.8'
 # Usage: docker-compose -f docker-compose.cluster.yml up -d
 #
 # This configuration creates a 3-node cluster with:
-# - Raft consensus for metadata
+# - Dragonboat Raft consensus for metadata (high-performance multi-group Raft)
 # - Gossip-based node discovery (memberlist)
 # - High availability with leader election
+#
+# Dragonboat Configuration:
+# - shard_id: 1 (all nodes in same Raft group)
+# - replica_id: unique per node (1, 2, 3)
 #
 # Access Points:
 # - Node 1: S3 API at http://localhost:9000, Admin API at http://localhost:9001

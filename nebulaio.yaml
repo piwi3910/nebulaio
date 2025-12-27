@@ -9,15 +9,21 @@ s3_port: 9000
 admin_port: 9001
 console_port: 9002
 
-# Cluster configuration
+# Cluster configuration (Dragonboat consensus)
 cluster:
   bootstrap: true
   advertise_address: "127.0.0.1"
+  shard_id: 1              # Dragonboat shard ID (uint64)
+  replica_id: 1            # Dragonboat replica ID (must be unique per node, uint64)
   raft_port: 9003
   gossip_port: 9004
   node_role: "storage"
   cluster_name: "nebulaio-dev"
   expect_nodes: 1
+  # Dragonboat RTT-based timeouts
+  rtt_millisecond: 200
+  election_rtt: 10
+  heartbeat_rtt: 1
 
 # Storage configuration
 storage:

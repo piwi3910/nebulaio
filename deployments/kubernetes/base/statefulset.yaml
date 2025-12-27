@@ -48,6 +48,10 @@ spec:
                 echo "Join node detected"
                 echo "false" > /shared/bootstrap
               fi
+              # Set replica_id based on ordinal (1-based for Dragonboat)
+              # Dragonboat requires unique non-zero replica IDs
+              REPLICA_ID=$((ORDINAL + 1))
+              echo "$REPLICA_ID" > /shared/replica_id
           volumeMounts:
             - name: shared
               mountPath: /shared
@@ -147,13 +151,15 @@ spec:
             #       key: nim-api-key
             #       optional: true
 
-          # Bootstrap flag set by init container
+          # Bootstrap flag and replica_id set by init container
           command:
             - sh
             - -c
             - |
               BOOTSTRAP=$(cat /shared/bootstrap)
+              REPLICA_ID=$(cat /shared/replica_id)
               export NEBULAIO_CLUSTER_BOOTSTRAP=$BOOTSTRAP
+              export NEBULAIO_REPLICA_ID=$REPLICA_ID
               exec /app/nebulaio
 
           resources:

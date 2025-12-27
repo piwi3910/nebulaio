@@ -19,6 +19,7 @@ data:
     cluster:
       bootstrap: ${NEBULAIO_CLUSTER_BOOTSTRAP:-false}
       shard_id: 1
+      replica_id: ${NEBULAIO_REPLICA_ID:-1}  # Must be unique per node (uint64)
       raft_port: 9003
       wal_dir: /data/wal
       snapshot_count: 10000
@@ -26,6 +27,10 @@ data:
       gossip_port: 9004
       node_role: storage
       cluster_name: nebulaio-k8s
+      # Dragonboat RTT-based timeouts
+      rtt_millisecond: 200
+      election_rtt: 10
+      heartbeat_rtt: 1
 
     # Storage configuration
     storage:
