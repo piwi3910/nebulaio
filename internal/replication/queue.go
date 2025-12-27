@@ -138,9 +138,10 @@ func (q *Queue) Fail(id string, err error) error {
 
 	// Requeue with exponential backoff
 	item.Status = QueueStatusPending
+	retryCount := item.RetryCount // Capture before goroutine to avoid race
 	go func() {
 		// Exponential backoff: 1s, 2s, 4s, 8s, etc.
-		backoff := time.Duration(1<<uint(item.RetryCount-1)) * time.Second
+		backoff := time.Duration(1<<uint(retryCount-1)) * time.Second
 		time.Sleep(backoff)
 		select {
 		case q.pending <- item:

@@ -2,7 +2,6 @@
 package backup
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"

@@ -2,7 +2,6 @@
 package dlp
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"

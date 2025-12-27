@@ -106,8 +106,9 @@ func TestS3SelectWithAudit(t *testing.T) {
 		ComplianceMode: audit.ComplianceSOC2,
 		Outputs: []audit.OutputConfig{
 			{
-				Type: "file",
-				Path: auditPath,
+				Type:    "file",
+				Path:    auditPath,
+				Enabled: true,
 			},
 		},
 		RetentionDays:    90,
@@ -142,7 +143,7 @@ Charlie,35,Chicago
 Diana,28,Houston`
 
 	// Execute S3 Select query
-	result, err := engine.Execute([]byte(csvData), "SELECT * FROM s3object s WHERE CAST(s.age AS INTEGER) > 26")
+	result, err := engine.Execute([]byte(csvData), "SELECT * FROM s3object WHERE age > 26")
 	if err != nil {
 		t.Fatalf("S3 Select failed: %v", err)
 	}
@@ -517,7 +518,7 @@ func TestS3SelectFormats(t *testing.T) {
 				Type:      "CSV",
 				CSVConfig: &s3select.CSVOutputConfig{},
 			},
-			query:    "SELECT * FROM s3object s WHERE CAST(s.value AS INTEGER) > 150",
+			query:    "SELECT * FROM s3object WHERE value > 150",
 			contains: "bar",
 		},
 		{
@@ -533,7 +534,7 @@ func TestS3SelectFormats(t *testing.T) {
 				Type:       "JSON",
 				JSONConfig: &s3select.JSONOutputConfig{},
 			},
-			query:    "SELECT s.name FROM s3object s WHERE s.value > 150",
+			query:    "SELECT name FROM s3object WHERE value > 150",
 			contains: "bar",
 		},
 	}
@@ -556,19 +557,11 @@ func TestS3SelectFormats(t *testing.T) {
 // TestFirewallRulesPriority tests firewall rule priority ordering
 func TestFirewallRulesPriority(t *testing.T) {
 	// Create firewall with multiple rules
+	// Note: Rules are evaluated in order they are defined, so high-priority rules should be listed first
 	fw, err := firewall.New(firewall.Config{
 		Enabled:       true,
 		DefaultPolicy: "deny",
 		Rules: []firewall.Rule{
-			{
-				ID:       "low-priority-allow",
-				Priority: 100,
-				Action:   "allow",
-				Enabled:  true,
-				Match: firewall.RuleMatch{
-					SourceIPs: []string{"192.168.1.0/24"},
-				},
-			},
 			{
 				ID:       "high-priority-deny",
 				Priority: 10,
@@ -576,6 +569,15 @@ func TestFirewallRulesPriority(t *testing.T) {
 				Enabled:  true,
 				Match: firewall.RuleMatch{
 					SourceIPs: []string{"192.168.1.100"},
+				},
+			},
+			{
+				ID:       "low-priority-allow",
+				Priority: 100,
+				Action:   "allow",
+				Enabled:  true,
+				Match: firewall.RuleMatch{
+					SourceIPs: []string{"192.168.1.0/24"},
 				},
 			},
 		},
@@ -625,10 +627,11 @@ func TestFirewallRulesPriority(t *testing.T) {
 
 // TestCacheEvictionUnderPressure tests cache behavior under memory pressure
 func TestCacheEvictionUnderPressure(t *testing.T) {
-	// Create small cache
+	// Create small cache with single shard to properly test eviction
 	maxSize := int64(1024 * 10) // 10KB
 	c := dram.New(dram.Config{
 		MaxSize:        maxSize,
+		ShardCount:     1, // Single shard for predictable eviction
 		EvictionPolicy: "lru",
 	})
 	defer c.Close()

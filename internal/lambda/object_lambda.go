@@ -495,7 +495,8 @@ func (s *ObjectLambdaService) applyWebhookTransform(
 			Event:       eventBody,
 			ObjectBytes: base64.StdEncoding.EncodeToString(bodyBytes),
 		}
-		reqBody, _ = json.Marshal(combined)
+		combinedBytes, _ := json.Marshal(combined)
+		reqBody = bytes.NewReader(combinedBytes)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", webhookConfig.URL, reqBody)

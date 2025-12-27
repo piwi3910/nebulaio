@@ -71,7 +71,7 @@ jobs:
 
       - name: Run tests
         working-directory: web
-        run: npm test -- --passWithNoTests
+        run: npm run test:run
 
       - name: Build
         working-directory: web

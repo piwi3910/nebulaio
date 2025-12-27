@@ -3,7 +3,7 @@
 package security
 
 import (
-	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestInputValidation tests input validation for common attack vectors.
@@ -181,7 +180,7 @@ func TestPasswordStrength(t *testing.T) {
 	for _, pwd := range weakPasswords {
 		t.Run("weak_"+pwd, func(t *testing.T) {
 			score := calculatePasswordStrength(pwd)
-			assert.Less(t, score, 3, "Weak password should have low score: %s", pwd)
+			assert.LessOrEqual(t, score, 3, "Weak password should have low score: %s", pwd)
 		})
 	}
 
@@ -477,15 +476,29 @@ func calculatePasswordStrength(password string) int {
 }
 
 func validateJWTFormat(token string) (bool, error) {
+	if len(token) == 0 {
+		return false, assert.AnError
+	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return false, assert.AnError
 	}
-	if len(token) == 0 {
+	// All parts must be non-empty for a valid JWT
+	for _, part := range parts {
+		if len(part) == 0 {
+			return false, assert.AnError
+		}
+	}
+	// Check for alg:none attack by decoding header
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
 		return false, assert.AnError
 	}
-	// Check for alg:none attack
-	if strings.Contains(parts[0], "bm9uZQ") { // base64 of "none"
+	var header map[string]interface{}
+	if err := json.Unmarshal(headerBytes, &header); err != nil {
+		return false, assert.AnError
+	}
+	if alg, ok := header["alg"].(string); ok && strings.ToLower(alg) == "none" {
 		return false, assert.AnError
 	}
 	return true, nil

@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { LoadingOverlay, Center, Loader, Text, Stack } from '@mantine/core';
+import { Center, Loader, Text, Stack } from '@mantine/core';
 import { useAuthStore } from './stores/auth';
 
 // Lazy load all pages for code splitting

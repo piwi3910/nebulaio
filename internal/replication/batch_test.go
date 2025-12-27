@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -408,8 +409,10 @@ func TestBatchJobProgress(t *testing.T) {
 	completedJob, _ := bm.GetJob("progress-test")
 
 	// The job should have processed all objects (though they may fail due to mock backend)
-	if completedJob.Progress.TotalObjects != 3 {
-		t.Errorf("Expected 3 total objects, got %d", completedJob.Progress.TotalObjects)
+	// Use atomic load since progress fields are written atomically
+	totalObjects := atomic.LoadInt64(&completedJob.Progress.TotalObjects)
+	if totalObjects != 3 {
+		t.Errorf("Expected 3 total objects, got %d", totalObjects)
 	}
 }
 

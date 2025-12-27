@@ -10,7 +10,7 @@ import {
   Button,
   rem,
 } from '@mantine/core';
-import { Dropzone, FileWithPath, MIME_TYPES } from '@mantine/dropzone';
+import { Dropzone, FileWithPath, FileRejection } from '@mantine/dropzone';
 import { notifications } from '@mantine/notifications';
 import {
   IconUpload,
@@ -62,7 +62,7 @@ export function FileUploader({
     setFiles((prev) => [...prev, ...newFiles].slice(0, maxFiles));
   }, [maxFiles]);
 
-  const handleReject = useCallback((rejectedFiles: { file: FileWithPath; errors: { message: string }[] }[]) => {
+  const handleReject = useCallback((rejectedFiles: FileRejection[]) => {
     rejectedFiles.forEach(({ file, errors }) => {
       notifications.show({
         title: 'File rejected',

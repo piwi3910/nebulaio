@@ -252,7 +252,7 @@ func NewMultipartCopyManager(storage ObjectStorage) *MultipartCopyManager {
 // CopyObject copies an object, using multipart copy for large objects.
 func (m *MultipartCopyManager) CopyObject(ctx context.Context, opts *MultipartCopyOptions) (*CopyObjectResult, error) {
 	// Get source object metadata
-	sourcePath := opts.SourceBucket + "/" + opts.SourceKey
+	_ = opts.SourceBucket + "/" + opts.SourceKey // sourcePath for logging if needed
 	metadata, err := m.storage.HeadObject(ctx, opts.SourceBucket, opts.SourceKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get source object: %w", err)

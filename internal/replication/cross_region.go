@@ -2,7 +2,6 @@
 package replication
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -21,14 +20,14 @@ import (
 	"github.com/google/uuid"
 )
 
-// ReplicationStatus represents the status of replication.
-type ReplicationStatus string
+// S3ReplicationStatus represents the status of replication for S3 API responses.
+type S3ReplicationStatus string
 
 const (
-	ReplicationStatusPending   ReplicationStatus = "PENDING"
-	ReplicationStatusCompleted ReplicationStatus = "COMPLETED"
-	ReplicationStatusFailed    ReplicationStatus = "FAILED"
-	ReplicationStatusReplica   ReplicationStatus = "REPLICA"
+	S3ReplicationStatusPending   S3ReplicationStatus = "PENDING"
+	S3ReplicationStatusCompleted S3ReplicationStatus = "COMPLETED"
+	S3ReplicationStatusFailed    S3ReplicationStatus = "FAILED"
+	S3ReplicationStatusReplica   S3ReplicationStatus = "REPLICA"
 )
 
 // ReplicationRule defines a replication rule.
@@ -38,9 +37,9 @@ type ReplicationRule struct {
 	Status                  string                   `xml:"Status" json:"status"` // Enabled or Disabled
 	Filter                  *ReplicationFilter       `xml:"Filter,omitempty" json:"filter,omitempty"`
 	Destination             ReplicationDestination   `xml:"Destination" json:"destination"`
-	DeleteMarkerReplication *DeleteMarkerReplication `xml:"DeleteMarkerReplication,omitempty" json:"deleteMarkerReplication,omitempty"`
+	DeleteMarkerReplication *S3DeleteMarkerReplication `xml:"DeleteMarkerReplication,omitempty" json:"deleteMarkerReplication,omitempty"`
 	SourceSelectionCriteria *SourceSelectionCriteria `xml:"SourceSelectionCriteria,omitempty" json:"sourceSelectionCriteria,omitempty"`
-	ExistingObjectReplication *ExistingObjectReplication `xml:"ExistingObjectReplication,omitempty" json:"existingObjectReplication,omitempty"`
+	ExistingObjectReplication *S3ExistingObjectReplication `xml:"ExistingObjectReplication,omitempty" json:"existingObjectReplication,omitempty"`
 }
 
 // ReplicationFilter defines which objects to replicate.
@@ -69,7 +68,7 @@ type ReplicationDestination struct {
 	StorageClass        string              `xml:"StorageClass,omitempty" json:"storageClass,omitempty"`
 	AccessControlTranslation *AccessControlTranslation `xml:"AccessControlTranslation,omitempty" json:"accessControlTranslation,omitempty"`
 	EncryptionConfiguration *EncryptionConfiguration `xml:"EncryptionConfiguration,omitempty" json:"encryptionConfiguration,omitempty"`
-	Metrics             *ReplicationMetrics `xml:"Metrics,omitempty" json:"metrics,omitempty"`
+	Metrics             *S3ReplicationMetrics `xml:"Metrics,omitempty" json:"metrics,omitempty"`
 	ReplicationTime     *ReplicationTime    `xml:"ReplicationTime,omitempty" json:"replicationTime,omitempty"`
 }
 
@@ -83,8 +82,8 @@ type EncryptionConfiguration struct {
 	ReplicaKmsKeyID string `xml:"ReplicaKmsKeyID,omitempty" json:"replicaKmsKeyId,omitempty"`
 }
 
-// ReplicationMetrics controls replication metrics.
-type ReplicationMetrics struct {
+// S3ReplicationMetrics controls replication metrics for S3 API.
+type S3ReplicationMetrics struct {
 	Status        string                   `xml:"Status" json:"status"` // Enabled or Disabled
 	EventThreshold *ReplicationEventThreshold `xml:"EventThreshold,omitempty" json:"eventThreshold,omitempty"`
 }
@@ -105,8 +104,8 @@ type ReplicationTimeValue struct {
 	Minutes int `xml:"Minutes" json:"minutes"`
 }
 
-// DeleteMarkerReplication controls delete marker replication.
-type DeleteMarkerReplication struct {
+// S3DeleteMarkerReplication controls delete marker replication for S3 API.
+type S3DeleteMarkerReplication struct {
 	Status string `xml:"Status" json:"status"` // Enabled or Disabled
 }
 
@@ -126,8 +125,8 @@ type ReplicaModifications struct {
 	Status string `xml:"Status" json:"status"` // Enabled or Disabled
 }
 
-// ExistingObjectReplication controls replication of existing objects.
-type ExistingObjectReplication struct {
+// S3ExistingObjectReplication controls replication of existing objects for S3 API.
+type S3ExistingObjectReplication struct {
 	Status string `xml:"Status" json:"status"` // Enabled or Disabled
 }
 
@@ -147,7 +146,7 @@ type ReplicationTask struct {
 	DestKey         string
 	DestRegion      string
 	Rule            *ReplicationRule
-	Status          ReplicationStatus
+	Status          S3ReplicationStatus
 	Attempts        int
 	LastAttempt     time.Time
 	Error           string
@@ -182,15 +181,15 @@ type RegionEndpoint struct {
 
 // ReplicationStorage interface for accessing storage.
 type ReplicationStorage interface {
-	GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, *ObjectInfo, error)
-	GetObjectVersion(ctx context.Context, bucket, key, versionID string) (io.ReadCloser, *ObjectInfo, error)
+	GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, *S3ObjectInfo, error)
+	GetObjectVersion(ctx context.Context, bucket, key, versionID string) (io.ReadCloser, *S3ObjectInfo, error)
 	PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64, opts *PutOptions) error
 	DeleteObject(ctx context.Context, bucket, key string) error
 	GetObjectTags(ctx context.Context, bucket, key string) (map[string]string, error)
 }
 
-// ObjectInfo contains object metadata.
-type ObjectInfo struct {
+// S3ObjectInfo contains object metadata for S3 replication.
+type S3ObjectInfo struct {
 	Key          string
 	Size         int64
 	ETag         string
@@ -328,7 +327,7 @@ func (rm *ReplicationManager) validateConfiguration(config *ReplicationConfigura
 }
 
 // OnObjectCreated is called when a new object is created.
-func (rm *ReplicationManager) OnObjectCreated(ctx context.Context, bucket, key string, info *ObjectInfo) error {
+func (rm *ReplicationManager) OnObjectCreated(ctx context.Context, bucket, key string, info *S3ObjectInfo) error {
 	rm.mu.RLock()
 	config := rm.configs[bucket]
 	rm.mu.RUnlock()
@@ -353,7 +352,7 @@ func (rm *ReplicationManager) OnObjectCreated(ctx context.Context, bucket, key s
 				DestKey:         key,
 				DestRegion:      rm.extractRegion(rule.Destination.Bucket),
 				Rule:            &rule,
-				Status:          ReplicationStatusPending,
+				Status:          S3ReplicationStatusPending,
 				CreatedAt:       time.Now(),
 				Size:            info.Size,
 				ETag:            info.ETag,
@@ -399,7 +398,7 @@ func (rm *ReplicationManager) OnObjectDeleted(ctx context.Context, bucket, key, 
 					DestKey:         key,
 					DestRegion:      rm.extractRegion(rule.Destination.Bucket),
 					Rule:            &rule,
-					Status:          ReplicationStatusPending,
+					Status:          S3ReplicationStatusPending,
 					CreatedAt:       time.Now(),
 				}
 
@@ -416,7 +415,7 @@ func (rm *ReplicationManager) OnObjectDeleted(ctx context.Context, bucket, key, 
 }
 
 // matchesFilter checks if an object matches the rule filter.
-func (rm *ReplicationManager) matchesFilter(rule *ReplicationRule, key string, info *ObjectInfo) bool {
+func (rm *ReplicationManager) matchesFilter(rule *ReplicationRule, key string, info *S3ObjectInfo) bool {
 	if rule.Filter == nil {
 		return true
 	}
@@ -522,7 +521,7 @@ func (rm *ReplicationManager) processTask(task *ReplicationTask) {
 
 	err := rm.replicateObject(ctx, task)
 	if err != nil {
-		task.Status = ReplicationStatusFailed
+		task.Status = S3ReplicationStatusFailed
 		task.Error = err.Error()
 		atomic.AddInt64(&rm.metrics.objectsFailed, 1)
 
@@ -537,7 +536,7 @@ func (rm *ReplicationManager) processTask(task *ReplicationTask) {
 			}
 		}
 	} else {
-		task.Status = ReplicationStatusCompleted
+		task.Status = S3ReplicationStatusCompleted
 		atomic.AddInt64(&rm.metrics.objectsReplicated, 1)
 		atomic.AddInt64(&rm.metrics.bytesReplicated, task.Size)
 
@@ -555,7 +554,7 @@ func (rm *ReplicationManager) processTask(task *ReplicationTask) {
 func (rm *ReplicationManager) replicateObject(ctx context.Context, task *ReplicationTask) error {
 	// Get source object
 	var reader io.ReadCloser
-	var info *ObjectInfo
+	var info *S3ObjectInfo
 	var err error
 
 	if task.SourceVersionID != "" {
@@ -625,7 +624,7 @@ func (rm *ReplicationManager) putObjectRemote(ctx context.Context, endpoint *Reg
 	}
 
 	// Add replication status header
-	req.Header.Set("x-amz-replication-status", string(ReplicationStatusReplica))
+	req.Header.Set("x-amz-replication-status", string(S3ReplicationStatusReplica))
 
 	// Sign request
 	rm.signRequest(req, endpoint)
@@ -869,7 +868,7 @@ func (h *ReplicationHandler) HandleGetMetrics(w http.ResponseWriter, r *http.Req
 }
 
 // ReplicateBatch processes a batch of existing objects for replication.
-func (rm *ReplicationManager) ReplicateBatch(ctx context.Context, bucket string, objects []*ObjectInfo) error {
+func (rm *ReplicationManager) ReplicateBatch(ctx context.Context, bucket string, objects []*S3ObjectInfo) error {
 	rm.mu.RLock()
 	config := rm.configs[bucket]
 	rm.mu.RUnlock()

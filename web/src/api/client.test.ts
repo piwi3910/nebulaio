@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { adminApi, consoleApi, apiClient } from './client';
 import { useAuthStore } from '../stores/auth';
 import { server } from '../test/mocks/server';
