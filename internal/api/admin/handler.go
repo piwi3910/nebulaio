@@ -108,6 +108,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 		// Audit logs
 		r.Get("/audit-logs", h.ListAuditLogs)
+
+		// AI/ML Features
+		h.RegisterAIMLRoutes(r)
 	})
 }
 

@@ -189,6 +189,11 @@ export const adminApi = {
   // Server Configuration
   getConfig: () => apiClient.get('/admin/config'),
   updateConfig: <T extends object>(config: T) => apiClient.put('/admin/config', config),
+
+  // AI/ML Features
+  getAIMLMetrics: () => apiClient.get('/admin/aiml/metrics'),
+  getAIMLFeatureMetrics: (feature: string) => apiClient.get(`/admin/aiml/metrics/${feature}`),
+  getAIMLStatus: () => apiClient.get('/admin/aiml/status'),
 };
 
 // Console API (user-facing)
