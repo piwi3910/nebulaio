@@ -1,5 +1,8 @@
+//go:build integration
+
 // Package integration provides end-to-end integration tests for NebulaIO.
 // These tests verify that all components work together correctly.
+// Run with: go test -tags=integration ./internal/integration/...
 package integration
 
 import (

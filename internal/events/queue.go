@@ -281,6 +281,10 @@ func (q *EventQueue) retryProcessor() {
 // processRetries processes events ready for retry
 func (q *EventQueue) processRetries() {
 	q.mu.Lock()
+	if q.closed {
+		q.mu.Unlock()
+		return
+	}
 	now := time.Now()
 	ready := make([]*QueuedEvent, 0)
 	remaining := make([]*QueuedEvent, 0)
@@ -296,6 +300,12 @@ func (q *EventQueue) processRetries() {
 	q.mu.Unlock()
 
 	for _, qe := range ready {
+		q.mu.RLock()
+		closed := q.closed
+		q.mu.RUnlock()
+		if closed {
+			return
+		}
 		select {
 		case q.events <- qe:
 		default:
