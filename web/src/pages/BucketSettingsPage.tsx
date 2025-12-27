@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -197,7 +197,7 @@ export function BucketSettingsPage() {
   };
 
   // Bucket Policy state
-  const [policyDocument, setPolicyDocument] = useState('');
+  const [policyDocument, setPolicyDocument] = useState<string | null>(null);
   const [policyError, setPolicyError] = useState<string | null>(null);
 
   const { data: policyData, isLoading: policyLoading } = useQuery({
@@ -205,16 +205,20 @@ export function BucketSettingsPage() {
     queryFn: () => adminApi.getBucketPolicy(bucketName!).then((res) => res.data as { policy?: string }),
   });
 
-  // Update policy document when data loads
-  useEffect(() => {
+  // Derive formatted policy from server data, allowing user edits to override
+  const effectivePolicyDocument = useMemo(() => {
+    if (policyDocument !== null) {
+      return policyDocument;
+    }
     if (policyData?.policy) {
       try {
-        setPolicyDocument(JSON.stringify(JSON.parse(policyData.policy), null, 2));
+        return JSON.stringify(JSON.parse(policyData.policy), null, 2);
       } catch {
-        setPolicyDocument(policyData.policy);
+        return policyData.policy;
       }
     }
-  }, [policyData]);
+    return '';
+  }, [policyDocument, policyData]);
 
   const policyMutation = useMutation({
     mutationFn: (policy: string) => adminApi.setBucketPolicy(bucketName!, policy),
@@ -539,7 +543,7 @@ export function BucketSettingsPage() {
               ) : (
                 <>
                   <PolicyEditor
-                    value={policyDocument}
+                    value={effectivePolicyDocument}
                     onChange={setPolicyDocument}
                     error={policyError || undefined}
                   />
@@ -557,15 +561,15 @@ export function BucketSettingsPage() {
                     <Button
                       onClick={() => {
                         try {
-                          JSON.parse(policyDocument);
+                          JSON.parse(effectivePolicyDocument);
                           setPolicyError(null);
-                          policyMutation.mutate(policyDocument);
+                          policyMutation.mutate(effectivePolicyDocument);
                         } catch {
                           setPolicyError('Invalid JSON');
                         }
                       }}
                       loading={policyMutation.isPending}
-                      disabled={!policyDocument.trim()}
+                      disabled={!effectivePolicyDocument.trim()}
                     >
                       Save Policy
                     </Button>

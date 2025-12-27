@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import {
   Stack,
   Textarea,
@@ -94,66 +94,45 @@ const policyTemplates = {
 };
 
 export function PolicyEditor({ value, onChange, error, readOnly = false }: PolicyEditorProps) {
-  const [syntaxError, setSyntaxError] = useState<string | null>(null);
-  const [isValid, setIsValid] = useState(false);
-
-  useEffect(() => {
-    validateJson(value);
-  }, [value]);
-
-  const validateJson = (json: string) => {
-    if (!json.trim()) {
-      setSyntaxError(null);
-      setIsValid(false);
-      return;
+  // Derive validation state from value using useMemo (no useEffect needed)
+  const { syntaxError, isValid } = useMemo(() => {
+    if (!value.trim()) {
+      return { syntaxError: null, isValid: false };
     }
 
     try {
-      const parsed = JSON.parse(json);
-      
+      const parsed = JSON.parse(value);
+
       // Basic policy structure validation
       if (!parsed.Version) {
-        setSyntaxError('Policy must include a "Version" field');
-        setIsValid(false);
-        return;
+        return { syntaxError: 'Policy must include a "Version" field', isValid: false };
       }
-      
+
       if (!parsed.Statement || !Array.isArray(parsed.Statement)) {
-        setSyntaxError('Policy must include a "Statement" array');
-        setIsValid(false);
-        return;
+        return { syntaxError: 'Policy must include a "Statement" array', isValid: false };
       }
 
       for (let i = 0; i < parsed.Statement.length; i++) {
         const stmt = parsed.Statement[i];
         if (!stmt.Effect || !['Allow', 'Deny'].includes(stmt.Effect)) {
-          setSyntaxError(`Statement ${i + 1}: Effect must be "Allow" or "Deny"`);
-          setIsValid(false);
-          return;
+          return { syntaxError: `Statement ${i + 1}: Effect must be "Allow" or "Deny"`, isValid: false };
         }
         if (!stmt.Action) {
-          setSyntaxError(`Statement ${i + 1}: Missing "Action" field`);
-          setIsValid(false);
-          return;
+          return { syntaxError: `Statement ${i + 1}: Missing "Action" field`, isValid: false };
         }
         if (!stmt.Resource) {
-          setSyntaxError(`Statement ${i + 1}: Missing "Resource" field`);
-          setIsValid(false);
-          return;
+          return { syntaxError: `Statement ${i + 1}: Missing "Resource" field`, isValid: false };
         }
       }
 
-      setSyntaxError(null);
-      setIsValid(true);
+      return { syntaxError: null, isValid: true };
     } catch (e) {
       if (e instanceof SyntaxError) {
-        setSyntaxError(`JSON syntax error: ${e.message}`);
-      } else {
-        setSyntaxError('Invalid JSON');
+        return { syntaxError: `JSON syntax error: ${e.message}`, isValid: false };
       }
-      setIsValid(false);
+      return { syntaxError: 'Invalid JSON', isValid: false };
     }
-  };
+  }, [value]);
 
   const formatJson = () => {
     try {
