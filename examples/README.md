@@ -1,6 +1,6 @@
 # NebulaIO Usage Examples
 
-This directory contains usage examples for NebulaIO's enterprise features.
+This directory contains usage examples for NebulaIO's features.
 
 ## Directory Structure
 
@@ -11,7 +11,7 @@ examples/
 └── shell/          # Shell scripts using curl and AWS CLI
 ```
 
-## Core Enterprise Features
+## Core Features
 
 ### DRAM Cache
 

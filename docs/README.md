@@ -23,17 +23,17 @@ Welcome to the NebulaIO documentation. This guide covers everything from getting
 - [Storage Backend](architecture/storage.md) - Storage layer details
 - [Security Model](architecture/security.md) - Authentication and authorization
 
-### Enterprise Features
-- [Erasure Coding](enterprise/erasure-coding.md) - Data durability with Reed-Solomon encoding
-- [Data Compression](enterprise/compression.md) - Zstandard, LZ4, and Gzip compression
-- [Bucket Replication](enterprise/replication.md) - Async bucket replication configuration
-- [Site Replication](enterprise/site-replication.md) - Multi-datacenter Active-Active sync
-- [LDAP Integration](enterprise/ldap.md) - LDAP/Active Directory authentication
-- [OIDC/SSO](enterprise/oidc.md) - OpenID Connect single sign-on
-- [KMS Integration](enterprise/kms.md) - Key Management System integration
-- [Event Notifications](enterprise/events.md) - Webhook, Kafka, and messaging integration
-- [Storage Tiering](enterprise/tiering.md) - Hot/Cold storage with caching
-- [Object Lock](enterprise/object-lock.md) - WORM compliance and legal holds
+### Advanced Features
+- [Erasure Coding](features/erasure-coding.md) - Data durability with Reed-Solomon encoding
+- [Data Compression](features/compression.md) - Zstandard, LZ4, and Gzip compression
+- [Bucket Replication](features/replication.md) - Async bucket replication configuration
+- [Site Replication](features/site-replication.md) - Multi-datacenter Active-Active sync
+- [LDAP Integration](features/ldap.md) - LDAP/Active Directory authentication
+- [OIDC/SSO](features/oidc.md) - OpenID Connect single sign-on
+- [KMS Integration](features/kms.md) - Key Management System integration
+- [Event Notifications](features/events.md) - Webhook, Kafka, and messaging integration
+- [Storage Tiering](features/tiering.md) - Hot/Cold storage with caching
+- [Object Lock](features/object-lock.md) - WORM compliance and legal holds
 
 ### Operations
 - [Monitoring](operations/monitoring.md) - Prometheus metrics and alerting

@@ -1,5 +1,5 @@
-// Package integration provides integration tests for enterprise features.
-// These tests verify that enterprise components work together correctly.
+// Package integration provides integration tests for advanced features.
+// These tests verify that feature components work together correctly.
 package integration
 
 import (
@@ -251,8 +251,8 @@ func TestFirewallBandwidthWithCache(t *testing.T) {
 	}
 }
 
-// TestConcurrentEnterpriseFeatures tests concurrent access to enterprise features
-func TestConcurrentEnterpriseFeatures(t *testing.T) {
+// TestConcurrentAdvancedFeatures tests concurrent access to advanced features
+func TestConcurrentAdvancedFeatures(t *testing.T) {
 	// Create firewall
 	fw, err := firewall.New(firewall.Config{
 		Enabled:       true,
@@ -659,9 +659,9 @@ func TestCacheEvictionUnderPressure(t *testing.T) {
 		metrics.Size, metrics.Evictions, metrics.Objects)
 }
 
-// TestEnterpriseFeatureIntegration tests the complete integration of enterprise features
-func TestEnterpriseFeatureIntegration(t *testing.T) {
-	// This test simulates a complete request flow through all enterprise components
+// TestAdvancedFeatureIntegration tests the complete integration of advanced features
+func TestAdvancedFeatureIntegration(t *testing.T) {
+	// This test simulates a complete request flow through all feature components
 
 	// 1. Set up components
 	fw, err := firewall.New(firewall.Config{

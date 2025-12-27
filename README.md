@@ -1,6 +1,6 @@
 # NebulaIO
 
-An S3-compatible object storage system with a full-featured web GUI, designed to scale from single-node deployments to distributed enterprise clusters. **100% feature parity with MinIO**, including all 2025 AI/ML features.
+An S3-compatible object storage system with a full-featured web GUI, designed to scale from single-node deployments to distributed clusters. **100% feature parity with MinIO**, including all 2025 AI/ML features - all features included free.
 
 ## Features
 
@@ -12,7 +12,7 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 - **IAM** - Users, groups, policies, and S3-compatible access keys
 - **Multi-tenant** - Role-based access control with admin and user portals
 
-### Enterprise Features
+### Advanced Features
 
 #### Data Durability
 - **Erasure Coding** - Reed-Solomon encoding with configurable data/parity shards (default: 10+4)
@@ -23,7 +23,7 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 - **Site Replication** - Active-Active multi-datacenter sync with IAM/policy synchronization
 
 #### Identity & Security
-- **LDAP/Active Directory** - Enterprise identity integration with user sync and group-to-policy mapping
+- **LDAP/Active Directory** - Identity integration with user sync and group-to-policy mapping
 - **OIDC/SSO** - OpenID Connect support for single sign-on (Keycloak, Okta, Auth0, etc.)
 - **KMS Integration** - Envelope encryption with HashiCorp Vault, AWS KMS, or local key management
 - **Object Lock (WORM)** - GOVERNANCE and COMPLIANCE modes with legal hold support
@@ -395,7 +395,7 @@ make test
 - [x] Phase 2: Multipart uploads, versioning, lifecycle policies
 - [x] Phase 3: Multi-node clustering, erasure coding, data compression
 - [x] Phase 4: Cross-cluster replication, encryption at rest (KMS integration)
-- [x] Phase 5: Enterprise identity (LDAP, OIDC/SSO)
+- [x] Phase 5: Identity integration (LDAP, OIDC/SSO)
 - [x] Phase 6: Event notifications, storage tiering, caching
 - [x] Phase 7: Object Lock (WORM compliance), CLI tool
 - [x] Phase 8: S3 Express, Iceberg, MCP Server, GPUDirect, DPU, RDMA, NIM

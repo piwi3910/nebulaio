@@ -1,10 +1,10 @@
-# NebulaIO Enterprise Features
+# NebulaIO Advanced Features
 
-This section documents the enterprise-grade features available in NebulaIO for production deployments requiring advanced security, compliance, and performance capabilities.
+This section documents the advanced features available in NebulaIO for production deployments requiring security, compliance, and high-performance capabilities. All features are included free.
 
 ## Feature Overview
 
-### Core Enterprise Features
+### Core Features
 
 | Feature | Description | Status |
 |---------|-------------|--------|
@@ -28,12 +28,12 @@ This section documents the enterprise-grade features available in NebulaIO for p
 
 ## Quick Start
 
-### Core Enterprise Features
+### Enabling Features
 
-Enable enterprise features in your configuration:
+Enable features in your configuration:
 
 ```yaml
-# Enterprise DRAM Cache
+# DRAM Cache
 cache:
   enabled: true
   max_size: 8589934592  # 8GB
@@ -108,7 +108,7 @@ nim:
 
 ## Compliance Support
 
-NebulaIO Enterprise supports multiple compliance frameworks:
+NebulaIO supports multiple compliance frameworks:
 
 - **SOC 2** - Service Organization Control 2
 - **PCI DSS** - Payment Card Industry Data Security Standard
@@ -120,7 +120,7 @@ See [Audit Logging](audit-logging.md) for compliance configuration details.
 
 ## Architecture
 
-### Core Enterprise Features
+### Core Features
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -179,7 +179,7 @@ See [Audit Logging](audit-logging.md) for compliance configuration details.
 
 ## Performance Benchmarks
 
-### Core Enterprise Features
+### Core Features
 
 | Feature | Metric | Value |
 |---------|--------|-------|
@@ -204,7 +204,7 @@ See [Audit Logging](audit-logging.md) for compliance configuration details.
 
 ## Next Steps
 
-### Core Enterprise Features
+### Core Features
 
 - [Configure DRAM Cache for AI/ML](dram-cache.md)
 - [Set up compliance audit logging](audit-logging.md)

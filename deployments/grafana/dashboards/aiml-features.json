@@ -2699,7 +2699,7 @@
   "refresh": "30s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["nebulaio", "aiml", "enterprise"],
+  "tags": ["nebulaio", "aiml"],
   "templating": {
     "list": []
   },

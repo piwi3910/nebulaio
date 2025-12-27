@@ -723,7 +723,7 @@ function ConfigurationPanel({
           icon={<IconBolt size={20} />}
           enabled={displayFeatures.s3_express.enabled}
           onToggle={(v) => toggleFeature('s3_express', v)}
-          docsLink="/docs/enterprise/s3-express"
+          docsLink="/docs/features/s3-express"
         >
           <Stack gap="sm">
             <TextInput
@@ -753,7 +753,7 @@ function ConfigurationPanel({
           icon={<IconDatabase size={20} />}
           enabled={displayFeatures.iceberg.enabled}
           onToggle={(v) => toggleFeature('iceberg', v)}
-          docsLink="/docs/enterprise/iceberg"
+          docsLink="/docs/features/iceberg"
         >
           <Stack gap="sm">
             <TextInput
@@ -787,7 +787,7 @@ function ConfigurationPanel({
           icon={<IconRobot size={20} />}
           enabled={displayFeatures.mcp.enabled}
           onToggle={(v) => toggleFeature('mcp', v)}
-          docsLink="/docs/enterprise/mcp-server"
+          docsLink="/docs/features/mcp-server"
         >
           <Stack gap="sm">
             <NumberInput
@@ -836,7 +836,7 @@ function ConfigurationPanel({
           icon={<IconCpu size={20} />}
           enabled={displayFeatures.gpudirect.enabled}
           onToggle={(v) => toggleFeature('gpudirect', v)}
-          docsLink="/docs/enterprise/gpudirect"
+          docsLink="/docs/features/gpudirect"
         >
           <Stack gap="sm">
             <NumberInput
@@ -869,7 +869,7 @@ function ConfigurationPanel({
           icon={<IconServer size={20} />}
           enabled={displayFeatures.dpu.enabled}
           onToggle={(v) => toggleFeature('dpu', v)}
-          docsLink="/docs/enterprise/dpu"
+          docsLink="/docs/features/dpu"
         >
           <Stack gap="sm">
             <TextInput
@@ -907,7 +907,7 @@ function ConfigurationPanel({
           icon={<IconNetwork size={20} />}
           enabled={displayFeatures.rdma.enabled}
           onToggle={(v) => toggleFeature('rdma', v)}
-          docsLink="/docs/enterprise/rdma"
+          docsLink="/docs/features/rdma"
         >
           <Stack gap="sm">
             <NumberInput
@@ -945,7 +945,7 @@ function ConfigurationPanel({
           icon={<IconBrain size={20} />}
           enabled={displayFeatures.nim.enabled}
           onToggle={(v) => toggleFeature('nim', v)}
-          docsLink="/docs/enterprise/nim"
+          docsLink="/docs/features/nim"
         >
           <Grid>
             <Grid.Col span={{ base: 12, md: 6 }}>

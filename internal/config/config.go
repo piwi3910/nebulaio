@@ -121,7 +121,7 @@ type StorageConfig struct {
 
 // CacheConfig holds DRAM cache configuration for high-performance workloads
 type CacheConfig struct {
-	// Enabled enables the enterprise DRAM cache
+	// Enabled enables the DRAM cache
 	Enabled bool `mapstructure:"enabled"`
 
 	// MaxSize is the maximum cache size in bytes (default: 8GB)
@@ -673,7 +673,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("storage.max_object_size", 5*1024*1024*1024*1024) // 5TB
 	v.SetDefault("storage.multipart_part_size", 64*1024*1024)      // 64MB
 
-	// Cache defaults (Enterprise DRAM Cache)
+	// Cache defaults (DRAM Cache)
 	v.SetDefault("cache.enabled", false)
 	v.SetDefault("cache.max_size", 8*1024*1024*1024)   // 8GB
 	v.SetDefault("cache.shard_count", 256)

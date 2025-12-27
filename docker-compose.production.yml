@@ -1,14 +1,14 @@
-# NebulaIO Enterprise Docker Compose Configuration
-# Usage: docker-compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
+# NebulaIO Production Docker Compose Configuration
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.production.yml up -d
 #
-# This overlay enables all enterprise features with production-ready defaults.
+# This overlay enables all advanced features with production-ready defaults.
 
 version: '3.8'
 
 services:
   nebulaio:
     environment:
-      # Enterprise DRAM Cache
+      # DRAM Cache
       - NEBULAIO_CACHE_ENABLED=true
       - NEBULAIO_CACHE_MAX_SIZE=8589934592
       - NEBULAIO_CACHE_SHARD_COUNT=256

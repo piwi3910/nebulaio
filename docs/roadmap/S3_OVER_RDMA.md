@@ -207,7 +207,7 @@ Client GetObject:
 
 ### Phase 4: Production Readiness (Q1 2026)
 
-**Objective**: Enterprise-ready deployment
+**Objective**: Production-ready deployment
 
 **Deliverables**:
 1. Hybrid transport (automatic fallback to TCP)

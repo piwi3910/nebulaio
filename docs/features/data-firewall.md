@@ -1,6 +1,6 @@
 # Data Firewall
 
-NebulaIO's Data Firewall provides enterprise-grade Quality of Service (QoS), rate limiting, bandwidth throttling, and access control to protect your storage infrastructure.
+NebulaIO's Data Firewall provides Quality of Service (QoS), rate limiting, bandwidth throttling, and access control to protect your storage infrastructure.
 
 ## Overview
 

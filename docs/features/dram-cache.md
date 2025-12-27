@@ -1,4 +1,4 @@
-# Enterprise DRAM Cache
+# DRAM Cache
 
 NebulaIO's DRAM Cache provides high-performance in-memory caching optimized for AI/ML workloads, delivering sub-100μs read latencies and 10GB/s+ throughput.
 

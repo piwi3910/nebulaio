@@ -1,4 +1,4 @@
-// Package dram provides an enterprise-grade distributed DRAM cache
+// Package dram provides a high-performance distributed DRAM cache
 // optimized for AI/ML workloads with high-throughput, low-latency access.
 package dram
 
@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// Config configures the enterprise DRAM cache
+// Config configures the DRAM cache
 type Config struct {
 	// MaxSize is the maximum cache size in bytes (default: 8GB)
 	MaxSize int64 `json:"maxSize" yaml:"max_size"`
@@ -64,7 +64,7 @@ type Config struct {
 	MetricsEnabled bool `json:"metricsEnabled" yaml:"metrics_enabled"`
 }
 
-// DefaultConfig returns sensible defaults for enterprise workloads
+// DefaultConfig returns sensible defaults for production workloads
 func DefaultConfig() Config {
 	return Config{
 		MaxSize:           8 * 1024 * 1024 * 1024, // 8GB
@@ -125,7 +125,7 @@ type shard struct {
 	evictions int64
 }
 
-// Cache is an enterprise-grade distributed DRAM cache
+// Cache is a high-performance distributed DRAM cache
 type Cache struct {
 	config Config
 	shards []*shard
@@ -170,7 +170,7 @@ type peerClient struct {
 	lastSeen  time.Time
 }
 
-// New creates a new enterprise DRAM cache
+// New creates a new DRAM cache
 func New(config Config) *Cache {
 	if config.ShardCount <= 0 {
 		config.ShardCount = 256

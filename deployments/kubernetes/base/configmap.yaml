@@ -97,7 +97,7 @@ data:
     #       endpoint: https://s3.amazonaws.com
     #       bucket: my-cold-tier
 
-    # Enterprise DRAM Cache
+    # DRAM Cache
     # High-performance in-memory cache for AI/ML workloads
     # cache:
     #   enabled: false

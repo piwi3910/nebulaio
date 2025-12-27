@@ -26,7 +26,7 @@ storage:
   max_object_size: 5497558138880  # 5TB
   multipart_part_size: 67108864   # 64MB
 
-# DRAM Cache configuration (Enterprise)
+# DRAM Cache configuration
 cache:
   enabled: false
   max_size: 8589934592            # 8GB

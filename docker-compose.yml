@@ -20,7 +20,7 @@ services:
       - NEBULAIO_AUTH_ROOT_USER=admin
       - NEBULAIO_AUTH_ROOT_PASSWORD=Admin123
 
-      # Enterprise DRAM Cache (uncomment to enable)
+      # DRAM Cache (uncomment to enable)
       # - NEBULAIO_CACHE_ENABLED=true
       # - NEBULAIO_CACHE_MAX_SIZE=8589934592
       # - NEBULAIO_CACHE_EVICTION_POLICY=arc

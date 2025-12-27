@@ -6,7 +6,7 @@ This document provides a comprehensive comparison between NebulaIO and MinIO, hi
 
 ## Executive Summary
 
-NebulaIO implements **100% feature parity** with MinIO's enterprise capabilities, including all 2025 features:
+NebulaIO implements **100% feature parity** with MinIO's capabilities, including all 2025 features - all included free:
 
 | New MinIO Features (2025) | NebulaIO Status |
 |--------------------------|-----------------|
@@ -17,7 +17,7 @@ NebulaIO implements **100% feature parity** with MinIO's enterprise capabilities
 | BlueField-3 DPU Support | ✅ Full (SmartNIC offload) |
 | S3 over RDMA (Production) | ✅ Full (libibverbs abstraction) |
 
-NebulaIO maintains full parity on core S3 operations, enterprise security, data management, and AI/ML features.
+NebulaIO maintains full parity on core S3 operations, security, data management, and AI/ML features.
 
 ## Feature Comparison Matrix
 
@@ -125,7 +125,7 @@ NebulaIO maintains full parity on core S3 operations, enterprise security, data 
 | Azure Key Vault | ✅ | ✅ | Full |
 | Local KMS | ✅ | ✅ | Full |
 
-### Enterprise Features
+### Advanced Features
 
 | Feature | MinIO | NebulaIO | Status |
 |---------|-------|----------|--------|
@@ -366,13 +366,13 @@ All MinIO 2025 features are fully implemented in NebulaIO.
 1. **Open Source** - Fully open source under permissive license
 2. **Single Binary** - Simple deployment with no external dependencies
 3. **Modern Go Codebase** - Clean, maintainable architecture
-4. **Full Enterprise Features** - All major enterprise features included free
+4. **All Features Included** - All features included free, no paid tiers
 5. **Comprehensive Documentation** - Detailed docs and examples
 
 ### MinIO Advantages
 1. **Mature Product** - Years of production hardening
 2. **Larger Community** - More contributors and users (2B+ Docker pulls, 50K+ GitHub stars)
-3. **Commercial Support** - Enterprise support with SLAs
+3. **Commercial Support** - Professional support with SLAs
 
 ### Feature Parity Score: 100%
 

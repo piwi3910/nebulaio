@@ -1,6 +1,6 @@
-# NebulaIO Enterprise Architecture
+# NebulaIO Architecture
 
-This document provides architectural diagrams for NebulaIO's enterprise features.
+This document provides architectural diagrams for NebulaIO's advanced features.
 
 ## System Overview
 
@@ -506,7 +506,7 @@ graph LR
     FedRAMP --> Alerts
 ```
 
-## Complete Enterprise Feature Integration
+## Complete Feature Integration
 
 ```mermaid
 graph TB
