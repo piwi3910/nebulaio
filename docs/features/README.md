@@ -14,6 +14,17 @@ This section documents the advanced features available in NebulaIO for productio
 | [Batch Replication](batch-replication.md) | Bulk data migration and disaster recovery | Production |
 | [Audit Logging](audit-logging.md) | Compliance-ready audit trails with integrity | Production |
 
+### Security Features
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| [Access Analytics](security-features.md#access-analytics) | Real-time anomaly detection and behavior analysis | Production |
+| [Key Rotation](security-features.md#encryption-key-rotation) | Automated encryption key lifecycle management | Production |
+| [mTLS](security-features.md#mtls-internal-communication) | Mutual TLS for internal cluster communication | Production |
+| [Distributed Tracing](security-features.md#opentelemetry-tracing) | OpenTelemetry request tracing | Production |
+| [Secret Scanning](security-features.md) | Detect secrets and credentials in objects | Production |
+| [DLP](security-features.md) | Data Loss Prevention with PII detection | Production |
+
 ### AI/ML Features (2025)
 
 | Feature | Description | Status |

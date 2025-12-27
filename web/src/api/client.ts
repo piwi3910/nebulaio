@@ -47,6 +47,83 @@ export interface Policy {
   updated_at: string;
 }
 
+// Security Feature Types
+export interface Anomaly {
+  id: string;
+  type: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  user_id: string;
+  description: string;
+  detected_at: string;
+  acknowledged: boolean;
+  acknowledged_by?: string;
+  acknowledged_at?: string;
+  resolution?: string;
+  details: Record<string, unknown>;
+}
+
+export interface AnalyticsStats {
+  total_events: number;
+  anomalies_detected: number;
+  users_monitored: number;
+  baselines_created: number;
+  events_last_24h: number;
+  anomalies_last_24h: number;
+  anomalies_by_severity?: Record<string, number>;
+  anomalies_by_type?: Record<string, number>;
+}
+
+export interface EncryptionKey {
+  id: string;
+  type: 'MASTER' | 'DATA' | 'BUCKET' | 'OBJECT' | 'CUSTOMER';
+  algorithm: string;
+  alias?: string;
+  version: number;
+  status: 'ACTIVE' | 'ROTATING' | 'PENDING_DELETION' | 'DELETED';
+  created_at: string;
+  rotated_at?: string;
+  expires_at?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface KeyRotationEvent {
+  id: string;
+  key_id: string;
+  old_version: number;
+  new_version: number;
+  trigger: 'scheduled' | 'manual' | 'policy';
+  initiated_by?: string;
+  started_at: string;
+  completed_at?: string;
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  error?: string;
+}
+
+export interface Certificate {
+  id: string;
+  type: 'SERVER' | 'CLIENT' | 'PEER';
+  common_name: string;
+  dns_names?: string[];
+  ip_addresses?: string[];
+  serial_number: string;
+  not_before: string;
+  not_after: string;
+  revoked: boolean;
+  revoked_at?: string;
+  revocation_reason?: string;
+}
+
+export interface TracingStats {
+  enabled: boolean;
+  service_name: string;
+  sampling_rate: number;
+  exporter_type: string;
+  spans_exported: number;
+  spans_dropped: number;
+  active_spans: number;
+  propagator: string;
+}
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -194,6 +271,47 @@ export const adminApi = {
   getAIMLMetrics: () => apiClient.get('/admin/aiml/metrics'),
   getAIMLFeatureMetrics: (feature: string) => apiClient.get(`/admin/aiml/metrics/${feature}`),
   getAIMLStatus: () => apiClient.get('/admin/aiml/status'),
+
+  // Security - Access Analytics
+  listAnomalies: (params?: { severity?: string; acknowledged?: boolean; limit?: number }) =>
+    apiClient.get('/analytics/anomalies', { params }),
+  getAnalyticsStats: () => apiClient.get('/analytics/stats'),
+  acknowledgeAnomaly: (id: string, data: { resolution?: string }) =>
+    apiClient.post(`/analytics/anomalies/${id}/acknowledge`, data),
+  getUserBaseline: (userId: string) => apiClient.get(`/analytics/baselines/${userId}`),
+
+  // Security - Key Rotation
+  listKeys: (params?: { type?: string }) => apiClient.get('/keys', { params }),
+  createKey: (data: { type: string; algorithm: string; alias?: string; metadata?: Record<string, string> }) =>
+    apiClient.post('/keys', data),
+  getKey: (id: string) => apiClient.get(`/keys/${id}`),
+  rotateKey: (id: string, data?: { trigger?: string }) =>
+    apiClient.post(`/keys/${id}/rotate`, data),
+  getKeyRotations: (id: string) => apiClient.get(`/keys/${id}/rotations`),
+  startReencryption: (id: string, data: { old_version: number; new_version: number; buckets?: string[]; concurrency?: number }) =>
+    apiClient.post(`/keys/${id}/reencrypt`, data),
+
+  // Security - mTLS
+  initCA: (data: { common_name: string }) => apiClient.post('/mtls/ca/init', data),
+  getCA: () => apiClient.get('/mtls/ca/certificate'),
+  listCertificates: () => apiClient.get('/mtls/certificates'),
+  issueCertificate: (data: { type: string; common_name: string; dns_names?: string[]; ip_addresses?: string[] }) =>
+    apiClient.post('/mtls/certificates', data),
+  getCertificate: (id: string) => apiClient.get(`/mtls/certificates/${id}`),
+  revokeCertificate: (id: string, data: { reason: string }) =>
+    apiClient.post(`/mtls/certificates/${id}/revoke`, data),
+  getCRL: () => apiClient.get('/mtls/crl'),
+
+  // Security - Distributed Tracing
+  getTracingConfig: () => apiClient.get('/tracing/config'),
+  updateTracingConfig: (data: { enabled?: boolean; sampling?: { rate: number }; exporter?: { type: string; endpoint: string }; propagator?: string }) =>
+    apiClient.put('/tracing/config', data),
+  getTracingStats: () => apiClient.get('/tracing/stats'),
+
+  // Security - Feature Configuration
+  getSecurityConfig: () => apiClient.get('/admin/security/config'),
+  updateSecurityConfig: (data: { analytics_enabled?: boolean; key_rotation_enabled?: boolean; mtls_enabled?: boolean; tracing_enabled?: boolean }) =>
+    apiClient.put('/admin/security/config', data),
 };
 
 // Console API (user-facing)

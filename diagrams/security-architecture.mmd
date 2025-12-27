@@ -1,0 +1,110 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#2563eb', 'primaryTextColor': '#fff', 'primaryBorderColor': '#1d4ed8', 'lineColor': '#64748b', 'secondaryColor': '#10b981', 'tertiaryColor': '#f59e0b'}}}%%
+flowchart TB
+    subgraph External["External Access"]
+        Client[("S3 Client")]
+        Admin[("Admin Client")]
+        Agent[("AI Agent")]
+    end
+
+    subgraph Gateway["NebulaIO Gateway Layer"]
+        direction TB
+        TLS["TLS Termination<br/>mTLS Validation"]
+        Auth["Authentication<br/>JWT / Access Keys"]
+        Firewall["Data Firewall<br/>Rate Limiting"]
+    end
+
+    subgraph Security["Security Layer"]
+        direction TB
+
+        subgraph Analytics["Access Analytics"]
+            Baseline["Behavior<br/>Baselines"]
+            Anomaly["Anomaly<br/>Detection"]
+            Alert["Alert<br/>Engine"]
+        end
+
+        subgraph Encryption["Encryption"]
+            KeyMgmt["Key<br/>Management"]
+            Rotation["Auto<br/>Rotation"]
+            KMS["KMS<br/>Integration"]
+        end
+
+        subgraph Scanning["Content Scanning"]
+            Secret["Secret<br/>Scanner"]
+            DLP["DLP<br/>Engine"]
+        end
+    end
+
+    subgraph Observability["Observability Layer"]
+        direction TB
+        Tracing["OpenTelemetry<br/>Tracing"]
+        Metrics["Prometheus<br/>Metrics"]
+        Audit["Audit<br/>Logging"]
+    end
+
+    subgraph Internal["Internal Communication"]
+        direction TB
+        MTLS["mTLS<br/>Certificates"]
+        CA["Internal<br/>CA"]
+        CRL["Certificate<br/>Revocation"]
+    end
+
+    subgraph Storage["Storage Layer"]
+        S3API["S3 API<br/>Handler"]
+        Objects[("Encrypted<br/>Objects")]
+        Metadata[("Metadata<br/>Store")]
+    end
+
+    subgraph Exporters["External Systems"]
+        OTEL["OTLP<br/>Collector"]
+        Jaeger["Jaeger"]
+        Prometheus["Prometheus"]
+        SIEM["SIEM<br/>Webhook"]
+    end
+
+    Client --> TLS
+    Admin --> TLS
+    Agent --> TLS
+
+    TLS --> Auth
+    Auth --> Firewall
+    Firewall --> S3API
+
+    S3API --> Analytics
+    S3API --> Encryption
+    S3API --> Scanning
+    S3API --> Tracing
+
+    Baseline --> Anomaly
+    Anomaly --> Alert
+    Alert --> SIEM
+
+    KeyMgmt --> Rotation
+    KeyMgmt --> KMS
+
+    Secret --> DLP
+
+    S3API --> Objects
+    S3API --> Metadata
+
+    Internal --> S3API
+    MTLS --> CA
+    CA --> CRL
+
+    Tracing --> OTEL
+    OTEL --> Jaeger
+    Metrics --> Prometheus
+    Audit --> SIEM
+
+    classDef external fill:#64748b,stroke:#334155,color:#fff
+    classDef gateway fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef security fill:#10b981,stroke:#059669,color:#fff
+    classDef observe fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef storage fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    classDef export fill:#ec4899,stroke:#db2777,color:#fff
+
+    class Client,Admin,Agent external
+    class TLS,Auth,Firewall gateway
+    class Baseline,Anomaly,Alert,KeyMgmt,Rotation,KMS,Secret,DLP security
+    class Tracing,Metrics,Audit observe
+    class S3API,Objects,Metadata storage
+    class OTEL,Jaeger,Prometheus,SIEM export

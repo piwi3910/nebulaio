@@ -1,0 +1,173 @@
+# NebulaIO AlertManager Configuration
+# This configuration defines how alerts are routed and managed.
+
+global:
+  # Global settings for all receivers
+  resolve_timeout: 5m
+  smtp_from: 'nebulaio-alerts@example.com'
+  smtp_smarthost: 'smtp.example.com:587'
+  smtp_auth_username: 'alertmanager@example.com'
+  smtp_auth_password: '{{ .SMTP_PASSWORD }}'
+  smtp_require_tls: true
+
+  # Slack integration (optional)
+  slack_api_url: '{{ .SLACK_WEBHOOK_URL }}'
+
+  # PagerDuty integration (optional)
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# Templates for notification formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alert routing
+route:
+  # Default receiver
+  receiver: 'default-receiver'
+
+  # Group alerts by these labels
+  group_by: ['alertname', 'cluster', 'service']
+
+  # Wait time before sending initial notification
+  group_wait: 30s
+
+  # Wait time before sending additional alerts for a group
+  group_interval: 5m
+
+  # Wait time before re-sending an alert
+  repeat_interval: 4h
+
+  # Child routes for specific alert handling
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-receiver'
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: true
+
+    # Warning alerts - standard notification
+    - match:
+        severity: warning
+      receiver: 'warning-receiver'
+      group_wait: 1m
+      repeat_interval: 4h
+
+    # AI/ML feature alerts
+    - match:
+        feature: aiml
+      receiver: 'aiml-receiver'
+      group_by: ['alertname', 'feature_name']
+
+    # Cluster health alerts
+    - match:
+        alertname: ClusterNodeDown
+      receiver: 'cluster-receiver'
+      group_wait: 10s
+
+    # Storage alerts
+    - match_re:
+        alertname: '^(StorageSpace|DiskUsage|ObjectCount).*'
+      receiver: 'storage-receiver'
+
+# Inhibition rules - suppress alerts when others are firing
+inhibit_rules:
+  # Suppress warning when critical is firing for same alertname
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['alertname', 'cluster', 'instance']
+
+  # Suppress node-specific alerts when cluster is down
+  - source_match:
+      alertname: ClusterDown
+    target_match_re:
+      alertname: '^ClusterNode.*'
+    equal: ['cluster']
+
+  # Suppress individual feature alerts when system is down
+  - source_match:
+      alertname: SystemDown
+    target_match_re:
+      alertname: '.*'
+    equal: ['instance']
+
+# Receiver definitions
+receivers:
+  # Default receiver - email notifications
+  - name: 'default-receiver'
+    email_configs:
+      - to: 'ops-team@example.com'
+        send_resolved: true
+        headers:
+          Subject: '[NebulaIO] {{ .Status | toUpper }} - {{ .GroupLabels.alertname }}'
+        html: '{{ template "email.default.html" . }}'
+
+  # Critical receiver - multiple notification channels
+  - name: 'critical-receiver'
+    email_configs:
+      - to: 'oncall@example.com,leadership@example.com'
+        send_resolved: true
+    slack_configs:
+      - channel: '#nebulaio-critical'
+        send_resolved: true
+        title: '{{ if eq .Status "firing" }}:fire:{{ else }}:white_check_mark:{{ end }} [{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    pagerduty_configs:
+      - service_key: '{{ .PAGERDUTY_SERVICE_KEY }}'
+        severity: critical
+        description: '{{ .GroupLabels.alertname }}'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+
+  # Warning receiver - standard notifications
+  - name: 'warning-receiver'
+    email_configs:
+      - to: 'ops-team@example.com'
+        send_resolved: true
+    slack_configs:
+      - channel: '#nebulaio-alerts'
+        send_resolved: true
+        title: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  # AI/ML specific receiver
+  - name: 'aiml-receiver'
+    slack_configs:
+      - channel: '#nebulaio-aiml'
+        send_resolved: true
+        title: '[AI/ML] {{ .GroupLabels.alertname }}'
+        text: |
+          Feature: {{ .GroupLabels.feature_name }}
+          {{ range .Alerts }}
+          - {{ .Annotations.description }}
+          {{ end }}
+
+  # Cluster receiver - priority notifications
+  - name: 'cluster-receiver'
+    email_configs:
+      - to: 'cluster-ops@example.com'
+        send_resolved: true
+    slack_configs:
+      - channel: '#nebulaio-cluster'
+        send_resolved: true
+
+  # Storage receiver
+  - name: 'storage-receiver'
+    email_configs:
+      - to: 'storage-team@example.com'
+        send_resolved: true
+    slack_configs:
+      - channel: '#nebulaio-storage'
+        send_resolved: true
+
+  # Webhook receiver for custom integrations
+  - name: 'webhook-receiver'
+    webhook_configs:
+      - url: 'http://alert-handler.example.com/webhook'
+        send_resolved: true
+        http_config:
+          bearer_token: '{{ .WEBHOOK_TOKEN }}'
