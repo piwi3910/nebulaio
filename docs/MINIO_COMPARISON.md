@@ -315,16 +315,14 @@ NebulaIO maintains full parity on core S3 operations, enterprise security, data 
 | MCP Server for Agents | ✅ | ✅ | Model Context Protocol |
 | GPUDirect Storage (GDS) | ✅ | ✅ | Direct GPU-to-storage transfers |
 | BlueField-3 DPU support | ✅ | ✅ | SmartNIC offload |
-| NIM Microservices integration | ✅ | 🔄 | NVIDIA inference integration |
+| NIM Microservices integration | ✅ | ✅ | Full (NVIDIA inference integration) |
 | **Performance** |
 | S3 over RDMA (Production) | ✅ | ✅ | [Full implementation](roadmap/S3_OVER_RDMA.md) |
 | Sub-10ms latency | ✅ | ✅ | Comparable performance |
 
 ### Features In Progress
 
-| Feature | MinIO | NebulaIO | Notes |
-|---------|-------|----------|-------|
-| NIM Microservices | ✅ | 🔄 | NVIDIA NIM inference integration |
+All MinIO 2025 features are fully implemented in NebulaIO.
 
 **S3 over RDMA Status**: Full implementation complete including transport abstraction, memory pools, client SDK, server, and libibverbs abstraction layer. Simulated mode available for development and testing without RDMA hardware.
 
@@ -375,7 +373,6 @@ NebulaIO maintains full parity on core S3 operations, enterprise security, data 
 1. **Mature Product** - Years of production hardening
 2. **Larger Community** - More contributors and users (2B+ Docker pulls, 50K+ GitHub stars)
 3. **Commercial Support** - Enterprise support with SLAs
-4. **NIM Microservices** - Native NVIDIA inference integration
 
 ### Feature Parity Score: 100%
 
@@ -401,9 +398,7 @@ NebulaIO implements complete parity with MinIO, including all 2025 features:
 - GPUDirect Storage (GPU-to-storage direct transfers)
 - BlueField-3 DPU support (SmartNIC offload)
 - S3 over RDMA (full implementation with libibverbs abstraction)
-
-**🔄 In Progress:**
-- NIM Microservices integration (NVIDIA inference)
+- NIM Microservices (NVIDIA inference integration)
 
 ## Completed Roadmap
 
@@ -441,8 +436,13 @@ All MinIO 2025 features have been implemented:
    - Network acceleration
    - Health monitoring
 
-### 🔄 In Progress
 7. **NIM Microservices** - NVIDIA inference integration
+   - Chat completion with streaming
+   - Embeddings generation
+   - Vision inference (detection, classification, segmentation)
+   - Batch processing
+   - S3 object inference integration
+   - Full model catalog (LLM, Vision, Audio, Multimodal)
 
 ## Sources
 
