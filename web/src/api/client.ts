@@ -185,6 +185,10 @@ export const adminApi = {
     page?: number;
     page_size?: number;
   }) => apiClient.get('/admin/audit-logs', { params }),
+
+  // Server Configuration
+  getConfig: () => apiClient.get('/admin/config'),
+  updateConfig: <T extends object>(config: T) => apiClient.put('/admin/config', config),
 };
 
 // Console API (user-facing)

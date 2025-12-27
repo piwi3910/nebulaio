@@ -18,7 +18,7 @@ services:
       - NEBULAIO_DATA_DIR=/data
       - NEBULAIO_LOG_LEVEL=info
       - NEBULAIO_AUTH_ROOT_USER=admin
-      - NEBULAIO_AUTH_ROOT_PASSWORD=admin123
+      - NEBULAIO_AUTH_ROOT_PASSWORD=Admin123
 
       # Enterprise DRAM Cache (uncomment to enable)
       # - NEBULAIO_CACHE_ENABLED=true
@@ -102,7 +102,6 @@ volumes:
   nebulaio-data:
     driver: local
 
----
 # 3-Node Cluster Configuration
 # To use: docker-compose -f docker-compose.yml -f docker-compose.cluster.yml up -d
 #

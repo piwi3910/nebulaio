@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -612,6 +613,7 @@ func Load(configPath string, opts Options) (*Config, error) {
 
 	// Environment variables override
 	v.SetEnvPrefix("NEBULAIO")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
 	// Apply command line options

@@ -1,6 +1,6 @@
 # Build stage for Go backend
 # Multi-architecture build support via TARGETARCH
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS go-builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS go-builder
 
 ARG TARGETARCH
 ARG TARGETOS=linux
