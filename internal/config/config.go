@@ -79,7 +79,7 @@ type ClusterConfig struct {
 	// If empty, the system will try to detect the outbound IP
 	AdvertiseAddress string `mapstructure:"advertise_address"`
 
-	// RaftPort is the port used for Raft consensus
+	// RaftPort is the port used for Raft consensus (Dragonboat RaftAddress)
 	RaftPort int `mapstructure:"raft_port"`
 
 	// GossipPort is the port used for gossip-based node discovery
@@ -102,6 +102,26 @@ type ClusterConfig struct {
 
 	// RetryJoinInterval is the interval between join attempts
 	RetryJoinInterval time.Duration `mapstructure:"retry_join_interval"`
+
+	// ShardID is the Dragonboat shard (cluster) ID for this node
+	// Each logical Raft cluster has a unique shard ID
+	ShardID uint64 `mapstructure:"shard_id"`
+
+	// ReplicaID is the unique replica ID for this node within the shard
+	// If set to 0, a replica ID will be auto-generated
+	ReplicaID uint64 `mapstructure:"replica_id"`
+
+	// WALDir is the directory for Write-Ahead Log storage
+	// Keeping WAL separate from data can improve performance
+	WALDir string `mapstructure:"wal_dir"`
+
+	// SnapshotCount is the number of applied entries before taking a snapshot
+	// Lower values reduce recovery time but increase I/O overhead
+	SnapshotCount uint64 `mapstructure:"snapshot_count"`
+
+	// CompactionOverhead is the number of entries to keep after compaction
+	// This allows some historical data for lagging replicas
+	CompactionOverhead uint64 `mapstructure:"compaction_overhead"`
 }
 
 // StorageConfig holds storage-related configuration
@@ -666,6 +686,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cluster.expect_nodes", 1)
 	v.SetDefault("cluster.retry_join_max_attempts", 10)
 	v.SetDefault("cluster.retry_join_interval", 5*time.Second)
+	// Dragonboat-specific defaults
+	v.SetDefault("cluster.shard_id", uint64(1))
+	v.SetDefault("cluster.replica_id", uint64(0)) // Auto-generate if 0
+	v.SetDefault("cluster.wal_dir", "")           // Empty means use data_dir/wal
+	v.SetDefault("cluster.snapshot_count", uint64(10000))
+	v.SetDefault("cluster.compaction_overhead", uint64(5000))
 
 	// Storage defaults
 	v.SetDefault("storage.backend", "fs")
@@ -850,11 +876,54 @@ func (c *Config) validate() error {
 		}
 	}
 
+	// Generate or load replica ID if not set
+	if c.Cluster.ReplicaID == 0 {
+		replicaIDPath := filepath.Join(c.DataDir, "replica-id")
+		if data, err := os.ReadFile(replicaIDPath); err == nil {
+			// Parse stored replica ID
+			var replicaID uint64
+			if _, err := fmt.Sscanf(string(data), "%d", &replicaID); err == nil && replicaID > 0 {
+				c.Cluster.ReplicaID = replicaID
+			}
+		}
+		// Generate new replica ID if still not set
+		if c.Cluster.ReplicaID == 0 {
+			c.Cluster.ReplicaID = generateReplicaID()
+			if err := os.WriteFile(replicaIDPath, []byte(fmt.Sprintf("%d", c.Cluster.ReplicaID)), 0644); err != nil {
+				return fmt.Errorf("failed to write replica ID: %w", err)
+			}
+		}
+	}
+
+	// Set WAL directory if not specified
+	if c.Cluster.WALDir == "" {
+		c.Cluster.WALDir = filepath.Join(c.DataDir, "wal")
+	}
+
+	// Ensure WAL directory exists
+	if err := os.MkdirAll(c.Cluster.WALDir, 0755); err != nil {
+		return fmt.Errorf("failed to create WAL directory: %w", err)
+	}
+
 	return nil
 }
 
 func generateNodeID() string {
 	return fmt.Sprintf("node-%s", generateSecret(8))
+}
+
+func generateReplicaID() uint64 {
+	// Generate a unique replica ID based on process ID and timestamp
+	// This creates a reasonably unique ID for Dragonboat
+	pid := uint64(os.Getpid())
+	uid := uint64(os.Getuid())
+	// Combine pid and uid to create a unique replica ID
+	// Use simple hash to ensure it's a positive uint64
+	replicaID := (pid << 32) | uid
+	if replicaID == 0 {
+		replicaID = 1
+	}
+	return replicaID
 }
 
 func generateSecret(length int) string {
