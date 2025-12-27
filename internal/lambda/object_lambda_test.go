@@ -108,7 +108,9 @@ func TestListAccessPoints(t *testing.T) {
 				{Actions: []string{"GetObject"}, ContentTransformation: ContentTransformation{Type: TransformBuiltIn}},
 			},
 		}
-		svc.CreateAccessPoint(cfg)
+		if err := svc.CreateAccessPoint(cfg); err != nil {
+			t.Fatalf("CreateAccessPoint failed: %v", err)
+		}
 	}
 
 	list := svc.ListAccessPoints()
@@ -127,7 +129,9 @@ func TestDeleteAccessPoint(t *testing.T) {
 			{Actions: []string{"GetObject"}, ContentTransformation: ContentTransformation{Type: TransformBuiltIn}},
 		},
 	}
-	svc.CreateAccessPoint(cfg)
+	if err := svc.CreateAccessPoint(cfg); err != nil {
+		t.Fatalf("CreateAccessPoint failed: %v", err)
+	}
 
 	err := svc.DeleteAccessPoint("test-ap")
 	if err != nil {
@@ -206,7 +210,9 @@ func TestPIIMaskTransformer(t *testing.T) {
 
 	data, _ := io.ReadAll(output)
 	var result map[string]interface{}
-	json.Unmarshal(data, &result)
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("Failed to unmarshal result: %v", err)
+	}
 
 	// Name should not be masked
 	if result["name"] != "John Doe" {
@@ -272,7 +278,9 @@ func TestFilterFieldsTransformer(t *testing.T) {
 
 			data, _ := io.ReadAll(output)
 			var result map[string]interface{}
-			json.Unmarshal(data, &result)
+			if err := json.Unmarshal(data, &result); err != nil {
+				t.Fatalf("Failed to unmarshal result: %v", err)
+			}
 
 			if !tt.check(result) {
 				t.Errorf("Check failed for result: %v", result)
@@ -334,7 +342,9 @@ func TestBuiltInTransformWithAccessPoint(t *testing.T) {
 			},
 		},
 	}
-	svc.CreateAccessPoint(cfg)
+	if err := svc.CreateAccessPoint(cfg); err != nil {
+		t.Fatalf("CreateAccessPoint failed: %v", err)
+	}
 
 	input := "Contact email: user@example.com"
 	output, _, err := svc.TransformObject(

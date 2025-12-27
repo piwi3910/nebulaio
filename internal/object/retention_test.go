@@ -1,6 +1,7 @@
 package object
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func TestCheckObjectLock_NoLock(t *testing.T) {
 		Key:    "test-key",
 	}
 
-	err := s.CheckObjectLock(nil, meta, nil)
+	err := s.CheckObjectLock(context.TODO(), meta, nil)
 	if err != nil {
 		t.Errorf("expected no error for unlocked object, got: %v", err)
 	}
@@ -32,7 +33,7 @@ func TestCheckObjectLock_LegalHold(t *testing.T) {
 		ObjectLockLegalHoldStatus: "ON",
 	}
 
-	err := s.CheckObjectLock(nil, meta, nil)
+	err := s.CheckObjectLock(context.TODO(), meta, nil)
 	if err != s3errors.ErrObjectLocked {
 		t.Errorf("expected ErrObjectLocked, got: %v", err)
 	}
@@ -50,7 +51,7 @@ func TestCheckObjectLock_ComplianceMode(t *testing.T) {
 	}
 
 	// Should not be able to delete even with bypass
-	err := s.CheckObjectLock(nil, meta, &ObjectLockCheckOptions{
+	err := s.CheckObjectLock(context.TODO(), meta, &ObjectLockCheckOptions{
 		BypassGovernanceRetention: true,
 	})
 	if err != s3errors.ErrObjectLocked {
@@ -70,7 +71,7 @@ func TestCheckObjectLock_GovernanceMode(t *testing.T) {
 	}
 
 	// Should not be able to delete without bypass
-	err := s.CheckObjectLock(nil, meta, nil)
+	err := s.CheckObjectLock(context.TODO(), meta, nil)
 	if err != s3errors.ErrObjectLocked {
 		t.Errorf("expected ErrObjectLocked for governance mode without bypass, got: %v", err)
 	}
@@ -96,7 +97,7 @@ func TestCheckObjectLock_ExpiredRetention(t *testing.T) {
 	}
 
 	// Should be able to delete after retention expires
-	err := s.CheckObjectLock(nil, meta, nil)
+	err := s.CheckObjectLock(context.TODO(), meta, nil)
 	if err != nil {
 		t.Errorf("expected no error for expired retention, got: %v", err)
 	}

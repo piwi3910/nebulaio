@@ -106,7 +106,7 @@ func (s *Service) CreateBucket(ctx context.Context, name, owner, region, storage
 	// Create storage
 	if err := s.storage.CreateBucket(ctx, name); err != nil {
 		// Rollback metadata
-		s.store.DeleteBucket(ctx, name)
+		_ = s.store.DeleteBucket(ctx, name)
 		return nil, s3errors.ErrInternalError.WithMessage("failed to create bucket storage: " + err.Error())
 	}
 

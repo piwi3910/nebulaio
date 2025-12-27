@@ -5,10 +5,9 @@ kind: Kustomization
 namespace: nebulaio-system
 
 resources:
-  - ../crd/bases/storage.nebulaio.io_nebulaios.yaml
-  - ../crd/bases/storage.nebulaio.io_nebulaiobackups.yaml
-  - ../rbac/role.yaml
-  - ../manager/manager.yaml
+  - ../crd
+  - ../rbac
+  - ../manager
 
 images:
   - name: ghcr.io/piwi3910/nebulaio-operator

@@ -848,7 +848,7 @@ func (c *Catalog) applyUpdate(metadata *TableMetadata, update *TableUpdate) erro
 func (c *Catalog) copyMetadata(m *TableMetadata) *TableMetadata {
 	data, _ := json.Marshal(m)
 	var copy TableMetadata
-	json.Unmarshal(data, &copy)
+	_ = json.Unmarshal(data, &copy)
 	return &copy
 }
 

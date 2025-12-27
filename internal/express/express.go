@@ -693,7 +693,7 @@ func (s *ExpressService) ExpressCopyObject(ctx context.Context, srcBucket, srcKe
 	if err != nil {
 		return nil, err
 	}
-	defer obj.Data.Close()
+	defer func() { _ = obj.Data.Close() }()
 
 	// Read all data
 	data, err := io.ReadAll(obj.Data)
@@ -795,7 +795,7 @@ func (s *ExpressService) ExpressHeadObject(ctx context.Context, bucket, key stri
 	if err != nil {
 		return nil, err
 	}
-	defer obj.Data.Close()
+	defer func() { _ = obj.Data.Close() }()
 
 	return &ObjectInfo{
 		Key:          obj.Key,

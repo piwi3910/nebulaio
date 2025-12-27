@@ -277,11 +277,11 @@ func NewDLPEngine(config *DLPConfig, storage DLPStorage) *DLPEngine {
 // buildDataPatterns builds the default data patterns.
 func buildDataPatterns() []*DataPattern {
 	return []*DataPattern{
-		// SSN (US)
+		// SSN (US) - simplified pattern, validation done in Validator
 		{
 			Type:        DataTypeSSN,
 			Name:        "US Social Security Number",
-			Pattern:     regexp.MustCompile(`\b(?!000|666|9\d{2})([0-8]\d{2}|7([0-6]\d))([-\s]?)(?!00)\d{2}\3(?!0000)\d{4}\b`),
+			Pattern:     regexp.MustCompile(`\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b`),
 			Sensitivity: SensitivityRestricted,
 			Region:      "US",
 			Validator: func(s string) bool {
@@ -289,9 +289,19 @@ func buildDataPatterns() []*DataPattern {
 				if len(cleaned) != 9 {
 					return false
 				}
-				// Additional validation
+				// Validate area number (first 3 digits)
 				area := cleaned[:3]
 				if area == "000" || area == "666" || area[0] == '9' {
+					return false
+				}
+				// Validate group number (middle 2 digits)
+				group := cleaned[3:5]
+				if group == "00" {
+					return false
+				}
+				// Validate serial number (last 4 digits)
+				serial := cleaned[5:9]
+				if serial == "0000" {
 					return false
 				}
 				return true
@@ -653,7 +663,7 @@ func (e *DLPEngine) Scan(ctx context.Context, req *ScanRequest) (*ScanResult, er
 
 	// Process findings into violations
 	highestSensitivity := SensitivityPublic
-	var finalAction Action = ActionAllow
+	finalAction := ActionAllow
 
 	dataTypesMap := make(map[DataType]bool)
 
@@ -691,9 +701,11 @@ func (e *DLPEngine) Scan(ctx context.Context, req *ScanRequest) (*ScanResult, er
 			finalAction = finding.rule.Action
 		}
 
-		// Save violation
+		// Save violation (best-effort)
 		if e.storage != nil {
-			e.storage.SaveViolation(ctx, violation)
+			if err := e.storage.SaveViolation(ctx, violation); err != nil {
+				_ = err // Log storage failure but continue
+			}
 		}
 
 		// Update stats

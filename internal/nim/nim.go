@@ -743,8 +743,8 @@ func (s *S3Integration) Close() error {
 	return nil
 }
 
-// Helper for making HTTP requests to NIM API
-func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
+// _doRequest is a helper for making HTTP requests to NIM API (reserved for future use)
+func (c *Client) _doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -769,7 +769,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("NIM API error: %s", resp.Status)

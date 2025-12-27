@@ -760,7 +760,7 @@ func (s *Service) Close() error {
 	// Stop all services
 	s.mu.Lock()
 	for offloadType := range s.services {
-		s.backend.StopService(offloadType)
+		_ = s.backend.StopService(offloadType)
 	}
 	s.services = nil
 	s.mu.Unlock()

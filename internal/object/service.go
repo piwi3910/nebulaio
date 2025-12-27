@@ -288,14 +288,14 @@ func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, 
 	if versionID != "" {
 		if err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions); err != nil {
 			// Rollback: delete the stored object
-			s.storage.DeleteObject(ctx, bucket, key)
+			_ = s.storage.DeleteObject(ctx, bucket, key)
 			return nil, fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	} else {
 		// No versioning, just store normally
 		if err := s.store.PutObjectMeta(ctx, meta); err != nil {
 			// Rollback: delete the stored object
-			s.storage.DeleteObject(ctx, bucket, key)
+			_ = s.storage.DeleteObject(ctx, bucket, key)
 			return nil, fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	}
@@ -478,7 +478,7 @@ func (s *Service) CopyObjectWithOptions(ctx context.Context, srcBucket, srcKey, 
 	if err != nil {
 		return nil, fmt.Errorf("source object not found: %w", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Determine tags based on tagging directive
 	var tags map[string]string
@@ -696,7 +696,7 @@ func (s *Service) CreateMultipartUpload(ctx context.Context, bucket, key, conten
 
 	// Store metadata
 	if err := s.store.CreateMultipartUpload(ctx, upload); err != nil {
-		s.storage.AbortMultipartUpload(ctx, bucket, key, uploadID)
+		_ = s.storage.AbortMultipartUpload(ctx, bucket, key, uploadID)
 		return nil, fmt.Errorf("failed to store multipart upload metadata: %w", err)
 	}
 
@@ -1148,7 +1148,7 @@ func getErrorCode(err error) string {
 
 // Helper functions
 
-func generateVersionID() string {
+func _generateVersionID() string {
 	return uuid.New().String()
 }
 

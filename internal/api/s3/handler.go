@@ -610,7 +610,7 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request) {
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Set response headers
 	w.Header().Set("Content-Type", meta.ContentType)
@@ -627,7 +627,7 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, reader)
+	_, _ = io.Copy(w, reader)
 }
 
 // ListParts lists the uploaded parts for a multipart upload
@@ -1222,7 +1222,7 @@ func (h *Handler) GetObjectVersion(w http.ResponseWriter, r *http.Request) {
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Set response headers
 	w.Header().Set("Content-Type", meta.ContentType)
@@ -1239,7 +1239,7 @@ func (h *Handler) GetObjectVersion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, reader)
+	_, _ = io.Copy(w, reader)
 }
 
 func (h *Handler) GetBucketPolicy(w http.ResponseWriter, r *http.Request) {
@@ -1258,7 +1258,7 @@ func (h *Handler) GetBucketPolicy(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(policy))
+	_, _ = w.Write([]byte(policy))
 }
 
 func (h *Handler) GetBucketTagging(w http.ResponseWriter, r *http.Request) {
@@ -2844,8 +2844,8 @@ func (h *Handler) PutObjectLegalHold(w http.ResponseWriter, r *http.Request) {
 func writeXML(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(status)
-	w.Write([]byte(xml.Header))
-	xml.NewEncoder(w).Encode(v)
+	_, _ = w.Write([]byte(xml.Header))
+	_ = xml.NewEncoder(w).Encode(v)
 }
 
 // writeS3Error writes an S3 error response (legacy signature for backward compatibility)

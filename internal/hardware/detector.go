@@ -307,7 +307,7 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 	}
 
 	// Start MST
-	exec.Command("mst", "start").Run()
+	_ = exec.Command("mst", "start").Run()
 
 	// Query devices
 	cmd := exec.Command("mst", "status", "-v")

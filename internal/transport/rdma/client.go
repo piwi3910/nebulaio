@@ -249,7 +249,7 @@ func (c *Client) getObjectHTTP(ctx context.Context, bucket, key string, opts *Ge
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("HTTP error: %s", resp.Status)
 	}
 
@@ -343,7 +343,7 @@ func (c *Client) putObjectHTTP(ctx context.Context, bucket, key string, body io.
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("HTTP error: %s", resp.Status)
@@ -394,7 +394,7 @@ func (c *Client) deleteObjectHTTP(ctx context.Context, bucket, key string) error
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("HTTP error: %s", resp.Status)
@@ -463,7 +463,7 @@ func (c *Client) headObjectHTTP(ctx context.Context, bucket, key string) (*HeadO
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP error: %s", resp.Status)
@@ -652,7 +652,7 @@ func (c *Client) Close() error {
 	// Close all connections
 	for endpoint := range c.conns {
 		if c.transport != nil {
-			c.transport.Disconnect(endpoint)
+			_ = c.transport.Disconnect(endpoint)
 		}
 	}
 	c.conns = nil
@@ -660,7 +660,7 @@ func (c *Client) Close() error {
 
 	// Close transport
 	if c.transport != nil {
-		c.transport.Close()
+		_ = c.transport.Close()
 	}
 
 	return nil

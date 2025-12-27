@@ -331,7 +331,7 @@ func (m *MultipartCopyManager) simpleCopy(ctx context.Context, opts *MultipartCo
 	if err != nil {
 		return nil, fmt.Errorf("failed to get source object: %w", err)
 	}
-	defer obj.Body.Close()
+	defer func() { _ = obj.Body.Close() }()
 
 	// Determine metadata
 	metadata := sourceMetadata.Metadata

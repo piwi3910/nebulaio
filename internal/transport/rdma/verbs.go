@@ -858,19 +858,19 @@ func (t *VerbsTransport) Close() error {
 	defer t.mu.Unlock()
 
 	if t.qp != 0 {
-		t.backend.DestroyQP(t.qp)
+		_ = t.backend.DestroyQP(t.qp)
 	}
 	if t.sendCQ != 0 {
-		t.backend.DestroyCQ(t.sendCQ)
+		_ = t.backend.DestroyCQ(t.sendCQ)
 	}
 	if t.recvCQ != 0 {
-		t.backend.DestroyCQ(t.recvCQ)
+		_ = t.backend.DestroyCQ(t.recvCQ)
 	}
 	if t.pd != 0 {
-		t.backend.DeallocPD(t.pd)
+		_ = t.backend.DeallocPD(t.pd)
 	}
 	if t.ctx != 0 {
-		t.backend.CloseDevice(t.ctx)
+		_ = t.backend.CloseDevice(t.ctx)
 	}
 
 	return t.backend.Close()

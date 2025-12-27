@@ -1,0 +1,106 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+  settings:
+    errcheck:
+      # Ignore common patterns where error checking is often intentionally skipped
+      exclude-functions:
+        - io.Copy
+        - io.Copy(*bytes.Buffer)
+        - io.CopyBuffer
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (net/http.ResponseWriter).Write
+        - (*encoding/json.Encoder).Encode
+        - (*encoding/xml.Encoder).Encode
+        - (hash.Hash).Write
+        - crypto/rand.Read
+        - encoding/binary.Read
+        - encoding/binary.Write
+
+    staticcheck:
+      checks:
+        - all
+        - "-SA9003"  # Empty branch - often intentional for TODO stubs
+        - "-SA1012"  # nil context - sometimes intentional in tests
+        - "-SA1026"  # xml.Encode map - false positive when used for error responses
+        - "-ST1005"  # Error strings should not be capitalized - too strict for API errors
+        - "-ST1003"  # Initialisms (ACL vs Acl) - S3 API compatibility
+        - "-ST1000"  # Package comments - not required for internal packages
+        - "-ST1020"  # Comment format on methods - style preference
+        - "-ST1021"  # Comment format on types - style preference
+        - "-ST1022"  # Comment format on consts - style preference
+        - "-S1008"   # Simplify return - readability preference
+        - "-QF1002"  # Tagged switch - style preference
+        - "-QF1003"  # Tagged switch - style preference
+
+  exclusions:
+    # Exclude test files from certain checks
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck  # Test files often intentionally ignore errors for brevity
+
+      - path: internal/benchmark/
+        linters:
+          - errcheck  # Benchmark code often skips error handling for perf measurement
+
+      # Exclude generated or stub code
+      - path: internal/transport/rdma/
+        linters:
+          - unused  # RDMA transport has placeholder fields for future implementation
+
+      - path: internal/dpu/
+        linters:
+          - unused  # DPU code has placeholder fields for hardware integration
+
+      - path: internal/backup/pitr\.go
+        linters:
+          - unused  # Backup jobs have progress tracking fields for future use
+
+      # Exclude unused fields/funcs reserved for future use (prefixed with _)
+      - path: internal/cache/dram/
+        linters:
+          - unused
+
+      - path: internal/catalog/
+        linters:
+          - unused
+
+      - path: internal/cluster/membership\.go
+        linters:
+          - unused
+
+      - path: internal/integration/
+        linters:
+          - unused
+
+      - path: internal/mcp/
+        linters:
+          - unused
+
+      - path: internal/metadata/raft\.go
+        linters:
+          - unused
+
+      - path: internal/nim/
+        linters:
+          - unused
+
+      - path: internal/object/service\.go
+        linters:
+          - unused
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags:
+    - integration

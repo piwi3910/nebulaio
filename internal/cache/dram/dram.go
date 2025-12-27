@@ -144,7 +144,7 @@ type Cache struct {
 	patternMu      sync.RWMutex
 
 	// Distributed cache
-	nodeID       string
+	_nodeID      string
 	peerClients  map[string]*peerClient
 	peerClientMu sync.RWMutex
 

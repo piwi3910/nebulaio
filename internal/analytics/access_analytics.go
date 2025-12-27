@@ -484,9 +484,12 @@ func (aa *AccessAnalytics) processBatch(events []*AccessEvent) {
 		}
 		aa.mu.Unlock()
 
-		// Send alerts
+		// Send alerts (best-effort, log errors)
 		if aa.alertHandler != nil {
-			aa.alertHandler.SendBulkAlert(ctx, detectedAnomalies)
+			if err := aa.alertHandler.SendBulkAlert(ctx, detectedAnomalies); err != nil {
+				// Log alert sending failure but continue
+				_ = err
+			}
 		}
 	}
 }
@@ -1061,9 +1064,12 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 		baseline.IsStable = true
 	}
 
-	// Store updated baseline
+	// Store updated baseline (best-effort)
 	if aa.storage != nil {
-		aa.storage.StoreBaseline(ctx, baseline)
+		if err := aa.storage.StoreBaseline(ctx, baseline); err != nil {
+			// Log storage failure but continue
+			_ = err
+		}
 	}
 }
 

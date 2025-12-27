@@ -22,7 +22,7 @@ type SimulatedBackend struct {
 	dpus         []*DPUInfo
 	services     map[OffloadType]bool
 	latencyNs    int64
-	failureRate  float64 // 0.0 - 1.0, for testing failures
+	_failureRate float64 // 0.0 - 1.0, for testing failures (reserved for future use)
 }
 
 // NewSimulatedBackend creates a new simulated DPU backend.
@@ -387,7 +387,7 @@ func (b *SimulatedBackend) Decompress(ctx context.Context, algorithm string, dat
 
 	// Perform actual decompression
 	r := flate.NewReader(bytes.NewReader(data))
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, r); err != nil {

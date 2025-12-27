@@ -693,8 +693,8 @@ func (s *CatalogService) writeInventoryFile(ctx context.Context, cfg *InventoryC
 	if err != nil {
 		return ManifestFile{}, fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	defer func() { _ = tmpFile.Close() }()
 
 	var size int64
 
@@ -714,7 +714,7 @@ func (s *CatalogService) writeInventoryFile(ctx context.Context, cfg *InventoryC
 	}
 
 	// Seek to beginning for upload
-	tmpFile.Seek(0, 0)
+	_, _ = tmpFile.Seek(0, 0)
 
 	// Upload to destination bucket
 	contentType := "application/octet-stream"
@@ -851,14 +851,14 @@ func (s *CatalogService) writeManifest(ctx context.Context, bucket, key string, 
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	defer func() { _ = tmpFile.Close() }()
 
 	if _, err := tmpFile.Write(data); err != nil {
 		return err
 	}
 
-	tmpFile.Seek(0, 0)
+	_, _ = tmpFile.Seek(0, 0)
 
 	return s.writer.PutObject(ctx, bucket, key, tmpFile, int64(len(data)), "application/json")
 }
@@ -981,8 +981,8 @@ func (s *CatalogService) ListBucketInventoryConfigurations(bucket string) []*Inv
 	return s.ListInventoryConfigs(bucket)
 }
 
-// Ensure directory exists
-func ensureDir(dir string) error {
+// _ensureDir ensures directory exists (reserved for future use)
+func _ensureDir(dir string) error {
 	return os.MkdirAll(dir, 0755)
 }
 

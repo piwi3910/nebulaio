@@ -498,7 +498,7 @@ func (l *EnhancedAuditLogger) processEvents() {
 			if !ok {
 				// Drain remaining
 				for event := range l.buffer {
-					l.processEvent(l.ctx, event)
+					_ = l.processEvent(l.ctx, event)
 				}
 				return
 			}
@@ -576,10 +576,7 @@ func (l *EnhancedAuditLogger) enrichEvent(event *EnhancedAuditEvent) {
 func (l *EnhancedAuditLogger) shouldLog(event *EnhancedAuditEvent) bool {
 	for _, rule := range l.config.FilterRules {
 		if l.matchesFilterRule(&rule, event) {
-			if rule.Action == "exclude" {
-				return false
-			}
-			return true
+			return rule.Action != "exclude"
 		}
 	}
 	return true // Default to include
@@ -681,14 +678,15 @@ func (l *EnhancedAuditLogger) addIntegrity(event *EnhancedAuditEvent) {
 
 func (l *EnhancedAuditLogger) computeEventHash(event *EnhancedAuditEvent, prevHash string) string {
 	h := sha256.New()
-	h.Write([]byte(prevHash))
-	h.Write([]byte(fmt.Sprintf("%d", event.SequenceNumber)))
-	h.Write([]byte(event.Timestamp.Format(time.RFC3339Nano)))
-	h.Write([]byte(event.EventType))
-	h.Write([]byte(event.UserIdentity.Username))
-	h.Write([]byte(event.Resource.Bucket))
-	h.Write([]byte(event.Resource.Key))
-	h.Write([]byte(event.Result))
+	fmt.Fprintf(h, "%s%d%s%s%s%s%s%s",
+		prevHash,
+		event.SequenceNumber,
+		event.Timestamp.Format(time.RFC3339Nano),
+		event.EventType,
+		event.UserIdentity.Username,
+		event.Resource.Bucket,
+		event.Resource.Key,
+		event.Result)
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
@@ -931,7 +929,7 @@ func (o *FileOutput) Write(ctx context.Context, event *EnhancedAuditEvent) error
 }
 
 func (o *FileOutput) rotate() error {
-	o.file.Close()
+	_ = o.file.Close()
 
 	// Rename current file
 	timestamp := time.Now().Format("20060102-150405")
@@ -1043,7 +1041,7 @@ func (o *WebhookOutput) Flush(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)

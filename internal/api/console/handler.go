@@ -465,7 +465,7 @@ func (h *Handler) GetObjectContent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Set response headers
 	w.Header().Set("Content-Type", meta.ContentType)
@@ -559,7 +559,7 @@ func (h *Handler) UploadObject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "No file provided", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Get optional path prefix
 	pathPrefix := r.FormValue("path")

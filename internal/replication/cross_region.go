@@ -565,7 +565,7 @@ func (rm *ReplicationManager) replicateObject(ctx context.Context, task *Replica
 	if err != nil {
 		return fmt.Errorf("failed to get source object: %w", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Get destination endpoint
 	rm.mu.RLock()
@@ -635,7 +635,7 @@ func (rm *ReplicationManager) putObjectRemote(ctx context.Context, endpoint *Reg
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -810,7 +810,7 @@ func (h *ReplicationHandler) HandleGetReplication(w http.ResponseWriter, r *http
 	config, err := h.manager.GetReplicationConfiguration(bucket)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
-		xml.NewEncoder(w).Encode(map[string]string{
+		_ = xml.NewEncoder(w).Encode(map[string]string{
 			"Code":    "ReplicationConfigurationNotFoundError",
 			"Message": "The replication configuration was not found",
 		})
@@ -818,7 +818,7 @@ func (h *ReplicationHandler) HandleGetReplication(w http.ResponseWriter, r *http
 	}
 
 	w.Header().Set("Content-Type", "application/xml")
-	xml.NewEncoder(w).Encode(config)
+	_ = xml.NewEncoder(w).Encode(config)
 }
 
 // HandlePutReplication handles PUT bucket replication requests.
@@ -828,7 +828,7 @@ func (h *ReplicationHandler) HandlePutReplication(w http.ResponseWriter, r *http
 	var config ReplicationConfiguration
 	if err := xml.NewDecoder(r.Body).Decode(&config); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		xml.NewEncoder(w).Encode(map[string]string{
+		_ = xml.NewEncoder(w).Encode(map[string]string{
 			"Code":    "MalformedXML",
 			"Message": "The XML you provided was not well-formed",
 		})
@@ -837,7 +837,7 @@ func (h *ReplicationHandler) HandlePutReplication(w http.ResponseWriter, r *http
 
 	if err := h.manager.SetReplicationConfiguration(bucket, &config); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		xml.NewEncoder(w).Encode(map[string]string{
+		_ = xml.NewEncoder(w).Encode(map[string]string{
 			"Code":    "InvalidRequest",
 			"Message": err.Error(),
 		})
@@ -864,7 +864,7 @@ func (h *ReplicationHandler) HandleGetMetrics(w http.ResponseWriter, r *http.Req
 	metrics := h.manager.GetMetrics()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(metrics)
+	_ = json.NewEncoder(w).Encode(metrics)
 }
 
 // ReplicateBatch processes a batch of existing objects for replication.

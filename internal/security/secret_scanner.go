@@ -540,7 +540,7 @@ func (s *SecretScanner) ScanObject(ctx context.Context, bucket, key string, read
 
 		// Save finding
 		if s.storage != nil {
-			s.storage.SaveFinding(ctx, finding)
+			_ = s.storage.SaveFinding(ctx, finding)
 		}
 	}
 

@@ -24,6 +24,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+// ClientCertContextKey is the context key for client certificates
+const ClientCertContextKey contextKey = "client_cert"
+
 // CertificateType represents the type of certificate
 type CertificateType string
 
@@ -839,7 +845,7 @@ func (m *MTLSManager) MTLSMiddleware(next http.Handler) http.Handler {
 			}
 
 			// Add certificate info to context
-			ctx := context.WithValue(r.Context(), "client_cert", cert)
+			ctx := context.WithValue(r.Context(), ClientCertContextKey, cert)
 			r = r.WithContext(ctx)
 		}
 

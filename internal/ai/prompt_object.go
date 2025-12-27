@@ -542,7 +542,7 @@ func (p *OpenAIProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -634,7 +634,7 @@ func (p *OpenAIProvider) Embed(ctx context.Context, content string) ([]float64, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -725,11 +725,11 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Anthropic API error: %s - %s", resp.Status, string(body))
+		return nil, fmt.Errorf("anthropic API error: %s - %s", resp.Status, string(body))
 	}
 
 	var result struct {
@@ -795,7 +795,7 @@ func (p *AnthropicProvider) StreamQuery(ctx context.Context, req *PromptRequest)
 
 func (p *AnthropicProvider) Embed(ctx context.Context, content string) ([]float64, error) {
 	// Anthropic doesn't have native embeddings, could use alternative
-	return nil, errors.New("Anthropic does not support embeddings directly")
+	return nil, errors.New("anthropic does not support embeddings directly")
 }
 
 // OllamaProvider implements LLMProvider for local Ollama
@@ -865,7 +865,7 @@ func (p *OllamaProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -939,7 +939,7 @@ func (p *OllamaProvider) Embed(ctx context.Context, content string) ([]float64, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

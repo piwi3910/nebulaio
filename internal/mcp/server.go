@@ -542,7 +542,7 @@ func (s *Server) handleGetObject(ctx context.Context, args map[string]interface{
 			IsError: true,
 		}, nil
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Read content
 	data, err := io.ReadAll(reader)
@@ -804,7 +804,7 @@ func (s *Server) handleCopyObject(ctx context.Context, args map[string]interface
 			IsError: true,
 		}, nil
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -955,7 +955,10 @@ func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		// Response already started, log error but can't do much
+		_ = err
+	}
 
 	atomic.AddInt64(&s.metrics.RequestsSuccess, 1)
 
@@ -1150,7 +1153,7 @@ func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage)
 	if err != nil {
 		return nil, err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -1270,7 +1273,10 @@ func (s *Server) sendError(w http.ResponseWriter, id interface{}, code int, mess
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK) // JSON-RPC always returns 200
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		// Response already started, log error but can't do much
+		_ = err
+	}
 }
 
 // GetMetrics returns server metrics

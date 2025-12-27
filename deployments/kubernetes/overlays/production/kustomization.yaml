@@ -97,13 +97,12 @@ patches:
       - op: remove
         path: /spec/maxUnavailable
 
-# Secret generator for production
-secretGenerator:
-  - name: nebulaio-secrets
-    behavior: replace
-    literals:
-      - root-user=admin
-      # In production, use external secrets management
-      # - root-password=<from-vault-or-sealed-secrets>
-    options:
-      disableNameSuffixHash: true
+  # Patch secret with production note
+  - target:
+      kind: Secret
+      name: nebulaio-secrets
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          production-note: "Replace root-password with Vault/SealedSecrets in production"

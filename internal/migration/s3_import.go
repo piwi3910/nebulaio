@@ -417,7 +417,7 @@ func (c *S3Client) ListObjects(ctx context.Context, bucket, prefix, marker strin
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -454,7 +454,7 @@ func (c *S3Client) GetObject(ctx context.Context, bucket, key string) (io.ReadCl
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		return nil, nil, fmt.Errorf("get object failed: %s - %s", resp.Status, string(body))
 	}
@@ -594,7 +594,7 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 		mm.mu.Lock()
 		mm.activeJob = nil
 		mm.mu.Unlock()
-		mm.saveJobs()
+		_ = mm.saveJobs()
 	}()
 
 	job := activeJob.job
@@ -798,7 +798,7 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 				LastBucket: sourceBucket,
 				LastKey:    marker,
 			}
-			mm.saveJobs()
+			_ = mm.saveJobs()
 		}
 	}
 
@@ -869,7 +869,7 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 	if err != nil {
 		return fmt.Errorf("failed to get source object: %w", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Apply bandwidth limit
 	var limitedReader io.Reader = reader
@@ -914,7 +914,7 @@ func (mm *MigrationManager) logFailedObject(bucket, key string, err error) {
 	}
 
 	data, _ := json.Marshal(entry)
-	mm.failedLog.Write(append(data, '\n'))
+	_, _ = mm.failedLog.Write(append(data, '\n'))
 }
 
 // PauseMigration pauses the active migration.

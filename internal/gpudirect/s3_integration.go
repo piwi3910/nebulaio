@@ -347,7 +347,7 @@ func (s *S3Integration) Close() error {
 
 	// Unregister all handles
 	for path, handle := range s.handles {
-		s.service.UnregisterFile(handle)
+		_ = s.service.UnregisterFile(handle)
 		delete(s.handles, path)
 	}
 

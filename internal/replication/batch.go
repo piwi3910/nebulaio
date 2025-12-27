@@ -535,7 +535,7 @@ func (bm *BatchManager) replicateObject(ctx context.Context, job *BatchJob, obj 
 	if err != nil {
 		return fmt.Errorf("failed to get source object: %w", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Get object info for metadata
 	info, err := bm.service.getSourceObjectInfo(ctx, job.SourceBucket, obj.Key, obj.VersionID)
@@ -556,7 +556,7 @@ func (bm *BatchManager) replicateObject(ctx context.Context, job *BatchJob, obj 
 		if err != nil {
 			return fmt.Errorf("failed to get remote client: %w", err)
 		}
-		defer client.Close()
+		defer func() { _ = client.Close() }()
 
 		return client.PutObject(ctx, job.DestinationBucket, obj.Key, wrappedReader, obj.Size, info.ContentType, info.UserMetadata)
 	}
@@ -573,7 +573,7 @@ func (bm *BatchManager) replicateDeleteMarker(ctx context.Context, job *BatchJob
 		if err != nil {
 			return fmt.Errorf("failed to get remote client: %w", err)
 		}
-		defer client.Close()
+		defer func() { _ = client.Close() }()
 
 		return client.DeleteObject(ctx, job.DestinationBucket, obj.Key)
 	}

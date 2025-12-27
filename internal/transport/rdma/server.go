@@ -172,7 +172,7 @@ func (s *Server) handleConnection(conn *Connection) {
 	defer s.wg.Done()
 	defer func() {
 		atomic.AddInt64(&s.metrics.ActiveConnections, -1)
-		s.transport.Disconnect(conn.RemoteAddr)
+		_ = s.transport.Disconnect(conn.RemoteAddr)
 	}()
 
 	for s.running.Load() && conn.Connected {
@@ -389,7 +389,7 @@ func (s *Server) Stop() error {
 	}
 
 	if s.listener != nil {
-		s.listener.Close()
+		_ = s.listener.Close()
 	}
 
 	// Wait for all goroutines to finish
@@ -406,7 +406,7 @@ func (s *Server) Stop() error {
 	}
 
 	if s.transport != nil {
-		s.transport.Close()
+		_ = s.transport.Close()
 	}
 
 	return nil
@@ -490,7 +490,7 @@ func (h *S3Handler) handleGetObject(ctx context.Context, req *ServerRequest) (*S
 	if err != nil {
 		return &ServerResponse{StatusCode: 404}, nil
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	data, err := io.ReadAll(body)
 	if err != nil {

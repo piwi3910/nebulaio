@@ -225,7 +225,7 @@ func (l *AuditLogger) Stop() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.file != nil {
-		l.file.Close()
+		_ = l.file.Close()
 	}
 }
 

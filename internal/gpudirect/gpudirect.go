@@ -657,7 +657,7 @@ func (s *Service) Close() error {
 	s.mu.Lock()
 	for _, buffers := range s.buffers {
 		for _, buf := range buffers {
-			s.backend.FreeBuffer(buf)
+			_ = s.backend.FreeBuffer(buf)
 		}
 	}
 	s.buffers = nil

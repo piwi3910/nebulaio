@@ -90,7 +90,7 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath) // Clean up on error
+	defer func() { _ = os.Remove(tmpPath) }() // Clean up on error
 
 	// Write data and calculate MD5
 	hash := md5.New()
@@ -98,12 +98,12 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 
 	written, err := io.Copy(writer, reader)
 	if err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return nil, fmt.Errorf("failed to write object: %w", err)
 	}
 
 	if err := tmpFile.Sync(); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return nil, fmt.Errorf("failed to sync object: %w", err)
 	}
 
@@ -226,7 +226,7 @@ func (b *Backend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, err
 
 	// Count objects
 	var objectCount int64
-	filepath.Walk(b.bucketsDir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(b.bucketsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -268,7 +268,7 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	// Write data and calculate MD5
 	hash := md5.New()
@@ -276,12 +276,12 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 
 	written, err := io.Copy(writer, reader)
 	if err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return nil, fmt.Errorf("failed to write part: %w", err)
 	}
 
 	if err := tmpFile.Sync(); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return nil, fmt.Errorf("failed to sync part: %w", err)
 	}
 
@@ -341,8 +341,8 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 	success := false
 	defer func() {
 		if !success {
-			tmpFile.Close()
-			os.Remove(tmpPath)
+			_ = tmpFile.Close()
+			_ = os.Remove(tmpPath)
 		}
 	}()
 
@@ -374,7 +374,7 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 
 		// Stream the part using the preallocated buffer
 		written, err := io.CopyBuffer(writer, partFile, buffer)
-		partFile.Close()
+		_ = partFile.Close()
 		if err != nil {
 			return nil, fmt.Errorf("failed to copy part %d: %w", partNum, err)
 		}
@@ -399,7 +399,7 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 
 	// Clean up upload directory and parts
 	uploadPath := b.uploadPath(bucket, key, uploadID)
-	os.RemoveAll(uploadPath)
+	_ = os.RemoveAll(uploadPath)
 
 	// Clean up empty parent directories in uploads dir
 	b.cleanEmptyDirs(filepath.Dir(uploadPath), b.uploadsDir)

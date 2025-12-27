@@ -463,9 +463,8 @@ func (t *Tracer) batchProcessor() {
 func (t *Tracer) exportBatch(spans []*Span) {
 	ctx := context.Background()
 	for _, exporter := range t.exporters {
-		if err := exporter.ExportSpans(ctx, spans); err != nil {
-			// Log error but continue
-		}
+		// Ignore export errors - best effort export
+		_ = exporter.ExportSpans(ctx, spans)
 	}
 }
 

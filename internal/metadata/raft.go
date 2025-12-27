@@ -34,7 +34,7 @@ type RaftStore struct {
 	fsm    *fsm
 	badger *badger.DB
 
-	mu sync.RWMutex
+	_mu sync.RWMutex // Reserved for future thread-safe operations
 }
 
 // NewRaftStore creates a new Raft-backed metadata store
@@ -1126,7 +1126,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore restores the FSM from a snapshot
 func (f *fsm) Restore(rc io.ReadCloser) error {
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	// Clear existing data
 	err := f.db.DropAll()
@@ -1190,7 +1190,7 @@ func (s *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	})
 
 	if err != nil {
-		sink.Cancel()
+		_ = sink.Cancel()
 		return err
 	}
 

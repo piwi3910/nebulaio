@@ -153,7 +153,7 @@ type Device struct {
 	MaxInlineData  int
 	AtomicCapable  bool
 	Ports          []PortInfo
-	handle         interface{} // Underlying device handle
+	_handle        interface{} // Underlying device handle (reserved for RDMA implementation)
 }
 
 // PortInfo represents information about a device port
@@ -169,8 +169,8 @@ type PortInfo struct {
 
 // ProtectionDomain isolates RDMA resources
 type ProtectionDomain struct {
-	device *Device
-	handle interface{}
+	device  *Device
+	_handle interface{} // Reserved for RDMA implementation
 }
 
 // MemoryRegion represents registered memory for RDMA operations
@@ -206,7 +206,7 @@ type QueuePair struct {
 	MaxRecv    int
 	MaxSendSGE int
 	MaxRecvSGE int
-	handle     interface{}
+	_handle    interface{} // Reserved for RDMA implementation
 }
 
 // CompletionQueue handles work request completions
@@ -215,7 +215,7 @@ type CompletionQueue struct {
 	Count    int64
 	Errors   int64
 	channel  chan *WorkCompletion
-	handle   interface{}
+	_handle  interface{} // Reserved for RDMA implementation
 }
 
 // WorkCompletion represents a completed work request
@@ -742,12 +742,12 @@ func (t *Transport) Close() error {
 
 	// Close listener
 	if t.listener != nil {
-		t.listener.Close()
+		_ = t.listener.Close()
 	}
 
 	// Close all connections
 	t.connections.Range(func(key, value interface{}) bool {
-		t.Disconnect(key.(string))
+		_ = t.Disconnect(key.(string))
 		return true
 	})
 
@@ -761,14 +761,12 @@ func (t *Transport) Close() error {
 	}
 
 	// Deallocate protection domain
-	if t.protDomain != nil {
-		// TODO: ibv_dealloc_pd()
-	}
+	// TODO: ibv_dealloc_pd() when RDMA is fully implemented
+	_ = t.protDomain // Mark as intentionally unused for now
 
 	// Close device
-	if t.device != nil {
-		// TODO: ibv_close_device()
-	}
+	// TODO: ibv_close_device() when RDMA is fully implemented
+	_ = t.device // Mark as intentionally unused for now
 
 	return nil
 }

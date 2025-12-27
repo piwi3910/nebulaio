@@ -98,7 +98,7 @@ func (s *S3Operations) PutObject(ctx context.Context, bucket, key string, body i
 		end, err := sr.Seek(0, io.SeekEnd)
 		if err == nil {
 			bodySize = end
-			sr.Seek(0, io.SeekStart)
+			_, _ = sr.Seek(0, io.SeekStart)
 		}
 	}
 
@@ -319,9 +319,9 @@ func parseListResponse(data []byte) ([]ObjectInfo, []string, string, bool) {
 	binary.Read(r, binary.BigEndian, &isTruncated)
 
 	var nextTokenLen uint16
-	binary.Read(r, binary.BigEndian, &nextTokenLen)
+	_ = binary.Read(r, binary.BigEndian, &nextTokenLen)
 	nextToken := make([]byte, nextTokenLen)
-	r.Read(nextToken)
+	_, _ = r.Read(nextToken)
 
 	objects := make([]ObjectInfo, 0, count)
 	for i := uint32(0); i < count; i++ {
@@ -330,15 +330,15 @@ func parseListResponse(data []byte) ([]ObjectInfo, []string, string, bool) {
 			break
 		}
 		key := make([]byte, keyLen)
-		r.Read(key)
+		_, _ = r.Read(key)
 
 		var size int64
-		binary.Read(r, binary.BigEndian, &size)
+		_ = binary.Read(r, binary.BigEndian, &size)
 
 		var etagLen uint16
-		binary.Read(r, binary.BigEndian, &etagLen)
+		_ = binary.Read(r, binary.BigEndian, &etagLen)
 		etag := make([]byte, etagLen)
-		r.Read(etag)
+		_, _ = r.Read(etag)
 
 		var timestamp int64
 		binary.Read(r, binary.BigEndian, &timestamp)

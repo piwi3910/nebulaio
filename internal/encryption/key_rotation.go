@@ -423,7 +423,7 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 
 	// Notify rotation started
 	if krm.notifier != nil {
-		krm.notifier.NotifyRotationStarted(ctx, event)
+		_ = krm.notifier.NotifyRotationStarted(ctx, event)
 	}
 
 	// Generate new key material
@@ -433,7 +433,7 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 		event.Error = err.Error()
 		krm.storeRotationEvent(ctx, event)
 		if krm.notifier != nil {
-			krm.notifier.NotifyRotationFailed(ctx, event)
+			_ = krm.notifier.NotifyRotationFailed(ctx, event)
 		}
 		return event, err
 	}
@@ -444,7 +444,7 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 		event.Error = err.Error()
 		krm.storeRotationEvent(ctx, event)
 		if krm.notifier != nil {
-			krm.notifier.NotifyRotationFailed(ctx, event)
+			_ = krm.notifier.NotifyRotationFailed(ctx, event)
 		}
 		return event, err
 	}
@@ -504,7 +504,7 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 
 	// Notify rotation completed
 	if krm.notifier != nil {
-		krm.notifier.NotifyRotationCompleted(ctx, event)
+		_ = krm.notifier.NotifyRotationCompleted(ctx, event)
 	}
 
 	return event, nil
@@ -517,7 +517,7 @@ func (krm *KeyRotationManager) storeRotationEvent(ctx context.Context, event *Ro
 	krm.mu.Unlock()
 
 	if krm.storage != nil {
-		krm.storage.StoreRotationEvent(ctx, event)
+		_ = krm.storage.StoreRotationEvent(ctx, event)
 	}
 }
 
@@ -575,7 +575,7 @@ func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 		}
 
 		if keyAge >= policy.RotationInterval {
-			krm.RotateKey(ctx, key.ID, "scheduled", "system")
+			_, _ = krm.RotateKey(ctx, key.ID, "scheduled", "system")
 			continue
 		}
 
@@ -584,7 +584,7 @@ func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 			timeToExpiry := key.ExpiresAt.Sub(now)
 			if timeToExpiry <= policy.NotifyBeforeExpiry && timeToExpiry > 0 {
 				if krm.notifier != nil {
-					krm.notifier.NotifyKeyExpiring(ctx, key, timeToExpiry)
+					_ = krm.notifier.NotifyKeyExpiring(ctx, key, timeToExpiry)
 				}
 			}
 		}
@@ -973,7 +973,7 @@ func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *Reen
 	}
 
 	if krm.storage != nil {
-		krm.storage.StoreReencryptionJob(ctx, job)
+		_ = krm.storage.StoreReencryptionJob(ctx, job)
 	}
 }
 

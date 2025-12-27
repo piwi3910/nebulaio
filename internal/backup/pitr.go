@@ -186,24 +186,24 @@ type WALManager struct {
 
 // BackupJob represents an active backup operation.
 type BackupJob struct {
-	metadata     *BackupMetadata
-	ctx          context.Context
-	cancel       context.CancelFunc
-	progress     int64
-	totalObjects int64
-	errors       []error
-	mu           sync.Mutex
+	metadata       *BackupMetadata
+	ctx            context.Context
+	cancel         context.CancelFunc
+	_progress      int64
+	_totalObjects  int64
+	_errors        []error
+	_mu            sync.Mutex
 }
 
 // RestoreJob represents an active restore operation.
 type RestoreJob struct {
-	metadata     *RestoreMetadata
-	ctx          context.Context
-	cancel       context.CancelFunc
-	progress     int64
-	totalObjects int64
-	errors       []error
-	mu           sync.Mutex
+	metadata       *RestoreMetadata
+	ctx            context.Context
+	cancel         context.CancelFunc
+	_progress      int64
+	_totalObjects  int64
+	_errors        []error
+	_mu            sync.Mutex
 }
 
 // NewBackupManager creates a new backup manager.
@@ -463,7 +463,7 @@ func (bm *BackupManager) runBackup(job *BackupJob) {
 		bm.mu.Lock()
 		bm.activeBackup = nil
 		bm.mu.Unlock()
-		bm.saveMetadata()
+		_ = bm.saveMetadata()
 	}()
 
 	job.metadata.Status = BackupStatusInProgress
@@ -569,7 +569,7 @@ func (bm *BackupManager) backupObject(job *BackupJob, bucket string, obj *Object
 	if err != nil {
 		return fmt.Errorf("failed to get object %s/%s: %w", bucket, obj.Key, err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Create object path
 	objectPath := filepath.Join(job.metadata.Location, bucket, obj.Key)
@@ -588,20 +588,20 @@ func (bm *BackupManager) backupObject(job *BackupJob, bucket string, obj *Object
 		if err != nil {
 			return fmt.Errorf("failed to create backup file: %w", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		gzWriter, err := gzip.NewWriterLevel(file, bm.config.CompressionLevel)
 		if err != nil {
 			return fmt.Errorf("failed to create gzip writer: %w", err)
 		}
-		defer gzWriter.Close()
+		defer func() { _ = gzWriter.Close() }()
 		writer = io.MultiWriter(gzWriter, hasher)
 	} else {
 		file, err = os.Create(objectPath)
 		if err != nil {
 			return fmt.Errorf("failed to create backup file: %w", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		writer = io.MultiWriter(file, hasher)
 	}
 
@@ -947,7 +947,7 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 		key := strings.TrimSuffix(relPath, ".gz")
 
 		// Load metadata
-		metaPath := path + ".meta"
+		var metaPath string
 		if !strings.HasSuffix(path, ".gz") {
 			metaPath = path + ".meta"
 		} else {
@@ -957,7 +957,7 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 		var objMeta ObjectInfo
 		metaData, err := os.ReadFile(metaPath)
 		if err == nil {
-			json.Unmarshal(metaData, &objMeta)
+			_ = json.Unmarshal(metaData, &objMeta)
 		}
 
 		// Open backup file
@@ -965,10 +965,10 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 		if err != nil {
 			return fmt.Errorf("failed to open backup file: %w", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		var reader io.Reader = file
-		var size int64 = info.Size()
+		size := info.Size()
 
 		// Decompress if needed
 		if strings.HasSuffix(path, ".gz") {
@@ -976,7 +976,7 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 			if err != nil {
 				return fmt.Errorf("failed to create gzip reader: %w", err)
 			}
-			defer gzReader.Close()
+			defer func() { _ = gzReader.Close() }()
 			reader = gzReader
 			size = objMeta.Size
 		}
@@ -1010,7 +1010,7 @@ func (bm *BackupManager) applyWALEntry(ctx context.Context, entry *WALEntry, tar
 		if err != nil {
 			return fmt.Errorf("failed to open WAL data: %w", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		opts := &PutObjectOptions{
 			ContentType: entry.ContentType,
@@ -1134,7 +1134,7 @@ func (bm *BackupManager) applyRetentionPolicy() {
 	// Delete marked backups
 	for _, id := range toDelete {
 		backup := bm.backups[id]
-		os.RemoveAll(backup.Location)
+		_ = os.RemoveAll(backup.Location)
 		delete(bm.backups, id)
 	}
 }

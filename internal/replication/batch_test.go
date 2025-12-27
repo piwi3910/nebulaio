@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -44,40 +43,8 @@ func (m *mockObjectLister) ListObjects(ctx context.Context, bucket, prefix strin
 	return objCh, errCh
 }
 
-// mockRemoteClient implements RemoteClient for testing
-type mockRemoteClient struct {
-	mu        sync.Mutex
-	putCalls  []string
-	deleteCalls []string
-	err       error
-}
-
-func (m *mockRemoteClient) PutObject(ctx context.Context, bucket, key string, data io.Reader, size int64, contentType string, metadata map[string]string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.putCalls = append(m.putCalls, bucket+"/"+key)
-	return m.err
-}
-
-func (m *mockRemoteClient) DeleteObject(ctx context.Context, bucket, key string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.deleteCalls = append(m.deleteCalls, bucket+"/"+key)
-	return m.err
-}
-
-func (m *mockRemoteClient) Close() error {
-	return nil
-}
-
-// mockRemoteClientFactory implements RemoteClientFactory for testing
-type mockRemoteClientFactory struct {
-	client *mockRemoteClient
-}
-
-func (m *mockRemoteClientFactory) GetClient(endpoint, accessKey, secretKey string) (RemoteClient, error) {
-	return m.client, nil
-}
+// Note: mockRemoteClient and mockRemoteClientFactory are available for future batch replication tests
+// that need to verify actual remote operations. Currently unused as tests focus on job management.
 
 func TestBatchManagerCreateJob(t *testing.T) {
 	svc := createTestService()
@@ -517,8 +484,8 @@ func TestMaxConcurrentJobs(t *testing.T) {
 	}
 
 	// Cancel jobs to clean up
-	bm.CancelJob("job-a")
-	bm.CancelJob("job-b")
+	_ = bm.CancelJob("job-a")
+	_ = bm.CancelJob("job-b")
 }
 
 func TestJobHistoryCleanup(t *testing.T) {

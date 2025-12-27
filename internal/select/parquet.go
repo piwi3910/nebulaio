@@ -883,7 +883,7 @@ func Decompress(data []byte, codec CompressionCodec) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 		}
-		defer reader.Close()
+		defer func() { _ = reader.Close() }()
 		return io.ReadAll(reader)
 
 	case CodecSnappy:

@@ -317,7 +317,7 @@ func (e *Engine) parseJSON(data []byte) ([]Record, error) {
 func (e *Engine) parseParquet(data []byte) ([]Record, error) {
 	// Parquet requires a more complex implementation using a library
 	// For now, return an error indicating limited support
-	return nil, fmt.Errorf("Parquet format requires the parquet-go library; basic support only")
+	return nil, fmt.Errorf("parquet format requires the parquet-go library; basic support only")
 }
 
 // executeQuery executes the parsed query on records

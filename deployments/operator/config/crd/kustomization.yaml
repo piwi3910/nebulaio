@@ -1,0 +1,7 @@
+# CRD Kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - bases/storage.nebulaio.io_nebulaios.yaml
+  - bases/storage.nebulaio.io_nebulaiobackups.yaml
