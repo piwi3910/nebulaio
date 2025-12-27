@@ -1,0 +1,983 @@
+openapi: 3.1.0
+info:
+  title: NebulaIO Admin API
+  description: |
+    REST API for managing NebulaIO object storage system.
+
+    ## Authentication
+    All endpoints (except /admin/auth/login) require a valid JWT token in the Authorization header:
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    ## Rate Limiting
+    API requests are rate-limited per user. Default limits:
+    - 1000 requests per minute for read operations
+    - 100 requests per minute for write operations
+  version: 1.0.0
+  contact:
+    name: NebulaIO Support
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:9001/api/v1
+    description: Development server
+  - url: https://api.nebulaio.local/api/v1
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: Authentication and token management
+  - name: Users
+    description: User management operations
+  - name: Buckets
+    description: Bucket management operations
+  - name: Policies
+    description: IAM policy management
+  - name: Cluster
+    description: Cluster management and monitoring
+  - name: AI/ML
+    description: AI/ML feature configuration and metrics
+  - name: Audit
+    description: Audit log access
+  - name: Configuration
+    description: Server configuration management
+
+security:
+  - bearerAuth: []
+
+paths:
+  /admin/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Authenticate user
+      description: Authenticate with username and password to receive JWT tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh access token
+      description: Exchange a refresh token for a new access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid or expired refresh token
+
+  /admin/users:
+    get:
+      tags:
+        - Users
+      summary: List all users
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+    post:
+      tags:
+        - Users
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request
+        '409':
+          description: User already exists
+
+  /admin/users/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Users
+      summary: Get user details
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+    put:
+      tags:
+        - Users
+      summary: Update user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+        '404':
+          description: User not found
+    delete:
+      tags:
+        - Users
+      summary: Delete user
+      responses:
+        '204':
+          description: User deleted
+        '404':
+          description: User not found
+
+  /admin/buckets:
+    get:
+      tags:
+        - Buckets
+      summary: List all buckets
+      responses:
+        '200':
+          description: List of buckets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buckets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bucket'
+    post:
+      tags:
+        - Buckets
+      summary: Create a new bucket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBucketRequest'
+      responses:
+        '201':
+          description: Bucket created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bucket'
+        '409':
+          description: Bucket already exists
+
+  /admin/buckets/{bucketName}:
+    parameters:
+      - name: bucketName
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+    get:
+      tags:
+        - Buckets
+      summary: Get bucket details
+      responses:
+        '200':
+          description: Bucket details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BucketDetails'
+        '404':
+          description: Bucket not found
+    delete:
+      tags:
+        - Buckets
+      summary: Delete bucket
+      responses:
+        '204':
+          description: Bucket deleted
+        '404':
+          description: Bucket not found
+        '409':
+          description: Bucket not empty
+
+  /admin/buckets/{bucketName}/versioning:
+    parameters:
+      - name: bucketName
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Buckets
+      summary: Get bucket versioning status
+      responses:
+        '200':
+          description: Versioning status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+    put:
+      tags:
+        - Buckets
+      summary: Set bucket versioning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Versioning updated
+
+  /admin/cluster/status:
+    get:
+      tags:
+        - Cluster
+      summary: Get cluster status
+      responses:
+        '200':
+          description: Cluster status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterStatus'
+
+  /admin/cluster/nodes:
+    get:
+      tags:
+        - Cluster
+      summary: List cluster nodes
+      responses:
+        '200':
+          description: List of nodes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClusterNode'
+
+  /admin/aiml/status:
+    get:
+      tags:
+        - AI/ML
+      summary: Get AI/ML features status
+      responses:
+        '200':
+          description: Feature status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIMLStatus'
+
+  /admin/aiml/metrics:
+    get:
+      tags:
+        - AI/ML
+      summary: Get AI/ML metrics
+      responses:
+        '200':
+          description: Feature metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIMLMetrics'
+
+  /admin/aiml/metrics/{feature}:
+    parameters:
+      - name: feature
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [s3_express, iceberg, mcp, gpudirect, dpu, rdma, nim]
+    get:
+      tags:
+        - AI/ML
+      summary: Get metrics for specific feature
+      responses:
+        '200':
+          description: Feature metrics
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/S3ExpressMetrics'
+                  - $ref: '#/components/schemas/IcebergMetrics'
+                  - $ref: '#/components/schemas/MCPMetrics'
+        '404':
+          description: Unknown feature
+
+  /admin/config:
+    get:
+      tags:
+        - Configuration
+      summary: Get server configuration
+      responses:
+        '200':
+          description: Server configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerConfig'
+    put:
+      tags:
+        - Configuration
+      summary: Update server configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServerConfig'
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+
+  /admin/audit-logs:
+    get:
+      tags:
+        - Audit
+      summary: List audit logs
+      parameters:
+        - name: bucket
+          in: query
+          schema:
+            type: string
+        - name: user_id
+          in: query
+          schema:
+            type: string
+        - name: event_type
+          in: query
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogResponse'
+
+  /admin/policies:
+    get:
+      tags:
+        - Policies
+      summary: List all policies
+      responses:
+        '200':
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Policy'
+    post:
+      tags:
+        - Policies
+      summary: Create a new policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePolicyRequest'
+      responses:
+        '201':
+          description: Policy created
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness check
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+        '503':
+          description: Service is not ready
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+          description: Token expiration in seconds
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [superadmin, admin, user, readonly, service]
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required:
+        - username
+        - password
+        - role
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 64
+        password:
+          type: string
+          minLength: 8
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, user, readonly, service]
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, user, readonly, service]
+        enabled:
+          type: boolean
+
+    Bucket:
+      type: object
+      properties:
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        size:
+          type: integer
+          format: int64
+          description: Total size in bytes
+        object_count:
+          type: integer
+
+    BucketDetails:
+      allOf:
+        - $ref: '#/components/schemas/Bucket'
+        - type: object
+          properties:
+            versioning_enabled:
+              type: boolean
+            encryption_enabled:
+              type: boolean
+            lifecycle_rules:
+              type: array
+              items:
+                $ref: '#/components/schemas/LifecycleRule'
+
+    CreateBucketRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+        region:
+          type: string
+        storage_class:
+          type: string
+          enum: [STANDARD, INTELLIGENT_TIERING, GLACIER]
+
+    LifecycleRule:
+      type: object
+      properties:
+        id:
+          type: string
+        prefix:
+          type: string
+        enabled:
+          type: boolean
+        expiration_days:
+          type: integer
+        transitions:
+          type: array
+          items:
+            type: object
+            properties:
+              days:
+                type: integer
+              storage_class:
+                type: string
+
+    ClusterStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, critical]
+        leader:
+          type: string
+        nodes:
+          type: integer
+        quorum:
+          type: boolean
+
+    ClusterNode:
+      type: object
+      properties:
+        id:
+          type: string
+        address:
+          type: string
+        status:
+          type: string
+          enum: [leader, follower, candidate]
+        healthy:
+          type: boolean
+        last_contact:
+          type: string
+          format: date-time
+
+    AIMLStatus:
+      type: object
+      properties:
+        features:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              enabled:
+                type: boolean
+              available:
+                type: boolean
+              version:
+                type: string
+              description:
+                type: string
+
+    AIMLMetrics:
+      type: object
+      properties:
+        s3_express:
+          $ref: '#/components/schemas/S3ExpressMetrics'
+        iceberg:
+          $ref: '#/components/schemas/IcebergMetrics'
+        mcp:
+          $ref: '#/components/schemas/MCPMetrics'
+        gpudirect:
+          $ref: '#/components/schemas/GPUDirectMetrics'
+        dpu:
+          $ref: '#/components/schemas/DPUMetrics'
+        rdma:
+          $ref: '#/components/schemas/RDMAMetrics'
+        nim:
+          $ref: '#/components/schemas/NIMMetrics'
+
+    S3ExpressMetrics:
+      type: object
+      properties:
+        sessions_active:
+          type: integer
+        sessions_total:
+          type: integer
+        atomic_appends:
+          type: integer
+        bytes_appended:
+          type: integer
+          format: int64
+
+    IcebergMetrics:
+      type: object
+      properties:
+        tables_count:
+          type: integer
+        namespaces_count:
+          type: integer
+        transactions_total:
+          type: integer
+        snapshots_created:
+          type: integer
+
+    MCPMetrics:
+      type: object
+      properties:
+        connections_active:
+          type: integer
+        requests_total:
+          type: integer
+        tools_executed:
+          type: integer
+        avg_latency_ms:
+          type: number
+          format: float
+
+    GPUDirectMetrics:
+      type: object
+      properties:
+        transfers_total:
+          type: integer
+        bytes_transferred:
+          type: integer
+          format: int64
+        gpus_active:
+          type: integer
+        avg_throughput_mbps:
+          type: number
+          format: float
+
+    DPUMetrics:
+      type: object
+      properties:
+        offload_operations:
+          type: integer
+        crypto_operations:
+          type: integer
+        compression_operations:
+          type: integer
+        bytes_processed:
+          type: integer
+          format: int64
+
+    RDMAMetrics:
+      type: object
+      properties:
+        connections_active:
+          type: integer
+        operations_total:
+          type: integer
+        bytes_transferred:
+          type: integer
+          format: int64
+        avg_latency_us:
+          type: number
+          format: float
+
+    NIMMetrics:
+      type: object
+      properties:
+        inference_requests:
+          type: integer
+        tokens_used:
+          type: integer
+        cache_hit_rate:
+          type: number
+          format: float
+        avg_latency_ms:
+          type: number
+          format: float
+
+    ServerConfig:
+      type: object
+      properties:
+        s3_express:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            default_zone:
+              type: string
+            enable_atomic_append:
+              type: boolean
+        iceberg:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            warehouse:
+              type: string
+            catalog_type:
+              type: string
+        mcp:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            port:
+              type: integer
+            enable_tools:
+              type: boolean
+            enable_resources:
+              type: boolean
+        gpudirect:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            buffer_pool_size:
+              type: integer
+        dpu:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            device_name:
+              type: string
+            enable_crypto:
+              type: boolean
+            enable_compression:
+              type: boolean
+        rdma:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            port:
+              type: integer
+            device_name:
+              type: string
+        nim:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            endpoint:
+              type: string
+            api_key:
+              type: string
+            default_model:
+              type: string
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        event_type:
+          type: string
+        user_id:
+          type: string
+        username:
+          type: string
+        bucket:
+          type: string
+        object_key:
+          type: string
+        source_ip:
+          type: string
+        status_code:
+          type: integer
+        details:
+          type: object
+
+    AuditLogResponse:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogEntry'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+
+    Policy:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        document:
+          type: string
+          description: JSON policy document
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreatePolicyRequest:
+      type: object
+      required:
+        - name
+        - document
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        document:
+          type: string
+          description: JSON policy document
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
