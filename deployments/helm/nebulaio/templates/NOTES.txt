@@ -1,0 +1,102 @@
+
+NebulaIO has been deployed successfully!
+
+{{- if .Values.cluster.enabled }}
+Cluster Mode: {{ .Values.replicaCount }} node{{ if gt (int .Values.replicaCount) 1 }}s{{ end }}
+{{- else }}
+Mode: Single Node (Standalone)
+{{- end }}
+
+==========================================================================
+ GETTING STARTED
+==========================================================================
+
+1. Get the application URLs:
+
+{{- if .Values.ingress.enabled }}
+
+   S3 API:
+   {{- if .Values.ingress.s3.host }}
+     http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.s3.host }}
+   {{- end }}
+
+   Admin API:
+   {{- if .Values.ingress.admin.host }}
+     http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.admin.host }}
+   {{- end }}
+
+   Web Console:
+   {{- if .Values.ingress.console.host }}
+     http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.console.host }}
+   {{- end }}
+
+{{- else }}
+
+   # Port-forward to access NebulaIO locally:
+
+   S3 API (port 9000):
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "nebulaio.fullname" . }} 9000:9000
+
+   Admin API (port 9001):
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "nebulaio.fullname" . }} 9001:9001
+
+   Web Console (port 9002):
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "nebulaio.fullname" . }} 9002:9002
+
+{{- end }}
+
+2. Default credentials:
+
+   Username: {{ .Values.auth.rootUser }}
+   {{- if .Values.auth.existingSecret }}
+   Password: (stored in secret "{{ .Values.auth.existingSecret }}")
+   {{- else }}
+   Password: {{ .Values.auth.rootPassword }}
+   {{- end }}
+
+   ⚠️  IMPORTANT: Change the default password in production!
+
+3. Test the S3 API:
+
+   # Configure AWS CLI
+   aws configure set aws_access_key_id {{ .Values.auth.rootUser }}
+   aws configure set aws_secret_access_key <your-password>
+
+   # Create a bucket
+   aws --endpoint-url http://localhost:9000 s3 mb s3://my-bucket
+
+   # Upload a file
+   aws --endpoint-url http://localhost:9000 s3 cp myfile.txt s3://my-bucket/
+
+4. Check cluster health:
+
+   kubectl exec -n {{ .Release.Namespace }} {{ include "nebulaio.fullname" . }}-0 -- curl -s http://localhost:9001/health/ready
+
+{{- if .Values.cluster.enabled }}
+
+5. View cluster status:
+
+   kubectl exec -n {{ .Release.Namespace }} {{ include "nebulaio.fullname" . }}-0 -- curl -s http://localhost:9001/api/v1/admin/cluster/nodes | jq
+
+{{- end }}
+
+==========================================================================
+ MONITORING
+==========================================================================
+
+{{- if .Values.metrics.serviceMonitor.enabled }}
+ServiceMonitor is enabled. Prometheus will automatically discover and scrape metrics.
+{{- else }}
+To enable Prometheus monitoring, set metrics.serviceMonitor.enabled=true
+{{- end }}
+
+Metrics endpoint: http://<pod-ip>:9001/metrics
+
+==========================================================================
+ DOCUMENTATION
+==========================================================================
+
+For more information, visit:
+- GitHub: https://github.com/piwi3910/nebulaio
+- Documentation: https://github.com/piwi3910/nebulaio/tree/main/docs
+

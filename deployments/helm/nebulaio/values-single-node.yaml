@@ -1,0 +1,21 @@
+# Single-node deployment values
+# Usage: helm install nebulaio ./nebulaio -f values-single-node.yaml
+
+replicaCount: 1
+
+cluster:
+  enabled: false
+
+persistence:
+  size: 50Gi
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+
+podDisruptionBudget:
+  enabled: false

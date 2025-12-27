@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nebulaio.fullname" . }}-config
+  labels:
+    {{- include "nebulaio.labels" . | nindent 4 }}
+data:
+  # Ports
+  NEBULAIO_S3_PORT: "9000"
+  NEBULAIO_ADMIN_PORT: "9001"
+  NEBULAIO_CONSOLE_PORT: "9002"
+
+  # Data directory
+  NEBULAIO_DATA_DIR: {{ .Values.persistence.mountPath | quote }}
+
+  # Cluster configuration
+  {{- if .Values.cluster.enabled }}
+  NEBULAIO_CLUSTER_ENABLED: "true"
+  NEBULAIO_CLUSTER_NAME: {{ .Values.cluster.name | quote }}
+  NEBULAIO_CLUSTER_RAFT_PORT: "9003"
+  NEBULAIO_CLUSTER_GOSSIP_PORT: "9004"
+  NEBULAIO_CLUSTER_NODE_ROLE: {{ .Values.cluster.nodeRole | quote }}
+  NEBULAIO_CLUSTER_EXPECT_NODES: {{ .Values.replicaCount | quote }}
+  {{- else }}
+  NEBULAIO_CLUSTER_ENABLED: "false"
+  NEBULAIO_CLUSTER_BOOTSTRAP: "true"
+  {{- end }}
+
+  # Storage configuration
+  NEBULAIO_STORAGE_BACKEND: {{ .Values.storage.backend | quote }}
+  NEBULAIO_STORAGE_PATH: "{{ .Values.persistence.mountPath }}/objects"
+  NEBULAIO_STORAGE_DEFAULT_CLASS: {{ .Values.storage.defaultStorageClass | quote }}
+
+  # Logging
+  NEBULAIO_LOG_LEVEL: {{ .Values.logLevel | quote }}
+  NEBULAIO_LOG_FORMAT: {{ .Values.logFormat | quote }}
+
+  # Enterprise DRAM Cache
+  {{- if .Values.cache.enabled }}
+  NEBULAIO_CACHE_ENABLED: "true"
+  NEBULAIO_CACHE_MAX_SIZE: {{ .Values.cache.maxSize | quote }}
+  NEBULAIO_CACHE_SHARD_COUNT: {{ .Values.cache.shardCount | quote }}
+  NEBULAIO_CACHE_ENTRY_MAX_SIZE: {{ .Values.cache.entryMaxSize | quote }}
+  NEBULAIO_CACHE_TTL: {{ .Values.cache.ttl | quote }}
+  NEBULAIO_CACHE_EVICTION_POLICY: {{ .Values.cache.evictionPolicy | quote }}
+  NEBULAIO_CACHE_PREFETCH_ENABLED: {{ .Values.cache.prefetchEnabled | quote }}
+  NEBULAIO_CACHE_PREFETCH_THRESHOLD: {{ .Values.cache.prefetchThreshold | quote }}
+  NEBULAIO_CACHE_PREFETCH_AHEAD: {{ .Values.cache.prefetchAhead | quote }}
+  NEBULAIO_CACHE_ZERO_COPY_ENABLED: {{ .Values.cache.zeroCopyEnabled | quote }}
+  NEBULAIO_CACHE_DISTRIBUTED_MODE: {{ .Values.cache.distributedMode | quote }}
+  {{- end }}
+
+  # Data Firewall
+  {{- if .Values.firewall.enabled }}
+  NEBULAIO_FIREWALL_ENABLED: "true"
+  NEBULAIO_FIREWALL_DEFAULT_POLICY: {{ .Values.firewall.defaultPolicy | quote }}
+  NEBULAIO_FIREWALL_AUDIT_ENABLED: {{ .Values.firewall.auditEnabled | quote }}
+  {{- if .Values.firewall.rateLimiting.enabled }}
+  NEBULAIO_FIREWALL_RATE_LIMITING_ENABLED: "true"
+  NEBULAIO_FIREWALL_RATE_LIMIT_RPS: {{ .Values.firewall.rateLimiting.requestsPerSecond | quote }}
+  NEBULAIO_FIREWALL_RATE_LIMIT_BURST: {{ .Values.firewall.rateLimiting.burstSize | quote }}
+  NEBULAIO_FIREWALL_RATE_LIMIT_PER_USER: {{ .Values.firewall.rateLimiting.perUser | quote }}
+  NEBULAIO_FIREWALL_RATE_LIMIT_PER_IP: {{ .Values.firewall.rateLimiting.perIP | quote }}
+  {{- end }}
+  {{- if .Values.firewall.bandwidth.enabled }}
+  NEBULAIO_FIREWALL_BANDWIDTH_ENABLED: "true"
+  NEBULAIO_FIREWALL_BANDWIDTH_MAX_BPS: {{ .Values.firewall.bandwidth.maxBytesPerSecond | quote }}
+  NEBULAIO_FIREWALL_BANDWIDTH_MAX_BPS_PER_USER: {{ .Values.firewall.bandwidth.maxBytesPerSecondPerUser | quote }}
+  NEBULAIO_FIREWALL_BANDWIDTH_MAX_BPS_PER_BUCKET: {{ .Values.firewall.bandwidth.maxBytesPerSecondPerBucket | quote }}
+  {{- end }}
+  {{- if .Values.firewall.connections.enabled }}
+  NEBULAIO_FIREWALL_CONNECTIONS_ENABLED: "true"
+  NEBULAIO_FIREWALL_MAX_CONNECTIONS: {{ .Values.firewall.connections.maxConnections | quote }}
+  NEBULAIO_FIREWALL_MAX_CONNECTIONS_PER_IP: {{ .Values.firewall.connections.maxConnectionsPerIP | quote }}
+  NEBULAIO_FIREWALL_MAX_CONNECTIONS_PER_USER: {{ .Values.firewall.connections.maxConnectionsPerUser | quote }}
+  {{- end }}
+  {{- end }}
+
+  # S3 Select
+  {{- if .Values.s3Select.enabled }}
+  NEBULAIO_S3SELECT_ENABLED: "true"
+  NEBULAIO_S3SELECT_MAX_RECORD_SIZE: {{ .Values.s3Select.maxRecordSize | quote }}
+  NEBULAIO_S3SELECT_MAX_RESULTS_SIZE: {{ .Values.s3Select.maxResultsSize | quote }}
+  NEBULAIO_S3SELECT_TIMEOUT: {{ .Values.s3Select.timeout | quote }}
+  NEBULAIO_S3SELECT_WORKER_POOL_SIZE: {{ .Values.s3Select.workerPoolSize | quote }}
+  {{- end }}
+
+  # Batch Replication
+  {{- if .Values.batchReplication.enabled }}
+  NEBULAIO_BATCH_REPLICATION_ENABLED: "true"
+  NEBULAIO_BATCH_REPLICATION_MAX_JOBS: {{ .Values.batchReplication.maxConcurrentJobs | quote }}
+  NEBULAIO_BATCH_REPLICATION_CONCURRENCY: {{ .Values.batchReplication.defaultConcurrency | quote }}
+  NEBULAIO_BATCH_REPLICATION_MAX_RETRIES: {{ .Values.batchReplication.maxRetries | quote }}
+  NEBULAIO_BATCH_REPLICATION_RETRY_DELAY: {{ .Values.batchReplication.retryDelay | quote }}
+  NEBULAIO_BATCH_REPLICATION_HISTORY_LIMIT: {{ .Values.batchReplication.historyLimit | quote }}
+  NEBULAIO_BATCH_REPLICATION_CHECKPOINT_INTERVAL: {{ .Values.batchReplication.checkpointInterval | quote }}
+  {{- end }}
+
+  # Enhanced Audit Logging
+  {{- if .Values.audit.enabled }}
+  NEBULAIO_AUDIT_ENABLED: "true"
+  NEBULAIO_AUDIT_COMPLIANCE_MODE: {{ .Values.audit.complianceMode | quote }}
+  NEBULAIO_AUDIT_FILE_PATH: {{ .Values.audit.filePath | quote }}
+  NEBULAIO_AUDIT_RETENTION_DAYS: {{ .Values.audit.retentionDays | quote }}
+  NEBULAIO_AUDIT_BUFFER_SIZE: {{ .Values.audit.bufferSize | quote }}
+  NEBULAIO_AUDIT_INTEGRITY_ENABLED: {{ .Values.audit.integrityEnabled | quote }}
+  NEBULAIO_AUDIT_MASK_SENSITIVE: {{ .Values.audit.maskSensitiveData | quote }}
+  {{- if .Values.audit.rotation.enabled }}
+  NEBULAIO_AUDIT_ROTATION_ENABLED: "true"
+  NEBULAIO_AUDIT_ROTATION_MAX_SIZE_MB: {{ .Values.audit.rotation.maxSizeMB | quote }}
+  NEBULAIO_AUDIT_ROTATION_MAX_AGE_DAYS: {{ .Values.audit.rotation.maxAgeDays | quote }}
+  NEBULAIO_AUDIT_ROTATION_MAX_BACKUPS: {{ .Values.audit.rotation.maxBackups | quote }}
+  NEBULAIO_AUDIT_ROTATION_COMPRESS: {{ .Values.audit.rotation.compress | quote }}
+  {{- end }}
+  {{- if .Values.audit.webhook.enabled }}
+  NEBULAIO_AUDIT_WEBHOOK_ENABLED: "true"
+  NEBULAIO_AUDIT_WEBHOOK_URL: {{ .Values.audit.webhook.url | quote }}
+  NEBULAIO_AUDIT_WEBHOOK_BATCH_SIZE: {{ .Values.audit.webhook.batchSize | quote }}
+  NEBULAIO_AUDIT_WEBHOOK_FLUSH_INTERVAL: {{ .Values.audit.webhook.flushInterval | quote }}
+  NEBULAIO_AUDIT_WEBHOOK_RETRY_COUNT: {{ .Values.audit.webhook.retryCount | quote }}
+  {{- end }}
+  {{- end }}
+
+  {{- with .Values.extraEnvVars }}
+  {{- range $key, $value := . }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- end }}

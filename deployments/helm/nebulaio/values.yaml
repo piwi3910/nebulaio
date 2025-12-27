@@ -1,0 +1,1107 @@
+# Default values for nebulaio.
+# This is a YAML-formatted file.
+
+# -- Number of replicas (1 for single-node, 3+ for HA)
+replicaCount: 1
+
+image:
+  # -- Image repository
+  repository: ghcr.io/piwi3910/nebulaio
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Image tag (defaults to chart appVersion)
+  tag: ""
+
+# -- Image pull secrets
+imagePullSecrets: []
+# -- Override chart name
+nameOverride: ""
+# -- Override full name
+fullnameOverride: ""
+
+# Authentication configuration
+auth:
+  # -- Root admin username
+  rootUser: admin
+  # -- Root admin password (use existingSecret in production)
+  rootPassword: changeme
+  # -- Use existing secret for credentials
+  existingSecret: ""
+  # -- Key in existing secret for root user
+  existingSecretUserKey: root-user
+  # -- Key in existing secret for root password
+  existingSecretPasswordKey: root-password
+  # -- JWT secret (auto-generated if empty)
+  jwtSecret: ""
+
+# Cluster configuration
+cluster:
+  # -- Enable clustering
+  enabled: true
+  # -- Cluster name
+  name: nebulaio-cluster
+  # -- Expected number of nodes (set to replicaCount for new clusters)
+  expectNodes: ""
+  # -- Node role: storage, management, or hybrid
+  nodeRole: storage
+
+# Service configuration
+service:
+  # -- Service type: ClusterIP, NodePort, LoadBalancer
+  type: ClusterIP
+  # S3 API port
+  s3Port: 9000
+  # Admin API port
+  adminPort: 9001
+  # Console port
+  consolePort: 9002
+  # -- Annotations for the service
+  annotations: {}
+  # -- LoadBalancer IP (if type is LoadBalancer)
+  loadBalancerIP: ""
+  # -- LoadBalancer source ranges
+  loadBalancerSourceRanges: []
+
+# Ingress configuration
+ingress:
+  # -- Enable ingress
+  enabled: false
+  # -- Ingress class name
+  className: nginx
+  # -- Ingress annotations
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    # nginx.ingress.kubernetes.io/proxy-body-size: "5g"
+
+  # S3 API ingress
+  s3:
+    # -- S3 API hostname
+    host: s3.example.com
+    # -- S3 API path
+    path: /
+    # -- S3 API path type
+    pathType: Prefix
+
+  # Admin API ingress
+  admin:
+    # -- Admin API hostname
+    host: admin.example.com
+    # -- Admin API path
+    path: /
+    # -- Admin API path type
+    pathType: Prefix
+
+  # Web Console ingress
+  console:
+    # -- Console hostname
+    host: console.example.com
+    # -- Console path
+    path: /
+    # -- Console path type
+    pathType: Prefix
+
+  # -- TLS configuration
+  tls: []
+  #  - secretName: nebulaio-tls
+  #    hosts:
+  #      - s3.example.com
+  #      - admin.example.com
+  #      - console.example.com
+
+# Resource configuration
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+# Storage configuration
+persistence:
+  # -- Enable persistence
+  enabled: true
+  # -- Storage class (empty for default)
+  storageClass: ""
+  # -- Access mode
+  accessMode: ReadWriteOnce
+  # -- Storage size
+  size: 10Gi
+  # -- Annotations for PVC
+  annotations: {}
+
+# Pod configuration
+podAnnotations: {}
+
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
+
+# -- Node selector
+nodeSelector: {}
+
+# -- Tolerations
+tolerations: []
+
+# -- Affinity rules
+affinity: {}
+
+# -- Pod anti-affinity preset: soft, hard, or empty
+podAntiAffinityPreset: soft
+
+# Pod disruption budget
+podDisruptionBudget:
+  # -- Enable PDB
+  enabled: true
+  # -- Minimum available pods
+  minAvailable: ""
+  # -- Maximum unavailable pods
+  maxUnavailable: 1
+
+# Probes configuration
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Metrics configuration
+metrics:
+  # -- Enable Prometheus metrics
+  enabled: true
+  # -- ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+    relabelings: []
+    metricRelabelings: []
+  # -- PrometheusRule for alerting
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    labels: {}
+    # -- Enable default alerting rules
+    defaultRules: true
+    # -- Additional custom rules
+    rules: []
+
+# Storage backend configuration
+storage:
+  # -- Storage backend: fs, erasure
+  backend: fs
+  # -- Default storage class for objects
+  defaultStorageClass: STANDARD
+  # -- Path within data directory for objects
+  mountPath: /data
+
+  # Compression
+  compression:
+    # -- Enable compression
+    enabled: false
+    # -- Compression algorithm: zstd, lz4, gzip
+    algorithm: zstd
+    # -- Compression level (1-9 for zstd, 1-12 for gzip)
+    level: 3
+
+  # Erasure coding (when backend: erasure)
+  erasure:
+    # -- Number of data shards
+    dataShards: 10
+    # -- Number of parity shards
+    parityShards: 4
+
+# Identity providers
+identity:
+  # LDAP/Active Directory
+  ldap:
+    # -- Enable LDAP authentication
+    enabled: false
+    # -- LDAP server URL
+    serverUrl: ""
+    # -- Bind DN
+    bindDn: ""
+    # -- Use existing secret for bind password
+    existingSecret: ""
+    # -- Key in existing secret for bind password
+    existingSecretKey: ldap-bind-password
+    # -- User search base
+    userSearchBase: ""
+    # -- User search filter
+    userSearchFilter: "(uid={username})"
+    # -- Group search base
+    groupSearchBase: ""
+    # -- Enable TLS
+    tls: false
+    # -- Skip TLS verification
+    tlsSkipVerify: false
+    # -- Group to policy mapping
+    groupToPolicy: {}
+    #   admins: admin
+    #   developers: readwrite
+
+  # OpenID Connect / SSO
+  oidc:
+    # -- Enable OIDC authentication
+    enabled: false
+    # -- OIDC issuer URL
+    issuerUrl: ""
+    # -- Client ID
+    clientId: ""
+    # -- Use existing secret for client secret
+    existingSecret: ""
+    # -- Key in existing secret for client secret
+    existingSecretKey: oidc-client-secret
+    # -- Redirect URL
+    redirectUrl: ""
+    # -- Scopes
+    scopes:
+      - openid
+      - profile
+      - email
+    # -- Group to policy mapping
+    groupToPolicy: {}
+
+# KMS Integration
+kms:
+  # -- KMS provider: local, vault, aws, gcp, azure
+  provider: local
+
+  # Local key management (development/testing)
+  local:
+    # -- Key file path
+    keyFile: /data/keys/master.key
+
+  # HashiCorp Vault
+  vault:
+    # -- Vault address
+    address: ""
+    # -- Use existing secret for Vault token
+    existingSecret: ""
+    # -- Key in existing secret for token
+    existingSecretTokenKey: vault-token
+    # -- Transit mount path
+    mount: transit
+    # -- Key name
+    keyName: nebulaio-master
+    # -- Skip TLS verification
+    tlsSkipVerify: false
+
+  # AWS KMS
+  aws:
+    # -- AWS region
+    region: us-east-1
+    # -- KMS key ID or alias
+    keyId: ""
+
+# Replication
+replication:
+  # -- Enable replication
+  enabled: false
+
+  # Site replication (multi-datacenter)
+  sites: []
+  #   - name: site2
+  #     endpoint: https://site2.example.com:9000
+  #     existingSecret: site2-credentials
+  #     accessKeyKey: access-key
+  #     secretKeyKey: secret-key
+  #     syncIam: true
+  #     syncPolicies: true
+
+# Event Notifications
+events:
+  # -- Enable event notifications
+  enabled: false
+
+  targets: []
+  #   # Webhook example
+  #   - name: webhook1
+  #     type: webhook
+  #     url: https://events.example.com/s3
+  #
+  #   # Kafka example
+  #   - name: kafka1
+  #     type: kafka
+  #     brokers:
+  #       - kafka:9092
+  #     topic: s3-events
+  #
+  #   # RabbitMQ example
+  #   - name: rabbitmq1
+  #     type: amqp
+  #     url: amqp://rabbitmq:5672/
+  #     exchange: s3-events
+  #
+  #   # NATS example
+  #   - name: nats1
+  #     type: nats
+  #     url: nats://nats:4222
+  #     subject: s3.events
+  #
+  #   # Redis example
+  #   - name: redis1
+  #     type: redis
+  #     address: redis:6379
+  #     channel: s3-events
+
+# Enterprise DRAM Cache
+# High-performance in-memory cache optimized for AI/ML workloads
+cache:
+  # -- Enable enterprise DRAM cache
+  enabled: false
+  # -- Maximum cache size in bytes (default: 8GB)
+  maxSize: 8589934592
+  # -- Number of cache shards for lock reduction
+  shardCount: 256
+  # -- Maximum size for a single cache entry (default: 256MB)
+  entryMaxSize: 268435456
+  # -- Cache TTL in seconds
+  ttl: 3600
+  # -- Eviction policy: lru, lfu, arc
+  evictionPolicy: arc
+  # -- Enable predictive prefetching for AI/ML workloads
+  prefetchEnabled: true
+  # -- Access count threshold before prefetch
+  prefetchThreshold: 2
+  # -- Number of chunks to prefetch ahead
+  prefetchAhead: 4
+  # -- Enable zero-copy reads where supported
+  zeroCopyEnabled: true
+  # -- Enable distributed cache across cluster nodes
+  distributedMode: false
+  # -- Replication factor for distributed cache
+  replicationFactor: 2
+  # -- Enable cache warmup on startup
+  warmupEnabled: false
+  # -- Keys to pre-warm on startup
+  warmupKeys: []
+
+# Storage Tiering
+tiering:
+  # -- Enable storage tiering
+  enabled: false
+
+  cache:
+    # -- Enable hot cache
+    enabled: true
+    # -- Maximum cache size in bytes
+    maxSize: 10737418240  # 10GB
+    # -- Maximum cached objects
+    maxObjects: 100000
+    # -- Cache TTL in seconds
+    ttl: 3600
+    # -- Cache mode: write_through, write_back
+    mode: write_through
+
+  coldStorage: []
+  #   - name: glacier
+  #     type: s3
+  #     endpoint: https://s3.amazonaws.com
+  #     bucket: my-cold-tier
+  #     existingSecret: cold-storage-credentials
+  #     accessKeyKey: access-key
+  #     secretKeyKey: secret-key
+  #     storageClass: GLACIER
+
+  policies: []
+  #   - name: archive-old-logs
+  #     enabled: true
+  #     filter:
+  #       bucket: logs
+  #       prefix: ""
+  #       suffix: .log
+  #     transition:
+  #       daysAfterCreation: 30
+  #       targetTier: cold
+
+# Enterprise Data Firewall
+# QoS, rate limiting, bandwidth throttling, and access control
+firewall:
+  # -- Enable data firewall
+  enabled: false
+  # -- Default policy: allow, deny
+  defaultPolicy: allow
+  # -- Enable audit logging of firewall decisions
+  auditEnabled: true
+
+  # Rate limiting (token bucket algorithm)
+  rateLimiting:
+    # -- Enable rate limiting
+    enabled: true
+    # -- Default requests per second
+    requestsPerSecond: 1000
+    # -- Maximum burst size
+    burstSize: 100
+    # -- Enable per-user rate limiting
+    perUser: true
+    # -- Enable per-IP rate limiting
+    perIP: true
+    # -- Enable per-bucket rate limiting
+    perBucket: false
+    # -- Per-user rate limit overrides
+    userLimits: {}
+    #   heavy-user: 100
+    #   light-user: 500
+    # -- Per-bucket rate limit overrides
+    bucketLimits: {}
+    #   hot-bucket: 5000
+
+  # Bandwidth throttling
+  bandwidth:
+    # -- Enable bandwidth throttling
+    enabled: true
+    # -- Global max bandwidth in bytes/second (1GB/s)
+    maxBytesPerSecond: 1073741824
+    # -- Per-user bandwidth limit
+    maxBytesPerSecondPerUser: 104857600  # 100MB/s
+    # -- Per-bucket bandwidth limit
+    maxBytesPerSecondPerBucket: 524288000  # 500MB/s
+
+  # Connection limits
+  connections:
+    # -- Enable connection limiting
+    enabled: true
+    # -- Maximum concurrent connections
+    maxConnections: 10000
+    # -- Maximum connections per IP
+    maxConnectionsPerIP: 100
+    # -- Maximum connections per user
+    maxConnectionsPerUser: 500
+
+  # IP filtering
+  # -- Allowed IP addresses/CIDRs
+  ipAllowlist: []
+  #   - 10.0.0.0/8
+  #   - 192.168.0.0/16
+  # -- Blocked IP addresses/CIDRs
+  ipBlocklist: []
+  #   - 203.0.113.0/24
+
+  # Firewall rules
+  rules: []
+  #   - id: block-large-uploads
+  #     priority: 100
+  #     action: deny
+  #     match:
+  #       operations:
+  #         - PutObject
+  #       minSize: 1073741824  # 1GB
+
+# S3 Select
+# SQL queries on CSV/JSON/Parquet data without full download
+s3Select:
+  # -- Enable S3 Select
+  enabled: true
+  # -- Maximum record size in bytes
+  maxRecordSize: 1048576  # 1MB
+  # -- Maximum results size in bytes
+  maxResultsSize: 268435456  # 256MB
+  # -- Query timeout in seconds
+  timeout: 300
+  # -- Worker pool size for concurrent queries
+  workerPoolSize: 10
+
+# Batch Replication
+# Bulk data migration and disaster recovery
+batchReplication:
+  # -- Enable batch replication
+  enabled: false
+  # -- Maximum concurrent jobs
+  maxConcurrentJobs: 5
+  # -- Default workers per job
+  defaultConcurrency: 10
+  # -- Maximum retry attempts
+  maxRetries: 3
+  # -- Retry delay between attempts
+  retryDelay: 5s
+  # -- Number of completed jobs to keep in history
+  historyLimit: 100
+  # -- Objects between checkpoints
+  checkpointInterval: 1000
+
+# Enhanced Audit Logging
+# Compliance-ready audit trails with cryptographic integrity
+audit:
+  # -- Enable enhanced audit logging
+  enabled: true
+  # -- Compliance mode: none, soc2, pci, hipaa, gdpr, fedramp
+  complianceMode: none
+  # -- Audit log file path
+  filePath: /data/audit/audit.log
+  # -- Retention in days
+  retentionDays: 90
+  # -- Event buffer size
+  bufferSize: 10000
+  # -- Enable cryptographic integrity chain
+  integrityEnabled: true
+  # -- Use existing secret for integrity HMAC key
+  integrityExistingSecret: ""
+  # -- Key in existing secret for integrity key
+  integritySecretKey: audit-integrity-key
+  # -- Enable sensitive data masking
+  maskSensitiveData: true
+  # -- Fields to mask
+  sensitiveFields:
+    - password
+    - secret
+    - token
+    - credential
+    - key
+
+  # Log rotation
+  rotation:
+    # -- Enable log rotation
+    enabled: true
+    # -- Rotate at this size in MB
+    maxSizeMB: 100
+    # -- Rotate after this many days
+    maxAgeDays: 7
+    # -- Keep this many rotated files
+    maxBackups: 10
+    # -- Compress rotated files
+    compress: true
+
+  # Webhook output
+  webhook:
+    # -- Enable webhook output
+    enabled: false
+    # -- Webhook URL
+    url: ""
+    # -- Webhook headers (use existingSecret for sensitive headers)
+    headers: {}
+    # -- Use existing secret for webhook headers
+    existingSecret: ""
+    # -- Batch size for webhook delivery
+    batchSize: 100
+    # -- Flush interval
+    flushInterval: 5s
+    # -- Retry count for failed deliveries
+    retryCount: 3
+
+# Object Lock defaults
+objectLock:
+  # -- Default retention mode: GOVERNANCE, COMPLIANCE, or empty
+  defaultMode: ""
+  # -- Default retention days
+  defaultDays: 0
+  # -- Default retention years
+  defaultYears: 0
+
+# =============================================================================
+# AI/ML & High-Performance Features (2025)
+# =============================================================================
+
+# S3 Express One Zone
+# High-performance S3 with atomic appends for streaming workloads
+s3Express:
+  # -- Enable S3 Express One Zone
+  enabled: false
+  # -- Default zone for directory buckets
+  defaultZone: use1-az1
+  # -- Session token duration in seconds
+  sessionDuration: 3600
+  # -- Maximum append size in bytes (5GB)
+  maxAppendSize: 5368709120
+  # -- Enable atomic append operations
+  enableAtomicAppend: true
+  # -- Express zones configuration
+  zones:
+    - name: use1-az1
+      region: us-east-1
+      storagePath: /data/express/az1
+      maxIOPS: 100000
+      maxThroughputMBps: 10000
+
+# Apache Iceberg
+# Native Iceberg table format support for data lakehouse
+iceberg:
+  # -- Enable Iceberg support
+  enabled: false
+  # -- Catalog type: rest, hive, glue
+  catalogType: rest
+  # -- Catalog service URI
+  catalogUri: http://localhost:8181
+  # -- Default warehouse location
+  warehouse: s3://warehouse/
+  # -- Default file format: parquet, orc, avro
+  defaultFileFormat: parquet
+  # -- Metadata storage path
+  metadataPath: /data/iceberg
+  # -- Number of snapshots to retain
+  snapshotRetention: 10
+  # -- Expire snapshots older than (hours)
+  expireSnapshotsOlderThan: 168
+  # -- Enable ACID transactions
+  enableACID: true
+
+# MCP Server
+# Model Context Protocol for AI agent integration
+mcp:
+  # -- Enable MCP server
+  enabled: false
+  # -- MCP server port
+  port: 9005
+  # -- Maximum concurrent connections
+  maxConnections: 100
+  # -- Enable tool execution
+  enableTools: true
+  # -- Enable resource access
+  enableResources: true
+  # -- Enable prompt templates
+  enablePrompts: true
+  # -- Allowed origins for CORS
+  allowedOrigins:
+    - "*"
+  # -- Require authentication
+  authRequired: true
+  # -- Rate limit per minute
+  rateLimitPerMinute: 60
+  # -- Service configuration (for separate MCP service)
+  service:
+    # -- Enable separate MCP service
+    enabled: false
+    # -- Service type
+    type: ClusterIP
+    # -- Service annotations
+    annotations: {}
+
+# GPUDirect Storage
+# Direct GPU-to-storage transfers for AI/ML training
+gpuDirect:
+  # -- Enable GPUDirect Storage
+  enabled: false
+  # -- GPU device IDs (empty for auto-detect)
+  devices: []
+  # -- GPU buffer pool size in bytes (1GB)
+  bufferPoolSize: 1073741824
+  # -- Maximum single transfer size (256MB)
+  maxTransferSize: 268435456
+  # -- Enable asynchronous transfers
+  enableAsync: true
+  # -- CUDA streams per GPU
+  cudaStreamCount: 4
+  # -- Enable peer-to-peer GPU transfers
+  enableP2P: true
+  # -- NVMe device path pattern
+  nvmePath: /dev/nvme*
+  # -- Node selector for GPU nodes
+  nodeSelector: {}
+    # nvidia.com/gpu.present: "true"
+  # -- Tolerations for GPU nodes
+  tolerations: []
+    # - key: nvidia.com/gpu
+    #   operator: Exists
+    #   effect: NoSchedule
+  # -- Resource limits for GPU
+  resources:
+    limits: {}
+      # nvidia.com/gpu: 1
+
+# BlueField DPU
+# NVIDIA SmartNIC for hardware-accelerated offload
+dpu:
+  # -- Enable BlueField DPU support
+  enabled: false
+  # -- DPU device index
+  deviceIndex: 0
+  # -- Enable crypto offload (AES-GCM)
+  enableCrypto: true
+  # -- Enable compression offload (Deflate/LZ4)
+  enableCompression: true
+  # -- Enable storage offload
+  enableStorage: true
+  # -- Enable network offload
+  enableNetwork: true
+  # -- Enable RDMA via DPU
+  enableRDMA: true
+  # -- Enable regex offload (BlueField-3)
+  enableRegex: false
+  # -- Health check interval in seconds
+  healthCheckInterval: 30
+  # -- Fall back to CPU on errors
+  fallbackOnError: true
+  # -- Minimum data size to offload (bytes)
+  minSizeForOffload: 4096
+  # -- Node selector for DPU nodes
+  nodeSelector: {}
+    # nvidia.com/dpu.present: "true"
+  # -- Tolerations for DPU nodes
+  tolerations: []
+
+# S3 over RDMA
+# Ultra-low latency object storage via RDMA
+rdma:
+  # -- Enable RDMA transport
+  enabled: false
+  # -- RDMA listener port
+  port: 9100
+  # -- RDMA device name (e.g., mlx5_0)
+  deviceName: mlx5_0
+  # -- GID index for RoCE
+  gidIndex: 0
+  # -- Max send work requests per QP
+  maxSendWR: 128
+  # -- Max receive work requests per QP
+  maxRecvWR: 128
+  # -- Max scatter/gather elements per send
+  maxSendSGE: 1
+  # -- Max scatter/gather elements per recv
+  maxRecvSGE: 1
+  # -- Max inline data size
+  maxInlineData: 64
+  # -- Registered memory pool size (1GB)
+  memoryPoolSize: 1073741824
+  # -- Enable zero-copy transfers
+  enableZeroCopy: true
+  # -- Fall back to TCP if RDMA unavailable
+  fallbackToTCP: true
+  # -- RDMA service configuration
+  service:
+    # -- Enable separate RDMA service
+    enabled: false
+    # -- Service type
+    type: ClusterIP
+    # -- Service annotations
+    annotations: {}
+  # -- Node selector for RDMA nodes
+  nodeSelector: {}
+    # feature.node.kubernetes.io/rdma.capable: "true"
+  # -- Tolerations for RDMA nodes
+  tolerations: []
+
+# NVIDIA NIM
+# NVIDIA Inference Microservices for AI workloads
+nim:
+  # -- Enable NIM integration
+  enabled: false
+  # -- NIM API endpoints
+  endpoints:
+    - https://integrate.api.nvidia.com/v1
+  # -- NVIDIA API key (use existingSecret in production)
+  apiKey: ""
+  # -- Use existing secret for API key
+  existingSecret: ""
+  # -- Key in existing secret for API key
+  existingSecretKey: nim-api-key
+  # -- NVIDIA organization ID
+  organizationId: ""
+  # -- Default model for inference
+  defaultModel: meta/llama-3.1-8b-instruct
+  # -- Inference timeout in seconds
+  timeout: 60
+  # -- Max retries for failed requests
+  maxRetries: 3
+  # -- Max batch size
+  maxBatchSize: 100
+  # -- Enable streaming responses
+  enableStreaming: true
+  # -- Cache inference results
+  cacheResults: true
+  # -- Cache TTL in seconds
+  cacheTTL: 3600
+  # -- Enable detailed metrics
+  enableMetrics: true
+  # -- Trigger inference on object upload
+  processOnUpload: false
+  # -- Content types to process on upload
+  processContentTypes:
+    - image/jpeg
+    - image/png
+    - text/plain
+    - application/json
+
+# =============================================================================
+# Security & Observability Features
+# =============================================================================
+
+# Access Analytics
+# Real-time anomaly detection and behavior analysis
+accessAnalytics:
+  # -- Enable access analytics
+  enabled: false
+  # -- Baseline learning window
+  baselineWindow: 168h  # 7 days
+  # -- Minimum events for stable baseline
+  minEventsForBaseline: 100
+  # -- Anomaly threshold (standard deviations)
+  anomalyThreshold: 3.0
+  # -- Data retention period
+  retentionPeriod: 720h  # 30 days
+  # -- Sampling rate (0.0-1.0)
+  samplingRate: 1.0
+  # -- Enable real-time detection
+  enableRealtime: true
+  # -- Batch size for processing
+  batchSize: 1000
+  # -- Flush interval for batches
+  flushInterval: 1m
+
+  # Alert configuration
+  alerts:
+    webhook:
+      # -- Enable webhook alerts
+      enabled: false
+      # -- Webhook URL
+      url: ""
+      # -- Webhook headers (use existingSecret for sensitive headers)
+      headers: {}
+      # -- Use existing secret for webhook auth
+      existingSecret: ""
+      # -- Key in existing secret
+      existingSecretKey: webhook-token
+
+  # Custom detection rules
+  customRules: []
+  #   - id: sensitive-bucket-access
+  #     name: Sensitive Bucket Access
+  #     type: SENSITIVE_ACCESS
+  #     enabled: true
+  #     severity: HIGH
+  #     threshold: 1
+  #     window: 1h
+  #     conditions:
+  #       - field: bucket
+  #         operator: in
+  #         value: ["secrets", "credentials"]
+
+# Encryption Key Rotation
+# Automated key lifecycle management
+keyRotation:
+  # -- Enable automatic key rotation
+  enabled: false
+  # -- Key rotation check interval
+  checkInterval: 1h
+
+  # Rotation policies by key type
+  policies:
+    master:
+      # -- Master key rotation interval
+      rotationInterval: 8760h  # 1 year
+      # -- Maximum key age
+      maxKeyAge: 9600h
+      # -- Grace period for transition
+      gracePeriod: 720h  # 30 days
+      # -- Notify before expiry
+      notifyBeforeExpiry: 720h
+      # -- Versions to retain
+      retainVersions: 3
+      # -- Require object re-encryption
+      requireReencryption: true
+
+    data:
+      # -- Data key rotation interval
+      rotationInterval: 2160h  # 90 days
+      maxKeyAge: 2880h
+      gracePeriod: 168h
+      notifyBeforeExpiry: 336h
+      retainVersions: 5
+      requireReencryption: true
+
+    bucket:
+      # -- Bucket key rotation interval
+      rotationInterval: 4320h  # 180 days
+      maxKeyAge: 5040h
+      gracePeriod: 336h
+      retainVersions: 3
+      requireReencryption: false
+
+  # Re-encryption job settings
+  reencryption:
+    # -- Concurrent workers per job
+    concurrency: 10
+    # -- Batch size for re-encryption
+    batchSize: 1000
+
+# mTLS for Internal Communication
+# Mutual TLS between cluster nodes
+mtls:
+  # -- Enable mTLS for internal communication
+  enabled: false
+  # -- Certificate directory
+  certDir: /data/certs
+
+  # Certificate Authority
+  ca:
+    # -- CA common name
+    commonName: NebulaIO Internal CA
+    # -- CA validity duration
+    validityDuration: 87600h  # 10 years
+    # -- Organization for CA
+    organization:
+      - NebulaIO
+
+  # Certificate settings
+  certificates:
+    # -- Certificate validity duration
+    validityDuration: 8760h  # 1 year
+    # -- Auto-renew before expiry
+    autoRenewBefore: 720h  # 30 days
+    # -- Key algorithm: ECDSA-P256, ECDSA-P384
+    keyAlgorithm: ECDSA-P256
+
+  # TLS settings
+  tls:
+    # -- Minimum TLS version
+    minVersion: "1.2"
+    # -- Require client certificate
+    requireClientCert: true
+
+  # Certificate Revocation List
+  crl:
+    # -- Enable CRL
+    enabled: true
+    # -- CRL update interval
+    updateInterval: 24h
+
+# OpenTelemetry Distributed Tracing
+tracing:
+  # -- Enable distributed tracing
+  enabled: false
+  # -- Service name for traces
+  serviceName: nebulaio
+  # -- Service version
+  serviceVersion: "1.0.0"
+  # -- Environment name
+  environment: production
+
+  # Sampling configuration
+  sampling:
+    # -- Sampling rate (0.0-1.0)
+    rate: 0.1
+
+  # Exporter configuration
+  exporter:
+    # -- Exporter type: otlp, jaeger, zipkin, console
+    type: otlp
+    # -- Exporter endpoint
+    endpoint: ""
+    # -- Exporter headers (use existingSecret for sensitive headers)
+    headers: {}
+    # -- Use existing secret for exporter auth
+    existingSecret: ""
+    # -- Key in existing secret
+    existingSecretKey: otel-token
+
+  # Batch processor settings
+  batch:
+    # -- Batch timeout
+    timeout: 5s
+    # -- Maximum batch size
+    maxSize: 512
+
+  # -- Propagator format: w3c, b3, jaeger
+  propagator: w3c
+
+# Secret Scanning
+# Detect secrets and credentials in objects
+secretScanning:
+  # -- Enable secret scanning
+  enabled: false
+  # -- Scan on upload
+  scanOnUpload: true
+  # -- Maximum file size to scan (bytes)
+  maxScanSize: 104857600  # 100MB
+  # -- Action on detection: log, block, alert
+  action: log
+  # -- Content types to scan
+  contentTypes:
+    - text/plain
+    - application/json
+    - application/yaml
+    - application/x-yaml
+
+# Data Loss Prevention
+# Detect and protect sensitive data
+dlp:
+  # -- Enable DLP
+  enabled: false
+  # -- Scan on upload
+  scanOnUpload: true
+  # -- Maximum file size to scan
+  maxScanSize: 104857600
+
+  # Detection patterns
+  patterns:
+    # -- Enable SSN detection
+    ssn: true
+    # -- Enable credit card detection
+    creditCard: true
+    # -- Enable email detection
+    email: true
+    # -- Enable phone number detection
+    phone: true
+
+  # Actions
+  actions:
+    # -- Default action: allow, log, block, mask
+    default: log
+    # -- Action for high severity
+    highSeverity: block
+
+# Logging configuration
+logLevel: info
+logFormat: json
+
+# Network policy
+networkPolicy:
+  # -- Enable network policy
+  enabled: false
+  # -- Allow S3 API from anywhere (true) or restrict to specific sources (false)
+  allowS3FromAnywhere: true
+  # -- Namespaces allowed to access S3 API (when allowS3FromAnywhere is false)
+  s3AllowedNamespaces: []
+  # -- Pod labels allowed to access S3 API (when allowS3FromAnywhere is false)
+  s3AllowedPodLabels: {}
+  # -- Namespaces allowed to access Admin API
+  adminAllowedNamespaces: []
+  # -- Prometheus namespace for metrics scraping
+  prometheusNamespace: monitoring
+  # -- Additional egress rules
+  additionalEgressRules: []
+
+# Service account
+serviceAccount:
+  # -- Create service account
+  create: true
+  # -- Service account name
+  name: ""
+  # -- Service account annotations
+  annotations: {}
+
+# -- Extra environment variables
+extraEnvVars: []
+# - name: EXTRA_VAR
+#   value: "value"
+
+# -- Extra volumes
+extraVolumes: []
+
+# -- Extra volume mounts
+extraVolumeMounts: []
+
+# -- Init containers
+initContainers: []
+
+# -- Sidecar containers
+sidecars: []

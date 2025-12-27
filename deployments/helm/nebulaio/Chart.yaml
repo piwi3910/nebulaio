@@ -1,0 +1,31 @@
+apiVersion: v2
+name: nebulaio
+description: A Helm chart for NebulaIO S3-compatible object storage
+
+type: application
+
+# Chart version
+version: 0.1.0
+
+# Application version
+appVersion: "0.1.0"
+
+home: https://github.com/piwi3910/nebulaio
+sources:
+  - https://github.com/piwi3910/nebulaio
+
+maintainers:
+  - name: Pascal Watteel
+    email: pascal@example.com
+    url: https://github.com/piwi3910
+
+keywords:
+  - s3
+  - object-storage
+  - storage
+  - minio
+  - cloud-native
+
+annotations:
+  category: Storage
+  licenses: MIT

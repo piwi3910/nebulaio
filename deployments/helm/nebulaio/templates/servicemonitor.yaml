@@ -1,0 +1,118 @@
+{{- if .Values.metrics.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "nebulaio.fullname" . }}
+  labels:
+    {{- include "nebulaio.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.metrics.serviceMonitor.namespace }}
+  namespace: {{ . }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "nebulaio.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: admin
+      path: /metrics
+      {{- with .Values.metrics.serviceMonitor.interval }}
+      interval: {{ . }}
+      {{- end }}
+      {{- with .Values.metrics.serviceMonitor.scrapeTimeout }}
+      scrapeTimeout: {{ . }}
+      {{- end }}
+      {{- with .Values.metrics.serviceMonitor.relabelings }}
+      relabelings:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.metrics.serviceMonitor.metricRelabelings }}
+      metricRelabelings:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+{{- end }}
+---
+{{- if .Values.metrics.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "nebulaio.fullname" . }}
+  labels:
+    {{- include "nebulaio.labels" . | nindent 4 }}
+    {{- with .Values.metrics.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.metrics.prometheusRule.namespace }}
+  namespace: {{ . }}
+  {{- end }}
+spec:
+  groups:
+    - name: nebulaio
+      rules:
+        {{- if .Values.metrics.prometheusRule.defaultRules }}
+        # NebulaIO is down
+        - alert: NebulaIODown
+          expr: up{job="{{ include "nebulaio.fullname" . }}"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "NebulaIO instance {{ "{{" }} $labels.instance {{ "}}" }} is down"
+            description: "NebulaIO instance {{ "{{" }} $labels.instance {{ "}}" }} has been down for more than 5 minutes."
+
+        # High error rate
+        - alert: NebulaIOHighErrorRate
+          expr: |
+            sum(rate(nebulaio_http_requests_total{status=~"5.."}[5m])) by (instance)
+            /
+            sum(rate(nebulaio_http_requests_total[5m])) by (instance)
+            > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "NebulaIO high error rate on {{ "{{" }} $labels.instance {{ "}}" }}"
+            description: "NebulaIO instance {{ "{{" }} $labels.instance {{ "}}" }} has error rate above 5%."
+
+        # High latency
+        - alert: NebulaIOHighLatency
+          expr: |
+            histogram_quantile(0.95, sum(rate(nebulaio_http_request_duration_seconds_bucket[5m])) by (le, instance))
+            > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "NebulaIO high latency on {{ "{{" }} $labels.instance {{ "}}" }}"
+            description: "NebulaIO instance {{ "{{" }} $labels.instance {{ "}}" }} has p95 latency above 1 second."
+
+        # Raft leader lost
+        - alert: NebulaIORaftLeaderLost
+          expr: nebulaio_raft_state != 2
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "NebulaIO cluster has no leader"
+            description: "NebulaIO cluster has been without a leader for more than 2 minutes."
+
+        # Storage space low
+        - alert: NebulaIOStorageSpaceLow
+          expr: |
+            (nebulaio_storage_bytes_used / nebulaio_storage_bytes_total) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "NebulaIO storage space low on {{ "{{" }} $labels.instance {{ "}}" }}"
+            description: "NebulaIO instance {{ "{{" }} $labels.instance {{ "}}" }} has less than 15% storage space remaining."
+        {{- end }}
+        {{- with .Values.metrics.prometheusRule.rules }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}

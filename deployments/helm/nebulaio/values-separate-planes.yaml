@@ -1,0 +1,85 @@
+# Separate Management and Storage Planes
+#
+# This configuration demonstrates how to deploy NebulaIO with separated
+# management (Raft voters) and storage (workers) planes.
+#
+# Deploy two releases:
+# 1. Management plane: helm install nebulaio-mgmt ./nebulaio -f values-separate-planes.yaml --set plane=management
+# 2. Storage plane: helm install nebulaio-storage ./nebulaio -f values-separate-planes.yaml --set plane=storage
+#
+# The management plane handles:
+# - Raft consensus
+# - Metadata operations
+# - Cluster coordination
+#
+# The storage plane handles:
+# - Object storage
+# - Data replication
+# - Client requests
+
+# Default to management plane (override with --set plane=storage)
+plane: management
+
+# Management plane settings
+management:
+  replicaCount: 3
+  nodeRole: management
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  persistence:
+    size: 10Gi  # Small - only metadata
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: "true"
+
+# Storage plane settings
+storage:
+  replicaCount: 5
+  nodeRole: storage
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 8000m
+      memory: 16Gi
+  persistence:
+    size: 500Gi
+  nodeSelector:
+    node-role.kubernetes.io/storage: "true"
+
+# Shared settings
+cluster:
+  enabled: true
+  name: nebulaio-separated
+
+podAntiAffinityPreset: hard
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+# Note: You'll need a post-render hook or separate values files
+# to apply the correct settings per plane. Example with Helmfile:
+#
+# releases:
+#   - name: nebulaio-mgmt
+#     chart: ./nebulaio
+#     values:
+#       - replicaCount: 3
+#       - cluster.nodeRole: management
+#       - resources: {{ .management.resources }}
+#       - persistence.size: 10Gi
+#
+#   - name: nebulaio-storage
+#     chart: ./nebulaio
+#     values:
+#       - replicaCount: 5
+#       - cluster.nodeRole: storage
+#       - resources: {{ .storage.resources }}
+#       - persistence.size: 500Gi

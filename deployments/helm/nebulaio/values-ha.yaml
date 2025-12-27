@@ -1,0 +1,37 @@
+# High-Availability cluster deployment values
+# Usage: helm install nebulaio ./nebulaio -f values-ha.yaml
+
+replicaCount: 3
+
+cluster:
+  enabled: true
+  name: nebulaio-ha-cluster
+  nodeRole: storage
+
+persistence:
+  size: 100Gi
+  storageClass: ""  # Use default or specify fast storage class
+
+resources:
+  requests:
+    cpu: 1000m
+    memory: 2Gi
+  limits:
+    cpu: 4000m
+    memory: 8Gi
+
+# Spread pods across nodes
+podAntiAffinityPreset: hard
+
+# Ensure at least 2 pods are available during disruptions
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+  maxUnavailable: ""
+
+# Enable monitoring
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s

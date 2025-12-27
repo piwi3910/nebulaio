@@ -1,0 +1,126 @@
+# Production deployment values
+# Usage: helm install nebulaio ./nebulaio -f values-production.yaml
+#
+# Prerequisites:
+# - Configure auth.existingSecret with your credentials
+# - Update ingress hostnames
+# - Configure TLS certificates
+
+replicaCount: 5
+
+image:
+  pullPolicy: Always
+
+# Use existing secret for credentials (create this secret first!)
+auth:
+  existingSecret: nebulaio-credentials
+  existingSecretUserKey: root-user
+  existingSecretPasswordKey: root-password
+
+cluster:
+  enabled: true
+  name: nebulaio-production
+  nodeRole: storage
+
+# Production-grade storage
+persistence:
+  enabled: true
+  storageClass: fast-ssd  # Use your fast storage class
+  size: 500Gi
+
+# Production resources
+resources:
+  requests:
+    cpu: 2000m
+    memory: 4Gi
+  limits:
+    cpu: 8000m
+    memory: 16Gi
+
+# Hard anti-affinity - never schedule 2 pods on same node
+podAntiAffinityPreset: hard
+
+# Schedule on dedicated storage nodes
+nodeSelector:
+  node-role.kubernetes.io/storage: "true"
+
+tolerations:
+  - key: node-role.kubernetes.io/storage
+    operator: Exists
+    effect: NoSchedule
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 3
+
+# Enable ingress with TLS
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "5g"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+
+  s3:
+    host: s3.your-domain.com
+    path: /
+    pathType: Prefix
+
+  admin:
+    host: admin.your-domain.com
+    path: /
+    pathType: Prefix
+
+  console:
+    host: console.your-domain.com
+    path: /
+    pathType: Prefix
+
+  tls:
+    - secretName: nebulaio-tls
+      hosts:
+        - s3.your-domain.com
+        - admin.your-domain.com
+        - console.your-domain.com
+
+# Full monitoring stack
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    labels:
+      release: prometheus
+  prometheusRule:
+    enabled: true
+    defaultRules: true
+    labels:
+      release: prometheus
+
+# Network policies for security
+networkPolicy:
+  enabled: true
+  allowS3FromAnywhere: true
+  adminAllowedNamespaces:
+    - ingress-nginx
+  prometheusNamespace: monitoring
+
+# Enhanced logging
+logLevel: info
+logFormat: json
+
+# Pod security
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
