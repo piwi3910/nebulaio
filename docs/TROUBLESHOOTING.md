@@ -617,8 +617,12 @@ nebulaio cluster join --peer=node2:9000
 # Check cluster status on each node
 nebulaio cluster status
 
-# Check Raft state
-nebulaio cluster raft status
+# Check Dragonboat state and leader info
+nebulaio cluster dragonboat status
+
+# Check GetLeaderID returns (leaderID, term, valid, error)
+# valid=false indicates no stable leader
+curl http://localhost:9001/api/v1/admin/cluster/leader
 ```
 
 **Solutions:**
@@ -629,6 +633,9 @@ nebulaio cluster raft status
 for node in node1 node2 node3; do
   echo "$node: $(ssh $node nebulaio cluster members | wc -l)"
 done
+
+# Check shard membership on each node
+curl http://localhost:9001/api/v1/admin/cluster/membership
 ```
 
 2. Stop minority partition nodes:
@@ -641,28 +648,68 @@ systemctl stop nebulaio
 nebulaio cluster recover --force-leader
 ```
 
+### Issue: GetLeaderID Returns Invalid
+
+**Symptoms:**
+- `GetLeaderID` returns `valid=false`
+- Operations fail with "no leader" errors
+
+**Diagnosis:**
+```bash
+# Check if quorum exists
+curl http://localhost:9001/api/v1/admin/cluster/health
+
+# Check Dragonboat shard membership
+curl http://localhost:9001/api/v1/admin/cluster/membership
+```
+
+**Solutions:**
+1. Ensure majority of voting members are online
+2. Check network connectivity between nodes on Raft port (default: 9003)
+3. Wait for election timeout to complete (default: RTT * 10 = 2000ms)
+
 ### Issue: Node Won't Join Cluster
 
 **Symptoms:**
 ```
 Error: failed to join cluster: dial tcp: connection refused
+Error: failed to add non-voter: context deadline exceeded
 ```
 
 **Solutions:**
 
 1. Check network connectivity between nodes:
 ```bash
+# Check gossip port (for discovery)
+nc -zv leader-node 9004
+
+# Check Raft port (for consensus)
+nc -zv leader-node 9003
+
+# Check API ports
 nc -zv leader-node 9000
 nc -zv leader-node 9001
 ```
 
-2. Verify cluster token:
-```bash
-# Tokens must match
-grep cluster_token /etc/nebulaio/config.yaml
+2. Verify Dragonboat configuration:
+```yaml
+# Ensure unique replica_id across all nodes
+cluster:
+  shard_id: 1
+  replica_id: 2  # Must be unique (uint64)
+  raft_address: 10.0.1.11:9003
 ```
 
-3. Check TLS configuration:
+3. Check if new node is being added correctly:
+```bash
+# On the leader, check membership
+curl http://localhost:9001/api/v1/admin/cluster/membership
+
+# New nodes join as non-voters via SyncRequestAddNonVoting
+# Then can be promoted via SyncRequestAddReplica
+```
+
+4. Check TLS configuration:
 ```yaml
 # All nodes must use same CA
 cluster:
@@ -1106,8 +1153,8 @@ grep "duration_ms" /var/log/nebulaio/api.log | awk '$NF > 1000'
 # Find authentication issues
 grep "auth" /var/log/nebulaio/audit.log | grep -i "fail\|denied"
 
-# Find cluster events
-grep "raft\|leader\|join\|leave" /var/log/nebulaio/cluster.log
+# Find cluster events (Dragonboat-specific)
+grep "dragonboat\|leader\|join\|leave\|shard\|replica\|GetLeaderID\|SyncRequest" /var/log/nebulaio/cluster.log
 ```
 
 ---

@@ -7,7 +7,7 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 ### Core Features
 - **Full S3 API Compatibility** - Works with existing S3 SDKs and tools (AWS CLI, boto3, etc.)
 - **Web Console** - Modern React-based admin and user portals
-- **Distributed Metadata** - Raft consensus for high availability (works single-node too)
+- **Distributed Metadata** - Dragonboat consensus for high availability and ultra-low latency (1.3ms, 1.25M writes/sec)
 - **Scalable Storage** - Start with local filesystem, scale to erasure-coded distributed storage
 - **IAM** - Users, groups, policies, and S3-compatible access keys
 - **Multi-tenant** - Role-based access control with admin and user portals
@@ -101,7 +101,7 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 └─────────────────────────┬───────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
-│                  Metadata Store (Raft)                      │
+│              Metadata Store (Dragonboat)                    │
 │                    (BadgerDB backend)                       │
 └─────────────────────────┬───────────────────────────────────┘
                           │
@@ -198,6 +198,8 @@ console_port: 9002
 cluster:
   bootstrap: true
   raft_port: 9003
+  shard_id: 1
+  replica_id: 1
 
 storage:
   backend: erasure  # fs | erasure

@@ -164,8 +164,8 @@ func (s *RaftStore) IsLeader() bool {
 }
 
 // LeaderAddress returns the address of the current leader
-func (s *RaftStore) LeaderAddress() string {
-	return string(s.raft.Leader())
+func (s *RaftStore) LeaderAddress() (string, error) {
+	return string(s.raft.Leader()), nil
 }
 
 // GetRaft returns the underlying Raft instance

@@ -17,7 +17,7 @@ type Store interface {
 	IsLeader() bool
 
 	// LeaderAddress returns the address of the current leader
-	LeaderAddress() string
+	LeaderAddress() (string, error)
 
 	// Bucket operations
 	CreateBucket(ctx context.Context, bucket *Bucket) error

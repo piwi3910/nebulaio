@@ -117,16 +117,32 @@ All options can be set via environment variables using the `NEBULAIO_` prefix. N
 
 ## Clustering
 
-### Raft Consensus
+### Dragonboat Consensus
+
+NebulaIO uses [Dragonboat](https://github.com/lni/dragonboat), a high-performance multi-group Raft consensus library.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `cluster.bootstrap` | bool | `false` | Bootstrap new cluster (first node only) |
-| `cluster.raft_port` | int | `9003` | Raft consensus port |
+| `cluster.shard_id` | uint64 | `1` | Raft shard/group identifier |
+| `cluster.replica_id` | uint64 | auto | Unique replica ID within shard (derived from node_id if not set) |
+| `cluster.raft_port` | int | `9003` | Dragonboat consensus port |
+| `cluster.raft_address` | string | - | Full Raft address (host:port) for Dragonboat NodeHost |
 | `cluster.advertise_address` | string | - | Address advertised to other nodes |
-| `cluster.join_addresses` | list | - | Addresses of existing cluster nodes |
-| `cluster.raft_election_timeout` | duration | `1s` | Raft election timeout |
-| `cluster.raft_heartbeat_timeout` | duration | `500ms` | Raft heartbeat timeout |
+| `cluster.join_addresses` | list | - | Addresses of existing cluster nodes (gossip port) |
+| `cluster.initial_members` | map | - | Initial cluster members map (replica_id -> raft_address) |
+| `cluster.raft_election_rtt` | int | `10` | Election timeout in RTT multiples |
+| `cluster.raft_heartbeat_rtt` | int | `1` | Heartbeat interval in RTT multiples |
+| `cluster.rtt_millisecond` | int | `200` | RTT in milliseconds between nodes |
+| `cluster.wal_dir` | string | `{data_dir}/wal` | Write-Ahead Log directory (use NVMe for best performance) |
+| `cluster.snapshot_entries` | uint64 | `1024` | Create snapshot every N log entries |
+| `cluster.compaction_overhead` | uint64 | `500` | Log entries to keep after snapshot |
+| `cluster.check_quorum` | bool | `true` | Enable quorum checking for leader validity |
+
+**Dragonboat Terminology**:
+- **ShardID**: Identifies a Raft group (equivalent to cluster ID)
+- **ReplicaID**: Unique identifier for each node within a shard (must be unique per node)
+- **RTT**: Round-Trip Time - election and heartbeat timeouts are expressed as multiples of RTT
 
 ### Gossip Protocol
 
@@ -214,11 +230,21 @@ storage:
 
 cluster:
   bootstrap: true
+  shard_id: 1
+  replica_id: 1
   raft_port: 9003
+  raft_address: 10.0.1.10:9003
   gossip_port: 9004
   advertise_address: 10.0.1.10
   cluster_name: production
   expect_nodes: 3
+  wal_dir: /fast/nvme/wal
+  rtt_millisecond: 200
+  raft_election_rtt: 10
+  raft_heartbeat_rtt: 1
+  snapshot_entries: 1024
+  compaction_overhead: 500
+  check_quorum: true
 
 auth:
   root_user: admin

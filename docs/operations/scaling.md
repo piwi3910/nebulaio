@@ -78,14 +78,20 @@ Storage nodes handle object data without participating in Raft voting.
 node_id: storage-node-4
 cluster:
   bootstrap: false
+  shard_id: 1
+  replica_id: 4  # Must be unique within shard (uint64)
   node_role: storage
   voter: false
+  raft_address: 10.0.1.20:9003
   join_addresses:
     - 10.0.1.10:9004
     - 10.0.1.11:9004
     - 10.0.1.12:9004
   advertise_address: 10.0.1.20
+  wal_dir: /var/lib/nebulaio/wal
 ```
+
+**Important**: The `replica_id` must be unique across all nodes in the shard. Dragonboat uses this to identify each node in the Raft group.
 
 **Step 2**: Start the new node
 
@@ -110,11 +116,18 @@ Voter nodes participate in Raft consensus. Only add voters in odd increments.
 node_id: mgmt-node-4
 cluster:
   bootstrap: false
+  shard_id: 1
+  replica_id: 5  # Must be unique within shard (uint64)
   node_role: management
   voter: false
+  raft_address: 10.0.1.14:9003
   join_addresses:
     - 10.0.1.10:9004
+  advertise_address: 10.0.1.14
+  wal_dir: /var/lib/nebulaio/wal
 ```
+
+**Note**: New nodes initially join as non-voters via `SyncRequestAddNonVoting`. This allows them to catch up with the log before participating in elections.
 
 **Step 2**: Start and let it sync
 
@@ -160,12 +173,20 @@ kubectl exec -n nebulaio nebulaio-0 -- \
 curl -X POST http://leader:9001/api/v1/admin/cluster/nodes/{node-id}/demote
 ```
 
-**Step 2**: Wait for data migration
+**Step 2**: Wait for data migration and Dragonboat synchronization
 
 ```bash
 # Check rebalance progress
 curl http://leader:9001/api/v1/admin/cluster/rebalance/status
+
+# Verify Dragonboat shard membership is updated
+curl http://leader:9001/api/v1/admin/cluster/dragonboat/status
+
+# Check shard membership (shows all replicas and their addresses)
+curl http://leader:9001/api/v1/admin/cluster/membership
 ```
+
+**Note**: Dragonboat's `SyncGetShardMembership` returns the current membership configuration, including all voting and non-voting replicas.
 
 **Step 3**: Remove from cluster
 

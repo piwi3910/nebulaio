@@ -14,7 +14,7 @@ import (
 
 // Bucket operations
 
-func (s *RaftStore) CreateBucket(ctx context.Context, bucket *Bucket) error {
+func (s *DragonboatStore) CreateBucket(ctx context.Context, bucket *Bucket) error {
 	data, err := json.Marshal(bucket)
 	if err != nil {
 		return err
@@ -22,7 +22,7 @@ func (s *RaftStore) CreateBucket(ctx context.Context, bucket *Bucket) error {
 	return s.apply(&command{Type: cmdCreateBucket, Data: data})
 }
 
-func (s *RaftStore) GetBucket(ctx context.Context, name string) (*Bucket, error) {
+func (s *DragonboatStore) GetBucket(ctx context.Context, name string) (*Bucket, error) {
 	key := []byte(prefixBucket + name)
 	data, err := s.get(key)
 	if err == badger.ErrKeyNotFound {
@@ -39,7 +39,7 @@ func (s *RaftStore) GetBucket(ctx context.Context, name string) (*Bucket, error)
 	return &bucket, nil
 }
 
-func (s *RaftStore) DeleteBucket(ctx context.Context, name string) error {
+func (s *DragonboatStore) DeleteBucket(ctx context.Context, name string) error {
 	data, err := json.Marshal(name)
 	if err != nil {
 		return err
@@ -47,7 +47,7 @@ func (s *RaftStore) DeleteBucket(ctx context.Context, name string) error {
 	return s.apply(&command{Type: cmdDeleteBucket, Data: data})
 }
 
-func (s *RaftStore) ListBuckets(ctx context.Context, owner string) ([]*Bucket, error) {
+func (s *DragonboatStore) ListBuckets(ctx context.Context, owner string) ([]*Bucket, error) {
 	results, err := s.scan([]byte(prefixBucket))
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (s *RaftStore) ListBuckets(ctx context.Context, owner string) ([]*Bucket, e
 	return buckets, nil
 }
 
-func (s *RaftStore) UpdateBucket(ctx context.Context, bucket *Bucket) error {
+func (s *DragonboatStore) UpdateBucket(ctx context.Context, bucket *Bucket) error {
 	data, err := json.Marshal(bucket)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (s *RaftStore) UpdateBucket(ctx context.Context, bucket *Bucket) error {
 
 // Object metadata operations
 
-func (s *RaftStore) PutObjectMeta(ctx context.Context, meta *ObjectMeta) error {
+func (s *DragonboatStore) PutObjectMeta(ctx context.Context, meta *ObjectMeta) error {
 	data, err := json.Marshal(meta)
 	if err != nil {
 		return err
@@ -91,7 +91,7 @@ func (s *RaftStore) PutObjectMeta(ctx context.Context, meta *ObjectMeta) error {
 	return s.apply(&command{Type: cmdPutObjectMeta, Data: data})
 }
 
-func (s *RaftStore) GetObjectMeta(ctx context.Context, bucket, key string) (*ObjectMeta, error) {
+func (s *DragonboatStore) GetObjectMeta(ctx context.Context, bucket, key string) (*ObjectMeta, error) {
 	dbKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, key))
 	data, err := s.get(dbKey)
 	if err == badger.ErrKeyNotFound {
@@ -108,7 +108,7 @@ func (s *RaftStore) GetObjectMeta(ctx context.Context, bucket, key string) (*Obj
 	return &meta, nil
 }
 
-func (s *RaftStore) DeleteObjectMeta(ctx context.Context, bucket, key string) error {
+func (s *DragonboatStore) DeleteObjectMeta(ctx context.Context, bucket, key string) error {
 	data, err := json.Marshal(struct {
 		Bucket string `json:"bucket"`
 		Key    string `json:"key"`
@@ -119,7 +119,7 @@ func (s *RaftStore) DeleteObjectMeta(ctx context.Context, bucket, key string) er
 	return s.apply(&command{Type: cmdDeleteObjectMeta, Data: data})
 }
 
-func (s *RaftStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*ObjectListing, error) {
+func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*ObjectListing, error) {
 	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObject, bucket))
 
 	var objects []*ObjectMeta
@@ -214,7 +214,7 @@ func (s *RaftStore) ListObjects(ctx context.Context, bucket, prefix, delimiter s
 
 // Version operations
 
-func (s *RaftStore) GetObjectVersion(ctx context.Context, bucket, key, versionID string) (*ObjectMeta, error) {
+func (s *DragonboatStore) GetObjectVersion(ctx context.Context, bucket, key, versionID string) (*ObjectMeta, error) {
 	// If no version ID specified or "null", get the current version
 	if versionID == "" || versionID == "null" {
 		return s.GetObjectMeta(ctx, bucket, key)
@@ -237,7 +237,7 @@ func (s *RaftStore) GetObjectVersion(ctx context.Context, bucket, key, versionID
 	return &meta, nil
 }
 
-func (s *RaftStore) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (*VersionListing, error) {
+func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (*VersionListing, error) {
 	// Prefix for all versions in this bucket
 	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObjectVersion, bucket))
 
@@ -442,7 +442,7 @@ func (s *RaftStore) ListObjectVersions(ctx context.Context, bucket, prefix, deli
 	}, nil
 }
 
-func (s *RaftStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {
+func (s *DragonboatStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {
 	data, err := json.Marshal(struct {
 		Bucket    string `json:"bucket"`
 		Key       string `json:"key"`
@@ -454,7 +454,7 @@ func (s *RaftStore) DeleteObjectVersion(ctx context.Context, bucket, key, versio
 	return s.apply(&command{Type: cmdDeleteObjectVersion, Data: data})
 }
 
-func (s *RaftStore) PutObjectMetaVersioned(ctx context.Context, meta *ObjectMeta, preserveOldVersions bool) error {
+func (s *DragonboatStore) PutObjectMetaVersioned(ctx context.Context, meta *ObjectMeta, preserveOldVersions bool) error {
 	data, err := json.Marshal(struct {
 		Meta                *ObjectMeta `json:"meta"`
 		PreserveOldVersions bool        `json:"preserve_old_versions"`
@@ -467,7 +467,7 @@ func (s *RaftStore) PutObjectMetaVersioned(ctx context.Context, meta *ObjectMeta
 
 // Multipart upload operations
 
-func (s *RaftStore) CreateMultipartUpload(ctx context.Context, upload *MultipartUpload) error {
+func (s *DragonboatStore) CreateMultipartUpload(ctx context.Context, upload *MultipartUpload) error {
 	data, err := json.Marshal(upload)
 	if err != nil {
 		return err
@@ -475,7 +475,7 @@ func (s *RaftStore) CreateMultipartUpload(ctx context.Context, upload *Multipart
 	return s.apply(&command{Type: cmdCreateMultipartUpload, Data: data})
 }
 
-func (s *RaftStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*MultipartUpload, error) {
+func (s *DragonboatStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*MultipartUpload, error) {
 	dbKey := []byte(fmt.Sprintf("%s%s/%s/%s", prefixMultipart, bucket, key, uploadID))
 	data, err := s.get(dbKey)
 	if err == badger.ErrKeyNotFound {
@@ -492,7 +492,7 @@ func (s *RaftStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadI
 	return &upload, nil
 }
 
-func (s *RaftStore) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
+func (s *DragonboatStore) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	data, err := json.Marshal(struct {
 		Bucket   string `json:"bucket"`
 		Key      string `json:"key"`
@@ -504,7 +504,7 @@ func (s *RaftStore) AbortMultipartUpload(ctx context.Context, bucket, key, uploa
 	return s.apply(&command{Type: cmdAbortMultipartUpload, Data: data})
 }
 
-func (s *RaftStore) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
+func (s *DragonboatStore) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	data, err := json.Marshal(struct {
 		Bucket   string `json:"bucket"`
 		Key      string `json:"key"`
@@ -516,7 +516,7 @@ func (s *RaftStore) CompleteMultipartUpload(ctx context.Context, bucket, key, up
 	return s.apply(&command{Type: cmdCompleteMultipartUpload, Data: data})
 }
 
-func (s *RaftStore) AddUploadPart(ctx context.Context, bucket, key, uploadID string, part *UploadPart) error {
+func (s *DragonboatStore) AddUploadPart(ctx context.Context, bucket, key, uploadID string, part *UploadPart) error {
 	data, err := json.Marshal(struct {
 		Bucket   string     `json:"bucket"`
 		Key      string     `json:"key"`
@@ -529,7 +529,7 @@ func (s *RaftStore) AddUploadPart(ctx context.Context, bucket, key, uploadID str
 	return s.apply(&command{Type: cmdAddUploadPart, Data: data})
 }
 
-func (s *RaftStore) ListMultipartUploads(ctx context.Context, bucket string) ([]*MultipartUpload, error) {
+func (s *DragonboatStore) ListMultipartUploads(ctx context.Context, bucket string) ([]*MultipartUpload, error) {
 	prefix := []byte(fmt.Sprintf("%s%s/", prefixMultipart, bucket))
 	results, err := s.scan(prefix)
 	if err != nil {
@@ -549,7 +549,7 @@ func (s *RaftStore) ListMultipartUploads(ctx context.Context, bucket string) ([]
 
 // User operations
 
-func (s *RaftStore) CreateUser(ctx context.Context, user *User) error {
+func (s *DragonboatStore) CreateUser(ctx context.Context, user *User) error {
 	data, err := json.Marshal(user)
 	if err != nil {
 		return err
@@ -557,7 +557,7 @@ func (s *RaftStore) CreateUser(ctx context.Context, user *User) error {
 	return s.apply(&command{Type: cmdCreateUser, Data: data})
 }
 
-func (s *RaftStore) GetUser(ctx context.Context, id string) (*User, error) {
+func (s *DragonboatStore) GetUser(ctx context.Context, id string) (*User, error) {
 	key := []byte(prefixUser + id)
 	data, err := s.get(key)
 	if err == badger.ErrKeyNotFound {
@@ -574,7 +574,7 @@ func (s *RaftStore) GetUser(ctx context.Context, id string) (*User, error) {
 	return &user, nil
 }
 
-func (s *RaftStore) GetUserByUsername(ctx context.Context, username string) (*User, error) {
+func (s *DragonboatStore) GetUserByUsername(ctx context.Context, username string) (*User, error) {
 	// Get user ID from username mapping
 	usernameKey := []byte(prefixUsername + username)
 	userID, err := s.get(usernameKey)
@@ -588,7 +588,7 @@ func (s *RaftStore) GetUserByUsername(ctx context.Context, username string) (*Us
 	return s.GetUser(ctx, string(userID))
 }
 
-func (s *RaftStore) UpdateUser(ctx context.Context, user *User) error {
+func (s *DragonboatStore) UpdateUser(ctx context.Context, user *User) error {
 	data, err := json.Marshal(user)
 	if err != nil {
 		return err
@@ -596,7 +596,7 @@ func (s *RaftStore) UpdateUser(ctx context.Context, user *User) error {
 	return s.apply(&command{Type: cmdUpdateUser, Data: data})
 }
 
-func (s *RaftStore) DeleteUser(ctx context.Context, id string) error {
+func (s *DragonboatStore) DeleteUser(ctx context.Context, id string) error {
 	data, err := json.Marshal(id)
 	if err != nil {
 		return err
@@ -604,7 +604,7 @@ func (s *RaftStore) DeleteUser(ctx context.Context, id string) error {
 	return s.apply(&command{Type: cmdDeleteUser, Data: data})
 }
 
-func (s *RaftStore) ListUsers(ctx context.Context) ([]*User, error) {
+func (s *DragonboatStore) ListUsers(ctx context.Context) ([]*User, error) {
 	results, err := s.scan([]byte(prefixUser))
 	if err != nil {
 		return nil, err
@@ -628,7 +628,7 @@ func (s *RaftStore) ListUsers(ctx context.Context) ([]*User, error) {
 
 // Access key operations
 
-func (s *RaftStore) CreateAccessKey(ctx context.Context, key *AccessKey) error {
+func (s *DragonboatStore) CreateAccessKey(ctx context.Context, key *AccessKey) error {
 	data, err := json.Marshal(key)
 	if err != nil {
 		return err
@@ -636,7 +636,7 @@ func (s *RaftStore) CreateAccessKey(ctx context.Context, key *AccessKey) error {
 	return s.apply(&command{Type: cmdCreateAccessKey, Data: data})
 }
 
-func (s *RaftStore) GetAccessKey(ctx context.Context, accessKeyID string) (*AccessKey, error) {
+func (s *DragonboatStore) GetAccessKey(ctx context.Context, accessKeyID string) (*AccessKey, error) {
 	key := []byte(prefixAccessKey + accessKeyID)
 	data, err := s.get(key)
 	if err == badger.ErrKeyNotFound {
@@ -653,7 +653,7 @@ func (s *RaftStore) GetAccessKey(ctx context.Context, accessKeyID string) (*Acce
 	return &accessKey, nil
 }
 
-func (s *RaftStore) DeleteAccessKey(ctx context.Context, accessKeyID string) error {
+func (s *DragonboatStore) DeleteAccessKey(ctx context.Context, accessKeyID string) error {
 	data, err := json.Marshal(accessKeyID)
 	if err != nil {
 		return err
@@ -661,7 +661,7 @@ func (s *RaftStore) DeleteAccessKey(ctx context.Context, accessKeyID string) err
 	return s.apply(&command{Type: cmdDeleteAccessKey, Data: data})
 }
 
-func (s *RaftStore) ListAccessKeys(ctx context.Context, userID string) ([]*AccessKey, error) {
+func (s *DragonboatStore) ListAccessKeys(ctx context.Context, userID string) ([]*AccessKey, error) {
 	results, err := s.scan([]byte(prefixAccessKey))
 	if err != nil {
 		return nil, err
@@ -682,7 +682,7 @@ func (s *RaftStore) ListAccessKeys(ctx context.Context, userID string) ([]*Acces
 
 // Policy operations
 
-func (s *RaftStore) CreatePolicy(ctx context.Context, policy *Policy) error {
+func (s *DragonboatStore) CreatePolicy(ctx context.Context, policy *Policy) error {
 	data, err := json.Marshal(policy)
 	if err != nil {
 		return err
@@ -690,7 +690,7 @@ func (s *RaftStore) CreatePolicy(ctx context.Context, policy *Policy) error {
 	return s.apply(&command{Type: cmdCreatePolicy, Data: data})
 }
 
-func (s *RaftStore) GetPolicy(ctx context.Context, name string) (*Policy, error) {
+func (s *DragonboatStore) GetPolicy(ctx context.Context, name string) (*Policy, error) {
 	key := []byte(prefixPolicy + name)
 	data, err := s.get(key)
 	if err == badger.ErrKeyNotFound {
@@ -707,7 +707,7 @@ func (s *RaftStore) GetPolicy(ctx context.Context, name string) (*Policy, error)
 	return &policy, nil
 }
 
-func (s *RaftStore) UpdatePolicy(ctx context.Context, policy *Policy) error {
+func (s *DragonboatStore) UpdatePolicy(ctx context.Context, policy *Policy) error {
 	data, err := json.Marshal(policy)
 	if err != nil {
 		return err
@@ -715,7 +715,7 @@ func (s *RaftStore) UpdatePolicy(ctx context.Context, policy *Policy) error {
 	return s.apply(&command{Type: cmdUpdatePolicy, Data: data})
 }
 
-func (s *RaftStore) DeletePolicy(ctx context.Context, name string) error {
+func (s *DragonboatStore) DeletePolicy(ctx context.Context, name string) error {
 	data, err := json.Marshal(name)
 	if err != nil {
 		return err
@@ -723,7 +723,7 @@ func (s *RaftStore) DeletePolicy(ctx context.Context, name string) error {
 	return s.apply(&command{Type: cmdDeletePolicy, Data: data})
 }
 
-func (s *RaftStore) ListPolicies(ctx context.Context) ([]*Policy, error) {
+func (s *DragonboatStore) ListPolicies(ctx context.Context) ([]*Policy, error) {
 	results, err := s.scan([]byte(prefixPolicy))
 	if err != nil {
 		return nil, err
@@ -747,23 +747,25 @@ func (s *RaftStore) ListPolicies(ctx context.Context) ([]*Policy, error) {
 
 // Cluster operations
 
-func (s *RaftStore) GetClusterInfo(ctx context.Context) (*ClusterInfo, error) {
+func (s *DragonboatStore) GetClusterInfo(ctx context.Context) (*ClusterInfo, error) {
 	nodes, err := s.ListNodes(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	leaderID, _, _, _ := s.nodeHost.GetLeaderID(s.shardID)
 	leaderAddr, _ := s.LeaderAddress()
+
 	return &ClusterInfo{
-		ClusterID:     s.config.NodeID, // Use node ID as cluster ID for now
-		LeaderID:      string(s.raft.Leader()),
+		ClusterID:     fmt.Sprintf("%d", s.shardID),
+		LeaderID:      fmt.Sprintf("%d", leaderID),
 		LeaderAddress: leaderAddr,
 		Nodes:         nodes,
-		RaftState:     s.raft.State().String(),
+		RaftState:     s.State(),
 	}, nil
 }
 
-func (s *RaftStore) AddNode(ctx context.Context, node *NodeInfo) error {
+func (s *DragonboatStore) AddNode(ctx context.Context, node *NodeInfo) error {
 	data, err := json.Marshal(node)
 	if err != nil {
 		return err
@@ -771,7 +773,7 @@ func (s *RaftStore) AddNode(ctx context.Context, node *NodeInfo) error {
 	return s.apply(&command{Type: cmdAddNode, Data: data})
 }
 
-func (s *RaftStore) RemoveNode(ctx context.Context, nodeID string) error {
+func (s *DragonboatStore) RemoveNode(ctx context.Context, nodeID string) error {
 	data, err := json.Marshal(nodeID)
 	if err != nil {
 		return err
@@ -779,7 +781,7 @@ func (s *RaftStore) RemoveNode(ctx context.Context, nodeID string) error {
 	return s.apply(&command{Type: cmdRemoveNode, Data: data})
 }
 
-func (s *RaftStore) ListNodes(ctx context.Context) ([]*NodeInfo, error) {
+func (s *DragonboatStore) ListNodes(ctx context.Context) ([]*NodeInfo, error) {
 	results, err := s.scan([]byte(prefixNode))
 	if err != nil {
 		return nil, err
@@ -799,7 +801,7 @@ func (s *RaftStore) ListNodes(ctx context.Context) ([]*NodeInfo, error) {
 // Audit operations
 
 // StoreAuditEvent stores an audit event
-func (s *RaftStore) StoreAuditEvent(ctx context.Context, event *audit.AuditEvent) error {
+func (s *DragonboatStore) StoreAuditEvent(ctx context.Context, event *audit.AuditEvent) error {
 	data, err := json.Marshal(event)
 	if err != nil {
 		return err
@@ -808,7 +810,7 @@ func (s *RaftStore) StoreAuditEvent(ctx context.Context, event *audit.AuditEvent
 }
 
 // ListAuditEvents lists audit events with filtering
-func (s *RaftStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) {
+func (s *DragonboatStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) {
 	prefix := []byte(prefixAudit)
 
 	var events []audit.AuditEvent
@@ -913,7 +915,7 @@ func (s *RaftStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilte
 }
 
 // DeleteOldAuditEvents deletes audit events older than the specified time
-func (s *RaftStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error) {
+func (s *DragonboatStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error) {
 	// First, collect the keys to delete
 	var keysToDelete []string
 
@@ -946,7 +948,7 @@ func (s *RaftStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) 
 		return 0, err
 	}
 
-	// Delete the collected events through Raft
+	// Delete the collected events through Dragonboat
 	deleted := 0
 	for _, id := range keysToDelete {
 		data, err := json.Marshal(id)

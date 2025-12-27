@@ -535,28 +535,60 @@ iceberg:
 
 ## Cluster Configuration
 
-### Raft Consensus Tuning
+### Dragonboat Consensus Tuning
+
+Dragonboat uses `config.Config` for Raft shard configuration and `config.NodeHostConfig` for the NodeHost.
 
 ```yaml
 # config.yaml
 cluster:
-  raft:
-    # Election timeout (higher = more stable, lower = faster failover)
-    election_timeout: 1000ms
+  # Shard and replica configuration (config.Config)
+  shard_id: 1
+  replica_id: 1  # Must be unique per node (uint64)
 
-    # Heartbeat interval
-    heartbeat_interval: 100ms
+  # RTT-based timeouts (Dragonboat uses RTT multiples, not durations)
+  rtt_millisecond: 200  # Base RTT between nodes
+  raft_election_rtt: 10  # Election timeout = 10 * RTT = 2000ms
+  raft_heartbeat_rtt: 1  # Heartbeat = 1 * RTT = 200ms
 
-    # Snapshot settings
-    snapshot:
-      threshold: 10000
-      retain: 3
+  # WAL directory (use fastest storage available - NVMe recommended)
+  wal_dir: /fast/nvme/wal
+  node_host_dir: /var/lib/nebulaio/nodehost
 
-    # Log compaction
-    log_compaction:
-      enabled: true
-      threshold: 100000
+  # Snapshot settings
+  snapshot_entries: 1024  # Create snapshot every N entries
+  compaction_overhead: 500  # Entries to retain after snapshot
+
+  # Quorum checking (recommended for production)
+  check_quorum: true
 ```
+
+**NodeHost Configuration** (applied at NodeHost level):
+
+```yaml
+cluster:
+  # NodeHost settings
+  raft_address: 10.0.1.10:9003  # Address for Raft communication
+
+  # Advanced NodeHost tuning (config.NodeHostConfig)
+  max_send_queue_size: 0  # 0 = use Dragonboat defaults
+  max_receive_queue_size: 0
+```
+
+**Performance Notes**:
+- Dragonboat achieves 1.25M writes/sec with 1.3ms latency
+- WAL directory on NVMe can improve performance by 10-20%
+- Batch proposals are automatically enabled for high throughput
+- Pipelined replication reduces round-trip latency
+- `GetLeaderID` returns 4 values: `(leaderID, term, valid, error)` - always check `valid` before using
+- Use `SyncRequestAddNonVoting` for adding non-voting members (not observers)
+- Use `SyncRequestAddReplica` for adding voting members
+
+**Dragonboat API Notes**:
+- Leader operations: `SyncPropose`, `SyncRead`
+- Membership changes: `SyncRequestAddReplica`, `SyncRequestAddNonVoting`, `SyncRequestDeleteReplica`
+- Snapshots: `SyncRequestSnapshot`
+- Leadership transfer: `RequestLeaderTransfer`
 
 ### Replication Settings
 

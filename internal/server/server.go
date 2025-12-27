@@ -36,7 +36,7 @@ type Server struct {
 	cfg *config.Config
 
 	// Core services
-	metaStore      *metadata.RaftStore
+	metaStore      *metadata.DragonboatStore
 	storageBackend backend.MultipartBackend
 	authService    *auth.Service
 	bucketService  *bucket.Service
@@ -73,19 +73,30 @@ func New(cfg *config.Config) (*Server, error) {
 	metrics.Init(cfg.NodeID)
 	log.Info().Str("node_id", cfg.NodeID).Msg("Metrics initialized")
 
-	// Initialize metadata store (Raft-backed)
+	// Initialize metadata store (Dragonboat-backed)
 	// Use advertise address for raft binding if specified, otherwise use localhost for single-node
 	raftBindAddr := cfg.Cluster.AdvertiseAddress
 	if raftBindAddr == "" {
 		raftBindAddr = "127.0.0.1"
 	}
 	var err error
-	srv.metaStore, err = metadata.NewRaftStore(metadata.RaftConfig{
-		NodeID:    cfg.NodeID,
-		DataDir:   cfg.DataDir,
-		Bootstrap: cfg.Cluster.Bootstrap,
-		RaftBind:  fmt.Sprintf("%s:%d", raftBindAddr, cfg.Cluster.RaftPort),
-	})
+
+	// Create Dragonboat store configuration
+	storeConfig := metadata.DragonboatConfig{
+		NodeID:      cfg.Cluster.ReplicaID,
+		ShardID:     cfg.Cluster.ShardID,
+		DataDir:     cfg.DataDir,
+		RaftAddress: fmt.Sprintf("%s:%d", raftBindAddr, cfg.Cluster.RaftPort),
+		Bootstrap:   cfg.Cluster.Bootstrap,
+	}
+
+	if cfg.Cluster.Bootstrap {
+		storeConfig.InitialMembers = map[uint64]string{
+			cfg.Cluster.ReplicaID: storeConfig.RaftAddress,
+		}
+	}
+
+	srv.metaStore, err = metadata.NewDragonboatStore(storeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize metadata store: %w", err)
 	}
@@ -103,8 +114,13 @@ func New(cfg *config.Config) (*Server, error) {
 		Version:       Version,
 	})
 
-	// Set Raft instance for discovery
-	srv.discovery.SetRaft(srv.metaStore.GetRaft())
+	// Set NodeHost for discovery
+	// TODO: Temporarily commented out until DragonboatStore is fully implemented
+	// Once DragonboatStore exists with GetNodeHost() method, uncomment this:
+	// srv.discovery.SetNodeHost(srv.metaStore.GetNodeHost(), storeConfig.ShardID)
+	
+	// Old RaftStore approach (no longer compatible):
+	// srv.discovery.SetRaft(srv.metaStore.GetRaft())
 
 	// Initialize storage backend
 	srv.storageBackend, err = fs.New(fs.Config{
@@ -413,12 +429,12 @@ func (s *Server) runMetricsCollector(ctx context.Context) {
 // collectMetrics gathers system metrics and updates Prometheus gauges
 func (s *Server) collectMetrics(ctx context.Context) {
 	// Update Raft state metrics
+	shardID := fmt.Sprintf("%d", s.cfg.Cluster.ShardID)
 	isLeader := s.metaStore.IsLeader()
-	metrics.SetRaftLeader(isLeader)
+	metrics.SetRaftLeader(shardID, isLeader)
 
-	// Get cluster info and update Raft state
+	// Get cluster info and update node count
 	if clusterInfo, err := s.metaStore.GetClusterInfo(ctx); err == nil {
-		metrics.SetRaftState(s.cfg.NodeID, clusterInfo.RaftState)
 		metrics.SetClusterNodesTotal(len(clusterInfo.Nodes))
 	}
 
@@ -487,8 +503,22 @@ func (s *Server) Discovery() *cluster.Discovery {
 }
 
 // MetaStore returns the metadata store (for admin API)
-func (s *Server) MetaStore() *metadata.RaftStore {
+func (s *Server) MetaStore() *metadata.DragonboatStore {
 	return s.metaStore
+}
+
+// hashNodeID generates a numeric replica ID from a string node ID
+// This is a simple hash function for converting node IDs to uint64 replica IDs
+func hashNodeID(nodeID string) uint64 {
+	var hash uint64 = 5381
+	for _, c := range nodeID {
+		hash = ((hash << 5) + hash) + uint64(c)
+	}
+	// Ensure we get a non-zero value
+	if hash == 0 {
+		hash = 1
+	}
+	return hash
 }
 
 // lifecycleObjectService adapts object.Service to lifecycle.ObjectService interface

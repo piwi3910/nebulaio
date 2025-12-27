@@ -232,7 +232,8 @@ func (c *Checker) IsReady(ctx context.Context) bool {
 	}
 
 	// Check if we're the leader or have a leader
-	return c.store.IsLeader() || c.store.LeaderAddress() != ""
+	leaderAddr, _ := c.store.LeaderAddress()
+	return c.store.IsLeader() || leaderAddr != ""
 }
 
 // IsLive checks if the service is alive

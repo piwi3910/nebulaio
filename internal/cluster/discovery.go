@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/hashicorp/raft"
+	"github.com/lni/dragonboat/v4"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,7 +31,8 @@ type Discovery struct {
 	config     DiscoveryConfig
 	members    map[string]*NodeInfo
 	mu         sync.RWMutex
-	raft       *raft.Raft
+	nodeHost   *dragonboat.NodeHost
+	shardID    uint64
 	membership *Membership
 
 	ctx    context.Context
@@ -73,11 +75,12 @@ func NewDiscovery(config DiscoveryConfig) *Discovery {
 	}
 }
 
-// SetRaft sets the Raft instance for the discovery
-func (d *Discovery) SetRaft(r *raft.Raft) {
+// SetNodeHost sets the NodeHost instance and shard ID for the discovery
+func (d *Discovery) SetNodeHost(nh *dragonboat.NodeHost, shardID uint64) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.raft = r
+	d.nodeHost = nh
+	d.shardID = shardID
 }
 
 // Start starts the discovery service
@@ -318,30 +321,68 @@ func (d *Discovery) LocalNode() *NodeInfo {
 
 // IsLeader returns true if the local node is the Raft leader
 func (d *Discovery) IsLeader() bool {
-	if d.raft == nil {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	if d.nodeHost == nil {
 		return false
 	}
-	return d.raft.State() == raft.Leader
+
+	leaderID, _, valid, err := d.nodeHost.GetLeaderID(d.shardID)
+	if err != nil || !valid {
+		return false
+	}
+
+	// Check if we are the leader
+	info := d.nodeHost.GetNodeHostInfo(dragonboat.DefaultNodeHostInfoOption)
+	for _, ci := range info.ShardInfoList {
+		if ci.ShardID == d.shardID {
+			return ci.ReplicaID == leaderID
+		}
+	}
+	return false
 }
 
 // LeaderID returns the ID of the current leader
 func (d *Discovery) LeaderID() string {
-	if d.raft == nil {
-		return ""
-	}
-
-	leaderAddr := string(d.raft.Leader())
-	if leaderAddr == "" {
-		return ""
-	}
-
-	// Find node by raft address
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
+	if d.nodeHost == nil {
+		return ""
+	}
+
+	leaderID, _, valid, err := d.nodeHost.GetLeaderID(d.shardID)
+	if err != nil || !valid {
+		return ""
+	}
+
+	// Get membership to find node info
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	membership, err := d.nodeHost.SyncGetShardMembership(ctx, d.shardID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get shard membership")
+		return ""
+	}
+
+	// Find the leader in our members map by replica ID
 	for _, info := range d.members {
-		if info.RaftAddr == leaderAddr {
+		nodeReplicaID := hashNodeID(info.NodeID)
+		if nodeReplicaID == leaderID {
 			return info.NodeID
+		}
+	}
+
+	// If not found in our members, check if it's in the membership
+	for nodeID := range membership.Nodes {
+		for _, info := range d.members {
+			if hashNodeID(info.NodeID) == nodeID {
+				if nodeID == leaderID {
+					return info.NodeID
+				}
+			}
 		}
 	}
 
@@ -376,8 +417,8 @@ func (d *Discovery) onNodeJoin(nodeID string, meta []byte) {
 	}
 	d.mu.Unlock()
 
-	// If we're the leader, add the new node to Raft cluster
-	if d.raft != nil && d.raft.State() == raft.Leader {
+	// If we're the leader, add the new node to Dragonboat cluster
+	if d.IsLeader() {
 		d.addRaftVoter(nodeID, nodeMeta.RaftAddr)
 	}
 }
@@ -392,8 +433,8 @@ func (d *Discovery) onNodeLeave(nodeID string) {
 	}
 	d.mu.Unlock()
 
-	// If we're the leader, remove the node from Raft cluster
-	if d.raft != nil && d.raft.State() == raft.Leader {
+	// If we're the leader, remove the node from Dragonboat cluster
+	if d.IsLeader() {
 		d.removeRaftVoter(nodeID)
 	}
 }
@@ -418,113 +459,233 @@ func (d *Discovery) onNodeUpdate(nodeID string, meta []byte) {
 	d.mu.Unlock()
 }
 
-// addRaftVoter adds a node as a Raft voter
+// addRaftVoter adds a node as a Dragonboat replica
 func (d *Discovery) addRaftVoter(nodeID, raftAddr string) {
-	if d.raft == nil {
+	d.mu.RLock()
+	nodeHost := d.nodeHost
+	shardID := d.shardID
+	d.mu.RUnlock()
+
+	if nodeHost == nil {
 		return
 	}
 
 	log.Info().
 		Str("node_id", nodeID).
 		Str("raft_addr", raftAddr).
-		Msg("Adding node as Raft voter")
+		Msg("Adding node as Dragonboat replica")
 
-	future := d.raft.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(raftAddr), 0, 10*time.Second)
-	if err := future.Error(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Get current membership to obtain config change index
+	membership, err := nodeHost.SyncGetShardMembership(ctx, shardID)
+	if err != nil {
 		log.Error().Err(err).
 			Str("node_id", nodeID).
-			Msg("Failed to add Raft voter")
-	}
-}
-
-// removeRaftVoter removes a node from the Raft cluster
-func (d *Discovery) removeRaftVoter(nodeID string) {
-	if d.raft == nil {
+			Msg("Failed to get shard membership")
 		return
 	}
 
-	log.Info().Str("node_id", nodeID).Msg("Removing node from Raft cluster")
-
-	future := d.raft.RemoveServer(raft.ServerID(nodeID), 0, 10*time.Second)
-	if err := future.Error(); err != nil {
+	// Add the replica
+	replicaID := hashNodeID(nodeID)
+	if err := nodeHost.SyncRequestAddReplica(ctx, shardID, replicaID, raftAddr, membership.ConfigChangeID); err != nil {
 		log.Error().Err(err).
 			Str("node_id", nodeID).
-			Msg("Failed to remove Raft voter")
+			Uint64("replica_id", replicaID).
+			Msg("Failed to add Dragonboat replica")
 	}
 }
 
-// AddVoter manually adds a Raft voter (for API use)
+// removeRaftVoter removes a node from the Dragonboat cluster
+func (d *Discovery) removeRaftVoter(nodeID string) {
+	d.mu.RLock()
+	nodeHost := d.nodeHost
+	shardID := d.shardID
+	d.mu.RUnlock()
+
+	if nodeHost == nil {
+		return
+	}
+
+	log.Info().Str("node_id", nodeID).Msg("Removing node from Dragonboat cluster")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Get current membership to obtain config change index
+	membership, err := nodeHost.SyncGetShardMembership(ctx, shardID)
+	if err != nil {
+		log.Error().Err(err).
+			Str("node_id", nodeID).
+			Msg("Failed to get shard membership")
+		return
+	}
+
+	// Remove the replica
+	replicaID := hashNodeID(nodeID)
+	if err := nodeHost.SyncRequestDeleteReplica(ctx, shardID, replicaID, membership.ConfigChangeID); err != nil {
+		log.Error().Err(err).
+			Str("node_id", nodeID).
+			Uint64("replica_id", replicaID).
+			Msg("Failed to remove Dragonboat replica")
+	}
+}
+
+// AddVoter manually adds a Dragonboat replica (for API use)
 func (d *Discovery) AddVoter(nodeID, raftAddr string) error {
-	if d.raft == nil {
-		return fmt.Errorf("raft not initialized")
+	d.mu.RLock()
+	nodeHost := d.nodeHost
+	shardID := d.shardID
+	d.mu.RUnlock()
+
+	if nodeHost == nil {
+		return fmt.Errorf("nodeHost not initialized")
 	}
 
-	if d.raft.State() != raft.Leader {
+	if !d.IsLeader() {
 		return fmt.Errorf("not leader")
 	}
 
-	future := d.raft.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(raftAddr), 0, 10*time.Second)
-	return future.Error()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Get current membership to obtain config change index
+	membership, err := nodeHost.SyncGetShardMembership(ctx, shardID)
+	if err != nil {
+		return fmt.Errorf("failed to get shard membership: %w", err)
+	}
+
+	// Add the replica
+	replicaID := hashNodeID(nodeID)
+	if err := nodeHost.SyncRequestAddReplica(ctx, shardID, replicaID, raftAddr, membership.ConfigChangeID); err != nil {
+		return fmt.Errorf("failed to add replica: %w", err)
+	}
+
+	return nil
 }
 
-// RemoveVoter manually removes a Raft voter (for API use)
+// RemoveVoter manually removes a Dragonboat replica (for API use)
 func (d *Discovery) RemoveVoter(nodeID string) error {
-	if d.raft == nil {
-		return fmt.Errorf("raft not initialized")
+	d.mu.RLock()
+	nodeHost := d.nodeHost
+	shardID := d.shardID
+	d.mu.RUnlock()
+
+	if nodeHost == nil {
+		return fmt.Errorf("nodeHost not initialized")
 	}
 
-	if d.raft.State() != raft.Leader {
+	if !d.IsLeader() {
 		return fmt.Errorf("not leader")
 	}
 
-	future := d.raft.RemoveServer(raft.ServerID(nodeID), 0, 10*time.Second)
-	return future.Error()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Get current membership to obtain config change index
+	membership, err := nodeHost.SyncGetShardMembership(ctx, shardID)
+	if err != nil {
+		return fmt.Errorf("failed to get shard membership: %w", err)
+	}
+
+	// Remove the replica
+	replicaID := hashNodeID(nodeID)
+	if err := nodeHost.SyncRequestDeleteReplica(ctx, shardID, replicaID, membership.ConfigChangeID); err != nil {
+		return fmt.Errorf("failed to remove replica: %w", err)
+	}
+
+	return nil
 }
 
 // TransferLeadership transfers leadership to another node
 func (d *Discovery) TransferLeadership(targetID string) error {
-	if d.raft == nil {
-		return fmt.Errorf("raft not initialized")
+	d.mu.RLock()
+	nodeHost := d.nodeHost
+	shardID := d.shardID
+	d.mu.RUnlock()
+
+	if nodeHost == nil {
+		return fmt.Errorf("nodeHost not initialized")
 	}
 
-	if d.raft.State() != raft.Leader {
+	if !d.IsLeader() {
 		return fmt.Errorf("not leader")
 	}
 
+	// Get target replica ID
+	targetReplicaID := hashNodeID(targetID)
+
+	// Request leadership transfer
+	if err := nodeHost.RequestLeaderTransfer(shardID, targetReplicaID); err != nil {
+		return fmt.Errorf("failed to transfer leadership: %w", err)
+	}
+
+	return nil
+}
+
+// GetRaftStats returns Dragonboat cluster statistics
+func (d *Discovery) GetRaftStats() map[string]string {
 	d.mu.RLock()
-	targetNode, ok := d.members[targetID]
+	nodeHost := d.nodeHost
+	shardID := d.shardID
 	d.mu.RUnlock()
 
-	if !ok {
-		return fmt.Errorf("target node not found: %s", targetID)
-	}
-
-	future := d.raft.LeadershipTransferToServer(
-		raft.ServerID(targetID),
-		raft.ServerAddress(targetNode.RaftAddr),
-	)
-	return future.Error()
-}
-
-// GetRaftStats returns Raft cluster statistics
-func (d *Discovery) GetRaftStats() map[string]string {
-	if d.raft == nil {
+	if nodeHost == nil {
 		return nil
 	}
-	return d.raft.Stats()
+
+	stats := make(map[string]string)
+	info := nodeHost.GetNodeHostInfo(dragonboat.DefaultNodeHostInfoOption)
+
+	// Find our shard info
+	for _, ci := range info.ShardInfoList {
+		if ci.ShardID == shardID {
+			stats["shard_id"] = fmt.Sprintf("%d", ci.ShardID)
+			stats["replica_id"] = fmt.Sprintf("%d", ci.ReplicaID)
+			stats["is_leader"] = fmt.Sprintf("%t", ci.IsLeader)
+			stats["state_machine_type"] = fmt.Sprintf("%d", ci.StateMachineType)
+			stats["pending"] = fmt.Sprintf("%t", ci.Pending)
+			break
+		}
+	}
+
+	return stats
 }
 
-// GetRaftConfiguration returns the current Raft configuration
-func (d *Discovery) GetRaftConfiguration() (raft.Configuration, error) {
-	if d.raft == nil {
-		return raft.Configuration{}, fmt.Errorf("raft not initialized")
+// ShardMembershipInfo represents the shard membership configuration
+type ShardMembershipInfo struct {
+	ConfigChangeID  uint64
+	Nodes           map[uint64]string
+	Witnesses       map[uint64]string
+	Removed         map[uint64]struct{}
+}
+
+// GetRaftConfiguration returns the current Dragonboat shard membership
+func (d *Discovery) GetRaftConfiguration() (*ShardMembershipInfo, error) {
+	d.mu.RLock()
+	nodeHost := d.nodeHost
+	shardID := d.shardID
+	d.mu.RUnlock()
+
+	if nodeHost == nil {
+		return nil, fmt.Errorf("nodeHost not initialized")
 	}
 
-	future := d.raft.GetConfiguration()
-	if err := future.Error(); err != nil {
-		return raft.Configuration{}, err
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	membership, err := nodeHost.SyncGetShardMembership(ctx, shardID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get shard membership: %w", err)
 	}
-	return future.Configuration(), nil
+
+	return &ShardMembershipInfo{
+		ConfigChangeID: membership.ConfigChangeID,
+		Nodes:          membership.Nodes,
+		Witnesses:      membership.Witnesses,
+		Removed:        membership.Removed,
+	}, nil
 }
 
 // getOutboundIP gets the preferred outbound IP of this machine
@@ -537,4 +698,11 @@ func getOutboundIP() string {
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	return localAddr.IP.String()
+}
+
+// hashNodeID converts a string node ID to a uint64 replica ID for Dragonboat
+func hashNodeID(nodeID string) uint64 {
+	h := fnv.New64a()
+	h.Write([]byte(nodeID))
+	return h.Sum64()
 }

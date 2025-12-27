@@ -57,8 +57,8 @@ func (m *MockMetadataStore) IsLeader() bool {
 	return true
 }
 
-func (m *MockMetadataStore) LeaderAddress() string {
-	return "localhost:9003"
+func (m *MockMetadataStore) LeaderAddress() (string, error) {
+	return "localhost:9003", nil
 }
 
 func (m *MockMetadataStore) CreateBucket(ctx context.Context, bucket *metadata.Bucket) error {

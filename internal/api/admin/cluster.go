@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -10,14 +11,30 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metadata"
 )
 
+// ClusterStore defines the interface for cluster operations
+type ClusterStore interface {
+	IsLeader() bool
+	LeaderAddress() (string, error)
+	AddVoter(nodeID string, raftAddr string) error
+	AddNonvoter(nodeID string, raftAddr string) error
+	RemoveServer(nodeID string) error
+	TransferLeadership(targetID, targetAddr string) error
+	GetServers() (map[uint64]string, error)
+	GetClusterConfiguration() (*metadata.ClusterConfiguration, error)
+	Stats() map[string]string
+	Snapshot() error
+	LastIndex() (uint64, error)
+	AppliedIndex() (uint64, error)
+}
+
 // ClusterHandler handles cluster-related admin API requests
 type ClusterHandler struct {
 	discovery *cluster.Discovery
-	store     *metadata.RaftStore
+	store     ClusterStore
 }
 
 // NewClusterHandler creates a new cluster handler
-func NewClusterHandler(discovery *cluster.Discovery, store *metadata.RaftStore) *ClusterHandler {
+func NewClusterHandler(discovery *cluster.Discovery, store ClusterStore) *ClusterHandler {
 	return &ClusterHandler{
 		discovery: discovery,
 		store:     store,
@@ -73,12 +90,12 @@ func (h *ClusterHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
 		leaderID = h.discovery.LeaderID()
 	}
 
-	// Get Raft configuration to determine voters
+	// Get cluster configuration to determine voters
 	voterMap := make(map[string]bool)
 	if h.store != nil {
-		if config, err := h.store.GetConfiguration(); err == nil {
+		if config, err := h.store.GetClusterConfiguration(); err == nil {
 			for _, server := range config.Servers {
-				voterMap[string(server.ID)] = server.Suffrage.String() == "Voter"
+				voterMap[fmt.Sprintf("%d", server.ID)] = server.IsVoter
 			}
 		}
 	}
@@ -136,7 +153,7 @@ func (h *ClusterHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !h.store.IsLeader() {
-		leaderAddr := h.store.LeaderAddress()
+		leaderAddr, _ := h.store.LeaderAddress()
 		writeJSON(w, http.StatusTemporaryRedirect, map[string]string{
 			"error":   "not leader",
 			"leader":  leaderAddr,
@@ -182,7 +199,7 @@ func (h *ClusterHandler) RemoveNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !h.store.IsLeader() {
-		leaderAddr := h.store.LeaderAddress()
+		leaderAddr, _ := h.store.LeaderAddress()
 		writeJSON(w, http.StatusTemporaryRedirect, map[string]string{
 			"error":   "not leader",
 			"leader":  leaderAddr,
@@ -222,7 +239,7 @@ func (h *ClusterHandler) GetLeader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	leaderAddr := h.store.LeaderAddress()
+	leaderAddr, _ := h.store.LeaderAddress()
 	leaderID := ""
 	isLocal := h.store.IsLeader()
 
@@ -268,7 +285,7 @@ func (h *ClusterHandler) TransferLeadership(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Get target address from configuration
-	config, err := h.store.GetConfiguration()
+	config, err := h.store.GetClusterConfiguration()
 	if err != nil {
 		writeError(w, "Failed to get configuration", http.StatusInternalServerError)
 		return
@@ -276,8 +293,8 @@ func (h *ClusterHandler) TransferLeadership(w http.ResponseWriter, r *http.Reque
 
 	var targetAddr string
 	for _, server := range config.Servers {
-		if string(server.ID) == req.TargetID {
-			targetAddr = string(server.Address)
+		if fmt.Sprintf("%d", server.ID) == req.TargetID {
+			targetAddr = server.Address
 			break
 		}
 	}
@@ -317,7 +334,7 @@ func (h *ClusterHandler) GetRaftConfiguration(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	config, err := h.store.GetConfiguration()
+	config, err := h.store.GetClusterConfiguration()
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -325,10 +342,14 @@ func (h *ClusterHandler) GetRaftConfiguration(w http.ResponseWriter, r *http.Req
 
 	servers := make([]RaftServerInfo, 0, len(config.Servers))
 	for _, server := range config.Servers {
+		suffrage := "Nonvoter"
+		if server.IsVoter {
+			suffrage = "Voter"
+		}
 		servers = append(servers, RaftServerInfo{
-			ID:       string(server.ID),
-			Address:  string(server.Address),
-			Suffrage: server.Suffrage.String(),
+			ID:       fmt.Sprintf("%d", server.ID),
+			Address:  server.Address,
+			Suffrage: suffrage,
 		})
 	}
 
@@ -410,6 +431,9 @@ func (h *ClusterHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request
 	// Healthy if: has a leader, majority of nodes are alive
 	healthy := leaderID != "" && healthyNodes > totalNodes/2
 
+	lastIndex, _ := h.store.LastIndex()
+	appliedIndex, _ := h.store.AppliedIndex()
+
 	response := &ClusterHealthResponse{
 		Healthy:      healthy,
 		State:        state,
@@ -417,8 +441,8 @@ func (h *ClusterHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request
 		LeaderID:     leaderID,
 		TotalNodes:   totalNodes,
 		HealthyNodes: healthyNodes,
-		LastIndex:    h.store.LastIndex(),
-		AppliedIndex: h.store.AppliedIndex(),
+		LastIndex:    lastIndex,
+		AppliedIndex: appliedIndex,
 	}
 
 	statusCode := http.StatusOK
@@ -455,12 +479,12 @@ func (h *ClusterHandler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) 
 	// Get leader ID
 	leaderID := h.discovery.LeaderID()
 
-	// Get Raft configuration to determine voters
+	// Get cluster configuration to determine voters
 	voterMap := make(map[string]bool)
 	if h.store != nil {
-		if config, err := h.store.GetConfiguration(); err == nil {
+		if config, err := h.store.GetClusterConfiguration(); err == nil {
 			for _, server := range config.Servers {
-				voterMap[string(server.ID)] = server.Suffrage.String() == "Voter"
+				voterMap[fmt.Sprintf("%d", server.ID)] = server.IsVoter
 			}
 		}
 	}

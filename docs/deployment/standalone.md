@@ -83,6 +83,8 @@ console_port: 9002
 # Cluster (single-node mode)
 cluster:
   bootstrap: true
+  shard_id: 1
+  replica_id: 1
   raft_port: 9003
 
 # Storage
@@ -190,6 +192,8 @@ console_port: 9002
 
 cluster:
   bootstrap: true  # Only node1 bootstraps
+  shard_id: 1
+  replica_id: 1
   advertise_address: 10.0.1.10  # This node's IP
   raft_port: 9003
   gossip_port: 9004
@@ -221,6 +225,8 @@ console_port: 9002
 
 cluster:
   bootstrap: false
+  shard_id: 1
+  replica_id: 2  # Unique per node (3 for node-3)
   join_addresses:
     - 10.0.1.10:9004  # Node 1's gossip address
   advertise_address: 10.0.1.11  # This node's IP
