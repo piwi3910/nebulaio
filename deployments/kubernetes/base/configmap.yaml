@@ -148,6 +148,100 @@ data:
     #   timeout: 300               # Query timeout seconds
     #   worker_pool_size: 10
 
+    # =========================================================================
+    # AI/ML Features (2025)
+    # =========================================================================
+
+    # S3 Express One Zone
+    # Ultra-low latency storage with atomic append support
+    # s3_express:
+    #   enabled: false
+    #   default_zone: use1-az1
+    #   session_duration: 300
+    #   max_append_size: 5368709120   # 5GB
+    #   enable_atomic_append: true
+    #   zones:
+    #     - id: use1-az1
+    #       name: US East 1 AZ1
+    #       region: us-east-1
+    #       storage_class: EXPRESS_ONEZONE
+
+    # Apache Iceberg Integration
+    # Native table format for data lakehouse workloads
+    # iceberg:
+    #   enabled: false
+    #   catalog_type: rest           # rest | hive | glue
+    #   warehouse: s3://warehouse/
+    #   catalog_name: nebulaio
+    #   enable_acid: true
+    #   snapshot_retention: 5
+    #   metadata_refresh_interval: 60
+    #   rest_catalog:
+    #     port: 9006
+    #     prefix: /iceberg
+
+    # MCP Server (Model Context Protocol)
+    # AI agent integration for Claude, ChatGPT, and other LLMs
+    # mcp:
+    #   enabled: false
+    #   port: 9005
+    #   enable_tools: true
+    #   enable_resources: true
+    #   enable_prompts: true
+    #   max_resource_size: 10485760  # 10MB
+    #   allowed_buckets: []          # Empty = all buckets
+    #   auth_required: true
+    #   rate_limit: 100              # Requests per minute
+
+    # GPUDirect Storage
+    # Zero-copy GPU-to-storage transfers for AI/ML workloads
+    # gpudirect:
+    #   enabled: false
+    #   device_ids: []               # Empty = auto-detect
+    #   buffer_pool_size: 1073741824 # 1GB
+    #   max_transfer_size: 268435456 # 256MB
+    #   enable_async: true
+    #   enable_p2p: true             # Peer-to-peer GPU transfers
+    #   queue_depth: 64
+
+    # BlueField DPU Offload
+    # SmartNIC acceleration for crypto, compression, and RDMA
+    # dpu:
+    #   enabled: false
+    #   device_name: mlx5_0
+    #   enable_crypto: true          # AES-GCM offload
+    #   enable_compression: true     # Deflate/LZ4 offload
+    #   enable_rdma: true            # RDMA acceleration
+    #   crypto_queue_size: 256
+    #   compression_queue_size: 256
+
+    # S3 over RDMA
+    # Ultra-low latency object access via InfiniBand/RoCE
+    # rdma:
+    #   enabled: false
+    #   port: 9100
+    #   device_name: mlx5_0
+    #   ib_port: 1
+    #   gid_index: 0
+    #   enable_zero_copy: true
+    #   max_send_wr: 128
+    #   max_recv_wr: 128
+    #   max_sge: 4
+    #   cq_size: 256
+
+    # NVIDIA NIM Integration
+    # Run AI inference on stored objects
+    # nim:
+    #   enabled: false
+    #   api_key: ${NIM_API_KEY}
+    #   endpoint: https://integrate.api.nvidia.com/v1
+    #   default_model: meta/llama-3.1-8b-instruct
+    #   enable_streaming: true
+    #   timeout: 300
+    #   max_retries: 3
+    #   cache_responses: true
+    #   cache_ttl: 3600
+
     # Batch Replication
     # Bulk data migration and disaster recovery
     # batch_replication:

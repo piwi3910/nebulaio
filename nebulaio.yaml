@@ -1,6 +1,7 @@
-# NebulaIO Configuration for Local Development
-node_name: "local-dev"
+# NebulaIO Configuration
+# Full configuration reference for all features
 
+node_name: "local-dev"
 data_dir: "./data"
 
 # Network ports
@@ -22,12 +23,186 @@ cluster:
 storage:
   backend: "fs"
   default_storage_class: "STANDARD"
+  max_object_size: 5497558138880  # 5TB
+  multipart_part_size: 67108864   # 64MB
 
-# Auth configuration
+# DRAM Cache configuration (Enterprise)
+cache:
+  enabled: false
+  max_size: 8589934592            # 8GB
+  shard_count: 256
+  entry_max_size: 268435456       # 256MB
+  ttl: 3600                       # 1 hour
+  eviction_policy: "arc"          # lru, lfu, arc
+  prefetch_enabled: true
+  prefetch_threshold: 2
+  prefetch_ahead: 4
+  zero_copy_enabled: true
+  distributed_mode: false
+  replication_factor: 2
+  warmup_enabled: false
+
+# Data Firewall / QoS configuration
+firewall:
+  enabled: false
+  default_policy: "allow"
+  audit_enabled: true
+  rate_limiting:
+    enabled: false
+    requests_per_second: 1000
+    burst_size: 100
+    per_user: true
+    per_ip: true
+    per_bucket: false
+  bandwidth:
+    enabled: false
+    max_bytes_per_second: 1073741824        # 1GB/s
+    max_bytes_per_second_per_user: 104857600    # 100MB/s
+    max_bytes_per_second_per_bucket: 524288000  # 500MB/s
+  connections:
+    enabled: false
+    max_connections: 10000
+    max_connections_per_ip: 100
+    max_connections_per_user: 500
+    idle_timeout_seconds: 60
+
+# Audit logging configuration
+audit:
+  enabled: true
+  compliance_mode: "none"         # none, soc2, pci, hipaa, gdpr, fedramp
+  file_path: "./data/audit/audit.log"
+  retention_days: 90
+  buffer_size: 10000
+  integrity_enabled: true
+  mask_sensitive_data: true
+  rotation:
+    enabled: true
+    max_size_mb: 100
+    max_backups: 10
+    max_age_days: 30
+    compress: true
+  webhook:
+    enabled: false
+    url: ""
+    auth_token: ""
+    batch_size: 100
+    flush_interval_seconds: 30
+
+# Authentication configuration
 auth:
   root_user: "admin"
   root_password: "Admin1234"
   token_expiry: 60
   refresh_token_expiry: 168
+
+# =============================================================================
+# AI/ML & High-Performance Features (2025)
+# =============================================================================
+
+# S3 Express One Zone - High-performance S3 with atomic appends
+s3_express:
+  enabled: false
+  default_zone: "use1-az1"
+  session_duration: 3600          # Session token duration in seconds
+  max_append_size: 5368709120     # 5GB max append size
+  enable_atomic_append: true
+  zones:
+    - name: "use1-az1"
+      region: "us-east-1"
+      storage_path: "./data/express/az1"
+      max_iops: 100000
+      max_throughput_mbps: 10000
+    # - name: "use1-az2"
+    #   region: "us-east-1"
+    #   storage_path: "./data/express/az2"
+    #   max_iops: 100000
+    #   max_throughput_mbps: 10000
+
+# Apache Iceberg - Native table format support
+iceberg:
+  enabled: false
+  catalog_type: "rest"            # rest, hive, glue
+  catalog_uri: "http://localhost:8181"
+  warehouse: "s3://warehouse/"
+  default_file_format: "parquet"  # parquet, orc, avro
+  metadata_path: "./data/iceberg"
+  snapshot_retention: 10
+  expire_snapshots_older_than: 168  # hours (7 days)
+  enable_acid: true
+
+# MCP Server - Model Context Protocol for AI agents
+mcp:
+  enabled: false
+  port: 9005
+  max_connections: 100
+  enable_tools: true
+  enable_resources: true
+  enable_prompts: true
+  allowed_origins:
+    - "*"
+  auth_required: true
+  rate_limit_per_minute: 60
+
+# GPUDirect Storage - Direct GPU-to-storage transfers
+gpudirect:
+  enabled: false
+  devices: []                     # GPU device IDs, empty = auto-detect
+  buffer_pool_size: 1073741824    # 1GB GPU buffer pool
+  max_transfer_size: 268435456    # 256MB max transfer
+  enable_async: true
+  cuda_stream_count: 4
+  enable_p2p: true                # Peer-to-peer GPU transfers
+  nvme_path: "/dev/nvme*"
+
+# BlueField DPU - SmartNIC offload for crypto, compression, storage
+dpu:
+  enabled: false
+  device_index: 0
+  enable_crypto: true             # AES-GCM hardware acceleration
+  enable_compression: true        # Deflate/LZ4 hardware acceleration
+  enable_storage: true            # Storage offload
+  enable_network: true            # Network offload
+  enable_rdma: true               # RDMA via DPU
+  enable_regex: false             # Regex offload (BlueField-3)
+  health_check_interval: 30       # seconds
+  fallback_on_error: true         # Fall back to CPU on errors
+  min_size_for_offload: 4096      # Minimum bytes to offload
+
+# S3 over RDMA - Ultra-low latency object storage
+rdma:
+  enabled: false
+  port: 9100
+  device_name: "mlx5_0"           # RDMA device (mlx5_0, mlx5_1, etc.)
+  gid_index: 0                    # GID index for RoCE
+  max_send_wr: 128                # Max send work requests per QP
+  max_recv_wr: 128                # Max receive work requests per QP
+  max_send_sge: 1                 # Max scatter/gather elements per send
+  max_recv_sge: 1                 # Max scatter/gather elements per recv
+  max_inline_data: 64             # Max inline data size
+  memory_pool_size: 1073741824    # 1GB registered memory pool
+  enable_zero_copy: true          # Zero-copy data transfers
+  fallback_to_tcp: true           # Fall back to TCP if RDMA unavailable
+
+# NVIDIA NIM - Inference Microservices integration
+nim:
+  enabled: false
+  endpoints:
+    - "https://integrate.api.nvidia.com/v1"
+  api_key: ""                     # NVIDIA API key (or use NEBULAIO_NIM_API_KEY env)
+  organization_id: ""             # NVIDIA organization ID
+  default_model: "meta/llama-3.1-8b-instruct"
+  timeout: 60                     # Inference timeout in seconds
+  max_retries: 3
+  max_batch_size: 100
+  enable_streaming: true
+  cache_results: true
+  cache_ttl: 3600                 # Cache TTL in seconds
+  enable_metrics: true
+  process_on_upload: false        # Trigger inference on object upload
+  process_content_types:          # Content types to process on upload
+    - "image/jpeg"
+    - "image/png"
+    - "text/plain"
+    - "application/json"
 
 log_level: "debug"

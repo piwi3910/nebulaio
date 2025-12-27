@@ -56,6 +56,36 @@ spec:
       ports:
         - protocol: TCP
           port: 9001
+    # Allow MCP Server traffic (AI agents)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              nebulaio-access: mcp
+        - podSelector:
+            matchLabels:
+              app: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 9005
+    # Allow Iceberg REST Catalog traffic
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              nebulaio-access: iceberg
+        - podSelector:
+            matchLabels:
+              app: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 9006
+    # Allow RDMA traffic (internal only, typically direct pod-to-pod)
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nebulaio
+      ports:
+        - protocol: TCP
+          port: 9100
   egress:
     # Allow DNS
     - to:

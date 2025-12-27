@@ -41,6 +41,27 @@ type Config struct {
 	// Auth configuration
 	Auth AuthConfig `mapstructure:"auth"`
 
+	// S3 Express configuration (high-performance S3)
+	S3Express S3ExpressConfig `mapstructure:"s3_express"`
+
+	// Iceberg configuration (table format)
+	Iceberg IcebergConfig `mapstructure:"iceberg"`
+
+	// MCP Server configuration (AI agents)
+	MCP MCPConfig `mapstructure:"mcp"`
+
+	// GPUDirect configuration (GPU-to-storage)
+	GPUDirect GPUDirectConfig `mapstructure:"gpudirect"`
+
+	// DPU configuration (BlueField SmartNIC)
+	DPU DPUConfig `mapstructure:"dpu"`
+
+	// RDMA configuration (remote direct memory access)
+	RDMA RDMAConfig `mapstructure:"rdma"`
+
+	// NIM configuration (NVIDIA Inference Microservices)
+	NIM NIMConfig `mapstructure:"nim"`
+
 	// Logging
 	LogLevel string `mapstructure:"log_level"`
 }
@@ -310,6 +331,252 @@ type AuthConfig struct {
 	RefreshTokenExpiry int `mapstructure:"refresh_token_expiry"`
 }
 
+// S3ExpressConfig holds S3 Express One Zone configuration
+type S3ExpressConfig struct {
+	// Enabled enables S3 Express One Zone support
+	Enabled bool `mapstructure:"enabled"`
+
+	// Zones defines the available express zones
+	Zones []ExpressZoneConfig `mapstructure:"zones"`
+
+	// DefaultZone is the default zone for new directory buckets
+	DefaultZone string `mapstructure:"default_zone"`
+
+	// SessionDuration is the session token duration in seconds
+	SessionDuration int `mapstructure:"session_duration"`
+
+	// MaxAppendSize is the maximum size for atomic append operations
+	MaxAppendSize int64 `mapstructure:"max_append_size"`
+
+	// EnableAtomicAppend enables atomic append operations
+	EnableAtomicAppend bool `mapstructure:"enable_atomic_append"`
+}
+
+// ExpressZoneConfig defines an S3 Express zone
+type ExpressZoneConfig struct {
+	// Name is the zone identifier (e.g., "use1-az1")
+	Name string `mapstructure:"name"`
+
+	// Region is the AWS region equivalent
+	Region string `mapstructure:"region"`
+
+	// StoragePath is the local storage path for this zone
+	StoragePath string `mapstructure:"storage_path"`
+
+	// MaxIOPS is the maximum IOPS for this zone
+	MaxIOPS int `mapstructure:"max_iops"`
+
+	// MaxThroughputMBps is the maximum throughput in MB/s
+	MaxThroughputMBps int `mapstructure:"max_throughput_mbps"`
+}
+
+// IcebergConfig holds Apache Iceberg table format configuration
+type IcebergConfig struct {
+	// Enabled enables Iceberg table support
+	Enabled bool `mapstructure:"enabled"`
+
+	// CatalogType is the catalog implementation (rest, hive, glue)
+	CatalogType string `mapstructure:"catalog_type"`
+
+	// CatalogURI is the catalog service URI
+	CatalogURI string `mapstructure:"catalog_uri"`
+
+	// Warehouse is the default warehouse location
+	Warehouse string `mapstructure:"warehouse"`
+
+	// DefaultFileFormat is the default file format (parquet, orc, avro)
+	DefaultFileFormat string `mapstructure:"default_file_format"`
+
+	// MetadataPath is where table metadata is stored
+	MetadataPath string `mapstructure:"metadata_path"`
+
+	// SnapshotRetention is how many snapshots to retain
+	SnapshotRetention int `mapstructure:"snapshot_retention"`
+
+	// ExpireSnapshotsOlderThan in hours
+	ExpireSnapshotsOlderThan int `mapstructure:"expire_snapshots_older_than"`
+
+	// EnableACID enables ACID transaction support
+	EnableACID bool `mapstructure:"enable_acid"`
+}
+
+// MCPConfig holds Model Context Protocol server configuration
+type MCPConfig struct {
+	// Enabled enables the MCP server
+	Enabled bool `mapstructure:"enabled"`
+
+	// Port is the MCP server port
+	Port int `mapstructure:"port"`
+
+	// MaxConnections is the maximum concurrent connections
+	MaxConnections int `mapstructure:"max_connections"`
+
+	// EnableTools enables tool execution
+	EnableTools bool `mapstructure:"enable_tools"`
+
+	// EnableResources enables resource access
+	EnableResources bool `mapstructure:"enable_resources"`
+
+	// EnablePrompts enables prompt templates
+	EnablePrompts bool `mapstructure:"enable_prompts"`
+
+	// AllowedOrigins for CORS
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
+
+	// AuthRequired requires authentication for MCP access
+	AuthRequired bool `mapstructure:"auth_required"`
+
+	// RateLimitPerMinute is requests per minute limit
+	RateLimitPerMinute int `mapstructure:"rate_limit_per_minute"`
+}
+
+// GPUDirectConfig holds GPUDirect Storage configuration
+type GPUDirectConfig struct {
+	// Enabled enables GPUDirect Storage support
+	Enabled bool `mapstructure:"enabled"`
+
+	// Devices is a list of GPU device IDs to use
+	Devices []int `mapstructure:"devices"`
+
+	// BufferPoolSize is the GPU buffer pool size in bytes
+	BufferPoolSize int64 `mapstructure:"buffer_pool_size"`
+
+	// MaxTransferSize is the maximum single transfer size
+	MaxTransferSize int64 `mapstructure:"max_transfer_size"`
+
+	// EnableAsync enables asynchronous transfers
+	EnableAsync bool `mapstructure:"enable_async"`
+
+	// CUDAStreamCount is the number of CUDA streams per GPU
+	CUDAStreamCount int `mapstructure:"cuda_stream_count"`
+
+	// EnableP2P enables peer-to-peer GPU transfers
+	EnableP2P bool `mapstructure:"enable_p2p"`
+
+	// NVMePath is the path pattern for NVMe devices
+	NVMePath string `mapstructure:"nvme_path"`
+}
+
+// DPUConfig holds BlueField DPU configuration
+type DPUConfig struct {
+	// Enabled enables DPU offload support
+	Enabled bool `mapstructure:"enabled"`
+
+	// DeviceIndex is the DPU device index to use
+	DeviceIndex int `mapstructure:"device_index"`
+
+	// EnableCrypto enables crypto offload
+	EnableCrypto bool `mapstructure:"enable_crypto"`
+
+	// EnableCompression enables compression offload
+	EnableCompression bool `mapstructure:"enable_compression"`
+
+	// EnableStorage enables storage offload
+	EnableStorage bool `mapstructure:"enable_storage"`
+
+	// EnableNetwork enables network offload
+	EnableNetwork bool `mapstructure:"enable_network"`
+
+	// EnableRDMA enables RDMA offload via DPU
+	EnableRDMA bool `mapstructure:"enable_rdma"`
+
+	// EnableRegex enables regex offload
+	EnableRegex bool `mapstructure:"enable_regex"`
+
+	// HealthCheckInterval in seconds
+	HealthCheckInterval int `mapstructure:"health_check_interval"`
+
+	// FallbackOnError falls back to CPU on DPU errors
+	FallbackOnError bool `mapstructure:"fallback_on_error"`
+
+	// MinSizeForOffload minimum data size to offload (bytes)
+	MinSizeForOffload int `mapstructure:"min_size_for_offload"`
+}
+
+// RDMAConfig holds RDMA transport configuration
+type RDMAConfig struct {
+	// Enabled enables RDMA transport
+	Enabled bool `mapstructure:"enabled"`
+
+	// Port is the RDMA listener port
+	Port int `mapstructure:"port"`
+
+	// DeviceName is the RDMA device name (e.g., "mlx5_0")
+	DeviceName string `mapstructure:"device_name"`
+
+	// GIDIndex is the GID index for RoCE
+	GIDIndex int `mapstructure:"gid_index"`
+
+	// MaxSendWR is max send work requests per QP
+	MaxSendWR int `mapstructure:"max_send_wr"`
+
+	// MaxRecvWR is max receive work requests per QP
+	MaxRecvWR int `mapstructure:"max_recv_wr"`
+
+	// MaxSendSGE is max scatter/gather elements per send
+	MaxSendSGE int `mapstructure:"max_send_sge"`
+
+	// MaxRecvSGE is max scatter/gather elements per receive
+	MaxRecvSGE int `mapstructure:"max_recv_sge"`
+
+	// MaxInlineData is max inline data size
+	MaxInlineData int `mapstructure:"max_inline_data"`
+
+	// MemoryPoolSize is the registered memory pool size
+	MemoryPoolSize int64 `mapstructure:"memory_pool_size"`
+
+	// EnableZeroCopy enables zero-copy data transfers
+	EnableZeroCopy bool `mapstructure:"enable_zero_copy"`
+
+	// FallbackToTCP falls back to TCP if RDMA unavailable
+	FallbackToTCP bool `mapstructure:"fallback_to_tcp"`
+}
+
+// NIMConfig holds NVIDIA NIM Microservices configuration
+type NIMConfig struct {
+	// Enabled enables NIM integration
+	Enabled bool `mapstructure:"enabled"`
+
+	// Endpoints are NIM server endpoints
+	Endpoints []string `mapstructure:"endpoints"`
+
+	// APIKey is the NVIDIA API key
+	APIKey string `mapstructure:"api_key"`
+
+	// OrganizationID is the NVIDIA organization ID
+	OrganizationID string `mapstructure:"organization_id"`
+
+	// DefaultModel is the default model for inference
+	DefaultModel string `mapstructure:"default_model"`
+
+	// Timeout is the inference timeout in seconds
+	Timeout int `mapstructure:"timeout"`
+
+	// MaxRetries for failed requests
+	MaxRetries int `mapstructure:"max_retries"`
+
+	// MaxBatchSize for batch inference
+	MaxBatchSize int `mapstructure:"max_batch_size"`
+
+	// EnableStreaming enables streaming responses
+	EnableStreaming bool `mapstructure:"enable_streaming"`
+
+	// CacheResults enables inference result caching
+	CacheResults bool `mapstructure:"cache_results"`
+
+	// CacheTTL is cache TTL in seconds
+	CacheTTL int `mapstructure:"cache_ttl"`
+
+	// EnableMetrics enables detailed metrics
+	EnableMetrics bool `mapstructure:"enable_metrics"`
+
+	// ProcessOnUpload triggers inference on object upload
+	ProcessOnUpload bool `mapstructure:"process_on_upload"`
+
+	// ProcessContentTypes are content types to process
+	ProcessContentTypes []string `mapstructure:"process_content_types"`
+}
+
 // Options are command line overrides
 type Options struct {
 	DataDir     string
@@ -466,6 +733,84 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.root_password", "admin123") // Should be changed!
 	v.SetDefault("auth.token_expiry", 60)          // 1 hour
 	v.SetDefault("auth.refresh_token_expiry", 168) // 7 days
+
+	// S3 Express defaults
+	v.SetDefault("s3_express.enabled", false)
+	v.SetDefault("s3_express.default_zone", "use1-az1")
+	v.SetDefault("s3_express.session_duration", 3600)              // 1 hour
+	v.SetDefault("s3_express.max_append_size", 5*1024*1024*1024)   // 5GB
+	v.SetDefault("s3_express.enable_atomic_append", true)
+
+	// Iceberg defaults
+	v.SetDefault("iceberg.enabled", false)
+	v.SetDefault("iceberg.catalog_type", "rest")
+	v.SetDefault("iceberg.catalog_uri", "http://localhost:8181")
+	v.SetDefault("iceberg.warehouse", "s3://warehouse/")
+	v.SetDefault("iceberg.default_file_format", "parquet")
+	v.SetDefault("iceberg.metadata_path", "./data/iceberg")
+	v.SetDefault("iceberg.snapshot_retention", 10)
+	v.SetDefault("iceberg.expire_snapshots_older_than", 168) // 7 days
+	v.SetDefault("iceberg.enable_acid", true)
+
+	// MCP Server defaults
+	v.SetDefault("mcp.enabled", false)
+	v.SetDefault("mcp.port", 9005)
+	v.SetDefault("mcp.max_connections", 100)
+	v.SetDefault("mcp.enable_tools", true)
+	v.SetDefault("mcp.enable_resources", true)
+	v.SetDefault("mcp.enable_prompts", true)
+	v.SetDefault("mcp.auth_required", true)
+	v.SetDefault("mcp.rate_limit_per_minute", 60)
+
+	// GPUDirect defaults
+	v.SetDefault("gpudirect.enabled", false)
+	v.SetDefault("gpudirect.buffer_pool_size", 1024*1024*1024)    // 1GB
+	v.SetDefault("gpudirect.max_transfer_size", 256*1024*1024)    // 256MB
+	v.SetDefault("gpudirect.enable_async", true)
+	v.SetDefault("gpudirect.cuda_stream_count", 4)
+	v.SetDefault("gpudirect.enable_p2p", true)
+	v.SetDefault("gpudirect.nvme_path", "/dev/nvme*")
+
+	// DPU (BlueField) defaults
+	v.SetDefault("dpu.enabled", false)
+	v.SetDefault("dpu.device_index", 0)
+	v.SetDefault("dpu.enable_crypto", true)
+	v.SetDefault("dpu.enable_compression", true)
+	v.SetDefault("dpu.enable_storage", true)
+	v.SetDefault("dpu.enable_network", true)
+	v.SetDefault("dpu.enable_rdma", true)
+	v.SetDefault("dpu.enable_regex", false)
+	v.SetDefault("dpu.health_check_interval", 30)
+	v.SetDefault("dpu.fallback_on_error", true)
+	v.SetDefault("dpu.min_size_for_offload", 4096)
+
+	// RDMA defaults
+	v.SetDefault("rdma.enabled", false)
+	v.SetDefault("rdma.port", 9100)
+	v.SetDefault("rdma.device_name", "mlx5_0")
+	v.SetDefault("rdma.gid_index", 0)
+	v.SetDefault("rdma.max_send_wr", 128)
+	v.SetDefault("rdma.max_recv_wr", 128)
+	v.SetDefault("rdma.max_send_sge", 1)
+	v.SetDefault("rdma.max_recv_sge", 1)
+	v.SetDefault("rdma.max_inline_data", 64)
+	v.SetDefault("rdma.memory_pool_size", 1024*1024*1024)  // 1GB
+	v.SetDefault("rdma.enable_zero_copy", true)
+	v.SetDefault("rdma.fallback_to_tcp", true)
+
+	// NIM defaults
+	v.SetDefault("nim.enabled", false)
+	v.SetDefault("nim.endpoints", []string{"https://integrate.api.nvidia.com/v1"})
+	v.SetDefault("nim.default_model", "meta/llama-3.1-8b-instruct")
+	v.SetDefault("nim.timeout", 60)
+	v.SetDefault("nim.max_retries", 3)
+	v.SetDefault("nim.max_batch_size", 100)
+	v.SetDefault("nim.enable_streaming", true)
+	v.SetDefault("nim.cache_results", true)
+	v.SetDefault("nim.cache_ttl", 3600)  // 1 hour
+	v.SetDefault("nim.enable_metrics", true)
+	v.SetDefault("nim.process_on_upload", false)
+	v.SetDefault("nim.process_content_types", []string{"image/jpeg", "image/png", "text/plain", "application/json"})
 
 	// Logging
 	v.SetDefault("log_level", "info")

@@ -20,6 +20,8 @@ spec:
         - s3.example.com
         - admin.example.com
         - console.example.com
+        - mcp.example.com
+        - iceberg.example.com
       secretName: nebulaio-tls
   rules:
     # S3 API
@@ -55,3 +57,25 @@ spec:
                 name: prod-nebulaio
                 port:
                   name: console
+    # MCP Server (AI Agent API)
+    - host: mcp.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prod-nebulaio
+                port:
+                  name: mcp
+    # Iceberg REST Catalog
+    - host: iceberg.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prod-nebulaio
+                port:
+                  name: iceberg

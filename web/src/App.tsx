@@ -13,6 +13,7 @@ import { ClusterPage } from './pages/ClusterPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { PoliciesPage } from './pages/PoliciesPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
+import { AIMLFeaturesPage } from './pages/AIMLFeaturesPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -99,6 +100,14 @@ export default function App() {
           element={
             <AdminRoute>
               <AuditLogsPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="ai-ml-features"
+          element={
+            <AdminRoute>
+              <AIMLFeaturesPage />
             </AdminRoute>
           }
         />

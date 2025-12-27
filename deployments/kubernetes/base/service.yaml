@@ -29,6 +29,15 @@ spec:
     - name: gossip
       port: 9004
       targetPort: gossip
+    - name: mcp
+      port: 9005
+      targetPort: mcp
+    - name: iceberg
+      port: 9006
+      targetPort: iceberg
+    - name: rdma
+      port: 9100
+      targetPort: rdma
 
 ---
 # ClusterIP service for client access
@@ -54,6 +63,12 @@ spec:
     - name: console
       port: 9002
       targetPort: console
+    - name: mcp
+      port: 9005
+      targetPort: mcp
+    - name: iceberg
+      port: 9006
+      targetPort: iceberg
 
 ---
 # LoadBalancer service (optional, for external access)
@@ -79,3 +94,6 @@ spec:
     - name: admin
       port: 9001
       targetPort: admin
+    - name: mcp
+      port: 9005
+      targetPort: mcp

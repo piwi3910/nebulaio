@@ -10,6 +10,8 @@ services:
       - "9000:9000"  # S3 API
       - "9001:9001"  # Admin/Console API (includes /metrics endpoint)
       - "9002:9002"  # Web Console
+      - "9005:9005"  # MCP Server (when enabled)
+      - "9100:9100"  # RDMA (when enabled)
     volumes:
       - nebulaio-data:/data
     environment:
@@ -17,20 +19,77 @@ services:
       - NEBULAIO_LOG_LEVEL=info
       - NEBULAIO_AUTH_ROOT_USER=admin
       - NEBULAIO_AUTH_ROOT_PASSWORD=admin123
+
       # Enterprise DRAM Cache (uncomment to enable)
       # - NEBULAIO_CACHE_ENABLED=true
       # - NEBULAIO_CACHE_MAX_SIZE=8589934592
       # - NEBULAIO_CACHE_EVICTION_POLICY=arc
       # - NEBULAIO_CACHE_PREFETCH_ENABLED=true
+
       # Data Firewall (uncomment to enable)
       # - NEBULAIO_FIREWALL_ENABLED=true
       # - NEBULAIO_FIREWALL_RATE_LIMIT_RPS=1000
       # - NEBULAIO_FIREWALL_BANDWIDTH_MAX_BPS=1073741824
+
       # S3 Select (enabled by default)
       - NEBULAIO_S3SELECT_ENABLED=true
+
       # Audit Logging (enabled by default)
       - NEBULAIO_AUDIT_ENABLED=true
       - NEBULAIO_AUDIT_FILE_PATH=/data/audit/audit.log
+
+      # =========================================================================
+      # AI/ML & High-Performance Features (2025)
+      # =========================================================================
+
+      # S3 Express One Zone (uncomment to enable)
+      # - NEBULAIO_S3_EXPRESS_ENABLED=true
+      # - NEBULAIO_S3_EXPRESS_DEFAULT_ZONE=use1-az1
+      # - NEBULAIO_S3_EXPRESS_ENABLE_ATOMIC_APPEND=true
+
+      # Apache Iceberg (uncomment to enable)
+      # - NEBULAIO_ICEBERG_ENABLED=true
+      # - NEBULAIO_ICEBERG_CATALOG_TYPE=rest
+      # - NEBULAIO_ICEBERG_CATALOG_URI=http://localhost:8181
+      # - NEBULAIO_ICEBERG_WAREHOUSE=s3://warehouse/
+      # - NEBULAIO_ICEBERG_ENABLE_ACID=true
+
+      # MCP Server for AI Agents (uncomment to enable)
+      # - NEBULAIO_MCP_ENABLED=true
+      # - NEBULAIO_MCP_PORT=9005
+      # - NEBULAIO_MCP_ENABLE_TOOLS=true
+      # - NEBULAIO_MCP_ENABLE_RESOURCES=true
+      # - NEBULAIO_MCP_AUTH_REQUIRED=true
+
+      # GPUDirect Storage (uncomment to enable - requires NVIDIA GPU)
+      # - NEBULAIO_GPUDIRECT_ENABLED=true
+      # - NEBULAIO_GPUDIRECT_BUFFER_POOL_SIZE=1073741824
+      # - NEBULAIO_GPUDIRECT_ENABLE_ASYNC=true
+      # - NEBULAIO_GPUDIRECT_ENABLE_P2P=true
+
+      # BlueField DPU (uncomment to enable - requires BlueField hardware)
+      # - NEBULAIO_DPU_ENABLED=true
+      # - NEBULAIO_DPU_DEVICE_INDEX=0
+      # - NEBULAIO_DPU_ENABLE_CRYPTO=true
+      # - NEBULAIO_DPU_ENABLE_COMPRESSION=true
+      # - NEBULAIO_DPU_ENABLE_RDMA=true
+      # - NEBULAIO_DPU_FALLBACK_ON_ERROR=true
+
+      # S3 over RDMA (uncomment to enable - requires RDMA NIC)
+      # - NEBULAIO_RDMA_ENABLED=true
+      # - NEBULAIO_RDMA_PORT=9100
+      # - NEBULAIO_RDMA_DEVICE_NAME=mlx5_0
+      # - NEBULAIO_RDMA_ENABLE_ZERO_COPY=true
+      # - NEBULAIO_RDMA_FALLBACK_TO_TCP=true
+
+      # NVIDIA NIM Microservices (uncomment to enable)
+      # - NEBULAIO_NIM_ENABLED=true
+      # - NEBULAIO_NIM_API_KEY=your-nvidia-api-key
+      # - NEBULAIO_NIM_DEFAULT_MODEL=meta/llama-3.1-8b-instruct
+      # - NEBULAIO_NIM_ENABLE_STREAMING=true
+      # - NEBULAIO_NIM_CACHE_RESULTS=true
+      # - NEBULAIO_NIM_PROCESS_ON_UPLOAD=false
+
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health/ready"]

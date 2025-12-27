@@ -27,6 +27,7 @@ import {
   IconCloud,
   IconShieldCheck,
   IconClipboardList,
+  IconBrain,
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/auth';
 
@@ -45,6 +46,7 @@ const navItems: NavItem[] = [
   { label: 'Access Keys', icon: <IconKey size={20} />, path: '/access-keys' },
   { label: 'Cluster', icon: <IconServer size={20} />, path: '/cluster', adminOnly: true },
   { label: 'Audit Logs', icon: <IconClipboardList size={20} />, path: '/audit-logs', adminOnly: true },
+  { label: 'AI/ML Features', icon: <IconBrain size={20} />, path: '/ai-ml-features', adminOnly: true },
   { label: 'Settings', icon: <IconSettings size={20} />, path: '/settings' },
 ];
 

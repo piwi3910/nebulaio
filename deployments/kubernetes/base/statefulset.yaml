@@ -73,6 +73,15 @@ spec:
             - name: gossip
               containerPort: 9004
               protocol: TCP
+            - name: mcp
+              containerPort: 9005
+              protocol: TCP
+            - name: iceberg
+              containerPort: 9006
+              protocol: TCP
+            - name: rdma
+              containerPort: 9100
+              protocol: TCP
 
           env:
             - name: NEBULAIO_NODE_ID
@@ -107,6 +116,36 @@ spec:
               value: "storage"
             - name: NEBULAIO_CLUSTER_CLUSTER_NAME
               value: "nebulaio-k8s"
+
+            # AI/ML Features - Enable via environment variables
+            # S3 Express
+            - name: NEBULAIO_S3_EXPRESS_ENABLED
+              value: "false"
+            # Iceberg
+            - name: NEBULAIO_ICEBERG_ENABLED
+              value: "false"
+            # MCP Server
+            - name: NEBULAIO_MCP_ENABLED
+              value: "false"
+            # GPUDirect (requires GPU node)
+            - name: NEBULAIO_GPUDIRECT_ENABLED
+              value: "false"
+            # DPU Offload (requires BlueField DPU)
+            - name: NEBULAIO_DPU_ENABLED
+              value: "false"
+            # RDMA (requires InfiniBand/RoCE)
+            - name: NEBULAIO_RDMA_ENABLED
+              value: "false"
+            # NIM Integration
+            - name: NEBULAIO_NIM_ENABLED
+              value: "false"
+            # NIM API Key from secret (optional)
+            # - name: NEBULAIO_NIM_API_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: nebulaio-secrets
+            #       key: nim-api-key
+            #       optional: true
 
           # Bootstrap flag set by init container
           command:
