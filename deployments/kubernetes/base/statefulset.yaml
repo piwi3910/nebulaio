@@ -188,6 +188,10 @@ spec:
             - name: shared
               mountPath: /shared
               readOnly: true
+            # Separate WAL directory for better I/O performance
+            # Note: If using separate WAL volume, uncomment the PVC template below
+            # - name: wal
+            #   mountPath: /data/wal
 
       volumes:
         - name: shared
@@ -215,3 +219,17 @@ spec:
           requests:
             storage: 10Gi
         # storageClassName: standard  # Uncomment and set your storage class
+
+    # Optional: Separate WAL volume for better I/O performance
+    # Uncomment if using separate WAL directory (requires faster storage class)
+    # - metadata:
+    #     name: wal
+    #     labels:
+    #       app.kubernetes.io/name: nebulaio
+    #   spec:
+    #     accessModes:
+    #       - ReadWriteOnce
+    #     resources:
+    #       requests:
+    #         storage: 5Gi
+    #     # storageClassName: fast-ssd  # Use faster storage for WAL

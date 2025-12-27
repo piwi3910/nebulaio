@@ -18,7 +18,11 @@ data:
 
     cluster:
       bootstrap: ${NEBULAIO_CLUSTER_BOOTSTRAP:-false}
+      shard_id: 1
       raft_port: 9003
+      wal_dir: /data/wal
+      snapshot_count: 10000
+      compaction_overhead: 5000
       gossip_port: 9004
       node_role: storage
       cluster_name: nebulaio-k8s

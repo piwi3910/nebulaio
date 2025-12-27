@@ -166,6 +166,11 @@ spec:
             - name: shared
               mountPath: /shared
               readOnly: true
+            {{- if .Values.cluster.walDir }}
+            # Separate WAL directory for better I/O performance
+            - name: wal
+              mountPath: {{ .Values.cluster.walDir }}
+            {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -219,4 +224,26 @@ spec:
         {{- if .Values.persistence.storageClass }}
         storageClassName: {{ .Values.persistence.storageClass }}
         {{- end }}
+
+    {{- if .Values.cluster.walDir }}
+    # Separate WAL volume for better I/O performance with Dragonboat
+    - metadata:
+        name: wal
+        labels:
+          {{- include "nebulaio.selectorLabels" . | nindent 10 }}
+        {{- with .Values.persistence.annotations }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
+        {{- if .Values.persistence.storageClass }}
+        # Consider using faster storage class for WAL
+        storageClassName: {{ .Values.persistence.storageClass }}
+        {{- end }}
+    {{- end }}
   {{- end }}

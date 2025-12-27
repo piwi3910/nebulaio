@@ -73,14 +73,32 @@ groups:
           summary: "Frequent cluster leadership changes"
           description: "Cluster leadership has changed more than 3 times in the last 5 minutes."
 
-      - alert: RaftLogBehind
-        expr: nebulaio_raft_commit_index - nebulaio_raft_applied_index > 1000
+      - alert: DragonboatLogBehind
+        expr: nebulaio_dragonboat_commit_index - nebulaio_dragonboat_applied_index > 1000
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Raft log is behind on {{ $labels.instance }}"
-          description: "Raft applied index is more than 1000 entries behind commit index."
+          summary: "Dragonboat Raft log is behind on {{ $labels.instance }}"
+          description: "Dragonboat applied index is more than 1000 entries behind commit index."
+
+      - alert: DragonboatSnapshotFailures
+        expr: rate(nebulaio_dragonboat_snapshot_failures_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dragonboat snapshot failures"
+          description: "Dragonboat is experiencing snapshot creation failures."
+
+      - alert: DragonboatHighLatency
+        expr: nebulaio_dragonboat_propose_latency_seconds > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Dragonboat proposal latency"
+          description: "Dragonboat proposal latency is above 1 second."
 
   # S3 API Alerts
   - name: nebulaio.s3api

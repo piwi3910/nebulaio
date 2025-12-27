@@ -44,6 +44,18 @@ cluster:
   expectNodes: ""
   # -- Node role: storage, management, or hybrid
   nodeRole: storage
+  # -- Dragonboat shard ID (default: 1)
+  shardId: 1
+  # -- Raft port (default: 9003)
+  raftPort: 9003
+  # -- Gossip port (default: 9004)
+  gossipPort: 9004
+  # -- WAL directory (empty for default /data/wal)
+  walDir: ""
+  # -- Number of entries between snapshots (default: 10000)
+  snapshotCount: 10000
+  # -- Compaction overhead in entries (default: 5000)
+  compactionOverhead: 5000
 
 # Service configuration
 service:

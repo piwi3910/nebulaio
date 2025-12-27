@@ -49,15 +49,15 @@ spec:
             summary: "NebulaIO cluster is unhealthy"
             description: "Cluster {{ $labels.cluster }} has been unhealthy for 5 minutes"
 
-        # No leader elected
+        # No leader elected (updated for Dragonboat)
         - alert: NebulaIONoLeader
-          expr: sum(nebulaio_raft_is_leader) == 0
+          expr: sum(nebulaio_dragonboat_is_leader) == 0
           for: 1m
           labels:
             severity: critical
           annotations:
-            summary: "No Raft leader elected"
-            description: "NebulaIO cluster has no leader for over 1 minute"
+            summary: "No Dragonboat Raft leader elected"
+            description: "NebulaIO cluster has no Dragonboat leader for over 1 minute"
 
         # Pod not ready
         - alert: NebulaIOPodNotReady
@@ -98,3 +98,31 @@ spec:
           annotations:
             summary: "High error rate on NebulaIO"
             description: "Error rate is above 5% for 5 minutes"
+
+        # Dragonboat-specific alerts
+        - alert: DragonboatLogBehind
+          expr: nebulaio_dragonboat_commit_index - nebulaio_dragonboat_applied_index > 1000
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Dragonboat log behind"
+            description: "Dragonboat applied index is more than 1000 entries behind commit index"
+
+        - alert: DragonboatSnapshotFailures
+          expr: rate(nebulaio_dragonboat_snapshot_failures_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Dragonboat snapshot failures"
+            description: "Dragonboat is experiencing snapshot creation failures"
+
+        - alert: DragonboatHighProposalLatency
+          expr: nebulaio_dragonboat_propose_latency_seconds > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High Dragonboat proposal latency"
+            description: "Dragonboat proposal latency is above 1 second"

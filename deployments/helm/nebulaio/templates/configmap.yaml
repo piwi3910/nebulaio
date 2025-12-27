@@ -17,10 +17,16 @@ data:
   {{- if .Values.cluster.enabled }}
   NEBULAIO_CLUSTER_ENABLED: "true"
   NEBULAIO_CLUSTER_NAME: {{ .Values.cluster.name | quote }}
-  NEBULAIO_CLUSTER_RAFT_PORT: "9003"
-  NEBULAIO_CLUSTER_GOSSIP_PORT: "9004"
+  NEBULAIO_CLUSTER_SHARD_ID: {{ .Values.cluster.shardId | quote }}
+  NEBULAIO_CLUSTER_RAFT_PORT: {{ .Values.cluster.raftPort | quote }}
+  NEBULAIO_CLUSTER_GOSSIP_PORT: {{ .Values.cluster.gossipPort | quote }}
   NEBULAIO_CLUSTER_NODE_ROLE: {{ .Values.cluster.nodeRole | quote }}
   NEBULAIO_CLUSTER_EXPECT_NODES: {{ .Values.replicaCount | quote }}
+  {{- if .Values.cluster.walDir }}
+  NEBULAIO_CLUSTER_WAL_DIR: {{ .Values.cluster.walDir | quote }}
+  {{- end }}
+  NEBULAIO_CLUSTER_SNAPSHOT_COUNT: {{ .Values.cluster.snapshotCount | quote }}
+  NEBULAIO_CLUSTER_COMPACTION_OVERHEAD: {{ .Values.cluster.compactionOverhead | quote }}
   {{- else }}
   NEBULAIO_CLUSTER_ENABLED: "false"
   NEBULAIO_CLUSTER_BOOTSTRAP: "true"
