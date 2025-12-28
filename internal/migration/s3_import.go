@@ -768,7 +768,7 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 						errMu.Unlock()
 
 						atomic.AddInt64(&job.Progress.FailedObjects, 1)
-						mm.logFailedObject(sourceBucket, o.Key, err)
+						mm.logFailedObject(job.ID, sourceBucket, o.Key, err)
 					} else {
 						atomic.AddInt64(&job.Progress.MigratedObjects, 1)
 						atomic.AddInt64(&job.Progress.MigratedBytes, o.Size)
@@ -918,7 +918,7 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 }
 
 // logFailedObject logs a failed object migration.
-func (mm *MigrationManager) logFailedObject(bucket, key string, err error) {
+func (mm *MigrationManager) logFailedObject(jobID, bucket, key string, err error) {
 	entry := FailedObject{
 		Bucket:    bucket,
 		Key:       key,
@@ -930,6 +930,7 @@ func (mm *MigrationManager) logFailedObject(bucket, key string, err error) {
 	if marshalErr != nil {
 		log.Error().
 			Err(marshalErr).
+			Str("job_id", jobID).
 			Str("bucket", bucket).
 			Str("key", key).
 			Str("original_error", err.Error()).
@@ -939,6 +940,7 @@ func (mm *MigrationManager) logFailedObject(bucket, key string, err error) {
 	if _, writeErr := mm.failedLog.Write(append(data, '\n')); writeErr != nil {
 		log.Error().
 			Err(writeErr).
+			Str("job_id", jobID).
 			Str("bucket", bucket).
 			Str("key", key).
 			Msg("failed to write migration failure to log file")

@@ -287,15 +287,14 @@ func New(config Config) (*Firewall, error) {
 		userConnections: make(map[string]int64),
 	}
 
-	// Parse IP allowlist
+	// Parse IP allowlist - collect invalid entries for summary logging
+	var invalidAllowlistEntries []string
 	for _, cidr := range config.IPAllowlist {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
 			ip := net.ParseIP(cidr)
 			if ip == nil {
-				log.Warn().
-					Str("cidr", cidr).
-					Msg("skipping invalid IP allowlist entry - not a valid IP or CIDR notation")
+				invalidAllowlistEntries = append(invalidAllowlistEntries, cidr)
 				continue
 			}
 			var parseErr error
@@ -305,10 +304,7 @@ func New(config Config) (*Firewall, error) {
 				_, network, parseErr = net.ParseCIDR(cidr + "/128")
 			}
 			if parseErr != nil {
-				log.Warn().
-					Err(parseErr).
-					Str("cidr", cidr).
-					Msg("failed to convert IP to CIDR for allowlist - skipping entry")
+				invalidAllowlistEntries = append(invalidAllowlistEntries, cidr)
 				continue
 			}
 		}
@@ -316,16 +312,21 @@ func New(config Config) (*Firewall, error) {
 			fw.allowedNets = append(fw.allowedNets, network)
 		}
 	}
+	if len(invalidAllowlistEntries) > 0 {
+		log.Warn().
+			Int("count", len(invalidAllowlistEntries)).
+			Strs("entries", invalidAllowlistEntries).
+			Msg("skipped invalid IP allowlist entries - check firewall configuration")
+	}
 
-	// Parse IP blocklist
+	// Parse IP blocklist - collect invalid entries for summary logging
+	var invalidBlocklistEntries []string
 	for _, cidr := range config.IPBlocklist {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
 			ip := net.ParseIP(cidr)
 			if ip == nil {
-				log.Warn().
-					Str("cidr", cidr).
-					Msg("skipping invalid IP blocklist entry - not a valid IP or CIDR notation")
+				invalidBlocklistEntries = append(invalidBlocklistEntries, cidr)
 				continue
 			}
 			var parseErr error
@@ -335,16 +336,19 @@ func New(config Config) (*Firewall, error) {
 				_, network, parseErr = net.ParseCIDR(cidr + "/128")
 			}
 			if parseErr != nil {
-				log.Warn().
-					Err(parseErr).
-					Str("cidr", cidr).
-					Msg("failed to convert IP to CIDR for blocklist - skipping entry")
+				invalidBlocklistEntries = append(invalidBlocklistEntries, cidr)
 				continue
 			}
 		}
 		if network != nil {
 			fw.blockedNets = append(fw.blockedNets, network)
 		}
+	}
+	if len(invalidBlocklistEntries) > 0 {
+		log.Warn().
+			Int("count", len(invalidBlocklistEntries)).
+			Strs("entries", invalidBlocklistEntries).
+			Msg("skipped invalid IP blocklist entries - check firewall configuration")
 	}
 
 	// Initialize global rate limiter

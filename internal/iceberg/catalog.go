@@ -851,6 +851,9 @@ func (c *Catalog) applyUpdate(metadata *TableMetadata, update *TableUpdate) erro
 }
 
 func (c *Catalog) copyMetadata(m *TableMetadata) *TableMetadata {
+	if m == nil {
+		return nil
+	}
 	data, err := json.Marshal(m)
 	if err != nil {
 		log.Error().
