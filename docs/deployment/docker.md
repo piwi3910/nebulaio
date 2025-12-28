@@ -562,13 +562,15 @@ docker service logs -f nebulaio_nebulaio
 
 ### Authentication
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEBULAIO_AUTH_ROOT_USER` | Initial admin username | `admin` |
-| `NEBULAIO_AUTH_ROOT_PASSWORD` | Initial admin password | `admin123` |
-| `NEBULAIO_AUTH_JWT_SECRET` | JWT signing secret | Auto-generated |
-| `NEBULAIO_AUTH_TOKEN_EXPIRY` | Token expiry (minutes) | `60` |
-| `NEBULAIO_AUTH_REFRESH_TOKEN_EXPIRY` | Refresh token expiry (hours) | `168` |
+> **Security Warning**: Never use weak or default passwords in production. The root password must be explicitly set and meet minimum security requirements.
+
+| Variable | Description | Default | Requirements |
+|----------|-------------|---------|--------------|
+| `NEBULAIO_AUTH_ROOT_USER` | Initial admin username | `admin` | - |
+| `NEBULAIO_AUTH_ROOT_PASSWORD` | Initial admin password | **Required** | Min 12 chars, mixed case, numbers |
+| `NEBULAIO_AUTH_JWT_SECRET` | JWT signing secret | Auto-generated | - |
+| `NEBULAIO_AUTH_TOKEN_EXPIRY` | Token expiry (minutes) | `60` | - |
+| `NEBULAIO_AUTH_REFRESH_TOKEN_EXPIRY` | Refresh token expiry (hours) | `168` | - |
 
 ### TLS Configuration
 

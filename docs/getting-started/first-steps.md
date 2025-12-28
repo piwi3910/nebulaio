@@ -6,7 +6,9 @@ This guide walks you through fundamental operations in NebulaIO, from understand
 
 - NebulaIO running (see [Quick Start Guide](quick-start.md))
 - AWS CLI v2 installed, or MinIO Client (mc)
-- Access credentials (default: `admin` / `password123`)
+- Access credentials (set via `NEBULAIO_AUTH_ROOT_USER` and `NEBULAIO_AUTH_ROOT_PASSWORD` environment variables)
+
+> **Note**: TLS is enabled by default. Use HTTPS endpoints and `--no-verify-ssl` for self-signed certificates.
 
 ## Understanding NebulaIO Concepts
 
@@ -27,12 +29,13 @@ Objects are fundamental storage units consisting of:
 
 ```bash
 # AWS CLI: Configure credentials and create alias
+# Use the credentials you set when starting NebulaIO
 aws configure set aws_access_key_id admin
-aws configure set aws_secret_access_key password123
-alias nebulaio='aws --endpoint-url http://localhost:9000'
+aws configure set aws_secret_access_key "$NEBULAIO_AUTH_ROOT_PASSWORD"
+alias nebulaio='aws --endpoint-url https://localhost:9000 --no-verify-ssl'
 
 # MinIO Client: Add NebulaIO as alias
-mc alias set nebulaio http://localhost:9000 admin password123
+mc alias set nebulaio https://localhost:9000 admin "$NEBULAIO_AUTH_ROOT_PASSWORD" --insecure
 ```
 
 ## Creating Your First Bucket

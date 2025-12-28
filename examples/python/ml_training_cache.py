@@ -14,10 +14,14 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 
 # Configuration
-ENDPOINT = os.getenv("NEBULAIO_ENDPOINT", "http://localhost:9000")
+# Note: Set credentials via environment variables (no defaults for security)
+ENDPOINT = os.getenv("NEBULAIO_ENDPOINT", "https://localhost:9000")
 ACCESS_KEY = os.getenv("NEBULAIO_ACCESS_KEY", "admin")
-SECRET_KEY = os.getenv("NEBULAIO_SECRET_KEY", "admin123")
-ADMIN_ENDPOINT = os.getenv("NEBULAIO_ADMIN_ENDPOINT", "http://localhost:9001")
+SECRET_KEY = os.getenv("NEBULAIO_SECRET_KEY")  # Required - set via environment
+ADMIN_ENDPOINT = os.getenv("NEBULAIO_ADMIN_ENDPOINT", "https://localhost:9001")
+
+if not SECRET_KEY:
+    raise ValueError("NEBULAIO_SECRET_KEY environment variable is required")
 
 
 def get_s3_client():

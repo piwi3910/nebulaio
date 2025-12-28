@@ -29,12 +29,13 @@ export PATH=$PATH:/path/to/nebulaio/bin
 ### Initial Setup
 
 ```bash
-# Set endpoint
-nebulaio-cli config set endpoint http://localhost:9000
+# Set endpoint (use HTTPS since TLS is enabled by default)
+nebulaio-cli config set endpoint https://localhost:9000
+nebulaio-cli config set skip-verify true  # For self-signed certificates
 
 # Set credentials
 nebulaio-cli config set access-key YOUR_ACCESS_KEY
-nebulaio-cli config set secret-key YOUR_SECRET_KEY
+nebulaio-cli config set secret-key "$NEBULAIO_AUTH_ROOT_PASSWORD"
 
 # Optional: Set region
 nebulaio-cli config set region us-east-1
@@ -55,12 +56,12 @@ nebulaio-cli config get endpoint
 Configuration is stored in `~/.nebulaio/config.yaml`:
 
 ```yaml
-endpoint: http://localhost:9000
+endpoint: https://localhost:9000
 access_key: YOUR_ACCESS_KEY
 secret_key: YOUR_SECRET_KEY
 region: us-east-1
-use_ssl: false
-skip_verify: false
+use_ssl: true
+skip_verify: true  # Set to false when using trusted certificates
 ```
 
 ### Environment Variables
@@ -68,10 +69,11 @@ skip_verify: false
 You can also use environment variables (they override config file):
 
 ```bash
-export NEBULAIO_ENDPOINT=http://localhost:9000
+export NEBULAIO_ENDPOINT=https://localhost:9000
 export NEBULAIO_ACCESS_KEY=YOUR_ACCESS_KEY
 export NEBULAIO_SECRET_KEY=YOUR_SECRET_KEY
 export NEBULAIO_REGION=us-east-1
+export NEBULAIO_SKIP_VERIFY=true  # For self-signed certificates
 
 # AWS SDK compatible variables also work:
 export AWS_ACCESS_KEY_ID=YOUR_ACCESS_KEY

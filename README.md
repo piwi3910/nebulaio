@@ -186,7 +186,7 @@ docker run -p 9000:9000 -p 9001:9001 -v nebulaio-data:/data nebulaio:latest
 | `NEBULAIO_S3_PORT` | S3 API port | `9000` |
 | `NEBULAIO_ADMIN_PORT` | Admin/Console API port | `9001` |
 | `NEBULAIO_AUTH_ROOT_USER` | Initial admin username | `admin` |
-| `NEBULAIO_AUTH_ROOT_PASSWORD` | Initial admin password | `admin123` |
+| `NEBULAIO_AUTH_ROOT_PASSWORD` | Initial admin password | **Required** (min 12 chars) |
 | `NEBULAIO_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
 
 #### AI/ML Feature Environment Variables

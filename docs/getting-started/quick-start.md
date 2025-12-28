@@ -66,17 +66,19 @@ Run with default settings:
 
 Default configuration:
 
-- **S3 API**: `http://localhost:9000`
-- **Admin API**: `http://localhost:9001`
+- **S3 API**: `https://localhost:9000` (TLS enabled by default)
+- **Admin API**: `https://localhost:9001`
 - **Data directory**: `./data`
-- **Credentials**: `admin` / `admin123`
+- **Credentials**: Set via environment variables (required)
 
-Custom configuration via environment variables:
+> **Security Note**: You must set a secure password before starting. Passwords must be at least 12 characters with mixed case and numbers.
+
+Configuration via environment variables:
 
 ```bash
 export NEBULAIO_DATA_DIR=/var/lib/nebulaio
 export NEBULAIO_AUTH_ROOT_USER=admin
-export NEBULAIO_AUTH_ROOT_PASSWORD=your-secure-password
+export NEBULAIO_AUTH_ROOT_PASSWORD="YourSecurePassword123!"  # Required
 
 ./bin/nebulaio
 ```
@@ -86,30 +88,31 @@ export NEBULAIO_AUTH_ROOT_PASSWORD=your-secure-password
 ## Verify Installation
 
 ```bash
-# Health check
-curl http://localhost:9001/health
+# Health check (use -k for self-signed certificates since TLS is enabled by default)
+curl -k https://localhost:9001/health
 # {"status":"healthy"}
 
 # Detailed health status
-curl http://localhost:9001/health/detailed
+curl -k https://localhost:9001/health/detailed
 
 # Readiness probe
-curl http://localhost:9001/health/ready
+curl -k https://localhost:9001/health/ready
 ```
 
 ---
 
 ## Basic Usage with AWS CLI
 
-Configure the AWS CLI:
+Configure the AWS CLI with your credentials:
 
 ```bash
+# Use the credentials you configured when starting NebulaIO
 aws configure set aws_access_key_id admin
-aws configure set aws_secret_access_key admin123
+aws configure set aws_secret_access_key "$NEBULAIO_AUTH_ROOT_PASSWORD"
 aws configure set region us-east-1
 
-# Create endpoint alias
-alias nebulaio='aws --endpoint-url http://localhost:9000 s3'
+# Create endpoint alias (use https:// since TLS is enabled by default)
+alias nebulaio='aws --endpoint-url https://localhost:9000 --no-verify-ssl s3'
 ```
 
 ### Create a Bucket and Upload an Object
@@ -134,13 +137,13 @@ nebulaio cp s3://my-bucket/hello.txt downloaded.txt
 ## Alternative: MinIO Client (mc)
 
 ```bash
-# Configure mc
-mc alias set nebulaio http://localhost:9000 admin admin123
+# Configure mc with your credentials
+mc alias set nebulaio https://localhost:9000 admin "$NEBULAIO_AUTH_ROOT_PASSWORD" --insecure
 
 # Basic operations
-mc mb nebulaio/my-bucket
-mc cp myfile.txt nebulaio/my-bucket/
-mc ls nebulaio/my-bucket/
+mc mb nebulaio/my-bucket --insecure
+mc cp myfile.txt nebulaio/my-bucket/ --insecure
+mc ls nebulaio/my-bucket/ --insecure
 ```
 
 ---
@@ -148,10 +151,11 @@ mc ls nebulaio/my-bucket/
 ## Using the NebulaIO CLI
 
 ```bash
-# Configure
-./bin/nebulaio-cli config set endpoint http://localhost:9000
+# Configure with your credentials
+./bin/nebulaio-cli config set endpoint https://localhost:9000
 ./bin/nebulaio-cli config set access-key admin
-./bin/nebulaio-cli config set secret-key admin123
+./bin/nebulaio-cli config set secret-key "$NEBULAIO_AUTH_ROOT_PASSWORD"
+./bin/nebulaio-cli config set tls-skip-verify true  # For self-signed certs
 
 # Create bucket and upload
 ./bin/nebulaio-cli bucket create my-bucket
