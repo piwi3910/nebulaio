@@ -50,6 +50,7 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 ### AI/ML & High-Performance Features (2025)
 
 > **Feature Status Legend:**
+>
 > - ![Stable](https://img.shields.io/badge/status-stable-brightgreen) Production-ready
 > - ![Beta](https://img.shields.io/badge/status-beta-yellow) Feature complete, testing in progress
 > - ![Experimental](https://img.shields.io/badge/status-experimental-orange) Early development, API may change

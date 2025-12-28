@@ -3,11 +3,14 @@ package health
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/piwi3910/nebulaio/internal/audit"
 	"github.com/piwi3910/nebulaio/internal/metadata"
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 	"github.com/piwi3910/nebulaio/pkg/s3errors"
@@ -42,8 +45,11 @@ func (m *MockMetadataStore) IsLeader() bool {
 	return m.isLeader
 }
 
-func (m *MockMetadataStore) LeaderAddress() (string, bool) {
-	return m.leaderAddress, m.leaderAddress != ""
+func (m *MockMetadataStore) LeaderAddress() (string, error) {
+	if m.leaderAddress == "" {
+		return "", s3errors.ErrInternalError
+	}
+	return m.leaderAddress, nil
 }
 
 func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*metadata.Bucket, error) {
@@ -68,9 +74,36 @@ func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key
 func (m *MockMetadataStore) CreateMultipartUpload(ctx context.Context, upload *metadata.MultipartUpload) error { return nil }
 func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*metadata.MultipartUpload, error) { return nil, nil }
 func (m *MockMetadataStore) DeleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error { return nil }
-func (m *MockMetadataStore) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker string, maxUploads int) (*metadata.MultipartUploadListing, error) { return nil, nil }
-func (m *MockMetadataStore) AddPart(ctx context.Context, bucket, key, uploadID string, part *metadata.Part) error { return nil }
-func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID string) ([]*metadata.Part, error) { return nil, nil }
+func (m *MockMetadataStore) ListMultipartUploads(ctx context.Context, bucket string) ([]*metadata.MultipartUpload, error) { return nil, nil }
+func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uploadID string, part *metadata.UploadPart) error { return nil }
+func (m *MockMetadataStore) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error { return nil }
+func (m *MockMetadataStore) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error { return nil }
+func (m *MockMetadataStore) AddNode(ctx context.Context, node *metadata.NodeInfo) error { return nil }
+func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID string) ([]*metadata.UploadPart, error) { return nil, nil }
+func (m *MockMetadataStore) PutObjectMeta(ctx context.Context, meta *metadata.ObjectMeta) error { return nil }
+func (m *MockMetadataStore) GetObjectMeta(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) { return nil, nil }
+func (m *MockMetadataStore) DeleteObjectMeta(ctx context.Context, bucket, key string) error { return nil }
+func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *metadata.ObjectMeta, preserveOldVersions bool) error { return nil }
+func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User) error { return nil }
+func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.User, error) { return nil, nil }
+func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username string) (*metadata.User, error) { return nil, nil }
+func (m *MockMetadataStore) UpdateUser(ctx context.Context, user *metadata.User) error { return nil }
+func (m *MockMetadataStore) DeleteUser(ctx context.Context, id string) error { return nil }
+func (m *MockMetadataStore) ListUsers(ctx context.Context) ([]*metadata.User, error) { return nil, nil }
+func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.AccessKey) error { return nil }
+func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string) (*metadata.AccessKey, error) { return nil, nil }
+func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID string) error { return nil }
+func (m *MockMetadataStore) ListAccessKeys(ctx context.Context, userID string) ([]*metadata.AccessKey, error) { return nil, nil }
+func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.Policy) error { return nil }
+func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metadata.Policy, error) { return nil, nil }
+func (m *MockMetadataStore) UpdatePolicy(ctx context.Context, policy *metadata.Policy) error { return nil }
+func (m *MockMetadataStore) DeletePolicy(ctx context.Context, name string) error { return nil }
+func (m *MockMetadataStore) ListPolicies(ctx context.Context) ([]*metadata.Policy, error) { return nil, nil }
+func (m *MockMetadataStore) RemoveNode(ctx context.Context, nodeID string) error { return nil }
+func (m *MockMetadataStore) ListNodes(ctx context.Context) ([]*metadata.NodeInfo, error) { return nil, nil }
+func (m *MockMetadataStore) StoreAuditEvent(ctx context.Context, event *audit.AuditEvent) error { return nil }
+func (m *MockMetadataStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) { return nil, nil }
+func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error) { return 0, nil }
 func (m *MockMetadataStore) Close() error { return nil }
 
 // MockStorageBackend implements backend.Backend interface for testing
@@ -93,12 +126,16 @@ func (m *MockStorageBackend) GetStorageInfo(ctx context.Context) (*backend.Stora
 }
 
 // Implement remaining interface methods as no-ops
+func (m *MockStorageBackend) Init(ctx context.Context) error { return nil }
 func (m *MockStorageBackend) CreateBucket(ctx context.Context, name string) error { return nil }
 func (m *MockStorageBackend) DeleteBucket(ctx context.Context, name string) error { return nil }
-func (m *MockStorageBackend) PutObject(ctx context.Context, bucket, key string, data []byte) error { return nil }
-func (m *MockStorageBackend) GetObject(ctx context.Context, bucket, key string) ([]byte, error) { return nil, nil }
+func (m *MockStorageBackend) BucketExists(ctx context.Context, name string) (bool, error) { return false, nil }
+func (m *MockStorageBackend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) { return nil, nil }
+func (m *MockStorageBackend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("")), nil }
 func (m *MockStorageBackend) DeleteObject(ctx context.Context, bucket, key string) error { return nil }
-func (m *MockStorageBackend) ListObjects(ctx context.Context, bucket, prefix string) ([]string, error) { return nil, nil }
+func (m *MockStorageBackend) ObjectExists(ctx context.Context, bucket, key string) (bool, error) { return false, nil }
+func (m *MockStorageBackend) ListBuckets(ctx context.Context) ([]string, error) { return nil, nil }
+func (m *MockStorageBackend) Close() error { return nil }
 
 func TestNewChecker(t *testing.T) {
 	store := &MockMetadataStore{}

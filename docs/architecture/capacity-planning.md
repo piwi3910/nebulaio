@@ -5,6 +5,7 @@ This guide helps you plan storage capacity, node sizing, and placement group con
 ## Overview
 
 Capacity planning for NebulaIO involves:
+
 1. **Storage capacity** - Raw storage needed for data + overhead
 2. **Node sizing** - CPU, RAM, and network per node
 3. **Placement groups** - Data locality and fault domain configuration
@@ -21,6 +22,7 @@ Total Raw Storage = Data Size × Erasure Coding Overhead × Replication Factor
 ```
 
 **Example:**
+
 - Data size: 100 TB
 - Erasure coding: 10+4 (40% overhead)
 - Replication factor: 2 (cross-DC)
@@ -48,6 +50,7 @@ Raw Storage = 100 TB × 1.4 × 2 = 280 TB
 | Archive | Unlimited | Long-term retention |
 
 **Example for 1 PB deployment:**
+
 ```yaml
 storage_allocation:
   hot_tier: 100 TB    # 10%
@@ -71,6 +74,7 @@ storage_allocation:
 ### RAM Requirements
 
 **Base formula:**
+
 ```
 RAM per Node = Base + (Objects × Metadata Size) + Cache + Buffers
 ```
@@ -84,6 +88,7 @@ RAM per Node = Base + (Objects × Metadata Size) + Cache + Buffers
 | Raft state | 1-4 GB |
 
 **Example for 100 million objects (5 nodes):**
+
 ```
 Metadata per node: 100M / 5 × 200 bytes = 4 GB
 Total RAM: 4 GB (base) + 4 GB (metadata) + 32 GB (cache) + 4 GB (buffers) = 44 GB
@@ -133,6 +138,7 @@ Placement groups define data locality boundaries:
 ### Sizing Placement Groups
 
 **Minimum nodes per placement group:**
+
 ```
 Min Nodes = Data Shards + Parity Shards + Spare Nodes
 ```
@@ -174,11 +180,13 @@ storage:
 ### Capacity per Placement Group
 
 **Formula:**
+
 ```
 PG Capacity = (Nodes × Storage per Node) / Erasure Overhead
 ```
 
 **Example: 10 nodes with 10 TB NVMe, 10+4 erasure:**
+
 ```
 Raw capacity: 10 × 10 TB = 100 TB
 Usable capacity: 100 TB / 1.4 = 71 TB
@@ -200,16 +208,19 @@ Usable capacity: 100 TB / 1.4 = 71 TB
 ### Scaling Strategies
 
 **Vertical Scaling (Single Node):**
+
 - Add RAM for more cache
 - Add NVMe drives
 - Upgrade network
 
 **Horizontal Scaling (Add Nodes):**
+
 - Better for large datasets
 - Improves fault tolerance
 - Linear capacity increase
 
 **Placement Group Expansion:**
+
 - Add nodes to existing placement groups
 - Create new placement groups for geographic expansion
 
@@ -220,6 +231,7 @@ Usable capacity: 100 TB / 1.4 = 71 TB
 | 10 TB | 25 TB | 60 TB | 150 TB |
 
 **Typical growth factors:**
+
 - Conservative: 1.5x per year
 - Moderate: 2.5x per year
 - Aggressive: 4x per year
