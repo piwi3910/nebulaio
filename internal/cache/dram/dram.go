@@ -69,20 +69,20 @@ type Config struct {
 // DefaultConfig returns sensible defaults for production workloads
 func DefaultConfig() Config {
 	return Config{
-		MaxSize:           8 * 1024 * 1024 * 1024, // 8GB
-		ShardCount:        256,
-		EntryMaxSize:      256 * 1024 * 1024, // 256MB
-		TTL:               time.Hour,
-		EvictionPolicy:    "arc",
-		PrefetchEnabled:   true,
-		PrefetchThreshold: 2,
-		PrefetchAhead:     4,
-		ZeroCopyEnabled:   true,
+		MaxSize:            8 * 1024 * 1024 * 1024, // 8GB
+		ShardCount:         256,
+		EntryMaxSize:       256 * 1024 * 1024, // 256MB
+		TTL:                time.Hour,
+		EvictionPolicy:     "arc",
+		PrefetchEnabled:    true,
+		PrefetchThreshold:  2,
+		PrefetchAhead:      4,
+		ZeroCopyEnabled:    true,
 		CompressionEnabled: false,
-		DistributedMode:   false,
-		ReplicationFactor: 2,
-		WarmupEnabled:     false,
-		MetricsEnabled:    true,
+		DistributedMode:    false,
+		ReplicationFactor:  2,
+		WarmupEnabled:      false,
+		MetricsEnabled:     true,
 	}
 }
 
@@ -103,17 +103,18 @@ type Entry struct {
 
 // Metrics contains cache statistics
 type Metrics struct {
-	Size           int64   `json:"size"`
-	MaxSize        int64   `json:"maxSize"`
-	Objects        int64   `json:"objects"`
-	Hits           int64   `json:"hits"`
-	Misses         int64   `json:"misses"`
-	HitRate        float64 `json:"hitRate"`
-	Evictions      int64   `json:"evictions"`
-	BytesServed    int64   `json:"bytesServed"`
-	AvgLatencyUs   int64   `json:"avgLatencyUs"`
-	PrefetchHits   int64   `json:"prefetchHits"`
-	PrefetchMisses int64   `json:"prefetchMisses"`
+	Size                   int64   `json:"size"`
+	MaxSize                int64   `json:"maxSize"`
+	Objects                int64   `json:"objects"`
+	Hits                   int64   `json:"hits"`
+	Misses                 int64   `json:"misses"`
+	HitRate                float64 `json:"hitRate"`
+	Evictions              int64   `json:"evictions"`
+	BytesServed            int64   `json:"bytesServed"`
+	AvgLatencyUs           int64   `json:"avgLatencyUs"`
+	PrefetchHits           int64   `json:"prefetchHits"`
+	PrefetchMisses         int64   `json:"prefetchMisses"`
+	PeerCacheWriteFailures int64   `json:"peerCacheWriteFailures"`
 }
 
 // shard is a partition of the cache with its own lock
@@ -133,13 +134,14 @@ type Cache struct {
 	shards []*shard
 
 	// Statistics (atomic)
-	hits           int64
-	misses         int64
-	bytesServed    int64
-	prefetchHits   int64
-	prefetchMisses int64
-	totalLatency   int64 // nanoseconds
-	opCount        int64
+	hits                   int64
+	misses                 int64
+	bytesServed            int64
+	prefetchHits           int64
+	prefetchMisses         int64
+	totalLatency           int64 // nanoseconds
+	opCount                int64
+	peerCacheWriteFailures int64 // failed attempts to cache entries from peers
 
 	// Prefetch tracking
 	accessPatterns map[string]*accessPattern
@@ -256,6 +258,7 @@ func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 			if entry, ok := c.getFromPeer(ctx, key); ok {
 				// Cache locally for future access - log if caching fails but don't fail the get
 				if putErr := c.Put(ctx, key, entry.Data, entry.ContentType, entry.ETag); putErr != nil {
+					atomic.AddInt64(&c.peerCacheWriteFailures, 1)
 					log.Warn().
 						Err(putErr).
 						Str("key", key).
@@ -423,17 +426,18 @@ func (c *Cache) Metrics() Metrics {
 	}
 
 	return Metrics{
-		Size:           totalSize,
-		MaxSize:        c.config.MaxSize,
-		Objects:        totalObjects,
-		Hits:           hits,
-		Misses:         misses,
-		HitRate:        hitRate,
-		Evictions:      totalEvictions,
-		BytesServed:    atomic.LoadInt64(&c.bytesServed),
-		AvgLatencyUs:   avgLatency,
-		PrefetchHits:   atomic.LoadInt64(&c.prefetchHits),
-		PrefetchMisses: atomic.LoadInt64(&c.prefetchMisses),
+		Size:                   totalSize,
+		MaxSize:                c.config.MaxSize,
+		Objects:                totalObjects,
+		Hits:                   hits,
+		Misses:                 misses,
+		HitRate:                hitRate,
+		Evictions:              totalEvictions,
+		BytesServed:            atomic.LoadInt64(&c.bytesServed),
+		AvgLatencyUs:           avgLatency,
+		PrefetchHits:           atomic.LoadInt64(&c.prefetchHits),
+		PrefetchMisses:         atomic.LoadInt64(&c.prefetchMisses),
+		PeerCacheWriteFailures: atomic.LoadInt64(&c.peerCacheWriteFailures),
 	}
 }
 
