@@ -779,10 +779,18 @@ func (t *ConvertJSONTransformer) Transform(ctx context.Context, input io.Reader,
 // CompressTransformer compresses content
 type CompressTransformer struct{}
 
+// MaxTransformSize is the maximum size of data that can be transformed in memory (100MB)
+const MaxTransformSize = 100 * 1024 * 1024
+
 func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
-	data, err := io.ReadAll(input)
+	// Use LimitReader to prevent memory exhaustion from large objects
+	limitedReader := io.LimitReader(input, MaxTransformSize+1)
+	data, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(data) > MaxTransformSize {
+		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", MaxTransformSize)
 	}
 
 	// Get compression algorithm from params (default: gzip)
@@ -871,9 +879,14 @@ func compressZstd(buf *bytes.Buffer, data []byte, level int) (err error) {
 type DecompressTransformer struct{}
 
 func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
-	data, err := io.ReadAll(input)
+	// Use LimitReader to prevent memory exhaustion from large objects
+	limitedReader := io.LimitReader(input, MaxTransformSize+1)
+	data, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(data) > MaxTransformSize {
+		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", MaxTransformSize)
 	}
 
 	// Get compression algorithm from params (auto-detect if not specified)

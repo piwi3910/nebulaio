@@ -17,6 +17,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // ComplianceMode represents the compliance standard to follow
@@ -963,41 +965,50 @@ func (o *FileOutput) compressFile(filePath string) {
 	// Read the original file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return // Silently fail - compression is best-effort
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to read log file for compression")
+		return
 	}
 
 	// Create the compressed file
 	compressedPath := filePath + ".gz"
 	outFile, err := os.Create(compressedPath)
 	if err != nil {
+		log.Warn().Err(err).Str("file", compressedPath).Msg("Failed to create compressed log file")
 		return
 	}
-
-	// Track if compression succeeded to determine cleanup action
-	success := false
-	defer func() {
-		outFile.Close()
-		if !success {
-			os.Remove(compressedPath)
-		}
-	}()
 
 	// Create gzip writer and compress
 	gzWriter := gzip.NewWriter(outFile)
-	defer gzWriter.Close()
 
+	// Write data to gzip writer
 	if _, err := gzWriter.Write(data); err != nil {
-		return
-	}
-	if err := gzWriter.Close(); err != nil {
+		// Close both writers before cleaning up
+		gzWriter.Close()
+		outFile.Close()
+		os.Remove(compressedPath)
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to write compressed data")
 		return
 	}
 
-	// Mark as successful before removing original
-	success = true
+	// Close gzip writer to flush all data
+	if err := gzWriter.Close(); err != nil {
+		outFile.Close()
+		os.Remove(compressedPath)
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to finalize gzip compression")
+		return
+	}
+
+	// Close the output file
+	if err := outFile.Close(); err != nil {
+		os.Remove(compressedPath)
+		log.Warn().Err(err).Str("file", compressedPath).Msg("Failed to close compressed log file")
+		return
+	}
 
 	// Remove the original uncompressed file
-	os.Remove(filePath)
+	if err := os.Remove(filePath); err != nil {
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to remove original log file after compression")
+	}
 }
 
 // cleanupOldFiles removes old log files based on MaxBackups and MaxAgeDays
@@ -1009,6 +1020,7 @@ func (o *FileOutput) cleanupOldFiles() {
 	// Find all rotated files (matching pattern: baseName.timestamp or baseName.timestamp.gz)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		log.Warn().Err(err).Str("dir", dir).Msg("Failed to read log directory for cleanup")
 		return
 	}
 
@@ -1063,7 +1075,9 @@ func (o *FileOutput) cleanupOldFiles() {
 		}
 
 		if shouldDelete {
-			os.Remove(rf.path)
+			if err := os.Remove(rf.path); err != nil {
+				log.Warn().Err(err).Str("file", rf.path).Msg("Failed to remove old log file during cleanup")
+			}
 		}
 	}
 }

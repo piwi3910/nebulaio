@@ -408,26 +408,16 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 	// Track statistics
 	var enqueuedCount int64
 	var errorCount int64
+	var listErr error
 
-	// Process objects
-	for {
+	// Process objects - drain both channels to avoid goroutine leaks
+	objectsDone := false
+	for !objectsDone {
 		select {
 		case obj, ok := <-objectsCh:
 			if !ok {
-				// Channel closed, done listing
-				if errorCount > 0 {
-					log.Warn().
-						Str("bucket", bucket).
-						Int64("enqueued", enqueuedCount).
-						Int64("errors", errorCount).
-						Msg("Bucket resync completed with errors")
-					return fmt.Errorf("resync completed with %d errors, %d objects enqueued", errorCount, enqueuedCount)
-				}
-				log.Info().
-					Str("bucket", bucket).
-					Int64("enqueued", enqueuedCount).
-					Msg("Bucket resync completed successfully")
-				return nil
+				objectsDone = true
+				continue
 			}
 
 			// Check which rules apply to this object
@@ -440,7 +430,7 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 				// Enqueue the object for replication
 				_, err := s.queue.Enqueue(ctx, bucket, obj.Key, obj.VersionID, "PUT", rule.ID)
 				if err != nil {
-					log.Error().
+					log.Warn().
 						Err(err).
 						Str("bucket", bucket).
 						Str("key", obj.Key).
@@ -455,7 +445,7 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 		case err, ok := <-errCh:
 			if ok && err != nil {
 				log.Error().Err(err).Str("bucket", bucket).Msg("Error listing objects during resync")
-				return fmt.Errorf("error listing objects: %w", err)
+				listErr = err
 			}
 
 		case <-ctx.Done():
@@ -463,6 +453,36 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 			return ctx.Err()
 		}
 	}
+
+	// Drain any remaining errors from errCh
+	select {
+	case err, ok := <-errCh:
+		if ok && err != nil && listErr == nil {
+			listErr = err
+		}
+	default:
+	}
+
+	// Return listing error if any
+	if listErr != nil {
+		return fmt.Errorf("error listing objects: %w", listErr)
+	}
+
+	// Log completion
+	if errorCount > 0 {
+		log.Warn().
+			Str("bucket", bucket).
+			Int64("enqueued", enqueuedCount).
+			Int64("errors", errorCount).
+			Msg("Bucket resync completed with enqueue errors")
+		return fmt.Errorf("resync completed with %d enqueue errors, %d objects enqueued", errorCount, enqueuedCount)
+	}
+
+	log.Info().
+		Str("bucket", bucket).
+		Int64("enqueued", enqueuedCount).
+		Msg("Bucket resync completed successfully")
+	return nil
 }
 
 // MarshalJSON implements json.Marshaler for Config
