@@ -19,6 +19,8 @@ const PoliciesPage = lazy(() => import('./pages/PoliciesPage').then(m => ({ defa
 const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage').then(m => ({ default: m.AuditLogsPage })));
 const AIMLFeaturesPage = lazy(() => import('./pages/AIMLFeaturesPage').then(m => ({ default: m.AIMLFeaturesPage })));
 const SecurityFeaturesPage = lazy(() => import('./pages/SecurityFeaturesPage').then(m => ({ default: m.SecurityFeaturesPage })));
+const TieringPoliciesPage = lazy(() => import('./pages/TieringPoliciesPage').then(m => ({ default: m.TieringPoliciesPage })));
+const PredictiveAnalyticsPage = lazy(() => import('./pages/PredictiveAnalyticsPage').then(m => ({ default: m.PredictiveAnalyticsPage })));
 
 // Loading fallback component
 function PageLoader() {
@@ -158,6 +160,26 @@ export default function App() {
               <AdminRoute>
                 <Suspense fallback={<ContentLoader />}>
                   <SecurityFeaturesPage />
+                </Suspense>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="tiering-policies"
+            element={
+              <AdminRoute>
+                <Suspense fallback={<ContentLoader />}>
+                  <TieringPoliciesPage />
+                </Suspense>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="predictive-analytics"
+            element={
+              <AdminRoute>
+                <Suspense fallback={<ContentLoader />}>
+                  <PredictiveAnalyticsPage />
                 </Suspense>
               </AdminRoute>
             }

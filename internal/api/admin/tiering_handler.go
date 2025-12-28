@@ -12,11 +12,11 @@ import (
 
 // TieringHandler handles tiering policy API requests
 type TieringHandler struct {
-	service *tiering.AdvancedService
+	service tiering.AdvancedServiceInterface
 }
 
 // NewTieringHandler creates a new tiering policy handler
-func NewTieringHandler(service *tiering.AdvancedService) *TieringHandler {
+func NewTieringHandler(service tiering.AdvancedServiceInterface) *TieringHandler {
 	return &TieringHandler{
 		service: service,
 	}
@@ -36,7 +36,7 @@ func (h *TieringHandler) RegisterTieringRoutes(r chi.Router) {
 
 	// Access Stats
 	r.Get("/tiering/access-stats/{bucket}", h.GetBucketAccessStats)
-	r.Get("/tiering/access-stats/{bucket}/{key}", h.GetObjectAccessStats)
+	r.Get("/tiering/access-stats/{bucket}/*", h.GetObjectAccessStats)
 
 	// Manual Transitions
 	r.Post("/tiering/transition", h.ManualTransition)
@@ -51,7 +51,7 @@ func (h *TieringHandler) RegisterTieringRoutes(r chi.Router) {
 	r.Get("/tiering/metrics", h.GetTieringMetrics)
 
 	// Predictive Tiering (ML-based)
-	r.Get("/tiering/predictions/{bucket}/{key}", h.GetAccessPrediction)
+	r.Get("/tiering/predictions/{bucket}/*", h.GetAccessPrediction)
 	r.Get("/tiering/predictions/recommendations", h.GetTierRecommendations)
 	r.Get("/tiering/predictions/hot-objects", h.GetHotObjectsPrediction)
 	r.Get("/tiering/predictions/cold-objects", h.GetColdObjectsPrediction)
@@ -402,7 +402,7 @@ func (h *TieringHandler) GetBucketAccessStats(w http.ResponseWriter, r *http.Req
 func (h *TieringHandler) GetObjectAccessStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucket := chi.URLParam(r, "bucket")
-	key := chi.URLParam(r, "key")
+	key := chi.URLParam(r, "*") // Catch-all for paths with slashes
 
 	// URL decode the key if needed
 	if r.URL.Query().Get("key") != "" {
@@ -664,7 +664,7 @@ func (h *TieringHandler) GetTieringMetrics(w http.ResponseWriter, r *http.Reques
 func (h *TieringHandler) GetAccessPrediction(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucket := chi.URLParam(r, "bucket")
-	key := chi.URLParam(r, "key")
+	key := chi.URLParam(r, "*") // Catch-all for paths with slashes
 
 	// URL decode key if needed
 	if r.URL.Query().Get("key") != "" {

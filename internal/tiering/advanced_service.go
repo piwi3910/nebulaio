@@ -11,6 +11,40 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// AdvancedServiceInterface defines the methods used by the tiering handler.
+// This interface enables testing with mock implementations.
+type AdvancedServiceInterface interface {
+	// Policy management
+	CreatePolicy(ctx context.Context, policy *AdvancedPolicy) error
+	GetPolicy(ctx context.Context, id string) (*AdvancedPolicy, error)
+	UpdatePolicy(ctx context.Context, policy *AdvancedPolicy) error
+	DeletePolicy(ctx context.Context, id string) error
+	ListPolicies(ctx context.Context) ([]*AdvancedPolicy, error)
+	ListPoliciesByType(ctx context.Context, policyType PolicyType) ([]*AdvancedPolicy, error)
+	ListPoliciesByScope(ctx context.Context, scope PolicyScope) ([]*AdvancedPolicy, error)
+	GetPolicyStats(ctx context.Context, id string) (*PolicyStats, error)
+
+	// Access statistics
+	GetAccessStats(ctx context.Context, bucket, key string) (*ObjectAccessStats, error)
+	GetHotObjects(ctx context.Context, limit int) []*ObjectAccessStats
+	GetColdObjects(ctx context.Context, inactiveDays, limit int) []*ObjectAccessStats
+
+	// Object management
+	TransitionObject(ctx context.Context, bucket, key string, targetTier TierType) error
+
+	// S3 Lifecycle compatibility
+	GetS3LifecycleConfiguration(ctx context.Context, bucket string) (*S3LifecycleConfiguration, error)
+	SetS3LifecycleConfiguration(ctx context.Context, bucket string, config *S3LifecycleConfiguration) error
+
+	// Predictive analytics
+	GetPrediction(ctx context.Context, bucket, key string) (*AccessPrediction, error)
+	GetTierRecommendations(ctx context.Context, limit int) ([]*TierRecommendation, error)
+	GetAccessAnomalies(ctx context.Context, limit int) ([]*AccessAnomaly, error)
+}
+
+// Verify AdvancedService implements AdvancedServiceInterface
+var _ AdvancedServiceInterface = (*AdvancedService)(nil)
+
 // AdvancedService provides comprehensive tiered storage with policy management
 type AdvancedService struct {
 	// Core components

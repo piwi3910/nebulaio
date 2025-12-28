@@ -124,6 +124,58 @@ export interface TracingStats {
   propagator: string;
 }
 
+// Tiering Policy Types
+export interface TieringTrigger {
+  type: 'age' | 'access' | 'capacity';
+  age_days?: number;
+  access_count?: number;
+  access_days?: number;
+  capacity_percent?: number;
+}
+
+export interface TieringAction {
+  type: 'transition' | 'delete';
+  target_tier?: string;
+  notify_url?: string;
+}
+
+export interface TieringSchedule {
+  maintenance_windows?: string[];
+  blackout_windows?: string[];
+}
+
+export interface TieringAdvancedOptions {
+  rate_limit?: number;
+  anti_thrash_hours?: number;
+  distributed_execution?: boolean;
+}
+
+export interface TieringPolicy {
+  id: string;
+  name: string;
+  description: string;
+  type: 'scheduled' | 'realtime' | 'threshold' | 's3_lifecycle';
+  scope: 'global' | 'bucket' | 'prefix';
+  bucket_pattern?: string;
+  prefix_pattern?: string;
+  enabled: boolean;
+  triggers: TieringTrigger[];
+  actions: TieringAction[];
+  schedule?: TieringSchedule;
+  cron_expression?: string;
+  advanced_options?: TieringAdvancedOptions;
+  created_at: string;
+  updated_at: string;
+  last_run?: string;
+  stats?: {
+    objects_affected: number;
+    transitions_performed: number;
+    last_execution_time?: string;
+    success_count: number;
+    failure_count: number;
+  };
+}
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -312,6 +364,19 @@ export const adminApi = {
   getSecurityConfig: () => apiClient.get('/admin/security/config'),
   updateSecurityConfig: (data: { analytics_enabled?: boolean; key_rotation_enabled?: boolean; mtls_enabled?: boolean; tracing_enabled?: boolean }) =>
     apiClient.put('/admin/security/config', data),
+
+  // Tiering Policies
+  listTieringPolicies: (params?: { type?: string; scope?: string; enabled?: boolean }) =>
+    apiClient.get('/admin/tiering-policies', { params }),
+  createTieringPolicy: (data: Omit<TieringPolicy, 'id' | 'created_at' | 'updated_at' | 'last_run' | 'stats'>) =>
+    apiClient.post('/admin/tiering-policies', data),
+  getTieringPolicy: (id: string) => apiClient.get(`/admin/tiering-policies/${id}`),
+  updateTieringPolicy: (id: string, data: Partial<Omit<TieringPolicy, 'id' | 'created_at' | 'updated_at' | 'last_run' | 'stats'>>) =>
+    apiClient.put(`/admin/tiering-policies/${id}`, data),
+  deleteTieringPolicy: (id: string) => apiClient.delete(`/admin/tiering-policies/${id}`),
+  enableTieringPolicy: (id: string) => apiClient.post(`/admin/tiering-policies/${id}/enable`),
+  disableTieringPolicy: (id: string) => apiClient.post(`/admin/tiering-policies/${id}/disable`),
+  getTieringPolicyStats: (id: string) => apiClient.get(`/admin/tiering-policies/${id}/stats`),
 };
 
 // Console API (user-facing)
