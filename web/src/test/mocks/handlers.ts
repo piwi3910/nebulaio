@@ -31,14 +31,12 @@ export const handlers = [
     });
   }),
 
-  // Users endpoints
+  // Users endpoints - return array directly
   http.get('/api/v1/admin/users', () => {
-    return HttpResponse.json({
-      users: [
-        { id: '1', username: 'admin', role: 'admin', created_at: '2024-01-01T00:00:00Z' },
-        { id: '2', username: 'user1', role: 'user', created_at: '2024-01-02T00:00:00Z' },
-      ],
-    });
+    return HttpResponse.json([
+      { id: '1', username: 'admin', role: 'admin', created_at: '2024-01-01T00:00:00Z' },
+      { id: '2', username: 'user1', role: 'user', created_at: '2024-01-02T00:00:00Z' },
+    ]);
   }),
 
   http.post('/api/v1/admin/users', async ({ request }) => {
@@ -51,14 +49,12 @@ export const handlers = [
     }, { status: 201 });
   }),
 
-  // Buckets endpoints
+  // Buckets endpoints - return array directly
   http.get('/api/v1/admin/buckets', () => {
-    return HttpResponse.json({
-      buckets: [
-        { name: 'test-bucket', created_at: '2024-01-01T00:00:00Z', size: 1024000 },
-        { name: 'data-bucket', created_at: '2024-01-02T00:00:00Z', size: 5120000 },
-      ],
-    });
+    return HttpResponse.json([
+      { name: 'test-bucket', created_at: '2024-01-01T00:00:00Z', size: 1024000 },
+      { name: 'data-bucket', created_at: '2024-01-02T00:00:00Z', size: 5120000 },
+    ]);
   }),
 
   http.post('/api/v1/admin/buckets', async ({ request }) => {
@@ -135,30 +131,39 @@ export const handlers = [
     });
   }),
 
-  // Audit logs
+  // Audit logs - keep nested format with correct field names
   http.get('/api/v1/admin/audit-logs', () => {
     return HttpResponse.json({
       logs: [
         {
           id: '1',
           timestamp: '2024-01-01T12:00:00Z',
-          user: 'admin',
-          action: 'login',
-          resource: 'auth',
-          status: 'success',
+          event_type: 'user:login',
+          user_id: 'user-1',
+          username: 'admin',
+          source_ip: '192.168.1.100',
+          user_agent: 'Mozilla/5.0',
+          request_id: 'req-123',
+          status_code: 200,
+          details: {},
         },
         {
           id: '2',
           timestamp: '2024-01-01T12:05:00Z',
-          user: 'admin',
-          action: 'create_bucket',
-          resource: 'test-bucket',
-          status: 'success',
+          event_type: 'bucket:create',
+          user_id: 'user-1',
+          username: 'admin',
+          source_ip: '192.168.1.100',
+          user_agent: 'Mozilla/5.0',
+          request_id: 'req-124',
+          status_code: 201,
+          details: { bucket: 'test-bucket' },
         },
       ],
       total: 2,
       page: 1,
-      page_size: 20,
+      page_size: 25,
+      total_pages: 1,
     });
   }),
 
@@ -179,6 +184,18 @@ export const handlers = [
       username: 'admin',
       role: 'admin',
     });
+  }),
+
+  // Console access keys - return array directly
+  http.get('/api/v1/console/me/keys', () => {
+    return HttpResponse.json([]);
+  }),
+
+  // Console buckets - return array directly
+  http.get('/api/v1/console/buckets', () => {
+    return HttpResponse.json([
+      { name: 'my-bucket', created_at: '2024-01-01T00:00:00Z', size: 1024000 },
+    ]);
   }),
 
   http.get('/api/v1/console/buckets/:bucket/objects', () => {
