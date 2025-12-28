@@ -4,7 +4,7 @@ Get NebulaIO running in minutes with this guide covering installation, configura
 
 ## Prerequisites
 
-- **Go 1.23+** (for building from source)
+- **Go 1.24+** (for building from source)
 - **Docker 20.10+** (optional, for containerized deployment)
 - **AWS CLI** or **MinIO Client (mc)** (optional, for S3 operations)
 
