@@ -136,7 +136,7 @@ func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) 
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath) // Best effort cleanup
 		return fmt.Errorf("failed to rename metadata: %w", err)
 	}
 
