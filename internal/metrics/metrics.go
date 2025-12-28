@@ -291,6 +291,149 @@ var (
 		},
 		[]string{"tier"},
 	)
+
+	// CachePeerWriteFailures tracks failed attempts to cache entries from peer nodes
+	CachePeerWriteFailures = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_cache_peer_write_failures_total",
+			Help: "Total failed attempts to cache entries from peer nodes",
+		},
+	)
+
+	// CacheHits tracks cache hit count
+	CacheHits = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_cache_hits_total",
+			Help: "Total cache hits",
+		},
+	)
+
+	// CacheMisses tracks cache miss count
+	CacheMisses = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_cache_misses_total",
+			Help: "Total cache misses",
+		},
+	)
+
+	// BucketRollbackFailures tracks bucket rollback failures
+	BucketRollbackFailures = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_bucket_rollback_failures_total",
+			Help: "Total failed bucket rollback operations",
+		},
+	)
+
+	// BucketCreationFailures tracks bucket creation failures
+	BucketCreationFailures = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_bucket_creation_failures_total",
+			Help: "Total failed bucket creation operations",
+		},
+	)
+
+	// MetadataAppliedIndexErrors tracks metadata applied index errors
+	MetadataAppliedIndexErrors = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_metadata_applied_index_errors_total",
+			Help: "Total metadata applied index errors",
+		},
+	)
+
+	// MetadataCloseErrors tracks metadata close errors
+	MetadataCloseErrors = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_metadata_close_errors_total",
+			Help: "Total metadata close errors",
+		},
+	)
+
+	// KeyRotationFailures tracks key rotation failures
+	KeyRotationFailures = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_key_rotation_failures_total",
+			Help: "Total key rotation failures",
+		},
+	)
+
+	// KeyExpiryNotificationFailures tracks key expiry notification failures
+	KeyExpiryNotificationFailures = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_key_expiry_notification_failures_total",
+			Help: "Total key expiry notification failures",
+		},
+	)
+
+	// MigrationJobSaveFailures tracks migration job save failures
+	MigrationJobSaveFailures = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_migration_job_save_failures_total",
+			Help: "Total migration job save failures",
+		},
+	)
+
+	// MigrationFailedObjectLogFailures tracks migration failed object log failures
+	MigrationFailedObjectLogFailures = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_migration_failed_object_log_failures_total",
+			Help: "Total migration failed object log failures",
+		},
+	)
+
+	// BackupWALSyncFailures tracks backup WAL sync failures
+	BackupWALSyncFailures = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_backup_wal_sync_failures_total",
+			Help: "Total backup WAL sync failures",
+		},
+	)
+
+	// LambdaCompressionOperations tracks Lambda compression/decompression operations
+	LambdaCompressionOperations = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_lambda_compression_operations_total",
+			Help: "Total Lambda compression/decompression operations",
+		},
+		[]string{"algorithm", "direction", "status"},
+	)
+
+	// LambdaCompressionDuration tracks Lambda compression operation duration
+	LambdaCompressionDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "nebulaio_lambda_compression_duration_seconds",
+			Help:    "Duration of Lambda compression/decompression operations",
+			Buckets: prometheus.ExponentialBuckets(0.001, 2, 12),
+		},
+		[]string{"algorithm", "direction"},
+	)
+
+	// LambdaCompressionRatio tracks compression effectiveness
+	LambdaCompressionRatio = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "nebulaio_lambda_compression_ratio",
+			Help:    "Compression ratio (original/compressed size)",
+			Buckets: []float64{1.0, 1.5, 2.0, 3.0, 5.0, 10.0, 20.0, 50.0, 100.0},
+		},
+		[]string{"algorithm"},
+	)
+
+	// LambdaOperationsInFlight tracks concurrent Lambda operations
+	LambdaOperationsInFlight = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_lambda_operations_in_flight",
+			Help: "Number of Lambda operations currently in progress",
+		},
+		[]string{"algorithm"},
+	)
+
+	// ObjectCreationRateLimited tracks rate-limited object creation attempts
+	ObjectCreationRateLimited = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_object_creation_rate_limited_total",
+			Help: "Total object creation attempts that were rate limited",
+		},
+		[]string{"bucket", "reason"},
+	)
 )
 
 // Version is set at build time
@@ -510,4 +653,95 @@ func CollectDragonboatMetrics(shardID uint64, nodeHost DragonboatNodeHost, repli
 		RaftState.WithLabelValues(shardLabel).Set(0)
 		RaftIsLeader.WithLabelValues(shardLabel).Set(0)
 	}
+}
+
+// RecordCachePeerWriteFailure increments the cache peer write failure counter
+func RecordCachePeerWriteFailure() {
+	CachePeerWriteFailures.Inc()
+}
+
+// RecordCacheHit increments the cache hit counter
+func RecordCacheHit() {
+	CacheHits.Inc()
+}
+
+// RecordCacheMiss increments the cache miss counter
+func RecordCacheMiss() {
+	CacheMisses.Inc()
+}
+
+// RecordBucketRollbackFailure increments the bucket rollback failure counter
+func RecordBucketRollbackFailure() {
+	BucketRollbackFailures.Inc()
+}
+
+// RecordBucketCreationFailure increments the bucket creation failure counter
+func RecordBucketCreationFailure() {
+	BucketCreationFailures.Inc()
+}
+
+// RecordMetadataAppliedIndexError increments the metadata applied index error counter
+func RecordMetadataAppliedIndexError() {
+	MetadataAppliedIndexErrors.Inc()
+}
+
+// RecordMetadataCloseError increments the metadata close error counter
+func RecordMetadataCloseError() {
+	MetadataCloseErrors.Inc()
+}
+
+// RecordKeyRotationFailure increments the key rotation failure counter
+func RecordKeyRotationFailure() {
+	KeyRotationFailures.Inc()
+}
+
+// RecordKeyExpiryNotificationFailure increments the key expiry notification failure counter
+func RecordKeyExpiryNotificationFailure() {
+	KeyExpiryNotificationFailures.Inc()
+}
+
+// RecordMigrationJobSaveFailure increments the migration job save failure counter
+func RecordMigrationJobSaveFailure() {
+	MigrationJobSaveFailures.Inc()
+}
+
+// RecordMigrationFailedObjectLogFailure increments the migration failed object log failure counter
+func RecordMigrationFailedObjectLogFailure() {
+	MigrationFailedObjectLogFailures.Inc()
+}
+
+// RecordBackupWALSyncFailure increments the backup WAL sync failure counter
+func RecordBackupWALSyncFailure() {
+	BackupWALSyncFailures.Inc()
+}
+
+// RecordLambdaCompression records a Lambda compression/decompression operation
+func RecordLambdaCompression(algorithm, direction string, success bool, duration time.Duration, originalSize, compressedSize int64) {
+	status := "success"
+	if !success {
+		status = "error"
+	}
+	LambdaCompressionOperations.WithLabelValues(algorithm, direction, status).Inc()
+	if success {
+		LambdaCompressionDuration.WithLabelValues(algorithm, direction).Observe(duration.Seconds())
+		if direction == "compress" && compressedSize > 0 {
+			ratio := float64(originalSize) / float64(compressedSize)
+			LambdaCompressionRatio.WithLabelValues(algorithm).Observe(ratio)
+		}
+	}
+}
+
+// IncrementLambdaOperationsInFlight increments the in-flight Lambda operations gauge
+func IncrementLambdaOperationsInFlight(algorithm string) {
+	LambdaOperationsInFlight.WithLabelValues(algorithm).Inc()
+}
+
+// DecrementLambdaOperationsInFlight decrements the in-flight Lambda operations gauge
+func DecrementLambdaOperationsInFlight(algorithm string) {
+	LambdaOperationsInFlight.WithLabelValues(algorithm).Dec()
+}
+
+// RecordObjectCreationRateLimited records a rate-limited object creation attempt
+func RecordObjectCreationRateLimited(bucket, reason string) {
+	ObjectCreationRateLimited.WithLabelValues(bucket, reason).Inc()
 }

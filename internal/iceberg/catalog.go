@@ -690,10 +690,10 @@ func (c *Catalog) CommitTable(ctx context.Context, request *UpdateTableRequest) 
 	}
 
 	// Apply updates
-	newMetadata := c.copyMetadata(table.Metadata)
-	if newMetadata == nil {
+	newMetadata, err := c.copyMetadata(table.Metadata)
+	if err != nil {
 		atomic.AddInt64(&c.metrics.CommitsFailed, 1)
-		return nil, fmt.Errorf("failed to copy table metadata for update: internal serialization error")
+		return nil, fmt.Errorf("failed to copy table metadata for update: %w", err)
 	}
 	for _, update := range request.Updates {
 		if err := c.applyUpdate(newMetadata, &update); err != nil {
@@ -850,27 +850,19 @@ func (c *Catalog) applyUpdate(metadata *TableMetadata, update *TableUpdate) erro
 	return nil
 }
 
-func (c *Catalog) copyMetadata(m *TableMetadata) *TableMetadata {
+func (c *Catalog) copyMetadata(m *TableMetadata) (*TableMetadata, error) {
 	if m == nil {
-		return nil
+		return nil, fmt.Errorf("cannot copy nil metadata")
 	}
 	data, err := json.Marshal(m)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Str("table_uuid", m.TableUUID).
-			Msg("failed to marshal table metadata for copy - returning nil copy")
-		return nil
+		return nil, fmt.Errorf("failed to marshal table metadata for copy: %w", err)
 	}
 	var copy TableMetadata
 	if err := json.Unmarshal(data, &copy); err != nil {
-		log.Error().
-			Err(err).
-			Str("table_uuid", m.TableUUID).
-			Msg("failed to unmarshal table metadata copy - returning nil copy")
-		return nil
+		return nil, fmt.Errorf("failed to unmarshal table metadata copy: %w", err)
 	}
-	return &copy
+	return &copy, nil
 }
 
 // RenameTable renames a table

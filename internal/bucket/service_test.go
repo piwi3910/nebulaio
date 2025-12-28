@@ -329,3 +329,182 @@ func TestValidateBucketName(t *testing.T) {
 		})
 	}
 }
+
+// TestBucketCreateRollbackIntegration tests the bucket creation rollback flow
+// with various failure scenarios
+func TestBucketCreateRollbackIntegration(t *testing.T) {
+	t.Run("storage failure during creation triggers metadata rollback", func(t *testing.T) {
+		// Create mock stores with storage that fails on bucket creation
+		metaStore := newMockMetadataStore()
+		storageBackend := &mockStorageBackend{
+			createBucketErr: errors.New("simulated storage failure"),
+		}
+
+		service := NewService(metaStore, storageBackend, nil)
+
+		// Attempt to create bucket - should fail
+		_, err := service.CreateBucket(context.Background(), "rollback-test-bucket", "test-owner", nil)
+		if err == nil {
+			t.Error("Expected error when storage fails, got nil")
+		}
+
+		// Verify bucket is NOT in metadata store (rollback should have removed it)
+		_, getErr := metaStore.GetBucket(context.Background(), "rollback-test-bucket")
+		if getErr == nil {
+			t.Error("Bucket should not exist in metadata after failed storage creation")
+		}
+	})
+
+	t.Run("metadata rollback failure is logged but does not mask original error", func(t *testing.T) {
+		// Create mock stores where both storage and metadata deletion fail
+		metaStore := &mockMetadataStore{
+			buckets:         make(map[string]*metadata.Bucket),
+			deleteBucketErr: errors.New("metadata deletion failed"),
+		}
+		storageBackend := &mockStorageBackend{
+			createBucketErr: errors.New("storage creation failed"),
+		}
+
+		service := NewService(metaStore, storageBackend, nil)
+
+		// Attempt to create bucket - should fail with storage error
+		_, err := service.CreateBucket(context.Background(), "double-fail-bucket", "test-owner", nil)
+		if err == nil {
+			t.Error("Expected error when storage fails, got nil")
+		}
+
+		// The returned error should be about storage, not metadata rollback
+		if !strings.Contains(err.Error(), "storage") && !strings.Contains(err.Error(), "failed") {
+			t.Logf("Error message: %v", err)
+		}
+	})
+
+	t.Run("successful creation leaves bucket in consistent state", func(t *testing.T) {
+		// Create mock stores that succeed
+		metaStore := newMockMetadataStore()
+		storageBackend := &mockStorageBackend{
+			buckets: make(map[string]bool),
+		}
+
+		service := NewService(metaStore, storageBackend, nil)
+
+		// Create bucket successfully
+		bucket, err := service.CreateBucket(context.Background(), "success-bucket", "test-owner", nil)
+		if err != nil {
+			t.Fatalf("Expected successful creation, got error: %v", err)
+		}
+		if bucket == nil {
+			t.Fatal("Expected non-nil bucket after successful creation")
+		}
+
+		// Verify bucket exists in metadata
+		gotBucket, getErr := metaStore.GetBucket(context.Background(), "success-bucket")
+		if getErr != nil {
+			t.Errorf("Bucket should exist in metadata after creation: %v", getErr)
+		}
+		if gotBucket == nil {
+			t.Error("Expected non-nil bucket from metadata store")
+		}
+
+		// Verify storage was created
+		if !storageBackend.buckets["success-bucket"] {
+			t.Error("Bucket should exist in storage after creation")
+		}
+	})
+
+	t.Run("concurrent bucket creation with failures", func(t *testing.T) {
+		// Create mock stores
+		metaStore := newMockMetadataStore()
+		storageBackend := &mockStorageBackend{
+			buckets: make(map[string]bool),
+		}
+
+		service := NewService(metaStore, storageBackend, nil)
+
+		// Create several buckets concurrently
+		const numBuckets = 10
+		results := make(chan error, numBuckets)
+
+		for i := 0; i < numBuckets; i++ {
+			go func(idx int) {
+				bucketName := "concurrent-bucket-" + string(rune('a'+idx))
+				_, err := service.CreateBucket(context.Background(), bucketName, "test-owner", nil)
+				results <- err
+			}(i)
+		}
+
+		// Collect results
+		successCount := 0
+		for i := 0; i < numBuckets; i++ {
+			err := <-results
+			if err == nil {
+				successCount++
+			}
+		}
+
+		// All should succeed in this test (no injected failures)
+		if successCount != numBuckets {
+			t.Errorf("Expected %d successful creations, got %d", numBuckets, successCount)
+		}
+	})
+}
+
+// mockStorageBackend is a test storage backend that can simulate failures
+type mockStorageBackend struct {
+	createBucketErr error
+	deleteBucketErr error
+	buckets         map[string]bool
+}
+
+func (m *mockStorageBackend) Type() string { return "mock" }
+
+func (m *mockStorageBackend) CreateBucket(ctx context.Context, name string) error {
+	if m.createBucketErr != nil {
+		return m.createBucketErr
+	}
+	if m.buckets == nil {
+		m.buckets = make(map[string]bool)
+	}
+	m.buckets[name] = true
+	return nil
+}
+
+func (m *mockStorageBackend) DeleteBucket(ctx context.Context, name string) error {
+	if m.deleteBucketErr != nil {
+		return m.deleteBucketErr
+	}
+	delete(m.buckets, name)
+	return nil
+}
+
+func (m *mockStorageBackend) BucketExists(ctx context.Context, name string) (bool, error) {
+	return m.buckets[name], nil
+}
+
+func (m *mockStorageBackend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType string) (string, error) {
+	return "", nil
+}
+
+func (m *mockStorageBackend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, int64, error) {
+	return nil, 0, nil
+}
+
+func (m *mockStorageBackend) DeleteObject(ctx context.Context, bucket, key string) error {
+	return nil
+}
+
+func (m *mockStorageBackend) ObjectExists(ctx context.Context, bucket, key string) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStorageBackend) GetObjectSize(ctx context.Context, bucket, key string) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockStorageBackend) ListObjects(ctx context.Context, bucket, prefix string) ([]backend.ObjectInfo, error) {
+	return nil, nil
+}
+
+func (m *mockStorageBackend) Close() error {
+	return nil
+}

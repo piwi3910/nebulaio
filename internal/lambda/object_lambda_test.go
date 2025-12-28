@@ -730,3 +730,187 @@ func TestDecompressTransformerUnsupportedAlgorithm(t *testing.T) {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }
+
+// TestDecompressionBombProtection verifies that the transformer rejects
+// compressed data that would expand beyond the maximum transform size
+func TestDecompressionBombProtection(t *testing.T) {
+	// Save original max size and set a small limit for testing
+	originalMaxSize := GetMaxTransformSize()
+	SetMaxTransformSize(1024) // 1KB limit for testing
+	defer SetMaxTransformSize(originalMaxSize)
+
+	transformer := &DecompressTransformer{}
+
+	tests := []struct {
+		name          string
+		compressFunc  func([]byte) []byte
+		algorithm     string
+		inputSize     int
+		shouldSucceed bool
+	}{
+		{
+			name:          "gzip_data_at_limit",
+			compressFunc:  compressWithGzip,
+			algorithm:     "gzip",
+			inputSize:     1024, // Exactly at limit
+			shouldSucceed: true,
+		},
+		{
+			name:          "gzip_data_over_limit",
+			compressFunc:  compressWithGzip,
+			algorithm:     "gzip",
+			inputSize:     2048, // Exceeds 1KB limit when decompressed
+			shouldSucceed: false,
+		},
+		{
+			name:          "zstd_data_at_limit",
+			compressFunc:  compressWithZstd,
+			algorithm:     "zstd",
+			inputSize:     1024, // Exactly at limit
+			shouldSucceed: true,
+		},
+		{
+			name:          "zstd_data_over_limit",
+			compressFunc:  compressWithZstd,
+			algorithm:     "zstd",
+			inputSize:     2048, // Exceeds 1KB limit when decompressed
+			shouldSucceed: false,
+		},
+		{
+			name:          "small_data_well_under_limit",
+			compressFunc:  compressWithGzip,
+			algorithm:     "gzip",
+			inputSize:     100, // Well under limit
+			shouldSucceed: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create test data
+			testData := bytes.Repeat([]byte("A"), tc.inputSize)
+			compressedData := tc.compressFunc(testData)
+
+			params := map[string]interface{}{"algorithm": tc.algorithm}
+			_, _, err := transformer.Transform(context.Background(), bytes.NewReader(compressedData), params)
+
+			if tc.shouldSucceed {
+				if err != nil {
+					t.Errorf("Expected success but got error: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Error("Expected error for data exceeding limit but got none")
+				} else if !strings.Contains(err.Error(), "exceeds maximum transform size") {
+					t.Errorf("Expected 'exceeds maximum transform size' error, got: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestCompressionSizeLimit verifies that the compressor rejects oversized inputs
+func TestCompressionSizeLimit(t *testing.T) {
+	// Save original max size and set a small limit for testing
+	originalMaxSize := GetMaxTransformSize()
+	SetMaxTransformSize(1024) // 1KB limit for testing
+	defer SetMaxTransformSize(originalMaxSize)
+
+	transformer := &CompressTransformer{}
+
+	tests := []struct {
+		name          string
+		inputSize     int
+		shouldSucceed bool
+	}{
+		{
+			name:          "data_at_limit",
+			inputSize:     1024, // Exactly at limit
+			shouldSucceed: true,
+		},
+		{
+			name:          "data_over_limit",
+			inputSize:     1025, // Just over limit
+			shouldSucceed: false,
+		},
+		{
+			name:          "data_well_over_limit",
+			inputSize:     4096, // Well over limit
+			shouldSucceed: false,
+		},
+		{
+			name:          "small_data",
+			inputSize:     100, // Well under limit
+			shouldSucceed: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testData := bytes.Repeat([]byte("B"), tc.inputSize)
+			params := map[string]interface{}{"algorithm": "gzip"}
+
+			_, _, err := transformer.Transform(context.Background(), bytes.NewReader(testData), params)
+
+			if tc.shouldSucceed {
+				if err != nil {
+					t.Errorf("Expected success but got error: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Error("Expected error for data exceeding limit but got none")
+				} else if !strings.Contains(err.Error(), "exceeds maximum transform size") {
+					t.Errorf("Expected 'exceeds maximum transform size' error, got: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestMaxTransformSizeConfiguration verifies the configurable max transform size
+func TestMaxTransformSizeConfiguration(t *testing.T) {
+	// Save original max size
+	originalMaxSize := GetMaxTransformSize()
+	defer SetMaxTransformSize(originalMaxSize)
+
+	// Test setting a custom size
+	SetMaxTransformSize(50 * 1024 * 1024) // 50MB
+	if GetMaxTransformSize() != 50*1024*1024 {
+		t.Errorf("Expected max transform size to be 50MB, got %d", GetMaxTransformSize())
+	}
+
+	// Test that invalid sizes are rejected
+	SetMaxTransformSize(0)
+	if GetMaxTransformSize() != 50*1024*1024 {
+		t.Error("Setting size to 0 should not change the value")
+	}
+
+	SetMaxTransformSize(-1)
+	if GetMaxTransformSize() != 50*1024*1024 {
+		t.Error("Setting negative size should not change the value")
+	}
+
+	// Reset and verify default
+	SetMaxTransformSize(DefaultMaxTransformSize)
+	if GetMaxTransformSize() != DefaultMaxTransformSize {
+		t.Errorf("Expected default max transform size, got %d", GetMaxTransformSize())
+	}
+}
+
+// Helper function to compress data with gzip
+func compressWithGzip(data []byte) []byte {
+	var buf bytes.Buffer
+	writer := gzip.NewWriter(&buf)
+	_, _ = writer.Write(data)
+	_ = writer.Close()
+	return buf.Bytes()
+}
+
+// Helper function to compress data with zstd
+func compressWithZstd(data []byte) []byte {
+	var buf bytes.Buffer
+	writer, _ := zstd.NewWriter(&buf)
+	_, _ = writer.Write(data)
+	_ = writer.Close()
+	return buf.Bytes()
+}

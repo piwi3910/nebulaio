@@ -950,7 +950,10 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 			Location:      "s3://bucket/table",
 		}
 
-		copied := catalog.copyMetadata(validMetadata)
+		copied, err := catalog.copyMetadata(validMetadata)
+		if err != nil {
+			t.Fatalf("copyMetadata should not return error for valid metadata: %v", err)
+		}
 		if copied == nil {
 			t.Fatal("copyMetadata should return non-nil for valid metadata")
 		}
@@ -966,8 +969,8 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 		}
 	})
 
-	t.Run("nil input returns nil", func(t *testing.T) {
-		// Test with nil input - should handle gracefully
+	t.Run("nil input returns error", func(t *testing.T) {
+		// Test with nil input - should return error
 		// Note: This tests defensive programming; copyMetadata should not panic on nil
 		defer func() {
 			if r := recover(); r != nil {
@@ -975,10 +978,13 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 			}
 		}()
 
-		// Nil metadata should return nil (or panic is caught above)
-		copied := catalog.copyMetadata(nil)
+		// Nil metadata should return error
+		copied, err := catalog.copyMetadata(nil)
+		if err == nil {
+			t.Error("copyMetadata with nil input should return error")
+		}
 		if copied != nil {
-			t.Error("copyMetadata with nil input should return nil")
+			t.Error("copyMetadata with nil input should return nil result")
 		}
 	})
 
@@ -1009,7 +1015,10 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 			},
 		}
 
-		copied := catalog.copyMetadata(complexMetadata)
+		copied, err := catalog.copyMetadata(complexMetadata)
+		if err != nil {
+			t.Fatalf("copyMetadata should not return error for complex metadata: %v", err)
+		}
 		if copied == nil {
 			t.Fatal("copyMetadata should return non-nil for complex metadata")
 		}

@@ -819,6 +819,34 @@ func TestFirewallInvalidCIDR(t *testing.T) {
 					}
 				}
 			}
+
+			// Verify allowlist entries work correctly
+			if len(tc.allowlist) > 0 {
+				for _, entry := range tc.allowlist {
+					if entry == "192.168.1.0/24" {
+						req := &Request{
+							SourceIP:  "192.168.1.100",
+							Operation: "GetObject",
+						}
+						decision := fw.Evaluate(context.Background(), req)
+						if !decision.Allowed {
+							t.Error("Expected IP in allowlist to be allowed")
+						}
+						break
+					}
+					if entry == "192.168.1.100" {
+						req := &Request{
+							SourceIP:  "192.168.1.100",
+							Operation: "GetObject",
+						}
+						decision := fw.Evaluate(context.Background(), req)
+						if !decision.Allowed {
+							t.Error("Expected exact IP in allowlist to be allowed")
+						}
+						break
+					}
+				}
+			}
 		})
 	}
 }

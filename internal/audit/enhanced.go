@@ -949,25 +949,33 @@ func (o *FileOutput) rotate() error {
 	o.file = f
 	o.size = 0
 
-	// Compress old file if configured (run in background to not block writes)
-	if o.rotation.Compress {
-		go o.compressFile(rotatedPath)
-	}
-
-	// Clean up old files based on MaxBackups and MaxAgeDays
-	go o.cleanupOldFiles()
+	// Compress and cleanup in a single goroutine to ensure proper sequencing
+	// This prevents the race condition where cleanup could run before compression finishes
+	go func() {
+		// First, compress the rotated file if configured
+		if o.rotation.Compress {
+			o.compressFile(rotatedPath)
+		}
+		// Only after compression (if enabled) is complete, run cleanup
+		// This ensures we don't delete uncompressed files before they're compressed
+		if o.rotation.MaxBackups > 0 || o.rotation.MaxAgeDays > 0 {
+			o.cleanupOldFiles()
+		}
+	}()
 
 	return nil
 }
 
-// compressFile compresses a rotated log file using gzip
+// compressFile compresses a rotated log file using gzip with streaming
+// to avoid loading the entire file into memory (important for large audit logs)
 func (o *FileOutput) compressFile(filePath string) {
-	// Read the original file
-	data, err := os.ReadFile(filePath)
+	// Open the original file for streaming read
+	inFile, err := os.Open(filePath)
 	if err != nil {
-		log.Warn().Err(err).Str("file", filePath).Msg("Failed to read log file for compression")
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to open log file for compression")
 		return
 	}
+	defer inFile.Close()
 
 	// Create the compressed file
 	compressedPath := filePath + ".gz"
@@ -977,16 +985,17 @@ func (o *FileOutput) compressFile(filePath string) {
 		return
 	}
 
-	// Create gzip writer and compress
+	// Create gzip writer for streaming compression
 	gzWriter := gzip.NewWriter(outFile)
 
-	// Write data to gzip writer
-	if _, err := gzWriter.Write(data); err != nil {
+	// Stream compress the file instead of loading it all into memory
+	// This significantly reduces memory pressure for large audit logs
+	if _, err := io.Copy(gzWriter, inFile); err != nil {
 		// Close both writers before cleaning up (errors ignored during cleanup)
 		_ = gzWriter.Close()
 		_ = outFile.Close()
 		_ = os.Remove(compressedPath)
-		log.Warn().Err(err).Str("file", filePath).Msg("Failed to write compressed data")
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to stream compress data")
 		return
 	}
 
