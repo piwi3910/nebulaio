@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/piwi3910/nebulaio/internal/metrics"
 	"github.com/rs/zerolog/log"
 )
 
@@ -96,6 +97,13 @@ func NewPlacementGroupManager(config PlacementGroupConfig) (*PlacementGroupManag
 		return nil, fmt.Errorf("local placement group %s not found in configuration", config.LocalGroupID)
 	}
 
+	// Initialize metrics for all placement groups
+	for _, group := range mgr.groups {
+		metrics.SetPlacementGroupNodes(string(group.ID), group.Datacenter, group.Region, len(group.Nodes))
+		metrics.SetPlacementGroupStatusMetric(string(group.ID), string(group.Status))
+		metrics.SetPlacementGroupInfo(string(group.ID), group.Name, group.Datacenter, group.Region, group.IsLocal)
+	}
+
 	log.Info().
 		Str("local_group", string(config.LocalGroupID)).
 		Int("total_groups", len(config.Groups)).
@@ -104,8 +112,8 @@ func NewPlacementGroupManager(config PlacementGroupConfig) (*PlacementGroupManag
 	return mgr, nil
 }
 
-// LocalGroup returns a copy of the placement group this node belongs to
-// Returns nil if no local group is configured
+// LocalGroup returns a copy of the placement group this node belongs to.
+// Returns nil if no local group is configured.
 func (m *PlacementGroupManager) LocalGroup() *PlacementGroup {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -116,7 +124,8 @@ func (m *PlacementGroupManager) LocalGroup() *PlacementGroup {
 	return m.copyGroup(m.localGroup)
 }
 
-// GetGroup returns a copy of the placement group by ID
+// GetGroup returns a copy of the placement group by ID.
+// Returns (nil, false) if the group ID is not found.
 func (m *PlacementGroupManager) GetGroup(id PlacementGroupID) (*PlacementGroup, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -128,7 +137,8 @@ func (m *PlacementGroupManager) GetGroup(id PlacementGroupID) (*PlacementGroup, 
 	return m.copyGroup(group), true
 }
 
-// GetNodeGroup returns a copy of the placement group a node belongs to
+// GetNodeGroup returns a copy of the placement group a node belongs to.
+// Returns (nil, false) if the node is not assigned to any group.
 func (m *PlacementGroupManager) GetNodeGroup(nodeID string) (*PlacementGroup, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -159,7 +169,8 @@ func (m *PlacementGroupManager) AllGroups() []*PlacementGroup {
 	return groups
 }
 
-// LocalGroupNodes returns a copy of all nodes in the local placement group
+// LocalGroupNodes returns a copy of all nodes in the local placement group.
+// Returns nil if no local group is configured.
 func (m *PlacementGroupManager) LocalGroupNodes() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -251,6 +262,13 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 		Int("group_size", groupSize).
 		Msg("Node added to placement group")
 
+	// Update metrics for node count
+	m.mu.RLock()
+	if grp, ok := m.groups[groupID]; ok {
+		metrics.SetPlacementGroupNodes(string(groupID), grp.Datacenter, grp.Region, groupSize)
+	}
+	m.mu.RUnlock()
+
 	// Notify about status change if it occurred
 	if statusCallback != nil && newStatus != "" {
 		log.Info().
@@ -258,6 +276,8 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 			Str("old_status", string(oldStatus)).
 			Str("new_status", string(newStatus)).
 			Msg("Placement group status changed")
+		// Update status metrics
+		metrics.SetPlacementGroupStatusMetric(string(groupID), string(newStatus))
 		go m.safeCallback(func() { statusCallback(groupID, newStatus) })
 	}
 
@@ -318,7 +338,16 @@ func (m *PlacementGroupManager) RemoveNodeFromGroup(groupID PlacementGroupID, no
 		Int("group_size", groupSize).
 		Msg("Node removed from placement group")
 
+	// Update metrics for node count
+	m.mu.RLock()
+	if grp, ok := m.groups[groupID]; ok {
+		metrics.SetPlacementGroupNodes(string(groupID), grp.Datacenter, grp.Region, groupSize)
+	}
+	m.mu.RUnlock()
+
 	if statusCallback != nil {
+		// Update status metrics
+		metrics.SetPlacementGroupStatusMetric(string(groupID), string(newStatus))
 		go m.safeCallback(func() { statusCallback(groupID, newStatus) })
 	}
 
@@ -356,6 +385,9 @@ func (m *PlacementGroupManager) UpdateGroupStatus(groupID PlacementGroupID, stat
 			Str("new_status", string(status)).
 			Msg("Placement group status changed")
 
+		// Update status metrics
+		metrics.SetPlacementGroupStatusMetric(string(groupID), string(status))
+
 		if callback != nil {
 			go m.safeCallback(func() { callback(groupID, status) })
 		}
@@ -378,8 +410,10 @@ func (m *PlacementGroupManager) CanPerformErasureCoding(dataShards, parityShards
 	return len(m.localGroup.Nodes) >= totalShards
 }
 
-// GetShardPlacementNodes returns nodes for distributing erasure shards
-// Returns nodes from the local placement group only
+// GetShardPlacementNodes returns nodes for distributing erasure shards.
+// Returns nodes from the local placement group only.
+// Returns an empty slice (not nil) for single node mode when no local group is configured.
+// Returns (nil, error) if there are not enough nodes in the placement group.
 func (m *PlacementGroupManager) GetShardPlacementNodes(numShards int) ([]string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -404,6 +438,8 @@ func (m *PlacementGroupManager) GetShardPlacementNodes(numShards int) ([]string,
 // GetShardPlacementNodesForObject returns nodes for distributing erasure shards
 // using hash-based distribution for better load balancing across nodes.
 // The bucket and key are used to determine the starting offset for node selection.
+// Returns an empty slice (not nil) for single node mode when no local group is configured.
+// Returns (nil, error) if there are not enough nodes in the placement group.
 func (m *PlacementGroupManager) GetShardPlacementNodesForObject(bucket, key string, numShards int) ([]string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

@@ -136,13 +136,8 @@ func New(cfg *config.Config) (*Server, error) {
 		Version:       Version,
 	})
 
-	// Set NodeHost for discovery
-	// TODO: Temporarily commented out until DragonboatStore is fully implemented
-	// Once DragonboatStore exists with GetNodeHost() method, uncomment this:
-	// srv.discovery.SetNodeHost(srv.metaStore.GetNodeHost(), storeConfig.ShardID)
-
-	// Old RaftStore approach (no longer compatible):
-	// srv.discovery.SetRaft(srv.metaStore.GetRaft())
+	// Set NodeHost for discovery to enable Raft-based leader election awareness
+	srv.discovery.SetNodeHost(srv.metaStore.GetNodeHost(), storeConfig.ShardID)
 
 	// Initialize placement group manager for distributed storage
 	pgConfig := cluster.PlacementGroupConfig{
