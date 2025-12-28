@@ -227,6 +227,75 @@ storage:
   # -- Path within data directory for objects
   mountPath: /data
 
+  # Default redundancy configuration (for erasure backend)
+  # Per-bucket and per-object redundancy can override these settings
+  defaultRedundancy:
+    # -- Enable erasure coding by default
+    enabled: true
+    # -- Number of data shards (Reed-Solomon k value)
+    dataShards: 10
+    # -- Number of parity shards (Reed-Solomon m value)
+    parityShards: 4
+    # -- Shard placement policy: spread, local, rack-aware, zone-aware
+    placementPolicy: spread
+    # -- Cross-placement group DR replication factor (0 = disabled)
+    replicationFactor: 0
+
+  # Placement groups for distributed storage
+  # Erasure coding and tiering happen within a placement group
+  # Cross-placement group replication for DR uses full object copies
+  placementGroups:
+    # -- Placement group this node belongs to
+    localGroupId: "default"
+    # -- Minimum nodes required for distributed erasure coding
+    minNodesForErasure: 3
+    # -- Placement groups to replicate to for DR (list of group IDs)
+    replicationTargets: []
+    # -- Placement group definitions
+    groups: []
+    # Example:
+    #   - id: pg-dc1
+    #     name: "Datacenter 1"
+    #     datacenter: dc1
+    #     region: us-east-1
+    #     minNodes: 3
+    #     maxNodes: 10
+
+  # Per-tier storage configuration (enables mixed backend types)
+  tiering:
+    # -- Enable per-tier storage configuration
+    enabled: false
+    # -- Tier definitions with backend types
+    tiers: {}
+    # Example:
+    #   hot:
+    #     backend: erasure
+    #     dataDir: /data/hot
+    #     erasureConfig:
+    #       dataShards: 10
+    #       parityShards: 4
+    #     priority: 1
+    #     capacityThreshold: 0.85
+    #   warm:
+    #     backend: volume
+    #     dataDir: /data/warm
+    #     priority: 2
+    #   cold:
+    #     backend: fs
+    #     dataDir: /data/cold
+    #     priority: 3
+
+    # -- Tiering policies for automatic data movement
+    policies: []
+    # Example:
+    #   - name: age-based-cold
+    #     enabled: true
+    #     sourceTier: hot
+    #     destinationTier: cold
+    #     condition:
+    #       type: age
+    #       ageDays: 30
+
   # Volume storage (when backend: volume)
   # High-performance block-based storage with pre-allocated volume files
   volume:

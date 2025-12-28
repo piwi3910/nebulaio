@@ -124,6 +124,102 @@ erasure:
 ```
 100% overhead, tolerates 8 failures. For compliance or critical archives.
 
+## Per-Bucket and Per-Object Redundancy
+
+NebulaIO supports configuring redundancy at multiple levels: system-wide, per-bucket, and per-object.
+
+### Redundancy Configuration Hierarchy
+
+```
+System Default  →  Bucket Override  →  Object Override
+    ↓                    ↓                    ↓
+storage:           bucket config         object metadata
+  default_         redundancy:           x-amz-meta-
+  redundancy:      data_shards: 8       redundancy: ...
+```
+
+### System Default Configuration
+
+```yaml
+storage:
+  default_redundancy:
+    enabled: true
+    data_shards: 10
+    parity_shards: 4
+    placement_policy: spread    # spread, local, rack-aware, zone-aware
+    replication_factor: 1       # DR copies to other placement groups
+```
+
+### Per-Bucket Configuration
+
+Override the default redundancy for specific buckets:
+
+```bash
+# Create bucket with custom redundancy
+aws s3api create-bucket --bucket critical-data \
+  --create-bucket-configuration '{
+    "Redundancy": {
+      "Enabled": true,
+      "DataShards": 8,
+      "ParityShards": 8,
+      "PlacementPolicy": "zone-aware"
+    }
+  }'
+
+# Update existing bucket
+nebulaio-cli bucket set-redundancy critical-data \
+  --data-shards 8 --parity-shards 8 --placement-policy zone-aware
+```
+
+### Per-Object Configuration
+
+Set redundancy for individual objects using metadata:
+
+```bash
+# Upload with custom redundancy
+aws s3 cp important-file.dat s3://my-bucket/important-file.dat \
+  --metadata '{"redundancy-data-shards":"8","redundancy-parity-shards":"8"}'
+```
+
+### Redundancy Presets
+
+| Preset | Data | Parity | Overhead | Use Case |
+|--------|------|--------|----------|----------|
+| `none` | - | - | 0% | Development/testing only |
+| `minimal` | 4 | 2 | 50% | Small clusters, lower durability |
+| `standard` | 10 | 4 | 40% | Production default |
+| `maximum` | 8 | 8 | 100% | Mission-critical, compliance |
+
+### Placement Policies
+
+| Policy | Description |
+|--------|-------------|
+| `spread` | Maximize distribution across all available nodes |
+| `local` | Prefer local node storage (single-node mode) |
+| `rack-aware` | Distribute shards across different racks |
+| `zone-aware` | Distribute shards across availability zones |
+
+### Example: Multi-Tier Redundancy
+
+```yaml
+# Hot tier: lower redundancy for fast access
+storage:
+  tiering:
+    tiers:
+      hot:
+        backend: erasure
+        erasure_config:
+          data_shards: 10
+          parity_shards: 4
+
+      # Cold tier: higher redundancy for long-term storage
+      cold:
+        backend: erasure
+        erasure_config:
+          data_shards: 8
+          parity_shards: 8
+```
+
 ### High-Throughput Workloads
 ```yaml
 erasure:
