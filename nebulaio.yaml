@@ -37,6 +37,11 @@ storage:
   # volume:
   #   max_volume_size: 34359738368  # 32GB per volume file
   #   auto_create: true             # Auto-create new volumes when needed
+  #   direct_io:                    # Direct I/O (O_DIRECT) configuration
+  #     enabled: true               # Enable direct I/O on Linux (bypasses kernel cache)
+  #     block_alignment: 4096       # Alignment for buffers and offsets (4KB)
+  #     use_memory_pool: true       # Pool aligned buffers for reduced allocations
+  #     fallback_on_error: true     # Fall back to buffered I/O on errors
 
 # DRAM Cache configuration
 cache:

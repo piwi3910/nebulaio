@@ -22,13 +22,15 @@ type Manager struct {
 	// Configuration
 	maxVolumeSize uint64
 	autoCreate    bool
+	directIO      DirectIOConfig
 }
 
 // ManagerConfig holds configuration for the volume manager
 type ManagerConfig struct {
-	DataDir       string // Directory for volume files
-	MaxVolumeSize uint64 // Maximum size of each volume (default: 32GB)
-	AutoCreate    bool   // Automatically create new volumes when needed
+	DataDir       string         // Directory for volume files
+	MaxVolumeSize uint64         // Maximum size of each volume (default: 32GB)
+	AutoCreate    bool           // Automatically create new volumes when needed
+	DirectIO      DirectIOConfig // Direct I/O configuration
 }
 
 // DefaultManagerConfig returns the default manager configuration
@@ -37,6 +39,7 @@ func DefaultManagerConfig(dataDir string) ManagerConfig {
 		DataDir:       dataDir,
 		MaxVolumeSize: DefaultVolumeSize,
 		AutoCreate:    true,
+		DirectIO:      DefaultDirectIOConfig(),
 	}
 }
 
@@ -55,6 +58,7 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 		objectIndex:   make(map[string]string),
 		maxVolumeSize: cfg.MaxVolumeSize,
 		autoCreate:    cfg.AutoCreate,
+		directIO:      cfg.DirectIO,
 	}
 
 	// Load existing volumes
@@ -86,7 +90,7 @@ func (m *Manager) loadExistingVolumes() error {
 		}
 
 		path := filepath.Join(m.dataDir, entry.Name())
-		vol, err := OpenVolume(path)
+		vol, err := OpenVolumeWithConfig(path, m.directIO)
 		if err != nil {
 			log.Warn().
 				Str("path", path).
@@ -156,6 +160,7 @@ func (m *Manager) createVolumeLocked() (*Volume, error) {
 	cfg := VolumeConfig{
 		Size:      m.maxVolumeSize,
 		BlockSize: BlockSize,
+		DirectIO:  m.directIO,
 	}
 
 	vol, err := CreateVolume(path, cfg)

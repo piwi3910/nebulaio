@@ -16,6 +16,7 @@ import (
 type Volume struct {
 	path string
 	file *os.File
+	dio  *DirectIOFile // Direct I/O wrapper (nil if direct I/O disabled)
 	mu   sync.RWMutex
 
 	// Cached metadata
@@ -34,14 +35,16 @@ type Volume struct {
 	readBytes  uint64
 
 	// State
-	closed bool
-	dirty  bool
+	closed   bool
+	dirty    bool
+	dioConfig DirectIOConfig
 }
 
 // VolumeConfig holds configuration for creating a new volume
 type VolumeConfig struct {
-	Size      uint64 // Volume size (default: 32GB)
-	BlockSize uint32 // Block size (default: 4MB)
+	Size      uint64       // Volume size (default: 32GB)
+	BlockSize uint32       // Block size (default: 4MB)
+	DirectIO  DirectIOConfig // Direct I/O configuration
 }
 
 // DefaultVolumeConfig returns the default volume configuration
@@ -49,6 +52,7 @@ func DefaultVolumeConfig() VolumeConfig {
 	return VolumeConfig{
 		Size:      DefaultVolumeSize,
 		BlockSize: BlockSize,
+		DirectIO:  DefaultDirectIOConfig(),
 	}
 }
 
@@ -168,6 +172,12 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 		activeTiny:   0xFFFFFFFF, // Invalid = none active
 		activeSmall:  0xFFFFFFFF,
 		activeMedium: 0xFFFFFFFF,
+		dioConfig:    cfg.DirectIO,
+	}
+
+	// Initialize direct I/O wrapper if enabled
+	if cfg.DirectIO.Enabled {
+		v.dio = NewDirectIOFile(file, cfg.DirectIO)
 	}
 
 	return v, nil
@@ -267,6 +277,109 @@ func OpenVolume(path string) (*Volume, error) {
 	}, nil
 }
 
+// OpenVolumeWithConfig opens an existing volume file with custom configuration
+func OpenVolumeWithConfig(path string, dioConfig DirectIOConfig) (*Volume, error) {
+	file, err := os.OpenFile(path, os.O_RDWR, 0644)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrVolumeNotFound
+		}
+		return nil, fmt.Errorf("failed to open volume: %w", err)
+	}
+
+	// Read superblock
+	superBytes := make([]byte, 128)
+	if _, err := file.ReadAt(superBytes, 0); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("failed to read superblock: %w", err)
+	}
+
+	super, err := UnmarshalSuperblock(superBytes)
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+
+	// Validate version
+	if super.Version != SuperblockVersion {
+		_ = file.Close()
+		return nil, ErrVersionMismatch
+	}
+
+	// Read allocation map
+	allocMap, err := ReadAllocationMap(file, BitmapOffset, super.TotalBlocks)
+	if err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("failed to read allocation map: %w", err)
+	}
+
+	// Read block type map
+	blockTypes := make([]byte, super.TotalBlocks)
+	if _, err := file.ReadAt(blockTypes, BlockTypeMapOffset); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("failed to read block type map: %w", err)
+	}
+
+	// Read index
+	index, err := ReadIndex(file, int64(super.IndexOffset), int64(super.IndexSize))
+	if err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("failed to read index: %w", err)
+	}
+
+	// Find active packed blocks
+	activeTiny := uint32(0xFFFFFFFF)
+	activeSmall := uint32(0xFFFFFFFF)
+	activeMedium := uint32(0xFFFFFFFF)
+
+	for i := uint32(0); i < super.TotalBlocks; i++ {
+		switch blockTypes[i] {
+		case BlockTypePackedTiny:
+			if activeTiny == 0xFFFFFFFF {
+				activeTiny = i
+			}
+		case BlockTypePackedSmall:
+			if activeSmall == 0xFFFFFFFF {
+				activeSmall = i
+			}
+		case BlockTypePackedMed:
+			if activeMedium == 0xFFFFFFFF {
+				activeMedium = i
+			}
+		}
+	}
+
+	volumeID, _ := uuid.FromBytes(super.VolumeID[:])
+	log.Info().
+		Str("path", path).
+		Str("volume_id", volumeID.String()).
+		Uint32("total_blocks", super.TotalBlocks).
+		Uint32("free_blocks", super.FreeBlocks).
+		Uint64("objects", super.ObjectCount).
+		Bool("direct_io", dioConfig.Enabled && directIOSupported()).
+		Msg("Opened volume with config")
+
+	v := &Volume{
+		path:         path,
+		file:         file,
+		super:        super,
+		allocMap:     allocMap,
+		blockTypes:   blockTypes,
+		index:        index,
+		activeTiny:   activeTiny,
+		activeSmall:  activeSmall,
+		activeMedium: activeMedium,
+		dioConfig:    dioConfig,
+	}
+
+	// Initialize direct I/O wrapper if enabled
+	if dioConfig.Enabled {
+		v.dio = NewDirectIOFile(file, dioConfig)
+	}
+
+	return v, nil
+}
+
 // Close closes the volume file
 func (v *Volume) Close() error {
 	v.mu.Lock()
@@ -350,7 +463,7 @@ func (v *Volume) Stats() VolumeStats {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	return VolumeStats{
+	stats := VolumeStats{
 		VolumeID:    v.ID(),
 		Path:        v.path,
 		TotalSize:   v.super.VolumeSize,
@@ -361,6 +474,13 @@ func (v *Volume) Stats() VolumeStats {
 		Created:     time.Unix(0, v.super.Created),
 		Modified:    time.Unix(0, v.super.Modified),
 	}
+
+	// Add direct I/O stats if available
+	if v.dio != nil {
+		stats.DirectIO = v.dio.Stats()
+	}
+
+	return stats
 }
 
 // VolumeStats contains volume statistics
@@ -374,6 +494,7 @@ type VolumeStats struct {
 	ObjectCount uint64
 	Created     time.Time
 	Modified    time.Time
+	DirectIO    DirectIOStats
 }
 
 // HasSpace checks if the volume has space for an object of given size
@@ -434,8 +555,25 @@ func (v *Volume) readBlock(blockNum uint32) ([]byte, error) {
 		return nil, ErrInvalidBlockNum
 	}
 
-	buf := make([]byte, BlockSize)
 	offset := v.blockOffset(blockNum)
+
+	// Use direct I/O if available
+	if v.dio != nil {
+		// Get an aligned buffer for direct I/O
+		buf := v.dio.GetAlignedBuffer(BlockSize)
+		n, err := v.dio.ReadAt(buf, offset)
+		if err != nil && err != io.EOF {
+			v.dio.PutAlignedBuffer(buf)
+			return nil, err
+		}
+		v.readBytes += uint64(n)
+		// Note: caller is responsible for the returned buffer
+		// For direct I/O, we return the aligned buffer directly
+		return buf, nil
+	}
+
+	// Fallback to regular I/O
+	buf := make([]byte, BlockSize)
 	n, err := v.file.ReadAt(buf, offset)
 	if err != nil && err != io.EOF {
 		return nil, err
@@ -453,6 +591,26 @@ func (v *Volume) writeBlock(blockNum uint32, data []byte) error {
 		return fmt.Errorf("data exceeds block size")
 	}
 
+	offset := v.blockOffset(blockNum)
+
+	// Use direct I/O if available
+	if v.dio != nil {
+		// Get an aligned buffer for direct I/O
+		buf := v.dio.GetAlignedBuffer(BlockSize)
+		copy(buf, data)
+		// Pad remaining with zeros (buf is already zeroed from pool)
+
+		n, err := v.dio.WriteAt(buf, offset)
+		v.dio.PutAlignedBuffer(buf)
+		if err != nil {
+			return err
+		}
+		v.writeBytes += uint64(n)
+		v.dirty = true
+		return nil
+	}
+
+	// Fallback to regular I/O
 	// Pad to full block size if needed
 	if len(data) < BlockSize {
 		padded := make([]byte, BlockSize)
@@ -460,7 +618,6 @@ func (v *Volume) writeBlock(blockNum uint32, data []byte) error {
 		data = padded
 	}
 
-	offset := v.blockOffset(blockNum)
 	n, err := v.file.WriteAt(data, offset)
 	if err != nil {
 		return err

@@ -149,6 +149,29 @@ type VolumeStorageConfig struct {
 
 	// AutoCreate enables automatic creation of new volumes when needed (default: true)
 	AutoCreate bool `mapstructure:"auto_create"`
+
+	// DirectIO configuration for bypassing kernel page cache
+	DirectIO DirectIOStorageConfig `mapstructure:"direct_io"`
+}
+
+// DirectIOStorageConfig holds direct I/O configuration for volume storage
+type DirectIOStorageConfig struct {
+	// Enabled enables direct I/O (O_DIRECT on Linux) for bypassing kernel cache
+	// This provides more predictable latency and avoids double-buffering
+	// Default: true on Linux, false on other platforms
+	Enabled bool `mapstructure:"enabled"`
+
+	// BlockAlignment is the alignment requirement for buffers and offsets
+	// Must be a power of 2, typically 512 or 4096 bytes (default: 4096)
+	BlockAlignment int `mapstructure:"block_alignment"`
+
+	// UseMemoryPool enables pooling of aligned buffers for reduced allocations
+	// Default: true
+	UseMemoryPool bool `mapstructure:"use_memory_pool"`
+
+	// FallbackOnError falls back to buffered I/O if direct I/O fails
+	// Default: true
+	FallbackOnError bool `mapstructure:"fallback_on_error"`
 }
 
 // CacheConfig holds DRAM cache configuration for high-performance workloads
