@@ -327,8 +327,6 @@ Enhanced audit logging for compliance and security monitoring.
 | `log_output` | string | `stdout` | Output: `stdout`, `stderr`, or file path |
 | `metrics.enabled` | bool | `true` | Enable Prometheus metrics |
 | `metrics.path` | string | `/metrics` | Metrics endpoint path |
-| `audit.enabled` | bool | `false` | Enable audit logging |
-| `audit.output` | string | `stdout` | Audit log output |
 
 ---
 
