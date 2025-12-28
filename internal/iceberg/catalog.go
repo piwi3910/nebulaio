@@ -691,6 +691,10 @@ func (c *Catalog) CommitTable(ctx context.Context, request *UpdateTableRequest) 
 
 	// Apply updates
 	newMetadata := c.copyMetadata(table.Metadata)
+	if newMetadata == nil {
+		atomic.AddInt64(&c.metrics.CommitsFailed, 1)
+		return nil, fmt.Errorf("failed to copy table metadata for update: internal serialization error")
+	}
 	for _, update := range request.Updates {
 		if err := c.applyUpdate(newMetadata, &update); err != nil {
 			atomic.AddInt64(&c.metrics.CommitsFailed, 1)

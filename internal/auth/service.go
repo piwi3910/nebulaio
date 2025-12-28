@@ -607,8 +607,8 @@ func generateID(prefix string) string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak IDs
-		log.Error().Err(err).Str("prefix", prefix).Msg("crypto/rand.Read failed while generating ID - this indicates a serious system entropy problem")
-		panic(fmt.Sprintf("crypto/rand.Read failed for prefix %s: %v", prefix, err))
+		log.Error().Err(err).Str("prefix", prefix).Msg("crypto/rand.Read failed while generating ID - this indicates a serious system entropy problem; check that /dev/urandom is available and the system has sufficient entropy")
+		panic(fmt.Sprintf("crypto/rand.Read failed for prefix %s: %v - ensure /dev/urandom is accessible", prefix, err))
 	}
 	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(b))
 }
@@ -617,8 +617,8 @@ func generateAccessKeyID() string {
 	b := make([]byte, 10)
 	if _, err := rand.Read(b); err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak access keys
-		log.Error().Err(err).Msg("crypto/rand.Read failed while generating access key ID - this indicates a serious system entropy problem")
-		panic(fmt.Sprintf("crypto/rand.Read failed for access key ID generation: %v", err))
+		log.Error().Err(err).Msg("crypto/rand.Read failed while generating access key ID - this indicates a serious system entropy problem; check that /dev/urandom is available")
+		panic(fmt.Sprintf("crypto/rand.Read failed for access key ID generation: %v - ensure /dev/urandom is accessible", err))
 	}
 	return "AKIA" + strings.ToUpper(hex.EncodeToString(b))[:16]
 }
@@ -627,8 +627,8 @@ func generateSecretAccessKey() string {
 	b := make([]byte, 30)
 	if _, err := rand.Read(b); err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak secret keys
-		log.Error().Err(err).Msg("crypto/rand.Read failed while generating secret access key - this indicates a serious system entropy problem")
-		panic(fmt.Sprintf("crypto/rand.Read failed for secret access key generation: %v", err))
+		log.Error().Err(err).Msg("crypto/rand.Read failed while generating secret access key - this indicates a serious system entropy problem; check that /dev/urandom is available")
+		panic(fmt.Sprintf("crypto/rand.Read failed for secret access key generation: %v - ensure /dev/urandom is accessible", err))
 	}
 	return hex.EncodeToString(b)[:40]
 }

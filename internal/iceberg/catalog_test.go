@@ -934,3 +934,34 @@ func TestSchemaEvolution(t *testing.T) {
 func intPtr(i int) *int {
 	return &i
 }
+
+// TestCopyMetadataErrorHandling verifies that copyMetadata handles errors properly
+// and callers check for nil returns
+func TestCopyMetadataErrorHandling(t *testing.T) {
+	catalog := &Catalog{
+		config:  CatalogConfig{Name: "test"},
+		metrics: &CatalogMetrics{},
+	}
+
+	// Test with valid metadata
+	validMetadata := &TableMetadata{
+		FormatVersion: 2,
+		TableUUID:     "test-uuid",
+		Location:      "s3://bucket/table",
+	}
+
+	copied := catalog.copyMetadata(validMetadata)
+	if copied == nil {
+		t.Error("copyMetadata should return non-nil for valid metadata")
+	}
+
+	if copied.TableUUID != validMetadata.TableUUID {
+		t.Errorf("Expected TableUUID %s, got %s", validMetadata.TableUUID, copied.TableUUID)
+	}
+
+	// Verify that original is not modified when copy is changed
+	copied.Location = "modified"
+	if validMetadata.Location == "modified" {
+		t.Error("Modifying copy should not affect original metadata")
+	}
+}

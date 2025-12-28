@@ -256,10 +256,10 @@ func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 			if entry, ok := c.getFromPeer(ctx, key); ok {
 				// Cache locally for future access - log if caching fails but don't fail the get
 				if putErr := c.Put(ctx, key, entry.Data, entry.ContentType, entry.ETag); putErr != nil {
-					log.Debug().
+					log.Warn().
 						Err(putErr).
 						Str("key", key).
-						Msg("failed to cache entry retrieved from peer - entry will need to be fetched again next time")
+						Msg("failed to cache entry retrieved from peer - this may impact cache hit rate and performance")
 				}
 				atomic.AddInt64(&c.bytesServed, entry.Size)
 				return entry, true

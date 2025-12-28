@@ -735,3 +735,90 @@ func BenchmarkBandwidthTracker(b *testing.B) {
 		bt.TryConsume(1024)
 	}
 }
+
+// TestFirewallInvalidCIDR verifies that invalid CIDR entries are handled gracefully
+// and don't cause the firewall to fail initialization
+func TestFirewallInvalidCIDR(t *testing.T) {
+	tests := []struct {
+		name        string
+		allowlist   []string
+		blocklist   []string
+		expectError bool
+	}{
+		{
+			name:        "Valid CIDR entries",
+			allowlist:   []string{"192.168.1.0/24", "10.0.0.0/8"},
+			blocklist:   []string{"172.16.0.0/12"},
+			expectError: false,
+		},
+		{
+			name:        "Valid single IPs",
+			allowlist:   []string{"192.168.1.100", "10.0.0.1"},
+			blocklist:   []string{"172.16.0.1"},
+			expectError: false,
+		},
+		{
+			name:        "Invalid CIDR entries are skipped",
+			allowlist:   []string{"not-an-ip", "192.168.1.0/24", "also-invalid"},
+			blocklist:   []string{"bad-entry", "10.0.0.0/8"},
+			expectError: false, // Should succeed, just skip invalid entries
+		},
+		{
+			name:        "Mixed valid and invalid entries",
+			allowlist:   []string{"192.168.1.100", "garbage", "10.0.0.1"},
+			blocklist:   []string{"invalid", "172.16.0.1", "not-a-cidr"},
+			expectError: false,
+		},
+		{
+			name:        "Empty lists",
+			allowlist:   []string{},
+			blocklist:   []string{},
+			expectError: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			config := DefaultConfig()
+			config.Enabled = true
+			config.IPAllowlist = tc.allowlist
+			config.IPBlocklist = tc.blocklist
+
+			fw, err := New(config)
+
+			if tc.expectError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if fw == nil {
+				t.Fatal("Firewall is nil")
+			}
+
+			// Verify that valid entries were processed
+			// Test with an IP that should work if valid entries were added
+			if len(tc.blocklist) > 0 {
+				// Find a valid entry to test
+				for _, entry := range tc.blocklist {
+					if entry == "10.0.0.0/8" {
+						req := &Request{
+							SourceIP:  "10.0.0.50",
+							Operation: "GetObject",
+						}
+						decision := fw.Evaluate(context.Background(), req)
+						if decision.Allowed {
+							t.Error("Expected IP in blocklist to be denied")
+						}
+						break
+					}
+				}
+			}
+		})
+	}
+}

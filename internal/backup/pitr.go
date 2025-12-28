@@ -314,7 +314,7 @@ func (wm *WALManager) syncLoop() {
 		if err := wm.file.Sync(); err != nil {
 			log.Error().
 				Err(err).
-				Msg("failed to sync WAL file - data durability may be compromised")
+				Msg("failed to sync WAL file - data durability may be compromised; check disk health, available space, and filesystem mount options (consider enabling sync mount option)")
 		}
 		wm.lastSync = time.Now()
 
