@@ -21,6 +21,9 @@ jobs:
           go-version: '1.24'
           cache: true
 
+      - name: Tidy go modules
+        run: go mod tidy
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
@@ -52,6 +55,11 @@ jobs:
         with:
           go-version: '1.24'
           cache: true
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum || (echo "go.mod or go.sum is not tidy. Run 'go mod tidy' and commit the changes." && exit 1)
 
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out ./...
@@ -103,6 +111,9 @@ jobs:
         with:
           go-version: '1.24'
           cache: true
+
+      - name: Tidy go modules
+        run: go mod tidy
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
