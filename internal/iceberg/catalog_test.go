@@ -952,7 +952,7 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 
 		copied := catalog.copyMetadata(validMetadata)
 		if copied == nil {
-			t.Error("copyMetadata should return non-nil for valid metadata")
+			t.Fatal("copyMetadata should return non-nil for valid metadata")
 		}
 
 		if copied.TableUUID != validMetadata.TableUUID {
