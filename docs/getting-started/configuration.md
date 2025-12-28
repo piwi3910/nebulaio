@@ -64,6 +64,7 @@ NebulaIO is **secure by default** with TLS enabled and automatic certificate gen
 | `tls.ip_addresses` | list | `[]` | Additional IP addresses for certificate SAN |
 
 **Note:** When `auto_generate` is enabled and no certificates are provided, NebulaIO automatically:
+
 - Creates a CA certificate (10-year validity)
 - Generates a server certificate signed by the CA
 - Detects and includes all local IP addresses in the certificate SAN
@@ -118,6 +119,7 @@ The volume backend stores objects in pre-allocated volume files with block-based
 | `storage.volume.tier_directories.cold` | string | - | Cold tier directory (HDD) |
 
 **When to use Volume backend:**
+
 - High-throughput workloads with many small to medium objects
 - Reduced filesystem overhead (no per-object files)
 - Predictable performance with pre-allocated storage
@@ -196,6 +198,7 @@ NebulaIO uses [Dragonboat](https://github.com/lni/dragonboat), a high-performanc
 | `cluster.check_quorum` | bool | `true` | Enable quorum checking for leader validity |
 
 **Dragonboat Terminology**:
+
 - **ShardID**: Identifies a Raft group (equivalent to cluster ID)
 - **ReplicaID**: Unique identifier for each node within a shard (must be unique per node)
 - **RTT**: Round-Trip Time - election and heartbeat timeouts are expressed as multiples of RTT

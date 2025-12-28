@@ -65,6 +65,7 @@ Run with default settings:
 ```
 
 Default configuration:
+
 - **S3 API**: `http://localhost:9000`
 - **Admin API**: `http://localhost:9001`
 - **Data directory**: `./data`
@@ -165,21 +166,25 @@ See the [CLI documentation](cli.md) for complete reference.
 ## Next Steps
 
 ### Deployment Guides
+
 - [Docker Deployment](../deployment/docker.md) - Production Docker setup
 - [Kubernetes Deployment](../deployment/kubernetes.md) - Cloud-native deployment
 - [Standalone Deployment](../deployment/standalone.md) - Binary installation
 
 ### Configuration
+
 - [Configuration Reference](configuration.md) - All configuration options
 - [CLI Tool Guide](cli.md) - Command-line reference
 
 ### Advanced Features
+
 - [Erasure Coding](../features/erasure-coding.md) - Data durability
 - [Bucket Replication](../features/replication.md) - Cross-cluster replication
 - [Object Lock](../features/object-lock.md) - WORM compliance
 - [Event Notifications](../features/events.md) - Webhook and Kafka integration
 
 ### AI/ML Features
+
 - [MCP Server](../features/mcp-server.md) - AI agent integration
 - [GPUDirect Storage](../features/gpudirect.md) - GPU-accelerated data access
 - [S3 Express](../features/s3-express.md) - Low-latency operations

@@ -118,12 +118,14 @@ S3 over RDMA:
 **Objective**: Establish RDMA infrastructure and basic connectivity
 
 **Deliverables**:
+
 1. RDMA transport abstraction layer
 2. Connection management (RC - Reliable Connection)
 3. Memory registration framework
 4. Basic GetObject over RDMA
 
 **Technical Details**:
+
 ```go
 // internal/transport/rdma/transport.go
 
@@ -157,6 +159,7 @@ type S3OverRDMARequest struct {
 ```
 
 **Dependencies**:
+
 - RDMA-capable hardware for development/testing
 - libibverbs (Linux RDMA user-space library)
 - Go RDMA bindings (github.com/Mellanox/goroce or similar)
@@ -166,6 +169,7 @@ type S3OverRDMARequest struct {
 **Objective**: Implement all S3 operations over RDMA
 
 **Deliverables**:
+
 1. PutObject with zero-copy uploads
 2. Multipart upload support
 3. DeleteObject, HeadObject
@@ -173,6 +177,7 @@ type S3OverRDMARequest struct {
 5. Concurrent connection handling
 
 **Zero-Copy Data Path**:
+
 ```
 Client PutObject:
 1. Client registers memory containing object data
@@ -193,6 +198,7 @@ Client GetObject:
 **Objective**: Achieve target performance metrics
 
 **Deliverables**:
+
 1. Memory pool pre-allocation
 2. Request pipelining
 3. Adaptive batching for small objects
@@ -200,6 +206,7 @@ Client GetObject:
 5. Connection multiplexing
 
 **Target Metrics**:
+
 - GetObject 4KB: < 5 μs (p99)
 - GetObject 1MB: < 50 μs (p99)
 - PutObject 4KB: < 10 μs (p99)
@@ -210,6 +217,7 @@ Client GetObject:
 **Objective**: Production-ready deployment
 
 **Deliverables**:
+
 1. Hybrid transport (automatic fallback to TCP)
 2. Authentication over RDMA
 3. Encryption support (hardware offload where available)
@@ -432,11 +440,13 @@ The following components have been implemented in `internal/transport/rdma/`:
 | Unit tests | `transport_test.go` | ✅ |
 
 **Simulated Mode**: The implementation includes a simulated mode (`DeviceName: "simulated"`) for development and testing without actual RDMA hardware. This allows:
+
 - Unit testing of all RDMA code paths
 - Development on standard machines
 - CI/CD pipeline integration
 
 **Next Steps for Phase 2**:
+
 - Integration with libibverbs for real hardware
 - Performance benchmarking with actual RDMA NICs
 - GPU Direct integration for AI/ML workloads
@@ -444,15 +454,18 @@ The following components have been implemented in `internal/transport/rdma/`:
 ## Resources
 
 ### Documentation
+
 - [RDMA Programming Guide](https://www.rdmamojo.com/)
 - [Mellanox OFED Documentation](https://docs.nvidia.com/networking/)
 - [Linux RDMA Subsystem](https://www.kernel.org/doc/html/latest/infiniband/)
 
 ### Reference Implementations
+
 - [HERD (RDMA Key-Value)](https://github.com/efficient/HERD)
 - [FaRM (Microsoft)](https://www.microsoft.com/en-us/research/project/farm/)
 
 ### Dependencies
+
 - [go-rdma](https://github.com/Mellanox/goroce) - Go RDMA bindings
 - [libibverbs](https://github.com/linux-rdma/rdma-core) - RDMA user-space library
 

@@ -77,6 +77,7 @@ flowchart TB
 The S3 API layer handles all client requests using the Amazon S3 protocol.
 
 **Responsibilities**:
+
 - Parse and validate S3 requests
 - AWS Signature V4 authentication
 - Request routing to appropriate handlers
@@ -89,6 +90,7 @@ The S3 API layer handles all client requests using the Amazon S3 protocol.
 The Admin API provides cluster management and monitoring capabilities.
 
 **Responsibilities**:
+
 - Cluster management (add/remove nodes)
 - User and IAM management
 - Bucket policy management
@@ -101,6 +103,7 @@ The Admin API provides cluster management and monitoring capabilities.
 A browser-based interface for managing NebulaIO.
 
 **Features**:
+
 - Bucket management
 - Object browsing and upload
 - User management
@@ -113,6 +116,7 @@ A browser-based interface for managing NebulaIO.
 Handles distributed consensus for metadata operations using the Dragonboat library.
 
 **Features**:
+
 - Leader election
 - Log replication with batching and pipelining
 - Consistent reads and writes
@@ -128,6 +132,7 @@ Handles distributed consensus for metadata operations using the Dragonboat libra
 Provides cluster membership and node discovery.
 
 **Features**:
+
 - Node discovery
 - Failure detection
 - Cluster state propagation
@@ -140,11 +145,13 @@ Provides cluster membership and node discovery.
 Handles object data storage with multiple backend options.
 
 **Supported Backends**:
+
 - **Filesystem (fs)**: Local or network filesystem (default)
 - **Volume**: High-performance block-based storage with pre-allocated volume files and Direct I/O
 - **Erasure Coding**: Reed-Solomon distributed storage with configurable data/parity shards
 
 **Additional Capabilities**:
+
 - **Compression**: Zstandard, LZ4, or Gzip compression with automatic content-type detection
 - **Storage Tiering**: Hot/Warm/Cold/Archive tiers with policy-based transitions
 - **Raw Device Access**: Direct block device access for maximum performance
@@ -203,6 +210,7 @@ sequenceDiagram
 ### ASCII Diagrams (for terminal viewing)
 
 **Object Upload:**
+
 ```
 Client                  Load Balancer           Node (Leader)           Storage
   │                          │                       │                     │
@@ -218,6 +226,7 @@ Client                  Load Balancer           Node (Leader)           Storage
 ```
 
 **Object Download:**
+
 ```
 Client                  Load Balancer           Any Node                Storage
   │                          │                       │                     │
@@ -303,6 +312,7 @@ For large deployments, separate management and storage planes.
 ```
 
 **Management Plane**:
+
 - 3, 5, or 7 nodes (odd number for Dragonboat quorum)
 - Handles metadata operations
 - Participates in Dragonboat consensus
@@ -310,6 +320,7 @@ For large deployments, separate management and storage planes.
 - Optimized for low-latency metadata access
 
 **Storage Plane**:
+
 - Any number of nodes
 - Handles data storage
 - Non-voting Dragonboat members
@@ -323,6 +334,7 @@ For large deployments, separate management and storage planes.
 NebulaIO uses an embedded key-value store for metadata.
 
 **Stored Data**:
+
 - Bucket metadata
 - Object metadata (keys, sizes, ETags)
 - User and IAM data
@@ -330,6 +342,7 @@ NebulaIO uses an embedded key-value store for metadata.
 - Cluster configuration
 
 **Consistency**:
+
 - Strong consistency via Dragonboat
 - Linearizable reads available
 - Eventual consistency for non-critical data

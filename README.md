@@ -5,6 +5,7 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 ## Features
 
 ### Core Features
+
 - **Full S3 API Compatibility** - Works with existing S3 SDKs and tools (AWS CLI, boto3, etc.)
 - **Web Console** - Modern React-based admin and user portals
 - **Distributed Metadata** - Dragonboat consensus for high availability and ultra-low latency (1.3ms, 1.25M writes/sec)
@@ -15,25 +16,30 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 ### Advanced Features
 
 #### Data Durability
+
 - **Erasure Coding** - Reed-Solomon encoding with configurable data/parity shards (default: 10+4)
 - **Data Compression** - Support for Zstandard, LZ4, and Gzip compression with automatic content-type detection
 
 #### Replication
+
 - **Bucket Replication** - Async replication with configurable rules and filtering
 - **Site Replication** - Active-Active multi-datacenter sync with IAM/policy synchronization
 
 #### Identity & Security
+
 - **LDAP/Active Directory** - Identity integration with user sync and group-to-policy mapping
 - **OIDC/SSO** - OpenID Connect support for single sign-on (Keycloak, Okta, Auth0, etc.)
 - **KMS Integration** - Envelope encryption with HashiCorp Vault, AWS KMS, or local key management
 - **Object Lock (WORM)** - GOVERNANCE and COMPLIANCE modes with legal hold support
 
 #### Operations
+
 - **Event Notifications** - Webhook, Kafka, RabbitMQ, NATS, Redis, AWS SNS/SQS targets
 - **Storage Tiering** - Hot/Warm/Cold/Archive tiers with LRU caching and policy-based transitions
 - **CLI Tool** - Full-featured command-line interface for all operations
 
 #### S3 API Extensions
+
 - **Object Versioning** - Full version management including delete markers
 - **Lifecycle Policies** - Automated object expiration and transition rules
 - **Multipart Uploads** - Large file support with resumable uploads
@@ -43,36 +49,43 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 ### AI/ML & High-Performance Features (2025)
 
 #### S3 Express One Zone
+
 - **Atomic Appends** - Append data to objects for streaming workloads
 - **Accelerated PUT/LIST** - Sub-millisecond latency for hot data
 - **Directory Buckets** - Optimized for single-zone deployments
 
 #### Apache Iceberg
+
 - **Native Tables** - First-class Iceberg table format support
 - **REST Catalog** - Standard Iceberg REST catalog API
 - **ACID Transactions** - Full transaction support with snapshot isolation
 
 #### MCP Server (Model Context Protocol)
+
 - **AI Agent Integration** - Native support for Claude, ChatGPT, and other AI agents
 - **Tool Execution** - Agents can read, write, and manage objects
 - **Resource Access** - Secure access to bucket contents for AI workloads
 
 #### GPUDirect Storage
+
 - **Zero-Copy Transfers** - Direct GPU-to-storage data paths
 - **NVIDIA GDS Support** - Bypass CPU for AI/ML training data loading
 - **Multi-GPU** - Support for peer-to-peer GPU transfers
 
 #### BlueField DPU Support
+
 - **Crypto Offload** - AES-GCM encryption on NVIDIA SmartNIC
 - **Compression Offload** - Hardware-accelerated Deflate/LZ4
 - **Network Acceleration** - RDMA and storage offload via DPU
 
 #### S3 over RDMA
+
 - **Ultra-Low Latency** - Sub-10μs object access via RDMA
 - **Zero-Copy** - Direct memory transfers between client and server
 - **libibverbs Integration** - Full verbs API support for InfiniBand/RoCE
 
 #### NVIDIA NIM Integration
+
 - **Inference on Objects** - Run AI inference on stored data
 - **Model Support** - LLM, Vision, Audio, Multimodal, Embedding models
 - **Streaming** - Real-time inference with streaming responses
@@ -267,6 +280,7 @@ nim:
 ### S3 API (Port 9000)
 
 Standard S3-compatible API supporting:
+
 - Bucket operations (CreateBucket, DeleteBucket, ListBuckets, etc.)
 - Object operations (PutObject, GetObject, DeleteObject, CopyObject, etc.)
 - S3 Express operations (CreateSession, atomic appends)
@@ -302,6 +316,7 @@ POST   /mcp                           # JSON-RPC 2.0 endpoint
 ### RDMA (Port 9100)
 
 Ultra-low latency S3 access via RDMA:
+
 - InfiniBand and RoCE v2 support
 - Zero-copy data transfers
 - Sub-10μs latency for small objects
