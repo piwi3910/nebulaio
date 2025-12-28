@@ -102,6 +102,7 @@ The Policy Store manages policy persistence with a hybrid approach:
 ```
 
 **Features:**
+
 - File-based persistence for GitOps workflows
 - In-memory caching for performance
 - Automatic sync between file and memory

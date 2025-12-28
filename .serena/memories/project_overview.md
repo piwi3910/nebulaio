@@ -1,7 +1,9 @@
 # NebulaIO Project Overview
 
 ## Purpose
+
 NebulaIO is an S3-compatible object storage system written in Go. It provides a fully compatible S3 API for object storage with features like:
+
 - S3-compatible API endpoints
 - Admin API for system management
 - Console API for user-facing operations
@@ -14,6 +16,7 @@ NebulaIO is an S3-compatible object storage system written in Go. It provides a 
 - Lifecycle management
 
 ## Tech Stack
+
 - **Language**: Go 1.25+
 - **HTTP Router**: chi/v5
 - **Logging**: zerolog
@@ -24,6 +27,7 @@ NebulaIO is an S3-compatible object storage system written in Go. It provides a 
 - **Consensus**: Hashicorp Raft for distributed metadata
 
 ## Project Structure
+
 ```
 nebulaio/
 ├── cmd/nebulaio/       # Main entry point
@@ -56,6 +60,7 @@ nebulaio/
 ```
 
 ## Ports
+
 - S3 API: 9000 (default)
 - Admin API: 9001 (default)
 - Console (Web UI): 9002 (default)

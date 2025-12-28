@@ -11,10 +11,13 @@ This guide walks you through fundamental operations in NebulaIO, from understand
 ## Understanding NebulaIO Concepts
 
 ### Buckets
+
 Buckets are top-level containers for storing objects. Each bucket has a unique name, can contain unlimited objects, and supports versioning, lifecycle policies, and access controls.
 
 ### Objects
+
 Objects are fundamental storage units consisting of:
+
 - **Key**: Unique identifier (path) within a bucket
 - **Data**: File content (up to 5 GB per object)
 - **Metadata**: System and user-defined key-value pairs (set at upload, immutable)
@@ -49,6 +52,7 @@ mc ls nebulaio
 ## Uploading Objects
 
 ### Single File
+
 ```bash
 # AWS CLI
 nebulaio s3 cp document.pdf s3://my-first-bucket/documents/document.pdf
@@ -59,6 +63,7 @@ mc cp document.pdf nebulaio/my-first-bucket/documents/
 ```
 
 ### Multiple Files
+
 ```bash
 # AWS CLI: Upload directory recursively
 nebulaio s3 cp ./local-folder s3://my-first-bucket/backup/ --recursive

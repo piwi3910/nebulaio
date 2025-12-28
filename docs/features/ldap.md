@@ -339,6 +339,7 @@ Error: failed to connect to LDAP server: dial tcp: connection refused
 ```
 
 **Solutions**:
+
 - Verify the server URL and port are correct
 - Check firewall rules allow connections to LDAP port (389/636)
 - Ensure the LDAP server is running and accessible
@@ -350,6 +351,7 @@ Error: failed to bind: LDAP Result Code 49 "Invalid Credentials"
 ```
 
 **Solutions**:
+
 - Verify the bind DN is correct and fully qualified
 - Check the bind password is correct
 - Ensure the service account has appropriate permissions
@@ -361,6 +363,7 @@ Error: user not found: alice
 ```
 
 **Solutions**:
+
 - Verify the user search base DN is correct
 - Check the search filter matches user entries
 - Ensure the username attribute mapping is correct
@@ -373,6 +376,7 @@ Error: x509: certificate signed by unknown authority
 ```
 
 **Solutions**:
+
 - Provide the CA certificate via `tls.caCertFile`
 - For testing only, set `tls.insecureSkipVerify: true`
 - Ensure certificate chain is complete

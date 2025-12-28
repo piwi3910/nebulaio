@@ -165,6 +165,7 @@ tls:
 ```
 
 **Using custom certificates:**
+
 ```yaml
 tls:
   enabled: true
@@ -175,6 +176,7 @@ tls:
 ```
 
 **Auto-generated certificate features:**
+
 - ECDSA P-256 keys for performance and security
 - CA certificate with 10-year validity
 - Server certificates with configurable validity (default 365 days)
@@ -332,26 +334,31 @@ aws s3api put-bucket-versioning \
 ## Security Best Practices
 
 ### Authentication
+
 - Rotate access keys every 90 days
 - Use LDAP/OIDC for enterprise environments
 - Enforce minimum 32-character secret keys
 
 ### Authorization
+
 - Follow least privilege principle
 - Regularly audit permissions quarterly
 - Use bucket policies for public access controls
 
 ### Encryption
+
 - Enable TLS for all endpoints
 - Enable default bucket encryption (SSE-S3)
 - Use KMS for sensitive/regulated data
 
 ### Network
+
 - Restrict access with IP allowlisting
 - Enable rate limiting to prevent abuse
 - Use mTLS for cluster communication
 
 ### Monitoring
+
 - Enable audit logging with integrity
 - Configure SIEM integration
 - Set up anomaly detection alerts

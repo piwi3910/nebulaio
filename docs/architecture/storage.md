@@ -345,6 +345,7 @@ storage:
 | Memory usage | 2x | 1x | No kernel buffers |
 
 **Recommendation**: Enable direct I/O for workloads that:
+
 - Have their own caching layer (like DRAM cache)
 - Need predictable latency
 - Are write-heavy
@@ -602,7 +603,7 @@ storage:
 | IOPS (4KB) | 50,000 | 150,000 | 3x |
 | Throughput | 2 GB/s | 6 GB/s | 3x |
 
-*Benchmarks on enterprise NVMe (Intel P5510)*
+**Note:** Benchmarks performed on enterprise NVMe (Intel P5510)
 
 ### Kubernetes Deployment
 

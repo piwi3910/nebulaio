@@ -1,6 +1,7 @@
 # Suggested Commands for NebulaIO Development
 
 ## Build Commands
+
 ```bash
 # Build the binary
 make build
@@ -19,6 +20,7 @@ make clean
 ```
 
 ## Development Commands
+
 ```bash
 # Download dependencies
 make deps
@@ -34,6 +36,7 @@ make dev
 ```
 
 ## Code Quality Commands
+
 ```bash
 # Format code
 make fmt
@@ -52,6 +55,7 @@ make test-coverage
 ```
 
 ## Docker Commands
+
 ```bash
 # Build Docker image
 make docker-build
@@ -67,6 +71,7 @@ make docker-compose-down
 ```
 
 ## Web Console Commands
+
 ```bash
 # Install web dependencies
 make web
@@ -79,6 +84,7 @@ make web-dev
 ```
 
 ## Utility Commands
+
 ```bash
 # Initialize data directory
 make init-data
@@ -88,6 +94,7 @@ make help
 ```
 
 ## Direct Go Commands
+
 ```bash
 # Build all packages
 go build ./...

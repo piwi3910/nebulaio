@@ -5,9 +5,11 @@ This directory contains architecture diagrams for NebulaIO in Mermaid format.
 ## Diagrams
 
 ### Security Architecture
+
 [security-architecture.mmd](security-architecture.mmd)
 
 Shows the complete security layer including:
+
 - Access Analytics with anomaly detection
 - Encryption key management and rotation
 - mTLS internal communication
@@ -18,15 +20,19 @@ Shows the complete security layer including:
 ## Viewing Diagrams
 
 ### VS Code
+
 Install the "Mermaid Preview" extension and open any `.mmd` file.
 
 ### GitHub
+
 GitHub renders Mermaid diagrams automatically in markdown files.
 
 ### Online Editor
+
 Copy diagram content to [Mermaid Live Editor](https://mermaid.live/)
 
 ### Command Line
+
 ```bash
 # Install mermaid-cli
 npm install -g @mermaid-js/mermaid-cli

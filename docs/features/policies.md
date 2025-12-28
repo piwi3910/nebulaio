@@ -409,6 +409,7 @@ distributed:
 ```
 
 Buckets are distributed across nodes using consistent hashing, ensuring:
+
 - Each bucket is processed by exactly one node
 - Load is balanced across the cluster
 - Node failures are handled gracefully

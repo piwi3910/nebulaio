@@ -26,6 +26,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIs...",
@@ -51,6 +52,7 @@ GET /api/v1/console/me
 ```
 
 **Response:**
+
 ```json
 {"id": "usr_abc123", "username": "johndoe", "email": "john@example.com", "role": "user"}
 ```
@@ -71,6 +73,7 @@ GET /api/v1/console/me/keys
 ```
 
 **Response:**
+
 ```json
 {"keys": [{"access_key_id": "AKIA...", "description": "Production app", "status": "active"}]}
 ```
@@ -83,6 +86,7 @@ POST /api/v1/console/me/keys
 ```
 
 **Response:**
+
 ```json
 {"access_key_id": "AKIA...", "secret_access_key": "wJalrXUtnFEMI...", "description": "CI/CD pipeline"}
 ```
@@ -102,6 +106,7 @@ GET /api/v1/console/buckets
 ```
 
 **Response:**
+
 ```json
 {"buckets": [{"name": "my-data", "creation_date": "2024-03-15T08:00:00Z", "object_count": 1250}]}
 ```
@@ -113,6 +118,7 @@ GET /api/v1/console/buckets/{bucketName}/settings
 ```
 
 **Response:**
+
 ```json
 {"versioning": true, "encryption": "AES256", "public_access_blocked": true}
 ```
@@ -133,6 +139,7 @@ GET /api/v1/console/buckets/{bucket}/objects?prefix=docs/&max_keys=100
 | `page_token` | Pagination token |
 
 **Response:**
+
 ```json
 {
   "objects": [{"key": "docs/report.pdf", "size": 1048576, "last_modified": "2024-12-20T14:30:00Z"}],
@@ -164,6 +171,7 @@ GET /api/v1/console/buckets/{bucket}/objects/{key}/download-url?expires_in=3600
 ```
 
 **Response:**
+
 ```json
 {"url": "https://nebulaio.example.com/bucket/file.pdf?X-Amz-...", "expires_at": "2024-12-27T11:00:00Z"}
 ```
@@ -181,16 +189,19 @@ ws.send(JSON.stringify({ type: 'auth', token: '<access_token>' }));
 ### Event Types
 
 **Upload Progress:**
+
 ```json
 {"type": "upload_progress", "data": {"upload_id": "upl_abc", "bucket": "my-data", "percent": 50}}
 ```
 
 **Bucket Event:**
+
 ```json
 {"type": "bucket_event", "data": {"event": "s3:ObjectCreated:Put", "bucket": "my-data", "key": "file.pdf"}}
 ```
 
 **Quota Alert:**
+
 ```json
 {"type": "quota_alert", "data": {"bucket": "my-data", "usage_percent": 90}}
 ```
@@ -216,6 +227,7 @@ ws.send(JSON.stringify({ type: 'auth', token: '<access_token>' }));
 - **Uploads:** 10 concurrent
 
 Rate limit headers in responses:
+
 ```http
 X-RateLimit-Limit: 500
 X-RateLimit-Remaining: 498

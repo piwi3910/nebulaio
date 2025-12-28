@@ -58,6 +58,7 @@ SELECT * FROM s3object s WHERE s.created BETWEEN '2024-01-01' AND '2024-12-31'
 ### Functions
 
 **String Functions:**
+
 ```sql
 SELECT UPPER(name), LOWER(email), TRIM(description) FROM s3object
 SELECT SUBSTRING(name, 1, 5) FROM s3object
@@ -65,12 +66,14 @@ SELECT CHAR_LENGTH(name) FROM s3object
 ```
 
 **Numeric Functions:**
+
 ```sql
 SELECT ABS(value), FLOOR(price), CEIL(score) FROM s3object
 SELECT ROUND(price, 2) FROM s3object
 ```
 
 **Date Functions:**
+
 ```sql
 SELECT EXTRACT(YEAR FROM created_at) FROM s3object
 SELECT DATE_ADD(day, 7, created_at) FROM s3object
@@ -79,12 +82,14 @@ SELECT UTCNOW() FROM s3object
 ```
 
 **Aggregate Functions:**
+
 ```sql
 SELECT COUNT(*), SUM(amount), AVG(score) FROM s3object
 SELECT MIN(price), MAX(price) FROM s3object
 ```
 
 **Conditional Functions:**
+
 ```sql
 SELECT CASE WHEN age > 18 THEN 'adult' ELSE 'minor' END FROM s3object
 SELECT COALESCE(nickname, name, 'unknown') FROM s3object

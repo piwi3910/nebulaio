@@ -99,6 +99,7 @@ kernel.shmall = 4294967296
 ```
 
 Apply changes:
+
 ```bash
 sudo sysctl -p
 ```
@@ -576,6 +577,7 @@ cluster:
 ```
 
 **Performance Notes**:
+
 - Dragonboat achieves 1.25M writes/sec with 1.3ms latency
 - WAL directory on NVMe can improve performance by 10-20%
 - Batch proposals are automatically enabled for high throughput
@@ -585,6 +587,7 @@ cluster:
 - Use `SyncRequestAddReplica` for adding voting members
 
 **Dragonboat API Notes**:
+
 - Leader operations: `SyncPropose`, `SyncRead`
 - Membership changes: `SyncRequestAddReplica`, `SyncRequestAddNonVoting`, `SyncRequestDeleteReplica`
 - Snapshots: `SyncRequestSnapshot`

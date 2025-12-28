@@ -524,6 +524,7 @@ kubectl describe pvc -n nebulaio data-nebulaio-0
 ```
 
 Common causes:
+
 - No available storage class
 - Insufficient node resources
 - Node selector not matching

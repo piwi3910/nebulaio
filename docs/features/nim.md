@@ -171,6 +171,7 @@ result = client.chat(
 ```
 
 Supported models:
+
 - `meta/llama-3.1-8b-instruct`
 - `meta/llama-3.1-70b-instruct`
 - `mistralai/mixtral-8x7b-instruct`

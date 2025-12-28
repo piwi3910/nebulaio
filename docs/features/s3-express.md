@@ -5,6 +5,7 @@ S3 Express One Zone provides ultra-low latency object storage for performance-cr
 ## Overview
 
 S3 Express One Zone is designed for:
+
 - **AI/ML Training** - Fast data loading for GPU workloads
 - **Real-time Analytics** - Low-latency data access
 - **Streaming Ingestion** - Atomic appends for log aggregation

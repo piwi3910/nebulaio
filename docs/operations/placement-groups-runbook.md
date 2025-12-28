@@ -18,6 +18,7 @@ This runbook provides step-by-step procedures for common placement group operati
 **When**: Scaling capacity or replacing failed nodes.
 
 **Prerequisites**:
+
 - New node is configured and running
 - Node has network connectivity to other group members
 - Node has sufficient storage capacity
@@ -25,11 +26,13 @@ This runbook provides step-by-step procedures for common placement group operati
 **Procedure**:
 
 1. **Verify node is healthy**:
+
    ```bash
    curl -s http://NEW_NODE:9001/health | jq .
    ```
 
 2. **Add node via Admin API**:
+
    ```bash
    curl -X POST "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1/nodes" \
      -H "Authorization: Bearer $TOKEN" \
@@ -38,18 +41,21 @@ This runbook provides step-by-step procedures for common placement group operati
    ```
 
 3. **Verify node joined**:
+
    ```bash
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | jq '.nodes'
    ```
 
 4. **Monitor rebalancing** (if enabled):
+
    ```bash
    # Watch rebalance progress
    watch -n 5 "curl -s 'http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1/status'"
    ```
 
 **Expected Outcome**:
+
 - Node appears in group membership
 - Group status remains "healthy"
 - New objects are distributed to new node
@@ -61,18 +67,21 @@ This runbook provides step-by-step procedures for common placement group operati
 **When**: Decommissioning hardware or performing maintenance.
 
 **Prerequisites**:
+
 - Group has more than `min_nodes` members
 - Node is accessible (for graceful removal)
 
 **Procedure**:
 
 1. **Check group capacity**:
+
    ```bash
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | jq '{nodes: .nodes | length, min_nodes: .min_nodes}'
    ```
 
 2. **Drain node (recommended)**:
+
    ```bash
    # Mark node as draining - stops new object placement
    curl -X PUT "http://NODE:9001/api/v1/admin/node/drain" \
@@ -81,6 +90,7 @@ This runbook provides step-by-step procedures for common placement group operati
    ```
 
 3. **Wait for active operations to complete**:
+
    ```bash
    # Check for in-flight operations
    curl -s "http://NODE:9001/api/v1/admin/node/operations" \
@@ -88,18 +98,21 @@ This runbook provides step-by-step procedures for common placement group operati
    ```
 
 4. **Remove node from group**:
+
    ```bash
    curl -X DELETE "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1/nodes/old-node-1" \
      -H "Authorization: Bearer $TOKEN"
    ```
 
 5. **Verify removal**:
+
    ```bash
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | jq '.nodes'
    ```
 
 **Expected Outcome**:
+
 - Node removed from group membership
 - Group may transition to "degraded" if near `min_nodes`
 - Existing data on removed node is rebuilt on remaining nodes
@@ -113,6 +126,7 @@ This runbook provides step-by-step procedures for common placement group operati
 **Procedure**:
 
 1. **Define group configuration**:
+
    ```yaml
    # Add to config.yaml
    storage:
@@ -127,6 +141,7 @@ This runbook provides step-by-step procedures for common placement group operati
    ```
 
 2. **Create via Admin API**:
+
    ```bash
    curl -X POST "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups" \
      -H "Authorization: Bearer $TOKEN" \
@@ -142,6 +157,7 @@ This runbook provides step-by-step procedures for common placement group operati
    ```
 
 3. **Add initial nodes**:
+
    ```bash
    for i in {1..14}; do
      curl -X POST "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc2/nodes" \
@@ -151,6 +167,7 @@ This runbook provides step-by-step procedures for common placement group operati
    ```
 
 4. **Configure replication target** (optional):
+
    ```bash
    curl -X PUT "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1/replication" \
      -H "Authorization: Bearer $TOKEN" \
@@ -170,6 +187,7 @@ This runbook provides step-by-step procedures for common placement group operati
 **Immediate Actions**:
 
 1. **Assess scope**:
+
    ```bash
    # Check which group is offline
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups" \
@@ -177,6 +195,7 @@ This runbook provides step-by-step procedures for common placement group operati
    ```
 
 2. **Check node status**:
+
    ```bash
    # List nodes and their status
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/nodes" \
@@ -184,6 +203,7 @@ This runbook provides step-by-step procedures for common placement group operati
    ```
 
 3. **Check network connectivity**:
+
    ```bash
    # From a healthy node, ping affected nodes
    for node in node1 node2 node3; do
@@ -202,17 +222,20 @@ This runbook provides step-by-step procedures for common placement group operati
 1. **Restore network connectivity** (if network issue)
 
 2. **Restart affected nodes** (if node issue):
+
    ```bash
    systemctl restart nebulaio
    ```
 
 3. **Force rejoin** (if nodes are healthy but not rejoining):
+
    ```bash
    curl -X POST "http://NODE:9001/api/v1/admin/cluster/rejoin" \
      -H "Authorization: Bearer $TOKEN"
    ```
 
 4. **Add replacement nodes** (if hardware failure):
+
    ```bash
    # See "Adding a Node" procedure above
    ```
@@ -228,12 +251,14 @@ This runbook provides step-by-step procedures for common placement group operati
 **Assessment**:
 
 1. **Check current status**:
+
    ```bash
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | jq '{status, nodes: .nodes | length, min_nodes}'
    ```
 
 2. **Identify missing nodes**:
+
    ```bash
    # Compare expected vs actual
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/nodes?placement_group=pg-dc1" \
@@ -249,6 +274,7 @@ This runbook provides step-by-step procedures for common placement group operati
 3. **For planned maintenance**: Expedite maintenance completion
 
 **Escalation**:
+
 - If degraded > 1 hour: Page on-call engineer
 - If degraded + additional node failure risk: Initiate DR procedures
 
@@ -263,11 +289,13 @@ This runbook provides step-by-step procedures for common placement group operati
 **Investigation**:
 
 1. **Check churn metrics**:
+
    ```bash
    curl -s "http://ADMIN_NODE:9090/metrics" | grep nebulaio_placement_group_node
    ```
 
 2. **Review recent events**:
+
    ```bash
    # Check audit log
    tail -1000 /var/log/nebulaio/audit.log | grep PlacementGroup
@@ -296,6 +324,7 @@ This runbook provides step-by-step procedures for common placement group operati
 **Procedure**:
 
 1. **Pre-flight checks**:
+
    ```bash
    # Ensure group is healthy
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
@@ -308,12 +337,14 @@ This runbook provides step-by-step procedures for common placement group operati
 2. **For each node**:
 
    a. **Drain node**:
+
    ```bash
    curl -X PUT "http://NODE:9001/api/v1/admin/node/drain" \
      -H "Authorization: Bearer $TOKEN" -d '{"drain": true}'
    ```
 
    b. **Wait for drain completion**:
+
    ```bash
    while true; do
      active=$(curl -s "http://NODE:9001/api/v1/admin/node/operations" | jq '.active_operations')
@@ -323,6 +354,7 @@ This runbook provides step-by-step procedures for common placement group operati
    ```
 
    c. **Perform upgrade**:
+
    ```bash
    systemctl stop nebulaio
    apt-get update && apt-get install nebulaio
@@ -330,11 +362,13 @@ This runbook provides step-by-step procedures for common placement group operati
    ```
 
    d. **Verify node health**:
+
    ```bash
    curl -s "http://NODE:9001/health" | jq '.status'
    ```
 
    e. **Undrain node**:
+
    ```bash
    curl -X PUT "http://NODE:9001/api/v1/admin/node/drain" \
      -H "Authorization: Bearer $TOKEN" -d '{"drain": false}'
@@ -343,6 +377,7 @@ This runbook provides step-by-step procedures for common placement group operati
    f. **Wait for stabilization** (2-5 minutes) before next node
 
 3. **Post-upgrade verification**:
+
    ```bash
    # Verify all nodes on same version
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/nodes" \
@@ -356,6 +391,7 @@ This runbook provides step-by-step procedures for common placement group operati
 **When**: Approaching storage limits or min_nodes threshold.
 
 1. **Review current capacity**:
+
    ```bash
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | \
@@ -370,6 +406,7 @@ This runbook provides step-by-step procedures for common placement group operati
 3. **Add nodes** (see "Adding a Node" procedure)
 
 4. **Update max_nodes if needed**:
+
    ```bash
    curl -X PATCH "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" \

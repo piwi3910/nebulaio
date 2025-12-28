@@ -9,12 +9,14 @@ NebulaIO uses a distributed architecture for high availability and fault toleran
 NebulaIO uses Dragonboat, a high-performance multi-group Raft implementation, for distributed consensus on metadata operations.
 
 **Performance Characteristics**:
+
 - **1.25 million writes/second** sustained throughput
 - **1.3ms average latency** for metadata operations
 - **Multi-Raft Groups** for horizontal scaling
 - **Efficient snapshots** with minimal impact on ongoing operations
 
 **Key Concepts**:
+
 - **ShardID**: Identifies a Raft group (uint64, default: 1)
 - **ReplicaID**: Unique identifier for each node within a shard (uint64, must be unique per node)
 - **Leader**: Handles all write operations for a shard
@@ -23,11 +25,13 @@ NebulaIO uses Dragonboat, a high-performance multi-group Raft implementation, fo
 - **Non-Voters**: Receive replication but don't vote (added via `SyncRequestAddNonVoting`)
 
 **Key API Methods**:
+
 - `GetLeaderID(shardID)` returns `(leaderID, term, valid, error)` - always check `valid` flag
 - `SyncPropose` for proposing commands through Raft
 - `SyncGetShardMembership` for retrieving current cluster membership
 
 **Quorum**:
+
 - Requires majority of voters for operations
 - 3 nodes: tolerates 1 failure
 - 5 nodes: tolerates 2 failures
@@ -38,6 +42,7 @@ NebulaIO uses Dragonboat, a high-performance multi-group Raft implementation, fo
 Uses Hashicorp's memberlist for cluster membership.
 
 **Features**:
+
 - Automatic node discovery
 - Failure detection (5-second timeout)
 - Cluster state propagation
@@ -116,6 +121,7 @@ cluster:
 **Configuration**:
 
 Node 1 (Bootstrap):
+
 ```yaml
 node_id: node-1
 cluster:
@@ -127,6 +133,7 @@ cluster:
 ```
 
 Node 2 & 3 (Join):
+
 ```yaml
 node_id: node-2  # or node-3
 cluster:
@@ -239,6 +246,7 @@ cluster:
 ```
 
 **Behavior**:
+
 - Partition with majority continues operating
 - Partition without majority becomes unavailable
 - Automatic healing when partition resolves
@@ -299,6 +307,7 @@ kill -SIGTERM <pid>
 ### Leader Bottleneck
 
 All writes go through the leader. Dragonboat's optimizations help:
+
 - **Batch proposals** reduce round-trips
 - **Pipelined replication** improves throughput
 - Use faster storage (NVMe) for WAL directory
@@ -307,6 +316,7 @@ All writes go through the leader. Dragonboat's optimizations help:
 ### Network Latency
 
 Dragonboat performance depends on network latency:
+
 - Use low-latency networks between nodes (10GbE+ recommended)
 - Co-locate nodes in same region/datacenter
 - Tune RTT and election timeouts for high-latency networks
@@ -325,6 +335,7 @@ cluster:
 ### Memory Usage
 
 Each node maintains:
+
 - In-memory Raft log (recent entries before compaction)
 - Metadata cache
 - Connection pools
@@ -377,11 +388,13 @@ curl http://localhost:9001/health/live
 **Symptoms**: Write operations fail, "no leader" errors
 
 **Causes**:
+
 - Not enough voters (quorum)
 - Network partition
 - All nodes recently restarted
 
 **Solutions**:
+
 1. Check if quorum exists
 2. Verify network connectivity on port 9003
 3. Check logs for election issues
@@ -391,10 +404,12 @@ curl http://localhost:9001/health/live
 **Symptoms**: Two leaders reported
 
 **Causes**:
+
 - Network partition resolved incorrectly
 - Time skew between nodes
 
 **Solutions**:
+
 1. Restart minority partition nodes
 2. Sync time between nodes (use NTP)
 3. Check network for intermittent issues
@@ -404,11 +419,13 @@ curl http://localhost:9001/health/live
 **Symptoms**: Long time to elect new leader
 
 **Causes**:
+
 - High network latency
 - Election timeout too short
 - Too many voters
 
 **Solutions**:
+
 1. Increase election timeout
 2. Reduce number of voters
 3. Improve network latency

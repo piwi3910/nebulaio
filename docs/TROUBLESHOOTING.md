@@ -57,6 +57,7 @@ nebulaio diag --all
 ### Issue: Binary Not Found After Installation
 
 **Symptoms:**
+
 ```
 bash: nebulaio: command not found
 ```
@@ -64,18 +65,21 @@ bash: nebulaio: command not found
 **Solutions:**
 
 1. Check installation path:
+
 ```bash
 which nebulaio
 ls -la /usr/local/bin/nebulaio
 ```
 
-2. Add to PATH:
+1. Add to PATH:
+
 ```bash
 export PATH=$PATH:/usr/local/bin
 echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
 ```
 
-3. Verify permissions:
+1. Verify permissions:
+
 ```bash
 chmod +x /usr/local/bin/nebulaio
 ```
@@ -83,6 +87,7 @@ chmod +x /usr/local/bin/nebulaio
 ### Issue: Dependency Missing
 
 **Symptoms:**
+
 ```
 error while loading shared libraries: libxxx.so: cannot open shared object file
 ```
@@ -90,6 +95,7 @@ error while loading shared libraries: libxxx.so: cannot open shared object file
 **Solutions:**
 
 1. Install missing dependencies:
+
 ```bash
 # Ubuntu/Debian
 apt-get update && apt-get install -y libc6 libssl3
@@ -98,7 +104,8 @@ apt-get update && apt-get install -y libc6 libssl3
 yum install -y glibc openssl-libs
 ```
 
-2. Check library paths:
+1. Check library paths:
+
 ```bash
 ldconfig -p | grep libssl
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
@@ -107,6 +114,7 @@ export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 ### Issue: Configuration File Not Found
 
 **Symptoms:**
+
 ```
 Error: config file not found: /etc/nebulaio/config.yaml
 ```
@@ -114,16 +122,19 @@ Error: config file not found: /etc/nebulaio/config.yaml
 **Solutions:**
 
 1. Create configuration directory:
+
 ```bash
 mkdir -p /etc/nebulaio
 ```
 
-2. Copy sample configuration:
+1. Copy sample configuration:
+
 ```bash
 cp /usr/share/nebulaio/config.sample.yaml /etc/nebulaio/config.yaml
 ```
 
-3. Use custom config path:
+1. Use custom config path:
+
 ```bash
 nebulaio server --config=/path/to/config.yaml
 ```
@@ -135,6 +146,7 @@ nebulaio server --config=/path/to/config.yaml
 ### Issue: Port Already in Use
 
 **Symptoms:**
+
 ```
 Error: listen tcp :9000: bind: address already in use
 ```
@@ -142,12 +154,14 @@ Error: listen tcp :9000: bind: address already in use
 **Solutions:**
 
 1. Find process using the port:
+
 ```bash
 lsof -i :9000
 netstat -tlnp | grep 9000
 ```
 
-2. Kill the process or change port:
+1. Kill the process or change port:
+
 ```bash
 # Kill process
 kill -9 $(lsof -t -i:9000)
@@ -162,6 +176,7 @@ server:
 ### Issue: Permission Denied
 
 **Symptoms:**
+
 ```
 Error: open /var/lib/nebulaio/data: permission denied
 ```
@@ -169,17 +184,20 @@ Error: open /var/lib/nebulaio/data: permission denied
 **Solutions:**
 
 1. Check directory ownership:
+
 ```bash
 ls -la /var/lib/nebulaio/
 ```
 
-2. Fix permissions:
+1. Fix permissions:
+
 ```bash
 chown -R nebulaio:nebulaio /var/lib/nebulaio
 chmod -R 755 /var/lib/nebulaio
 ```
 
-3. Run with correct user:
+1. Run with correct user:
+
 ```bash
 sudo -u nebulaio nebulaio server
 ```
@@ -187,6 +205,7 @@ sudo -u nebulaio nebulaio server
 ### Issue: TLS Certificate Errors
 
 **Symptoms:**
+
 ```
 Error: tls: failed to load certificate: open /etc/nebulaio/certs/server.crt: no such file
 ```
@@ -194,6 +213,7 @@ Error: tls: failed to load certificate: open /etc/nebulaio/certs/server.crt: no 
 **Solutions:**
 
 1. Generate self-signed certificates:
+
 ```bash
 mkdir -p /etc/nebulaio/certs
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
@@ -202,7 +222,8 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -subj "/CN=nebulaio.local"
 ```
 
-2. Disable TLS for testing:
+1. Disable TLS for testing:
+
 ```yaml
 # config.yaml
 server:
@@ -213,6 +234,7 @@ server:
 ### Issue: Out of Memory at Startup
 
 **Symptoms:**
+
 ```
 fatal error: runtime: out of memory
 ```
@@ -220,11 +242,13 @@ fatal error: runtime: out of memory
 **Solutions:**
 
 1. Check available memory:
+
 ```bash
 free -h
 ```
 
-2. Reduce memory allocation:
+1. Reduce memory allocation:
+
 ```yaml
 # config.yaml
 memory:
@@ -233,7 +257,8 @@ memory:
     size: 512MB
 ```
 
-3. Increase system memory or swap:
+1. Increase system memory or swap:
+
 ```bash
 # Add swap
 fallocate -l 4G /swapfile
@@ -249,6 +274,7 @@ swapon /swapfile
 ### Issue: Connection Refused
 
 **Symptoms:**
+
 ```
 Error: dial tcp 127.0.0.1:9000: connect: connection refused
 ```
@@ -256,12 +282,14 @@ Error: dial tcp 127.0.0.1:9000: connect: connection refused
 **Solutions:**
 
 1. Check if server is running:
+
 ```bash
 systemctl status nebulaio
 ps aux | grep nebulaio
 ```
 
-2. Check firewall rules:
+1. Check firewall rules:
+
 ```bash
 # UFW
 ufw status
@@ -274,7 +302,8 @@ firewall-cmd --permanent --add-port=9000/tcp
 firewall-cmd --reload
 ```
 
-3. Check bind address:
+1. Check bind address:
+
 ```yaml
 # config.yaml
 server:
@@ -284,6 +313,7 @@ server:
 ### Issue: Connection Timeout
 
 **Symptoms:**
+
 ```
 Error: dial tcp 10.0.0.5:9000: i/o timeout
 ```
@@ -291,19 +321,22 @@ Error: dial tcp 10.0.0.5:9000: i/o timeout
 **Solutions:**
 
 1. Test network connectivity:
+
 ```bash
 ping 10.0.0.5
 telnet 10.0.0.5 9000
 nc -zv 10.0.0.5 9000
 ```
 
-2. Check network routes:
+1. Check network routes:
+
 ```bash
 traceroute 10.0.0.5
 ip route show
 ```
 
-3. Increase client timeout:
+1. Increase client timeout:
+
 ```bash
 # AWS CLI
 aws configure set default.s3.connect_timeout 60
@@ -312,6 +345,7 @@ aws configure set default.s3.connect_timeout 60
 ### Issue: SSL/TLS Handshake Failure
 
 **Symptoms:**
+
 ```
 Error: tls: handshake failure
 Error: x509: certificate signed by unknown authority
@@ -320,18 +354,21 @@ Error: x509: certificate signed by unknown authority
 **Solutions:**
 
 1. Skip certificate verification (testing only):
+
 ```bash
 curl -k https://localhost:9000/
 export AWS_CA_BUNDLE=/path/to/ca.crt
 ```
 
-2. Install CA certificate:
+1. Install CA certificate:
+
 ```bash
 cp /etc/nebulaio/certs/ca.crt /usr/local/share/ca-certificates/
 update-ca-certificates
 ```
 
-3. Use correct certificate:
+1. Use correct certificate:
+
 ```yaml
 # config.yaml
 server:
@@ -348,6 +385,7 @@ server:
 ### Issue: Slow Upload/Download
 
 **Symptoms:**
+
 - Transfer speeds below expected
 - High latency on operations
 
@@ -370,6 +408,7 @@ uptime
 **Solutions:**
 
 1. Increase multipart thresholds:
+
 ```yaml
 # config.yaml
 s3:
@@ -379,7 +418,8 @@ s3:
     concurrent_parts: 20
 ```
 
-2. Enable compression:
+1. Enable compression:
+
 ```yaml
 compression:
   enabled: true
@@ -387,7 +427,8 @@ compression:
   level: 3
 ```
 
-3. Tune network settings:
+1. Tune network settings:
+
 ```bash
 # Increase TCP buffers
 sysctl -w net.core.rmem_max=16777216
@@ -397,6 +438,7 @@ sysctl -w net.core.wmem_max=16777216
 ### Issue: High Memory Usage
 
 **Symptoms:**
+
 - OOM kills
 - Swap usage increasing
 
@@ -414,6 +456,7 @@ go tool pprof http://localhost:6060/debug/pprof/heap
 **Solutions:**
 
 1. Limit cache sizes:
+
 ```yaml
 # config.yaml
 memory:
@@ -421,7 +464,8 @@ memory:
   max_memory: 8GB
 ```
 
-2. Enable memory limits:
+1. Enable memory limits:
+
 ```bash
 # systemd service
 [Service]
@@ -429,7 +473,8 @@ MemoryMax=8G
 MemoryHigh=6G
 ```
 
-3. Tune garbage collection:
+1. Tune garbage collection:
+
 ```bash
 export GOGC=50
 export GOMEMLIMIT=6GiB
@@ -438,6 +483,7 @@ export GOMEMLIMIT=6GiB
 ### Issue: High CPU Usage
 
 **Symptoms:**
+
 - CPU constantly at 100%
 - Slow response times
 
@@ -457,13 +503,15 @@ mpstat -P ALL 1
 **Solutions:**
 
 1. Adjust worker count:
+
 ```yaml
 # config.yaml
 cpu:
   workers: 16  # Match physical cores
 ```
 
-2. Enable connection pooling:
+1. Enable connection pooling:
+
 ```yaml
 s3:
   connection_pool:
@@ -471,7 +519,8 @@ s3:
     max_open: 1000
 ```
 
-3. Disable expensive features:
+1. Disable expensive features:
+
 ```yaml
 # Temporarily disable for diagnosis
 features:
@@ -486,6 +535,7 @@ features:
 ### Issue: AccessDenied (403)
 
 **Symptoms:**
+
 ```xml
 <Error>
   <Code>AccessDenied</Code>
@@ -496,6 +546,7 @@ features:
 **Solutions:**
 
 1. Verify credentials:
+
 ```bash
 # Check access key
 nebulaio admin user info --username=myuser
@@ -504,12 +555,14 @@ nebulaio admin user info --username=myuser
 nebulaio admin user accesskey create --username=myuser
 ```
 
-2. Check bucket policy:
+1. Check bucket policy:
+
 ```bash
 nebulaio admin policy info --bucket=mybucket
 ```
 
-3. Check IAM policy attached to user:
+1. Check IAM policy attached to user:
+
 ```bash
 nebulaio admin user policy list --username=myuser
 ```
@@ -517,6 +570,7 @@ nebulaio admin user policy list --username=myuser
 ### Issue: NoSuchBucket (404)
 
 **Symptoms:**
+
 ```xml
 <Error>
   <Code>NoSuchBucket</Code>
@@ -527,16 +581,19 @@ nebulaio admin user policy list --username=myuser
 **Solutions:**
 
 1. List available buckets:
+
 ```bash
 aws --endpoint-url http://localhost:9000 s3 ls
 ```
 
-2. Check bucket name spelling (case-sensitive):
+1. Check bucket name spelling (case-sensitive):
+
 ```bash
 nebulaio admin bucket list
 ```
 
-3. Create the bucket:
+1. Create the bucket:
+
 ```bash
 aws --endpoint-url http://localhost:9000 s3 mb s3://mybucket
 ```
@@ -544,6 +601,7 @@ aws --endpoint-url http://localhost:9000 s3 mb s3://mybucket
 ### Issue: SignatureDoesNotMatch
 
 **Symptoms:**
+
 ```xml
 <Error>
   <Code>SignatureDoesNotMatch</Code>
@@ -554,19 +612,22 @@ aws --endpoint-url http://localhost:9000 s3 mb s3://mybucket
 **Solutions:**
 
 1. Verify secret key:
+
 ```bash
 # Ensure no trailing whitespace
 echo -n "mysecretkey" | xxd
 ```
 
-2. Check system time:
+1. Check system time:
+
 ```bash
 # Time must be within 15 minutes
 timedatectl
 ntpdate -q pool.ntp.org
 ```
 
-3. Check signature version:
+1. Check signature version:
+
 ```bash
 # Use v4 signature
 aws configure set default.s3.signature_version s3v4
@@ -575,6 +636,7 @@ aws configure set default.s3.signature_version s3v4
 ### Issue: SlowDown (503)
 
 **Symptoms:**
+
 ```xml
 <Error>
   <Code>SlowDown</Code>
@@ -587,6 +649,7 @@ aws configure set default.s3.signature_version s3v4
 1. Implement exponential backoff in client
 
 2. Increase rate limits:
+
 ```yaml
 # config.yaml
 rate_limiting:
@@ -595,7 +658,8 @@ rate_limiting:
   burst: 20000
 ```
 
-3. Scale horizontally:
+1. Scale horizontally:
+
 ```bash
 # Add more nodes to cluster
 nebulaio cluster join --peer=node2:9000
@@ -608,6 +672,7 @@ nebulaio cluster join --peer=node2:9000
 ### Issue: Cluster Split Brain
 
 **Symptoms:**
+
 - Multiple leaders detected
 - Inconsistent data between nodes
 
@@ -628,6 +693,7 @@ curl http://localhost:9001/api/v1/admin/cluster/leader
 **Solutions:**
 
 1. Identify majority partition:
+
 ```bash
 # Find partition with most nodes
 for node in node1 node2 node3; do
@@ -638,12 +704,14 @@ done
 curl http://localhost:9001/api/v1/admin/cluster/membership
 ```
 
-2. Stop minority partition nodes:
+1. Stop minority partition nodes:
+
 ```bash
 systemctl stop nebulaio
 ```
 
-3. Restart with forced leader:
+1. Restart with forced leader:
+
 ```bash
 nebulaio cluster recover --force-leader
 ```
@@ -651,10 +719,12 @@ nebulaio cluster recover --force-leader
 ### Issue: GetLeaderID Returns Invalid
 
 **Symptoms:**
+
 - `GetLeaderID` returns `valid=false`
 - Operations fail with "no leader" errors
 
 **Diagnosis:**
+
 ```bash
 # Check if quorum exists
 curl http://localhost:9001/api/v1/admin/cluster/health
@@ -664,6 +734,7 @@ curl http://localhost:9001/api/v1/admin/cluster/membership
 ```
 
 **Solutions:**
+
 1. Ensure majority of voting members are online
 2. Check network connectivity between nodes on Raft port (default: 9003)
 3. Wait for election timeout to complete (default: RTT * 10 = 2000ms)
@@ -671,6 +742,7 @@ curl http://localhost:9001/api/v1/admin/cluster/membership
 ### Issue: Node Won't Join Cluster
 
 **Symptoms:**
+
 ```
 Error: failed to join cluster: dial tcp: connection refused
 Error: failed to add non-voter: context deadline exceeded
@@ -679,6 +751,7 @@ Error: failed to add non-voter: context deadline exceeded
 **Solutions:**
 
 1. Check network connectivity between nodes:
+
 ```bash
 # Check gossip port (for discovery)
 nc -zv leader-node 9004
@@ -691,7 +764,8 @@ nc -zv leader-node 9000
 nc -zv leader-node 9001
 ```
 
-2. Verify Dragonboat configuration:
+1. Verify Dragonboat configuration:
+
 ```yaml
 # Ensure unique replica_id across all nodes
 cluster:
@@ -700,7 +774,8 @@ cluster:
   raft_address: 10.0.1.11:9003
 ```
 
-3. Check if new node is being added correctly:
+1. Check if new node is being added correctly:
+
 ```bash
 # On the leader, check membership
 curl http://localhost:9001/api/v1/admin/cluster/membership
@@ -709,7 +784,8 @@ curl http://localhost:9001/api/v1/admin/cluster/membership
 # Then can be promoted via SyncRequestAddReplica
 ```
 
-4. Check TLS configuration:
+1. Check TLS configuration:
+
 ```yaml
 # All nodes must use same CA
 cluster:
@@ -720,6 +796,7 @@ cluster:
 ### Issue: Replication Lag
 
 **Symptoms:**
+
 - Data not appearing on replicas
 - High replication queue
 
@@ -736,6 +813,7 @@ curl -s http://localhost:9001/api/v1/metrics | grep replication_queue
 **Solutions:**
 
 1. Increase replication bandwidth:
+
 ```yaml
 # config.yaml
 replication:
@@ -743,12 +821,14 @@ replication:
   batch_size: 10000
 ```
 
-2. Check network between nodes:
+1. Check network between nodes:
+
 ```bash
 iperf3 -c replica-node
 ```
 
-3. Clear and rebuild replica:
+1. Clear and rebuild replica:
+
 ```bash
 nebulaio cluster node resync --node=node2
 ```
@@ -760,6 +840,7 @@ nebulaio cluster node resync --node=node2
 ### Issue: Disk Full
 
 **Symptoms:**
+
 ```
 Error: no space left on device
 ```
@@ -767,17 +848,20 @@ Error: no space left on device
 **Solutions:**
 
 1. Check disk usage:
+
 ```bash
 df -h
 du -sh /var/lib/nebulaio/*
 ```
 
-2. Clean up temporary files:
+1. Clean up temporary files:
+
 ```bash
 nebulaio admin cleanup --temp --older-than=24h
 ```
 
-3. Enable lifecycle policies:
+1. Enable lifecycle policies:
+
 ```yaml
 # Bucket lifecycle rule
 lifecycle:
@@ -788,7 +872,8 @@ lifecycle:
         days: 30
 ```
 
-4. Move data to new volume:
+1. Move data to new volume:
+
 ```bash
 # Add new storage volume
 nebulaio admin storage add --path=/mnt/new-volume
@@ -798,6 +883,7 @@ nebulaio admin storage balance
 ### Issue: Data Corruption
 
 **Symptoms:**
+
 - Checksum mismatch errors
 - Objects returning corrupted data
 
@@ -814,16 +900,19 @@ nebulaio admin bucket verify --bucket=mybucket
 **Solutions:**
 
 1. Restore from erasure coding:
+
 ```bash
 nebulaio admin object heal --bucket=mybucket --key=mykey
 ```
 
-2. Restore from backup:
+1. Restore from backup:
+
 ```bash
 nebulaio restore --source=backup --bucket=mybucket
 ```
 
-3. Check disk health:
+1. Check disk health:
+
 ```bash
 smartctl -a /dev/nvme0n1
 ```
@@ -831,6 +920,7 @@ smartctl -a /dev/nvme0n1
 ### Issue: I/O Errors
 
 **Symptoms:**
+
 ```
 Error: read /data/objects/xxx: input/output error
 ```
@@ -838,12 +928,14 @@ Error: read /data/objects/xxx: input/output error
 **Solutions:**
 
 1. Check disk health:
+
 ```bash
 dmesg | grep -i error
 smartctl -H /dev/sda
 ```
 
-2. Check filesystem:
+1. Check filesystem:
+
 ```bash
 # Unmount first if possible
 xfs_repair /dev/sda1
@@ -851,7 +943,8 @@ xfs_repair /dev/sda1
 fsck.ext4 -y /dev/sda1
 ```
 
-3. Replace failing disk:
+1. Replace failing disk:
+
 ```bash
 nebulaio admin disk replace --old=/dev/sda --new=/dev/sdb
 ```
@@ -863,6 +956,7 @@ nebulaio admin disk replace --old=/dev/sda --new=/dev/sdb
 ### Issue: GPUDirect Not Working
 
 **Symptoms:**
+
 ```
 Error: GPUDirect storage not available
 Warning: Falling back to CPU path
@@ -871,25 +965,29 @@ Warning: Falling back to CPU path
 **Solutions:**
 
 1. Check NVIDIA driver:
+
 ```bash
 nvidia-smi
 cat /proc/driver/nvidia/version
 ```
 
-2. Check CUDA installation:
+1. Check CUDA installation:
+
 ```bash
 nvcc --version
 ls /usr/local/cuda/lib64/
 ```
 
-3. Verify GPUDirect support:
+1. Verify GPUDirect support:
+
 ```bash
 # Check for GDS driver
 lsmod | grep nvidia_fs
 modprobe nvidia_fs
 ```
 
-4. Enable in configuration:
+1. Enable in configuration:
+
 ```yaml
 # config.yaml
 gpudirect:
@@ -901,6 +999,7 @@ gpudirect:
 ### Issue: RDMA Connection Failed
 
 **Symptoms:**
+
 ```
 Error: RDMA device not found
 Error: Cannot create queue pair
@@ -909,19 +1008,22 @@ Error: Cannot create queue pair
 **Solutions:**
 
 1. Check RDMA devices:
+
 ```bash
 ibv_devices
 ibv_devinfo
 ```
 
-2. Load kernel modules:
+1. Load kernel modules:
+
 ```bash
 modprobe ib_core
 modprobe rdma_ucm
 modprobe ib_uverbs
 ```
 
-3. Install RDMA packages:
+1. Install RDMA packages:
+
 ```bash
 # Ubuntu
 apt install rdma-core ibverbs-utils
@@ -930,7 +1032,8 @@ apt install rdma-core ibverbs-utils
 yum install rdma-core libibverbs-utils
 ```
 
-4. Configure network:
+1. Configure network:
+
 ```bash
 # For RoCE
 rdma link add rxe0 type rxe netdev eth0
@@ -939,6 +1042,7 @@ rdma link add rxe0 type rxe netdev eth0
 ### Issue: S3 Express Session Errors
 
 **Symptoms:**
+
 ```
 Error: Session expired
 Error: Maximum sessions exceeded
@@ -947,6 +1051,7 @@ Error: Maximum sessions exceeded
 **Solutions:**
 
 1. Check session limits:
+
 ```yaml
 # config.yaml
 s3_express:
@@ -955,12 +1060,14 @@ s3_express:
     timeout: 5m
 ```
 
-2. Clean up stale sessions:
+1. Clean up stale sessions:
+
 ```bash
 nebulaio admin s3express sessions cleanup
 ```
 
-3. Monitor session usage:
+1. Monitor session usage:
+
 ```bash
 curl -s http://localhost:9001/api/v1/metrics | grep s3express_sessions
 ```
@@ -972,6 +1079,7 @@ curl -s http://localhost:9001/api/v1/metrics | grep s3express_sessions
 ### Issue: Authentication Failures
 
 **Symptoms:**
+
 - Repeated 401/403 errors
 - Login failures in web console
 
@@ -988,17 +1096,20 @@ grep "failed" /var/log/nebulaio/audit.log | wc -l
 **Solutions:**
 
 1. Reset user password:
+
 ```bash
 nebulaio admin user password reset --username=admin
 ```
 
-2. Check account lockout:
+1. Check account lockout:
+
 ```bash
 nebulaio admin user info --username=admin
 nebulaio admin user unlock --username=admin
 ```
 
-3. Verify LDAP/OIDC configuration:
+1. Verify LDAP/OIDC configuration:
+
 ```bash
 nebulaio admin identity test --provider=ldap
 ```
@@ -1006,6 +1117,7 @@ nebulaio admin identity test --provider=ldap
 ### Issue: Certificate Expired
 
 **Symptoms:**
+
 ```
 Error: x509: certificate has expired or is not yet valid
 ```
@@ -1013,11 +1125,13 @@ Error: x509: certificate has expired or is not yet valid
 **Solutions:**
 
 1. Check certificate dates:
+
 ```bash
 openssl x509 -in /etc/nebulaio/certs/server.crt -noout -dates
 ```
 
-2. Renew certificate:
+1. Renew certificate:
+
 ```bash
 # Self-signed
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
@@ -1027,7 +1141,8 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 certbot renew
 ```
 
-3. Reload service:
+1. Reload service:
+
 ```bash
 systemctl reload nebulaio
 ```
@@ -1039,6 +1154,7 @@ systemctl reload nebulaio
 ### Issue: Console Not Loading
 
 **Symptoms:**
+
 - Blank page
 - JavaScript errors
 
@@ -1057,6 +1173,7 @@ curl -I http://localhost:9001
 1. Clear browser cache
 
 2. Check CORS configuration:
+
 ```yaml
 # config.yaml
 console:
@@ -1066,7 +1183,8 @@ console:
       - https://console.example.com
 ```
 
-3. Check static files:
+1. Check static files:
+
 ```bash
 ls -la /usr/share/nebulaio/console/
 ```
@@ -1074,6 +1192,7 @@ ls -la /usr/share/nebulaio/console/
 ### Issue: Login Loop
 
 **Symptoms:**
+
 - Redirected back to login after logging in
 
 **Solutions:**
@@ -1081,6 +1200,7 @@ ls -la /usr/share/nebulaio/console/
 1. Clear cookies and local storage
 
 2. Check session configuration:
+
 ```yaml
 # config.yaml
 console:
@@ -1089,7 +1209,8 @@ console:
     same_site: lax
 ```
 
-3. Check JWT settings:
+1. Check JWT settings:
+
 ```yaml
 auth:
   jwt:
@@ -1112,6 +1233,7 @@ logging:
 ```
 
 Or at runtime:
+
 ```bash
 nebulaio admin log level set debug
 ```

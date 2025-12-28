@@ -111,6 +111,7 @@ Storage Backend (internal/storage/) ─── actual data I/O
 ### Web Console (`web/`)
 
 React 19 + TypeScript + Mantine UI + TanStack Query:
+
 - `src/pages/` - Route components
 - `src/components/` - Reusable UI components
 - `src/api/` - API client (axios)
@@ -139,6 +140,7 @@ React 19 + TypeScript + Mantine UI + TanStack Query:
 ## Feature Flags (Environment Variables)
 
 Advanced features are disabled by default and enabled via config:
+
 - `NEBULAIO_S3_EXPRESS_ENABLED` - S3 Express One Zone
 - `NEBULAIO_ICEBERG_ENABLED` - Apache Iceberg tables
 - `NEBULAIO_MCP_ENABLED` - MCP Server for AI agents
@@ -150,18 +152,21 @@ Advanced features are disabled by default and enabled via config:
 After implementing or extending ANY feature, complete ALL of the following:
 
 ### 1. Documentation Updates
+
 - [ ] `docs/getting-started/configuration.md` - Add new config options
 - [ ] `docs/features/` - Create or update feature documentation
 - [ ] `docs/architecture/` - Update if architectural changes
 - [ ] `README.md` - Update feature list if user-facing
 
 ### 2. Deployment Configurations
+
 - [ ] `deployments/helm/nebulaio/values.yaml` - Add Helm values
 - [ ] `deployments/kubernetes/base/configmap.yaml` - Add K8s config
 - [ ] `docker-compose.yml` - Add environment variables
 - [ ] `docker-compose.production.yml` - Production settings
 
 ### 3. Frontend Integration (REQUIRED for all backend features)
+
 - [ ] API client in `web/src/api/` - Add endpoint calls
 - [ ] Page in `web/src/pages/` - Create configuration/management page
 - [ ] Navigation - Add to sidebar if new section
@@ -169,17 +174,20 @@ After implementing or extending ANY feature, complete ALL of the following:
 - [ ] Dashboard integration - Show status/metrics if applicable
 
 ### 4. Telemetry & Observability
+
 - [ ] Prometheus metrics (`internal/metrics/`) - Add counters, gauges, histograms
 - [ ] Structured logging - Add relevant log events with context
 - [ ] Health checks (`internal/health/`) - Include in health status if critical
 - [ ] Audit logging (`internal/audit/`) - Log security-relevant operations
 
 ### 5. Testing
+
 - [ ] Unit tests for new code
 - [ ] Integration tests if cross-component
 - [ ] Frontend tests (Vitest) for new UI
 
 ### 6. Security (Secure by Default)
+
 - [ ] TLS/HTTPS - All new endpoints must use TLS (enabled by default)
 - [ ] Authentication - All APIs require auth unless explicitly public
 - [ ] Authorization - Check IAM policies for resource access
@@ -198,6 +206,7 @@ NebulaIO is **secure by default**:
 5. **Defense in Depth**: Multiple security layers (TLS, auth, policies, rate limiting).
 
 When adding features:
+
 - NEVER disable security for convenience
 - NEVER log sensitive data (passwords, tokens, keys)
 - ALWAYS validate user input
@@ -249,6 +258,7 @@ web/src/pages/
 ```
 
 Include:
+
 - Enable/disable toggle
 - Configuration options with validation
 - Status indicators

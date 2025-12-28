@@ -423,6 +423,7 @@ curl -X GET "http://localhost:9000/admin/events/stats" \
 ```
 
 Response:
+
 ```json
 {
   "total_events": 150000,
@@ -505,6 +506,7 @@ groups:
 ### Events Not Delivering
 
 1. Verify notification configuration exists:
+
    ```bash
    aws s3api get-bucket-notification-configuration \
      --endpoint-url http://localhost:9000 \
@@ -512,6 +514,7 @@ groups:
    ```
 
 2. Check target health:
+
    ```bash
    curl -X GET "http://localhost:9000/admin/events/targets/health" \
      -H "Authorization: Bearer $TOKEN"
@@ -523,6 +526,7 @@ groups:
 
 1. Check target endpoint performance
 2. Increase worker count in configuration:
+
    ```yaml
    notifications:
      workers: 20

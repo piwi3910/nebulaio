@@ -168,6 +168,7 @@ kubectl get nebulaio nebulaio-ha -n nebulaio -o yaml
 ```
 
 Status fields:
+
 - `phase`: Current phase (Pending, Creating, Running, Updating, Failed)
 - `readyReplicas`: Number of ready pods
 - `leader`: Current Raft leader

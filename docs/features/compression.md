@@ -111,7 +111,7 @@ compression:
 | LZ4 | 1 | 850 MB/s | 4200 MB/s | Very Low |
 | Gzip | 6 | 85 MB/s | 420 MB/s | High |
 
-*Intel Xeon 8375C, single thread*
+**Note:** Benchmarks performed on Intel Xeon 8375C, single thread
 
 ## Best Practices
 
@@ -151,16 +151,19 @@ nebulaio admin compression-stats
 ## Troubleshooting
 
 ### Low Compression Ratios
+
 - Verify content is not already compressed
 - Check if min_size is filtering small objects
 - Review content-type detection accuracy
 
 ### High CPU Usage
+
 - Lower compression level (1-3 instead of 7-9)
 - Switch to LZ4 for high-throughput workloads
 - Enable compression only for cold data buckets
 
 ### Decompression Errors
+
 - Ensure compression metadata is intact
 - Verify algorithm compatibility across nodes
 - Check for corrupted objects in storage backend
