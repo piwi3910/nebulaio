@@ -104,6 +104,71 @@ The volume backend stores objects in pre-allocated volume files with block-based
 
 **Common configurations:** 4+2 (50% overhead, 2 failures), 8+4 (50% overhead, 4 failures), 10+4 (40% overhead, 4 failures).
 
+### Placement Groups
+
+Placement groups define data locality boundaries for erasure coding and tiering operations.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `storage.placement_groups.local_group_id` | string | - | ID of this node's placement group |
+| `storage.placement_groups.min_nodes_for_erasure` | int | `14` | Global minimum nodes for erasure coding |
+| `storage.placement_groups.groups` | list | - | List of placement group definitions |
+
+**Placement Group Definition:**
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `id` | string | Yes | Unique placement group identifier |
+| `name` | string | No | Human-readable name |
+| `datacenter` | string | Yes | Datacenter identifier |
+| `region` | string | Yes | Geographic region |
+| `min_nodes` | int | Yes | Minimum nodes for healthy status |
+| `max_nodes` | int | No | Maximum allowed nodes (0 = unlimited) |
+
+**Example Configuration:**
+
+```yaml
+storage:
+  default_redundancy:
+    enabled: true
+    data_shards: 10
+    parity_shards: 4
+
+  placement_groups:
+    local_group_id: pg-dc1
+    min_nodes_for_erasure: 14
+
+    groups:
+      - id: pg-dc1
+        name: US East Primary
+        datacenter: dc1
+        region: us-east-1
+        min_nodes: 14
+        max_nodes: 50
+
+      - id: pg-dc2
+        name: US West DR
+        datacenter: dc2
+        region: us-west-2
+        min_nodes: 14
+        max_nodes: 50
+
+    replication_targets:
+      - pg-dc2  # Cross-datacenter replication
+```
+
+**Environment Variables:**
+
+| Config Key | Environment Variable |
+|------------|---------------------|
+| `storage.placement_groups.local_group_id` | `NEBULAIO_STORAGE_PLACEMENT_GROUPS_LOCAL_GROUP_ID` |
+| `storage.placement_groups.min_nodes_for_erasure` | `NEBULAIO_STORAGE_PLACEMENT_GROUPS_MIN_NODES_FOR_ERASURE` |
+
+**Validation Rules:**
+- `min_nodes` must be >= `data_shards + parity_shards`
+- `local_group_id` must reference an existing group
+- All nodes in a group should have the same configuration
+
 ---
 
 ## Authentication

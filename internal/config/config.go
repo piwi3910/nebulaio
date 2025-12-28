@@ -1252,6 +1252,64 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid placement group configuration: %w", err)
 	}
 
+	// Validate redundancy settings against available nodes
+	if err := c.validateRedundancyVsNodes(); err != nil {
+		return fmt.Errorf("invalid redundancy configuration: %w", err)
+	}
+
+	return nil
+}
+
+// validateRedundancyVsNodes checks that redundancy settings are compatible with placement groups
+func (c *Config) validateRedundancyVsNodes() error {
+	// Skip validation if redundancy is not enabled
+	if !c.Storage.DefaultRedundancy.Enabled {
+		return nil
+	}
+
+	totalShards := c.Storage.DefaultRedundancy.DataShards + c.Storage.DefaultRedundancy.ParityShards
+
+	// Check MinNodesForErasure is sufficient for the default redundancy
+	if c.Storage.PlacementGroups.MinNodesForErasure > 0 {
+		if c.Storage.PlacementGroups.MinNodesForErasure < totalShards {
+			return fmt.Errorf(
+				"min_nodes_for_erasure (%d) is less than total shards required (%d data + %d parity = %d)",
+				c.Storage.PlacementGroups.MinNodesForErasure,
+				c.Storage.DefaultRedundancy.DataShards,
+				c.Storage.DefaultRedundancy.ParityShards,
+				totalShards,
+			)
+		}
+	}
+
+	// Check each placement group has enough min_nodes for the default redundancy
+	for _, pg := range c.Storage.PlacementGroups.Groups {
+		if pg.MinNodes > 0 && pg.MinNodes < totalShards {
+			return fmt.Errorf(
+				"placement group %q: min_nodes (%d) is less than total shards required (%d) for default redundancy",
+				pg.ID, pg.MinNodes, totalShards,
+			)
+		}
+		// If max_nodes is set, ensure it can accommodate the shards
+		if pg.MaxNodes > 0 && pg.MaxNodes < totalShards {
+			return fmt.Errorf(
+				"placement group %q: max_nodes (%d) is less than total shards required (%d) for default redundancy",
+				pg.ID, pg.MaxNodes, totalShards,
+			)
+		}
+	}
+
+	// Check replication factor doesn't exceed available placement groups
+	if c.Storage.DefaultRedundancy.ReplicationFactor > 0 {
+		availableTargets := len(c.Storage.PlacementGroups.ReplicationTargets)
+		if availableTargets > 0 && c.Storage.DefaultRedundancy.ReplicationFactor > availableTargets {
+			return fmt.Errorf(
+				"replication_factor (%d) exceeds number of available replication targets (%d)",
+				c.Storage.DefaultRedundancy.ReplicationFactor, availableTargets,
+			)
+		}
+	}
+
 	return nil
 }
 

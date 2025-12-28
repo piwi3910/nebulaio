@@ -57,6 +57,13 @@ const (
 	EventMultipartAborted   EventType = "s3:MultipartUpload:Aborted"
 	EventMultipartCompleted EventType = "s3:MultipartUpload:Completed"
 	EventMultipartPartAdded EventType = "s3:MultipartUpload:PartAdded"
+
+	// Placement group events
+	EventPlacementGroupNodeJoined    EventType = "cluster:PlacementGroup:NodeJoined"
+	EventPlacementGroupNodeLeft      EventType = "cluster:PlacementGroup:NodeLeft"
+	EventPlacementGroupStatusChanged EventType = "cluster:PlacementGroup:StatusChanged"
+	EventPlacementGroupCreated       EventType = "cluster:PlacementGroup:Created"
+	EventPlacementGroupDeleted       EventType = "cluster:PlacementGroup:Deleted"
 )
 
 // EventSource represents the source of the audit event
@@ -67,6 +74,7 @@ const (
 	SourceAdmin   EventSource = "admin"
 	SourceConsole EventSource = "console"
 	SourceSystem  EventSource = "system"
+	SourceCluster EventSource = "cluster"
 )
 
 // Result represents the outcome of an operation
@@ -99,21 +107,25 @@ type UserIdentity struct {
 type ResourceType string
 
 const (
-	ResourceBucket ResourceType = "bucket"
-	ResourceObject ResourceType = "object"
-	ResourceUser   ResourceType = "user"
-	ResourcePolicy ResourceType = "policy"
-	ResourceKey    ResourceType = "accesskey"
+	ResourceBucket         ResourceType = "bucket"
+	ResourceObject         ResourceType = "object"
+	ResourceUser           ResourceType = "user"
+	ResourcePolicy         ResourceType = "policy"
+	ResourceKey            ResourceType = "accesskey"
+	ResourcePlacementGroup ResourceType = "placementgroup"
+	ResourceClusterNode    ResourceType = "clusternode"
 )
 
 // ResourceInfo contains information about the resource being accessed
 type ResourceInfo struct {
-	Type       ResourceType `json:"type"`
-	Bucket     string       `json:"bucket,omitempty"`
-	Key        string       `json:"key,omitempty"`
-	VersionID  string       `json:"version_id,omitempty"`
-	UserID     string       `json:"user_id,omitempty"`
-	PolicyName string       `json:"policy_name,omitempty"`
+	Type             ResourceType `json:"type"`
+	Bucket           string       `json:"bucket,omitempty"`
+	Key              string       `json:"key,omitempty"`
+	VersionID        string       `json:"version_id,omitempty"`
+	UserID           string       `json:"user_id,omitempty"`
+	PolicyName       string       `json:"policy_name,omitempty"`
+	PlacementGroupID string       `json:"placement_group_id,omitempty"`
+	NodeID           string       `json:"node_id,omitempty"`
 }
 
 // AuditEvent represents a single audit log entry
@@ -389,4 +401,82 @@ func (e *AuditEvent) WithExtra(key, value string) *AuditEvent {
 	}
 	e.Extra[key] = value
 	return e
+}
+
+// NewPlacementGroupEvent creates a new audit event for placement group operations
+func NewPlacementGroupEvent(eventType EventType, groupID, nodeID string) *AuditEvent {
+	event := NewEvent(eventType, SourceCluster, string(eventType))
+	event.Resource = ResourceInfo{
+		Type:             ResourcePlacementGroup,
+		PlacementGroupID: groupID,
+		NodeID:           nodeID,
+	}
+	event.UserIdentity = UserIdentity{
+		Type:     IdentitySystem,
+		Username: "system",
+	}
+	return event
+}
+
+// NewPlacementGroupNodeJoinedEvent creates an audit event for node joining a placement group
+func NewPlacementGroupNodeJoinedEvent(groupID, nodeID, datacenter, region string) *AuditEvent {
+	event := NewPlacementGroupEvent(EventPlacementGroupNodeJoined, groupID, nodeID)
+	event.WithExtra("datacenter", datacenter)
+	event.WithExtra("region", region)
+	return event
+}
+
+// NewPlacementGroupNodeLeftEvent creates an audit event for node leaving a placement group
+func NewPlacementGroupNodeLeftEvent(groupID, nodeID, reason string) *AuditEvent {
+	event := NewPlacementGroupEvent(EventPlacementGroupNodeLeft, groupID, nodeID)
+	if reason != "" {
+		event.WithExtra("reason", reason)
+	}
+	return event
+}
+
+// NewPlacementGroupStatusChangedEvent creates an audit event for placement group status changes
+func NewPlacementGroupStatusChangedEvent(groupID, oldStatus, newStatus string) *AuditEvent {
+	event := NewPlacementGroupEvent(EventPlacementGroupStatusChanged, groupID, "")
+	event.WithExtra("old_status", oldStatus)
+	event.WithExtra("new_status", newStatus)
+	return event
+}
+
+// PlacementGroupAuditAdapter adapts an AuditLogger to the PlacementGroupAuditLogger interface
+// used by the cluster package for audit logging.
+type PlacementGroupAuditAdapter struct {
+	logger *AuditLogger
+}
+
+// NewPlacementGroupAuditAdapter creates a new adapter for the audit logger
+func NewPlacementGroupAuditAdapter(logger *AuditLogger) *PlacementGroupAuditAdapter {
+	return &PlacementGroupAuditAdapter{logger: logger}
+}
+
+// LogNodeJoined logs a node joining a placement group
+func (a *PlacementGroupAuditAdapter) LogNodeJoined(groupID, nodeID, datacenter, region string) {
+	if a.logger == nil {
+		return
+	}
+	event := NewPlacementGroupNodeJoinedEvent(groupID, nodeID, datacenter, region)
+	a.logger.Log(event)
+}
+
+// LogNodeLeft logs a node leaving a placement group
+func (a *PlacementGroupAuditAdapter) LogNodeLeft(groupID, nodeID, reason string) {
+	if a.logger == nil {
+		return
+	}
+	event := NewPlacementGroupNodeLeftEvent(groupID, nodeID, reason)
+	a.logger.Log(event)
+}
+
+// LogStatusChanged logs a placement group status change
+func (a *PlacementGroupAuditAdapter) LogStatusChanged(groupID, oldStatus, newStatus string) {
+	if a.logger == nil {
+		return
+	}
+	event := NewPlacementGroupStatusChangedEvent(groupID, oldStatus, newStatus)
+	a.logger.Log(event)
 }

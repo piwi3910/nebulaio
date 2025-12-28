@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -13,6 +14,13 @@ import (
 
 // callbackTimeout is the maximum time allowed for a callback to complete
 const callbackTimeout = 5 * time.Second
+
+// PlacementGroupAuditLogger is an interface for audit logging to avoid circular imports
+type PlacementGroupAuditLogger interface {
+	LogNodeJoined(groupID, nodeID, datacenter, region string)
+	LogNodeLeft(groupID, nodeID, reason string)
+	LogStatusChanged(groupID, oldStatus, newStatus string)
+}
 
 // PlacementGroupID uniquely identifies a placement group
 type PlacementGroupID string
@@ -62,18 +70,35 @@ type PlacementGroupManager struct {
 	nodeToGroup map[string]PlacementGroupID
 	mu          sync.RWMutex
 
+	// Context for cancelling pending callbacks during shutdown
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	// Cached values for frequently accessed read operations
+	// These are invalidated when the corresponding data changes
+	cachedLocalNodes     []string
+	cachedLocalNodesHash uint64 // Hash of nodes to detect changes
+	cacheGeneration      uint64 // Incremented on any mutation
+
 	// Callbacks for group events
-	onNodeJoinedGroup  func(groupID PlacementGroupID, nodeID string)
-	onNodeLeftGroup    func(groupID PlacementGroupID, nodeID string)
+	onNodeJoinedGroup   func(groupID PlacementGroupID, nodeID string)
+	onNodeLeftGroup     func(groupID PlacementGroupID, nodeID string)
 	onGroupStatusChange func(groupID PlacementGroupID, status PlacementGroupStatus)
+
+	// Optional audit logger for membership changes
+	auditLogger PlacementGroupAuditLogger
 }
 
 // NewPlacementGroupManager creates a new placement group manager
 func NewPlacementGroupManager(config PlacementGroupConfig) (*PlacementGroupManager, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	mgr := &PlacementGroupManager{
 		config:      config,
 		groups:      make(map[PlacementGroupID]*PlacementGroup),
 		nodeToGroup: make(map[string]PlacementGroupID),
+		ctx:         ctx,
+		cancel:      cancel,
 	}
 
 	// Initialize groups from config
@@ -90,6 +115,18 @@ func NewPlacementGroupManager(config PlacementGroupConfig) (*PlacementGroupManag
 		if group.ID == config.LocalGroupID {
 			mgr.localGroup = group
 			group.IsLocal = true
+		}
+
+		// Initialize status based on node count
+		// This ensures groups have a valid status from creation
+		if group.Status == "" {
+			if len(group.Nodes) == 0 {
+				group.Status = PlacementGroupStatusOffline
+			} else if group.MinNodes > 0 && len(group.Nodes) < group.MinNodes {
+				group.Status = PlacementGroupStatusDegraded
+			} else {
+				group.Status = PlacementGroupStatusHealthy
+			}
 		}
 	}
 
@@ -171,16 +208,40 @@ func (m *PlacementGroupManager) AllGroups() []*PlacementGroup {
 
 // LocalGroupNodes returns a copy of all nodes in the local placement group.
 // Returns nil if no local group is configured.
+// This method uses caching to avoid repeated allocations for frequent calls.
 func (m *PlacementGroupManager) LocalGroupNodes() []string {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
 
+	if m.localGroup == nil {
+		m.mu.RUnlock()
+		return nil
+	}
+
+	// Check if cache is valid
+	if m.cachedLocalNodes != nil {
+		// Return a copy of the cached slice
+		nodes := make([]string, len(m.cachedLocalNodes))
+		copy(nodes, m.cachedLocalNodes)
+		m.mu.RUnlock()
+		return nodes
+	}
+
+	// Cache miss - need to update (upgrade to write lock)
+	m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Double-check after acquiring write lock
 	if m.localGroup == nil {
 		return nil
 	}
-	// Return a copy to prevent external mutation
-	nodes := make([]string, len(m.localGroup.Nodes))
-	copy(nodes, m.localGroup.Nodes)
+
+	// Update cache
+	m.updateLocalNodesCache()
+
+	// Return a copy
+	nodes := make([]string, len(m.cachedLocalNodes))
+	copy(nodes, m.cachedLocalNodes)
 	return nodes
 }
 
@@ -241,6 +302,9 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 	m.nodeToGroup[nodeID] = groupID
 	groupSize := len(group.Nodes)
 
+	// Invalidate cache since membership changed
+	m.invalidateCache()
+
 	// Check if group should transition to healthy status
 	// If we now have enough nodes for minimum requirements, update status
 	var statusCallback func(PlacementGroupID, PlacementGroupStatus)
@@ -252,8 +316,11 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 		statusCallback = m.onGroupStatusChange
 	}
 
-	// Capture callback under lock to prevent data race
+	// Capture callback and audit logger under lock to prevent data race
 	callback := m.onNodeJoinedGroup
+	auditLogger := m.auditLogger
+	datacenter := group.Datacenter
+	region := group.Region
 	m.mu.Unlock()
 
 	log.Info().
@@ -263,11 +330,12 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 		Msg("Node added to placement group")
 
 	// Update metrics for node count
-	m.mu.RLock()
-	if grp, ok := m.groups[groupID]; ok {
-		metrics.SetPlacementGroupNodes(string(groupID), grp.Datacenter, grp.Region, groupSize)
+	metrics.SetPlacementGroupNodes(string(groupID), datacenter, region, groupSize)
+
+	// Audit log the membership change
+	if auditLogger != nil {
+		auditLogger.LogNodeJoined(string(groupID), nodeID, datacenter, region)
 	}
-	m.mu.RUnlock()
 
 	// Notify about status change if it occurred
 	if statusCallback != nil && newStatus != "" {
@@ -278,6 +346,10 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 			Msg("Placement group status changed")
 		// Update status metrics
 		metrics.SetPlacementGroupStatusMetric(string(groupID), string(newStatus))
+		// Audit log the status change
+		if auditLogger != nil {
+			auditLogger.LogStatusChanged(string(groupID), string(oldStatus), string(newStatus))
+		}
 		go m.safeCallback(func() { statusCallback(groupID, newStatus) })
 	}
 
@@ -315,11 +387,15 @@ func (m *PlacementGroupManager) RemoveNodeFromGroup(groupID PlacementGroupID, no
 
 	delete(m.nodeToGroup, nodeID)
 
+	// Invalidate cache since membership changed
+	m.invalidateCache()
+
 	// Update group status if below minimum
 	var statusCallback func(PlacementGroupID, PlacementGroupStatus)
 	var newStatus PlacementGroupStatus
+	var oldStatus PlacementGroupStatus
 	if group.MinNodes > 0 && len(group.Nodes) < group.MinNodes {
-		oldStatus := group.Status
+		oldStatus = group.Status
 		group.Status = PlacementGroupStatusDegraded
 		newStatus = group.Status
 		if oldStatus != group.Status {
@@ -328,8 +404,11 @@ func (m *PlacementGroupManager) RemoveNodeFromGroup(groupID PlacementGroupID, no
 	}
 
 	groupSize := len(group.Nodes)
-	// Capture callback under lock to prevent data race
+	datacenter := group.Datacenter
+	region := group.Region
+	// Capture callback and audit logger under lock to prevent data race
 	nodeLeftCallback := m.onNodeLeftGroup
+	auditLogger := m.auditLogger
 	m.mu.Unlock()
 
 	log.Info().
@@ -339,15 +418,20 @@ func (m *PlacementGroupManager) RemoveNodeFromGroup(groupID PlacementGroupID, no
 		Msg("Node removed from placement group")
 
 	// Update metrics for node count
-	m.mu.RLock()
-	if grp, ok := m.groups[groupID]; ok {
-		metrics.SetPlacementGroupNodes(string(groupID), grp.Datacenter, grp.Region, groupSize)
+	metrics.SetPlacementGroupNodes(string(groupID), datacenter, region, groupSize)
+
+	// Audit log the membership change
+	if auditLogger != nil {
+		auditLogger.LogNodeLeft(string(groupID), nodeID, "")
 	}
-	m.mu.RUnlock()
 
 	if statusCallback != nil {
 		// Update status metrics
 		metrics.SetPlacementGroupStatusMetric(string(groupID), string(newStatus))
+		// Audit log the status change
+		if auditLogger != nil {
+			auditLogger.LogStatusChanged(string(groupID), string(oldStatus), string(newStatus))
+		}
 		go m.safeCallback(func() { statusCallback(groupID, newStatus) })
 	}
 
@@ -371,10 +455,12 @@ func (m *PlacementGroupManager) UpdateGroupStatus(groupID PlacementGroupID, stat
 	oldStatus := group.Status
 	group.Status = status
 
-	// Capture callback under lock to prevent data race
+	// Capture callback and audit logger under lock to prevent data race
 	var callback func(PlacementGroupID, PlacementGroupStatus)
+	var auditLogger PlacementGroupAuditLogger
 	if oldStatus != status {
 		callback = m.onGroupStatusChange
+		auditLogger = m.auditLogger
 	}
 	m.mu.Unlock()
 
@@ -387,6 +473,11 @@ func (m *PlacementGroupManager) UpdateGroupStatus(groupID PlacementGroupID, stat
 
 		// Update status metrics
 		metrics.SetPlacementGroupStatusMetric(string(groupID), string(status))
+
+		// Audit log the status change
+		if auditLogger != nil {
+			auditLogger.LogStatusChanged(string(groupID), string(oldStatus), string(status))
+		}
 
 		if callback != nil {
 			go m.safeCallback(func() { callback(groupID, status) })
@@ -438,26 +529,46 @@ func (m *PlacementGroupManager) GetShardPlacementNodes(numShards int) ([]string,
 // GetShardPlacementNodesForObject returns nodes for distributing erasure shards
 // using hash-based distribution for better load balancing across nodes.
 // The bucket and key are used to determine the starting offset for node selection.
-// Returns an empty slice (not nil) for single node mode when no local group is configured.
-// Returns (nil, error) if there are not enough nodes in the placement group.
+// Returns (nil, error) if numShards is <= 0, if no local group is configured, or
+// if there are not enough nodes in the placement group.
+// This method uses cached node lists for improved performance on frequent calls.
 func (m *PlacementGroupManager) GetShardPlacementNodesForObject(bucket, key string, numShards int) ([]string, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if m.localGroup == nil {
-		// Single node mode
-		return []string{}, nil
+	// Validate numShards parameter
+	if numShards <= 0 {
+		return nil, fmt.Errorf("numShards must be positive, got %d", numShards)
 	}
 
-	nodeCount := len(m.localGroup.Nodes)
+	m.mu.RLock()
+
+	if m.localGroup == nil {
+		m.mu.RUnlock()
+		return nil, fmt.Errorf("no local placement group configured")
+	}
+
+	// Use cached nodes if available for better performance
+	var sourceNodes []string
+	if m.cachedLocalNodes != nil {
+		sourceNodes = m.cachedLocalNodes
+	} else {
+		sourceNodes = m.localGroup.Nodes
+	}
+
+	nodeCount := len(sourceNodes)
 	if nodeCount < numShards {
+		m.mu.RUnlock()
 		return nil, fmt.Errorf("not enough nodes in placement group: need %d, have %d",
 			numShards, nodeCount)
 	}
 
-	// Use FNV hash for deterministic but distributed node selection
+	// Use FNV hash for deterministic but distributed node selection.
 	// This ensures the same object always maps to the same nodes,
-	// while distributing objects evenly across the cluster
+	// while distributing objects evenly across the cluster.
+	//
+	// SECURITY NOTE: FNV-1a is used for load distribution, not cryptographic security.
+	// An attacker who knows the hash algorithm could potentially craft keys that
+	// concentrate shards on specific nodes. For security-critical deployments,
+	// consider additional measures like rate limiting or key validation.
+	// See docs/architecture/hash-distribution-security.md for details.
 	h := fnv.New32a()
 	h.Write([]byte(bucket))
 	h.Write([]byte("/"))
@@ -467,8 +578,10 @@ func (m *PlacementGroupManager) GetShardPlacementNodesForObject(bucket, key stri
 	// Select nodes starting from the hash-determined offset
 	nodes := make([]string, numShards)
 	for i := 0; i < numShards; i++ {
-		nodes[i] = m.localGroup.Nodes[(offset+i)%nodeCount]
+		nodes[i] = sourceNodes[(offset+i)%nodeCount]
 	}
+
+	m.mu.RUnlock()
 	return nodes, nil
 }
 
@@ -491,6 +604,13 @@ func (m *PlacementGroupManager) SetOnGroupStatusChange(fn func(PlacementGroupID,
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onGroupStatusChange = fn
+}
+
+// SetAuditLogger sets the audit logger for recording membership changes
+func (m *PlacementGroupManager) SetAuditLogger(logger PlacementGroupAuditLogger) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.auditLogger = logger
 }
 
 // MarshalJSON implements json.Marshaler
@@ -533,6 +653,39 @@ func DecodeNodeMeta(data []byte) (PlacementGroupNodeMeta, error) {
 	return meta, err
 }
 
+// invalidateCache increments the cache generation and clears cached values
+// Must be called while holding the write lock
+func (m *PlacementGroupManager) invalidateCache() {
+	m.cacheGeneration++
+	m.cachedLocalNodes = nil
+	m.cachedLocalNodesHash = 0
+}
+
+// updateLocalNodesCache updates the cached local nodes list
+// Must be called while holding at least a read lock
+func (m *PlacementGroupManager) updateLocalNodesCache() {
+	if m.localGroup == nil {
+		m.cachedLocalNodes = nil
+		m.cachedLocalNodesHash = 0
+		return
+	}
+
+	// Compute hash of current nodes
+	h := fnv.New64a()
+	for _, n := range m.localGroup.Nodes {
+		h.Write([]byte(n))
+		h.Write([]byte{0}) // separator
+	}
+	newHash := h.Sum64()
+
+	// Only update if hash changed
+	if newHash != m.cachedLocalNodesHash {
+		m.cachedLocalNodes = make([]string, len(m.localGroup.Nodes))
+		copy(m.cachedLocalNodes, m.localGroup.Nodes)
+		m.cachedLocalNodesHash = newHash
+	}
+}
+
 // copyGroup creates a deep copy of a PlacementGroup to prevent external mutation
 func (m *PlacementGroupManager) copyGroup(g *PlacementGroup) *PlacementGroup {
 	if g == nil {
@@ -555,8 +708,16 @@ func (m *PlacementGroupManager) copyGroup(g *PlacementGroup) *PlacementGroup {
 	}
 }
 
-// safeCallbackWithTimeout executes a callback function with panic recovery and timeout
+// safeCallbackWithTimeout executes a callback function with panic recovery, timeout, and context cancellation
 func (m *PlacementGroupManager) safeCallbackWithTimeout(fn func()) {
+	// Check if context is already cancelled (shutdown in progress)
+	select {
+	case <-m.ctx.Done():
+		log.Debug().Msg("Skipping placement group callback - context cancelled")
+		return
+	default:
+	}
+
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -573,6 +734,9 @@ func (m *PlacementGroupManager) safeCallbackWithTimeout(fn func()) {
 	select {
 	case <-done:
 		// Callback completed successfully
+	case <-m.ctx.Done():
+		// Context cancelled during callback execution (shutdown)
+		log.Debug().Msg("Placement group callback interrupted by shutdown")
 	case <-time.After(callbackTimeout):
 		log.Warn().
 			Dur("timeout", callbackTimeout).
@@ -583,4 +747,10 @@ func (m *PlacementGroupManager) safeCallbackWithTimeout(fn func()) {
 // safeCallback executes a callback function with panic recovery (deprecated, use safeCallbackWithTimeout)
 func (m *PlacementGroupManager) safeCallback(fn func()) {
 	m.safeCallbackWithTimeout(fn)
+}
+
+// Close gracefully shuts down the placement group manager, cancelling any pending callbacks
+func (m *PlacementGroupManager) Close() error {
+	m.cancel()
+	return nil
 }

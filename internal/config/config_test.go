@@ -168,3 +168,185 @@ func containsAt(s, substr string) bool {
 	}
 	return false
 }
+
+func TestConfig_ValidateRedundancyVsNodes(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  Config
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "disabled redundancy skips validation",
+			config: Config{
+				Storage: StorageConfig{
+					DefaultRedundancy: RedundancyConfig{
+						Enabled:      false,
+						DataShards:   100, // Would fail if enabled
+						ParityShards: 100,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid redundancy with sufficient min_nodes_for_erasure",
+			config: Config{
+				Storage: StorageConfig{
+					DefaultRedundancy: RedundancyConfig{
+						Enabled:      true,
+						DataShards:   10,
+						ParityShards: 4,
+					},
+					PlacementGroups: PlacementGroupsConfig{
+						MinNodesForErasure: 14,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "min_nodes_for_erasure less than total shards",
+			config: Config{
+				Storage: StorageConfig{
+					DefaultRedundancy: RedundancyConfig{
+						Enabled:      true,
+						DataShards:   10,
+						ParityShards: 4,
+					},
+					PlacementGroups: PlacementGroupsConfig{
+						MinNodesForErasure: 10, // Less than 14
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "min_nodes_for_erasure (10) is less than total shards required",
+		},
+		{
+			name: "placement group min_nodes less than total shards",
+			config: Config{
+				Storage: StorageConfig{
+					DefaultRedundancy: RedundancyConfig{
+						Enabled:      true,
+						DataShards:   10,
+						ParityShards: 4,
+					},
+					PlacementGroups: PlacementGroupsConfig{
+						Groups: []PlacementGroupConfig{
+							{ID: "pg1", MinNodes: 10, MaxNodes: 20}, // MinNodes < 14
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "min_nodes (10) is less than total shards required (14)",
+		},
+		{
+			name: "placement group max_nodes less than total shards",
+			config: Config{
+				Storage: StorageConfig{
+					DefaultRedundancy: RedundancyConfig{
+						Enabled:      true,
+						DataShards:   10,
+						ParityShards: 4,
+					},
+					PlacementGroups: PlacementGroupsConfig{
+						Groups: []PlacementGroupConfig{
+							{ID: "pg1", MinNodes: 0, MaxNodes: 10}, // MaxNodes < 14
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "max_nodes (10) is less than total shards required (14)",
+		},
+		{
+			name: "valid placement group with sufficient nodes",
+			config: Config{
+				Storage: StorageConfig{
+					DefaultRedundancy: RedundancyConfig{
+						Enabled:      true,
+						DataShards:   10,
+						ParityShards: 4,
+					},
+					PlacementGroups: PlacementGroupsConfig{
+						Groups: []PlacementGroupConfig{
+							{ID: "pg1", MinNodes: 14, MaxNodes: 20},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "replication factor exceeds available targets",
+			config: Config{
+				Storage: StorageConfig{
+					DefaultRedundancy: RedundancyConfig{
+						Enabled:           true,
+						DataShards:        10,
+						ParityShards:      4,
+						ReplicationFactor: 3,
+					},
+					PlacementGroups: PlacementGroupsConfig{
+						ReplicationTargets: []string{"pg2"}, // Only 1 target
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "replication_factor (3) exceeds number of available replication targets (1)",
+		},
+		{
+			name: "valid replication factor with sufficient targets",
+			config: Config{
+				Storage: StorageConfig{
+					DefaultRedundancy: RedundancyConfig{
+						Enabled:           true,
+						DataShards:        10,
+						ParityShards:      4,
+						ReplicationFactor: 2,
+					},
+					PlacementGroups: PlacementGroupsConfig{
+						ReplicationTargets: []string{"pg2", "pg3"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "zero min_nodes_for_erasure skips that check",
+			config: Config{
+				Storage: StorageConfig{
+					DefaultRedundancy: RedundancyConfig{
+						Enabled:      true,
+						DataShards:   10,
+						ParityShards: 4,
+					},
+					PlacementGroups: PlacementGroupsConfig{
+						MinNodesForErasure: 0, // Not set
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.validateRedundancyVsNodes()
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateRedundancyVsNodes() expected error containing %q, got nil", tt.errMsg)
+					return
+				}
+				if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateRedundancyVsNodes() error = %q, want containing %q", err.Error(), tt.errMsg)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateRedundancyVsNodes() unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}

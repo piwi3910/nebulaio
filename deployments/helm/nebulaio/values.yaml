@@ -253,13 +253,31 @@ storage:
     replicationTargets: []
     # -- Placement group definitions
     groups: []
-    # Example:
+    # Example multi-datacenter configuration:
     #   - id: pg-dc1
-    #     name: "Datacenter 1"
+    #     name: "US East Primary"
     #     datacenter: dc1
     #     region: us-east-1
-    #     minNodes: 3
-    #     maxNodes: 10
+    #     minNodes: 14        # For 10+4 erasure coding
+    #     maxNodes: 50
+    #   - id: pg-dc2
+    #     name: "US West DR"
+    #     datacenter: dc2
+    #     region: us-west-2
+    #     minNodes: 14
+    #     maxNodes: 50
+    #
+    # Example single-datacenter with fault domains:
+    #   - id: pg-rack1
+    #     name: "Rack 1"
+    #     datacenter: dc1
+    #     region: us-east-1
+    #     minNodes: 5
+    #   - id: pg-rack2
+    #     name: "Rack 2"
+    #     datacenter: dc1
+    #     region: us-east-1
+    #     minNodes: 5
 
   # Per-tier storage configuration (enables mixed backend types)
   tiering:

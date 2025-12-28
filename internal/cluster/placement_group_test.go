@@ -677,3 +677,266 @@ func TestPlacementGroupManager_GetShardPlacementNodesForObject(t *testing.T) {
 
 	t.Logf("Distribution: %v", distribution)
 }
+
+// TestPlacementGroupManager_NilPointerHandling tests that nil pointers are handled gracefully
+func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
+	// Test with empty config (no groups defined)
+	emptyConfig := PlacementGroupConfig{
+		LocalGroupID: "",
+		Groups:       nil,
+	}
+
+	mgr, err := NewPlacementGroupManager(emptyConfig)
+	if err != nil {
+		t.Fatalf("Should handle empty config: %v", err)
+	}
+
+	// LocalGroup should return nil gracefully
+	if mgr.LocalGroup() != nil {
+		t.Error("LocalGroup should return nil for empty config")
+	}
+
+	// LocalGroupNodes should return nil gracefully
+	if mgr.LocalGroupNodes() != nil {
+		t.Error("LocalGroupNodes should return nil for empty config")
+	}
+
+	// GetGroup for non-existent group
+	group, ok := mgr.GetGroup("nonexistent")
+	if ok || group != nil {
+		t.Error("GetGroup should return nil for non-existent group")
+	}
+
+	// GetShardPlacementNodes with no local group should return empty, no panic
+	nodes, err := mgr.GetShardPlacementNodes(3)
+	if err != nil {
+		t.Error("GetShardPlacementNodes should not error with no local group")
+	}
+	if len(nodes) != 0 {
+		t.Error("GetShardPlacementNodes should return empty slice with no local group")
+	}
+
+	// GetShardPlacementNodesForObject with no local group
+	nodes, err = mgr.GetShardPlacementNodesForObject("bucket", "key", 3)
+	if err == nil {
+		t.Error("GetShardPlacementNodesForObject should error with no local group")
+	}
+	if len(nodes) != 0 {
+		t.Error("GetShardPlacementNodesForObject should return empty slice on error")
+	}
+
+	// ReplicationTargets should return empty, not panic
+	targets := mgr.ReplicationTargets()
+	if len(targets) != 0 {
+		t.Error("ReplicationTargets should return empty slice for empty config")
+	}
+
+	// AllGroups should return empty slice, not panic
+	allGroups := mgr.AllGroups()
+	if allGroups == nil {
+		t.Error("AllGroups should return empty slice, not nil")
+	}
+	if len(allGroups) != 0 {
+		t.Error("AllGroups should be empty for empty config")
+	}
+
+	// AddNodeToGroup on non-existent group should error gracefully
+	err = mgr.AddNodeToGroup("nonexistent", "node1")
+	if err == nil {
+		t.Error("AddNodeToGroup should error for non-existent group")
+	}
+
+	// RemoveNodeFromGroup on non-existent group should error gracefully
+	err = mgr.RemoveNodeFromGroup("nonexistent", "node1")
+	if err == nil {
+		t.Error("RemoveNodeFromGroup should error for non-existent group")
+	}
+
+	// UpdateGroupStatus on non-existent group should error gracefully
+	err = mgr.UpdateGroupStatus("nonexistent", PlacementGroupStatusHealthy)
+	if err == nil {
+		t.Error("UpdateGroupStatus should error for non-existent group")
+	}
+
+	// Close should not panic on empty manager
+	err = mgr.Close()
+	if err != nil {
+		t.Errorf("Close should not error: %v", err)
+	}
+}
+
+// TestPlacementGroupManager_UnhealthyGroupOperations tests operations when group becomes unhealthy
+func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
+	config := PlacementGroupConfig{
+		LocalGroupID: "pg-main",
+		Groups: []PlacementGroup{
+			{
+				ID:         "pg-main",
+				Name:       "Main Group",
+				Datacenter: "dc1",
+				Region:     "us-east-1",
+				Nodes:      []string{"node1", "node2", "node3", "node4"},
+				MinNodes:   3,
+				MaxNodes:   10,
+			},
+		},
+	}
+
+	mgr, err := NewPlacementGroupManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+	defer mgr.Close()
+
+	// Verify initial healthy status
+	group := mgr.LocalGroup()
+	if group.Status != PlacementGroupStatusHealthy {
+		t.Errorf("Expected healthy status, got %s", group.Status)
+	}
+
+	// Shard placement should work when healthy
+	nodes, err := mgr.GetShardPlacementNodesForObject("bucket", "key", 3)
+	if err != nil {
+		t.Errorf("Shard placement should work when healthy: %v", err)
+	}
+	if len(nodes) != 3 {
+		t.Errorf("Expected 3 nodes, got %d", len(nodes))
+	}
+
+	// Remove nodes to make the group degraded (below MinNodes)
+	err = mgr.RemoveNodeFromGroup("pg-main", "node4")
+	if err != nil {
+		t.Fatalf("Failed to remove node: %v", err)
+	}
+	err = mgr.RemoveNodeFromGroup("pg-main", "node3")
+	if err != nil {
+		t.Fatalf("Failed to remove node: %v", err)
+	}
+
+	// Verify group is now degraded
+	group = mgr.LocalGroup()
+	if group.Status != PlacementGroupStatusDegraded {
+		t.Errorf("Expected degraded status, got %s", group.Status)
+	}
+
+	// Shard placement should still work (with 2 nodes for 2 shards)
+	nodes, err = mgr.GetShardPlacementNodesForObject("bucket", "key", 2)
+	if err != nil {
+		t.Errorf("Shard placement should work when degraded: %v", err)
+	}
+	if len(nodes) != 2 {
+		t.Errorf("Expected 2 nodes, got %d", len(nodes))
+	}
+
+	// Shard placement should fail when requesting more shards than nodes
+	_, err = mgr.GetShardPlacementNodesForObject("bucket", "key", 3)
+	if err == nil {
+		t.Error("Shard placement should fail when requesting more shards than available nodes")
+	}
+
+	// Remove all remaining nodes
+	err = mgr.RemoveNodeFromGroup("pg-main", "node2")
+	if err != nil {
+		t.Fatalf("Failed to remove node: %v", err)
+	}
+	err = mgr.RemoveNodeFromGroup("pg-main", "node1")
+	if err != nil {
+		t.Fatalf("Failed to remove node: %v", err)
+	}
+
+	// Verify group has no nodes
+	group = mgr.LocalGroup()
+	if len(group.Nodes) != 0 {
+		t.Errorf("Expected 0 nodes, got %d", len(group.Nodes))
+	}
+
+	// Shard placement should fail with no nodes
+	_, err = mgr.GetShardPlacementNodesForObject("bucket", "key", 1)
+	if err == nil {
+		t.Error("Shard placement should fail with no nodes")
+	}
+
+	// Add nodes back and verify recovery
+	err = mgr.AddNodeToGroup("pg-main", "node5")
+	if err != nil {
+		t.Fatalf("Failed to add node: %v", err)
+	}
+	err = mgr.AddNodeToGroup("pg-main", "node6")
+	if err != nil {
+		t.Fatalf("Failed to add node: %v", err)
+	}
+	err = mgr.AddNodeToGroup("pg-main", "node7")
+	if err != nil {
+		t.Fatalf("Failed to add node: %v", err)
+	}
+
+	// Verify recovery to healthy
+	group = mgr.LocalGroup()
+	if group.Status != PlacementGroupStatusHealthy {
+		t.Errorf("Expected healthy status after recovery, got %s", group.Status)
+	}
+
+	// Shard placement should work again
+	nodes, err = mgr.GetShardPlacementNodesForObject("bucket", "key", 3)
+	if err != nil {
+		t.Errorf("Shard placement should work after recovery: %v", err)
+	}
+	if len(nodes) != 3 {
+		t.Errorf("Expected 3 nodes after recovery, got %d", len(nodes))
+	}
+}
+
+// TestPlacementGroupManager_NumShardsValidation tests validation of numShards parameter
+func TestPlacementGroupManager_NumShardsValidation(t *testing.T) {
+	config := PlacementGroupConfig{
+		LocalGroupID: "pg-main",
+		Groups: []PlacementGroup{
+			{
+				ID:         "pg-main",
+				Name:       "Main Group",
+				Datacenter: "dc1",
+				Region:     "us-east-1",
+				Nodes:      []string{"node1", "node2", "node3"},
+				MinNodes:   2,
+			},
+		},
+	}
+
+	mgr, err := NewPlacementGroupManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+	defer mgr.Close()
+
+	testCases := []struct {
+		name      string
+		numShards int
+		wantErr   bool
+	}{
+		{"zero shards", 0, true},
+		{"negative shards", -1, true},
+		{"one shard", 1, false},
+		{"two shards", 2, false},
+		{"three shards", 3, false},
+		{"more than nodes", 4, true},
+		{"way more than nodes", 100, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			nodes, err := mgr.GetShardPlacementNodesForObject("bucket", "key", tc.numShards)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("Expected error for numShards=%d, got none", tc.numShards)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for numShards=%d: %v", tc.numShards, err)
+				}
+				if len(nodes) != tc.numShards {
+					t.Errorf("Expected %d nodes, got %d", tc.numShards, len(nodes))
+				}
+			}
+		})
+	}
+}
