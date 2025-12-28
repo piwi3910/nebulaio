@@ -1,0 +1,242 @@
+# Raw Block Device deployment values
+# Usage: helm install nebulaio ./nebulaio -f values-raw-devices.yaml
+#
+# Prerequisites:
+# - Nodes must have raw block devices available (/dev/nvme*, /dev/sd*)
+# - Devices must be unmounted and have no filesystem
+# - Node labels for device tier selection (optional)
+#
+# WARNING: This configuration requires privileged containers for raw device access
+
+replicaCount: 3
+
+image:
+  pullPolicy: Always
+
+# Use existing secret for credentials
+auth:
+  existingSecret: nebulaio-credentials
+  existingSecretUserKey: root-user
+  existingSecretPasswordKey: root-password
+
+cluster:
+  enabled: true
+  name: nebulaio-rawdevice
+  nodeRole: storage
+
+# Metadata/WAL storage (uses normal PVC)
+persistence:
+  enabled: true
+  storageClass: ""  # Default storage class
+  size: 20Gi        # For metadata, WAL, and index only
+
+# Production resources for raw device workloads
+resources:
+  requests:
+    cpu: 2000m
+    memory: 8Gi
+  limits:
+    cpu: 16000m
+    memory: 32Gi
+
+# Volume storage with raw block devices
+storage:
+  backend: volume
+  defaultStorageClass: STANDARD
+
+  volume:
+    maxVolumeSize: 34359738368  # 32GB for any file-based fallback
+    autoCreate: true
+
+    # Enable direct I/O (required for raw devices)
+    directIO:
+      enabled: true
+      blockAlignment: 4096
+      useMemoryPool: true
+      fallbackOnError: false  # Don't fall back - fail explicitly
+
+    # Raw block device configuration
+    rawDevices:
+      enabled: true
+
+      safety:
+        checkFilesystem: true
+        requireConfirmation: false  # Automated deployment
+        writeSignature: true
+        exclusiveLock: true
+
+      # Configure devices per tier
+      # Adjust paths based on your hardware
+      devices:
+        # Hot tier - NVMe drives for active data
+        - path: /dev/nvme0n1
+          tier: hot
+          size: 0  # Use entire device
+
+        - path: /dev/nvme1n1
+          tier: hot
+          size: 0
+
+        # Warm tier - SATA SSDs for moderate access
+        - path: /dev/sda
+          tier: warm
+          size: 0
+
+        - path: /dev/sdb
+          tier: warm
+          size: 0
+
+        # Cold tier - HDDs for infrequent access
+        - path: /dev/sdc
+          tier: cold
+          size: 0
+
+        - path: /dev/sdd
+          tier: cold
+          size: 0
+
+# Enable storage tiering
+tiering:
+  enabled: true
+
+  cache:
+    enabled: true
+    maxSize: 21474836480  # 20GB cache
+    maxObjects: 500000
+    ttl: 7200
+    mode: write_through
+
+  policies:
+    # Move from hot to warm after 7 days without access
+    - name: hot-to-warm
+      enabled: true
+      filter:
+        bucket: "*"
+      transition:
+        daysAfterLastAccess: 7
+        targetTier: warm
+
+    # Move from warm to cold after 30 days without access
+    - name: warm-to-cold
+      enabled: true
+      filter:
+        bucket: "*"
+      transition:
+        daysAfterLastAccess: 30
+        targetTier: cold
+
+# Enterprise DRAM Cache for hot data
+cache:
+  enabled: true
+  maxSize: 17179869184   # 16GB DRAM cache
+  shardCount: 256
+  entryMaxSize: 268435456  # 256MB max entry
+  ttl: 3600
+  evictionPolicy: arc     # ARC for best hit rate
+  prefetchEnabled: true
+  prefetchThreshold: 2
+  prefetchAhead: 4
+  zeroCopyEnabled: true
+  distributedMode: true   # Share cache across nodes
+  replicationFactor: 2
+
+# Monitoring
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+
+# CRITICAL: Raw device access requires privileged mode
+# Override security context for raw device access
+podSecurityContext:
+  runAsUser: 0
+  runAsGroup: 0
+  fsGroup: 0
+
+securityContext:
+  privileged: true
+  allowPrivilegeEscalation: true
+  readOnlyRootFilesystem: false
+  runAsNonRoot: false
+  capabilities:
+    add:
+      - SYS_RAWIO      # Raw I/O operations
+      - SYS_ADMIN      # Block device access
+      - MKNOD          # Create device nodes
+
+# Node affinity - schedule on nodes with specific device labels
+nodeSelector:
+  storage.nebulaio.io/raw-devices: "true"
+
+tolerations:
+  - key: storage.nebulaio.io/dedicated
+    operator: Exists
+    effect: NoSchedule
+
+# Anti-affinity - never schedule 2 pods on same node
+podAntiAffinityPreset: hard
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Extra volume mounts for raw devices
+extraVolumes:
+  # Mount /dev for device access
+  - name: dev
+    hostPath:
+      path: /dev
+      type: Directory
+
+extraVolumeMounts:
+  - name: dev
+    mountPath: /dev
+    readOnly: false
+
+# Init container to verify device availability
+initContainers:
+  - name: verify-devices
+    image: busybox:1.36
+    command:
+      - sh
+      - -c
+      - |
+        echo "Verifying raw block devices..."
+
+        # Check NVMe devices (hot tier)
+        for dev in /dev/nvme0n1 /dev/nvme1n1; do
+          if [ -b "$dev" ]; then
+            echo "✓ Found $dev"
+          else
+            echo "✗ Missing $dev (hot tier device)"
+            exit 1
+          fi
+        done
+
+        # Check SSD devices (warm tier)
+        for dev in /dev/sda /dev/sdb; do
+          if [ -b "$dev" ]; then
+            echo "✓ Found $dev"
+          else
+            echo "⚠ Missing $dev (warm tier device) - continuing"
+          fi
+        done
+
+        # Check HDD devices (cold tier)
+        for dev in /dev/sdc /dev/sdd; do
+          if [ -b "$dev" ]; then
+            echo "✓ Found $dev"
+          else
+            echo "⚠ Missing $dev (cold tier device) - continuing"
+          fi
+        done
+
+        echo "Device verification complete"
+    volumeMounts:
+      - name: dev
+        mountPath: /dev
+        readOnly: true
+    securityContext:
+      privileged: true

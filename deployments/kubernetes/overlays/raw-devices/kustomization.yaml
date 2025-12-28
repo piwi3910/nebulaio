@@ -1,0 +1,99 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: nebulaio
+
+resources:
+  - ../../base
+
+# Patches for raw block device support
+patches:
+  # Enable privileged mode for raw device access
+  - target:
+      kind: StatefulSet
+      name: nebulaio
+    patch: |
+      - op: replace
+        path: /spec/template/spec/securityContext
+        value:
+          runAsUser: 0
+          runAsGroup: 0
+          fsGroup: 0
+      - op: replace
+        path: /spec/template/spec/containers/0/securityContext
+        value:
+          privileged: true
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+              - SYS_RAWIO
+              - SYS_ADMIN
+              - MKNOD
+
+  # Add /dev volume mount for raw device access
+  - target:
+      kind: StatefulSet
+      name: nebulaio
+    patch: |
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: dev
+          hostPath:
+            path: /dev
+            type: Directory
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          name: dev
+          mountPath: /dev
+          readOnly: false
+
+  # Add device verification init container
+  - target:
+      kind: StatefulSet
+      name: nebulaio
+    patch: |
+      - op: add
+        path: /spec/template/spec/initContainers/-
+        value:
+          name: verify-devices
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Verifying raw block devices..."
+              # List available block devices
+              ls -la /dev/nvme* /dev/sd* 2>/dev/null || echo "No NVMe/SATA devices found"
+              echo "Device verification complete"
+          volumeMounts:
+            - name: dev
+              mountPath: /dev
+              readOnly: true
+          securityContext:
+            privileged: true
+
+  # Update resources for raw device workloads
+  - target:
+      kind: StatefulSet
+      name: nebulaio
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 2000m
+            memory: 8Gi
+          limits:
+            cpu: 16000m
+            memory: 32Gi
+
+# Add node selector for raw device nodes
+commonLabels:
+  storage.nebulaio.io/mode: raw-device
+
+# Increase replica count for HA
+replicas:
+  - name: nebulaio
+    count: 3

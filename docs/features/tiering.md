@@ -48,6 +48,110 @@ tiering:
       min_retention_days: 180
 ```
 
+## Physical Device Configuration
+
+NebulaIO supports assigning different physical devices (NVMe, SSD, HDD) to different storage tiers for optimal performance and cost efficiency.
+
+### Raw Block Device Tiering
+
+For maximum performance, use raw block devices directly without filesystem overhead:
+
+```yaml
+storage:
+  backend: volume
+
+  volume:
+    raw_devices:
+      enabled: true
+
+      # Assign devices to tiers
+      devices:
+        # Hot tier - NVMe for active data
+        - path: /dev/nvme0n1
+          tier: hot
+
+        - path: /dev/nvme1n1
+          tier: hot
+
+        # Warm tier - SATA SSDs for moderate access
+        - path: /dev/sda
+          tier: warm
+
+        - path: /dev/sdb
+          tier: warm
+
+        # Cold tier - HDDs for infrequent access
+        - path: /dev/sdc
+          tier: cold
+
+        - path: /dev/sdd
+          tier: cold
+
+tiering:
+  enabled: true
+  policies:
+    - name: standard-lifecycle
+      transitions:
+        - days: 7
+          from_tier: hot
+          to_tier: warm
+        - days: 30
+          from_tier: warm
+          to_tier: cold
+```
+
+### File-Based Volume Tiering
+
+For environments where raw device access isn't possible, use directory-based tiering:
+
+```yaml
+storage:
+  backend: volume
+
+  volume:
+    # Define volume directories per tier
+    tier_directories:
+      hot: /mnt/nvme/nebulaio       # NVMe mount point
+      warm: /mnt/ssd/nebulaio       # SSD mount point
+      cold: /mnt/hdd/nebulaio       # HDD mount point
+
+    max_volume_size: 34359738368     # 32GB per volume
+
+tiering:
+  enabled: true
+```
+
+### Tier Capacity Planning
+
+| Tier | Recommended Media | Typical Capacity | Data Retention |
+|------|------------------|------------------|----------------|
+| Hot | NVMe | 5-10% of total | < 7 days since access |
+| Warm | SSD | 20-30% of total | 7-30 days since access |
+| Cold | HDD | 60-70% of total | > 30 days since access |
+
+### Device Discovery
+
+```bash
+# List available block devices
+nebulaio-cli storage device discover
+# DEVICE         TYPE    SIZE      MOUNT     ELIGIBLE
+# /dev/nvme0n1   NVMe    1.0 TB    -         ✓
+# /dev/nvme1n1   NVMe    1.0 TB    -         ✓
+# /dev/sda       SSD     4.0 TB    -         ✓
+# /dev/sdb       SSD     4.0 TB    /data     ✗ (mounted)
+# /dev/sdc       HDD     16.0 TB   -         ✓
+
+# Initialize device for a specific tier
+nebulaio-cli storage device init /dev/nvme0n1 --tier hot
+
+# View tier assignment
+nebulaio-cli storage tier devices
+# TIER    DEVICES                    TOTAL CAPACITY
+# hot     /dev/nvme0n1, /dev/nvme1n1 2.0 TB
+# warm    /dev/sda                    4.0 TB
+# cold    /dev/sdc, /dev/sdd          32.0 TB
+```
+
 ## Lifecycle Policies
 
 Automate object transitions with lifecycle policies based on age or access patterns.

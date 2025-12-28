@@ -199,9 +199,22 @@ spec:
             # - name: wal
             #   mountPath: /data/wal
 
+            # Raw block device access (requires privileged mode)
+            # Uncomment if using raw devices for tiered storage
+            # - name: dev
+            #   mountPath: /dev
+            #   readOnly: false
+
       volumes:
         - name: shared
           emptyDir: {}
+
+        # Host /dev for raw block device access
+        # Uncomment if using raw devices
+        # - name: dev
+        #   hostPath:
+        #     path: /dev
+        #     type: Directory
 
       affinity:
         podAntiAffinity:

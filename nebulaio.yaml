@@ -37,11 +37,47 @@ storage:
   # volume:
   #   max_volume_size: 34359738368  # 32GB per volume file
   #   auto_create: true             # Auto-create new volumes when needed
-  #   direct_io:                    # Direct I/O (O_DIRECT) configuration
+  #
+  #   # Direct I/O (O_DIRECT) configuration
+  #   direct_io:
   #     enabled: true               # Enable direct I/O on Linux (bypasses kernel cache)
   #     block_alignment: 4096       # Alignment for buffers and offsets (4KB)
   #     use_memory_pool: true       # Pool aligned buffers for reduced allocations
   #     fallback_on_error: true     # Fall back to buffered I/O on errors
+  #
+  #   # Raw block device support (bypasses filesystem entirely)
+  #   # Provides maximum I/O performance for dedicated storage nodes
+  #   raw_devices:
+  #     enabled: false              # Enable raw block device mode
+  #     safety:
+  #       check_filesystem: true    # Verify device has no filesystem
+  #       require_confirmation: true # Require explicit confirmation
+  #       write_signature: true     # Write NebulaIO signature to device
+  #       exclusive_lock: true      # Lock device with flock()
+  #
+  #     # Devices assigned to storage tiers
+  #     devices:
+  #       # Hot tier - NVMe for active data (< 7 days old)
+  #       - path: /dev/nvme0n1
+  #         tier: hot
+  #         size: 0                 # 0 = use entire device
+  #
+  #       # Warm tier - SSD for moderate access (7-30 days)
+  #       - path: /dev/sda
+  #         tier: warm
+  #         size: 0
+  #
+  #       # Cold tier - HDD for infrequent access (> 30 days)
+  #       - path: /dev/sdb
+  #         tier: cold
+  #         size: 0
+  #
+  #   # Directory-based tiering (alternative to raw devices)
+  #   # Mount different device types to different directories
+  #   tier_directories:
+  #     hot: /mnt/nvme/nebulaio    # Mount NVMe here
+  #     warm: /mnt/ssd/nebulaio    # Mount SSD here
+  #     cold: /mnt/hdd/nebulaio    # Mount HDD here
 
 # DRAM Cache configuration
 cache:

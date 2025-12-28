@@ -152,6 +152,63 @@ type VolumeStorageConfig struct {
 
 	// DirectIO configuration for bypassing kernel page cache
 	DirectIO DirectIOStorageConfig `mapstructure:"direct_io"`
+
+	// RawDevices configuration for raw block device access
+	RawDevices RawDevicesConfig `mapstructure:"raw_devices"`
+
+	// TierDirectories for directory-based tiering (alternative to raw devices)
+	TierDirectories TierDirectoriesConfig `mapstructure:"tier_directories"`
+}
+
+// RawDevicesConfig holds configuration for raw block device access
+type RawDevicesConfig struct {
+	// Enabled enables raw block device mode (bypasses filesystem)
+	Enabled bool `mapstructure:"enabled"`
+
+	// Safety configuration for device access
+	Safety RawDeviceSafetyConfig `mapstructure:"safety"`
+
+	// Devices is the list of block devices to use
+	Devices []RawDeviceConfig `mapstructure:"devices"`
+}
+
+// RawDeviceSafetyConfig holds safety configuration for raw device access
+type RawDeviceSafetyConfig struct {
+	// CheckFilesystem verifies device has no existing filesystem before use
+	CheckFilesystem bool `mapstructure:"check_filesystem"`
+
+	// RequireConfirmation requires explicit confirmation for new devices
+	RequireConfirmation bool `mapstructure:"require_confirmation"`
+
+	// WriteSignature writes NebulaIO signature to device header
+	WriteSignature bool `mapstructure:"write_signature"`
+
+	// ExclusiveLock uses flock() to prevent concurrent access
+	ExclusiveLock bool `mapstructure:"exclusive_lock"`
+}
+
+// RawDeviceConfig holds configuration for a single raw block device
+type RawDeviceConfig struct {
+	// Path is the device path (e.g., /dev/nvme0n1, /dev/sda)
+	Path string `mapstructure:"path"`
+
+	// Tier is the storage tier for this device (hot, warm, cold)
+	Tier string `mapstructure:"tier"`
+
+	// Size is the size to use (0 = use entire device)
+	Size uint64 `mapstructure:"size"`
+}
+
+// TierDirectoriesConfig holds directory paths for tiered storage
+type TierDirectoriesConfig struct {
+	// Hot tier directory (mount NVMe here)
+	Hot string `mapstructure:"hot"`
+
+	// Warm tier directory (mount SSD here)
+	Warm string `mapstructure:"warm"`
+
+	// Cold tier directory (mount HDD here)
+	Cold string `mapstructure:"cold"`
 }
 
 // DirectIOStorageConfig holds direct I/O configuration for volume storage
@@ -736,6 +793,21 @@ func setDefaults(v *viper.Viper) {
 	// Volume backend defaults
 	v.SetDefault("storage.volume.max_volume_size", 32*1024*1024*1024) // 32GB
 	v.SetDefault("storage.volume.auto_create", true)
+	// Direct I/O defaults
+	v.SetDefault("storage.volume.direct_io.enabled", true)
+	v.SetDefault("storage.volume.direct_io.block_alignment", 4096)
+	v.SetDefault("storage.volume.direct_io.use_memory_pool", true)
+	v.SetDefault("storage.volume.direct_io.fallback_on_error", true)
+	// Raw device defaults
+	v.SetDefault("storage.volume.raw_devices.enabled", false)
+	v.SetDefault("storage.volume.raw_devices.safety.check_filesystem", true)
+	v.SetDefault("storage.volume.raw_devices.safety.require_confirmation", true)
+	v.SetDefault("storage.volume.raw_devices.safety.write_signature", true)
+	v.SetDefault("storage.volume.raw_devices.safety.exclusive_lock", true)
+	// Tier directories defaults (empty = disabled)
+	v.SetDefault("storage.volume.tier_directories.hot", "")
+	v.SetDefault("storage.volume.tier_directories.warm", "")
+	v.SetDefault("storage.volume.tier_directories.cold", "")
 
 	// Cache defaults (DRAM Cache)
 	v.SetDefault("cache.enabled", false)

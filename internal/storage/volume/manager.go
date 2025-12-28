@@ -2,6 +2,7 @@ package volume
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -396,7 +397,7 @@ func newBytesReader(data []byte) *bytesReader {
 
 func (r *bytesReader) Read(p []byte) (n int, err error) {
 	if r.pos >= len(r.data) {
-		return 0, nil
+		return 0, io.EOF
 	}
 	n = copy(p, r.data[r.pos:])
 	r.pos += n

@@ -235,6 +235,64 @@ storage:
     # -- Automatically create new volumes when needed
     autoCreate: true
 
+    # Direct I/O configuration (O_DIRECT on Linux)
+    directIO:
+      # -- Enable direct I/O to bypass kernel page cache
+      enabled: true
+      # -- Block alignment in bytes (4KB standard)
+      blockAlignment: 4096
+      # -- Use memory pool for aligned buffers
+      useMemoryPool: true
+      # -- Fall back to buffered I/O on errors
+      fallbackOnError: true
+
+    # Raw block device support (bypasses filesystem entirely)
+    rawDevices:
+      # -- Enable raw block device mode
+      enabled: false
+      # -- Safety checks for raw device access
+      safety:
+        # -- Check if device has existing filesystem before use
+        checkFilesystem: true
+        # -- Require explicit confirmation for new devices
+        requireConfirmation: true
+        # -- Write NebulaIO signature to device
+        writeSignature: true
+        # -- Lock device exclusively with flock()
+        exclusiveLock: true
+
+      # -- Raw block devices to use (requires privileged mode)
+      # Configure devices per storage tier for tiered storage
+      devices: []
+      #   # Hot tier - NVMe for active data (< 7 days)
+      #   - path: /dev/nvme0n1
+      #     tier: hot
+      #     size: 0  # 0 = use entire device
+      #
+      #   - path: /dev/nvme1n1
+      #     tier: hot
+      #     size: 0
+      #
+      #   # Warm tier - SSD for moderate access (7-30 days)
+      #   - path: /dev/sda
+      #     tier: warm
+      #     size: 0
+      #
+      #   # Cold tier - HDD for infrequent access (> 30 days)
+      #   - path: /dev/sdb
+      #     tier: cold
+      #     size: 0
+
+    # Directory-based tiering (alternative to raw devices)
+    # Use when filesystem access is required
+    tierDirectories:
+      # -- Hot tier volume directory (mount NVMe here)
+      hot: ""
+      # -- Warm tier volume directory (mount SSD here)
+      warm: ""
+      # -- Cold tier volume directory (mount HDD here)
+      cold: ""
+
   # Compression
   compression:
     # -- Enable compression
