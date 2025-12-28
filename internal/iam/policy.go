@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"sync"
@@ -995,9 +996,32 @@ func (pe *PolicyEvaluator) arnPatternMatches(pattern, value string) bool {
 
 // ipMatches checks if IP matches CIDR or exact IP.
 func (pe *PolicyEvaluator) ipMatches(ip, cidr string) bool {
-	// Simple exact match for now
-	// TODO: Implement CIDR matching
-	return ip == cidr || strings.HasPrefix(ip, strings.TrimSuffix(cidr, "/*"))
+	// Parse the source IP
+	sourceIP := net.ParseIP(ip)
+	if sourceIP == nil {
+		// Invalid source IP
+		return false
+	}
+
+	// Check if cidr is a single IP (no slash)
+	if !strings.Contains(cidr, "/") {
+		// Exact IP match
+		targetIP := net.ParseIP(cidr)
+		if targetIP == nil {
+			return false
+		}
+		return sourceIP.Equal(targetIP)
+	}
+
+	// Parse as CIDR
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		// Invalid CIDR, fall back to prefix match for backwards compatibility
+		return strings.HasPrefix(ip, strings.TrimSuffix(cidr, "/*"))
+	}
+
+	// Check if the source IP is within the CIDR network
+	return network.Contains(sourceIP)
 }
 
 // Predefined policies

@@ -204,53 +204,72 @@ func (h *Handler) GetFeatureMetrics(w http.ResponseWriter, r *http.Request) {
 
 // GetAIMLStatus returns the status of all AI/ML features
 func (h *Handler) GetAIMLStatus(w http.ResponseWriter, r *http.Request) {
+	// Get feature status from config (defaults to false if config not set)
+	s3ExpressEnabled := false
+	icebergEnabled := false
+	mcpEnabled := false
+	gpudirectEnabled := false
+	dpuEnabled := false
+	rdmaEnabled := false
+	nimEnabled := false
+
+	if h.config != nil {
+		s3ExpressEnabled = h.config.S3Express.Enabled
+		icebergEnabled = h.config.Iceberg.Enabled
+		mcpEnabled = h.config.MCP.Enabled
+		gpudirectEnabled = h.config.GPUDirect.Enabled
+		dpuEnabled = h.config.DPU.Enabled
+		rdmaEnabled = h.config.RDMA.Enabled
+		nimEnabled = h.config.NIM.Enabled
+	}
+
 	status := &AIMLFeaturesStatus{
 		Features: []FeatureStatus{
 			{
 				Name:        "s3_express",
-				Enabled:     false, // TODO: Get from config
+				Enabled:     s3ExpressEnabled,
 				Available:   true,
 				Version:     "1.0",
 				Description: "S3 Express One Zone - Ultra-low latency storage",
 			},
 			{
 				Name:        "iceberg",
-				Enabled:     false,
+				Enabled:     icebergEnabled,
 				Available:   true,
 				Version:     "1.0",
 				Description: "Apache Iceberg - Native table format for data lakehouses",
 			},
 			{
 				Name:        "mcp",
-				Enabled:     false,
+				Enabled:     mcpEnabled,
 				Available:   true,
 				Version:     "1.0",
 				Description: "MCP Server - AI agent integration",
 			},
 			{
 				Name:        "gpudirect",
-				Enabled:     false,
+				Enabled:     gpudirectEnabled,
 				Available:   true,
 				Version:     "1.0",
 				Description: "GPUDirect Storage - Zero-copy GPU transfers",
 			},
 			{
 				Name:        "dpu",
-				Enabled:     false,
+				Enabled:     dpuEnabled,
 				Available:   true,
 				Version:     "1.0",
 				Description: "BlueField DPU - Hardware offload",
 			},
 			{
 				Name:        "rdma",
-				Enabled:     false,
+				Enabled:     rdmaEnabled,
 				Available:   true,
 				Version:     "1.0",
 				Description: "S3 over RDMA - Sub-10μs latency",
 			},
 			{
 				Name:        "nim",
-				Enabled:     false,
+				Enabled:     nimEnabled,
 				Available:   true,
 				Version:     "1.0",
 				Description: "NVIDIA NIM - AI inference on objects",
@@ -263,59 +282,115 @@ func (h *Handler) GetAIMLStatus(w http.ResponseWriter, r *http.Request) {
 
 // GetConfig returns the server configuration
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
-	// Return a placeholder config - in production this would read from the actual config
-	config := map[string]interface{}{
-		"s3_express": map[string]interface{}{
-			"enabled":               false,
-			"default_zone":          "use1-az1",
-			"enable_atomic_append":  true,
-		},
-		"iceberg": map[string]interface{}{
-			"enabled":       false,
-			"catalog_type":  "rest",
-			"catalog_uri":   "http://localhost:8181",
-			"warehouse":     "s3://warehouse/",
-			"enable_acid":   true,
-		},
-		"mcp": map[string]interface{}{
+	// Build config from actual configuration values
+	configResponse := make(map[string]interface{})
+
+	if h.config != nil {
+		configResponse["s3_express"] = map[string]interface{}{
+			"enabled":              h.config.S3Express.Enabled,
+			"default_zone":         h.config.S3Express.DefaultZone,
+			"enable_atomic_append": h.config.S3Express.EnableAtomicAppend,
+			"session_duration":     h.config.S3Express.SessionDuration,
+			"max_append_size":      h.config.S3Express.MaxAppendSize,
+		}
+		configResponse["iceberg"] = map[string]interface{}{
+			"enabled":             h.config.Iceberg.Enabled,
+			"catalog_type":        h.config.Iceberg.CatalogType,
+			"catalog_uri":         h.config.Iceberg.CatalogURI,
+			"warehouse":           h.config.Iceberg.Warehouse,
+			"enable_acid":         h.config.Iceberg.EnableACID,
+			"default_file_format": h.config.Iceberg.DefaultFileFormat,
+			"snapshot_retention":  h.config.Iceberg.SnapshotRetention,
+		}
+		configResponse["mcp"] = map[string]interface{}{
+			"enabled":          h.config.MCP.Enabled,
+			"port":             h.config.MCP.Port,
+			"enable_tools":     h.config.MCP.EnableTools,
+			"enable_resources": h.config.MCP.EnableResources,
+			"enable_prompts":   h.config.MCP.EnablePrompts,
+			"auth_required":    h.config.MCP.AuthRequired,
+			"max_connections":  h.config.MCP.MaxConnections,
+		}
+		configResponse["gpudirect"] = map[string]interface{}{
+			"enabled":          h.config.GPUDirect.Enabled,
+			"buffer_pool_size": h.config.GPUDirect.BufferPoolSize,
+			"enable_async":     h.config.GPUDirect.EnableAsync,
+			"enable_p2p":       h.config.GPUDirect.EnableP2P,
+		}
+		configResponse["dpu"] = map[string]interface{}{
+			"enabled":            h.config.DPU.Enabled,
+			"device_index":       h.config.DPU.DeviceIndex,
+			"enable_crypto":      h.config.DPU.EnableCrypto,
+			"enable_compression": h.config.DPU.EnableCompression,
+			"enable_rdma":        h.config.DPU.EnableRDMA,
+			"fallback_on_error":  h.config.DPU.FallbackOnError,
+		}
+		configResponse["rdma"] = map[string]interface{}{
+			"enabled":          h.config.RDMA.Enabled,
+			"port":             h.config.RDMA.Port,
+			"device_name":      h.config.RDMA.DeviceName,
+			"enable_zero_copy": h.config.RDMA.EnableZeroCopy,
+			"fallback_to_tcp":  h.config.RDMA.FallbackToTCP,
+		}
+		configResponse["nim"] = map[string]interface{}{
+			"enabled":           h.config.NIM.Enabled,
+			"default_model":     h.config.NIM.DefaultModel,
+			"enable_streaming":  h.config.NIM.EnableStreaming,
+			"cache_results":     h.config.NIM.CacheResults,
+			"process_on_upload": h.config.NIM.ProcessOnUpload,
+		}
+	} else {
+		// Return placeholder defaults if config not set
+		configResponse["s3_express"] = map[string]interface{}{
+			"enabled":              false,
+			"default_zone":         "use1-az1",
+			"enable_atomic_append": true,
+		}
+		configResponse["iceberg"] = map[string]interface{}{
+			"enabled":      false,
+			"catalog_type": "rest",
+			"catalog_uri":  "http://localhost:8181",
+			"warehouse":    "s3://warehouse/",
+			"enable_acid":  true,
+		}
+		configResponse["mcp"] = map[string]interface{}{
 			"enabled":          false,
 			"port":             9005,
 			"enable_tools":     true,
 			"enable_resources": true,
 			"auth_required":    true,
-		},
-		"gpudirect": map[string]interface{}{
+		}
+		configResponse["gpudirect"] = map[string]interface{}{
 			"enabled":          false,
 			"buffer_pool_size": 1073741824,
 			"enable_async":     true,
 			"enable_p2p":       true,
-		},
-		"dpu": map[string]interface{}{
+		}
+		configResponse["dpu"] = map[string]interface{}{
 			"enabled":            false,
 			"device_index":       0,
 			"enable_crypto":      true,
 			"enable_compression": true,
 			"enable_rdma":        true,
 			"fallback_on_error":  true,
-		},
-		"rdma": map[string]interface{}{
+		}
+		configResponse["rdma"] = map[string]interface{}{
 			"enabled":          false,
 			"port":             9100,
 			"device_name":      "mlx5_0",
 			"enable_zero_copy": true,
 			"fallback_to_tcp":  true,
-		},
-		"nim": map[string]interface{}{
+		}
+		configResponse["nim"] = map[string]interface{}{
 			"enabled":           false,
-			"api_key":           "",
 			"default_model":     "meta/llama-3.1-8b-instruct",
 			"enable_streaming":  true,
 			"cache_results":     true,
 			"process_on_upload": false,
-		},
+		}
 	}
 
-	writeJSON(w, http.StatusOK, config)
+	writeJSON(w, http.StatusOK, configResponse)
 }
 
 // UpdateConfig updates the server configuration

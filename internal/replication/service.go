@@ -19,6 +19,7 @@ type Service struct {
 	workerPool  *WorkerPool
 	backend     ObjectBackend
 	metaStore   MetadataStore
+	lister      ObjectLister
 	started     bool
 	metrics     *ReplicationMetrics
 	metricsMu   sync.RWMutex
@@ -75,6 +76,13 @@ func NewService(backend ObjectBackend, metaStore MetadataStore, cfg ServiceConfi
 	svc.workerPool = NewWorkerPool(queue, svc, cfg.WorkerConfig)
 
 	return svc
+}
+
+// SetLister sets the object lister for bucket resync operations
+func (s *Service) SetLister(lister ObjectLister) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lister = lister
 }
 
 // Start starts the replication service
@@ -368,22 +376,70 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 	}
 
 	// Check if any rule has existing object replication enabled
-	hasExistingReplication := false
+	var applicableRules []Rule
 	for _, rule := range config.Rules {
 		if rule.ShouldReplicateExistingObjects() {
-			hasExistingReplication = true
-			break
+			applicableRules = append(applicableRules, rule)
 		}
 	}
 
-	if !hasExistingReplication {
+	if len(applicableRules) == 0 {
 		return errors.New("no rules have existing object replication enabled")
 	}
 
-	// TODO: Implement full bucket listing and queueing
-	// This would require listing all objects and enqueueing them
-	// For now, return an error indicating this is not implemented
-	return errors.New("bucket resync not yet implemented")
+	// Ensure lister is available
+	s.mu.RLock()
+	lister := s.lister
+	s.mu.RUnlock()
+
+	if lister == nil {
+		return errors.New("object lister not configured")
+	}
+
+	// List all objects in the bucket and enqueue them for replication
+	objectsCh, errCh := lister.ListObjects(ctx, bucket, "", true)
+
+	// Track statistics
+	var enqueuedCount int64
+	var errorCount int64
+
+	// Process objects
+	for {
+		select {
+		case obj, ok := <-objectsCh:
+			if !ok {
+				// Channel closed, done listing
+				if errorCount > 0 {
+					return fmt.Errorf("resync completed with %d errors, %d objects enqueued", errorCount, enqueuedCount)
+				}
+				return nil
+			}
+
+			// Check which rules apply to this object
+			for _, rule := range applicableRules {
+				// Check if the rule's filter matches the object
+				if rule.Filter != nil && !rule.Filter.Matches(obj.Key, obj.Tags) {
+					continue
+				}
+
+				// Enqueue the object for replication
+				_, err := s.queue.Enqueue(ctx, bucket, obj.Key, obj.VersionID, "PUT", rule.ID)
+				if err != nil {
+					errorCount++
+					continue
+				}
+				enqueuedCount++
+			}
+
+		case err, ok := <-errCh:
+			if ok && err != nil {
+				return fmt.Errorf("error listing objects: %w", err)
+			}
+
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 // MarshalJSON implements json.Marshaler for Config

@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -946,11 +947,114 @@ func (o *FileOutput) rotate() error {
 	o.file = f
 	o.size = 0
 
-	// TODO: Compress old file if configured
+	// Compress old file if configured (run in background to not block writes)
+	if o.rotation.Compress {
+		go o.compressFile(rotatedPath)
+	}
 
-	// TODO: Clean up old files based on MaxBackups and MaxAgeDays
+	// Clean up old files based on MaxBackups and MaxAgeDays
+	go o.cleanupOldFiles()
 
 	return nil
+}
+
+// compressFile compresses a rotated log file using gzip
+func (o *FileOutput) compressFile(filePath string) {
+	// Read the original file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return // Silently fail - compression is best-effort
+	}
+
+	// Create the compressed file
+	compressedPath := filePath + ".gz"
+	outFile, err := os.Create(compressedPath)
+	if err != nil {
+		return
+	}
+	defer outFile.Close()
+
+	// Create gzip writer and compress
+	gzWriter := gzip.NewWriter(outFile)
+	if _, err := gzWriter.Write(data); err != nil {
+		os.Remove(compressedPath)
+		return
+	}
+	if err := gzWriter.Close(); err != nil {
+		os.Remove(compressedPath)
+		return
+	}
+
+	// Remove the original uncompressed file
+	os.Remove(filePath)
+}
+
+// cleanupOldFiles removes old log files based on MaxBackups and MaxAgeDays
+func (o *FileOutput) cleanupOldFiles() {
+	// Get the directory and base name of the log file
+	dir := filepath.Dir(o.path)
+	baseName := filepath.Base(o.path)
+
+	// Find all rotated files (matching pattern: baseName.timestamp or baseName.timestamp.gz)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+
+	type rotatedFile struct {
+		path    string
+		modTime time.Time
+	}
+
+	var rotatedFiles []rotatedFile
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// Skip the current log file
+		if name == baseName {
+			continue
+		}
+		// Match rotated files (baseName.timestamp or baseName.timestamp.gz)
+		if strings.HasPrefix(name, baseName+".") {
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			rotatedFiles = append(rotatedFiles, rotatedFile{
+				path:    filepath.Join(dir, name),
+				modTime: info.ModTime(),
+			})
+		}
+	}
+
+	// Sort by modification time (newest first)
+	sort.Slice(rotatedFiles, func(i, j int) bool {
+		return rotatedFiles[i].modTime.After(rotatedFiles[j].modTime)
+	})
+
+	now := time.Now()
+	for i, rf := range rotatedFiles {
+		shouldDelete := false
+
+		// Check MaxBackups limit
+		if o.rotation.MaxBackups > 0 && i >= o.rotation.MaxBackups {
+			shouldDelete = true
+		}
+
+		// Check MaxAgeDays limit
+		if o.rotation.MaxAgeDays > 0 {
+			age := now.Sub(rf.modTime)
+			if age > time.Duration(o.rotation.MaxAgeDays)*24*time.Hour {
+				shouldDelete = true
+			}
+		}
+
+		if shouldDelete {
+			os.Remove(rf.path)
+		}
+	}
 }
 
 func (o *FileOutput) Flush(ctx context.Context) error {

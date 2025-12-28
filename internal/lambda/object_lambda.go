@@ -4,6 +4,7 @@ package lambda
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/klauspost/compress/zstd"
 )
 
 // TransformationType defines the type of transformation
@@ -783,9 +785,67 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 		return nil, nil, err
 	}
 
-	// TODO: Implement actual compression (gzip, zstd, etc.)
-	// For now, return as-is
-	return bytes.NewReader(data), map[string]string{"Content-Encoding": "identity"}, nil
+	// Get compression algorithm from params (default: gzip)
+	algorithm := "gzip"
+	if alg, ok := params["algorithm"].(string); ok {
+		algorithm = alg
+	}
+
+	// Get compression level from params
+	level := -1 // default level
+	if lvl, ok := params["level"].(int); ok {
+		level = lvl
+	} else if lvl, ok := params["level"].(float64); ok {
+		level = int(lvl)
+	}
+
+	var buf bytes.Buffer
+	var contentEncoding string
+
+	switch strings.ToLower(algorithm) {
+	case "gzip":
+		gzLevel := gzip.DefaultCompression
+		if level >= 0 && level <= 9 {
+			gzLevel = level
+		}
+		writer, err := gzip.NewWriterLevel(&buf, gzLevel)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create gzip writer: %w", err)
+		}
+		if _, err := writer.Write(data); err != nil {
+			writer.Close()
+			return nil, nil, fmt.Errorf("failed to write gzip data: %w", err)
+		}
+		if err := writer.Close(); err != nil {
+			return nil, nil, fmt.Errorf("failed to close gzip writer: %w", err)
+		}
+		contentEncoding = "gzip"
+
+	case "zstd":
+		var writer *zstd.Encoder
+		var err error
+		if level >= 1 && level <= 22 {
+			writer, err = zstd.NewWriter(&buf, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
+		} else {
+			writer, err = zstd.NewWriter(&buf, zstd.WithEncoderLevel(zstd.SpeedDefault))
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create zstd writer: %w", err)
+		}
+		if _, err := writer.Write(data); err != nil {
+			writer.Close()
+			return nil, nil, fmt.Errorf("failed to write zstd data: %w", err)
+		}
+		if err := writer.Close(); err != nil {
+			return nil, nil, fmt.Errorf("failed to close zstd writer: %w", err)
+		}
+		contentEncoding = "zstd"
+
+	default:
+		return nil, nil, fmt.Errorf("unsupported compression algorithm: %s", algorithm)
+	}
+
+	return bytes.NewReader(buf.Bytes()), map[string]string{"Content-Encoding": contentEncoding}, nil
 }
 
 // DecompressTransformer decompresses content
@@ -797,9 +857,54 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 		return nil, nil, err
 	}
 
-	// TODO: Implement actual decompression
-	// For now, return as-is
-	return bytes.NewReader(data), nil, nil
+	// Get compression algorithm from params (auto-detect if not specified)
+	algorithm := ""
+	if alg, ok := params["algorithm"].(string); ok {
+		algorithm = strings.ToLower(alg)
+	}
+
+	// Auto-detect compression based on magic bytes if algorithm not specified
+	if algorithm == "" {
+		if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
+			algorithm = "gzip"
+		} else if len(data) >= 4 && data[0] == 0x28 && data[1] == 0xb5 && data[2] == 0x2f && data[3] == 0xfd {
+			algorithm = "zstd"
+		} else {
+			// Data doesn't appear to be compressed, return as-is
+			return bytes.NewReader(data), nil, nil
+		}
+	}
+
+	var result []byte
+
+	switch algorithm {
+	case "gzip":
+		reader, err := gzip.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create gzip reader: %w", err)
+		}
+		defer reader.Close()
+		result, err = io.ReadAll(reader)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to decompress gzip data: %w", err)
+		}
+
+	case "zstd":
+		decoder, err := zstd.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create zstd decoder: %w", err)
+		}
+		defer decoder.Close()
+		result, err = io.ReadAll(decoder)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to decompress zstd data: %w", err)
+		}
+
+	default:
+		return nil, nil, fmt.Errorf("unsupported decompression algorithm: %s", algorithm)
+	}
+
+	return bytes.NewReader(result), nil, nil
 }
 
 // GetAccessPointForBucketConfiguration implements S3 API
