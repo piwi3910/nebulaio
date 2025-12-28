@@ -88,6 +88,7 @@ make run
 ```
 
 The server exposes three ports:
+
 - **9000**: S3 API
 - **9001**: Admin API
 - **9002**: Web Console
@@ -143,6 +144,7 @@ We follow standard Go conventions with these specifics:
 - **Interfaces**: Use -er suffix for behaviors (`Store`, `Validator`)
 
 **Handler pattern:**
+
 ```go
 type Handler struct {
     service *bucket.Service
@@ -159,6 +161,7 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
 ```
 
 **Error handling:**
+
 ```go
 if err != nil {
     return fmt.Errorf("failed to create bucket: %w", err)
@@ -173,6 +176,7 @@ if err != nil {
 - **Imports**: Group external imports, then internal, then types
 
 **Component pattern:**
+
 ```typescript
 interface BucketListProps {
   onSelect: (bucket: Bucket) => void;
@@ -198,6 +202,7 @@ Resolves #123
 ```
 
 **Types:**
+
 - `[Feature]` - New functionality
 - `[Fix]` - Bug fixes
 - `[Refactor]` - Code restructuring without behavior change
@@ -206,6 +211,7 @@ Resolves #123
 - `[Chore]` - Maintenance tasks, dependency updates
 
 **Examples:**
+
 ```
 [Feature] Add bucket versioning support
 
@@ -271,6 +277,7 @@ git push origin v1.2.0
 ```
 
 Release binaries are built for:
+
 - Linux (amd64)
 - macOS (arm64)
 
@@ -294,6 +301,7 @@ If you need assistance:
 ## Recognition
 
 Contributors are recognized in:
+
 - Release notes for significant contributions
 - The project README for major features
 

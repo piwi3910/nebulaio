@@ -162,6 +162,7 @@ nebulaio-cli admin policy delete my-bucket
 ```
 
 Example policy file (`policy.json`):
+
 ```json
 {
   "Version": "2012-10-17",
@@ -193,6 +194,7 @@ nebulaio-cli admin lifecycle delete my-bucket
 ```
 
 Example lifecycle configuration (`lifecycle.json`):
+
 ```json
 {
   "Rules": [
@@ -237,6 +239,7 @@ nebulaio-cli admin replication delete my-bucket
 ```
 
 Example replication configuration (`replication.json`):
+
 ```json
 {
   "Role": "arn:aws:iam::account-id:role/replication-role",

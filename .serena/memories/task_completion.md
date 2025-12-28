@@ -8,6 +8,7 @@ When completing a task, ensure the following:
 4. **Format code**: `make fmt`
 
 ## Before Committing
+
 - Ensure all linting passes
 - Ensure all tests pass
 - Code is properly formatted
@@ -15,6 +16,7 @@ When completing a task, ensure the following:
 - Metadata types in `internal/metadata/store.go` are consistent
 
 ## Key Files to Update When Adding Features
+
 - `internal/metadata/store.go` - Store interface and types
 - `internal/metadata/raft_store.go` - Raft store implementation
 - `internal/metadata/raft.go` - Raft FSM commands

@@ -195,6 +195,7 @@ storage:
 | `storage.placement_groups.min_nodes_for_erasure` | `NEBULAIO_STORAGE_PLACEMENT_GROUPS_MIN_NODES_FOR_ERASURE` |
 
 **Validation Rules:**
+
 - `min_nodes` must be >= `data_shards + parity_shards`
 - `local_group_id` must reference an existing group
 - All nodes in a group should have the same configuration

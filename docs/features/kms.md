@@ -31,7 +31,7 @@ The KMS integration supports envelope encryption, where data encryption keys (DE
 | [AWS KMS](#aws-kms) | Amazon Key Management Service | Production |
 | [Azure Key Vault](#azure-key-vault) | Microsoft Azure key management | Production |
 | [GCP Cloud KMS](#gcp-cloud-kms) | Google Cloud Key Management Service | Production |
-| [Local](#local-provider) | File-based keys for development/testing | Development |
+| Local | File-based keys for development/testing | Development |
 
 ---
 
@@ -392,6 +392,7 @@ Error: failed to connect to KMS provider: connection refused
 ```
 
 **Solutions:**
+
 - Verify KMS provider address is correct and reachable
 - Check network connectivity and firewall rules
 - Verify TLS certificates are valid and trusted
@@ -403,6 +404,7 @@ Error: KMS authentication failed: invalid credentials
 ```
 
 **Solutions:**
+
 - Verify credentials (token, access key, service principal)
 - Check credential expiration
 - Verify IAM policies/RBAC assignments
@@ -414,6 +416,7 @@ Error: key not found: nebulaio-master
 ```
 
 **Solutions:**
+
 - Verify key exists in KMS provider
 - Check key name matches configuration
 - Verify application has read permissions on key
@@ -425,6 +428,7 @@ Error: decryption failed: key version not available
 ```
 
 **Solutions:**
+
 - Ensure old key versions are retained during rotation
 - Check `min_decryption_version` setting in Vault
 - Verify key has not been deleted

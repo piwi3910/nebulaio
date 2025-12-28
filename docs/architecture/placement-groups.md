@@ -33,6 +33,7 @@ A placement group is a logical collection of storage nodes that share data local
 ### 1. Data Locality
 
 All shards of an erasure-coded object reside within the same placement group. This ensures:
+
 - **Low-latency reconstruction**: Failed shards can be rebuilt from local nodes
 - **Predictable performance**: Network latency is bounded within a datacenter
 - **Simplified failure domains**: Node failures affect only their placement group
@@ -40,6 +41,7 @@ All shards of an erasure-coded object reside within the same placement group. Th
 ### 2. Fault Isolation
 
 Each placement group operates independently:
+
 - Node failures in one group don't affect other groups
 - Status transitions are localized (healthy, degraded, offline)
 - Capacity limits prevent overcommitment
@@ -139,11 +141,13 @@ func GetShardPlacementNodesForObject(bucket, key string, numShards int) ([]strin
 ```
 
 **Algorithm:**
+
 1. Hash the object path (`bucket/key`) using FNV-1a
 2. Use the hash as an offset into the node list
 3. Select `numShards` consecutive nodes (wrapping around)
 
 **Properties:**
+
 - **Deterministic**: Same object always maps to same nodes
 - **Uniform**: Objects distributed evenly across nodes
 - **Stable**: Adding/removing nodes minimally disrupts placement
@@ -217,10 +221,12 @@ The system validates configuration at startup:
 Frequently accessed data is cached to reduce lock contention:
 
 ### Cached Data
+
 - Local group node list
 - Node membership hashes
 
 ### Cache Invalidation
+
 - On node join/leave
 - Cache generation counter prevents stale reads
 - Lock upgrade pattern for cache misses
@@ -319,6 +325,7 @@ pgManager.SetOnGroupStatusChange(func(groupID PlacementGroupID, status Placement
 ### Callback Safety
 
 Callbacks are executed with:
+
 - **Panic recovery**: Callbacks can't crash the manager
 - **Timeout protection**: 5-second maximum execution time
 - **Asynchronous execution**: Don't block the mutation path
@@ -338,6 +345,7 @@ The manager uses `sync.RWMutex` for concurrent access:
 ### Lock Ordering
 
 To prevent deadlocks:
+
 1. Always acquire manager lock before group-specific operations
 2. Release locks before invoking callbacks
 3. Capture callback references while holding lock, invoke after release
@@ -405,6 +413,7 @@ Placement group state is replicated through Raft to ensure consistency:
 When nodes join or leave a placement group, the changes are proposed through Raft:
 
 1. **Node Join Request**
+
    ```
    Client Request → Leader Proposes → Log Replication → Apply Locally
    ```

@@ -28,6 +28,7 @@ curl -X POST http://localhost:9001/api/v1/admin/auth/login \
 ```
 
 **Response:**
+
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIs...",
@@ -55,17 +56,21 @@ curl -X POST http://localhost:9001/api/v1/admin/auth/refresh \
 ## Cluster Management
 
 ### Get Cluster Status
+
 ```
 GET /admin/cluster/status
 ```
+
 ```json
 {"status": "healthy", "leader": "node-1", "nodes": 3, "quorum": true}
 ```
 
 ### List Cluster Nodes
+
 ```
 GET /admin/cluster/nodes
 ```
+
 ```json
 {
   "nodes": [{
@@ -76,6 +81,7 @@ GET /admin/cluster/nodes
 ```
 
 ### Node Operations
+
 ```
 POST /admin/cluster/nodes/{nodeId}/promote    # Promote to voter
 DELETE /admin/cluster/nodes/{nodeId}          # Remove from cluster
@@ -88,9 +94,11 @@ DELETE /admin/cluster/nodes/{nodeId}          # Remove from cluster
 Placement groups manage data locality and fault isolation for erasure coding and tiering.
 
 ### List Placement Groups
+
 ```
 GET /admin/cluster/placement-groups
 ```
+
 ```json
 {
   "placement_groups": [
@@ -110,9 +118,11 @@ GET /admin/cluster/placement-groups
 ```
 
 ### Get Placement Group
+
 ```
 GET /admin/cluster/placement-groups/{groupId}
 ```
+
 ```json
 {
   "id": "pg-dc1",
@@ -129,10 +139,13 @@ GET /admin/cluster/placement-groups/{groupId}
 ```
 
 ### Create Placement Group
+
 ```
 POST /admin/cluster/placement-groups
 ```
+
 **Request:**
+
 ```json
 {
   "id": "pg-dc2",
@@ -143,7 +156,9 @@ POST /admin/cluster/placement-groups
   "max_nodes": 50
 }
 ```
+
 **Response:** `201 Created`
+
 ```json
 {
   "id": "pg-dc2",
@@ -153,10 +168,13 @@ POST /admin/cluster/placement-groups
 ```
 
 ### Update Placement Group
+
 ```
 PATCH /admin/cluster/placement-groups/{groupId}
 ```
+
 **Request:**
+
 ```json
 {
   "name": "Updated Name",
@@ -166,22 +184,29 @@ PATCH /admin/cluster/placement-groups/{groupId}
 ```
 
 ### Delete Placement Group
+
 ```
 DELETE /admin/cluster/placement-groups/{groupId}
 ```
+
 **Note:** Only empty placement groups (no nodes) can be deleted.
 
 ### Add Node to Placement Group
+
 ```
 POST /admin/cluster/placement-groups/{groupId}/nodes
 ```
+
 **Request:**
+
 ```json
 {
   "node_id": "new-node-1"
 }
 ```
+
 **Response:** `201 Created`
+
 ```json
 {
   "group_id": "pg-dc1",
@@ -192,10 +217,13 @@ POST /admin/cluster/placement-groups/{groupId}/nodes
 ```
 
 ### Remove Node from Placement Group
+
 ```
 DELETE /admin/cluster/placement-groups/{groupId}/nodes/{nodeId}
 ```
+
 **Response:** `200 OK`
+
 ```json
 {
   "group_id": "pg-dc1",
@@ -206,9 +234,11 @@ DELETE /admin/cluster/placement-groups/{groupId}/nodes/{nodeId}
 ```
 
 ### Get Placement Group Status
+
 ```
 GET /admin/cluster/placement-groups/{groupId}/status
 ```
+
 ```json
 {
   "id": "pg-dc1",
@@ -225,10 +255,13 @@ GET /admin/cluster/placement-groups/{groupId}/status
 ```
 
 ### Configure Replication Targets
+
 ```
 PUT /admin/cluster/placement-groups/{groupId}/replication
 ```
+
 **Request:**
+
 ```json
 {
   "targets": ["pg-dc2", "pg-dc3"],
@@ -260,6 +293,7 @@ PUT /admin/cluster/placement-groups/{groupId}/replication
 | `/admin/users/{userId}` | DELETE | Delete user |
 
 **Create User Request:**
+
 ```json
 {"username": "bob", "password": "secure-password", "email": "bob@example.com", "role": "user"}
 ```
@@ -274,6 +308,7 @@ PUT /admin/cluster/placement-groups/{groupId}/replication
 | `/admin/policies` | POST | Create policy |
 
 **Create Policy Request:**
+
 ```json
 {
   "name": "dev-access",
@@ -294,11 +329,13 @@ PUT /admin/cluster/placement-groups/{groupId}/replication
 | `/admin/buckets/{name}/versioning` | GET/PUT | Manage versioning |
 
 **Create Bucket Request:**
+
 ```json
 {"name": "new-bucket", "region": "us-east-1", "storage_class": "STANDARD"}
 ```
 
 **Bucket Details Response:**
+
 ```json
 {
   "name": "production-data", "size": 1073741824, "object_count": 15420,
@@ -319,6 +356,7 @@ PUT /admin/config     # Update configuration
 ```
 
 **Response:**
+
 ```json
 {
   "s3_express": {"enabled": true, "enable_atomic_append": true},
@@ -344,9 +382,11 @@ Available via Prometheus endpoint at `/metrics`:
 ## Replication Configuration
 
 ### Site Replication Status
+
 ```
 GET /admin/site-replication/status
 ```
+
 ```json
 {
   "site": "us-east-1", "status": "healthy",
@@ -363,6 +403,7 @@ PUT /admin/site-replication/buckets/{bucketName}
 ```
 
 **Add Peer Request:**
+
 ```json
 {
   "name": "eu-west-1", "endpoint": "https://nebulaio-eu.example.com:9000",
@@ -384,6 +425,7 @@ PUT /admin/site-replication/buckets/{bucketName}
 | `/metrics` | Prometheus metrics |
 
 **Health Response:**
+
 ```json
 {
   "status": "healthy", "version": "1.0.0", "uptime_seconds": 86400,
@@ -401,6 +443,7 @@ GET /admin/audit-logs?bucket=my-bucket&user_id=usr_123&page=1&page_size=20
 ```
 
 **Response:**
+
 ```json
 {
   "logs": [{
@@ -416,6 +459,7 @@ GET /admin/audit-logs?bucket=my-bucket&user_id=usr_123&page=1&page_size=20
 ## Error Handling
 
 **Error Response Format:**
+
 ```json
 {"error": "NotFound", "message": "User not found", "code": "USER_NOT_FOUND"}
 ```
@@ -474,6 +518,7 @@ GET /admin/tiering/policies
 | `enabled` | boolean | Filter by enabled status (`true` or `false`) |
 
 **Response:**
+
 ```json
 {
   "policies": [
@@ -571,6 +616,7 @@ POST /admin/tiering/policies
 ```
 
 **Request:**
+
 ```json
 {
   "id": "promote-hot-objects",
@@ -616,6 +662,7 @@ POST /admin/tiering/policies
 ```
 
 **Response (201 Created):**
+
 ```json
 {
   "id": "promote-hot-objects",
@@ -638,6 +685,7 @@ GET /admin/tiering/policies/{id}
 ```
 
 **Response:**
+
 ```json
 {
   "id": "archive-logs-policy",
@@ -683,6 +731,7 @@ PUT /admin/tiering/policies/{id}
 ```
 
 **Request:**
+
 ```json
 {
   "name": "Archive Old Logs (Updated)",
@@ -716,6 +765,7 @@ PUT /admin/tiering/policies/{id}
 ```
 
 **Response:**
+
 ```json
 {
   "id": "archive-logs-policy",
@@ -744,6 +794,7 @@ POST /admin/tiering/policies/{id}/enable
 ```
 
 **Response:**
+
 ```json
 {
   "id": "archive-logs-policy",
@@ -761,6 +812,7 @@ POST /admin/tiering/policies/{id}/disable
 ```
 
 **Response:**
+
 ```json
 {
   "id": "archive-logs-policy",
@@ -778,6 +830,7 @@ GET /admin/tiering/policies/{id}/stats
 ```
 
 **Response:**
+
 ```json
 {
   "policy_id": "archive-logs-policy",
@@ -812,6 +865,7 @@ GET /admin/tiering/access-stats/{bucket}
 | `offset` | integer | 0 | Pagination offset |
 
 **Response:**
+
 ```json
 {
   "bucket": "my-data",
@@ -832,6 +886,7 @@ GET /admin/tiering/access-stats/{bucket}/{key}
 **Note:** For keys containing special characters, use the `key` query parameter instead.
 
 **Response (when tracked):**
+
 ```json
 {
   "bucket": "my-data",
@@ -848,6 +903,7 @@ GET /admin/tiering/access-stats/{bucket}/{key}
 ```
 
 **Response (when not tracked):**
+
 ```json
 {
   "bucket": "my-data",
@@ -868,6 +924,7 @@ POST /admin/tiering/transition
 ```
 
 **Request:**
+
 ```json
 {
   "bucket": "production-data",
@@ -880,6 +937,7 @@ POST /admin/tiering/transition
 **Tier Values:** `hot`, `warm`, `cold`, `archive`
 
 **Response:**
+
 ```json
 {
   "bucket": "production-data",
@@ -902,9 +960,11 @@ GET /admin/tiering/s3-lifecycle/{bucket}
 ```
 
 **Headers:**
+
 - `Accept: application/json` (default) or `Accept: application/xml`
 
 **Response (JSON):**
+
 ```json
 {
   "Rules": [
@@ -933,6 +993,7 @@ GET /admin/tiering/s3-lifecycle/{bucket}
 ```
 
 **Response (XML):**
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <LifecycleConfiguration>
@@ -966,9 +1027,11 @@ PUT /admin/tiering/s3-lifecycle/{bucket}
 ```
 
 **Headers:**
+
 - `Content-Type: application/json` or `Content-Type: application/xml`
 
 **Request (JSON):**
+
 ```json
 {
   "Rules": [
@@ -1007,6 +1070,7 @@ PUT /admin/tiering/s3-lifecycle/{bucket}
 ```
 
 **Response:**
+
 ```json
 {
   "bucket": "my-bucket",
@@ -1036,6 +1100,7 @@ GET /admin/tiering/status
 ```
 
 **Response:**
+
 ```json
 {
   "status": "running",
@@ -1064,6 +1129,7 @@ GET /admin/tiering/metrics
 ```
 
 **Response:**
+
 ```json
 {
   "total_executions": 45678,
@@ -1089,6 +1155,7 @@ GET /admin/tiering/predictions/{bucket}/{key}
 **Note:** For keys containing special characters, use the `key` query parameter.
 
 **Response (with sufficient data):**
+
 ```json
 {
   "bucket": "production-data",
@@ -1114,6 +1181,7 @@ GET /admin/tiering/predictions/{bucket}/{key}
 ```
 
 **Response (insufficient data):**
+
 ```json
 {
   "bucket": "production-data",
@@ -1137,6 +1205,7 @@ GET /admin/tiering/predictions/recommendations
 | `limit` | integer | 100 | Maximum recommendations (1-1000) |
 
 **Response:**
+
 ```json
 {
   "recommendations": [
@@ -1178,6 +1247,7 @@ GET /admin/tiering/predictions/hot-objects
 | `limit` | integer | 50 | Maximum results (1-500) |
 
 **Response:**
+
 ```json
 {
   "hot_objects": [
@@ -1214,6 +1284,7 @@ GET /admin/tiering/predictions/cold-objects
 | `inactive_days` | integer | 30 | Days of inactivity threshold (1-365) |
 
 **Response:**
+
 ```json
 {
   "cold_objects": [
@@ -1250,6 +1321,7 @@ GET /admin/tiering/anomalies
 | `limit` | integer | 50 | Maximum anomalies (1-500) |
 
 **Response:**
+
 ```json
 {
   "anomalies": [

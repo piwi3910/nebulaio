@@ -3,6 +3,7 @@
 ## Go Code Style
 
 ### Package Organization
+
 - Each feature domain has its own package under `internal/`
 - API handlers are in `internal/api/{area}/handler.go`
 - Middleware is in `internal/api/middleware/`
@@ -10,6 +11,7 @@
 - Types and interfaces are defined close to their usage
 
 ### Naming Conventions
+
 - **Packages**: lowercase, single word when possible
 - **Types/Structs**: PascalCase (e.g., `Handler`, `PresignParams`)
 - **Functions/Methods**: PascalCase for exported, camelCase for unexported
@@ -18,6 +20,7 @@
 - **Interfaces**: Use -er suffix when describing behavior (e.g., `Store`, `Service`)
 
 ### Struct Patterns
+
 ```go
 // Handler pattern used across API packages
 type Handler struct {
@@ -34,6 +37,7 @@ func NewHandler(...) *Handler {
 ```
 
 ### HTTP Handler Pattern
+
 ```go
 func (h *Handler) SomeEndpoint(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
@@ -64,6 +68,7 @@ func (h *Handler) SomeEndpoint(w http.ResponseWriter, r *http.Request) {
 ```
 
 ### Request/Response Types
+
 ```go
 // Request types with json tags
 type CreateSomethingRequest struct {
@@ -80,12 +85,14 @@ type SomethingResponse struct {
 ```
 
 ### Error Handling
+
 - Return errors up the call stack
 - Use `fmt.Errorf("context: %w", err)` for wrapping
 - HTTP handlers convert errors to appropriate status codes
 - Use sentinel errors for specific conditions
 
 ### Router Registration Pattern
+
 ```go
 func (h *Handler) RegisterRoutes(r chi.Router) {
     r.Use(h.authMiddleware)
@@ -99,6 +106,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 ```
 
 ### Middleware Pattern
+
 ```go
 func SomeMiddleware(config Config) func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
@@ -116,6 +124,7 @@ func SomeMiddleware(config Config) func(http.Handler) http.Handler {
 ```
 
 ### Helper Functions
+
 ```go
 // JSON response helper
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
@@ -131,11 +140,13 @@ func writeError(w http.ResponseWriter, message string, status int) {
 ```
 
 ## Testing Conventions
+
 - Test files: `*_test.go` in same package
 - Use table-driven tests when appropriate
 - Mock external dependencies
 
 ## Comments
+
 - Use godoc-style comments for exported items
 - Start with the name of the item
 - Document behavior, not implementation

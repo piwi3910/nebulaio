@@ -94,6 +94,7 @@ Maximum tolerable failures equals the number of parity shards.
 | Decode (recovery) | ~300 MB/s | Reconstruction |
 
 **I/O Patterns**:
+
 - Writes: 14 parallel writes (1.4x network traffic for 10+4)
 - Reads (healthy): 10 parallel reads (1x network traffic)
 - Reads (degraded): Additional CPU for reconstruction
@@ -101,27 +102,33 @@ Maximum tolerable failures equals the number of parity shards.
 ## Best Practices
 
 ### Small Clusters (4-8 nodes)
+
 ```yaml
 erasure:
   data_shards: 4
   parity_shards: 2
 ```
+
 50% overhead, tolerates 2 failures. Minimum 6 nodes recommended.
 
 ### Production Clusters (12+ nodes)
+
 ```yaml
 erasure:
   data_shards: 10
   parity_shards: 4
 ```
+
 40% overhead, tolerates 4 failures. Best balance for most workloads.
 
 ### Mission-Critical Data
+
 ```yaml
 erasure:
   data_shards: 8
   parity_shards: 8
 ```
+
 100% overhead, tolerates 8 failures. For compliance or critical archives.
 
 ## Per-Bucket and Per-Object Redundancy
@@ -221,17 +228,20 @@ storage:
 ```
 
 ### High-Throughput Workloads
+
 ```yaml
 erasure:
   data_shards: 16
   parity_shards: 4
   shard_size: 4194304  # 4MB shards
 ```
+
 25% overhead, higher parallelism. Requires 20+ nodes.
 
 ## CLI Commands
 
 ### Status and Configuration
+
 ```bash
 # Show erasure coding status
 nebulaio-cli admin erasure status
@@ -244,6 +254,7 @@ nebulaio-cli admin erasure set --data-shards 10 --parity-shards 4
 ```
 
 ### Health and Verification
+
 ```bash
 # Check shard health
 nebulaio-cli admin erasure health
@@ -253,6 +264,7 @@ nebulaio-cli admin erasure verify --bucket my-bucket --key path/to/object
 ```
 
 ### Rebuild Operations
+
 ```bash
 # Trigger rebuild for degraded objects
 nebulaio-cli admin erasure rebuild
@@ -265,6 +277,7 @@ nebulaio-cli admin erasure rebuild-status
 ```
 
 ### Troubleshooting
+
 ```bash
 # List degraded objects
 nebulaio-cli admin erasure list-degraded
@@ -276,6 +289,7 @@ nebulaio-cli admin erasure rebuild --priority high
 ## Monitoring
 
 ### Prometheus Metrics
+
 ```
 nebulaio_erasure_encode_operations_total
 nebulaio_erasure_decode_operations_total
@@ -287,6 +301,7 @@ nebulaio_erasure_objects_at_risk
 ```
 
 ### Alert Configuration
+
 ```yaml
 groups:
   - name: erasure-coding

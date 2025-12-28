@@ -397,7 +397,8 @@ Standard attributes added to all spans:
 ### Viewing Traces
 
 Traces can be viewed in:
-- **Jaeger UI**: http://jaeger:16686
+
+- **Jaeger UI**: <http://jaeger:16686>
 - **Grafana Tempo**: Via Grafana data source
 - **AWS X-Ray**: With OTLP/X-Ray exporter
 - **Console**: Development mode logging

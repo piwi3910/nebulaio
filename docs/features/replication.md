@@ -160,6 +160,7 @@ curl -X GET "http://localhost:9000/admin/replication/stats" -H "Authorization: B
 ```
 
 Response:
+
 ```json
 {"total": 1500, "pending": 150, "in_progress": 25, "completed": 1300, "failed": 25}
 ```
@@ -207,6 +208,7 @@ Common causes: Rule disabled, filter mismatch, destination unreachable, invalid 
 ### Replication Lag Increasing
 
 Increase workers in configuration:
+
 ```yaml
 replication:
   workers: 20

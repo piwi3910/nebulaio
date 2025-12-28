@@ -142,6 +142,7 @@ curl -X GET http://localhost:9000/admin/batch/jobs/migration-001 \
 ```
 
 Response:
+
 ```json
 {
   "job_id": "migration-001",
@@ -320,6 +321,7 @@ curl -X POST http://localhost:9000/admin/batch/jobs/migration-001/retry-failed \
 ### Checkpointing
 
 Jobs automatically checkpoint progress every `checkpoint_interval` objects. This enables:
+
 - Resume after failure
 - Progress persistence across restarts
 - Accurate progress tracking
@@ -456,6 +458,7 @@ curl -X GET http://localhost:9000/admin/batch/jobs/migration-001/failed \
 ```
 
 Response:
+
 ```json
 {
   "job_id": "migration-001",

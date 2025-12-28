@@ -97,6 +97,7 @@ curl -X GET http://localhost:9000/admin/cache/stats \
 ```
 
 Response:
+
 ```json
 {
   "enabled": true,
@@ -149,7 +150,7 @@ curl -X DELETE http://localhost:9000/admin/cache/clear \
 | Throughput | 500MB/s | 10GB/s | 20x |
 | IOPS | 5,000 | 150,000 | 30x |
 
-*Benchmarks performed on AWS r6i.4xlarge with 128GB RAM*
+**Note:** Benchmarks performed on AWS r6i.4xlarge with 128GB RAM
 
 ## Integration with AI/ML Frameworks
 

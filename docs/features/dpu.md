@@ -78,6 +78,7 @@ storage:
 ```
 
 Supported algorithms:
+
 - AES-128-GCM
 - AES-256-GCM
 - AES-128-XTS
@@ -98,6 +99,7 @@ storage:
 ```
 
 Supported algorithms:
+
 - Deflate (GZIP compatible)
 - LZ4
 
@@ -166,6 +168,7 @@ rdma:
 ### CPU Savings
 
 With DPU offload enabled:
+
 - Crypto: 80-90% CPU reduction
 - Compression: 70-85% CPU reduction
 - RDMA: 60-75% CPU reduction

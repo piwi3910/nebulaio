@@ -495,7 +495,7 @@ This allows scaling storage independently from the Raft consensus group.
 
 ### Common Issues
 
-**Node won't join cluster**
+#### Node won't join cluster
 
 ```bash
 # Check gossip connectivity
@@ -508,7 +508,7 @@ journalctl -u nebulaio -f
 grep cluster_name /etc/nebulaio/config.yaml
 ```
 
-**Leader election timeout**
+#### Leader election timeout
 
 ```bash
 # Check Raft port connectivity
@@ -521,7 +521,7 @@ cluster:
   raft_heartbeat_timeout: 2s
 ```
 
-**Split-brain scenario**
+#### Split-brain scenario
 
 - Ensure you have an odd number of voters (3, 5, 7)
 - Check network partitions between nodes

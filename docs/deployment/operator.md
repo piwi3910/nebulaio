@@ -415,6 +415,7 @@ kubectl get nebulaio my-cluster -o yaml
 ```
 
 Status fields:
+
 - `phase`: Current phase (Pending, Creating, Running, Updating, Failed)
 - `replicas`: Desired replicas
 - `readyReplicas`: Ready replicas
@@ -452,16 +453,19 @@ kubectl logs -l app.kubernetes.io/instance=my-cluster -f
 ### Common Issues
 
 **Cluster stuck in Creating**:
+
 - Check storage class exists
 - Verify node resources
 - Check operator logs
 
 **Backup failed**:
+
 - Verify S3 credentials
 - Check network connectivity to S3
 - Verify bucket permissions
 
 **Scaling issues**:
+
 - Ensure Raft quorum maintained
 - Check pod anti-affinity constraints
 - Verify node capacity

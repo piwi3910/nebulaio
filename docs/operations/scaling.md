@@ -23,12 +23,14 @@ NebulaIO supports both horizontal and vertical scaling strategies.
 Adding more nodes to distribute load and increase capacity.
 
 **Benefits**:
+
 - Linear capacity growth
 - Improved fault tolerance
 - Better geographic distribution
 - No downtime required
 
 **Considerations**:
+
 - Network overhead increases with node count
 - Raft voter count should stay odd (3, 5, 7)
 - Rebalancing required after adding nodes
@@ -38,11 +40,13 @@ Adding more nodes to distribute load and increase capacity.
 Upgrading existing nodes with more resources.
 
 **Benefits**:
+
 - Simpler architecture
 - Lower network overhead
 - No rebalancing needed
 
 **Considerations**:
+
 - Hardware limits apply
 - Requires node restart
 - Single points of higher capacity
@@ -63,6 +67,7 @@ Upgrading existing nodes with more resources.
 ### Prerequisites
 
 Before adding nodes:
+
 - Ensure network connectivity to existing cluster
 - Verify storage and compute resources
 - Plan node role (management, storage, or hybrid)

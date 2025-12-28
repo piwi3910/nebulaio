@@ -96,6 +96,7 @@ audit:
 ```
 
 Captures:
+
 - All authentication events
 - Access control changes
 - Data access events
@@ -117,6 +118,7 @@ audit:
 ```
 
 Captures:
+
 - Cardholder data access
 - Authentication attempts
 - Access control modifications
@@ -137,6 +139,7 @@ audit:
 ```
 
 Captures:
+
 - PHI access events
 - User authentication
 - Data modifications
@@ -153,6 +156,7 @@ audit:
 ```
 
 Captures:
+
 - Personal data access
 - Data subject requests
 - Consent changes
@@ -169,6 +173,7 @@ audit:
 ```
 
 Captures:
+
 - All security-relevant events
 - System access
 - Configuration changes
@@ -307,6 +312,7 @@ curl -X POST http://localhost:9000/admin/audit/verify \
 ```
 
 Response:
+
 ```json
 {
   "valid": true,
@@ -422,6 +428,7 @@ curl -X GET "http://localhost:9000/admin/audit/export?format=cef&start=2024-01-0
 ```
 
 CEF format example:
+
 ```
 CEF:0|NebulaIO|AuditLog|1.0|s3:ObjectAccessed:Get|Object Access|5|src=192.168.1.100 suser=alice dst=my-bucket/file.pdf outcome=success
 ```
@@ -457,6 +464,7 @@ curl -X GET "http://localhost:9000/admin/audit/stats?start=2024-01-01&end=2024-0
 ```
 
 Response:
+
 ```json
 {
   "total_events": 1234567,

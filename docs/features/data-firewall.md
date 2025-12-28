@@ -235,6 +235,7 @@ curl -X GET http://localhost:9000/admin/firewall/status \
 ```
 
 Response:
+
 ```json
 {
   "enabled": true,
@@ -309,6 +310,7 @@ connections:
 ### Connection Tracking
 
 The firewall tracks active connections for:
+
 - DoS protection
 - Fair resource allocation
 - Audit and monitoring

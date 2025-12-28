@@ -584,13 +584,15 @@ func BenchmarkDragonboat_Read(b *testing.B) { ... }
 
 ### 10.1 Data Migration Strategy
 
-**Option A: Clean Migration (Recommended for small deployments)**
+#### Option A: Clean Migration (Recommended for small deployments)
+
 1. Export all metadata from existing cluster
 2. Shut down old cluster
 3. Deploy new Dragonboat-based cluster
 4. Import metadata
 
-**Option B: Rolling Migration (For zero-downtime)**
+#### Option B: Rolling Migration (For zero-downtime)
+
 1. Add Dragonboat nodes as non-voters
 2. Sync state via external mechanism
 3. Switch over traffic
@@ -623,29 +625,34 @@ NebulaIO has migrated from HashiCorp Raft to Dragonboat for improved performance
 ## Implementation Timeline
 
 ### Week 1-2: Core Implementation
+
 - [ ] Create `dragonboat.go` with NodeHost setup
 - [ ] Create `dragonboat_fsm.go` with state machine
 - [ ] Create `dragonboat_store.go` with metadata operations
 - [ ] Update `go.mod` dependencies
 
 ### Week 3: Integration
+
 - [ ] Update `internal/config/config.go`
 - [ ] Update `internal/server/server.go`
 - [ ] Update `internal/cluster/discovery.go`
 - [ ] Update API handlers
 
 ### Week 4: Testing
+
 - [ ] Unit tests for all new code
 - [ ] Integration tests for cluster operations
 - [ ] Performance benchmarks
 
 ### Week 5: Deployment & Docs
+
 - [ ] Update all Kubernetes manifests
 - [ ] Update Helm charts
 - [ ] Update Docker Compose
 - [ ] Update all documentation
 
 ### Week 6: Migration Tools
+
 - [ ] Create migration CLI command
 - [ ] Write migration guide
 - [ ] Test upgrade paths
@@ -655,6 +662,7 @@ NebulaIO has migrated from HashiCorp Raft to Dragonboat for improved performance
 ## Dependencies
 
 ### Add
+
 ```go
 require (
     github.com/lni/dragonboat/v4 v4.0.0
@@ -662,6 +670,7 @@ require (
 ```
 
 ### Remove
+
 ```go
 // These can be removed after migration
 github.com/hashicorp/raft v1.7.3
@@ -676,6 +685,7 @@ If issues arise during migration:
 
 1. Keep HashiCorp Raft code in a separate branch
 2. Use build tags to switch implementations:
+
    ```go
    //go:build !dragonboat
    // hashicorp implementation
@@ -683,6 +693,7 @@ If issues arise during migration:
    //go:build dragonboat
    // dragonboat implementation
    ```
+
 3. Document rollback procedure in operations guide
 
 ---
