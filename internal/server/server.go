@@ -25,9 +25,10 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metadata"
 	"github.com/piwi3910/nebulaio/internal/metrics"
 	"github.com/piwi3910/nebulaio/internal/object"
-	"github.com/piwi3910/nebulaio/internal/storage/backend"
-	"github.com/piwi3910/nebulaio/internal/storage/fs"
 	"github.com/piwi3910/nebulaio/internal/security"
+	"github.com/piwi3910/nebulaio/internal/storage/backend"
+	"github.com/piwi3910/nebulaio/internal/storage/erasure"
+	"github.com/piwi3910/nebulaio/internal/storage/fs"
 	"github.com/piwi3910/nebulaio/internal/storage/volume"
 	"github.com/piwi3910/nebulaio/internal/tiering"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -132,27 +133,91 @@ func New(cfg *config.Config) (*Server, error) {
 	// Old RaftStore approach (no longer compatible):
 	// srv.discovery.SetRaft(srv.metaStore.GetRaft())
 
-	// Initialize storage backend based on configuration
-	switch cfg.Storage.Backend {
-	case "volume":
-		log.Info().Msg("Initializing volume storage backend")
-		volumeBackend, err := volume.NewBackend(cfg.DataDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize volume storage backend: %w", err)
+	// Initialize tiered storage model
+	// All storage uses tiered backends - hot tier is the primary/default storage
+	// Objects are written to hot tier and can be transitioned to warm/cold via policies
+	hotDataDir := filepath.Join(cfg.DataDir, "tiering", "hot")
+	warmDataDir := filepath.Join(cfg.DataDir, "tiering", "warm")
+	coldDataDir := filepath.Join(cfg.DataDir, "tiering", "cold")
+
+	// Helper function to create a backend based on type
+	createBackend := func(dataDir, tierName string) (backend.Backend, error) {
+		switch cfg.Storage.Backend {
+		case "erasure":
+			// Erasure coding provides redundancy through Reed-Solomon encoding
+			// Data is split into data shards + parity shards across the tier
+			erasureCfg := erasure.ConfigFromPreset(erasure.PresetStandard, dataDir)
+			log.Info().
+				Str("tier", tierName).
+				Int("data_shards", erasureCfg.DataShards).
+				Int("parity_shards", erasureCfg.ParityShards).
+				Msg("Initializing erasure coded storage")
+			return erasure.New(erasureCfg, cfg.NodeID)
+		case "volume":
+			log.Info().Str("tier", tierName).Msg("Initializing volume storage")
+			return volume.NewBackend(dataDir)
+		case "fs", "":
+			log.Info().Str("tier", tierName).Msg("Initializing filesystem storage")
+			return fs.New(fs.Config{DataDir: dataDir})
+		default:
+			return nil, fmt.Errorf("unsupported storage backend: %s (supported: fs, volume, erasure)", cfg.Storage.Backend)
 		}
-		// Volume backend implements Backend but not MultipartBackend yet
-		// Wrap it with a multipart adapter
-		srv.storageBackend = &multipartWrapper{Backend: volumeBackend}
-	case "fs", "":
-		log.Info().Msg("Initializing filesystem storage backend")
-		srv.storageBackend, err = fs.New(fs.Config{
-			DataDir: cfg.DataDir,
-		})
+	}
+
+	// Initialize hot tier - this is the PRIMARY storage backend
+	// All new objects are written here by default
+	hotBackend, err := createBackend(hotDataDir, "hot")
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize hot tier backend: %w", err)
+	}
+
+	// Use hot tier as the primary storage backend for all S3 operations
+	// This ensures all objects start in the hot tier
+	srv.storageBackend = &multipartWrapper{Backend: hotBackend}
+	log.Info().Str("path", hotDataDir).Msg("Hot tier initialized as primary storage")
+
+	// Initialize warm tier
+	warmBackend, err := createBackend(warmDataDir, "warm")
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize warm tier, warm tier disabled")
+		warmBackend = nil
+	} else {
+		log.Info().Str("path", warmDataDir).Msg("Warm tier initialized")
+	}
+
+	// Initialize cold tier
+	coldManager := tiering.NewColdStorageManager()
+	coldBackend, err := createBackend(coldDataDir, "cold")
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize cold tier backend, cold tier disabled")
+	} else {
+		coldStorage, err := tiering.NewColdStorage(tiering.ColdStorageConfig{
+			Name:    "cold-default",
+			Type:    tiering.ColdStorageFileSystem,
+			Enabled: true,
+		}, coldBackend)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize storage backend: %w", err)
+			log.Warn().Err(err).Msg("Failed to initialize cold tier storage, cold tier disabled")
+		} else {
+			coldManager.Register(coldStorage)
+			log.Info().Str("path", coldDataDir).Msg("Cold tier initialized")
 		}
-	default:
-		return nil, fmt.Errorf("unsupported storage backend: %s (supported: fs, volume)", cfg.Storage.Backend)
+	}
+
+	// Create advanced tiering service with all tiers
+	// The tiering service manages transitions between hot -> warm -> cold
+	tieringConfig := tiering.DefaultAdvancedServiceConfig()
+	tieringConfig.NodeID = cfg.NodeID
+	srv.tieringService, err = tiering.NewAdvancedService(
+		tieringConfig,
+		hotBackend,
+		warmBackend,
+		coldManager,
+	)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize tiering service")
+	} else {
+		log.Info().Msg("Tiering service initialized - all storage uses tiered model")
 	}
 
 	// Initialize auth service
@@ -164,10 +229,10 @@ func New(cfg *config.Config) (*Server, error) {
 		RootPassword:       cfg.Auth.RootPassword,
 	}, srv.metaStore)
 
-	// Initialize bucket service
+	// Initialize bucket service - uses hot tier as primary storage
 	srv.bucketService = bucket.NewService(srv.metaStore, srv.storageBackend)
 
-	// Initialize object service
+	// Initialize object service - uses hot tier as primary storage
 	srv.objectService = object.NewService(srv.metaStore, srv.storageBackend, srv.bucketService)
 
 	// Initialize health checker
@@ -191,56 +256,6 @@ func New(cfg *config.Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to initialize audit logger: %w", err)
 	}
 	log.Info().Str("path", auditLogPath).Msg("Audit logger initialized")
-
-	// Initialize tiering service with volume-based storage tiers
-	// Hot tier: fast storage for frequently accessed data
-	// Warm tier: medium storage for less frequently accessed data
-	hotDataDir := filepath.Join(cfg.DataDir, "tiering", "hot")
-	warmDataDir := filepath.Join(cfg.DataDir, "tiering", "warm")
-	coldDataDir := filepath.Join(cfg.DataDir, "tiering", "cold")
-
-	hotBackend, err := volume.NewBackend(hotDataDir)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize hot tier volume backend, tiering disabled")
-	} else {
-		warmBackend, err := volume.NewBackend(warmDataDir)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize warm tier volume backend, tiering disabled")
-		} else {
-			// Create cold storage manager and register cold tier
-			coldManager := tiering.NewColdStorageManager()
-			coldBackend, err := volume.NewBackend(coldDataDir)
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to initialize cold tier volume backend, cold tier disabled")
-			} else {
-				coldStorage, err := tiering.NewColdStorage(tiering.ColdStorageConfig{
-					Name:    "cold-default",
-					Type:    tiering.ColdStorageFileSystem,
-					Enabled: true,
-				}, coldBackend)
-				if err != nil {
-					log.Warn().Err(err).Msg("Failed to initialize cold tier storage, cold tier disabled")
-				} else {
-					coldManager.Register(coldStorage)
-				}
-			}
-
-			// Create advanced tiering service
-			tieringConfig := tiering.DefaultAdvancedServiceConfig()
-			tieringConfig.NodeID = cfg.NodeID
-			srv.tieringService, err = tiering.NewAdvancedService(
-				tieringConfig,
-				hotBackend,
-				warmBackend,
-				coldManager,
-			)
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to initialize tiering service")
-			} else {
-				log.Info().Msg("Tiering service initialized with hot/warm/cold tiers")
-			}
-		}
-	}
 
 	// Initialize TLS if enabled
 	if cfg.TLS.Enabled {

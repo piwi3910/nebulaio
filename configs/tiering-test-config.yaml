@@ -1,0 +1,136 @@
+# NebulaIO Tiering Test Configuration
+# This configuration sets up tiered storage with redundancy for testing
+
+node_name: tiering-test-node
+data_dir: /data
+
+s3_port: 9000
+admin_port: 9001
+console_port: 9002
+
+# Cluster configuration (single node for testing)
+cluster:
+  bootstrap: true
+  shard_id: 1
+  replica_id: 1
+  raft_port: 9003
+  gossip_port: 9004
+  node_role: storage
+  cluster_name: tiering-test
+
+# Storage configuration with tiered volumes
+storage:
+  backend: volume
+  path: /data/objects
+  default_storage_class: STANDARD
+
+  # Volume configuration
+  volume:
+    # Maximum size per volume file (1GB for testing)
+    max_volume_size: 1073741824  # 1GB
+
+    # Auto-create new volumes when needed
+    auto_create: true
+
+    # Direct I/O for better performance
+    direct_io:
+      enabled: true
+      block_alignment: 4096
+      buffer_pool_size: 16777216  # 16MB
+
+    # Raw devices with tiered storage (using file-backed devices for testing)
+    raw_devices:
+      enabled: true
+      safety:
+        check_filesystem: false  # Disabled since we're using file-backed devices
+        require_confirmation: false
+        write_signature: true
+        exclusive_lock: false  # Disabled for Docker volume mounts
+      devices:
+        # Hot tier devices (simulating NVMe - 2 for redundancy)
+        - path: /data/tiers/hot/vol1/device.raw
+          tier: hot
+          size: 536870912  # 512MB
+        - path: /data/tiers/hot/vol2/device.raw
+          tier: hot
+          size: 536870912  # 512MB
+        # Cold tier devices (simulating HDD - 2 for redundancy)
+        - path: /data/tiers/cold/vol1/device.raw
+          tier: cold
+          size: 536870912  # 512MB
+        - path: /data/tiers/cold/vol2/device.raw
+          tier: cold
+          size: 536870912  # 512MB
+
+    # Tier directories (alternative to raw devices)
+    tier_directories:
+      hot: /data/tiers/hot
+      cold: /data/tiers/cold
+
+# Authentication
+auth:
+  root_user: admin
+  root_password: Admin123
+  jwt_secret: ""  # Auto-generated
+
+# Storage Tiering configuration
+tiering:
+  enabled: true
+
+  # Hot cache for frequently accessed objects
+  cache:
+    enabled: true
+    max_size: 268435456  # 256MB
+    max_objects: 10000
+    ttl: 3600  # 1 hour
+    mode: write_through
+
+  # Tiering policies for automatic data lifecycle
+  policies:
+    # Move old objects to cold tier after 7 days
+    - name: archive-old-data
+      enabled: true
+      filter:
+        bucket: "*"
+        prefix: ""
+        min_size: 0
+        max_size: 0
+      transition:
+        days_after_creation: 7
+        days_after_last_access: 3
+        target_tier: cold
+
+    # Keep frequently accessed objects in hot tier
+    - name: keep-hot-active
+      enabled: true
+      filter:
+        bucket: "*"
+        prefix: ""
+      transition:
+        days_after_last_access: 1
+        target_tier: hot
+
+# Audit logging for tracking tiering operations
+audit:
+  enabled: true
+  file_path: /data/audit/audit.log
+  retention_days: 30
+  buffer_size: 1000
+  integrity_enabled: true
+  mask_sensitive_data: true
+  rotation:
+    enabled: true
+    max_size_mb: 50
+    max_backups: 5
+    max_age_days: 7
+    compress: true
+
+# Logging
+log_level: debug
+log_format: text
+
+# Metrics
+metrics:
+  enabled: true
+  port: 9090
+  path: /metrics

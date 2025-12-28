@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,14 @@ import (
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 	"github.com/rs/zerolog/log"
 )
+
+// objectMetadata stores metadata for an erasure-coded object
+type objectMetadata struct {
+	OriginalSize     int64  `json:"original_size"`
+	OriginalChecksum string `json:"original_checksum"`
+	DataShards       int    `json:"data_shards"`
+	ParityShards     int    `json:"parity_shards"`
+}
 
 // Backend implements the storage backend using erasure coding
 type Backend struct {
@@ -101,6 +110,67 @@ func (b *Backend) GetNodes() []NodeInfo {
 	return b.nodes
 }
 
+// metadataPath returns the filesystem path for object metadata
+func (b *Backend) metadataPath(bucket, key string) string {
+	hash := md5.Sum([]byte(fmt.Sprintf("%s/%s", bucket, key)))
+	hashHex := hex.EncodeToString(hash[:])
+	dir := filepath.Join(b.config.DataDir, "metadata", hashHex[:2], hashHex[2:4])
+	return filepath.Join(dir, fmt.Sprintf("%s_%s.meta", bucket, sanitizeKey(key)))
+}
+
+// writeObjectMetadata stores object metadata to a file
+func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) error {
+	path := b.metadataPath(bucket, key)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("failed to create metadata directory: %w", err)
+	}
+
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename metadata: %w", err)
+	}
+
+	return nil
+}
+
+// readObjectMetadata reads object metadata from a file
+func (b *Backend) readObjectMetadata(bucket, key string) (*objectMetadata, error) {
+	path := b.metadataPath(bucket, key)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("metadata not found for %s/%s", bucket, key)
+		}
+		return nil, fmt.Errorf("failed to read metadata: %w", err)
+	}
+
+	var meta objectMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+	}
+
+	return &meta, nil
+}
+
+// deleteObjectMetadata deletes object metadata
+func (b *Backend) deleteObjectMetadata(bucket, key string) error {
+	path := b.metadataPath(bucket, key)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete metadata: %w", err)
+	}
+	return nil
+}
+
 // PutObject stores an object with erasure coding
 func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
 	// Encode the data
@@ -174,6 +244,21 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		return nil, fmt.Errorf("too many shard write failures (%d): %v", len(errs), errs[0])
 	}
 
+	// Store object metadata for later retrieval
+	objMeta := &objectMetadata{
+		OriginalSize:     encoded.OriginalSize,
+		OriginalChecksum: encoded.OriginalChecksum,
+		DataShards:       b.config.DataShards,
+		ParityShards:     b.config.ParityShards,
+	}
+	if err := b.writeObjectMetadata(bucket, key, objMeta); err != nil {
+		log.Warn().
+			Err(err).
+			Str("bucket", bucket).
+			Str("key", key).
+			Msg("Failed to write object metadata (shards stored successfully)")
+	}
+
 	return &backend.PutResult{
 		ETag: encoded.OriginalChecksum,
 		Size: encoded.OriginalSize,
@@ -183,6 +268,22 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 
 // GetObject retrieves an object using erasure coding
 func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
+	// Read object metadata for original size
+	objMeta, err := b.readObjectMetadata(bucket, key)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("bucket", bucket).
+			Str("key", key).
+			Msg("Failed to read object metadata, attempting recovery without size info")
+		// Continue without metadata - data may have padding
+		objMeta = &objectMetadata{
+			OriginalSize: 0,
+			DataShards:   b.config.DataShards,
+			ParityShards: b.config.ParityShards,
+		}
+	}
+
 	// Collect available shards
 	totalShards := b.config.TotalShards()
 	shards := make([][]byte, totalShards)
@@ -206,14 +307,23 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 		return nil, fmt.Errorf("not enough shards available: need %d, have %d", b.config.DataShards, available)
 	}
 
-	// Decode the data
+	// Decode the data with original size for proper trimming
 	result, err := b.decoder.Decode(&DecodeInput{
-		Shards:       shards,
-		OriginalSize: 0, // Will be set from metadata
+		Shards:           shards,
+		OriginalSize:     objMeta.OriginalSize,
+		ExpectedChecksum: objMeta.OriginalChecksum,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode object: %w", err)
 	}
+
+	log.Debug().
+		Str("bucket", bucket).
+		Str("key", key).
+		Int("shards_available", available).
+		Int64("original_size", objMeta.OriginalSize).
+		Int("data_len", len(result.Data)).
+		Msg("Object decoded successfully")
 
 	return io.NopCloser(bytes.NewReader(result.Data)), nil
 }
@@ -251,6 +361,15 @@ func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 			Str("bucket", bucket).
 			Str("key", key).
 			Msg("Some shards could not be deleted")
+	}
+
+	// Delete object metadata
+	if err := b.deleteObjectMetadata(bucket, key); err != nil {
+		log.Warn().
+			Err(err).
+			Str("bucket", bucket).
+			Str("key", key).
+			Msg("Failed to delete object metadata")
 	}
 
 	return nil

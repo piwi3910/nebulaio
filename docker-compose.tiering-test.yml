@@ -1,0 +1,83 @@
+version: '3.8'
+
+# Docker Compose for testing volume redundancy and storage tiering
+#
+# This configuration creates:
+# - 2 volumes in hot tier (simulating NVMe storage)
+# - 2 volumes in cold tier (simulating HDD storage)
+#
+# Usage: docker-compose -f docker-compose.tiering-test.yml up -d
+
+services:
+  nebulaio:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+    container_name: nebulaio-tiering-test
+    ports:
+      - "9000:9000"  # S3 API
+      - "9001:9001"  # Admin/Console API
+      - "9002:9002"  # Web Console
+    volumes:
+      # Main data directory
+      - nebulaio-data:/data
+      # Hot tier volumes (simulating NVMe) - 2 volumes for redundancy
+      - hot-tier-vol1:/data/tiers/hot/vol1
+      - hot-tier-vol2:/data/tiers/hot/vol2
+      # Cold tier volumes (simulating HDD) - 2 volumes for redundancy
+      - cold-tier-vol1:/data/tiers/cold/vol1
+      - cold-tier-vol2:/data/tiers/cold/vol2
+      # Configuration file
+      - ./configs/tiering-test-config.yaml:/app/config.yaml:ro
+    environment:
+      - NEBULAIO_DATA_DIR=/data
+      - NEBULAIO_LOG_LEVEL=debug
+      - NEBULAIO_AUTH_ROOT_USER=admin
+      - NEBULAIO_AUTH_ROOT_PASSWORD=Admin123
+
+      # TLS disabled for local testing
+      - NEBULAIO_TLS_ENABLED=false
+
+      # Storage configuration - erasure coding for redundancy
+      # Uses Reed-Solomon encoding: 10 data shards + 4 parity shards
+      # Can lose up to 4 shards and still recover data
+      - NEBULAIO_STORAGE_BACKEND=erasure
+      - NEBULAIO_STORAGE_VOLUME_AUTO_CREATE=true
+      - NEBULAIO_STORAGE_VOLUME_MAX_SIZE=1073741824  # 1GB per volume for testing
+
+      # Tier directories configuration
+      - NEBULAIO_STORAGE_VOLUME_TIER_DIRECTORIES_HOT=/data/tiers/hot
+      - NEBULAIO_STORAGE_VOLUME_TIER_DIRECTORIES_COLD=/data/tiers/cold
+
+      # Enable tiering service
+      - NEBULAIO_TIERING_ENABLED=true
+
+      # Audit Logging
+      - NEBULAIO_AUDIT_ENABLED=true
+      - NEBULAIO_AUDIT_FILE_PATH=/data/audit/audit.log
+
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  nebulaio-data:
+    driver: local
+  # Hot tier volumes (2 for redundancy testing)
+  hot-tier-vol1:
+    driver: local
+  hot-tier-vol2:
+    driver: local
+  # Cold tier volumes (2 for redundancy testing)
+  cold-tier-vol1:
+    driver: local
+  cold-tier-vol2:
+    driver: local
+
+networks:
+  default:
+    name: nebulaio-tiering-test
