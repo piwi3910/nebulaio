@@ -27,6 +27,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/object"
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 	"github.com/piwi3910/nebulaio/internal/storage/fs"
+	"github.com/piwi3910/nebulaio/internal/security"
 	"github.com/piwi3910/nebulaio/internal/storage/volume"
 	"github.com/piwi3910/nebulaio/internal/tiering"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -59,6 +60,9 @@ type Server struct {
 
 	// Tiering service
 	tieringService *tiering.AdvancedService
+
+	// TLS manager
+	tlsManager *security.TLSManager
 
 	// HTTP servers
 	s3Server      *http.Server
@@ -238,6 +242,26 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 	}
 
+	// Initialize TLS if enabled
+	if cfg.TLS.Enabled {
+		hostname := cfg.NodeName
+		if hostname == "" {
+			hostname = "localhost"
+		}
+		tlsManager, err := security.NewTLSManager(&cfg.TLS, hostname)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize TLS: %w", err)
+		}
+		srv.tlsManager = tlsManager
+		log.Info().
+			Str("cert_file", tlsManager.GetCertFile()).
+			Str("ca_file", tlsManager.GetCAFile()).
+			Bool("require_client_cert", cfg.TLS.RequireClientCert).
+			Msg("TLS initialized (secure by default)")
+	} else {
+		log.Warn().Msg("TLS disabled - running in insecure mode (NOT recommended for production)")
+	}
+
 	// Setup HTTP servers
 	srv.setupS3Server()
 	srv.setupAdminServer()
@@ -285,6 +309,11 @@ func (s *Server) setupS3Server() {
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
+	}
+
+	// Apply TLS configuration if enabled
+	if s.tlsManager != nil {
+		s.s3Server.TLSConfig = s.tlsManager.GetTLSConfig()
 	}
 }
 
@@ -351,6 +380,11 @@ func (s *Server) setupAdminServer() {
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
+
+	// Apply TLS configuration if enabled
+	if s.tlsManager != nil {
+		s.adminServer.TLSConfig = s.tlsManager.GetTLSConfig()
+	}
 }
 
 func (s *Server) setupConsoleServer() {
@@ -369,6 +403,11 @@ func (s *Server) setupConsoleServer() {
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
+	}
+
+	// Apply TLS configuration if enabled
+	if s.tlsManager != nil {
+		s.consoleServer.TLSConfig = s.tlsManager.GetTLSConfig()
 	}
 }
 
@@ -413,8 +452,15 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Start S3 server
 	g.Go(func() error {
-		log.Info().Int("port", s.cfg.S3Port).Msg("Starting S3 API server")
-		if err := s.s3Server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		var err error
+		if s.tlsManager != nil {
+			log.Info().Int("port", s.cfg.S3Port).Msg("Starting S3 API server (TLS enabled)")
+			err = s.s3Server.ListenAndServeTLS(s.tlsManager.GetCertFile(), s.tlsManager.GetKeyFile())
+		} else {
+			log.Info().Int("port", s.cfg.S3Port).Msg("Starting S3 API server")
+			err = s.s3Server.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("S3 server error: %w", err)
 		}
 		return nil
@@ -422,9 +468,17 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Start Admin server
 	g.Go(func() error {
-		log.Info().Int("port", s.cfg.AdminPort).Msg("Starting Admin API server")
-		log.Info().Int("port", s.cfg.AdminPort).Msg("Prometheus metrics available at /metrics")
-		if err := s.adminServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		var err error
+		if s.tlsManager != nil {
+			log.Info().Int("port", s.cfg.AdminPort).Msg("Starting Admin API server (TLS enabled)")
+			log.Info().Int("port", s.cfg.AdminPort).Msg("Prometheus metrics available at /metrics")
+			err = s.adminServer.ListenAndServeTLS(s.tlsManager.GetCertFile(), s.tlsManager.GetKeyFile())
+		} else {
+			log.Info().Int("port", s.cfg.AdminPort).Msg("Starting Admin API server")
+			log.Info().Int("port", s.cfg.AdminPort).Msg("Prometheus metrics available at /metrics")
+			err = s.adminServer.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("Admin server error: %w", err)
 		}
 		return nil
@@ -432,8 +486,15 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Start Console server
 	g.Go(func() error {
-		log.Info().Int("port", s.cfg.ConsolePort).Msg("Starting Web Console server")
-		if err := s.consoleServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		var err error
+		if s.tlsManager != nil {
+			log.Info().Int("port", s.cfg.ConsolePort).Msg("Starting Web Console server (TLS enabled)")
+			err = s.consoleServer.ListenAndServeTLS(s.tlsManager.GetCertFile(), s.tlsManager.GetKeyFile())
+		} else {
+			log.Info().Int("port", s.cfg.ConsolePort).Msg("Starting Web Console server")
+			err = s.consoleServer.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("Console server error: %w", err)
 		}
 		return nil

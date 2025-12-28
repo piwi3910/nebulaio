@@ -63,8 +63,61 @@ type Config struct {
 	// NIM configuration (NVIDIA Inference Microservices)
 	NIM NIMConfig `mapstructure:"nim"`
 
+	// TLS configuration
+	TLS TLSConfig `mapstructure:"tls"`
+
 	// Logging
 	LogLevel string `mapstructure:"log_level"`
+}
+
+// TLSConfig holds TLS configuration for secure communications
+type TLSConfig struct {
+	// Enabled enables TLS for all HTTP servers (S3, Admin, Console)
+	// Default: true (secure by default)
+	Enabled bool `mapstructure:"enabled"`
+
+	// CertDir is the directory for storing certificates
+	// If certificates don't exist, self-signed ones will be generated
+	CertDir string `mapstructure:"cert_dir"`
+
+	// CertFile is the path to a custom TLS certificate file
+	// If not specified, a self-signed certificate will be generated
+	CertFile string `mapstructure:"cert_file"`
+
+	// KeyFile is the path to a custom TLS private key file
+	// Required if CertFile is specified
+	KeyFile string `mapstructure:"key_file"`
+
+	// CAFile is the path to a custom CA certificate for client verification
+	// If not specified, the generated CA will be used
+	CAFile string `mapstructure:"ca_file"`
+
+	// MinVersion is the minimum TLS version (1.2 or 1.3)
+	// Default: 1.2
+	MinVersion string `mapstructure:"min_version"`
+
+	// RequireClientCert enables mutual TLS (client certificate verification)
+	// Default: false (for external clients, true for internal cluster communication)
+	RequireClientCert bool `mapstructure:"require_client_cert"`
+
+	// AutoGenerate enables automatic generation of self-signed certificates
+	// Default: true
+	AutoGenerate bool `mapstructure:"auto_generate"`
+
+	// Organization for generated certificates
+	Organization string `mapstructure:"organization"`
+
+	// ValidityDays is the validity period for generated certificates in days
+	// Default: 365
+	ValidityDays int `mapstructure:"validity_days"`
+
+	// DNSNames are additional DNS names for the certificate
+	// localhost and the node name are always included
+	DNSNames []string `mapstructure:"dns_names"`
+
+	// IPAddresses are additional IP addresses for the certificate
+	// 127.0.0.1 and detected local IPs are always included
+	IPAddresses []string `mapstructure:"ip_addresses"`
 }
 
 // ClusterConfig holds cluster-related configuration
@@ -949,6 +1002,15 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("nim.enable_metrics", true)
 	v.SetDefault("nim.process_on_upload", false)
 	v.SetDefault("nim.process_content_types", []string{"image/jpeg", "image/png", "text/plain", "application/json"})
+
+	// TLS defaults (secure by default)
+	v.SetDefault("tls.enabled", true)
+	v.SetDefault("tls.cert_dir", "./data/certs")
+	v.SetDefault("tls.min_version", "1.2")
+	v.SetDefault("tls.require_client_cert", false)
+	v.SetDefault("tls.auto_generate", true)
+	v.SetDefault("tls.organization", "NebulaIO")
+	v.SetDefault("tls.validity_days", 365)
 
 	// Logging
 	v.SetDefault("log_level", "info")
