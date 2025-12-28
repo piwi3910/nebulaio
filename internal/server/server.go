@@ -28,6 +28,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 	"github.com/piwi3910/nebulaio/internal/storage/fs"
 	"github.com/piwi3910/nebulaio/internal/storage/volume"
+	"github.com/piwi3910/nebulaio/internal/tiering"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -55,6 +56,9 @@ type Server struct {
 
 	// Audit logger
 	auditLogger *audit.AuditLogger
+
+	// Tiering service
+	tieringService *tiering.AdvancedService
 
 	// HTTP servers
 	s3Server      *http.Server
@@ -184,6 +188,56 @@ func New(cfg *config.Config) (*Server, error) {
 	}
 	log.Info().Str("path", auditLogPath).Msg("Audit logger initialized")
 
+	// Initialize tiering service with volume-based storage tiers
+	// Hot tier: fast storage for frequently accessed data
+	// Warm tier: medium storage for less frequently accessed data
+	hotDataDir := filepath.Join(cfg.DataDir, "tiering", "hot")
+	warmDataDir := filepath.Join(cfg.DataDir, "tiering", "warm")
+	coldDataDir := filepath.Join(cfg.DataDir, "tiering", "cold")
+
+	hotBackend, err := volume.NewBackend(hotDataDir)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize hot tier volume backend, tiering disabled")
+	} else {
+		warmBackend, err := volume.NewBackend(warmDataDir)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize warm tier volume backend, tiering disabled")
+		} else {
+			// Create cold storage manager and register cold tier
+			coldManager := tiering.NewColdStorageManager()
+			coldBackend, err := volume.NewBackend(coldDataDir)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to initialize cold tier volume backend, cold tier disabled")
+			} else {
+				coldStorage, err := tiering.NewColdStorage(tiering.ColdStorageConfig{
+					Name:    "cold-default",
+					Type:    tiering.ColdStorageFileSystem,
+					Enabled: true,
+				}, coldBackend)
+				if err != nil {
+					log.Warn().Err(err).Msg("Failed to initialize cold tier storage, cold tier disabled")
+				} else {
+					coldManager.Register(coldStorage)
+				}
+			}
+
+			// Create advanced tiering service
+			tieringConfig := tiering.DefaultAdvancedServiceConfig()
+			tieringConfig.NodeID = cfg.NodeID
+			srv.tieringService, err = tiering.NewAdvancedService(
+				tieringConfig,
+				hotBackend,
+				warmBackend,
+				coldManager,
+			)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to initialize tiering service")
+			} else {
+				log.Info().Msg("Tiering service initialized with hot/warm/cold tiers")
+			}
+		}
+	}
+
 	// Setup HTTP servers
 	srv.setupS3Server()
 	srv.setupAdminServer()
@@ -266,6 +320,14 @@ func (s *Server) setupAdminServer() {
 
 	// Admin API handlers
 	adminHandler := admin.NewHandler(s.authService, s.bucketService, s.objectService, s.metaStore, s.discovery)
+
+	// Wire up tiering handler if tiering service is available
+	if s.tieringService != nil {
+		tieringHandler := admin.NewTieringHandler(s.tieringService)
+		adminHandler.SetTieringHandler(tieringHandler)
+		log.Info().Msg("Tiering handler registered with admin API")
+	}
+
 	r.Route("/api/v1/admin", func(r chi.Router) {
 		adminHandler.RegisterRoutes(r)
 		// Detailed health endpoint under admin API

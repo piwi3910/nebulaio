@@ -98,7 +98,11 @@ export function TieringPoliciesPage() {
           scope: scopeFilter || undefined,
           enabled: enabledFilter !== null ? enabledFilter : undefined,
         })
-        .then((res) => res.data as TieringPolicy[]),
+        .then((res) => {
+          // API returns { policies: [...], total_count: N }
+          const data = res.data as { policies: TieringPolicy[]; total_count: number } | TieringPolicy[];
+          return Array.isArray(data) ? data : data.policies || [];
+        }),
   });
 
   const createMutation = useMutation({

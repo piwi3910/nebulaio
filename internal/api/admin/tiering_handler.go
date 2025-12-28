@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/piwi3910/nebulaio/internal/tiering"
 )
 
@@ -24,15 +25,15 @@ func NewTieringHandler(service tiering.AdvancedServiceInterface) *TieringHandler
 
 // RegisterTieringRoutes registers tiering policy routes
 func (h *TieringHandler) RegisterTieringRoutes(r chi.Router) {
-	// Tiering Policies
-	r.Get("/tiering/policies", h.ListTieringPolicies)
-	r.Post("/tiering/policies", h.CreateTieringPolicy)
-	r.Get("/tiering/policies/{id}", h.GetTieringPolicy)
-	r.Put("/tiering/policies/{id}", h.UpdateTieringPolicy)
-	r.Delete("/tiering/policies/{id}", h.DeleteTieringPolicy)
-	r.Post("/tiering/policies/{id}/enable", h.EnableTieringPolicy)
-	r.Post("/tiering/policies/{id}/disable", h.DisableTieringPolicy)
-	r.Get("/tiering/policies/{id}/stats", h.GetTieringPolicyStats)
+	// Tiering Policies (matches frontend API client)
+	r.Get("/tiering-policies", h.ListTieringPolicies)
+	r.Post("/tiering-policies", h.CreateTieringPolicy)
+	r.Get("/tiering-policies/{id}", h.GetTieringPolicy)
+	r.Put("/tiering-policies/{id}", h.UpdateTieringPolicy)
+	r.Delete("/tiering-policies/{id}", h.DeleteTieringPolicy)
+	r.Post("/tiering-policies/{id}/enable", h.EnableTieringPolicy)
+	r.Post("/tiering-policies/{id}/disable", h.DisableTieringPolicy)
+	r.Get("/tiering-policies/{id}/stats", h.GetTieringPolicyStats)
 
 	// Access Stats
 	r.Get("/tiering/access-stats/{bucket}", h.GetBucketAccessStats)
@@ -113,22 +114,99 @@ func (h *TieringHandler) ListTieringPolicies(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, response)
 }
 
-// CreateTieringPolicyRequest represents the create request
+// SimpleTieringTrigger is the simplified trigger format from the frontend
+type SimpleTieringTrigger struct {
+	Type            string `json:"type"`
+	AgeDays         int    `json:"age_days,omitempty"`
+	AccessCount     int    `json:"access_count,omitempty"`
+	AccessDays      int    `json:"access_days,omitempty"`
+	CapacityPercent int    `json:"capacity_percent,omitempty"`
+}
+
+// SimpleTieringAction is the simplified action format from the frontend
+type SimpleTieringAction struct {
+	Type       string `json:"type"`
+	TargetTier string `json:"target_tier,omitempty"`
+	NotifyURL  string `json:"notify_url,omitempty"`
+}
+
+// SimpleTieringSchedule is the simplified schedule format from the frontend
+type SimpleTieringSchedule struct {
+	MaintenanceWindows []string `json:"maintenance_windows,omitempty"`
+	BlackoutWindows    []string `json:"blackout_windows,omitempty"`
+}
+
+// SimpleTieringAdvancedOptions is the simplified advanced options from the frontend
+type SimpleTieringAdvancedOptions struct {
+	RateLimit             int  `json:"rate_limit,omitempty"`
+	AntiThrashHours       int  `json:"anti_thrash_hours,omitempty"`
+	DistributedExecution  bool `json:"distributed_execution,omitempty"`
+}
+
+// CreateTieringPolicyRequest represents the create request (frontend format)
 type CreateTieringPolicyRequest struct {
-	ID          string                    `json:"id"`
-	Name        string                    `json:"name"`
-	Description string                    `json:"description"`
-	Type        tiering.PolicyType        `json:"type"`
-	Scope       tiering.PolicyScope       `json:"scope"`
-	Enabled     bool                      `json:"enabled"`
-	Priority    int                       `json:"priority"`
-	Selector    tiering.PolicySelector    `json:"selector"`
-	Triggers    []tiering.PolicyTrigger   `json:"triggers"`
-	Actions     []tiering.PolicyAction    `json:"actions"`
-	AntiThrash  tiering.AntiThrashConfig  `json:"anti_thrash"`
-	Schedule    tiering.ScheduleConfig    `json:"schedule,omitempty"`
-	RateLimit   tiering.RateLimitConfig   `json:"rate_limit,omitempty"`
-	Distributed tiering.DistributedConfig `json:"distributed,omitempty"`
+	ID              string                        `json:"id"`
+	Name            string                        `json:"name"`
+	Description     string                        `json:"description"`
+	Type            tiering.PolicyType            `json:"type"`
+	Scope           tiering.PolicyScope           `json:"scope"`
+	BucketPattern   string                        `json:"bucket_pattern,omitempty"`
+	PrefixPattern   string                        `json:"prefix_pattern,omitempty"`
+	Enabled         bool                          `json:"enabled"`
+	CronExpression  string                        `json:"cron_expression,omitempty"`
+	Triggers        []SimpleTieringTrigger        `json:"triggers"`
+	Actions         []SimpleTieringAction         `json:"actions"`
+	Schedule        *SimpleTieringSchedule        `json:"schedule,omitempty"`
+	AdvancedOptions *SimpleTieringAdvancedOptions `json:"advanced_options,omitempty"`
+}
+
+// convertSimpleTriggers converts the simple frontend trigger format to the internal format
+func convertSimpleTriggers(simpleTriggers []SimpleTieringTrigger) []tiering.PolicyTrigger {
+	triggers := make([]tiering.PolicyTrigger, len(simpleTriggers))
+	for i, st := range simpleTriggers {
+		trigger := tiering.PolicyTrigger{
+			Type: tiering.TriggerType(st.Type),
+		}
+		switch st.Type {
+		case "age":
+			trigger.Age = &tiering.AgeTrigger{
+				DaysSinceAccess: st.AgeDays,
+			}
+		case "access":
+			trigger.Access = &tiering.AccessTrigger{
+				CountThreshold: st.AccessCount,
+				PeriodMinutes:  st.AccessDays * 24 * 60, // Convert days to minutes
+			}
+		case "capacity":
+			trigger.Capacity = &tiering.CapacityTrigger{
+				HighWatermark: float64(st.CapacityPercent),
+			}
+		}
+		triggers[i] = trigger
+	}
+	return triggers
+}
+
+// convertSimpleActions converts the simple frontend action format to the internal format
+func convertSimpleActions(simpleActions []SimpleTieringAction) []tiering.PolicyAction {
+	actions := make([]tiering.PolicyAction, len(simpleActions))
+	for i, sa := range simpleActions {
+		action := tiering.PolicyAction{
+			Type: tiering.PolicyActionType(sa.Type),
+		}
+		if sa.Type == "transition" {
+			action.Transition = &tiering.TransitionActionConfig{
+				TargetTier: tiering.TierType(sa.TargetTier),
+			}
+		}
+		if sa.NotifyURL != "" {
+			action.Notify = &tiering.NotifyActionConfig{
+				Endpoint: sa.NotifyURL,
+			}
+		}
+		actions[i] = action
+	}
+	return actions
 }
 
 // CreateTieringPolicy creates a new tiering policy
@@ -141,26 +219,69 @@ func (h *TieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Generate ID if not provided
+	policyID := req.ID
+	if policyID == "" {
+		policyID = "policy-" + uuid.New().String()[:8]
+	}
+
+	// Convert simple triggers/actions to internal format
+	triggers := convertSimpleTriggers(req.Triggers)
+	actions := convertSimpleActions(req.Actions)
+
+	// Build selector from bucket/prefix patterns
+	selector := tiering.PolicySelector{}
+	if req.BucketPattern != "" {
+		selector.Buckets = []string{req.BucketPattern}
+	}
+	if req.PrefixPattern != "" {
+		selector.Prefixes = []string{req.PrefixPattern}
+	}
+
+	// Build schedule config
+	var schedule tiering.ScheduleConfig
+	schedule.Enabled = req.CronExpression != ""
+	// MaintenanceWindows and BlackoutWindows need to be MaintenanceWindow type
+	// For now, we'll leave them empty as conversion would be complex
+
+	// Build anti-thrash config from advanced options
+	var antiThrash tiering.AntiThrashConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.AntiThrashHours > 0 {
+		antiThrash.Enabled = true
+		antiThrash.MinTimeInTier = (time.Duration(req.AdvancedOptions.AntiThrashHours) * time.Hour).String()
+	}
+
+	// Build rate limit config
+	var rateLimit tiering.RateLimitConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.RateLimit > 0 {
+		rateLimit.Enabled = true
+		rateLimit.MaxObjectsPerSecond = req.AdvancedOptions.RateLimit
+	}
+
+	// Build distributed config
+	var distributed tiering.DistributedConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.DistributedExecution {
+		distributed.Enabled = true
+	}
+
 	policy := &tiering.AdvancedPolicy{
-		ID:          req.ID,
+		ID:          policyID,
 		Name:        req.Name,
 		Description: req.Description,
 		Type:        req.Type,
 		Scope:       req.Scope,
 		Enabled:     req.Enabled,
-		Priority:    req.Priority,
-		Selector:    req.Selector,
-		Triggers:    req.Triggers,
-		Actions:     req.Actions,
-		AntiThrash:  req.AntiThrash,
-		Schedule:    req.Schedule,
-		RateLimit:   req.RateLimit,
-		Distributed: req.Distributed,
+		Selector:    selector,
+		Triggers:    triggers,
+		Actions:     actions,
+		AntiThrash:  antiThrash,
+		Schedule:    schedule,
+		RateLimit:   rateLimit,
+		Distributed: distributed,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 		Version:     1,
 	}
-	// Stats will be initialized by the service
 
 	// Set defaults
 	if policy.Type == "" {
@@ -175,7 +296,7 @@ func (h *TieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.Requ
 			writeError(w, err.Error(), http.StatusConflict)
 			return
 		}
-		if strings.Contains(err.Error(), "validation") {
+		if strings.Contains(err.Error(), "invalid") {
 			writeError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -218,20 +339,56 @@ func (h *TieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Convert simple triggers/actions to internal format
+	triggers := convertSimpleTriggers(req.Triggers)
+	actions := convertSimpleActions(req.Actions)
+
+	// Build selector from bucket/prefix patterns
+	selector := tiering.PolicySelector{}
+	if req.BucketPattern != "" {
+		selector.Buckets = []string{req.BucketPattern}
+	}
+	if req.PrefixPattern != "" {
+		selector.Prefixes = []string{req.PrefixPattern}
+	}
+
+	// Build schedule config
+	var schedule tiering.ScheduleConfig
+	schedule.Enabled = req.CronExpression != ""
+
+	// Build anti-thrash config from advanced options
+	var antiThrash tiering.AntiThrashConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.AntiThrashHours > 0 {
+		antiThrash.Enabled = true
+		antiThrash.MinTimeInTier = (time.Duration(req.AdvancedOptions.AntiThrashHours) * time.Hour).String()
+	}
+
+	// Build rate limit config
+	var rateLimit tiering.RateLimitConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.RateLimit > 0 {
+		rateLimit.Enabled = true
+		rateLimit.MaxObjectsPerSecond = req.AdvancedOptions.RateLimit
+	}
+
+	// Build distributed config
+	var distributed tiering.DistributedConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.DistributedExecution {
+		distributed.Enabled = true
+	}
+
 	// Update fields
 	existing.Name = req.Name
 	existing.Description = req.Description
 	existing.Type = req.Type
 	existing.Scope = req.Scope
 	existing.Enabled = req.Enabled
-	existing.Priority = req.Priority
-	existing.Selector = req.Selector
-	existing.Triggers = req.Triggers
-	existing.Actions = req.Actions
-	existing.AntiThrash = req.AntiThrash
-	existing.Schedule = req.Schedule
-	existing.RateLimit = req.RateLimit
-	existing.Distributed = req.Distributed
+	existing.Selector = selector
+	existing.Triggers = triggers
+	existing.Actions = actions
+	existing.AntiThrash = antiThrash
+	existing.Schedule = schedule
+	existing.RateLimit = rateLimit
+	existing.Distributed = distributed
 	existing.UpdatedAt = time.Now()
 
 	if err := h.service.UpdatePolicy(ctx, existing); err != nil {
@@ -239,7 +396,7 @@ func (h *TieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.Requ
 			writeError(w, err.Error(), http.StatusConflict)
 			return
 		}
-		if strings.Contains(err.Error(), "validation") {
+		if strings.Contains(err.Error(), "invalid") {
 			writeError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
