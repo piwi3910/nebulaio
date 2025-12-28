@@ -804,40 +804,14 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 
 	switch strings.ToLower(algorithm) {
 	case "gzip":
-		gzLevel := gzip.DefaultCompression
-		if level >= 0 && level <= 9 {
-			gzLevel = level
-		}
-		writer, err := gzip.NewWriterLevel(&buf, gzLevel)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create gzip writer: %w", err)
-		}
-		if _, err := writer.Write(data); err != nil {
-			writer.Close()
-			return nil, nil, fmt.Errorf("failed to write gzip data: %w", err)
-		}
-		if err := writer.Close(); err != nil {
-			return nil, nil, fmt.Errorf("failed to close gzip writer: %w", err)
+		if err := compressGzip(&buf, data, level); err != nil {
+			return nil, nil, err
 		}
 		contentEncoding = "gzip"
 
 	case "zstd":
-		var writer *zstd.Encoder
-		var err error
-		if level >= 1 && level <= 22 {
-			writer, err = zstd.NewWriter(&buf, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
-		} else {
-			writer, err = zstd.NewWriter(&buf, zstd.WithEncoderLevel(zstd.SpeedDefault))
-		}
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create zstd writer: %w", err)
-		}
-		if _, err := writer.Write(data); err != nil {
-			writer.Close()
-			return nil, nil, fmt.Errorf("failed to write zstd data: %w", err)
-		}
-		if err := writer.Close(); err != nil {
-			return nil, nil, fmt.Errorf("failed to close zstd writer: %w", err)
+		if err := compressZstd(&buf, data, level); err != nil {
+			return nil, nil, err
 		}
 		contentEncoding = "zstd"
 
@@ -846,6 +820,51 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 	}
 
 	return bytes.NewReader(buf.Bytes()), map[string]string{"Content-Encoding": contentEncoding}, nil
+}
+
+// compressGzip compresses data using gzip and writes to the buffer
+func compressGzip(buf *bytes.Buffer, data []byte, level int) (err error) {
+	gzLevel := gzip.DefaultCompression
+	if level >= 0 && level <= 9 {
+		gzLevel = level
+	}
+	writer, err := gzip.NewWriterLevel(buf, gzLevel)
+	if err != nil {
+		return fmt.Errorf("failed to create gzip writer: %w", err)
+	}
+	defer func() {
+		if cerr := writer.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close gzip writer: %w", cerr)
+		}
+	}()
+
+	if _, err = writer.Write(data); err != nil {
+		return fmt.Errorf("failed to write gzip data: %w", err)
+	}
+	return nil
+}
+
+// compressZstd compresses data using zstd and writes to the buffer
+func compressZstd(buf *bytes.Buffer, data []byte, level int) (err error) {
+	var writer *zstd.Encoder
+	if level >= 1 && level <= 22 {
+		writer, err = zstd.NewWriter(buf, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
+	} else {
+		writer, err = zstd.NewWriter(buf, zstd.WithEncoderLevel(zstd.SpeedDefault))
+	}
+	if err != nil {
+		return fmt.Errorf("failed to create zstd writer: %w", err)
+	}
+	defer func() {
+		if cerr := writer.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close zstd writer: %w", cerr)
+		}
+	}()
+
+	if _, err = writer.Write(data); err != nil {
+		return fmt.Errorf("failed to write zstd data: %w", err)
+	}
+	return nil
 }
 
 // DecompressTransformer decompresses content
