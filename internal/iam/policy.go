@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // PolicyVersion represents the IAM policy language version.
@@ -999,7 +1000,9 @@ func (pe *PolicyEvaluator) ipMatches(ip, cidr string) bool {
 	// Parse the source IP
 	sourceIP := net.ParseIP(ip)
 	if sourceIP == nil {
-		// Invalid source IP
+		log.Warn().
+			Str("ip", ip).
+			Msg("Invalid source IP in policy condition")
 		return false
 	}
 
@@ -1008,6 +1011,9 @@ func (pe *PolicyEvaluator) ipMatches(ip, cidr string) bool {
 		// Exact IP match
 		targetIP := net.ParseIP(cidr)
 		if targetIP == nil {
+			log.Warn().
+				Str("cidr", cidr).
+				Msg("Invalid target IP in policy condition")
 			return false
 		}
 		return sourceIP.Equal(targetIP)
@@ -1017,6 +1023,10 @@ func (pe *PolicyEvaluator) ipMatches(ip, cidr string) bool {
 	_, network, err := net.ParseCIDR(cidr)
 	if err != nil {
 		// Invalid CIDR, fall back to prefix match for backwards compatibility
+		log.Warn().
+			Str("cidr", cidr).
+			Err(err).
+			Msg("Invalid CIDR notation, falling back to prefix matching")
 		return strings.HasPrefix(ip, strings.TrimSuffix(cidr, "/*"))
 	}
 

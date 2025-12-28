@@ -332,12 +332,14 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"enable_zero_copy": h.config.RDMA.EnableZeroCopy,
 			"fallback_to_tcp":  h.config.RDMA.FallbackToTCP,
 		}
+		// Note: Sensitive fields like APIKey are intentionally excluded from the response
 		configResponse["nim"] = map[string]interface{}{
-			"enabled":           h.config.NIM.Enabled,
-			"default_model":     h.config.NIM.DefaultModel,
-			"enable_streaming":  h.config.NIM.EnableStreaming,
-			"cache_results":     h.config.NIM.CacheResults,
-			"process_on_upload": h.config.NIM.ProcessOnUpload,
+			"enabled":            h.config.NIM.Enabled,
+			"default_model":      h.config.NIM.DefaultModel,
+			"enable_streaming":   h.config.NIM.EnableStreaming,
+			"cache_results":      h.config.NIM.CacheResults,
+			"process_on_upload":  h.config.NIM.ProcessOnUpload,
+			"api_key_configured": h.config.NIM.APIKey != "",
 		}
 	} else {
 		// Return placeholder defaults if config not set
@@ -382,11 +384,12 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"fallback_to_tcp":  true,
 		}
 		configResponse["nim"] = map[string]interface{}{
-			"enabled":           false,
-			"default_model":     "meta/llama-3.1-8b-instruct",
-			"enable_streaming":  true,
-			"cache_results":     true,
-			"process_on_upload": false,
+			"enabled":            false,
+			"default_model":      "meta/llama-3.1-8b-instruct",
+			"enable_streaming":   true,
+			"cache_results":      true,
+			"process_on_upload":  false,
+			"api_key_configured": false,
 		}
 	}
 

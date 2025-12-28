@@ -9,6 +9,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Service manages bucket replication
@@ -370,8 +372,11 @@ func (s *Service) ListConfigs() map[string]*Config {
 
 // ResyncBucket triggers resync of all objects in a bucket
 func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
+	log.Info().Str("bucket", bucket).Msg("Starting bucket resync")
+
 	config, err := s.GetConfig(ctx, bucket)
 	if err != nil {
+		log.Error().Err(err).Str("bucket", bucket).Msg("Failed to get replication config")
 		return err
 	}
 
@@ -387,7 +392,8 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 		return errors.New("no rules have existing object replication enabled")
 	}
 
-	// Ensure lister is available
+	// Copy lister reference under lock to avoid race conditions
+	// if SetLister is called during the resync operation
 	s.mu.RLock()
 	lister := s.lister
 	s.mu.RUnlock()
@@ -410,8 +416,17 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 			if !ok {
 				// Channel closed, done listing
 				if errorCount > 0 {
+					log.Warn().
+						Str("bucket", bucket).
+						Int64("enqueued", enqueuedCount).
+						Int64("errors", errorCount).
+						Msg("Bucket resync completed with errors")
 					return fmt.Errorf("resync completed with %d errors, %d objects enqueued", errorCount, enqueuedCount)
 				}
+				log.Info().
+					Str("bucket", bucket).
+					Int64("enqueued", enqueuedCount).
+					Msg("Bucket resync completed successfully")
 				return nil
 			}
 
@@ -425,6 +440,12 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 				// Enqueue the object for replication
 				_, err := s.queue.Enqueue(ctx, bucket, obj.Key, obj.VersionID, "PUT", rule.ID)
 				if err != nil {
+					log.Error().
+						Err(err).
+						Str("bucket", bucket).
+						Str("key", obj.Key).
+						Str("rule_id", rule.ID).
+						Msg("Failed to enqueue object for replication")
 					errorCount++
 					continue
 				}
@@ -433,10 +454,12 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 
 		case err, ok := <-errCh:
 			if ok && err != nil {
+				log.Error().Err(err).Str("bucket", bucket).Msg("Error listing objects during resync")
 				return fmt.Errorf("error listing objects: %w", err)
 			}
 
 		case <-ctx.Done():
+			log.Warn().Str("bucket", bucket).Msg("Bucket resync cancelled")
 			return ctx.Err()
 		}
 	}

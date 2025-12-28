@@ -972,18 +972,29 @@ func (o *FileOutput) compressFile(filePath string) {
 	if err != nil {
 		return
 	}
-	defer outFile.Close()
+
+	// Track if compression succeeded to determine cleanup action
+	success := false
+	defer func() {
+		outFile.Close()
+		if !success {
+			os.Remove(compressedPath)
+		}
+	}()
 
 	// Create gzip writer and compress
 	gzWriter := gzip.NewWriter(outFile)
+	defer gzWriter.Close()
+
 	if _, err := gzWriter.Write(data); err != nil {
-		os.Remove(compressedPath)
 		return
 	}
 	if err := gzWriter.Close(); err != nil {
-		os.Remove(compressedPath)
 		return
 	}
+
+	// Mark as successful before removing original
+	success = true
 
 	// Remove the original uncompressed file
 	os.Remove(filePath)
