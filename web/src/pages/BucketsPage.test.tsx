@@ -3,7 +3,7 @@ import { render, screen, waitFor, userEvent } from '../test/utils';
 import { BucketsPage } from './BucketsPage';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/mocks/server';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore, type User } from '../stores/auth';
 
 // Mock the auth store
 vi.mock('../stores/auth', () => ({
@@ -12,21 +12,27 @@ vi.mock('../stores/auth', () => ({
 
 const mockUseAuthStore = vi.mocked(useAuthStore);
 
+// Helper to create a properly typed auth state mock
+function createMockAuthState(user: User) {
+  return {
+    user,
+    accessToken: 'mock-token',
+    refreshToken: 'mock-refresh-token',
+    isAuthenticated: true,
+    setTokens: vi.fn(),
+    setUser: vi.fn(),
+    logout: vi.fn(),
+  };
+}
+
 describe('BucketsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     server.resetHandlers();
     // Default to admin user
-    mockUseAuthStore.mockReturnValue({
-      user: { id: '1', username: 'admin', role: 'admin' },
-      accessToken: 'mock-token',
-      refreshToken: 'mock-refresh-token',
-      isAuthenticated: true,
-      setTokens: vi.fn(),
-      setUser: vi.fn(),
-      logout: vi.fn(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    mockUseAuthStore.mockReturnValue(
+      createMockAuthState({ id: '1', username: 'admin', role: 'admin' })
+    );
 
     // Default handler returns empty array
     server.use(
@@ -62,16 +68,9 @@ describe('BucketsPage', () => {
   });
 
   it('hides Create Bucket button for non-admin users', async () => {
-    mockUseAuthStore.mockReturnValue({
-      user: { id: '2', username: 'user1', role: 'user' },
-      accessToken: 'mock-token',
-      refreshToken: 'mock-refresh-token',
-      isAuthenticated: true,
-      setTokens: vi.fn(),
-      setUser: vi.fn(),
-      logout: vi.fn(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    mockUseAuthStore.mockReturnValue(
+      createMockAuthState({ id: '2', username: 'user1', role: 'user' })
+    );
 
     server.use(
       http.get('/api/v1/console/buckets', () => {

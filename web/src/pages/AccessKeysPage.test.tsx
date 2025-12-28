@@ -3,7 +3,7 @@ import { render, screen, waitFor, userEvent } from '../test/utils';
 import { AccessKeysPage } from './AccessKeysPage';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/mocks/server';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore, type User } from '../stores/auth';
 
 // Mock the auth store
 vi.mock('../stores/auth', () => ({
@@ -12,20 +12,26 @@ vi.mock('../stores/auth', () => ({
 
 const mockUseAuthStore = vi.mocked(useAuthStore);
 
+// Helper to create a properly typed auth state mock
+function createMockAuthState(user: User) {
+  return {
+    user,
+    accessToken: 'mock-token',
+    refreshToken: 'mock-refresh-token',
+    isAuthenticated: true,
+    setTokens: vi.fn(),
+    setUser: vi.fn(),
+    logout: vi.fn(),
+  };
+}
+
 describe('AccessKeysPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     server.resetHandlers();
-    mockUseAuthStore.mockReturnValue({
-      user: { id: '1', username: 'admin', role: 'admin' },
-      accessToken: 'mock-token',
-      refreshToken: 'mock-refresh-token',
-      isAuthenticated: true,
-      setTokens: vi.fn(),
-      setUser: vi.fn(),
-      logout: vi.fn(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    mockUseAuthStore.mockReturnValue(
+      createMockAuthState({ id: '1', username: 'admin', role: 'admin' })
+    );
 
     // Default handler returns empty array
     server.use(

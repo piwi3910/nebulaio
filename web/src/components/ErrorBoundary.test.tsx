@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, userEvent } from '../test/utils';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -168,7 +169,7 @@ describe('ErrorBoundary', () => {
   });
 
   it('catches errors from deeply nested components', () => {
-    function DeepComponent() {
+    function DeepComponent(): React.JSX.Element {
       throw new Error('Deep error');
     }
 
@@ -245,7 +246,9 @@ describe('ErrorBoundary', () => {
     Object.defineProperty(window, 'location', {
       value: {
         ...originalLocation,
-        href: '',
+        get href() {
+          return navigatedTo;
+        },
         set href(value: string) {
           navigatedTo = value;
         },
@@ -273,7 +276,7 @@ describe('ErrorBoundary', () => {
   it('works with async errors when wrapped in error handling', async () => {
     // Note: ErrorBoundary doesn't catch async errors by default
     // This test verifies synchronous error handling
-    function SyncError() {
+    function SyncError(): React.JSX.Element {
       throw new Error('Sync error');
     }
 

@@ -1,13 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, userEvent } from '../test/utils';
 import { FilePreview } from './FilePreview';
+import type { AxiosResponse, InternalAxiosRequestConfig, AxiosHeaders } from 'axios';
+
+// Helper to create properly typed mock Axios responses
+function mockAxiosResponse<T>(data: T): AxiosResponse<T> {
+  return {
+    data,
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config: {
+      headers: {} as AxiosHeaders,
+    } as InternalAxiosRequestConfig,
+  };
+}
 
 // Mock the console API
 vi.mock('../api/client', () => ({
   consoleApi: {
     getPresignedUrl: vi.fn().mockResolvedValue({ data: { url: 'https://example.com/test' } }),
     getPresignedDownloadUrl: vi.fn().mockResolvedValue({ data: { url: 'https://example.com/download' } }),
-    getObjectContent: vi.fn().mockResolvedValue({ data: { text: () => Promise.resolve('test content') } }),
+    getObjectContent: vi.fn().mockResolvedValue({ data: new Blob(['test content'], { type: 'text/plain' }) }),
   },
 }));
 
@@ -29,10 +43,9 @@ describe('FilePreview', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockConsoleApi.getObjectContent.mockResolvedValue({
-      data: { text: () => Promise.resolve('test content') },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    mockConsoleApi.getObjectContent.mockResolvedValue(
+      mockAxiosResponse(new Blob(['test content'], { type: 'text/plain' }))
+    );
   });
 
   it('renders modal when opened', () => {
@@ -95,10 +108,9 @@ describe('FilePreview metadata tab', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockConsoleApi.getPresignedUrl.mockResolvedValue({
-      data: { url: 'https://example.com/presigned-url' },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    mockConsoleApi.getPresignedUrl.mockResolvedValue(
+      mockAxiosResponse({ url: 'https://example.com/presigned-url' })
+    );
   });
 
   it('displays object key in metadata tab', async () => {
@@ -150,10 +162,9 @@ describe('FilePreview metadata tab', () => {
 describe('FilePreview content type detection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockConsoleApi.getPresignedUrl.mockResolvedValue({
-      data: { url: 'https://example.com/presigned' },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    mockConsoleApi.getPresignedUrl.mockResolvedValue(
+      mockAxiosResponse({ url: 'https://example.com/presigned' })
+    );
   });
 
   it('detects image files', () => {
@@ -265,10 +276,9 @@ describe('FilePreview error handling', () => {
 describe('FilePreview download', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockConsoleApi.getPresignedDownloadUrl.mockResolvedValue({
-      data: { url: 'https://example.com/download' },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    mockConsoleApi.getPresignedDownloadUrl.mockResolvedValue(
+      mockAxiosResponse({ url: 'https://example.com/download' })
+    );
   });
 
   it('calls download API when button is clicked', async () => {
