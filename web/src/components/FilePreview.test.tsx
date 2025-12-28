@@ -163,7 +163,8 @@ describe('FilePreview content type detection', () => {
         onClose={vi.fn()}
       />
     );
-    expect(screen.getByText('photo.jpg')).toBeInTheDocument();
+    // File name may appear multiple times (title + metadata)
+    expect(screen.getAllByText('photo.jpg').length).toBeGreaterThan(0);
     expect(screen.getByText('JPG')).toBeInTheDocument();
   });
 
@@ -177,7 +178,7 @@ describe('FilePreview content type detection', () => {
         onClose={vi.fn()}
       />
     );
-    expect(screen.getByText('data.json')).toBeInTheDocument();
+    expect(screen.getAllByText('data.json').length).toBeGreaterThan(0);
     expect(screen.getByText('JSON')).toBeInTheDocument();
   });
 
@@ -191,7 +192,7 @@ describe('FilePreview content type detection', () => {
         onClose={vi.fn()}
       />
     );
-    expect(screen.getByText('video.mp4')).toBeInTheDocument();
+    expect(screen.getAllByText('video.mp4').length).toBeGreaterThan(0);
   });
 
   it('detects audio files', () => {
@@ -204,7 +205,7 @@ describe('FilePreview content type detection', () => {
         onClose={vi.fn()}
       />
     );
-    expect(screen.getByText('song.mp3')).toBeInTheDocument();
+    expect(screen.getAllByText('song.mp3').length).toBeGreaterThan(0);
   });
 
   it('detects PDF files', () => {
@@ -217,7 +218,7 @@ describe('FilePreview content type detection', () => {
         onClose={vi.fn()}
       />
     );
-    expect(screen.getByText('document.pdf')).toBeInTheDocument();
+    expect(screen.getAllByText('document.pdf').length).toBeGreaterThan(0);
     expect(screen.getByText('PDF')).toBeInTheDocument();
   });
 
@@ -231,7 +232,7 @@ describe('FilePreview content type detection', () => {
         onClose={vi.fn()}
       />
     );
-    expect(screen.getByText('archive.zip')).toBeInTheDocument();
+    expect(screen.getAllByText('archive.zip').length).toBeGreaterThan(0);
   });
 });
 

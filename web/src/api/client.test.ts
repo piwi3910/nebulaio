@@ -77,8 +77,9 @@ describe('adminApi', () => {
     it('listUsers returns users', async () => {
       const response = await adminApi.listUsers();
 
-      expect(response.data).toHaveProperty('users');
-      expect(response.data.users).toBeInstanceOf(Array);
+      // API returns array directly
+      expect(response.data).toBeInstanceOf(Array);
+      expect(response.data.length).toBeGreaterThan(0);
     });
 
     it('createUser sends correct data', async () => {
@@ -100,8 +101,9 @@ describe('adminApi', () => {
     it('listBuckets returns buckets', async () => {
       const response = await adminApi.listBuckets();
 
-      expect(response.data).toHaveProperty('buckets');
-      expect(response.data.buckets).toBeInstanceOf(Array);
+      // API returns array directly
+      expect(response.data).toBeInstanceOf(Array);
+      expect(response.data.length).toBeGreaterThan(0);
     });
 
     it('createBucket sends correct data', async () => {
