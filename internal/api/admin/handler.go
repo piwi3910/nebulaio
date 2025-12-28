@@ -19,11 +19,12 @@ import (
 
 // Handler handles Admin API requests
 type Handler struct {
-	auth      *auth.Service
-	bucket    *bucket.Service
-	object    *object.Service
-	store     metadata.Store
-	discovery *cluster.Discovery
+	auth           *auth.Service
+	bucket         *bucket.Service
+	object         *object.Service
+	store          metadata.Store
+	discovery      *cluster.Discovery
+	tieringHandler *TieringHandler
 }
 
 // NewHandler creates a new Admin API handler
@@ -35,6 +36,11 @@ func NewHandler(authService *auth.Service, bucketService *bucket.Service, object
 		store:     store,
 		discovery: discovery,
 	}
+}
+
+// SetTieringHandler sets the tiering handler for tiering policy management
+func (h *Handler) SetTieringHandler(tieringHandler *TieringHandler) {
+	h.tieringHandler = tieringHandler
 }
 
 // RegisterRoutes registers Admin API routes
@@ -112,6 +118,11 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 		// AI/ML Features
 		h.RegisterAIMLRoutes(r)
+
+		// Tiering Policies (if tiering handler is set)
+		if h.tieringHandler != nil {
+			h.tieringHandler.RegisterTieringRoutes(r)
+		}
 	})
 }
 

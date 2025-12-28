@@ -426,6 +426,27 @@ func (s *AdvancedService) ListPolicies(ctx context.Context) ([]*AdvancedPolicy, 
 	return s.policyStore.List(ctx)
 }
 
+// ListPoliciesByType returns policies of a specific type
+func (s *AdvancedService) ListPoliciesByType(ctx context.Context, policyType PolicyType) ([]*AdvancedPolicy, error) {
+	return s.policyStore.ListByType(ctx, policyType)
+}
+
+// ListPoliciesByScope returns policies of a specific scope
+func (s *AdvancedService) ListPoliciesByScope(ctx context.Context, scope PolicyScope) ([]*AdvancedPolicy, error) {
+	all, err := s.policyStore.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*AdvancedPolicy
+	for _, p := range all {
+		if p.Scope == scope {
+			result = append(result, p)
+		}
+	}
+	return result, nil
+}
+
 // GetPolicyStats returns statistics for a policy
 func (s *AdvancedService) GetPolicyStats(ctx context.Context, id string) (*PolicyStats, error) {
 	return s.policyStore.GetStats(ctx, id)
