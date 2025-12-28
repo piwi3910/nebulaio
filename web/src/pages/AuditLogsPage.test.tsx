@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '../test/utils';
+import { render, screen } from '../test/utils';
 import { AuditLogsPage } from './AuditLogsPage';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/mocks/server';

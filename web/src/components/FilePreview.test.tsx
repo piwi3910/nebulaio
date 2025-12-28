@@ -31,6 +31,7 @@ describe('FilePreview', () => {
     vi.clearAllMocks();
     mockConsoleApi.getObjectContent.mockResolvedValue({
       data: { text: () => Promise.resolve('test content') },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
   });
 
@@ -96,6 +97,7 @@ describe('FilePreview metadata tab', () => {
     vi.clearAllMocks();
     mockConsoleApi.getPresignedUrl.mockResolvedValue({
       data: { url: 'https://example.com/presigned-url' },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
   });
 
@@ -150,6 +152,7 @@ describe('FilePreview content type detection', () => {
     vi.clearAllMocks();
     mockConsoleApi.getPresignedUrl.mockResolvedValue({
       data: { url: 'https://example.com/presigned' },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
   });
 
@@ -264,6 +267,7 @@ describe('FilePreview download', () => {
     vi.clearAllMocks();
     mockConsoleApi.getPresignedDownloadUrl.mockResolvedValue({
       data: { url: 'https://example.com/download' },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
   });
 

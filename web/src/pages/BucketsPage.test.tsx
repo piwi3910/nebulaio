@@ -12,15 +12,6 @@ vi.mock('../stores/auth', () => ({
 
 const mockUseAuthStore = vi.mocked(useAuthStore);
 
-// Default bucket for tests that need data
-const mockBucket = {
-  name: 'test-bucket',
-  created_at: '2024-01-01T00:00:00Z',
-  region: 'us-east-1',
-  storage_class: 'STANDARD',
-  versioning: 'Disabled',
-};
-
 describe('BucketsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -34,6 +25,7 @@ describe('BucketsPage', () => {
       setTokens: vi.fn(),
       setUser: vi.fn(),
       logout: vi.fn(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     // Default handler returns empty array
@@ -78,6 +70,7 @@ describe('BucketsPage', () => {
       setTokens: vi.fn(),
       setUser: vi.fn(),
       logout: vi.fn(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     server.use(

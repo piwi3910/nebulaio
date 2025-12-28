@@ -24,6 +24,7 @@ describe('AccessKeysPage', () => {
       setTokens: vi.fn(),
       setUser: vi.fn(),
       logout: vi.fn(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     // Default handler returns empty array
