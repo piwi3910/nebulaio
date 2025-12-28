@@ -13,6 +13,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/piwi3910/nebulaio/internal/cluster"
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 	"github.com/rs/zerolog/log"
 )
@@ -40,6 +41,10 @@ type Backend struct {
 
 	// Local node info
 	localNodeID string
+
+	// Placement group manager for distributed shard placement (optional)
+	// When set, uses cluster placement groups for node selection
+	placementGroupMgr *cluster.PlacementGroupManager
 }
 
 // New creates a new erasure coding backend
@@ -68,16 +73,30 @@ func New(config Config, localNodeID string) (*Backend, error) {
 		return nil, fmt.Errorf("failed to create uploads directory: %w", err)
 	}
 
-	return &Backend{
-		config:       config,
-		encoder:      encoder,
-		decoder:      decoder,
-		shardManager: shardManager,
-		placement:    NewConsistentHashPlacement(100),
-		nodes:        make([]NodeInfo, 0),
-		uploadsDir:   uploadsDir,
-		localNodeID:  localNodeID,
-	}, nil
+	b := &Backend{
+		config:            config,
+		encoder:           encoder,
+		decoder:           decoder,
+		shardManager:      shardManager,
+		placement:         NewConsistentHashPlacement(100),
+		nodes:             make([]NodeInfo, 0),
+		uploadsDir:        uploadsDir,
+		localNodeID:       localNodeID,
+		placementGroupMgr: config.PlacementGroupManager,
+	}
+
+	// If placement group manager is provided, log distributed mode
+	if b.placementGroupMgr != nil {
+		localGroup := b.placementGroupMgr.LocalGroup()
+		if localGroup != nil {
+			log.Info().
+				Str("placement_group", string(localGroup.ID)).
+				Int("nodes_in_group", len(localGroup.Nodes)).
+				Msg("Erasure backend using placement group for shard distribution")
+		}
+	}
+
+	return b, nil
 }
 
 // Init initializes the storage backend
@@ -108,6 +127,35 @@ func (b *Backend) GetNodes() []NodeInfo {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.nodes
+}
+
+// GetPlacementNodesForObject returns the nodes that should store shards for an object.
+// If a placement group manager is configured, uses hash-based distribution across
+// the placement group nodes. Otherwise, falls back to the local consistent hash placement.
+func (b *Backend) GetPlacementNodesForObject(bucket, key string) ([]string, error) {
+	if b.placementGroupMgr != nil {
+		totalShards := b.config.DataShards + b.config.ParityShards
+		return b.placementGroupMgr.GetShardPlacementNodesForObject(bucket, key, totalShards)
+	}
+	// Fallback to local placement (single-node mode)
+	return nil, nil
+}
+
+// HasPlacementGroup returns true if this backend is configured with a placement group manager
+func (b *Backend) HasPlacementGroup() bool {
+	return b.placementGroupMgr != nil
+}
+
+// GetPlacementGroupID returns the local placement group ID if configured
+func (b *Backend) GetPlacementGroupID() string {
+	if b.placementGroupMgr == nil {
+		return ""
+	}
+	localGroup := b.placementGroupMgr.LocalGroup()
+	if localGroup == nil {
+		return ""
+	}
+	return string(localGroup.ID)
 }
 
 // metadataPath returns the filesystem path for object metadata

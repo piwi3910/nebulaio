@@ -221,10 +221,16 @@ func New(cfg *config.Config) (*Server, error) {
 				// Fallback to preset
 				erasureCfg = erasure.ConfigFromPreset(erasure.PresetStandard, dataDir)
 			}
+
+			// Attach placement group manager for distributed shard distribution
+			// This enables multi-node erasure coding when placement groups are configured
+			erasureCfg.PlacementGroupManager = srv.placementGroupMgr
+
 			log.Info().
 				Str("tier", tierName).
 				Int("data_shards", erasureCfg.DataShards).
 				Int("parity_shards", erasureCfg.ParityShards).
+				Bool("distributed", srv.placementGroupMgr != nil).
 				Msg("Initializing erasure coded storage")
 			return erasure.New(erasureCfg, cfg.NodeID)
 		case "volume":

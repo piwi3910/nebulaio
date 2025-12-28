@@ -2,6 +2,8 @@ package erasure
 
 import (
 	"fmt"
+
+	"github.com/piwi3910/nebulaio/internal/cluster"
 )
 
 // Config holds erasure coding configuration
@@ -17,6 +19,10 @@ type Config struct {
 
 	// DataDir is the local directory for storing shards
 	DataDir string `json:"data_dir" mapstructure:"data_dir"`
+
+	// PlacementGroupManager is optional - when set, shards are distributed across
+	// nodes in the placement group. When nil, local-only erasure coding is used.
+	PlacementGroupManager *cluster.PlacementGroupManager `json:"-" mapstructure:"-"`
 }
 
 // DefaultConfig returns the default erasure coding configuration
