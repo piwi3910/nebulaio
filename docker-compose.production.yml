@@ -2,12 +2,23 @@
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.production.yml up -d
 #
 # This overlay enables all advanced features with production-ready defaults.
+# TLS is enabled by default with auto-generated certificates.
 
 version: '3.8'
 
 services:
   nebulaio:
     environment:
+      # TLS Configuration (enabled by default)
+      # Auto-generated certificates are stored in /data/certs
+      # For production with custom certificates, mount them and set:
+      # - NEBULAIO_TLS_CERT_FILE=/etc/nebulaio/certs/server.crt
+      # - NEBULAIO_TLS_KEY_FILE=/etc/nebulaio/certs/server.key
+      # - NEBULAIO_TLS_CA_FILE=/etc/nebulaio/certs/ca.crt
+      - NEBULAIO_TLS_MIN_VERSION=1.2
+      - NEBULAIO_TLS_ORGANIZATION=NebulaIO
+      - NEBULAIO_TLS_VALIDITY_DAYS=365
+
       # DRAM Cache
       - NEBULAIO_CACHE_ENABLED=true
       - NEBULAIO_CACHE_MAX_SIZE=8589934592

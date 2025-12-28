@@ -20,6 +20,14 @@ services:
       - NEBULAIO_AUTH_ROOT_USER=admin
       - NEBULAIO_AUTH_ROOT_PASSWORD=Admin123
 
+      # TLS is enabled by default with auto-generated certificates
+      # The certificates are stored in /data/certs
+      # To use custom certificates:
+      # - NEBULAIO_TLS_CERT_FILE=/data/certs/custom-server.crt
+      # - NEBULAIO_TLS_KEY_FILE=/data/certs/custom-server.key
+      # To disable TLS (NOT recommended):
+      # - NEBULAIO_TLS_ENABLED=false
+
       # DRAM Cache (uncomment to enable)
       # - NEBULAIO_CACHE_ENABLED=true
       # - NEBULAIO_CACHE_MAX_SIZE=8589934592
@@ -92,7 +100,8 @@ services:
 
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health/ready"]
+      # Use HTTPS since TLS is enabled by default
+      test: ["CMD", "wget", "--no-check-certificate", "--no-verbose", "--tries=1", "--spider", "https://localhost:9001/health/ready"]
       interval: 30s
       timeout: 10s
       retries: 3

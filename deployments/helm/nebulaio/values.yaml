@@ -1011,6 +1011,42 @@ keyRotation:
     # -- Batch size for re-encryption
     batchSize: 1000
 
+# TLS Configuration (Secure by Default)
+# NebulaIO is secure by default with TLS enabled
+tls:
+  # -- Enable TLS encryption (enabled by default for security)
+  enabled: true
+  # -- Auto-generate self-signed certificates if none provided
+  autoGenerate: true
+  # -- Certificate directory for auto-generated certificates
+  certDir: /data/certs
+  # -- Path to custom TLS certificate (overrides auto-generation)
+  certFile: ""
+  # -- Path to custom TLS private key (overrides auto-generation)
+  keyFile: ""
+  # -- Path to CA certificate (for mTLS or custom CA)
+  caFile: ""
+  # -- Minimum TLS version: "1.2" or "1.3"
+  minVersion: "1.2"
+  # -- Require client certificates (enables mTLS)
+  requireClientCert: false
+  # -- Organization name for auto-generated certificates
+  organization: NebulaIO
+  # -- Validity period in days for auto-generated server certificates
+  validityDays: 365
+  # -- Additional DNS names for certificate SAN
+  dnsNames: []
+  # -- Additional IP addresses for certificate SAN
+  ipAddresses: []
+  # -- Use existing secret for TLS certificates
+  existingSecret: ""
+  # -- Key in existing secret for certificate
+  existingSecretCertKey: tls.crt
+  # -- Key in existing secret for private key
+  existingSecretKeyKey: tls.key
+  # -- Key in existing secret for CA certificate
+  existingSecretCaKey: ca.crt
+
 # mTLS for Internal Communication
 # Mutual TLS between cluster nodes
 mtls:

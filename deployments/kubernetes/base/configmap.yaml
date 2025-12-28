@@ -16,6 +16,21 @@ data:
     admin_port: 9001
     console_port: 9002
 
+    # TLS Configuration (Secure by Default)
+    # NebulaIO is secure by default with TLS enabled and auto-generated certificates
+    tls:
+      enabled: true              # TLS enabled by default
+      auto_generate: true        # Auto-generate self-signed certificates
+      cert_dir: /data/certs      # Certificate storage directory
+      min_version: "1.2"         # Minimum TLS 1.2
+      require_client_cert: false # Enable for mTLS
+      organization: NebulaIO
+      validity_days: 365
+      # For custom certificates, uncomment and set:
+      # cert_file: /etc/nebulaio/certs/server.crt
+      # key_file: /etc/nebulaio/certs/server.key
+      # ca_file: /etc/nebulaio/certs/ca.crt
+
     cluster:
       bootstrap: ${NEBULAIO_CLUSTER_BOOTSTRAP:-false}
       shard_id: 1

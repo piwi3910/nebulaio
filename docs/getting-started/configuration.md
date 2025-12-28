@@ -46,14 +46,28 @@ All options can be set via environment variables using the `NEBULAIO_` prefix. N
 
 ### TLS Configuration
 
+NebulaIO is **secure by default** with TLS enabled and automatic certificate generation.
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `tls.enabled` | bool | `false` | Enable TLS encryption |
-| `tls.cert_file` | string | - | Path to TLS certificate |
-| `tls.key_file` | string | - | Path to TLS private key |
+| `tls.enabled` | bool | `true` | Enable TLS encryption (enabled by default) |
+| `tls.auto_generate` | bool | `true` | Auto-generate self-signed certificates if none provided |
+| `tls.cert_dir` | string | `./data/certs` | Directory for storing certificates |
+| `tls.cert_file` | string | - | Path to TLS certificate (overrides auto-generation) |
+| `tls.key_file` | string | - | Path to TLS private key (overrides auto-generation) |
 | `tls.ca_file` | string | - | Path to CA certificate for mTLS |
-| `tls.client_auth` | string | `none` | Client auth: `none`, `request`, `require` |
-| `tls.min_version` | string | `TLS12` | Minimum TLS version |
+| `tls.require_client_cert` | bool | `false` | Require client certificates (mTLS) |
+| `tls.min_version` | string | `1.2` | Minimum TLS version: `1.2` or `1.3` |
+| `tls.organization` | string | `NebulaIO` | Organization name for auto-generated certificates |
+| `tls.validity_days` | int | `365` | Validity period for auto-generated server certificates |
+| `tls.dns_names` | list | `[]` | Additional DNS names for certificate SAN |
+| `tls.ip_addresses` | list | `[]` | Additional IP addresses for certificate SAN |
+
+**Note:** When `auto_generate` is enabled and no certificates are provided, NebulaIO automatically:
+- Creates a CA certificate (10-year validity)
+- Generates a server certificate signed by the CA
+- Detects and includes all local IP addresses in the certificate SAN
+- Regenerates certificates 30 days before expiry
 
 ---
 
@@ -220,6 +234,11 @@ auth:
   root_user: admin
   root_password: admin123
 
+# TLS is enabled by default with auto-generated certificates
+# Uncomment to disable for local development only:
+# tls:
+#   enabled: false
+
 log_level: debug
 log_format: text
 ```
@@ -254,10 +273,19 @@ log_level: info
 node_id: prod-node-1
 node_name: nebulaio-prod-1
 
+# TLS is enabled by default with auto-generated certificates
+# For production, you can either:
+# 1. Use auto-generated certificates (default)
+# 2. Provide your own certificates:
 tls:
   enabled: true
-  cert_file: /etc/nebulaio/certs/server.crt
-  key_file: /etc/nebulaio/certs/server.key
+  # Option 1: Auto-generate (default - just ensure cert_dir is persistent)
+  auto_generate: true
+  cert_dir: /etc/nebulaio/certs
+  # Option 2: Use custom certificates
+  # cert_file: /etc/nebulaio/certs/server.crt
+  # key_file: /etc/nebulaio/certs/server.key
+  # ca_file: /etc/nebulaio/certs/ca.crt
 
 storage:
   data_dir: /var/lib/nebulaio

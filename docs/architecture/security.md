@@ -150,18 +150,36 @@ S3-compatible canned ACLs for object-level permissions:
 
 ### TLS for Transport
 
-All external communication encrypted with TLS 1.2+:
+NebulaIO is **secure by default** with TLS enabled and automatic certificate generation. All external communication is encrypted with TLS 1.2+:
 
+```yaml
+# TLS is enabled by default - this shows the defaults
+tls:
+  enabled: true              # TLS enabled by default
+  auto_generate: true        # Auto-generate self-signed certificates
+  cert_dir: ./data/certs     # Certificate storage directory
+  min_version: "1.2"         # Minimum TLS 1.2
+  require_client_cert: false # Enable for mTLS
+  organization: NebulaIO
+  validity_days: 365
+```
+
+**Using custom certificates:**
 ```yaml
 tls:
   enabled: true
-  cert_file: /etc/nebulaio/tls.crt
-  key_file: /etc/nebulaio/tls.key
-  min_version: "1.2"
-  auto_tls:
-    enabled: true
-    domain: storage.example.com
+  cert_file: /etc/nebulaio/certs/server.crt
+  key_file: /etc/nebulaio/certs/server.key
+  ca_file: /etc/nebulaio/certs/ca.crt  # Optional, for mTLS
+  min_version: "1.3"
 ```
+
+**Auto-generated certificate features:**
+- ECDSA P-256 keys for performance and security
+- CA certificate with 10-year validity
+- Server certificates with configurable validity (default 365 days)
+- Automatic inclusion of all local IP addresses in SAN
+- Auto-renewal 30 days before expiry
 
 ### Server-Side Encryption (SSE-S3)
 
