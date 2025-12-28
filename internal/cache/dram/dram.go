@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/piwi3910/nebulaio/internal/metrics"
 	"github.com/rs/zerolog/log"
 )
 
@@ -143,6 +144,12 @@ type Cache struct {
 	opCount                int64
 	peerCacheWriteFailures int64 // failed attempts to cache entries from peers
 
+	// Rate limiting for peer cache failure logs
+	// Logs first 5 failures, then 1 per 100 thereafter to prevent log flooding
+	peerCacheLogCount     int64 // total failures since last summary
+	peerCacheLastLogTime  int64 // unix nano of last log emission
+	peerCacheLogBurstLeft int64 // remaining burst allowance
+
 	// Prefetch tracking
 	accessPatterns map[string]*accessPattern
 	patternMu      sync.RWMutex
@@ -197,12 +204,13 @@ func New(config Config) *Cache {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	c := &Cache{
-		config:         config,
-		shards:         make([]*shard, config.ShardCount),
-		accessPatterns: make(map[string]*accessPattern),
-		peerClients:    make(map[string]*peerClient),
-		ctx:            ctx,
-		cancel:         cancel,
+		config:                config,
+		shards:                make([]*shard, config.ShardCount),
+		accessPatterns:        make(map[string]*accessPattern),
+		peerClients:           make(map[string]*peerClient),
+		peerCacheLogBurstLeft: 5, // Allow first 5 logs before rate limiting
+		ctx:                   ctx,
+		cancel:                cancel,
 	}
 
 	// Initialize shards
@@ -259,10 +267,31 @@ func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 				// Cache locally for future access - log if caching fails but don't fail the get
 				if putErr := c.Put(ctx, key, entry.Data, entry.ContentType, entry.ETag); putErr != nil {
 					atomic.AddInt64(&c.peerCacheWriteFailures, 1)
-					log.Warn().
-						Err(putErr).
-						Str("key", key).
-						Msg("failed to cache entry retrieved from peer - this may impact cache hit rate and performance")
+					metrics.RecordCachePeerWriteFailure()
+
+					// Rate-limited logging to prevent log flooding during persistent failures
+					// Allow first 5 logs (burst), then 1 per 100 failures
+					count := atomic.AddInt64(&c.peerCacheLogCount, 1)
+					burstLeft := atomic.LoadInt64(&c.peerCacheLogBurstLeft)
+
+					shouldLog := false
+					if burstLeft > 0 {
+						// Use burst allowance
+						if atomic.CompareAndSwapInt64(&c.peerCacheLogBurstLeft, burstLeft, burstLeft-1) {
+							shouldLog = true
+						}
+					} else if count%100 == 0 {
+						// Log every 100th failure after burst exhausted
+						shouldLog = true
+					}
+
+					if shouldLog {
+						log.Warn().
+							Err(putErr).
+							Str("key", key).
+							Int64("total_failures", count).
+							Msg("failed to cache entry retrieved from peer - this may impact cache hit rate and performance")
+					}
 				}
 				atomic.AddInt64(&c.bytesServed, entry.Size)
 				return entry, true

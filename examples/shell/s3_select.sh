@@ -5,10 +5,10 @@
 #   - AWS CLI v2 installed
 #   - jq installed for JSON processing
 #
-# Configuration:
-#   export NEBULAIO_ENDPOINT="http://localhost:9000"
+# Configuration (required environment variables):
+#   export NEBULAIO_ENDPOINT="https://localhost:9000"
 #   export AWS_ACCESS_KEY_ID="admin"
-#   export AWS_SECRET_ACCESS_KEY="admin123"
+#   export AWS_SECRET_ACCESS_KEY="your-secure-password"  # Required, min 12 chars
 
 set -e
 

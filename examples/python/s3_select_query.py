@@ -11,9 +11,13 @@ import boto3
 from botocore.config import Config
 
 # Configuration
-ENDPOINT = os.getenv("NEBULAIO_ENDPOINT", "http://localhost:9000")
+# Note: Set credentials via environment variables (no defaults for security)
+ENDPOINT = os.getenv("NEBULAIO_ENDPOINT", "https://localhost:9000")
 ACCESS_KEY = os.getenv("NEBULAIO_ACCESS_KEY", "admin")
-SECRET_KEY = os.getenv("NEBULAIO_SECRET_KEY", "admin123")
+SECRET_KEY = os.getenv("NEBULAIO_SECRET_KEY")  # Required - set via environment
+
+if not SECRET_KEY:
+    raise ValueError("NEBULAIO_SECRET_KEY environment variable is required")
 
 
 def get_s3_client():

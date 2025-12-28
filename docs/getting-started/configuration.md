@@ -539,7 +539,7 @@ cluster:
 
 auth:
   root_user: admin
-  root_password: admin123
+  root_password: ${NEBULAIO_AUTH_ROOT_PASSWORD}  # Required, min 12 chars
 
 # TLS is enabled by default with auto-generated certificates
 # Uncomment to disable for local development only:

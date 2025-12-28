@@ -27,11 +27,11 @@ This guide helps diagnose and resolve common issues with NebulaIO deployments.
 # Check service status
 systemctl status nebulaio
 
-# Quick health check
-curl -s http://localhost:9000/minio/health/live
+# Quick health check (use -k for self-signed certificates since TLS is enabled by default)
+curl -sk https://localhost:9000/minio/health/live
 
 # Detailed health check
-curl -s http://localhost:9001/api/v1/health | jq
+curl -sk https://localhost:9001/api/v1/health | jq
 
 # Cluster status
 nebulaio cluster status

@@ -49,47 +49,57 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 
 ### AI/ML & High-Performance Features (2025)
 
-#### S3 Express One Zone
+> **Feature Status Legend:**
+> - ![Stable](https://img.shields.io/badge/status-stable-brightgreen) Production-ready
+> - ![Beta](https://img.shields.io/badge/status-beta-yellow) Feature complete, testing in progress
+> - ![Experimental](https://img.shields.io/badge/status-experimental-orange) Early development, API may change
+> - ![Planned](https://img.shields.io/badge/status-planned-lightgrey) Roadmap item
+
+#### S3 Express One Zone ![Beta](https://img.shields.io/badge/status-beta-yellow)
 
 - **Atomic Appends** - Append data to objects for streaming workloads
 - **Accelerated PUT/LIST** - Sub-millisecond latency for hot data
 - **Directory Buckets** - Optimized for single-zone deployments
 
-#### Apache Iceberg
+#### Apache Iceberg ![Experimental](https://img.shields.io/badge/status-experimental-orange)
 
 - **Native Tables** - First-class Iceberg table format support
 - **REST Catalog** - Standard Iceberg REST catalog API
 - **ACID Transactions** - Full transaction support with snapshot isolation
 
-#### MCP Server (Model Context Protocol)
+#### MCP Server (Model Context Protocol) ![Beta](https://img.shields.io/badge/status-beta-yellow)
 
 - **AI Agent Integration** - Native support for Claude, ChatGPT, and other AI agents
 - **Tool Execution** - Agents can read, write, and manage objects
 - **Resource Access** - Secure access to bucket contents for AI workloads
 
-#### GPUDirect Storage
+#### GPUDirect Storage ![Experimental](https://img.shields.io/badge/status-experimental-orange)
 
 - **Zero-Copy Transfers** - Direct GPU-to-storage data paths
 - **NVIDIA GDS Support** - Bypass CPU for AI/ML training data loading
 - **Multi-GPU** - Support for peer-to-peer GPU transfers
+- *Requires: NVIDIA GPU (Volta+), CUDA 11.4+, NVMe storage*
 
-#### BlueField DPU Support
+#### BlueField DPU Support ![Experimental](https://img.shields.io/badge/status-experimental-orange)
 
 - **Crypto Offload** - AES-GCM encryption on NVIDIA SmartNIC
 - **Compression Offload** - Hardware-accelerated Deflate/LZ4
 - **Network Acceleration** - RDMA and storage offload via DPU
+- *Requires: BlueField-2/3 DPU, DOCA 2.0+*
 
-#### S3 over RDMA
+#### S3 over RDMA ![Experimental](https://img.shields.io/badge/status-experimental-orange)
 
 - **Ultra-Low Latency** - Sub-10μs object access via RDMA
 - **Zero-Copy** - Direct memory transfers between client and server
 - **libibverbs Integration** - Full verbs API support for InfiniBand/RoCE
+- *Requires: ConnectX-5+ NIC, MLNX_OFED 5.4+*
 
-#### NVIDIA NIM Integration
+#### NVIDIA NIM Integration ![Beta](https://img.shields.io/badge/status-beta-yellow)
 
 - **Inference on Objects** - Run AI inference on stored data
 - **Model Support** - LLM, Vision, Audio, Multimodal, Embedding models
 - **Streaming** - Real-time inference with streaming responses
+- *Requires: NVIDIA API key or local GPU for self-hosted NIM*
 
 ## Architecture
 
@@ -186,7 +196,7 @@ docker run -p 9000:9000 -p 9001:9001 -v nebulaio-data:/data nebulaio:latest
 | `NEBULAIO_S3_PORT` | S3 API port | `9000` |
 | `NEBULAIO_ADMIN_PORT` | Admin/Console API port | `9001` |
 | `NEBULAIO_AUTH_ROOT_USER` | Initial admin username | `admin` |
-| `NEBULAIO_AUTH_ROOT_PASSWORD` | Initial admin password | `admin123` |
+| `NEBULAIO_AUTH_ROOT_PASSWORD` | Initial admin password | **Required** (min 12 chars) |
 | `NEBULAIO_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
 
 #### AI/ML Feature Environment Variables

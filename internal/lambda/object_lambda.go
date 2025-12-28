@@ -779,18 +779,36 @@ func (t *ConvertJSONTransformer) Transform(ctx context.Context, input io.Reader,
 // CompressTransformer compresses content
 type CompressTransformer struct{}
 
-// MaxTransformSize is the maximum size of data that can be transformed in memory (100MB)
-const MaxTransformSize = 100 * 1024 * 1024
+// DefaultMaxTransformSize is the default maximum size of data that can be transformed in memory (100MB)
+const DefaultMaxTransformSize = 100 * 1024 * 1024
+
+// maxTransformSize is the configurable maximum transform size (defaults to DefaultMaxTransformSize)
+var maxTransformSize int64 = DefaultMaxTransformSize
+
+// SetMaxTransformSize sets the maximum size of data that can be transformed in memory
+// This should be called during initialization before any transformations occur
+// Warning: Setting this too high may cause memory exhaustion during transformation operations
+func SetMaxTransformSize(size int64) {
+	if size > 0 {
+		maxTransformSize = size
+	}
+}
+
+// GetMaxTransformSize returns the current maximum transform size
+func GetMaxTransformSize() int64 {
+	return maxTransformSize
+}
 
 func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
 	// Use LimitReader to prevent memory exhaustion from large objects
-	limitedReader := io.LimitReader(input, MaxTransformSize+1)
+	maxSize := GetMaxTransformSize()
+	limitedReader := io.LimitReader(input, maxSize+1)
 	data, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(data) > MaxTransformSize {
-		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", MaxTransformSize)
+	if int64(len(data)) > maxSize {
+		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", maxSize)
 	}
 
 	// Get compression algorithm from params (default: gzip)
@@ -880,13 +898,14 @@ type DecompressTransformer struct{}
 
 func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
 	// Use LimitReader to prevent memory exhaustion from large objects
-	limitedReader := io.LimitReader(input, MaxTransformSize+1)
+	maxSize := GetMaxTransformSize()
+	limitedReader := io.LimitReader(input, maxSize+1)
 	data, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(data) > MaxTransformSize {
-		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", MaxTransformSize)
+	if int64(len(data)) > maxSize {
+		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", maxSize)
 	}
 
 	// Get compression algorithm from params (auto-detect if not specified)
@@ -917,13 +936,13 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 		}
 		defer func() { _ = reader.Close() }()
 		// Limit decompressed size to prevent decompression bombs
-		limitedReader := io.LimitReader(reader, MaxTransformSize+1)
-		result, err = io.ReadAll(limitedReader)
+		decompressLimit := io.LimitReader(reader, maxSize+1)
+		result, err = io.ReadAll(decompressLimit)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to decompress gzip data: %w", err)
 		}
-		if len(result) > MaxTransformSize {
-			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", MaxTransformSize)
+		if int64(len(result)) > maxSize {
+			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
 		}
 
 	case "zstd":
@@ -933,13 +952,13 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 		}
 		defer decoder.Close()
 		// Limit decompressed size to prevent decompression bombs
-		limitedReader := io.LimitReader(decoder, MaxTransformSize+1)
-		result, err = io.ReadAll(limitedReader)
+		decompressLimit := io.LimitReader(decoder, maxSize+1)
+		result, err = io.ReadAll(decompressLimit)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to decompress zstd data: %w", err)
 		}
-		if len(result) > MaxTransformSize {
-			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", MaxTransformSize)
+		if int64(len(result)) > maxSize {
+			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
 		}
 
 	default:

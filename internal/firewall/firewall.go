@@ -67,6 +67,20 @@ type RateLimitConfig struct {
 
 	// BucketLimits are per-bucket rate limit overrides
 	BucketLimits map[string]int `json:"bucketLimits" yaml:"bucket_limits"`
+
+	// OperationLimits are per-operation rate limit overrides
+	// Keys are operation names like "PutObject", "GetObject", etc.
+	// This is useful for protecting against hash DoS attacks on object creation
+	OperationLimits map[string]int `json:"operationLimits" yaml:"operation_limits"`
+
+	// ObjectCreationLimit is a specific rate limit for object creation operations
+	// This helps mitigate hash DoS attacks that target object key distribution
+	// Set to 0 to disable (uses default rate limit)
+	ObjectCreationLimit int `json:"objectCreationLimit" yaml:"object_creation_limit"`
+
+	// ObjectCreationBurstSize is the burst size for object creation operations
+	// Set to 0 to use the default burst size
+	ObjectCreationBurstSize int `json:"objectCreationBurstSize" yaml:"object_creation_burst_size"`
 }
 
 // BandwidthConfig configures bandwidth throttling
@@ -207,11 +221,12 @@ type Firewall struct {
 	mu     sync.RWMutex
 
 	// Rate limiters
-	globalLimiter    *TokenBucket
-	userLimiters     map[string]*TokenBucket
-	ipLimiters       map[string]*TokenBucket
-	bucketLimiters   map[string]*TokenBucket
-	limiterMu        sync.RWMutex
+	globalLimiter      *TokenBucket
+	userLimiters       map[string]*TokenBucket
+	ipLimiters         map[string]*TokenBucket
+	bucketLimiters     map[string]*TokenBucket
+	operationLimiters  map[string]*TokenBucket // Per-operation rate limiters for hash DoS mitigation
+	limiterMu          sync.RWMutex
 
 	// Bandwidth trackers
 	globalBandwidth  *BandwidthTracker
@@ -277,14 +292,15 @@ func DefaultConfig() Config {
 // New creates a new firewall
 func New(config Config) (*Firewall, error) {
 	fw := &Firewall{
-		config:          config,
-		userLimiters:    make(map[string]*TokenBucket),
-		ipLimiters:      make(map[string]*TokenBucket),
-		bucketLimiters:  make(map[string]*TokenBucket),
-		userBandwidth:   make(map[string]*BandwidthTracker),
-		bucketBandwidth: make(map[string]*BandwidthTracker),
-		ipConnections:   make(map[string]int64),
-		userConnections: make(map[string]int64),
+		config:            config,
+		userLimiters:      make(map[string]*TokenBucket),
+		ipLimiters:        make(map[string]*TokenBucket),
+		bucketLimiters:    make(map[string]*TokenBucket),
+		operationLimiters: make(map[string]*TokenBucket),
+		userBandwidth:     make(map[string]*BandwidthTracker),
+		bucketBandwidth:   make(map[string]*BandwidthTracker),
+		ipConnections:     make(map[string]int64),
+		userConnections:   make(map[string]int64),
 	}
 
 	// Parse IP allowlist - collect invalid entries for summary logging
@@ -601,7 +617,34 @@ func (fw *Firewall) checkRateLimits(req *Request) bool {
 		}
 	}
 
+	// Check operation-specific rate limits (e.g., for hash DoS mitigation on PutObject)
+	if req.Operation != "" {
+		// Check specific object creation rate limit (protects against hash DoS attacks)
+		if isObjectCreationOperation(req.Operation) && fw.config.RateLimiting.ObjectCreationLimit > 0 {
+			limiter := fw.getOrCreateOperationLimiter(req.Operation)
+			if !limiter.Allow() {
+				return false
+			}
+		} else if limit, ok := fw.config.RateLimiting.OperationLimits[req.Operation]; ok && limit > 0 {
+			// Check per-operation rate limit overrides
+			limiter := fw.getOrCreateOperationLimiter(req.Operation)
+			if !limiter.Allow() {
+				return false
+			}
+		}
+	}
+
 	return true
+}
+
+// isObjectCreationOperation checks if the operation creates objects (vulnerable to hash DoS)
+func isObjectCreationOperation(operation string) bool {
+	switch operation {
+	case "PutObject", "CopyObject", "CompleteMultipartUpload", "UploadPart":
+		return true
+	default:
+		return false
+	}
 }
 
 func (fw *Firewall) matchRule(rule *Rule, req *Request) bool {
@@ -795,6 +838,41 @@ func (fw *Firewall) getOrCreateBucketLimiter(bucket string) *TokenBucket {
 
 	limiter = NewTokenBucket(rps, fw.config.RateLimiting.BurstSize)
 	fw.bucketLimiters[bucket] = limiter
+	return limiter
+}
+
+func (fw *Firewall) getOrCreateOperationLimiter(operation string) *TokenBucket {
+	fw.limiterMu.RLock()
+	limiter, ok := fw.operationLimiters[operation]
+	fw.limiterMu.RUnlock()
+
+	if ok {
+		return limiter
+	}
+
+	fw.limiterMu.Lock()
+	defer fw.limiterMu.Unlock()
+
+	if limiter, ok := fw.operationLimiters[operation]; ok {
+		return limiter
+	}
+
+	// Determine rate limit for this operation
+	rps := fw.config.RateLimiting.RequestsPerSecond
+	burstSize := fw.config.RateLimiting.BurstSize
+
+	// Check for specific object creation limit
+	if isObjectCreationOperation(operation) && fw.config.RateLimiting.ObjectCreationLimit > 0 {
+		rps = fw.config.RateLimiting.ObjectCreationLimit
+		if fw.config.RateLimiting.ObjectCreationBurstSize > 0 {
+			burstSize = fw.config.RateLimiting.ObjectCreationBurstSize
+		}
+	} else if override, ok := fw.config.RateLimiting.OperationLimits[operation]; ok {
+		rps = override
+	}
+
+	limiter = NewTokenBucket(rps, burstSize)
+	fw.operationLimiters[operation] = limiter
 	return limiter
 }
 

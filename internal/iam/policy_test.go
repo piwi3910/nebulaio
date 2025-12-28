@@ -937,3 +937,143 @@ func TestConditionKeys(t *testing.T) {
 		})
 	}
 }
+
+// TestIPMatchesIPv6 tests IPv6 CIDR matching functionality
+func TestIPMatchesIPv6(t *testing.T) {
+	pm := NewPolicyManager(nil)
+	pe := NewPolicyEvaluator(pm)
+
+	tests := []struct {
+		name     string
+		ip       string
+		cidr     string
+		expected bool
+	}{
+		// IPv6 CIDR matching
+		{
+			name:     "IPv6 address within CIDR range",
+			ip:       "2001:db8::1",
+			cidr:     "2001:db8::/32",
+			expected: true,
+		},
+		{
+			name:     "IPv6 address outside CIDR range",
+			ip:       "2001:db9::1",
+			cidr:     "2001:db8::/32",
+			expected: false,
+		},
+		{
+			name:     "IPv6 exact match - same address",
+			ip:       "2001:db8::1",
+			cidr:     "2001:db8::1",
+			expected: true,
+		},
+		{
+			name:     "IPv6 loopback",
+			ip:       "::1",
+			cidr:     "::1/128",
+			expected: true,
+		},
+		{
+			name:     "IPv6 any address",
+			ip:       "::",
+			cidr:     "::/0",
+			expected: true,
+		},
+		// IPv4-mapped IPv6
+		{
+			name:     "IPv4-mapped IPv6 address",
+			ip:       "::ffff:192.168.1.1",
+			cidr:     "::ffff:192.168.0.0/112",
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := pe.ipMatches(tc.ip, tc.cidr)
+			assert.Equal(t, tc.expected, result, "ipMatches(%s, %s)", tc.ip, tc.cidr)
+		})
+	}
+}
+
+// TestIPMatchesIPv6SpecialAddresses tests special IPv6 address handling
+func TestIPMatchesIPv6SpecialAddresses(t *testing.T) {
+	pm := NewPolicyManager(nil)
+	pe := NewPolicyEvaluator(pm)
+
+	tests := []struct {
+		name     string
+		ip       string
+		cidr     string
+		expected bool
+	}{
+		// Unique local addresses (fc00::/7)
+		{
+			name:     "ULA address within range",
+			ip:       "fd00::1",
+			cidr:     "fc00::/7",
+			expected: true,
+		},
+		// Multicast addresses (ff00::/8)
+		{
+			name:     "Multicast address within range",
+			ip:       "ff02::1",
+			cidr:     "ff00::/8",
+			expected: true,
+		},
+		// Link-local (fe80::/10)
+		{
+			name:     "Link-local address",
+			ip:       "fe80::1",
+			cidr:     "fe80::/10",
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := pe.ipMatches(tc.ip, tc.cidr)
+			assert.Equal(t, tc.expected, result, "ipMatches(%s, %s)", tc.ip, tc.cidr)
+		})
+	}
+}
+
+// TestIPMatchesIPv6Normalization tests that different representations of the same address match
+func TestIPMatchesIPv6Normalization(t *testing.T) {
+	pm := NewPolicyManager(nil)
+	pe := NewPolicyEvaluator(pm)
+
+	tests := []struct {
+		name     string
+		ip       string
+		cidr     string
+		expected bool
+	}{
+		{
+			name:     "Full form vs compressed form",
+			ip:       "2001:0db8:0000:0000:0000:0000:0000:0001",
+			cidr:     "2001:db8::1",
+			expected: true,
+		},
+		{
+			name:     "Mixed case in hex digits",
+			ip:       "2001:DB8::1",
+			cidr:     "2001:db8::1",
+			expected: true,
+		},
+		{
+			name:     "Leading zeros stripped vs present",
+			ip:       "2001:db8:0:0:0:0:0:1",
+			cidr:     "2001:db8::1",
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := pe.ipMatches(tc.ip, tc.cidr)
+			assert.Equal(t, tc.expected, result, "ipMatches(%s, %s)", tc.ip, tc.cidr)
+		})
+	}
+}
