@@ -49,6 +49,13 @@ func (h *TieringHandler) RegisterTieringRoutes(r chi.Router) {
 	// Tiering Status
 	r.Get("/tiering/status", h.GetTieringStatus)
 	r.Get("/tiering/metrics", h.GetTieringMetrics)
+
+	// Predictive Tiering (ML-based)
+	r.Get("/tiering/predictions/{bucket}/{key}", h.GetAccessPrediction)
+	r.Get("/tiering/predictions/recommendations", h.GetTierRecommendations)
+	r.Get("/tiering/predictions/hot-objects", h.GetHotObjectsPrediction)
+	r.Get("/tiering/predictions/cold-objects", h.GetColdObjectsPrediction)
+	r.Get("/tiering/anomalies", h.GetAccessAnomalies)
 }
 
 // ====================
@@ -647,4 +654,130 @@ func (h *TieringHandler) GetTieringMetrics(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeJSON(w, http.StatusOK, metrics)
+}
+
+// ====================
+// Predictive Tiering Handlers
+// ====================
+
+// GetAccessPrediction gets ML-based access prediction for an object
+func (h *TieringHandler) GetAccessPrediction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucket := chi.URLParam(r, "bucket")
+	key := chi.URLParam(r, "key")
+
+	// URL decode key if needed
+	if r.URL.Query().Get("key") != "" {
+		key = r.URL.Query().Get("key")
+	}
+
+	prediction, err := h.service.GetPrediction(ctx, bucket, key)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if prediction == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"bucket":  bucket,
+			"key":     key,
+			"message": "Insufficient data for prediction",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, prediction)
+}
+
+// GetTierRecommendations gets ML-based tier recommendations
+func (h *TieringHandler) GetTierRecommendations(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Parse limit parameter
+	limit := 100
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 1000 {
+			limit = int(l)
+		}
+	}
+
+	recommendations, err := h.service.GetTierRecommendations(ctx, limit)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"recommendations": recommendations,
+		"count":           len(recommendations),
+	})
+}
+
+// GetHotObjectsPrediction gets objects predicted to become hot
+func (h *TieringHandler) GetHotObjectsPrediction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	limit := 50
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
+			limit = int(l)
+		}
+	}
+
+	hotObjects := h.service.GetHotObjects(ctx, limit)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"hot_objects": hotObjects,
+		"count":       len(hotObjects),
+	})
+}
+
+// GetColdObjectsPrediction gets objects predicted to become cold
+func (h *TieringHandler) GetColdObjectsPrediction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	limit := 50
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
+			limit = int(l)
+		}
+	}
+
+	inactiveDays := 30
+	if daysStr := r.URL.Query().Get("inactive_days"); daysStr != "" {
+		if d, err := json.Number(daysStr).Int64(); err == nil && d > 0 && d <= 365 {
+			inactiveDays = int(d)
+		}
+	}
+
+	coldObjects := h.service.GetColdObjects(ctx, inactiveDays, limit)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"cold_objects":  coldObjects,
+		"count":         len(coldObjects),
+		"inactive_days": inactiveDays,
+	})
+}
+
+// GetAccessAnomalies gets detected access anomalies
+func (h *TieringHandler) GetAccessAnomalies(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	limit := 50
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
+			limit = int(l)
+		}
+	}
+
+	anomalies, err := h.service.GetAccessAnomalies(ctx, limit)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"anomalies": anomalies,
+		"count":     len(anomalies),
+	})
 }

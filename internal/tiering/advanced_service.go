@@ -29,6 +29,10 @@ type AdvancedService struct {
 	// S3 compatibility
 	s3Adapter *S3LifecycleAdapter
 
+	// Predictive tiering
+	predictiveEngine *PredictiveEngine
+	anomalyDetector  *AnomalyDetector
+
 	// Background workers
 	stopChan chan struct{}
 	wg       sync.WaitGroup
@@ -128,18 +132,26 @@ func NewAdvancedService(
 
 	policyEngine := NewPolicyEngine(engineConfig, policyStore, tierManager, accessStats)
 
+	// Create predictive engine for ML-based tiering
+	predictiveEngine := NewPredictiveEngine(DefaultPredictiveConfig(), accessStats)
+
+	// Create anomaly detector
+	anomalyDetector := NewAnomalyDetector(DefaultAnomalyConfig())
+
 	service := &AdvancedService{
-		config:       config,
-		policyStore:  policyStore,
-		policyEngine: policyEngine,
-		accessStats:  accessStats,
-		hotStorage:   hotStorage,
-		warmStorage:  warmStorage,
-		coldManager:  coldManager,
-		tierManager:  tierManager,
-		cache:        cache,
-		s3Adapter:    NewS3LifecycleAdapter(),
-		stopChan:     make(chan struct{}),
+		config:           config,
+		policyStore:      policyStore,
+		policyEngine:     policyEngine,
+		accessStats:      accessStats,
+		hotStorage:       hotStorage,
+		warmStorage:      warmStorage,
+		coldManager:      coldManager,
+		tierManager:      tierManager,
+		cache:            cache,
+		s3Adapter:        NewS3LifecycleAdapter(),
+		predictiveEngine: predictiveEngine,
+		anomalyDetector:  anomalyDetector,
+		stopChan:         make(chan struct{}),
 	}
 
 	return service, nil
@@ -507,6 +519,30 @@ func (s *AdvancedService) GetHotObjects(ctx context.Context, limit int) []*Objec
 // GetColdObjects returns objects not accessed recently
 func (s *AdvancedService) GetColdObjects(ctx context.Context, inactiveDays, limit int) []*ObjectAccessStats {
 	return s.accessStats.GetColdObjects(ctx, inactiveDays, limit)
+}
+
+// GetPrediction returns ML-based access prediction for an object
+func (s *AdvancedService) GetPrediction(ctx context.Context, bucket, key string) (*AccessPrediction, error) {
+	if s.predictiveEngine == nil {
+		return nil, fmt.Errorf("predictive engine not initialized")
+	}
+	return s.predictiveEngine.Predict(ctx, bucket, key)
+}
+
+// GetTierRecommendations returns ML-based tier change recommendations
+func (s *AdvancedService) GetTierRecommendations(ctx context.Context, limit int) ([]*TierRecommendation, error) {
+	if s.predictiveEngine == nil {
+		return nil, fmt.Errorf("predictive engine not initialized")
+	}
+	return s.predictiveEngine.GetTierRecommendations(ctx, limit)
+}
+
+// GetAccessAnomalies returns detected access pattern anomalies
+func (s *AdvancedService) GetAccessAnomalies(ctx context.Context, limit int) ([]*AccessAnomaly, error) {
+	if s.anomalyDetector == nil {
+		return nil, fmt.Errorf("anomaly detector not initialized")
+	}
+	return s.anomalyDetector.GetAnomalies(limit)
 }
 
 // TransitionObject manually transitions an object to a different tier
