@@ -916,9 +916,14 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 			return nil, nil, fmt.Errorf("failed to create gzip reader: %w", err)
 		}
 		defer reader.Close()
-		result, err = io.ReadAll(reader)
+		// Limit decompressed size to prevent decompression bombs
+		limitedReader := io.LimitReader(reader, MaxTransformSize+1)
+		result, err = io.ReadAll(limitedReader)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to decompress gzip data: %w", err)
+		}
+		if len(result) > MaxTransformSize {
+			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", MaxTransformSize)
 		}
 
 	case "zstd":
@@ -927,9 +932,14 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 			return nil, nil, fmt.Errorf("failed to create zstd decoder: %w", err)
 		}
 		defer decoder.Close()
-		result, err = io.ReadAll(decoder)
+		// Limit decompressed size to prevent decompression bombs
+		limitedReader := io.LimitReader(decoder, MaxTransformSize+1)
+		result, err = io.ReadAll(limitedReader)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to decompress zstd data: %w", err)
+		}
+		if len(result) > MaxTransformSize {
+			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", MaxTransformSize)
 		}
 
 	default:
