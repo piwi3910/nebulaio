@@ -77,7 +77,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 An unexpected error occurred. This has been logged and we'll look into it.
               </Text>
 
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {import.meta.env.DEV && this.state.error && (
                 <Paper bg="gray.1" p="md" radius="sm" w="100%">
                   <Text size="sm" fw={600} mb="xs" c="red">
                     Error Details (Development Only):

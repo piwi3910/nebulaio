@@ -1142,16 +1142,16 @@ func TestCreateTieringPolicy(t *testing.T) {
 			Type:    tiering.PolicyTypeScheduled,
 			Scope:   tiering.PolicyScopeGlobal,
 			Enabled: true,
-			Triggers: []tiering.PolicyTrigger{
+			Triggers: []SimpleTieringTrigger{
 				{
-					Type: tiering.TriggerTypeAge,
-					Age:  &tiering.AgeTrigger{DaysSinceCreation: 30},
+					Type:    "age",
+					AgeDays: 30,
 				},
 			},
-			Actions: []tiering.PolicyAction{
+			Actions: []SimpleTieringAction{
 				{
-					Type:       tiering.ActionTransition,
-					Transition: &tiering.TransitionActionConfig{TargetTier: tiering.TierCold},
+					Type:       "transition",
+					TargetTier: "cold",
 				},
 			},
 		}
@@ -1199,11 +1199,11 @@ func TestCreateTieringPolicy(t *testing.T) {
 			Type:    tiering.PolicyTypeScheduled,
 			Scope:   tiering.PolicyScopeGlobal,
 			Enabled: true,
-			Triggers: []tiering.PolicyTrigger{
-				{Type: tiering.TriggerTypeAge, Age: &tiering.AgeTrigger{DaysSinceCreation: 30}},
+			Triggers: []SimpleTieringTrigger{
+				{Type: "age", AgeDays: 30},
 			},
-			Actions: []tiering.PolicyAction{
-				{Type: tiering.ActionTransition, Transition: &tiering.TransitionActionConfig{TargetTier: tiering.TierCold}},
+			Actions: []SimpleTieringAction{
+				{Type: "transition", TargetTier: "cold"},
 			},
 		}
 
@@ -1227,8 +1227,8 @@ func TestCreateTieringPolicy(t *testing.T) {
 			Scope:   tiering.PolicyScopeGlobal,
 			Enabled: true,
 			// Missing triggers
-			Actions: []tiering.PolicyAction{
-				{Type: tiering.ActionTransition, Transition: &tiering.TransitionActionConfig{TargetTier: tiering.TierCold}},
+			Actions: []SimpleTieringAction{
+				{Type: "transition", TargetTier: "cold"},
 			},
 		}
 
@@ -1289,11 +1289,11 @@ func TestUpdateTieringPolicy(t *testing.T) {
 			Type:    tiering.PolicyTypeScheduled,
 			Scope:   tiering.PolicyScopeGlobal,
 			Enabled: false,
-			Triggers: []tiering.PolicyTrigger{
-				{Type: tiering.TriggerTypeAge, Age: &tiering.AgeTrigger{DaysSinceCreation: 60}},
+			Triggers: []SimpleTieringTrigger{
+				{Type: "age", AgeDays: 60},
 			},
-			Actions: []tiering.PolicyAction{
-				{Type: tiering.ActionTransition, Transition: &tiering.TransitionActionConfig{TargetTier: tiering.TierArchive}},
+			Actions: []SimpleTieringAction{
+				{Type: "transition", TargetTier: "archive"},
 			},
 		}
 
