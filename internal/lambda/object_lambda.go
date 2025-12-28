@@ -915,7 +915,7 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create gzip reader: %w", err)
 		}
-		defer reader.Close()
+		defer func() { _ = reader.Close() }()
 		// Limit decompressed size to prevent decompression bombs
 		limitedReader := io.LimitReader(reader, MaxTransformSize+1)
 		result, err = io.ReadAll(limitedReader)

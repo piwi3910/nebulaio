@@ -982,25 +982,25 @@ func (o *FileOutput) compressFile(filePath string) {
 
 	// Write data to gzip writer
 	if _, err := gzWriter.Write(data); err != nil {
-		// Close both writers before cleaning up
-		gzWriter.Close()
-		outFile.Close()
-		os.Remove(compressedPath)
+		// Close both writers before cleaning up (errors ignored during cleanup)
+		_ = gzWriter.Close()
+		_ = outFile.Close()
+		_ = os.Remove(compressedPath)
 		log.Warn().Err(err).Str("file", filePath).Msg("Failed to write compressed data")
 		return
 	}
 
 	// Close gzip writer to flush all data
 	if err := gzWriter.Close(); err != nil {
-		outFile.Close()
-		os.Remove(compressedPath)
+		_ = outFile.Close()
+		_ = os.Remove(compressedPath)
 		log.Warn().Err(err).Str("file", filePath).Msg("Failed to finalize gzip compression")
 		return
 	}
 
 	// Close the output file
 	if err := outFile.Close(); err != nil {
-		os.Remove(compressedPath)
+		_ = os.Remove(compressedPath)
 		log.Warn().Err(err).Str("file", compressedPath).Msg("Failed to close compressed log file")
 		return
 	}
