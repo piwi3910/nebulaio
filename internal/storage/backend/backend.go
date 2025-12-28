@@ -2,7 +2,14 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"io"
+)
+
+// Common backend errors
+var (
+	ErrObjectNotFound = errors.New("object not found")
+	ErrBucketNotFound = errors.New("bucket not found")
 )
 
 // Backend is the interface for object storage backends
