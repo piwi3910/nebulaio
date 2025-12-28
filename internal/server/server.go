@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/object"
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 	"github.com/piwi3910/nebulaio/internal/storage/fs"
+	"github.com/piwi3910/nebulaio/internal/storage/volume"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -122,12 +124,27 @@ func New(cfg *config.Config) (*Server, error) {
 	// Old RaftStore approach (no longer compatible):
 	// srv.discovery.SetRaft(srv.metaStore.GetRaft())
 
-	// Initialize storage backend
-	srv.storageBackend, err = fs.New(fs.Config{
-		DataDir: cfg.DataDir,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize storage backend: %w", err)
+	// Initialize storage backend based on configuration
+	switch cfg.Storage.Backend {
+	case "volume":
+		log.Info().Msg("Initializing volume storage backend")
+		volumeBackend, err := volume.NewBackend(cfg.DataDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize volume storage backend: %w", err)
+		}
+		// Volume backend implements Backend but not MultipartBackend yet
+		// Wrap it with a multipart adapter
+		srv.storageBackend = &multipartWrapper{Backend: volumeBackend}
+	case "fs", "":
+		log.Info().Msg("Initializing filesystem storage backend")
+		srv.storageBackend, err = fs.New(fs.Config{
+			DataDir: cfg.DataDir,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize storage backend: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported storage backend: %s (supported: fs, volume)", cfg.Storage.Backend)
 	}
 
 	// Initialize auth service
@@ -524,4 +541,30 @@ func (l *lifecycleObjectService) DeleteObjectVersion(ctx context.Context, bucket
 
 func (l *lifecycleObjectService) TransitionStorageClass(ctx context.Context, bucket, key, targetClass string) error {
 	return l.svc.TransitionStorageClass(ctx, bucket, key, targetClass)
+}
+
+// multipartWrapper wraps a basic Backend to provide a stub MultipartBackend interface
+// This is used for backends that don't yet support multipart uploads natively
+type multipartWrapper struct {
+	backend.Backend
+}
+
+func (m *multipartWrapper) CreateMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
+	return fmt.Errorf("multipart uploads not yet supported by volume backend")
+}
+
+func (m *multipartWrapper) PutPart(ctx context.Context, bucket, key, uploadID string, partNumber int, reader io.Reader, size int64) (*backend.PutResult, error) {
+	return nil, fmt.Errorf("multipart uploads not yet supported by volume backend")
+}
+
+func (m *multipartWrapper) GetPart(ctx context.Context, bucket, key, uploadID string, partNumber int) (io.ReadCloser, error) {
+	return nil, fmt.Errorf("multipart uploads not yet supported by volume backend")
+}
+
+func (m *multipartWrapper) CompleteParts(ctx context.Context, bucket, key, uploadID string, parts []int) (*backend.PutResult, error) {
+	return nil, fmt.Errorf("multipart uploads not yet supported by volume backend")
+}
+
+func (m *multipartWrapper) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
+	return fmt.Errorf("multipart uploads not yet supported by volume backend")
 }

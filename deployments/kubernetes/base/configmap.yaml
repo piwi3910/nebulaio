@@ -34,9 +34,15 @@ data:
 
     # Storage configuration
     storage:
-      backend: fs  # fs | erasure
+      backend: fs  # fs | erasure | volume
       path: /data/objects
       default_storage_class: STANDARD
+
+      # Volume storage (when backend: volume)
+      # High-performance block-based storage with pre-allocated volume files
+      # volume:
+      #   max_volume_size: 34359738368  # 32GB per volume file
+      #   auto_create: true             # Auto-create new volumes when needed
 
       # Compression (uncomment to enable)
       # compression: zstd  # none | zstd | lz4 | gzip

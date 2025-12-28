@@ -8,7 +8,7 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 - **Full S3 API Compatibility** - Works with existing S3 SDKs and tools (AWS CLI, boto3, etc.)
 - **Web Console** - Modern React-based admin and user portals
 - **Distributed Metadata** - Dragonboat consensus for high availability and ultra-low latency (1.3ms, 1.25M writes/sec)
-- **Scalable Storage** - Start with local filesystem, scale to erasure-coded distributed storage
+- **Scalable Storage** - Start with local filesystem, use volume backend for high performance, or scale to erasure-coded distributed storage
 - **IAM** - Users, groups, policies, and S3-compatible access keys
 - **Multi-tenant** - Role-based access control with admin and user portals
 
@@ -108,9 +108,13 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 ┌─────────────────────────▼───────────────────────────────────┐
 │                  Storage Layer                              │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │ Filesystem  │  │   Erasure   │  │  S3 Express Zones   │ │
-│  │   Backend   │  │   Coding    │  │  (Iceberg Tables)   │ │
+│  │ Filesystem  │  │   Volume    │  │   Erasure Coding    │ │
+│  │   Backend   │  │   Backend   │  │      Backend        │ │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘ │
+│                                    ┌─────────────────────┐ │
+│                                    │  S3 Express Zones   │ │
+│                                    │  (Iceberg Tables)   │ │
+│                                    └─────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -202,12 +206,15 @@ cluster:
   replica_id: 1
 
 storage:
-  backend: erasure  # fs | erasure
+  backend: erasure  # fs | erasure | volume
   compression: zstd  # none | zstd | lz4 | gzip
   default_storage_class: STANDARD
   erasure:
     data_shards: 10
     parity_shards: 4
+  # volume:                           # High-performance block storage
+  #   max_volume_size: 34359738368    # 32GB per volume file
+  #   auto_create: true
 
 auth:
   root_user: admin
@@ -354,6 +361,7 @@ nebulaio/
 │   ├── object/             # Object service
 │   ├── storage/            # Storage backends
 │   │   ├── erasure/        # Erasure coding
+│   │   ├── volume/         # High-performance volume storage
 │   │   └── compression/    # Compression
 │   ├── express/            # S3 Express One Zone
 │   ├── iceberg/            # Apache Iceberg

@@ -62,9 +62,23 @@ All options can be set via environment variables using the `NEBULAIO_` prefix. N
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `storage.data_dir` | string | `/var/lib/nebulaio` | Root data directory |
-| `storage.backend` | string | `fs` | Storage backend |
+| `storage.backend` | string | `fs` | Storage backend: `fs`, `erasure`, `volume` |
 | `storage.path` | string | `{data_dir}/objects` | Object storage path |
 | `storage.default_storage_class` | string | `STANDARD` | Default storage class |
+
+### Volume Storage (High Performance)
+
+The volume backend stores objects in pre-allocated volume files with block-based allocation, optimized for high-throughput workloads.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `storage.volume.max_volume_size` | uint64 | `34359738368` | Maximum volume file size (32GB) |
+| `storage.volume.auto_create` | bool | `true` | Automatically create new volumes when needed |
+
+**When to use Volume backend:**
+- High-throughput workloads with many small to medium objects
+- Reduced filesystem overhead (no per-object files)
+- Predictable performance with pre-allocated storage
 
 ### Erasure Coding
 
@@ -208,6 +222,30 @@ auth:
 
 log_level: debug
 log_format: text
+```
+
+### High-Performance Volume Storage
+
+```yaml
+node_id: volume-node
+s3_port: 9000
+admin_port: 9001
+
+storage:
+  backend: volume
+  data_dir: /var/lib/nebulaio
+  volume:
+    max_volume_size: 34359738368  # 32GB volumes
+    auto_create: true
+
+cluster:
+  bootstrap: true
+
+auth:
+  root_user: admin
+  root_password: ${NEBULAIO_AUTH_ROOT_PASSWORD}
+
+log_level: info
 ```
 
 ### Production (3-Node Cluster)

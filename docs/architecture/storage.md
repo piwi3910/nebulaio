@@ -101,6 +101,166 @@ type Backend interface {
 
 ---
 
+## Volume Storage Backend
+
+The Volume storage backend is a high-performance alternative to the filesystem backend. Instead of storing one file per object (which incurs filesystem overhead), objects are stored in large pre-allocated volume files with efficient block-based allocation.
+
+### When to Use Volume Backend
+
+| Use Case | Recommended Backend |
+|----------|---------------------|
+| Mixed object sizes (small + large) | **Volume** |
+| Millions of small objects (<1MB) | **Volume** |
+| Maximum IOPS performance | **Volume** |
+| Simple deployment, portability | Filesystem |
+| Need multipart upload support | Filesystem |
+
+### Volume Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Volume Storage Architecture                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Volume Manager                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  - Routes objects to appropriate volumes                             │  │
+│  │  - Manages multi-volume capacity                                     │  │
+│  │  - Auto-creates new volumes when needed                              │  │
+│  │  - Maintains global object index                                     │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                        │
+│                   ┌────────────────┼────────────────┐                       │
+│                   ▼                ▼                ▼                       │
+│  ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────┐      │
+│  │  Volume 1 (32GB)   │ │  Volume 2 (32GB)   │ │  Volume N (32GB)   │      │
+│  │  ┌──────────────┐  │ │  ┌──────────────┐  │ │  ┌──────────────┐  │      │
+│  │  │  Superblock  │  │ │  │  Superblock  │  │ │  │  Superblock  │  │      │
+│  │  ├──────────────┤  │ │  ├──────────────┤  │ │  ├──────────────┤  │      │
+│  │  │ Alloc Bitmap │  │ │  │ Alloc Bitmap │  │ │  │ Alloc Bitmap │  │      │
+│  │  ├──────────────┤  │ │  ├──────────────┤  │ │  ├──────────────┤  │      │
+│  │  │  Block Types │  │ │  │  Block Types │  │ │  │  Block Types │  │      │
+│  │  ├──────────────┤  │ │  ├──────────────┤  │ │  ├──────────────┤  │      │
+│  │  │ Object Index │  │ │  │ Object Index │  │ │  │ Object Index │  │      │
+│  │  ├──────────────┤  │ │  ├──────────────┤  │ │  ├──────────────┤  │      │
+│  │  │              │  │ │  │              │  │ │  │              │  │      │
+│  │  │ Data Blocks  │  │ │  │ Data Blocks  │  │ │  │ Data Blocks  │  │      │
+│  │  │   (4MB each) │  │ │  │   (4MB each) │  │ │  │   (4MB each) │  │      │
+│  │  │              │  │ │  │              │  │ │  │              │  │      │
+│  │  └──────────────┘  │ │  └──────────────┘  │ │  └──────────────┘  │      │
+│  └────────────────────┘ └────────────────────┘ └────────────────────┘      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Volume File Format
+
+Each volume file is a pre-allocated file (default 32GB) with the following layout:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Offset 0        │ Superblock (4KB)                                      │
+│                 │ - Magic: "NEBULAVL"                                    │
+│                 │ - Volume ID (UUID), size, block count                  │
+│                 │ - Object count, creation/modified timestamps           │
+├─────────────────┼───────────────────────────────────────────────────────┤
+│ Offset 4KB      │ Allocation Bitmap (4KB)                               │
+│                 │ - 1 bit per 4MB block                                  │
+│                 │ - 0 = free, 1 = allocated                              │
+├─────────────────┼───────────────────────────────────────────────────────┤
+│ Offset 8KB      │ Block Type Map (32KB)                                 │
+│                 │ - 1 byte per block indicating type                     │
+│                 │ - FREE, LARGE, PACKED_TINY, PACKED_SMALL, SPANNING    │
+├─────────────────┼───────────────────────────────────────────────────────┤
+│ Offset 40KB     │ Object Index (up to 64MB)                             │
+│                 │ - Sorted by key hash for O(log n) lookups              │
+│                 │ - Includes: key, block#, offset, size, timestamps      │
+├─────────────────┼───────────────────────────────────────────────────────┤
+│ Offset 64MB     │ Data Blocks (4MB each)                                │
+│                 │ - Block 0: First data block                            │
+│                 │ - Block N: Last data block                             │
+│                 │ - Each block can be: Packed, Large, or Spanning        │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Size Classes and Packing
+
+Small objects are packed together into blocks to minimize wasted space:
+
+| Size Class | Object Size    | Block Type    | Packing Behavior |
+|------------|----------------|---------------|------------------|
+| TINY       | ≤ 64KB         | PACKED_TINY   | Many per block   |
+| SMALL      | ≤ 256KB        | PACKED_SMALL  | Several per block|
+| MEDIUM     | ≤ 1MB          | PACKED_MED    | Few per block    |
+| LARGE      | ≤ 4MB          | LARGE         | One per block    |
+| SPANNING   | > 4MB          | SPANNING      | Multiple blocks  |
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      Packed Block Structure (4MB)                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  Block Header (64 bytes)                                              │  │
+│  │  - Type, object count, free offset, checksum                         │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  Object 1                                                             │  │
+│  │  ┌─────────────┐ ┌─────────────────┐ ┌─────────────────────────────┐ │  │
+│  │  │ Entry (32B) │ │ Key (var len)   │ │ Data (var len)              │ │  │
+│  │  │ KeyHash,    │ │ "bucket/key1"   │ │ [object bytes...]           │ │  │
+│  │  │ Size, CRC   │ │                 │ │                             │ │  │
+│  │  └─────────────┘ └─────────────────┘ └─────────────────────────────┘ │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  Object 2                                                             │  │
+│  │  ┌─────────────┐ ┌─────────────────┐ ┌─────────────────────────────┐ │  │
+│  │  │ Entry (32B) │ │ Key (var len)   │ │ Data (var len)              │ │  │
+│  │  └─────────────┘ └─────────────────┘ └─────────────────────────────┘ │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  Object N ...                                                         │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  [Free Space]                                                         │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Configuration
+
+```yaml
+storage:
+  backend: volume    # Use volume storage backend
+
+  volume:
+    max_volume_size: 34359738368   # 32GB per volume file
+    auto_create: true               # Create new volumes as needed
+```
+
+### Performance Characteristics
+
+| Metric | Volume Backend | Filesystem Backend |
+|--------|----------------|-------------------|
+| Small object write | ~50μs | ~500μs |
+| Small object read | ~20μs | ~200μs |
+| Metadata overhead | ~50 bytes/obj | ~4KB/obj (inode) |
+| Files created | 1 per 32GB | 1 per object |
+| Best for | Many small objects | Large objects |
+
+### Limitations
+
+- Multipart uploads not yet supported (use filesystem backend if required)
+- No inline compression (can be added in future)
+- Compaction not yet implemented (space from deleted objects reclaimed on restart)
+
+---
+
 ## Object Storage Format
 
 Each object is stored with its content and metadata in a structured format.

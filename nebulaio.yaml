@@ -27,10 +27,16 @@ cluster:
 
 # Storage configuration
 storage:
-  backend: "fs"
+  backend: "fs"              # fs | erasure | volume
   default_storage_class: "STANDARD"
   max_object_size: 5497558138880  # 5TB
   multipart_part_size: 67108864   # 64MB
+
+  # Volume storage configuration (when backend: volume)
+  # High-performance block-based storage with pre-allocated volume files
+  # volume:
+  #   max_volume_size: 34359738368  # 32GB per volume file
+  #   auto_create: true             # Auto-create new volumes when needed
 
 # DRAM Cache configuration
 cache:

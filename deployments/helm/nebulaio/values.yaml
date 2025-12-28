@@ -220,12 +220,20 @@ metrics:
 
 # Storage backend configuration
 storage:
-  # -- Storage backend: fs, erasure
+  # -- Storage backend: fs, erasure, volume
   backend: fs
   # -- Default storage class for objects
   defaultStorageClass: STANDARD
   # -- Path within data directory for objects
   mountPath: /data
+
+  # Volume storage (when backend: volume)
+  # High-performance block-based storage with pre-allocated volume files
+  volume:
+    # -- Maximum size per volume file (32GB default)
+    maxVolumeSize: 34359738368
+    # -- Automatically create new volumes when needed
+    autoCreate: true
 
   # Compression
   compression:

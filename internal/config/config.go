@@ -126,7 +126,7 @@ type ClusterConfig struct {
 
 // StorageConfig holds storage-related configuration
 type StorageConfig struct {
-	// Backend type: "fs" (filesystem), "erasure" (distributed)
+	// Backend type: "fs" (filesystem), "erasure" (distributed), "volume" (high-performance)
 	Backend string `mapstructure:"backend"`
 
 	// DefaultStorageClass for new buckets
@@ -137,6 +137,18 @@ type StorageConfig struct {
 
 	// MultipartPartSize default size in bytes
 	MultipartPartSize int64 `mapstructure:"multipart_part_size"`
+
+	// Volume backend specific configuration
+	Volume VolumeStorageConfig `mapstructure:"volume"`
+}
+
+// VolumeStorageConfig holds configuration for the volume storage backend
+type VolumeStorageConfig struct {
+	// MaxVolumeSize is the maximum size of each volume file in bytes (default: 32GB)
+	MaxVolumeSize uint64 `mapstructure:"max_volume_size"`
+
+	// AutoCreate enables automatic creation of new volumes when needed (default: true)
+	AutoCreate bool `mapstructure:"auto_create"`
 }
 
 // CacheConfig holds DRAM cache configuration for high-performance workloads
@@ -698,6 +710,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("storage.default_storage_class", "STANDARD")
 	v.SetDefault("storage.max_object_size", 5*1024*1024*1024*1024) // 5TB
 	v.SetDefault("storage.multipart_part_size", 64*1024*1024)      // 64MB
+	// Volume backend defaults
+	v.SetDefault("storage.volume.max_volume_size", 32*1024*1024*1024) // 32GB
+	v.SetDefault("storage.volume.auto_create", true)
 
 	// Cache defaults (DRAM Cache)
 	v.SetDefault("cache.enabled", false)
