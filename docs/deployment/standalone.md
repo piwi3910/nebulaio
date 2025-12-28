@@ -24,6 +24,7 @@ nebulaio --version
 ```
 
 Available binaries:
+
 - `nebulaio-linux-amd64.tar.gz`
 - `nebulaio-linux-arm64.tar.gz`
 - `nebulaio-darwin-amd64.tar.gz`
@@ -34,7 +35,7 @@ Available binaries:
 
 ```bash
 # Prerequisites
-# - Go 1.23+
+# - Go 1.24+
 # - Node.js 20+ (for web console)
 # - Make
 
@@ -435,6 +436,7 @@ scrape_configs:
 ```
 
 Key metrics to monitor:
+
 - `nebulaio_http_requests_total` - Request counts by endpoint
 - `nebulaio_http_request_duration_seconds` - Request latency
 - `nebulaio_storage_bytes_total` - Total storage used
@@ -466,6 +468,7 @@ curl -X DELETE http://localhost:9001/api/v1/admin/cluster/nodes/node-4
 For larger deployments, you can run separate management and storage nodes:
 
 **Management Node** (Raft voter, no storage):
+
 ```yaml
 node_role: management
 cluster:
@@ -475,6 +478,7 @@ storage:
 ```
 
 **Storage Node** (Raft non-voter, storage only):
+
 ```yaml
 node_role: storage
 cluster:
@@ -492,6 +496,7 @@ This allows scaling storage independently from the Raft consensus group.
 ### Common Issues
 
 **Node won't join cluster**
+
 ```bash
 # Check gossip connectivity
 nc -zv <bootstrap-node> 9004
@@ -504,6 +509,7 @@ grep cluster_name /etc/nebulaio/config.yaml
 ```
 
 **Leader election timeout**
+
 ```bash
 # Check Raft port connectivity
 nc -zv <other-node> 9003
@@ -516,6 +522,7 @@ cluster:
 ```
 
 **Split-brain scenario**
+
 - Ensure you have an odd number of voters (3, 5, 7)
 - Check network partitions between nodes
 - Never manually edit Raft state

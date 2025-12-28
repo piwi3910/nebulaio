@@ -64,6 +64,7 @@ NebulaIO is **secure by default** with TLS enabled and automatic certificate gen
 | `tls.ip_addresses` | list | `[]` | Additional IP addresses for certificate SAN |
 
 **Note:** When `auto_generate` is enabled and no certificates are provided, NebulaIO automatically:
+
 - Creates a CA certificate (10-year validity)
 - Generates a server certificate signed by the CA
 - Detects and includes all local IP addresses in the certificate SAN
@@ -89,7 +90,36 @@ The volume backend stores objects in pre-allocated volume files with block-based
 | `storage.volume.max_volume_size` | uint64 | `34359738368` | Maximum volume file size (32GB) |
 | `storage.volume.auto_create` | bool | `true` | Automatically create new volumes when needed |
 
+#### Direct I/O Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `storage.volume.direct_io.enabled` | bool | `true` | Enable O_DIRECT to bypass kernel cache |
+| `storage.volume.direct_io.block_alignment` | int | `4096` | Buffer/offset alignment (bytes) |
+| `storage.volume.direct_io.use_memory_pool` | bool | `true` | Pool aligned buffers for reduced allocations |
+| `storage.volume.direct_io.fallback_on_error` | bool | `true` | Fall back to buffered I/O on failure |
+
+#### Raw Device Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `storage.volume.raw_devices.enabled` | bool | `false` | Enable raw block device access |
+| `storage.volume.raw_devices.safety.check_filesystem` | bool | `true` | Verify no filesystem exists |
+| `storage.volume.raw_devices.safety.require_confirmation` | bool | `true` | Require explicit confirmation |
+| `storage.volume.raw_devices.safety.write_signature` | bool | `true` | Write NebulaIO signature to device |
+| `storage.volume.raw_devices.safety.exclusive_lock` | bool | `true` | Use flock() for exclusive access |
+| `storage.volume.raw_devices.devices` | list | `[]` | List of raw devices with path, tier, and size |
+
+#### Tier Directories (Alternative to Raw Devices)
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `storage.volume.tier_directories.hot` | string | - | Hot tier directory (NVMe) |
+| `storage.volume.tier_directories.warm` | string | - | Warm tier directory (SSD) |
+| `storage.volume.tier_directories.cold` | string | - | Cold tier directory (HDD) |
+
 **When to use Volume backend:**
+
 - High-throughput workloads with many small to medium objects
 - Reduced filesystem overhead (no per-object files)
 - Predictable performance with pre-allocated storage
@@ -233,6 +263,7 @@ NebulaIO uses [Dragonboat](https://github.com/lni/dragonboat), a high-performanc
 | `cluster.check_quorum` | bool | `true` | Enable quorum checking for leader validity |
 
 **Dragonboat Terminology**:
+
 - **ShardID**: Identifies a Raft group (equivalent to cluster ID)
 - **ReplicaID**: Unique identifier for each node within a shard (must be unique per node)
 - **RTT**: Round-Trip Time - election and heartbeat timeouts are expressed as multiples of RTT
@@ -255,14 +286,103 @@ NebulaIO uses [Dragonboat](https://github.com/lni/dragonboat), a high-performanc
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `cache.enabled` | bool | `true` | Enable DRAM cache |
-| `cache.size` | string | `1GB` | Maximum cache size |
-| `cache.type` | string | `lru` | Eviction policy: `lru`, `lfu`, `arc` |
-| `cache.ttl` | duration | `5m` | Default cache TTL |
-| `cache.metadata_cache_size` | int | `10000` | Metadata entries to cache |
-| `cache.metadata_cache_ttl` | duration | `60s` | Metadata cache TTL |
-| `cache.readahead.enabled` | bool | `true` | Enable read-ahead |
-| `cache.readahead.size` | string | `4MB` | Read-ahead window size |
+| `cache.enabled` | bool | `false` | Enable DRAM cache |
+| `cache.max_size` | int64 | `8589934592` | Maximum cache size (8GB) |
+| `cache.shard_count` | int | `256` | Number of cache shards (reduces lock contention) |
+| `cache.entry_max_size` | int64 | `268435456` | Maximum size per entry (256MB) |
+| `cache.ttl` | int | `3600` | Default TTL in seconds (1 hour) |
+| `cache.eviction_policy` | string | `arc` | Eviction policy: `lru`, `lfu`, `arc` |
+| `cache.prefetch_enabled` | bool | `true` | Enable predictive prefetching (AI/ML) |
+| `cache.prefetch_threshold` | int | `2` | Access count before enabling prefetch |
+| `cache.prefetch_ahead` | int | `4` | Number of chunks to prefetch |
+| `cache.zero_copy_enabled` | bool | `true` | Enable zero-copy reads where supported |
+| `cache.distributed_mode` | bool | `false` | Enable distributed cache across nodes |
+| `cache.replication_factor` | int | `2` | Replication factor for distributed cache |
+| `cache.warmup_enabled` | bool | `false` | Enable cache warmup on startup |
+| `cache.warmup_keys` | list | `[]` | Keys to pre-warm on startup |
+
+---
+
+## Data Firewall (QoS)
+
+The data firewall provides rate limiting, bandwidth throttling, and connection management.
+
+### General Settings
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `firewall.enabled` | bool | `false` | Enable data firewall |
+| `firewall.default_policy` | string | `allow` | Default policy: `allow`, `deny` |
+| `firewall.ip_allowlist` | list | `[]` | Allowed IP addresses/CIDRs |
+| `firewall.ip_blocklist` | list | `[]` | Blocked IP addresses/CIDRs |
+| `firewall.audit_enabled` | bool | `true` | Enable firewall audit logging |
+
+### Rate Limiting
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `firewall.rate_limiting.enabled` | bool | `false` | Enable rate limiting |
+| `firewall.rate_limiting.requests_per_second` | int | `1000` | Global requests per second limit |
+| `firewall.rate_limiting.burst_size` | int | `100` | Maximum burst size |
+| `firewall.rate_limiting.per_user` | bool | `true` | Apply per-user rate limits |
+| `firewall.rate_limiting.per_ip` | bool | `true` | Apply per-IP rate limits |
+| `firewall.rate_limiting.per_bucket` | bool | `false` | Apply per-bucket rate limits |
+
+### Bandwidth Throttling
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `firewall.bandwidth.enabled` | bool | `false` | Enable bandwidth throttling |
+| `firewall.bandwidth.max_bytes_per_second` | int64 | `1073741824` | Global max bandwidth (1GB/s) |
+| `firewall.bandwidth.max_bytes_per_second_per_user` | int64 | `104857600` | Per-user bandwidth (100MB/s) |
+| `firewall.bandwidth.max_bytes_per_second_per_bucket` | int64 | `524288000` | Per-bucket bandwidth (500MB/s) |
+
+### Connection Limits
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `firewall.connections.enabled` | bool | `false` | Enable connection limiting |
+| `firewall.connections.max_connections` | int | `10000` | Maximum concurrent connections |
+| `firewall.connections.max_connections_per_ip` | int | `100` | Per-IP connection limit |
+| `firewall.connections.max_connections_per_user` | int | `500` | Per-user connection limit |
+| `firewall.connections.idle_timeout_seconds` | int | `60` | Idle connection timeout |
+
+---
+
+## Audit Logging
+
+Enhanced audit logging for compliance and security monitoring.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `audit.enabled` | bool | `true` | Enable audit logging |
+| `audit.compliance_mode` | string | `none` | Compliance standard: `none`, `soc2`, `pci`, `hipaa`, `gdpr`, `fedramp` |
+| `audit.file_path` | string | `./data/audit/audit.log` | Audit log file path |
+| `audit.retention_days` | int | `90` | How long to keep audit logs |
+| `audit.buffer_size` | int | `10000` | Async buffer size |
+| `audit.integrity_enabled` | bool | `true` | Enable cryptographic integrity (HMAC) |
+| `audit.integrity_secret` | string | auto | HMAC secret (auto-generated if empty) |
+| `audit.mask_sensitive_data` | bool | `true` | Mask passwords and secrets |
+
+### Audit Log Rotation
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `audit.rotation.enabled` | bool | `true` | Enable log rotation |
+| `audit.rotation.max_size_mb` | int | `100` | Max file size before rotation |
+| `audit.rotation.max_backups` | int | `10` | Max rotated files to keep |
+| `audit.rotation.max_age_days` | int | `30` | Max age of rotated files |
+| `audit.rotation.compress` | bool | `true` | Compress rotated files |
+
+### Audit Webhook
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `audit.webhook.enabled` | bool | `false` | Enable webhook output |
+| `audit.webhook.url` | string | - | Webhook endpoint URL |
+| `audit.webhook.auth_token` | string | - | Authentication token |
+| `audit.webhook.batch_size` | int | `100` | Events per batch |
+| `audit.webhook.flush_interval_seconds` | int | `30` | Flush interval |
 
 ---
 
@@ -275,8 +395,129 @@ NebulaIO uses [Dragonboat](https://github.com/lni/dragonboat), a high-performanc
 | `log_output` | string | `stdout` | Output: `stdout`, `stderr`, or file path |
 | `metrics.enabled` | bool | `true` | Enable Prometheus metrics |
 | `metrics.path` | string | `/metrics` | Metrics endpoint path |
-| `audit.enabled` | bool | `false` | Enable audit logging |
-| `audit.output` | string | `stdout` | Audit log output |
+
+---
+
+## AI/ML Features (2025)
+
+All AI/ML features are disabled by default and enabled via configuration.
+
+### S3 Express One Zone
+
+Ultra-low latency storage with atomic append operations.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `s3_express.enabled` | bool | `false` | Enable S3 Express One Zone |
+| `s3_express.default_zone` | string | `use1-az1` | Default availability zone |
+| `s3_express.session_duration` | int | `3600` | Session token duration (seconds) |
+| `s3_express.max_append_size` | int64 | `5368709120` | Max atomic append size (5GB) |
+| `s3_express.enable_atomic_append` | bool | `true` | Enable atomic append operations |
+
+### Apache Iceberg
+
+Native table format support for data lakehouse workloads.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `iceberg.enabled` | bool | `false` | Enable Iceberg support |
+| `iceberg.catalog_type` | string | `rest` | Catalog type: `rest`, `hive`, `glue` |
+| `iceberg.catalog_uri` | string | `http://localhost:8181` | Catalog service URI |
+| `iceberg.warehouse` | string | `s3://warehouse/` | Default warehouse location |
+| `iceberg.default_file_format` | string | `parquet` | File format: `parquet`, `orc`, `avro` |
+| `iceberg.metadata_path` | string | `./data/iceberg` | Metadata storage path |
+| `iceberg.snapshot_retention` | int | `10` | Snapshots to retain |
+| `iceberg.expire_snapshots_older_than` | int | `168` | Expire snapshots older than (hours) |
+| `iceberg.enable_acid` | bool | `true` | Enable ACID transactions |
+
+### MCP Server (AI Agent Integration)
+
+Model Context Protocol server for Claude, ChatGPT, and other AI agents.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `mcp.enabled` | bool | `false` | Enable MCP server |
+| `mcp.port` | int | `9005` | MCP server port |
+| `mcp.max_connections` | int | `100` | Maximum concurrent connections |
+| `mcp.enable_tools` | bool | `true` | Enable tool execution |
+| `mcp.enable_resources` | bool | `true` | Enable resource access |
+| `mcp.enable_prompts` | bool | `true` | Enable prompt templates |
+| `mcp.allowed_origins` | list | `[]` | CORS allowed origins |
+| `mcp.auth_required` | bool | `true` | Require authentication |
+| `mcp.rate_limit_per_minute` | int | `60` | Rate limit per minute |
+
+### GPUDirect Storage
+
+Zero-copy GPU-to-storage transfers for ML training workloads.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `gpudirect.enabled` | bool | `false` | Enable GPUDirect Storage |
+| `gpudirect.devices` | list | `[]` | GPU device IDs to use |
+| `gpudirect.buffer_pool_size` | int64 | `1073741824` | Buffer pool size (1GB) |
+| `gpudirect.max_transfer_size` | int64 | `268435456` | Max transfer size (256MB) |
+| `gpudirect.enable_async` | bool | `true` | Enable async transfers |
+| `gpudirect.cuda_stream_count` | int | `4` | CUDA streams per GPU |
+| `gpudirect.enable_p2p` | bool | `true` | Enable peer-to-peer GPU transfers |
+| `gpudirect.nvme_path` | string | `/dev/nvme*` | NVMe device path pattern |
+
+### BlueField DPU
+
+NVIDIA BlueField SmartNIC offload for crypto and compression.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `dpu.enabled` | bool | `false` | Enable DPU offload |
+| `dpu.device_index` | int | `0` | DPU device index |
+| `dpu.enable_crypto` | bool | `true` | Enable crypto offload |
+| `dpu.enable_compression` | bool | `true` | Enable compression offload |
+| `dpu.enable_storage` | bool | `true` | Enable storage offload |
+| `dpu.enable_network` | bool | `true` | Enable network offload |
+| `dpu.enable_rdma` | bool | `true` | Enable RDMA via DPU |
+| `dpu.enable_regex` | bool | `false` | Enable regex offload |
+| `dpu.health_check_interval` | int | `30` | Health check interval (seconds) |
+| `dpu.fallback_on_error` | bool | `true` | Fall back to CPU on error |
+| `dpu.min_size_for_offload` | int | `4096` | Min size to offload (bytes) |
+
+### S3 over RDMA
+
+Ultra-low latency object access via InfiniBand/RoCE.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `rdma.enabled` | bool | `false` | Enable RDMA transport |
+| `rdma.port` | int | `9100` | RDMA listener port |
+| `rdma.device_name` | string | `mlx5_0` | RDMA device name |
+| `rdma.gid_index` | int | `0` | GID index for RoCE |
+| `rdma.max_send_wr` | int | `128` | Max send work requests per QP |
+| `rdma.max_recv_wr` | int | `128` | Max receive work requests per QP |
+| `rdma.max_send_sge` | int | `1` | Max scatter/gather per send |
+| `rdma.max_recv_sge` | int | `1` | Max scatter/gather per receive |
+| `rdma.max_inline_data` | int | `64` | Max inline data size |
+| `rdma.memory_pool_size` | int64 | `1073741824` | Registered memory pool (1GB) |
+| `rdma.enable_zero_copy` | bool | `true` | Enable zero-copy transfers |
+| `rdma.fallback_to_tcp` | bool | `true` | Fall back to TCP if RDMA unavailable |
+
+### NVIDIA NIM Integration
+
+AI inference on stored objects using NVIDIA NIM.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `nim.enabled` | bool | `false` | Enable NIM integration |
+| `nim.endpoints` | list | `[https://integrate.api.nvidia.com/v1]` | NIM server endpoints |
+| `nim.api_key` | string | - | NVIDIA API key |
+| `nim.organization_id` | string | - | NVIDIA organization ID |
+| `nim.default_model` | string | `meta/llama-3.1-8b-instruct` | Default inference model |
+| `nim.timeout` | int | `60` | Inference timeout (seconds) |
+| `nim.max_retries` | int | `3` | Max retries for failed requests |
+| `nim.max_batch_size` | int | `100` | Max batch inference size |
+| `nim.enable_streaming` | bool | `true` | Enable streaming responses |
+| `nim.cache_results` | bool | `true` | Cache inference results |
+| `nim.cache_ttl` | int | `3600` | Cache TTL (seconds) |
+| `nim.enable_metrics` | bool | `true` | Enable detailed metrics |
+| `nim.process_on_upload` | bool | `false` | Auto-process on upload |
+| `nim.process_content_types` | list | `[image/*, text/*, application/json]` | Content types to process |
 
 ---
 

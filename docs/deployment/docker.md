@@ -548,6 +548,8 @@ docker service logs -f nebulaio_nebulaio
 
 ## Environment Variables Reference
 
+### Core Settings
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `NEBULAIO_DATA_DIR` | Data directory path | `/data` |
@@ -556,9 +558,36 @@ docker service logs -f nebulaio_nebulaio
 | `NEBULAIO_CONSOLE_PORT` | Web Console port | `9002` |
 | `NEBULAIO_NODE_ID` | Unique node identifier | Auto-generated |
 | `NEBULAIO_NODE_NAME` | Human-readable node name | hostname |
+| `NEBULAIO_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
+
+### Authentication
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `NEBULAIO_AUTH_ROOT_USER` | Initial admin username | `admin` |
 | `NEBULAIO_AUTH_ROOT_PASSWORD` | Initial admin password | `admin123` |
-| `NEBULAIO_LOG_LEVEL` | Log level | `info` |
+| `NEBULAIO_AUTH_JWT_SECRET` | JWT signing secret | Auto-generated |
+| `NEBULAIO_AUTH_TOKEN_EXPIRY` | Token expiry (minutes) | `60` |
+| `NEBULAIO_AUTH_REFRESH_TOKEN_EXPIRY` | Refresh token expiry (hours) | `168` |
+
+### TLS Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_TLS_ENABLED` | Enable TLS (secure by default) | `true` |
+| `NEBULAIO_TLS_CERT_DIR` | Certificate directory | `./data/certs` |
+| `NEBULAIO_TLS_CERT_FILE` | Custom certificate path | - |
+| `NEBULAIO_TLS_KEY_FILE` | Custom key path | - |
+| `NEBULAIO_TLS_CA_FILE` | CA certificate path | - |
+| `NEBULAIO_TLS_MIN_VERSION` | Minimum TLS version (1.2 or 1.3) | `1.2` |
+| `NEBULAIO_TLS_REQUIRE_CLIENT_CERT` | Enable mTLS | `false` |
+| `NEBULAIO_TLS_AUTO_GENERATE` | Auto-generate certificates | `true` |
+| `NEBULAIO_TLS_VALIDITY_DAYS` | Certificate validity (days) | `365` |
+
+### Clustering
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `NEBULAIO_CLUSTER_BOOTSTRAP` | Bootstrap new cluster | `true` |
 | `NEBULAIO_CLUSTER_JOIN_ADDRESSES` | Comma-separated join addresses | - |
 | `NEBULAIO_CLUSTER_ADVERTISE_ADDRESS` | Address to advertise | Auto-detected |
@@ -567,6 +596,134 @@ docker service logs -f nebulaio_nebulaio
 | `NEBULAIO_CLUSTER_NODE_ROLE` | Node role (storage/management) | `storage` |
 | `NEBULAIO_CLUSTER_CLUSTER_NAME` | Cluster name | `default` |
 | `NEBULAIO_CLUSTER_EXPECT_NODES` | Expected nodes (bootstrap) | `1` |
+| `NEBULAIO_CLUSTER_SHARD_ID` | Dragonboat shard ID | `1` |
+| `NEBULAIO_CLUSTER_REPLICA_ID` | Dragonboat replica ID | Auto-generated |
+
+### Storage
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_STORAGE_BACKEND` | Backend: fs, volume, erasure | `fs` |
+| `NEBULAIO_STORAGE_DEFAULT_STORAGE_CLASS` | Default storage class | `STANDARD` |
+| `NEBULAIO_STORAGE_MAX_OBJECT_SIZE` | Maximum object size (bytes) | `5497558138880` (5TB) |
+| `NEBULAIO_STORAGE_VOLUME_MAX_VOLUME_SIZE` | Volume file size (bytes) | `34359738368` (32GB) |
+| `NEBULAIO_STORAGE_VOLUME_AUTO_CREATE` | Auto-create volumes | `true` |
+| `NEBULAIO_STORAGE_VOLUME_DIRECT_IO_ENABLED` | Enable O_DIRECT | `true` |
+| `NEBULAIO_STORAGE_VOLUME_TIER_DIRECTORIES_HOT` | Hot tier directory | - |
+| `NEBULAIO_STORAGE_VOLUME_TIER_DIRECTORIES_WARM` | Warm tier directory | - |
+| `NEBULAIO_STORAGE_VOLUME_TIER_DIRECTORIES_COLD` | Cold tier directory | - |
+
+### DRAM Cache
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_CACHE_ENABLED` | Enable DRAM cache | `false` |
+| `NEBULAIO_CACHE_MAX_SIZE` | Maximum cache size (bytes) | `8589934592` (8GB) |
+| `NEBULAIO_CACHE_SHARD_COUNT` | Cache shards | `256` |
+| `NEBULAIO_CACHE_TTL` | TTL in seconds | `3600` |
+| `NEBULAIO_CACHE_EVICTION_POLICY` | Policy: lru, lfu, arc | `arc` |
+| `NEBULAIO_CACHE_PREFETCH_ENABLED` | Enable prefetching | `true` |
+| `NEBULAIO_CACHE_DISTRIBUTED_MODE` | Distributed cache | `false` |
+
+### Data Firewall (QoS)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_FIREWALL_ENABLED` | Enable data firewall | `false` |
+| `NEBULAIO_FIREWALL_DEFAULT_POLICY` | Default policy: allow, deny | `allow` |
+| `NEBULAIO_FIREWALL_RATE_LIMITING_ENABLED` | Enable rate limiting | `false` |
+| `NEBULAIO_FIREWALL_RATE_LIMITING_REQUESTS_PER_SECOND` | Requests per second | `1000` |
+| `NEBULAIO_FIREWALL_RATE_LIMITING_BURST_SIZE` | Burst size | `100` |
+| `NEBULAIO_FIREWALL_BANDWIDTH_ENABLED` | Enable bandwidth throttling | `false` |
+| `NEBULAIO_FIREWALL_BANDWIDTH_MAX_BYTES_PER_SECOND` | Max bandwidth | `1073741824` (1GB/s) |
+| `NEBULAIO_FIREWALL_CONNECTIONS_ENABLED` | Enable connection limits | `false` |
+| `NEBULAIO_FIREWALL_CONNECTIONS_MAX_CONNECTIONS` | Max connections | `10000` |
+
+### Audit Logging
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_AUDIT_ENABLED` | Enable audit logging | `true` |
+| `NEBULAIO_AUDIT_COMPLIANCE_MODE` | Compliance: none, soc2, pci, hipaa, gdpr, fedramp | `none` |
+| `NEBULAIO_AUDIT_FILE_PATH` | Audit log file path | `./data/audit/audit.log` |
+| `NEBULAIO_AUDIT_RETENTION_DAYS` | Retention period (days) | `90` |
+| `NEBULAIO_AUDIT_INTEGRITY_ENABLED` | Enable HMAC integrity | `true` |
+
+### AI/ML Features (2025)
+
+#### S3 Express One Zone
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_S3_EXPRESS_ENABLED` | Enable S3 Express | `false` |
+| `NEBULAIO_S3_EXPRESS_DEFAULT_ZONE` | Default zone | `use1-az1` |
+| `NEBULAIO_S3_EXPRESS_SESSION_DURATION` | Session duration (seconds) | `3600` |
+| `NEBULAIO_S3_EXPRESS_ENABLE_ATOMIC_APPEND` | Enable atomic appends | `true` |
+
+#### Apache Iceberg
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_ICEBERG_ENABLED` | Enable Iceberg | `false` |
+| `NEBULAIO_ICEBERG_CATALOG_TYPE` | Catalog: rest, hive, glue | `rest` |
+| `NEBULAIO_ICEBERG_CATALOG_URI` | Catalog URI | `http://localhost:8181` |
+| `NEBULAIO_ICEBERG_WAREHOUSE` | Warehouse location | `s3://warehouse/` |
+| `NEBULAIO_ICEBERG_ENABLE_ACID` | Enable ACID transactions | `true` |
+
+#### MCP Server
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_MCP_ENABLED` | Enable MCP server | `false` |
+| `NEBULAIO_MCP_PORT` | MCP server port | `9005` |
+| `NEBULAIO_MCP_ENABLE_TOOLS` | Enable tool execution | `true` |
+| `NEBULAIO_MCP_ENABLE_RESOURCES` | Enable resource access | `true` |
+| `NEBULAIO_MCP_AUTH_REQUIRED` | Require authentication | `true` |
+| `NEBULAIO_MCP_RATE_LIMIT_PER_MINUTE` | Rate limit | `60` |
+
+#### GPUDirect Storage
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_GPUDIRECT_ENABLED` | Enable GPUDirect | `false` |
+| `NEBULAIO_GPUDIRECT_BUFFER_POOL_SIZE` | Buffer pool (bytes) | `1073741824` (1GB) |
+| `NEBULAIO_GPUDIRECT_MAX_TRANSFER_SIZE` | Max transfer (bytes) | `268435456` (256MB) |
+| `NEBULAIO_GPUDIRECT_ENABLE_ASYNC` | Async transfers | `true` |
+| `NEBULAIO_GPUDIRECT_ENABLE_P2P` | P2P GPU transfers | `true` |
+
+#### BlueField DPU
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_DPU_ENABLED` | Enable DPU offload | `false` |
+| `NEBULAIO_DPU_DEVICE_INDEX` | DPU device index | `0` |
+| `NEBULAIO_DPU_ENABLE_CRYPTO` | Crypto offload | `true` |
+| `NEBULAIO_DPU_ENABLE_COMPRESSION` | Compression offload | `true` |
+| `NEBULAIO_DPU_ENABLE_RDMA` | RDMA offload | `true` |
+| `NEBULAIO_DPU_FALLBACK_ON_ERROR` | Fall back to CPU | `true` |
+
+#### S3 over RDMA
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_RDMA_ENABLED` | Enable RDMA | `false` |
+| `NEBULAIO_RDMA_PORT` | RDMA port | `9100` |
+| `NEBULAIO_RDMA_DEVICE_NAME` | RDMA device | `mlx5_0` |
+| `NEBULAIO_RDMA_ENABLE_ZERO_COPY` | Zero-copy transfers | `true` |
+| `NEBULAIO_RDMA_FALLBACK_TO_TCP` | Fall back to TCP | `true` |
+| `NEBULAIO_RDMA_MEMORY_POOL_SIZE` | Memory pool (bytes) | `1073741824` (1GB) |
+
+#### NVIDIA NIM
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_NIM_ENABLED` | Enable NIM | `false` |
+| `NEBULAIO_NIM_API_KEY` | NVIDIA API key | - |
+| `NEBULAIO_NIM_DEFAULT_MODEL` | Default model | `meta/llama-3.1-8b-instruct` |
+| `NEBULAIO_NIM_TIMEOUT` | Timeout (seconds) | `60` |
+| `NEBULAIO_NIM_ENABLE_STREAMING` | Enable streaming | `true` |
+| `NEBULAIO_NIM_CACHE_RESULTS` | Cache results | `true` |
+| `NEBULAIO_NIM_PROCESS_ON_UPLOAD` | Process on upload | `false` |
 
 ---
 
