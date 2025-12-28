@@ -83,6 +83,14 @@ func New(cfg *config.Config) (*Server, error) {
 		cfg: cfg,
 	}
 
+	// Track initialization success for cleanup on failure
+	var initSuccess bool
+	defer func() {
+		if !initSuccess {
+			srv.cleanupOnInitFailure()
+		}
+	}()
+
 	// Initialize metrics
 	metrics.Init(cfg.NodeID)
 	log.Info().Str("node_id", cfg.NodeID).Msg("Metrics initialized")
@@ -367,7 +375,37 @@ func New(cfg *config.Config) (*Server, error) {
 	srv.setupAdminServer()
 	srv.setupConsoleServer()
 
+	// Mark initialization as successful to prevent cleanup
+	initSuccess = true
 	return srv, nil
+}
+
+// cleanupOnInitFailure cleans up resources if initialization fails
+func (s *Server) cleanupOnInitFailure() {
+	log.Debug().Msg("Cleaning up resources after initialization failure")
+
+	// Close metadata store if initialized
+	if s.metaStore != nil {
+		if err := s.metaStore.Close(); err != nil {
+			log.Warn().Err(err).Msg("Failed to close metadata store during cleanup")
+		}
+	}
+
+	// Close storage backend if initialized
+	if s.storageBackend != nil {
+		if closer, ok := s.storageBackend.(interface{ Close() error }); ok {
+			if err := closer.Close(); err != nil {
+				log.Warn().Err(err).Msg("Failed to close storage backend during cleanup")
+			}
+		}
+	}
+
+	// Stop discovery if initialized
+	if s.discovery != nil {
+		if err := s.discovery.Stop(); err != nil {
+			log.Warn().Err(err).Msg("Failed to stop discovery during cleanup")
+		}
+	}
 }
 
 func (s *Server) setupS3Server() {

@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/piwi3910/nebulaio/internal/audit"
@@ -352,6 +353,68 @@ func DefaultRedundancyConfig() *RedundancyConfig {
 		ParityShards:    4,
 		PlacementPolicy: "spread",
 	}
+}
+
+// ValidPlacementPolicies defines the allowed placement policy values
+var ValidPlacementPolicies = map[string]bool{
+	"spread":     true,
+	"local":      true,
+	"rack-aware": true,
+	"zone-aware": true,
+	"":           true, // empty is allowed, defaults to spread
+}
+
+// Validate checks if the RedundancyConfig is valid
+func (c *RedundancyConfig) Validate() error {
+	if c == nil {
+		return nil // nil config is valid (uses defaults)
+	}
+
+	// If not enabled, no further validation needed
+	if !c.Enabled {
+		return nil
+	}
+
+	// Validate DataShards bounds
+	if c.DataShards < 2 {
+		return fmt.Errorf("data_shards must be at least 2, got %d", c.DataShards)
+	}
+	if c.DataShards > 256 {
+		return fmt.Errorf("data_shards must be at most 256, got %d", c.DataShards)
+	}
+
+	// Validate ParityShards bounds
+	if c.ParityShards < 1 {
+		return fmt.Errorf("parity_shards must be at least 1, got %d", c.ParityShards)
+	}
+	if c.ParityShards > 256 {
+		return fmt.Errorf("parity_shards must be at most 256, got %d", c.ParityShards)
+	}
+
+	// Total shards must not exceed 256 (Reed-Solomon limit)
+	if c.DataShards+c.ParityShards > 256 {
+		return fmt.Errorf("total shards (data + parity) must be at most 256, got %d", c.DataShards+c.ParityShards)
+	}
+
+	// Validate MinAvailableShards if set
+	if c.MinAvailableShards > 0 && c.MinAvailableShards < c.DataShards {
+		return fmt.Errorf("min_available_shards (%d) cannot be less than data_shards (%d)", c.MinAvailableShards, c.DataShards)
+	}
+
+	// Validate PlacementPolicy
+	if !ValidPlacementPolicies[c.PlacementPolicy] {
+		return fmt.Errorf("invalid placement_policy %q, must be one of: spread, local, rack-aware, zone-aware", c.PlacementPolicy)
+	}
+
+	// Validate ReplicationFactor bounds
+	if c.ReplicationFactor < 0 {
+		return fmt.Errorf("replication_factor cannot be negative, got %d", c.ReplicationFactor)
+	}
+	if c.ReplicationFactor > 10 {
+		return fmt.Errorf("replication_factor cannot exceed 10, got %d", c.ReplicationFactor)
+	}
+
+	return nil
 }
 
 // RedundancyPreset represents a named redundancy configuration preset

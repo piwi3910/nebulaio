@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1246,6 +1247,58 @@ func (c *Config) validate() error {
 		return fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 
+	// Validate placement group configuration
+	if err := c.Storage.PlacementGroups.validate(); err != nil {
+		return fmt.Errorf("invalid placement group configuration: %w", err)
+	}
+
+	return nil
+}
+
+// validate checks placement group configuration for consistency
+func (c *PlacementGroupsConfig) validate() error {
+	// Build a map of known group IDs
+	groupIDs := make(map[string]bool)
+	for _, g := range c.Groups {
+		if g.ID == "" {
+			return fmt.Errorf("placement group ID cannot be empty")
+		}
+		if groupIDs[g.ID] {
+			return fmt.Errorf("duplicate placement group ID: %s", g.ID)
+		}
+		groupIDs[g.ID] = true
+
+		// Validate MinNodes and MaxNodes
+		if g.MinNodes < 0 {
+			return fmt.Errorf("placement group %s: min_nodes cannot be negative", g.ID)
+		}
+		if g.MaxNodes < 0 {
+			return fmt.Errorf("placement group %s: max_nodes cannot be negative", g.ID)
+		}
+		if g.MaxNodes > 0 && g.MinNodes > g.MaxNodes {
+			return fmt.Errorf("placement group %s: min_nodes (%d) cannot exceed max_nodes (%d)", g.ID, g.MinNodes, g.MaxNodes)
+		}
+	}
+
+	// Validate LocalGroupID references a known group (if groups are defined)
+	if c.LocalGroupID != "" && len(c.Groups) > 0 {
+		if !groupIDs[c.LocalGroupID] {
+			return fmt.Errorf("local_group_id %q references unknown placement group", c.LocalGroupID)
+		}
+	}
+
+	// Validate ReplicationTargets reference known groups
+	for _, targetID := range c.ReplicationTargets {
+		if len(c.Groups) > 0 && !groupIDs[targetID] {
+			return fmt.Errorf("replication_target %q references unknown placement group", targetID)
+		}
+	}
+
+	// Validate MinNodesForErasure
+	if c.MinNodesForErasure < 0 {
+		return fmt.Errorf("min_nodes_for_erasure cannot be negative")
+	}
+
 	return nil
 }
 
@@ -1278,7 +1331,10 @@ func generateSecret(length int) string {
 
 func randomByte() byte {
 	var b [1]byte
-	_, _ = os.Stdin.Read(b[:])
-	// Fallback to time-based if stdin fails
-	return byte(os.Getpid() ^ int(os.Getuid()))
+	if _, err := rand.Read(b[:]); err != nil {
+		// This should never happen with crypto/rand, but if it does,
+		// panic is appropriate since we cannot safely generate secrets
+		panic(fmt.Sprintf("failed to generate random bytes: %v", err))
+	}
+	return b[0]
 }

@@ -179,7 +179,8 @@ func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) 
 	}
 
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	// Use 0600 permissions to protect metadata from unauthorized access
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
@@ -221,10 +222,24 @@ func (b *Backend) deleteObjectMetadata(bucket, key string) error {
 
 // PutObject stores an object with erasure coding
 func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
+	// Check for context cancellation before starting expensive operation
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Encode the data
 	encoded, err := b.encoder.Encode(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode object: %w", err)
+	}
+
+	// Check for context cancellation after encoding
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
 	}
 
 	// Get node assignments for shards
@@ -246,48 +261,64 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		return nil, fmt.Errorf("failed to place shards: %w", err)
 	}
 
-	// Store shards
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(encoded.Shards))
-	pathChan := make(chan struct {
+	// Store shards concurrently
+	// Use a struct to track results for proper cleanup on failure
+	type shardResult struct {
 		index int
 		path  string
-	}, len(encoded.Shards))
+		err   error
+	}
+
+	var wg sync.WaitGroup
+	results := make([]shardResult, len(encoded.Shards))
+	var resultsMu sync.Mutex
 
 	for i, shard := range encoded.Shards {
 		wg.Add(1)
 		go func(index int, data []byte, assignment NodeAssignment) {
 			defer wg.Done()
 
-			// For now, all shards go to local node (distributed mode would send to remote nodes)
-			path, writeErr := b.shardManager.WriteShard(ctx, bucket, key, index, data)
-			if writeErr != nil {
-				errChan <- fmt.Errorf("failed to write shard %d: %w", index, writeErr)
+			// Check for context cancellation before writing
+			select {
+			case <-ctx.Done():
+				resultsMu.Lock()
+				results[index] = shardResult{index: index, err: ctx.Err()}
+				resultsMu.Unlock()
 				return
+			default:
 			}
 
-			pathChan <- struct {
-				index int
-				path  string
-			}{index, path}
+			// For now, all shards go to local node (distributed mode would send to remote nodes)
+			path, writeErr := b.shardManager.WriteShard(ctx, bucket, key, index, data)
+
+			resultsMu.Lock()
+			if writeErr != nil {
+				results[index] = shardResult{index: index, err: fmt.Errorf("failed to write shard %d: %w", index, writeErr)}
+			} else {
+				results[index] = shardResult{index: index, path: path}
+			}
+			resultsMu.Unlock()
 		}(i, shard, assignments[i])
 	}
 
 	wg.Wait()
-	close(errChan)
-	close(pathChan)
 
-	// Check for errors
+	// Count errors and collect successful paths for potential cleanup
 	var errs []error
-	for err := range errChan {
-		errs = append(errs, err)
+	var successPaths []string
+	for _, result := range results {
+		if result.err != nil {
+			errs = append(errs, result.err)
+		} else if result.path != "" {
+			successPaths = append(successPaths, result.path)
+		}
 	}
 
 	// Allow some shard failures (up to parityShards)
 	if len(errs) > b.config.ParityShards {
 		// Clean up written shards on failure
-		for result := range pathChan {
-			_ = b.shardManager.DeleteShardByPath(ctx, result.path)
+		for _, path := range successPaths {
+			_ = b.shardManager.DeleteShardByPath(ctx, path)
 		}
 		return nil, fmt.Errorf("too many shard write failures (%d): %v", len(errs), errs[0])
 	}
@@ -316,20 +347,12 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 
 // GetObject retrieves an object using erasure coding
 func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
-	// Read object metadata for original size
+	// Read object metadata for original size - this is required for correct data reconstruction
 	objMeta, err := b.readObjectMetadata(bucket, key)
 	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("bucket", bucket).
-			Str("key", key).
-			Msg("Failed to read object metadata, attempting recovery without size info")
-		// Continue without metadata - data may have padding
-		objMeta = &objectMetadata{
-			OriginalSize: 0,
-			DataShards:   b.config.DataShards,
-			ParityShards: b.config.ParityShards,
-		}
+		// Without metadata, we cannot properly trim padding from reconstructed data
+		// This would result in data corruption, so we must fail
+		return nil, fmt.Errorf("failed to read object metadata for %s/%s: %w", bucket, key, err)
 	}
 
 	// Collect available shards

@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"hash/fnv"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
+
+// callbackTimeout is the maximum time allowed for a callback to complete
+const callbackTimeout = 5 * time.Second
 
 // PlacementGroupID uniquely identifies a placement group
 type PlacementGroupID string
@@ -226,6 +230,17 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 	m.nodeToGroup[nodeID] = groupID
 	groupSize := len(group.Nodes)
 
+	// Check if group should transition to healthy status
+	// If we now have enough nodes for minimum requirements, update status
+	var statusCallback func(PlacementGroupID, PlacementGroupStatus)
+	var newStatus PlacementGroupStatus
+	oldStatus := group.Status
+	if group.Status == PlacementGroupStatusDegraded && groupSize >= group.MinNodes {
+		group.Status = PlacementGroupStatusHealthy
+		newStatus = PlacementGroupStatusHealthy
+		statusCallback = m.onGroupStatusChange
+	}
+
 	// Capture callback under lock to prevent data race
 	callback := m.onNodeJoinedGroup
 	m.mu.Unlock()
@@ -235,6 +250,16 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 		Str("node_id", nodeID).
 		Int("group_size", groupSize).
 		Msg("Node added to placement group")
+
+	// Notify about status change if it occurred
+	if statusCallback != nil && newStatus != "" {
+		log.Info().
+			Str("group_id", string(groupID)).
+			Str("old_status", string(oldStatus)).
+			Str("new_status", string(newStatus)).
+			Msg("Placement group status changed")
+		go m.safeCallback(func() { statusCallback(groupID, newStatus) })
+	}
 
 	if callback != nil {
 		go m.safeCallback(func() { callback(groupID, nodeID) })
@@ -494,14 +519,32 @@ func (m *PlacementGroupManager) copyGroup(g *PlacementGroup) *PlacementGroup {
 	}
 }
 
-// safeCallback executes a callback function with panic recovery
-func (m *PlacementGroupManager) safeCallback(fn func()) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Error().
-				Interface("panic", r).
-				Msg("Panic recovered in placement group callback")
-		}
+// safeCallbackWithTimeout executes a callback function with panic recovery and timeout
+func (m *PlacementGroupManager) safeCallbackWithTimeout(fn func()) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Msg("Panic recovered in placement group callback")
+			}
+		}()
+		fn()
 	}()
-	fn()
+
+	select {
+	case <-done:
+		// Callback completed successfully
+	case <-time.After(callbackTimeout):
+		log.Warn().
+			Dur("timeout", callbackTimeout).
+			Msg("Placement group callback timed out")
+	}
+}
+
+// safeCallback executes a callback function with panic recovery (deprecated, use safeCallbackWithTimeout)
+func (m *PlacementGroupManager) safeCallback(fn func()) {
+	m.safeCallbackWithTimeout(fn)
 }
