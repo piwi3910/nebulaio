@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // SourceType represents the type of source system.
@@ -594,7 +595,12 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 		mm.mu.Lock()
 		mm.activeJob = nil
 		mm.mu.Unlock()
-		_ = mm.saveJobs()
+		if saveErr := mm.saveJobs(); saveErr != nil {
+			log.Error().
+				Err(saveErr).
+				Str("job_id", activeJob.job.ID).
+				Msg("failed to save migration jobs state after migration completed - progress may be lost on restart")
+		}
 	}()
 
 	job := activeJob.job
@@ -762,7 +768,7 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 						errMu.Unlock()
 
 						atomic.AddInt64(&job.Progress.FailedObjects, 1)
-						mm.logFailedObject(sourceBucket, o.Key, err)
+						mm.logFailedObject(job.ID, sourceBucket, o.Key, err)
 					} else {
 						atomic.AddInt64(&job.Progress.MigratedObjects, 1)
 						atomic.AddInt64(&job.Progress.MigratedBytes, o.Size)
@@ -798,7 +804,14 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 				LastBucket: sourceBucket,
 				LastKey:    marker,
 			}
-			_ = mm.saveJobs()
+			if saveErr := mm.saveJobs(); saveErr != nil {
+				log.Warn().
+					Err(saveErr).
+					Str("job_id", job.ID).
+					Str("bucket", sourceBucket).
+					Str("marker", marker).
+					Msg("failed to save migration resume state - migration may restart from beginning if interrupted")
+			}
 		}
 	}
 
@@ -905,7 +918,7 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 }
 
 // logFailedObject logs a failed object migration.
-func (mm *MigrationManager) logFailedObject(bucket, key string, err error) {
+func (mm *MigrationManager) logFailedObject(jobID, bucket, key string, err error) {
 	entry := FailedObject{
 		Bucket:    bucket,
 		Key:       key,
@@ -913,8 +926,25 @@ func (mm *MigrationManager) logFailedObject(bucket, key string, err error) {
 		Timestamp: time.Now(),
 	}
 
-	data, _ := json.Marshal(entry)
-	_, _ = mm.failedLog.Write(append(data, '\n'))
+	data, marshalErr := json.Marshal(entry)
+	if marshalErr != nil {
+		log.Error().
+			Err(marshalErr).
+			Str("job_id", jobID).
+			Str("bucket", bucket).
+			Str("key", key).
+			Str("original_error", err.Error()).
+			Msg("failed to marshal migration failure entry - failure will not be logged to file")
+		return
+	}
+	if _, writeErr := mm.failedLog.Write(append(data, '\n')); writeErr != nil {
+		log.Error().
+			Err(writeErr).
+			Str("job_id", jobID).
+			Str("bucket", bucket).
+			Str("key", key).
+			Msg("failed to write migration failure to log file")
+	}
 }
 
 // PauseMigration pauses the active migration.

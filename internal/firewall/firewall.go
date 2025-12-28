@@ -8,6 +8,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Config configures the data firewall
@@ -285,42 +287,68 @@ func New(config Config) (*Firewall, error) {
 		userConnections: make(map[string]int64),
 	}
 
-	// Parse IP allowlist
+	// Parse IP allowlist - collect invalid entries for summary logging
+	var invalidAllowlistEntries []string
 	for _, cidr := range config.IPAllowlist {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
 			ip := net.ParseIP(cidr)
 			if ip == nil {
+				invalidAllowlistEntries = append(invalidAllowlistEntries, cidr)
 				continue
 			}
+			var parseErr error
 			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32")
+				_, network, parseErr = net.ParseCIDR(cidr + "/32")
 			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128")
+				_, network, parseErr = net.ParseCIDR(cidr + "/128")
+			}
+			if parseErr != nil {
+				invalidAllowlistEntries = append(invalidAllowlistEntries, cidr)
+				continue
 			}
 		}
 		if network != nil {
 			fw.allowedNets = append(fw.allowedNets, network)
 		}
 	}
+	if len(invalidAllowlistEntries) > 0 {
+		log.Warn().
+			Int("count", len(invalidAllowlistEntries)).
+			Strs("entries", invalidAllowlistEntries).
+			Msg("skipped invalid IP allowlist entries - check firewall configuration")
+	}
 
-	// Parse IP blocklist
+	// Parse IP blocklist - collect invalid entries for summary logging
+	var invalidBlocklistEntries []string
 	for _, cidr := range config.IPBlocklist {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
 			ip := net.ParseIP(cidr)
 			if ip == nil {
+				invalidBlocklistEntries = append(invalidBlocklistEntries, cidr)
 				continue
 			}
+			var parseErr error
 			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32")
+				_, network, parseErr = net.ParseCIDR(cidr + "/32")
 			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128")
+				_, network, parseErr = net.ParseCIDR(cidr + "/128")
+			}
+			if parseErr != nil {
+				invalidBlocklistEntries = append(invalidBlocklistEntries, cidr)
+				continue
 			}
 		}
 		if network != nil {
 			fw.blockedNets = append(fw.blockedNets, network)
 		}
+	}
+	if len(invalidBlocklistEntries) > 0 {
+		log.Warn().
+			Int("count", len(invalidBlocklistEntries)).
+			Strs("entries", invalidBlocklistEntries).
+			Msg("skipped invalid IP blocklist entries - check firewall configuration")
 	}
 
 	// Initialize global rate limiter

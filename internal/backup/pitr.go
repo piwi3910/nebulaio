@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // BackupType represents the type of backup.
@@ -311,7 +312,9 @@ func (wm *WALManager) syncLoop() {
 	for range wm.syncTicker.C {
 		wm.mu.Lock()
 		if err := wm.file.Sync(); err != nil {
-			// Log error
+			log.Error().
+				Err(err).
+				Msg("failed to sync WAL file - data durability may be compromised; check disk health, available space, and filesystem mount options (consider enabling sync mount option)")
 		}
 		wm.lastSync = time.Now()
 

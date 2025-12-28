@@ -85,7 +85,9 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	// Create NodeHost
 	nh, err := dragonboat.NewNodeHost(nhConfig)
 	if err != nil {
-		_ = db.Close()
+		if closeErr := db.Close(); closeErr != nil {
+			log.Error().Err(closeErr).Msg("failed to close BadgerDB during cleanup after NodeHost creation failed")
+		}
 		return nil, fmt.Errorf("failed to create nodehost: %w", err)
 	}
 
@@ -118,7 +120,9 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 		// Bootstrap a new cluster
 		if err := nh.StartReplica(cfg.InitialMembers, false, smFactory, rc); err != nil {
 			nh.Close()
-			_ = db.Close()
+			if closeErr := db.Close(); closeErr != nil {
+				log.Error().Err(closeErr).Msg("failed to close BadgerDB during cleanup after replica start failed")
+			}
 			return nil, fmt.Errorf("failed to start replica: %w", err)
 		}
 		log.Info().
@@ -129,7 +133,9 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 		// Join existing cluster
 		if err := nh.StartReplica(nil, true, smFactory, rc); err != nil {
 			nh.Close()
-			_ = db.Close()
+			if closeErr := db.Close(); closeErr != nil {
+				log.Error().Err(closeErr).Msg("failed to close BadgerDB during cleanup after replica join failed")
+			}
 			return nil, fmt.Errorf("failed to start replica: %w", err)
 		}
 		log.Info().

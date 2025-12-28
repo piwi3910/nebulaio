@@ -23,6 +23,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Common errors
@@ -760,7 +762,12 @@ func (s *Service) Close() error {
 	// Stop all services
 	s.mu.Lock()
 	for offloadType := range s.services {
-		_ = s.backend.StopService(offloadType)
+		if stopErr := s.backend.StopService(offloadType); stopErr != nil {
+			log.Error().
+				Err(stopErr).
+				Str("offload_type", string(offloadType)).
+				Msg("failed to stop DPU offload service - resources may not be properly released")
+		}
 	}
 	s.services = nil
 	s.mu.Unlock()

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -575,7 +576,14 @@ func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 		}
 
 		if keyAge >= policy.RotationInterval {
-			_, _ = krm.RotateKey(ctx, key.ID, "scheduled", "system")
+			if _, rotateErr := krm.RotateKey(ctx, key.ID, "scheduled", "system"); rotateErr != nil {
+				log.Error().
+					Err(rotateErr).
+					Str("key_id", key.ID).
+					Str("key_type", string(key.Type)).
+					Dur("key_age", keyAge).
+					Msg("failed to rotate key during scheduled rotation - key may exceed rotation policy")
+			}
 			continue
 		}
 
@@ -584,7 +592,13 @@ func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 			timeToExpiry := key.ExpiresAt.Sub(now)
 			if timeToExpiry <= policy.NotifyBeforeExpiry && timeToExpiry > 0 {
 				if krm.notifier != nil {
-					_ = krm.notifier.NotifyKeyExpiring(ctx, key, timeToExpiry)
+					if notifyErr := krm.notifier.NotifyKeyExpiring(ctx, key, timeToExpiry); notifyErr != nil {
+						log.Warn().
+							Err(notifyErr).
+							Str("key_id", key.ID).
+							Dur("time_to_expiry", timeToExpiry).
+							Msg("failed to send key expiry notification")
+					}
 				}
 			}
 		}

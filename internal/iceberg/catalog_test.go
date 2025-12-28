@@ -934,3 +934,103 @@ func TestSchemaEvolution(t *testing.T) {
 func intPtr(i int) *int {
 	return &i
 }
+
+// TestCopyMetadataErrorHandling verifies that copyMetadata handles errors properly
+// and callers check for nil returns
+func TestCopyMetadataErrorHandling(t *testing.T) {
+	catalog := &Catalog{
+		config:  &CatalogConfig{CatalogName: "test"},
+		metrics: &CatalogMetrics{},
+	}
+
+	t.Run("valid metadata returns copy", func(t *testing.T) {
+		validMetadata := &TableMetadata{
+			FormatVersion: 2,
+			TableUUID:     "test-uuid",
+			Location:      "s3://bucket/table",
+		}
+
+		copied := catalog.copyMetadata(validMetadata)
+		if copied == nil {
+			t.Fatal("copyMetadata should return non-nil for valid metadata")
+		}
+
+		if copied.TableUUID != validMetadata.TableUUID {
+			t.Errorf("Expected TableUUID %s, got %s", validMetadata.TableUUID, copied.TableUUID)
+		}
+
+		// Verify that original is not modified when copy is changed
+		copied.Location = "modified"
+		if validMetadata.Location == "modified" {
+			t.Error("Modifying copy should not affect original metadata")
+		}
+	})
+
+	t.Run("nil input returns nil", func(t *testing.T) {
+		// Test with nil input - should handle gracefully
+		// Note: This tests defensive programming; copyMetadata should not panic on nil
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("copyMetadata panicked on nil input: %v", r)
+			}
+		}()
+
+		// Nil metadata should return nil (or panic is caught above)
+		copied := catalog.copyMetadata(nil)
+		if copied != nil {
+			t.Error("copyMetadata with nil input should return nil")
+		}
+	})
+
+	t.Run("complex metadata with nested structures", func(t *testing.T) {
+		// Test with more complex metadata structure
+		complexMetadata := &TableMetadata{
+			FormatVersion:   2,
+			TableUUID:       "complex-uuid",
+			Location:        "s3://bucket/complex-table",
+			LastUpdatedMs:   1234567890,
+			LastColumnID:    10,
+			CurrentSchemaID: 1,
+			Schema: &Schema{
+				SchemaID: 1,
+				Fields: []*Field{
+					{ID: 1, Name: "id", Type: "long", Required: true},
+					{ID: 2, Name: "data", Type: "string", Required: false},
+				},
+			},
+			Schemas: []*Schema{
+				{SchemaID: 0, Fields: []*Field{{ID: 1, Name: "id", Type: "long"}}},
+				{SchemaID: 1, Fields: []*Field{{ID: 1, Name: "id", Type: "long"}, {ID: 2, Name: "data", Type: "string"}}},
+			},
+			Properties: map[string]string{
+				"owner":       "test-user",
+				"created-at":  "2024-01-01",
+				"description": "Test table with nested structures",
+			},
+		}
+
+		copied := catalog.copyMetadata(complexMetadata)
+		if copied == nil {
+			t.Fatal("copyMetadata should return non-nil for complex metadata")
+		}
+
+		// Verify deep copy of nested structures
+		if len(copied.Schema.Fields) != len(complexMetadata.Schema.Fields) {
+			t.Errorf("Expected %d fields, got %d", len(complexMetadata.Schema.Fields), len(copied.Schema.Fields))
+		}
+
+		if len(copied.Schemas) != len(complexMetadata.Schemas) {
+			t.Errorf("Expected %d schemas, got %d", len(complexMetadata.Schemas), len(copied.Schemas))
+		}
+
+		if len(copied.Properties) != len(complexMetadata.Properties) {
+			t.Errorf("Expected %d properties, got %d", len(complexMetadata.Properties), len(copied.Properties))
+		}
+
+		// Verify modifying copy doesn't affect original
+		copied.Properties["new-key"] = "new-value"
+		if _, exists := complexMetadata.Properties["new-key"]; exists {
+			t.Error("Modifying copied properties should not affect original")
+		}
+	})
+}
