@@ -3,6 +3,7 @@ package targets
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -51,6 +52,11 @@ type RedisConfig struct {
 
 // DefaultRedisConfig returns a default Redis configuration
 func DefaultRedisConfig() RedisConfig {
+	// Use REDIS_URL environment variable if set, otherwise use default
+	redisAddr := os.Getenv("REDIS_URL")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
 	return RedisConfig{
 		TargetConfig: events.TargetConfig{
 			Type:       "redis",
@@ -58,7 +64,7 @@ func DefaultRedisConfig() RedisConfig {
 			QueueSize:  10000,
 			MaxRetries: 3,
 		},
-		Address:      "localhost:6379",
+		Address:      redisAddr,
 		DB:           0,
 		Channel:      "s3:events",
 		UsePubSub:    true,

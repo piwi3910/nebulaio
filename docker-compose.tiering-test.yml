@@ -33,7 +33,8 @@ services:
       - NEBULAIO_DATA_DIR=/data
       - NEBULAIO_LOG_LEVEL=debug
       - NEBULAIO_AUTH_ROOT_USER=admin
-      - NEBULAIO_AUTH_ROOT_PASSWORD=Admin123
+      # For testing only - use environment variable in production
+      - NEBULAIO_AUTH_ROOT_PASSWORD=${NEBULAIO_AUTH_ROOT_PASSWORD:-TestPassword123}
 
       # TLS disabled for local testing
       - NEBULAIO_TLS_ENABLED=false

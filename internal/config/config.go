@@ -1090,9 +1090,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("audit.webhook.flush_interval_seconds", 30)
 
 	// Auth defaults
+	// Note: root_password has no default - must be set via NEBULAIO_AUTH_ROOT_PASSWORD env var or config file
 	v.SetDefault("auth.root_user", "admin")
-	v.SetDefault("auth.root_password", "admin123") // Should be changed!
-	v.SetDefault("auth.token_expiry", 60)          // 1 hour
+	v.SetDefault("auth.root_password", "") // Must be configured - no default for security
+	v.SetDefault("auth.token_expiry", 60)  // 1 hour
 	v.SetDefault("auth.refresh_token_expiry", 168) // 7 days
 
 	// S3 Express defaults

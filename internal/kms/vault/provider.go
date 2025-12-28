@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -48,13 +49,18 @@ type Config struct {
 
 // DefaultConfig returns a default Vault KMS configuration
 func DefaultConfig() Config {
+	// Use VAULT_ADDR environment variable if set, otherwise use default
+	vaultAddr := os.Getenv("VAULT_ADDR")
+	if vaultAddr == "" {
+		vaultAddr = "http://127.0.0.1:8200"
+	}
 	return Config{
 		ProviderConfig: kms.ProviderConfig{
 			Type:        "vault",
 			Enabled:     true,
 			KeyCacheTTL: 5 * time.Minute,
 		},
-		Address:    "http://127.0.0.1:8200",
+		Address:    vaultAddr,
 		MountPath:  "transit",
 		Timeout:    30 * time.Second,
 		MaxRetries: 3,

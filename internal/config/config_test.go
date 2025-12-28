@@ -383,8 +383,8 @@ func TestAuthDefaults(t *testing.T) {
 
 	// Verify auth defaults
 	assert.Equal(t, "admin", cfg.Auth.RootUser)
-	assert.Equal(t, "admin123", cfg.Auth.RootPassword)
-	assert.Equal(t, 60, cfg.Auth.TokenExpiry)          // 1 hour
+	assert.Equal(t, "", cfg.Auth.RootPassword) // No default for security - must be configured
+	assert.Equal(t, 60, cfg.Auth.TokenExpiry)  // 1 hour
 	assert.Equal(t, 168, cfg.Auth.RefreshTokenExpiry) // 7 days
 }
 

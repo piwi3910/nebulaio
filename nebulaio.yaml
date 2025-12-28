@@ -144,7 +144,8 @@ audit:
 # Authentication configuration
 auth:
   root_user: "admin"
-  root_password: "Admin1234"
+  # IMPORTANT: Set password via NEBULAIO_AUTH_ROOT_PASSWORD environment variable
+  # root_password: ""  # Uncomment and set for production use
   token_expiry: 60
   refresh_token_expiry: 168
 
