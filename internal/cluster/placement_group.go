@@ -3,6 +3,7 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -99,22 +100,31 @@ func NewPlacementGroupManager(config PlacementGroupConfig) (*PlacementGroupManag
 	return mgr, nil
 }
 
-// LocalGroup returns the placement group this node belongs to
+// LocalGroup returns a copy of the placement group this node belongs to
+// Returns nil if no local group is configured
 func (m *PlacementGroupManager) LocalGroup() *PlacementGroup {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.localGroup
+	if m.localGroup == nil {
+		return nil
+	}
+	// Return a copy to prevent external mutation
+	return m.copyGroup(m.localGroup)
 }
 
-// GetGroup returns a placement group by ID
+// GetGroup returns a copy of the placement group by ID
 func (m *PlacementGroupManager) GetGroup(id PlacementGroupID) (*PlacementGroup, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	group, ok := m.groups[id]
-	return group, ok
+	if !ok {
+		return nil, false
+	}
+	// Return a copy to prevent external mutation
+	return m.copyGroup(group), true
 }
 
-// GetNodeGroup returns the placement group a node belongs to
+// GetNodeGroup returns a copy of the placement group a node belongs to
 func (m *PlacementGroupManager) GetNodeGroup(nodeID string) (*PlacementGroup, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -125,22 +135,27 @@ func (m *PlacementGroupManager) GetNodeGroup(nodeID string) (*PlacementGroup, bo
 	}
 
 	group, ok := m.groups[groupID]
-	return group, ok
+	if !ok {
+		return nil, false
+	}
+	// Return a copy to prevent external mutation
+	return m.copyGroup(group), true
 }
 
-// AllGroups returns all known placement groups
+// AllGroups returns copies of all known placement groups
 func (m *PlacementGroupManager) AllGroups() []*PlacementGroup {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	groups := make([]*PlacementGroup, 0, len(m.groups))
 	for _, g := range m.groups {
-		groups = append(groups, g)
+		// Return copies to prevent external mutation
+		groups = append(groups, m.copyGroup(g))
 	}
 	return groups
 }
 
-// LocalGroupNodes returns all nodes in the local placement group
+// LocalGroupNodes returns a copy of all nodes in the local placement group
 func (m *PlacementGroupManager) LocalGroupNodes() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -148,7 +163,10 @@ func (m *PlacementGroupManager) LocalGroupNodes() []string {
 	if m.localGroup == nil {
 		return nil
 	}
-	return m.localGroup.Nodes
+	// Return a copy to prevent external mutation
+	nodes := make([]string, len(m.localGroup.Nodes))
+	copy(nodes, m.localGroup.Nodes)
+	return nodes
 }
 
 // IsLocalGroupNode checks if a node is in the local placement group
@@ -164,7 +182,7 @@ func (m *PlacementGroupManager) IsLocalGroupNode(nodeID string) bool {
 	return groupID == m.config.LocalGroupID
 }
 
-// ReplicationTargets returns placement groups configured for DR replication
+// ReplicationTargets returns copies of placement groups configured for DR replication
 func (m *PlacementGroupManager) ReplicationTargets() []*PlacementGroup {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -172,7 +190,8 @@ func (m *PlacementGroupManager) ReplicationTargets() []*PlacementGroup {
 	targets := make([]*PlacementGroup, 0, len(m.config.ReplicationTargets))
 	for _, targetID := range m.config.ReplicationTargets {
 		if group, ok := m.groups[targetID]; ok {
-			targets = append(targets, group)
+			// Return copies to prevent external mutation
+			targets = append(targets, m.copyGroup(group))
 		}
 	}
 	return targets
@@ -181,37 +200,44 @@ func (m *PlacementGroupManager) ReplicationTargets() []*PlacementGroup {
 // AddNodeToGroup adds a node to a placement group
 func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	group, ok := m.groups[groupID]
 	if !ok {
+		m.mu.Unlock()
 		return fmt.Errorf("placement group %s not found", groupID)
 	}
 
 	// Check if already in this group
 	for _, n := range group.Nodes {
 		if n == nodeID {
+			m.mu.Unlock()
 			return nil // Already a member
 		}
 	}
 
 	// Check max nodes
 	if group.MaxNodes > 0 && len(group.Nodes) >= group.MaxNodes {
+		m.mu.Unlock()
 		return fmt.Errorf("placement group %s is at maximum capacity (%d nodes)", groupID, group.MaxNodes)
 	}
 
 	// Add node
 	group.Nodes = append(group.Nodes, nodeID)
 	m.nodeToGroup[nodeID] = groupID
+	groupSize := len(group.Nodes)
+
+	// Capture callback under lock to prevent data race
+	callback := m.onNodeJoinedGroup
+	m.mu.Unlock()
 
 	log.Info().
 		Str("group_id", string(groupID)).
 		Str("node_id", nodeID).
-		Int("group_size", len(group.Nodes)).
+		Int("group_size", groupSize).
 		Msg("Node added to placement group")
 
-	if m.onNodeJoinedGroup != nil {
-		go m.onNodeJoinedGroup(groupID, nodeID)
+	if callback != nil {
+		go m.safeCallback(func() { callback(groupID, nodeID) })
 	}
 
 	return nil
@@ -220,10 +246,10 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 // RemoveNodeFromGroup removes a node from a placement group
 func (m *PlacementGroupManager) RemoveNodeFromGroup(groupID PlacementGroupID, nodeID string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	group, ok := m.groups[groupID]
 	if !ok {
+		m.mu.Unlock()
 		return fmt.Errorf("placement group %s not found", groupID)
 	}
 
@@ -238,28 +264,41 @@ func (m *PlacementGroupManager) RemoveNodeFromGroup(groupID PlacementGroupID, no
 	}
 
 	if !found {
+		m.mu.Unlock()
 		return fmt.Errorf("node %s not found in placement group %s", nodeID, groupID)
 	}
 
 	delete(m.nodeToGroup, nodeID)
 
 	// Update group status if below minimum
+	var statusCallback func(PlacementGroupID, PlacementGroupStatus)
+	var newStatus PlacementGroupStatus
 	if group.MinNodes > 0 && len(group.Nodes) < group.MinNodes {
 		oldStatus := group.Status
 		group.Status = PlacementGroupStatusDegraded
-		if oldStatus != group.Status && m.onGroupStatusChange != nil {
-			go m.onGroupStatusChange(groupID, group.Status)
+		newStatus = group.Status
+		if oldStatus != group.Status {
+			statusCallback = m.onGroupStatusChange
 		}
 	}
+
+	groupSize := len(group.Nodes)
+	// Capture callback under lock to prevent data race
+	nodeLeftCallback := m.onNodeLeftGroup
+	m.mu.Unlock()
 
 	log.Info().
 		Str("group_id", string(groupID)).
 		Str("node_id", nodeID).
-		Int("group_size", len(group.Nodes)).
+		Int("group_size", groupSize).
 		Msg("Node removed from placement group")
 
-	if m.onNodeLeftGroup != nil {
-		go m.onNodeLeftGroup(groupID, nodeID)
+	if statusCallback != nil {
+		go m.safeCallback(func() { statusCallback(groupID, newStatus) })
+	}
+
+	if nodeLeftCallback != nil {
+		go m.safeCallback(func() { nodeLeftCallback(groupID, nodeID) })
 	}
 
 	return nil
@@ -268,15 +307,22 @@ func (m *PlacementGroupManager) RemoveNodeFromGroup(groupID PlacementGroupID, no
 // UpdateGroupStatus updates the status of a placement group
 func (m *PlacementGroupManager) UpdateGroupStatus(groupID PlacementGroupID, status PlacementGroupStatus) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	group, ok := m.groups[groupID]
 	if !ok {
+		m.mu.Unlock()
 		return fmt.Errorf("placement group %s not found", groupID)
 	}
 
 	oldStatus := group.Status
 	group.Status = status
+
+	// Capture callback under lock to prevent data race
+	var callback func(PlacementGroupID, PlacementGroupStatus)
+	if oldStatus != status {
+		callback = m.onGroupStatusChange
+	}
+	m.mu.Unlock()
 
 	if oldStatus != status {
 		log.Info().
@@ -285,8 +331,8 @@ func (m *PlacementGroupManager) UpdateGroupStatus(groupID PlacementGroupID, stat
 			Str("new_status", string(status)).
 			Msg("Placement group status changed")
 
-		if m.onGroupStatusChange != nil {
-			go m.onGroupStatusChange(groupID, status)
+		if callback != nil {
+			go m.safeCallback(func() { callback(groupID, status) })
 		}
 	}
 
@@ -323,9 +369,45 @@ func (m *PlacementGroupManager) GetShardPlacementNodes(numShards int) ([]string,
 			numShards, len(m.localGroup.Nodes))
 	}
 
-	// Return nodes for shard distribution
+	// Return nodes for shard distribution (first N nodes for deterministic placement)
+	// For hash-based distribution, use GetShardPlacementNodesForObject
 	nodes := make([]string, numShards)
 	copy(nodes, m.localGroup.Nodes[:numShards])
+	return nodes, nil
+}
+
+// GetShardPlacementNodesForObject returns nodes for distributing erasure shards
+// using hash-based distribution for better load balancing across nodes.
+// The bucket and key are used to determine the starting offset for node selection.
+func (m *PlacementGroupManager) GetShardPlacementNodesForObject(bucket, key string, numShards int) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.localGroup == nil {
+		// Single node mode
+		return []string{}, nil
+	}
+
+	nodeCount := len(m.localGroup.Nodes)
+	if nodeCount < numShards {
+		return nil, fmt.Errorf("not enough nodes in placement group: need %d, have %d",
+			numShards, nodeCount)
+	}
+
+	// Use FNV hash for deterministic but distributed node selection
+	// This ensures the same object always maps to the same nodes,
+	// while distributing objects evenly across the cluster
+	h := fnv.New32a()
+	h.Write([]byte(bucket))
+	h.Write([]byte("/"))
+	h.Write([]byte(key))
+	offset := int(h.Sum32()) % nodeCount
+
+	// Select nodes starting from the hash-determined offset
+	nodes := make([]string, numShards)
+	for i := 0; i < numShards; i++ {
+		nodes[i] = m.localGroup.Nodes[(offset+i)%nodeCount]
+	}
 	return nodes, nil
 }
 
@@ -355,12 +437,18 @@ func (m *PlacementGroupManager) MarshalJSON() ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	// Create copies of groups directly to avoid deadlock from calling AllGroups()
+	groups := make([]*PlacementGroup, 0, len(m.groups))
+	for _, g := range m.groups {
+		groups = append(groups, m.copyGroup(g))
+	}
+
 	return json.Marshal(struct {
-		LocalGroupID string             `json:"local_group_id"`
-		Groups       []*PlacementGroup  `json:"groups"`
+		LocalGroupID string            `json:"local_group_id"`
+		Groups       []*PlacementGroup `json:"groups"`
 	}{
 		LocalGroupID: string(m.config.LocalGroupID),
-		Groups:       m.AllGroups(),
+		Groups:       groups,
 	})
 }
 
@@ -382,4 +470,38 @@ func DecodeNodeMeta(data []byte) (PlacementGroupNodeMeta, error) {
 	var meta PlacementGroupNodeMeta
 	err := json.Unmarshal(data, &meta)
 	return meta, err
+}
+
+// copyGroup creates a deep copy of a PlacementGroup to prevent external mutation
+func (m *PlacementGroupManager) copyGroup(g *PlacementGroup) *PlacementGroup {
+	if g == nil {
+		return nil
+	}
+	// Create a copy of the nodes slice
+	nodesCopy := make([]string, len(g.Nodes))
+	copy(nodesCopy, g.Nodes)
+
+	return &PlacementGroup{
+		ID:         g.ID,
+		Name:       g.Name,
+		Datacenter: g.Datacenter,
+		Region:     g.Region,
+		Nodes:      nodesCopy,
+		MinNodes:   g.MinNodes,
+		MaxNodes:   g.MaxNodes,
+		IsLocal:    g.IsLocal,
+		Status:     g.Status,
+	}
+}
+
+// safeCallback executes a callback function with panic recovery
+func (m *PlacementGroupManager) safeCallback(fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().
+				Interface("panic", r).
+				Msg("Panic recovered in placement group callback")
+		}
+	}()
+	fn()
 }

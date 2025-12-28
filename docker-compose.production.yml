@@ -83,6 +83,29 @@ services:
       - NEBULAIO_AUDIT_ROTATION_MAX_BACKUPS=10
       - NEBULAIO_AUDIT_ROTATION_COMPRESS=true
 
+      # Placement Groups (for distributed deployments)
+      # Configure when running multiple nodes across datacenters
+      # - NEBULAIO_PLACEMENT_GROUP_LOCAL_ID=pg-dc1
+      # - NEBULAIO_PLACEMENT_GROUP_MIN_NODES_FOR_ERASURE=3
+      # - NEBULAIO_PLACEMENT_GROUP_DATACENTER=dc1
+      # - NEBULAIO_PLACEMENT_GROUP_REGION=us-east-1
+
+      # Default Redundancy Configuration (production recommended: 10+4)
+      - NEBULAIO_REDUNDANCY_ENABLED=true
+      - NEBULAIO_REDUNDANCY_DATA_SHARDS=10
+      - NEBULAIO_REDUNDANCY_PARITY_SHARDS=4
+      - NEBULAIO_REDUNDANCY_PLACEMENT_POLICY=spread
+      - NEBULAIO_REDUNDANCY_REPLICATION_FACTOR=0
+
+      # Storage Tiering (enable for multi-tier storage)
+      # - NEBULAIO_TIERING_ENABLED=true
+      # - NEBULAIO_TIERING_HOT_BACKEND=erasure
+      # - NEBULAIO_TIERING_HOT_DIR=/data/tiering/hot
+      # - NEBULAIO_TIERING_WARM_BACKEND=volume
+      # - NEBULAIO_TIERING_WARM_DIR=/data/tiering/warm
+      # - NEBULAIO_TIERING_COLD_BACKEND=fs
+      # - NEBULAIO_TIERING_COLD_DIR=/data/tiering/cold
+
     # Increase memory for DRAM cache
     deploy:
       resources:

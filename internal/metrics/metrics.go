@@ -164,6 +164,133 @@ var (
 		},
 		[]string{"node_id", "version"},
 	)
+
+	// PlacementGroupNodesTotal tracks number of nodes per placement group
+	PlacementGroupNodesTotal = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_placement_group_nodes_total",
+			Help: "Number of nodes in each placement group",
+		},
+		[]string{"group_id", "datacenter", "region"},
+	)
+
+	// PlacementGroupStatus tracks placement group status (1=healthy, 0=degraded/offline)
+	PlacementGroupStatus = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_placement_group_status",
+			Help: "Placement group status (1=healthy, 0=degraded/offline)",
+		},
+		[]string{"group_id", "status"},
+	)
+
+	// PlacementGroupShardDistribution tracks shard distribution across nodes
+	PlacementGroupShardDistribution = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_placement_group_shard_distribution",
+			Help: "Number of shards on each node",
+		},
+		[]string{"group_id", "node_id"},
+	)
+
+	// PlacementGroupInfo provides information about placement groups
+	PlacementGroupInfo = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_placement_group_info",
+			Help: "Placement group information",
+		},
+		[]string{"group_id", "name", "datacenter", "region", "is_local"},
+	)
+
+	// ErasureEncodeOperationsTotal tracks total erasure encoding operations
+	ErasureEncodeOperationsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_erasure_encode_operations_total",
+			Help: "Total number of erasure encoding operations",
+		},
+		[]string{"group_id", "status"},
+	)
+
+	// ErasureDecodeOperationsTotal tracks total erasure decoding operations
+	ErasureDecodeOperationsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_erasure_decode_operations_total",
+			Help: "Total number of erasure decoding operations",
+		},
+		[]string{"group_id", "status"},
+	)
+
+	// ErasureReconstructOperationsTotal tracks total erasure reconstruction operations
+	ErasureReconstructOperationsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_erasure_reconstruct_operations_total",
+			Help: "Total number of erasure reconstruction operations",
+		},
+		[]string{"group_id"},
+	)
+
+	// ErasureEncodeDurationSeconds tracks erasure encoding duration
+	ErasureEncodeDurationSeconds = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "nebulaio_erasure_encode_duration_seconds",
+			Help:    "Duration of erasure encoding operations",
+			Buckets: prometheus.ExponentialBuckets(0.001, 2, 12),
+		},
+		[]string{"group_id"},
+	)
+
+	// ErasureHealthyObjects tracks number of healthy (fully redundant) objects
+	ErasureHealthyObjects = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_erasure_healthy_objects",
+			Help: "Number of healthy objects with full redundancy",
+		},
+		[]string{"group_id"},
+	)
+
+	// ErasureDegradedObjects tracks number of degraded objects (missing some shards)
+	ErasureDegradedObjects = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_erasure_degraded_objects",
+			Help: "Number of degraded objects missing some shards but still recoverable",
+		},
+		[]string{"group_id"},
+	)
+
+	// ErasureObjectsAtRisk tracks objects at risk (close to losing recoverability)
+	ErasureObjectsAtRisk = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_erasure_objects_at_risk",
+			Help: "Number of objects at risk of becoming unrecoverable",
+		},
+		[]string{"group_id"},
+	)
+
+	// TieringTransitionsTotal tracks tiering transitions between tiers
+	TieringTransitionsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_tiering_transitions_total",
+			Help: "Total number of objects transitioned between tiers",
+		},
+		[]string{"source_tier", "destination_tier", "policy"},
+	)
+
+	// TieringObjectsPerTier tracks number of objects in each tier
+	TieringObjectsPerTier = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_tiering_objects_total",
+			Help: "Number of objects in each storage tier",
+		},
+		[]string{"tier"},
+	)
+
+	// TieringBytesPerTier tracks bytes stored in each tier
+	TieringBytesPerTier = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_tiering_bytes_total",
+			Help: "Bytes stored in each storage tier",
+		},
+		[]string{"tier"},
+	)
 )
 
 // Version is set at build time
@@ -257,6 +384,80 @@ func SetMultipartUploadsActive(count int) {
 // SetClusterNodesTotal sets total number of cluster nodes
 func SetClusterNodesTotal(count int) {
 	ClusterNodesTotal.Set(float64(count))
+}
+
+// SetPlacementGroupNodes sets the number of nodes in a placement group
+func SetPlacementGroupNodes(groupID, datacenter, region string, count int) {
+	PlacementGroupNodesTotal.WithLabelValues(groupID, datacenter, region).Set(float64(count))
+}
+
+// SetPlacementGroupStatusMetric sets the status of a placement group
+func SetPlacementGroupStatusMetric(groupID, status string) {
+	// Reset all status values for this group first
+	PlacementGroupStatus.WithLabelValues(groupID, "healthy").Set(0)
+	PlacementGroupStatus.WithLabelValues(groupID, "degraded").Set(0)
+	PlacementGroupStatus.WithLabelValues(groupID, "offline").Set(0)
+	PlacementGroupStatus.WithLabelValues(groupID, "unknown").Set(0)
+	// Set the current status
+	PlacementGroupStatus.WithLabelValues(groupID, status).Set(1)
+}
+
+// SetPlacementGroupInfo sets placement group information
+func SetPlacementGroupInfo(groupID, name, datacenter, region string, isLocal bool) {
+	isLocalStr := "false"
+	if isLocal {
+		isLocalStr = "true"
+	}
+	PlacementGroupInfo.WithLabelValues(groupID, name, datacenter, region, isLocalStr).Set(1)
+}
+
+// SetPlacementGroupShardCount sets the shard count for a node in a placement group
+func SetPlacementGroupShardCount(groupID, nodeID string, count int) {
+	PlacementGroupShardDistribution.WithLabelValues(groupID, nodeID).Set(float64(count))
+}
+
+// RecordErasureEncode records an erasure encoding operation
+func RecordErasureEncode(groupID string, success bool, duration time.Duration) {
+	status := "success"
+	if !success {
+		status = "failure"
+	}
+	ErasureEncodeOperationsTotal.WithLabelValues(groupID, status).Inc()
+	if success {
+		ErasureEncodeDurationSeconds.WithLabelValues(groupID).Observe(duration.Seconds())
+	}
+}
+
+// RecordErasureDecode records an erasure decoding operation
+func RecordErasureDecode(groupID string, success bool) {
+	status := "success"
+	if !success {
+		status = "failure"
+	}
+	ErasureDecodeOperationsTotal.WithLabelValues(groupID, status).Inc()
+}
+
+// RecordErasureReconstruct records an erasure reconstruction operation
+func RecordErasureReconstruct(groupID string) {
+	ErasureReconstructOperationsTotal.WithLabelValues(groupID).Inc()
+}
+
+// SetErasureHealthMetrics sets erasure coding health metrics
+func SetErasureHealthMetrics(groupID string, healthy, degraded, atRisk int) {
+	ErasureHealthyObjects.WithLabelValues(groupID).Set(float64(healthy))
+	ErasureDegradedObjects.WithLabelValues(groupID).Set(float64(degraded))
+	ErasureObjectsAtRisk.WithLabelValues(groupID).Set(float64(atRisk))
+}
+
+// RecordTieringTransition records a tiering transition
+func RecordTieringTransition(sourceTier, destTier, policy string) {
+	TieringTransitionsTotal.WithLabelValues(sourceTier, destTier, policy).Inc()
+}
+
+// SetTieringMetrics sets tiering metrics for a tier
+func SetTieringMetrics(tier string, objects int64, bytes int64) {
+	TieringObjectsPerTier.WithLabelValues(tier).Set(float64(objects))
+	TieringBytesPerTier.WithLabelValues(tier).Set(float64(bytes))
 }
 
 // statusCodeToString converts HTTP status code to a string category

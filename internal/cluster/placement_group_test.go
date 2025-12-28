@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -314,4 +316,364 @@ func TestPlacementGroupNodeMeta(t *testing.T) {
 	if decoded.Region != meta.Region {
 		t.Errorf("Expected Region '%s', got '%s'", meta.Region, decoded.Region)
 	}
+}
+
+func TestPlacementGroupManager_ConcurrentReads(t *testing.T) {
+	config := PlacementGroupConfig{
+		LocalGroupID: "pg-main",
+		Groups: []PlacementGroup{
+			{
+				ID:         "pg-main",
+				Name:       "Main",
+				Datacenter: "dc1",
+				Region:     "us-east-1",
+				Nodes:      []string{"node1", "node2", "node3", "node4", "node5"},
+				MinNodes:   2,
+				MaxNodes:   10,
+				Status:     PlacementGroupStatusHealthy,
+			},
+		},
+		MinNodesForErasure: 3,
+	}
+
+	mgr, err := NewPlacementGroupManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+
+	const numGoroutines = 100
+	const numIterations = 1000
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < numIterations; j++ {
+				// Concurrent reads should not panic or cause data races
+				_ = mgr.LocalGroup()
+				_ = mgr.AllGroups()
+				_ = mgr.LocalGroupNodes()
+				_, _ = mgr.GetGroup("pg-main")
+				_, _ = mgr.GetNodeGroup("node1")
+				_ = mgr.IsLocalGroupNode("node1")
+				_ = mgr.ReplicationTargets()
+				_ = mgr.CanPerformErasureCoding(4, 2)
+				_, _ = mgr.GetShardPlacementNodes(3)
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestPlacementGroupManager_ConcurrentReadWrite(t *testing.T) {
+	config := PlacementGroupConfig{
+		LocalGroupID: "pg-main",
+		Groups: []PlacementGroup{
+			{
+				ID:         "pg-main",
+				Name:       "Main",
+				Datacenter: "dc1",
+				Region:     "us-east-1",
+				Nodes:      []string{"node1", "node2"},
+				MinNodes:   1,
+				MaxNodes:   100, // High max to allow many concurrent adds
+				Status:     PlacementGroupStatusHealthy,
+			},
+		},
+		MinNodesForErasure: 3,
+	}
+
+	mgr, err := NewPlacementGroupManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+
+	const numReaders = 50
+	const numWriters = 10
+	const numIterations = 100
+
+	var wg sync.WaitGroup
+	var nodeCounter int64
+
+	// Start readers
+	wg.Add(numReaders)
+	for i := 0; i < numReaders; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < numIterations; j++ {
+				_ = mgr.LocalGroup()
+				_ = mgr.AllGroups()
+				_ = mgr.LocalGroupNodes()
+				_, _ = mgr.GetShardPlacementNodes(2)
+			}
+		}()
+	}
+
+	// Start writers (add/remove nodes)
+	wg.Add(numWriters)
+	for i := 0; i < numWriters; i++ {
+		go func(writerID int) {
+			defer wg.Done()
+			for j := 0; j < numIterations; j++ {
+				nodeNum := atomic.AddInt64(&nodeCounter, 1)
+				nodeID := string(rune('A'+writerID)) + string(rune('0'+nodeNum%10))
+
+				// Add node (ignore errors as capacity may be reached)
+				_ = mgr.AddNodeToGroup("pg-main", nodeID)
+
+				// Remove it back
+				_ = mgr.RemoveNodeFromGroup("pg-main", nodeID)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestPlacementGroupManager_ConcurrentStatusUpdates(t *testing.T) {
+	config := PlacementGroupConfig{
+		LocalGroupID: "pg-main",
+		Groups: []PlacementGroup{
+			{
+				ID:     "pg-main",
+				Name:   "Main",
+				Nodes:  []string{"node1", "node2", "node3"},
+				Status: PlacementGroupStatusHealthy,
+			},
+		},
+	}
+
+	mgr, err := NewPlacementGroupManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+
+	const numGoroutines = 50
+	const numIterations = 100
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	statuses := []PlacementGroupStatus{
+		PlacementGroupStatusHealthy,
+		PlacementGroupStatusDegraded,
+		PlacementGroupStatusOffline,
+		PlacementGroupStatusUnknown,
+	}
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < numIterations; j++ {
+				status := statuses[(id+j)%len(statuses)]
+				_ = mgr.UpdateGroupStatus("pg-main", status)
+
+				// Also do reads
+				group := mgr.LocalGroup()
+				_ = group.Status
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestPlacementGroupManager_ConcurrentCallbacks(t *testing.T) {
+	config := PlacementGroupConfig{
+		LocalGroupID: "pg-main",
+		Groups: []PlacementGroup{
+			{
+				ID:       "pg-main",
+				Name:     "Main",
+				Nodes:    []string{},
+				MinNodes: 0,
+				MaxNodes: 1000,
+			},
+		},
+	}
+
+	mgr, err := NewPlacementGroupManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+
+	var joinCount, leaveCount, statusCount int64
+
+	// Set callbacks
+	mgr.SetOnNodeJoinedGroup(func(groupID PlacementGroupID, nodeID string) {
+		atomic.AddInt64(&joinCount, 1)
+	})
+	mgr.SetOnNodeLeftGroup(func(groupID PlacementGroupID, nodeID string) {
+		atomic.AddInt64(&leaveCount, 1)
+	})
+	mgr.SetOnGroupStatusChange(func(groupID PlacementGroupID, status PlacementGroupStatus) {
+		atomic.AddInt64(&statusCount, 1)
+	})
+
+	const numGoroutines = 20
+	const numIterations = 50
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < numIterations; j++ {
+				nodeID := string(rune('A'+id)) + string(rune('0'+j%10))
+
+				// Add and remove nodes (triggers callbacks)
+				_ = mgr.AddNodeToGroup("pg-main", nodeID)
+				_ = mgr.RemoveNodeFromGroup("pg-main", nodeID)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Give callbacks time to complete (they run in goroutines)
+	// Note: We can't check exact counts due to race conditions in add/remove,
+	// but we verify no panics occurred
+	t.Logf("Callbacks triggered - joins: %d, leaves: %d, status: %d",
+		atomic.LoadInt64(&joinCount),
+		atomic.LoadInt64(&leaveCount),
+		atomic.LoadInt64(&statusCount))
+}
+
+func TestPlacementGroupManager_CopyPreventsExternalMutation(t *testing.T) {
+	config := PlacementGroupConfig{
+		LocalGroupID: "pg-main",
+		Groups: []PlacementGroup{
+			{
+				ID:         "pg-main",
+				Name:       "Main",
+				Datacenter: "dc1",
+				Region:     "us-east-1",
+				Nodes:      []string{"node1", "node2", "node3"},
+				MinNodes:   2,
+				MaxNodes:   10,
+				Status:     PlacementGroupStatusHealthy,
+			},
+		},
+	}
+
+	mgr, err := NewPlacementGroupManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+
+	// Get a copy and try to mutate it
+	group := mgr.LocalGroup()
+	originalNodes := len(group.Nodes)
+
+	// Mutate the returned copy
+	group.Nodes = append(group.Nodes, "malicious-node")
+	group.Name = "Hacked!"
+	group.Status = PlacementGroupStatusOffline
+
+	// Verify original is unchanged
+	actualGroup := mgr.LocalGroup()
+	if len(actualGroup.Nodes) != originalNodes {
+		t.Errorf("External mutation affected internal state: expected %d nodes, got %d",
+			originalNodes, len(actualGroup.Nodes))
+	}
+	if actualGroup.Name != "Main" {
+		t.Errorf("External mutation affected name: expected 'Main', got '%s'", actualGroup.Name)
+	}
+	if actualGroup.Status != PlacementGroupStatusHealthy {
+		t.Errorf("External mutation affected status: expected 'healthy', got '%s'", actualGroup.Status)
+	}
+
+	// Same test for AllGroups
+	allGroups := mgr.AllGroups()
+	allGroups[0].Nodes = []string{}
+	allGroups[0].Name = "Hacked!"
+
+	actualGroup = mgr.LocalGroup()
+	if len(actualGroup.Nodes) != originalNodes {
+		t.Errorf("AllGroups mutation affected internal state")
+	}
+}
+
+func TestPlacementGroupManager_GetShardPlacementNodesForObject(t *testing.T) {
+	config := PlacementGroupConfig{
+		LocalGroupID: "pg-main",
+		Groups: []PlacementGroup{
+			{
+				ID:       "pg-main",
+				Name:     "Main",
+				Nodes:    []string{"node1", "node2", "node3", "node4", "node5", "node6"},
+				MinNodes: 2,
+				MaxNodes: 10,
+			},
+		},
+	}
+
+	mgr, err := NewPlacementGroupManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+
+	// Test deterministic placement - same object should always get same nodes
+	nodes1, err := mgr.GetShardPlacementNodesForObject("bucket1", "key1", 3)
+	if err != nil {
+		t.Fatalf("Failed to get shard placement: %v", err)
+	}
+
+	nodes2, err := mgr.GetShardPlacementNodesForObject("bucket1", "key1", 3)
+	if err != nil {
+		t.Fatalf("Failed to get shard placement: %v", err)
+	}
+
+	// Should be identical
+	for i := range nodes1 {
+		if nodes1[i] != nodes2[i] {
+			t.Errorf("Non-deterministic placement: position %d got '%s' then '%s'",
+				i, nodes1[i], nodes2[i])
+		}
+	}
+
+	// Different objects should (usually) get different starting positions
+	nodesA, _ := mgr.GetShardPlacementNodesForObject("bucket1", "key1", 3)
+	nodesB, _ := mgr.GetShardPlacementNodesForObject("bucket2", "different-key", 3)
+
+	// At least one position should differ (with high probability)
+	// We don't assert this as hash collisions are possible, just log
+	allSame := true
+	for i := range nodesA {
+		if nodesA[i] != nodesB[i] {
+			allSame = false
+			break
+		}
+	}
+	if allSame {
+		t.Log("Note: Different objects got same placement (possible but unlikely)")
+	}
+
+	// Test distribution - run many objects and check distribution
+	distribution := make(map[string]int)
+	for i := 0; i < 1000; i++ {
+		key := string(rune('a'+i%26)) + string(rune('0'+i/26))
+		nodes, _ := mgr.GetShardPlacementNodesForObject("test-bucket", key, 1)
+		if len(nodes) > 0 {
+			distribution[nodes[0]]++
+		}
+	}
+
+	// Check all nodes got some objects
+	for _, nodeID := range []string{"node1", "node2", "node3", "node4", "node5", "node6"} {
+		count := distribution[nodeID]
+		if count == 0 {
+			t.Errorf("Node %s got no objects - distribution is not balanced", nodeID)
+		}
+		// Each node should get roughly 1000/6 = ~166 objects, allow wide tolerance
+		if count < 50 || count > 400 {
+			t.Errorf("Node %s got %d objects - may indicate poor distribution", nodeID, count)
+		}
+	}
+
+	t.Logf("Distribution: %v", distribution)
 }
