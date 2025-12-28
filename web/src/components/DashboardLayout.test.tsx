@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '../test/utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '../test/utils';
 import userEvent from '@testing-library/user-event';
 import { DashboardLayout } from './DashboardLayout';
 import { useAuthStore } from '../stores/auth';
@@ -19,6 +19,10 @@ vi.mock('react-router-dom', async () => {
 describe('DashboardLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   describe('when user is admin', () => {

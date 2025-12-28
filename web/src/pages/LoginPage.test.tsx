@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '../test/utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '../test/utils';
 import userEvent from '@testing-library/user-event';
 import { LoginPage } from './LoginPage';
 import { useAuthStore } from '../stores/auth';
@@ -24,6 +24,10 @@ describe('LoginPage', () => {
       user: null,
       isAuthenticated: false,
     });
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('renders the login form', () => {
