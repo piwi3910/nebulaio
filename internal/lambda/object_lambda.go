@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -783,20 +784,26 @@ type CompressTransformer struct{}
 const DefaultMaxTransformSize = 100 * 1024 * 1024
 
 // maxTransformSize is the configurable maximum transform size (defaults to DefaultMaxTransformSize)
-var maxTransformSize int64 = DefaultMaxTransformSize
+// Uses atomic operations for thread-safe access
+var maxTransformSize atomic.Int64
+
+func init() {
+	maxTransformSize.Store(DefaultMaxTransformSize)
+}
 
 // SetMaxTransformSize sets the maximum size of data that can be transformed in memory
-// This should be called during initialization before any transformations occur
+// This function is thread-safe and can be called at any time
 // Warning: Setting this too high may cause memory exhaustion during transformation operations
 func SetMaxTransformSize(size int64) {
 	if size > 0 {
-		maxTransformSize = size
+		maxTransformSize.Store(size)
 	}
 }
 
 // GetMaxTransformSize returns the current maximum transform size
+// This function is thread-safe
 func GetMaxTransformSize() int64 {
-	return maxTransformSize
+	return maxTransformSize.Load()
 }
 
 func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {

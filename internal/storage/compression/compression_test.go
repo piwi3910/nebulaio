@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"io"
+	"sync"
 	"testing"
 
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
@@ -188,7 +189,9 @@ func TestCompressorReaders(t *testing.T) {
 }
 
 // mockBackend is a simple in-memory backend for testing
+// Thread-safe with RWMutex protection for concurrent access
 type mockBackend struct {
+	mu      sync.RWMutex
 	objects map[string]map[string][]byte // bucket -> key -> data
 }
 
@@ -202,18 +205,22 @@ func (m *mockBackend) Init(_ context.Context) error { return nil }
 func (m *mockBackend) Close() error                 { return nil }
 
 func (m *mockBackend) PutObject(_ context.Context, bucket, key string, reader io.Reader, _ int64) (*backend.PutResult, error) {
-	if m.objects[bucket] == nil {
-		m.objects[bucket] = make(map[string][]byte)
-	}
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.objects[bucket] == nil {
+		m.objects[bucket] = make(map[string][]byte)
 	}
 	m.objects[bucket][key] = data
 	return &backend.PutResult{ETag: "mock-etag", Size: int64(len(data))}, nil
 }
 
 func (m *mockBackend) GetObject(_ context.Context, bucket, key string) (io.ReadCloser, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.objects[bucket] == nil {
 		return nil, io.EOF
 	}
@@ -225,6 +232,8 @@ func (m *mockBackend) GetObject(_ context.Context, bucket, key string) (io.ReadC
 }
 
 func (m *mockBackend) DeleteObject(_ context.Context, bucket, key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.objects[bucket] != nil {
 		delete(m.objects[bucket], key)
 	}
@@ -232,6 +241,8 @@ func (m *mockBackend) DeleteObject(_ context.Context, bucket, key string) error 
 }
 
 func (m *mockBackend) ObjectExists(_ context.Context, bucket, key string) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.objects[bucket] == nil {
 		return false, nil
 	}
@@ -240,6 +251,8 @@ func (m *mockBackend) ObjectExists(_ context.Context, bucket, key string) (bool,
 }
 
 func (m *mockBackend) CreateBucket(_ context.Context, bucket string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.objects[bucket] == nil {
 		m.objects[bucket] = make(map[string][]byte)
 	}
@@ -247,11 +260,15 @@ func (m *mockBackend) CreateBucket(_ context.Context, bucket string) error {
 }
 
 func (m *mockBackend) DeleteBucket(_ context.Context, bucket string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.objects, bucket)
 	return nil
 }
 
 func (m *mockBackend) BucketExists(_ context.Context, bucket string) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	_, ok := m.objects[bucket]
 	return ok, nil
 }
