@@ -180,6 +180,7 @@ type ClusterConfig struct {
 // StorageConfig holds storage-related configuration
 type StorageConfig struct {
 	// Backend type: "fs" (filesystem), "erasure" (distributed), "volume" (high-performance)
+	// This is the default backend used if tier-specific backends are not configured
 	Backend string `mapstructure:"backend"`
 
 	// DefaultStorageClass for new buckets
@@ -193,6 +194,160 @@ type StorageConfig struct {
 
 	// Volume backend specific configuration
 	Volume VolumeStorageConfig `mapstructure:"volume"`
+
+	// Tiering configuration for data lifecycle management
+	Tiering TieringConfig `mapstructure:"tiering"`
+
+	// DefaultRedundancy is the default redundancy configuration for new buckets
+	// This can be overridden at the bucket or object level
+	DefaultRedundancy RedundancyConfig `mapstructure:"default_redundancy"`
+
+	// PlacementGroups configuration
+	PlacementGroups PlacementGroupsConfig `mapstructure:"placement_groups"`
+}
+
+// TieringConfig holds configuration for tiered storage
+type TieringConfig struct {
+	// Enabled enables automatic data tiering
+	Enabled bool `mapstructure:"enabled"`
+
+	// Tiers defines the storage tiers with their specific backends
+	Tiers map[string]TierConfig `mapstructure:"tiers"`
+
+	// Policies for automatic data movement
+	Policies []TieringPolicyConfig `mapstructure:"policies"`
+}
+
+// TierConfig holds configuration for a specific storage tier
+type TierConfig struct {
+	// Backend type for this tier: "fs", "erasure", "volume", "rawdevice"
+	Backend string `mapstructure:"backend"`
+
+	// DataDir is the data directory for this tier
+	DataDir string `mapstructure:"data_dir"`
+
+	// Device is the raw device path (only for "rawdevice" backend)
+	Device string `mapstructure:"device"`
+
+	// VolumeConfig for volume-based backends
+	VolumeConfig *VolumeStorageConfig `mapstructure:"volume_config,omitempty"`
+
+	// ErasureConfig for erasure-coded backends
+	ErasureConfig *ErasureStorageConfig `mapstructure:"erasure_config,omitempty"`
+
+	// Priority determines preference for new data (lower = preferred)
+	Priority int `mapstructure:"priority"`
+
+	// MaxCapacity is the maximum capacity for this tier (0 = unlimited)
+	MaxCapacity int64 `mapstructure:"max_capacity"`
+
+	// CapacityThreshold triggers migration to next tier when exceeded (0.0-1.0)
+	CapacityThreshold float64 `mapstructure:"capacity_threshold"`
+}
+
+// ErasureStorageConfig holds erasure coding specific configuration
+type ErasureStorageConfig struct {
+	// DataShards is the number of data shards
+	DataShards int `mapstructure:"data_shards"`
+
+	// ParityShards is the number of parity shards
+	ParityShards int `mapstructure:"parity_shards"`
+
+	// ShardSize is the size of each shard in bytes
+	ShardSize int64 `mapstructure:"shard_size"`
+
+	// PlacementPolicy determines shard distribution
+	PlacementPolicy string `mapstructure:"placement_policy"`
+}
+
+// TieringPolicyConfig defines a policy for automatic data movement
+type TieringPolicyConfig struct {
+	// Name is the policy identifier
+	Name string `mapstructure:"name"`
+
+	// Enabled activates this policy
+	Enabled bool `mapstructure:"enabled"`
+
+	// SourceTier is the tier to move data from
+	SourceTier string `mapstructure:"source_tier"`
+
+	// DestinationTier is the tier to move data to
+	DestinationTier string `mapstructure:"destination_tier"`
+
+	// Condition defines when to trigger the policy
+	Condition TieringCondition `mapstructure:"condition"`
+}
+
+// TieringCondition defines when a tiering policy should trigger
+type TieringCondition struct {
+	// Type: "age", "access", "capacity", "cron"
+	Type string `mapstructure:"type"`
+
+	// AgeDays triggers when object is older than N days
+	AgeDays int `mapstructure:"age_days,omitempty"`
+
+	// AccessDays triggers when object hasn't been accessed for N days
+	AccessDays int `mapstructure:"access_days,omitempty"`
+
+	// CapacityPercent triggers when source tier exceeds N% capacity
+	CapacityPercent float64 `mapstructure:"capacity_percent,omitempty"`
+
+	// CronSchedule for scheduled migrations
+	CronSchedule string `mapstructure:"cron_schedule,omitempty"`
+}
+
+// RedundancyConfig holds default redundancy configuration
+type RedundancyConfig struct {
+	// Enabled enables erasure coding by default
+	Enabled bool `mapstructure:"enabled"`
+
+	// DataShards is the default number of data shards
+	DataShards int `mapstructure:"data_shards"`
+
+	// ParityShards is the default number of parity shards
+	ParityShards int `mapstructure:"parity_shards"`
+
+	// PlacementPolicy is the default shard placement policy
+	PlacementPolicy string `mapstructure:"placement_policy"`
+
+	// ReplicationFactor for cross-placement-group DR
+	ReplicationFactor int `mapstructure:"replication_factor"`
+}
+
+// PlacementGroupsConfig holds placement group configuration
+type PlacementGroupsConfig struct {
+	// LocalGroupID is the placement group this node belongs to
+	LocalGroupID string `mapstructure:"local_group_id"`
+
+	// Groups defines all known placement groups
+	Groups []PlacementGroupConfig `mapstructure:"groups"`
+
+	// MinNodesForErasure is minimum nodes needed for distributed erasure coding
+	MinNodesForErasure int `mapstructure:"min_nodes_for_erasure"`
+
+	// ReplicationTargets are placement groups to replicate to for DR
+	ReplicationTargets []string `mapstructure:"replication_targets"`
+}
+
+// PlacementGroupConfig defines a single placement group
+type PlacementGroupConfig struct {
+	// ID is the unique identifier for this placement group
+	ID string `mapstructure:"id"`
+
+	// Name is a human-readable name
+	Name string `mapstructure:"name"`
+
+	// Datacenter is the datacenter this group is in
+	Datacenter string `mapstructure:"datacenter"`
+
+	// Region is the region this group is in
+	Region string `mapstructure:"region"`
+
+	// MinNodes is the minimum nodes required
+	MinNodes int `mapstructure:"min_nodes"`
+
+	// MaxNodes is the maximum nodes allowed
+	MaxNodes int `mapstructure:"max_nodes"`
 }
 
 // VolumeStorageConfig holds configuration for the volume storage backend
@@ -861,6 +1016,20 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("storage.volume.tier_directories.hot", "")
 	v.SetDefault("storage.volume.tier_directories.warm", "")
 	v.SetDefault("storage.volume.tier_directories.cold", "")
+
+	// Tiering configuration defaults
+	v.SetDefault("storage.tiering.enabled", false)
+
+	// Default redundancy configuration
+	v.SetDefault("storage.default_redundancy.enabled", true)
+	v.SetDefault("storage.default_redundancy.data_shards", 10)
+	v.SetDefault("storage.default_redundancy.parity_shards", 4)
+	v.SetDefault("storage.default_redundancy.placement_policy", "spread")
+	v.SetDefault("storage.default_redundancy.replication_factor", 1)
+
+	// Placement groups defaults
+	v.SetDefault("storage.placement_groups.local_group_id", "default")
+	v.SetDefault("storage.placement_groups.min_nodes_for_erasure", 3)
 
 	// Cache defaults (DRAM Cache)
 	v.SetDefault("cache.enabled", false)

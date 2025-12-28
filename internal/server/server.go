@@ -50,6 +50,9 @@ type Server struct {
 	// Cluster discovery
 	discovery *cluster.Discovery
 
+	// Placement group manager
+	placementGroupMgr *cluster.PlacementGroupManager
+
 	// Health checker
 	healthChecker *health.Checker
 
@@ -129,9 +132,39 @@ func New(cfg *config.Config) (*Server, error) {
 	// TODO: Temporarily commented out until DragonboatStore is fully implemented
 	// Once DragonboatStore exists with GetNodeHost() method, uncomment this:
 	// srv.discovery.SetNodeHost(srv.metaStore.GetNodeHost(), storeConfig.ShardID)
-	
+
 	// Old RaftStore approach (no longer compatible):
 	// srv.discovery.SetRaft(srv.metaStore.GetRaft())
+
+	// Initialize placement group manager for distributed storage
+	pgConfig := cluster.PlacementGroupConfig{
+		LocalGroupID: cluster.PlacementGroupID(cfg.Storage.PlacementGroups.LocalGroupID),
+		Groups:       make([]cluster.PlacementGroup, 0, len(cfg.Storage.PlacementGroups.Groups)),
+		MinNodesForErasure: cfg.Storage.PlacementGroups.MinNodesForErasure,
+		ReplicationTargets: make([]cluster.PlacementGroupID, 0, len(cfg.Storage.PlacementGroups.ReplicationTargets)),
+	}
+	for _, g := range cfg.Storage.PlacementGroups.Groups {
+		pgConfig.Groups = append(pgConfig.Groups, cluster.PlacementGroup{
+			ID:         cluster.PlacementGroupID(g.ID),
+			Name:       g.Name,
+			Datacenter: g.Datacenter,
+			Region:     g.Region,
+			MinNodes:   g.MinNodes,
+			MaxNodes:   g.MaxNodes,
+		})
+	}
+	for _, target := range cfg.Storage.PlacementGroups.ReplicationTargets {
+		pgConfig.ReplicationTargets = append(pgConfig.ReplicationTargets, cluster.PlacementGroupID(target))
+	}
+	srv.placementGroupMgr, err = cluster.NewPlacementGroupManager(pgConfig)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize placement group manager, using single-node mode")
+	} else {
+		log.Info().
+			Str("local_group", string(pgConfig.LocalGroupID)).
+			Int("total_groups", len(pgConfig.Groups)).
+			Msg("Placement group manager initialized")
+	}
 
 	// Initialize tiered storage model
 	// All storage uses tiered backends - hot tier is the primary/default storage
@@ -141,12 +174,53 @@ func New(cfg *config.Config) (*Server, error) {
 	coldDataDir := filepath.Join(cfg.DataDir, "tiering", "cold")
 
 	// Helper function to create a backend based on type
+	// This now supports per-tier backend configuration
 	createBackend := func(dataDir, tierName string) (backend.Backend, error) {
-		switch cfg.Storage.Backend {
+		// Check if we have tier-specific configuration
+		tierBackend := cfg.Storage.Backend
+		var tierErasureConfig *config.ErasureStorageConfig
+
+		if cfg.Storage.Tiering.Enabled && cfg.Storage.Tiering.Tiers != nil {
+			if tierCfg, ok := cfg.Storage.Tiering.Tiers[tierName]; ok {
+				// Use tier-specific backend if configured
+				if tierCfg.Backend != "" {
+					tierBackend = tierCfg.Backend
+				}
+				if tierCfg.DataDir != "" {
+					dataDir = tierCfg.DataDir
+				}
+				tierErasureConfig = tierCfg.ErasureConfig
+			}
+		}
+
+		switch tierBackend {
 		case "erasure":
 			// Erasure coding provides redundancy through Reed-Solomon encoding
 			// Data is split into data shards + parity shards across the tier
-			erasureCfg := erasure.ConfigFromPreset(erasure.PresetStandard, dataDir)
+			var erasureCfg erasure.Config
+			if tierErasureConfig != nil {
+				// Use tier-specific erasure configuration
+				erasureCfg = erasure.Config{
+					DataDir:      dataDir,
+					DataShards:   tierErasureConfig.DataShards,
+					ParityShards: tierErasureConfig.ParityShards,
+					ShardSize:    int(tierErasureConfig.ShardSize),
+				}
+				if erasureCfg.ShardSize == 0 {
+					erasureCfg.ShardSize = 64 * 1024 * 1024 // 64MB default
+				}
+			} else if cfg.Storage.DefaultRedundancy.Enabled {
+				// Use default redundancy configuration
+				erasureCfg = erasure.Config{
+					DataDir:      dataDir,
+					DataShards:   cfg.Storage.DefaultRedundancy.DataShards,
+					ParityShards: cfg.Storage.DefaultRedundancy.ParityShards,
+					ShardSize:    64 * 1024 * 1024, // 64MB default
+				}
+			} else {
+				// Fallback to preset
+				erasureCfg = erasure.ConfigFromPreset(erasure.PresetStandard, dataDir)
+			}
 			log.Info().
 				Str("tier", tierName).
 				Int("data_shards", erasureCfg.DataShards).
@@ -156,11 +230,16 @@ func New(cfg *config.Config) (*Server, error) {
 		case "volume":
 			log.Info().Str("tier", tierName).Msg("Initializing volume storage")
 			return volume.NewBackend(dataDir)
+		case "rawdevice":
+			log.Info().Str("tier", tierName).Msg("Initializing raw device storage")
+			// Raw device storage is handled separately via TieredDeviceManager
+			// For now, fall back to volume storage
+			return volume.NewBackend(dataDir)
 		case "fs", "":
 			log.Info().Str("tier", tierName).Msg("Initializing filesystem storage")
 			return fs.New(fs.Config{DataDir: dataDir})
 		default:
-			return nil, fmt.Errorf("unsupported storage backend: %s (supported: fs, volume, erasure)", cfg.Storage.Backend)
+			return nil, fmt.Errorf("unsupported storage backend: %s (supported: fs, volume, erasure, rawdevice)", tierBackend)
 		}
 	}
 

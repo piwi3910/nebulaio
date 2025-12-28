@@ -122,6 +122,9 @@ type Bucket struct {
 
 	// Accelerate configuration
 	Accelerate string `json:"accelerate,omitempty"` // "Enabled" or "Suspended"
+
+	// Redundancy configuration for erasure coding
+	Redundancy *RedundancyConfig `json:"redundancy,omitempty"`
 }
 
 // VersioningStatus represents bucket versioning state
@@ -310,6 +313,97 @@ type OwnershipControlsRule struct {
 	ObjectOwnership string `json:"object_ownership"` // "BucketOwnerPreferred", "ObjectWriter", "BucketOwnerEnforced"
 }
 
+// RedundancyConfig defines how data should be protected with erasure coding
+type RedundancyConfig struct {
+	// Enabled indicates if erasure coding is enabled for this bucket/object
+	Enabled bool `json:"enabled"`
+
+	// DataShards is the number of data shards (Reed-Solomon k value)
+	// Minimum data fragments needed to reconstruct the original data
+	DataShards int `json:"data_shards"`
+
+	// ParityShards is the number of parity shards (Reed-Solomon m value)
+	// Number of additional fragments for redundancy
+	// Can lose up to ParityShards fragments and still recover data
+	ParityShards int `json:"parity_shards"`
+
+	// MinAvailableShards is the minimum number of shards that must be available
+	// for read operations. Default is DataShards.
+	MinAvailableShards int `json:"min_available_shards,omitempty"`
+
+	// PlacementPolicy defines how shards are distributed across nodes
+	// Options: "spread" (maximize distribution), "local" (prefer local node),
+	// "rack-aware" (spread across racks), "zone-aware" (spread across zones)
+	PlacementPolicy string `json:"placement_policy,omitempty"`
+
+	// ReplicationFactor for cross-placement-group DR replication
+	// This is for full object copies, not erasure shards
+	ReplicationFactor int `json:"replication_factor,omitempty"`
+
+	// ReplicationTargets specifies which placement groups to replicate to
+	ReplicationTargets []string `json:"replication_targets,omitempty"`
+}
+
+// DefaultRedundancyConfig returns a sensible default redundancy configuration
+func DefaultRedundancyConfig() *RedundancyConfig {
+	return &RedundancyConfig{
+		Enabled:         true,
+		DataShards:      10,
+		ParityShards:    4,
+		PlacementPolicy: "spread",
+	}
+}
+
+// RedundancyPreset represents a named redundancy configuration preset
+type RedundancyPreset string
+
+const (
+	// RedundancyPresetMinimal uses 4 data + 2 parity (can lose 2 shards)
+	RedundancyPresetMinimal RedundancyPreset = "minimal"
+
+	// RedundancyPresetStandard uses 10 data + 4 parity (can lose 4 shards)
+	RedundancyPresetStandard RedundancyPreset = "standard"
+
+	// RedundancyPresetMaximum uses 8 data + 8 parity (can lose 8 shards)
+	RedundancyPresetMaximum RedundancyPreset = "maximum"
+
+	// RedundancyPresetNone disables erasure coding (single copy)
+	RedundancyPresetNone RedundancyPreset = "none"
+)
+
+// RedundancyConfigFromPreset creates a RedundancyConfig from a preset name
+func RedundancyConfigFromPreset(preset RedundancyPreset) *RedundancyConfig {
+	switch preset {
+	case RedundancyPresetMinimal:
+		return &RedundancyConfig{
+			Enabled:         true,
+			DataShards:      4,
+			ParityShards:    2,
+			PlacementPolicy: "spread",
+		}
+	case RedundancyPresetStandard:
+		return &RedundancyConfig{
+			Enabled:         true,
+			DataShards:      10,
+			ParityShards:    4,
+			PlacementPolicy: "spread",
+		}
+	case RedundancyPresetMaximum:
+		return &RedundancyConfig{
+			Enabled:         true,
+			DataShards:      8,
+			ParityShards:    8,
+			PlacementPolicy: "spread",
+		}
+	case RedundancyPresetNone:
+		return &RedundancyConfig{
+			Enabled: false,
+		}
+	default:
+		return DefaultRedundancyConfig()
+	}
+}
+
 // ObjectMeta represents object metadata
 type ObjectMeta struct {
 	Bucket       string            `json:"bucket"`
@@ -337,6 +431,9 @@ type ObjectMeta struct {
 
 	// ACL for object
 	ACL *ObjectACL `json:"acl,omitempty"`
+
+	// Redundancy configuration (overrides bucket config if set)
+	Redundancy *RedundancyConfig `json:"redundancy,omitempty"`
 }
 
 // ObjectACL represents an object's access control list
