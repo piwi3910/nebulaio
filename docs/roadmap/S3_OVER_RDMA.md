@@ -451,7 +451,6 @@ The following components have been implemented in `internal/transport/rdma/`:
 ### Reference Implementations
 - [HERD (RDMA Key-Value)](https://github.com/efficient/HERD)
 - [FaRM (Microsoft)](https://www.microsoft.com/en-us/research/project/farm/)
-- [MinIO AIStor RDMA](https://min.io/product/aistor)
 
 ### Dependencies
 - [go-rdma](https://github.com/Mellanox/goroce) - Go RDMA bindings
@@ -460,5 +459,3 @@ The following components have been implemented in `internal/transport/rdma/`:
 ## Conclusion
 
 S3 over RDMA represents a significant advancement in object storage performance, enabling new use cases in AI/ML, HPC, and low-latency applications. The phased implementation approach ensures we can deliver incremental value while building toward the full vision.
-
-The feature will position NebulaIO as a leader in high-performance object storage, matching and exceeding MinIO's AIStor capabilities while maintaining full S3 API compatibility.

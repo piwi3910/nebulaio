@@ -1,6 +1,6 @@
 # NebulaIO
 
-An S3-compatible object storage system with a full-featured web GUI, designed to scale from single-node deployments to distributed clusters. **100% feature parity with MinIO**, including all 2025 AI/ML features - all features included free.
+An S3-compatible object storage system with a full-featured web GUI, designed to scale from single-node deployments to distributed clusters. All features included free.
 
 ## Features
 
@@ -409,10 +409,6 @@ make test
 - [x] Phase 6: Event notifications, storage tiering, caching
 - [x] Phase 7: Object Lock (WORM compliance), CLI tool
 - [x] Phase 8: S3 Express, Iceberg, MCP Server, GPUDirect, DPU, RDMA, NIM
-
-## MinIO Comparison
-
-NebulaIO implements **100% feature parity** with MinIO, including all 2025 features. See [docs/MINIO_COMPARISON.md](docs/MINIO_COMPARISON.md) for detailed comparison.
 
 ## License
 

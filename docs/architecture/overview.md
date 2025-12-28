@@ -1,6 +1,6 @@
 # Architecture Overview
 
-NebulaIO is a distributed, S3-compatible object storage system designed for high availability, scalability, and performance. It provides 100% feature parity with MinIO, including all 2025 AI/ML features.
+NebulaIO is a distributed, S3-compatible object storage system designed for high availability, scalability, and performance.
 
 ## High-Level Architecture
 
