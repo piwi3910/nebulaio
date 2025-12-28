@@ -13,7 +13,6 @@ import (
 type PolicyExecutor struct {
 	tierManager TierManager
 	store       PolicyStore
-	mu          sync.RWMutex
 }
 
 // NewPolicyExecutor creates a new policy executor
@@ -296,9 +295,8 @@ type AntiThrashManager struct {
 }
 
 type transitionRecord struct {
-	lastTransition time.Time
+	lastTransition  time.Time
 	transitionCount int
-	tier           TierType
 }
 
 // NewAntiThrashManager creates a new anti-thrash manager

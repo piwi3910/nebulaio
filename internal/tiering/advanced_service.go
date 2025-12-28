@@ -264,7 +264,7 @@ func (s *AdvancedService) GetObject(ctx context.Context, bucket, key string) (io
 			// Cache for future requests
 			if s.cache != nil {
 				data, readErr := io.ReadAll(reader)
-				reader.Close()
+				_ = reader.Close()
 				if readErr == nil {
 					cacheKey := bucket + "/" + key
 					_ = s.cache.Put(ctx, cacheKey, data, "", "")
@@ -622,11 +622,10 @@ func (s *AdvancedService) Stats(ctx context.Context) (*AdvancedServiceStats, err
 
 // DefaultTierManager implements TierManager
 type DefaultTierManager struct {
-	hot    backend.Backend
-	warm   backend.Backend
-	cold   *ColdStorageManager
-	cache  *Cache
-	mu     sync.RWMutex
+	hot   backend.Backend
+	warm  backend.Backend
+	cold  *ColdStorageManager
+	cache *Cache
 }
 
 // GetObject retrieves an object
@@ -636,7 +635,7 @@ func (m *DefaultTierManager) GetObject(ctx context.Context, bucket, key string) 
 		reader, err := m.hot.GetObject(ctx, bucket, key)
 		if err == nil {
 			data, err := io.ReadAll(reader)
-			reader.Close()
+			_ = reader.Close()
 			return data, err
 		}
 	}
@@ -646,7 +645,7 @@ func (m *DefaultTierManager) GetObject(ctx context.Context, bucket, key string) 
 		reader, err := m.warm.GetObject(ctx, bucket, key)
 		if err == nil {
 			data, err := io.ReadAll(reader)
-			reader.Close()
+			_ = reader.Close()
 			return data, err
 		}
 	}
@@ -657,7 +656,7 @@ func (m *DefaultTierManager) GetObject(ctx context.Context, bucket, key string) 
 			reader, err := cold.GetObject(ctx, bucket, key)
 			if err == nil {
 				data, err := io.ReadAll(reader)
-				reader.Close()
+				_ = reader.Close()
 				return data, err
 			}
 		}

@@ -195,16 +195,15 @@ func ParseDeviceSignature(data []byte) (*DeviceSignature, error) {
 
 // RawDeviceVolume implements a volume on a raw block device
 type RawDeviceVolume struct {
-	path       string
-	file       *os.File
-	dio        *DirectIOFile
-	tier       StorageTier
-	config     RawDeviceConfig
-	signature  *DeviceSignature
-	index      *Index
-	superblock *Superblock
-	allocator  *BlockAllocator
-	mu         sync.RWMutex
+	path      string
+	file      *os.File
+	dio       *DirectIOFile
+	tier      StorageTier
+	config    RawDeviceConfig
+	signature *DeviceSignature
+	index     *Index
+	allocator *BlockAllocator
+	mu        sync.RWMutex
 
 	// Stats
 	objectCount int
@@ -237,7 +236,7 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 	// Get device size
 	fi, err := file.Stat()
 	if err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, fmt.Errorf("failed to stat device: %w", err)
 	}
 
@@ -246,7 +245,7 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 		// For block devices, try to get size differently
 		deviceSize, err = getBlockDeviceSize(file)
 		if err != nil {
-			file.Close()
+			_ = file.Close()
 			return nil, fmt.Errorf("failed to get device size: %w", err)
 		}
 	}
@@ -254,7 +253,7 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 	// Try exclusive lock if requested
 	if cfg.Safety.ExclusiveLock {
 		if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-			file.Close()
+			_ = file.Close()
 			return nil, ErrDeviceLocked
 		}
 	}
@@ -279,7 +278,7 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 
 	// Check for existing signature or initialize
 	if err := vol.initializeOrLoad(cfg); err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, err
 	}
 
@@ -518,7 +517,7 @@ func NewTieredDeviceManager(cfg TieredDeviceManagerConfig) (*TieredDeviceManager
 		vol, err := NewRawDeviceVolume(devCfg.Path, cfg.RawDevices, devCfg.Tier)
 		if err != nil {
 			// Close already opened volumes
-			mgr.Close()
+			_ = mgr.Close()
 			return nil, fmt.Errorf("failed to open device %s: %w", devCfg.Path, err)
 		}
 		mgr.volumes[devCfg.Tier] = vol

@@ -538,8 +538,7 @@ func (h *TieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Request) 
 
 	if strings.Contains(contentType, "application/xml") || strings.Contains(contentType, "text/xml") {
 		// Parse XML body
-		var xmlData []byte
-		xmlData = make([]byte, r.ContentLength)
+		xmlData := make([]byte, r.ContentLength)
 		if _, err := r.Body.Read(xmlData); err != nil {
 			writeError(w, "Failed to read request body", http.StatusBadRequest)
 			return

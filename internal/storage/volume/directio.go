@@ -101,6 +101,7 @@ func (p *AlignedBufferPool) Put(buf []byte) {
 		for i := range buf {
 			buf[i] = 0
 		}
+		//nolint:staticcheck // SA6002: slices are pointer-like and safe to pass directly
 		p.pool.Put(buf)
 	}
 }

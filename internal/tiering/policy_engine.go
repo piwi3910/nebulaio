@@ -26,13 +26,11 @@ type PolicyEngine struct {
 	clusterNodes []string
 
 	// Background workers
-	stopChan     chan struct{}
-	workerWg     sync.WaitGroup
-	realtimeCh   chan RealtimeEvent
-	scheduledCh  chan *AdvancedPolicy
-	thresholdCh  chan ThresholdEvent
-
-	mu sync.RWMutex
+	stopChan    chan struct{}
+	workerWg    sync.WaitGroup
+	realtimeCh  chan RealtimeEvent
+	scheduledCh chan *AdvancedPolicy
+	thresholdCh chan ThresholdEvent
 }
 
 // TierManager interface for tier operations
