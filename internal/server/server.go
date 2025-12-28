@@ -277,8 +277,9 @@ func (s *Server) setupS3Server() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
-	r.Use(apimiddleware.MetricsMiddleware) // Add metrics middleware
-	r.Use(apimiddleware.RequestID)         // Add S3 request ID and x-amz-id-2 headers
+	r.Use(apimiddleware.S3SecurityHeaders())     // S3-appropriate security headers
+	r.Use(apimiddleware.MetricsMiddleware)       // Add metrics middleware
+	r.Use(apimiddleware.RequestID)               // Add S3 request ID and x-amz-id-2 headers
 	r.Use(s3LoggerMiddleware)
 
 	// Audit middleware for S3 operations
@@ -325,6 +326,12 @@ func (s *Server) setupAdminServer() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Logger)
+
+	// Security headers middleware (with HSTS enabled when TLS is active)
+	securityConfig := apimiddleware.DefaultSecurityHeadersConfig()
+	securityConfig.EnableHSTS = s.tlsManager != nil
+	r.Use(apimiddleware.SecurityHeaders(securityConfig))
+
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -389,6 +396,11 @@ func (s *Server) setupAdminServer() {
 
 func (s *Server) setupConsoleServer() {
 	r := chi.NewRouter()
+
+	// Security headers middleware for web console (with HSTS enabled when TLS is active)
+	securityConfig := apimiddleware.DefaultSecurityHeadersConfig()
+	securityConfig.EnableHSTS = s.tlsManager != nil
+	r.Use(apimiddleware.SecurityHeaders(securityConfig))
 
 	// Serve static files for web console
 	// In production, this would serve the built React app

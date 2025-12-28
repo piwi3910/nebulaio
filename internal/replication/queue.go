@@ -17,6 +17,9 @@ type Queue struct {
 	pending  chan *QueueItem
 	maxSize  int
 	maxRetry int
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
 }
 
 // QueueConfig holds queue configuration
@@ -44,11 +47,14 @@ func NewQueue(cfg QueueConfig) *Queue {
 		cfg.MaxRetry = 3
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Queue{
 		items:    make(map[string]*QueueItem),
 		pending:  make(chan *QueueItem, cfg.MaxSize),
 		maxSize:  cfg.MaxSize,
 		maxRetry: cfg.MaxRetry,
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 }
 
@@ -139,12 +145,26 @@ func (q *Queue) Fail(id string, err error) error {
 	// Requeue with exponential backoff
 	item.Status = QueueStatusPending
 	retryCount := item.RetryCount // Capture before goroutine to avoid race
+
+	q.wg.Add(1)
 	go func() {
+		defer q.wg.Done()
+
 		// Exponential backoff: 1s, 2s, 4s, 8s, etc.
 		backoff := time.Duration(1<<uint(retryCount-1)) * time.Second
-		time.Sleep(backoff)
+
+		// Wait for backoff or queue cancellation
+		select {
+		case <-q.ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+
+		// Try to requeue the item
 		select {
 		case q.pending <- item:
+		case <-q.ctx.Done():
+			// Queue is closing, don't requeue
 		default:
 			// Queue is full, item will stay in items map as pending
 		}
@@ -304,8 +324,13 @@ func (s QueueStats) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// Close closes the queue
+// Close closes the queue and waits for all pending goroutines to complete
 func (q *Queue) Close() error {
+	// Signal all goroutines to stop
+	q.cancel()
+	// Wait for all retry goroutines to complete
+	q.wg.Wait()
+	// Now safe to close the channel
 	close(q.pending)
 	return nil
 }
