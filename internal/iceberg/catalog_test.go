@@ -939,7 +939,7 @@ func intPtr(i int) *int {
 // and callers check for nil returns
 func TestCopyMetadataErrorHandling(t *testing.T) {
 	catalog := &Catalog{
-		config:  CatalogConfig{Name: "test"},
+		config:  &CatalogConfig{CatalogName: "test"},
 		metrics: &CatalogMetrics{},
 	}
 
@@ -989,18 +989,18 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 			TableUUID:       "complex-uuid",
 			Location:        "s3://bucket/complex-table",
 			LastUpdatedMs:   1234567890,
-			LastColumnId:    10,
+			LastColumnID:    10,
 			CurrentSchemaID: 1,
 			Schema: &Schema{
 				SchemaID: 1,
-				Fields: []Field{
+				Fields: []*Field{
 					{ID: 1, Name: "id", Type: "long", Required: true},
 					{ID: 2, Name: "data", Type: "string", Required: false},
 				},
 			},
 			Schemas: []*Schema{
-				{SchemaID: 0, Fields: []Field{{ID: 1, Name: "id", Type: "long"}}},
-				{SchemaID: 1, Fields: []Field{{ID: 1, Name: "id", Type: "long"}, {ID: 2, Name: "data", Type: "string"}}},
+				{SchemaID: 0, Fields: []*Field{{ID: 1, Name: "id", Type: "long"}}},
+				{SchemaID: 1, Fields: []*Field{{ID: 1, Name: "id", Type: "long"}, {ID: 2, Name: "data", Type: "string"}}},
 			},
 			Properties: map[string]string{
 				"owner":       "test-user",

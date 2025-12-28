@@ -765,7 +765,7 @@ func (s *Service) Close() error {
 		if stopErr := s.backend.StopService(offloadType); stopErr != nil {
 			log.Error().
 				Err(stopErr).
-				Str("offload_type", offloadType).
+				Str("offload_type", string(offloadType)).
 				Msg("failed to stop DPU offload service - resources may not be properly released")
 		}
 	}
