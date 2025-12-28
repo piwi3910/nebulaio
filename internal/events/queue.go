@@ -122,8 +122,9 @@ func (q *EventQueue) Stop() {
 	q.closed = true
 	q.mu.Unlock()
 
+	// Cancel context first to signal workers to stop
 	q.cancel()
-	close(q.events)
+	// Wait for workers to finish before closing the channel
 	q.wg.Wait()
 
 	log.Info().Msg("Event queue stopped")
