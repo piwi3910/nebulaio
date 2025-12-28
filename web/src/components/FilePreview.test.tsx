@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, userEvent } from '../test/utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, userEvent, cleanup } from '../test/utils';
 import { FilePreview } from './FilePreview';
 import type { AxiosResponse, InternalAxiosRequestConfig, AxiosHeaders } from 'axios';
 
@@ -46,6 +46,10 @@ describe('FilePreview', () => {
     mockConsoleApi.getObjectContent.mockResolvedValue(
       mockAxiosResponse(new Blob(['test content'], { type: 'text/plain' }))
     );
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('renders modal when opened', () => {

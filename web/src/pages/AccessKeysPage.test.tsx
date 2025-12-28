@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, userEvent } from '../test/utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, userEvent, cleanup } from '../test/utils';
 import { AccessKeysPage } from './AccessKeysPage';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/mocks/server';
@@ -39,6 +39,10 @@ describe('AccessKeysPage', () => {
         return HttpResponse.json([]);
       })
     );
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('renders the access keys page title', () => {

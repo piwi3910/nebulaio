@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, userEvent } from '../test/utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, userEvent, cleanup } from '../test/utils';
 import { BucketsPage } from './BucketsPage';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/mocks/server';
@@ -40,6 +40,10 @@ describe('BucketsPage', () => {
         return HttpResponse.json([]);
       })
     );
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('renders the buckets page title', () => {

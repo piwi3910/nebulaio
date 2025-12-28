@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, userEvent } from '../test/utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, userEvent, cleanup } from '../test/utils';
 import { PolicyEditor } from './PolicyEditor';
 
 describe('PolicyEditor', () => {
@@ -10,6 +10,10 @@ describe('PolicyEditor', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('renders textarea for policy input', () => {

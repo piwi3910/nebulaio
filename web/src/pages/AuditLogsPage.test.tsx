@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '../test/utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '../test/utils';
 import { AuditLogsPage } from './AuditLogsPage';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/mocks/server';
@@ -14,6 +14,10 @@ describe('AuditLogsPage', () => {
         return HttpResponse.json({ logs: [], total: 0, page: 1, page_size: 25, total_pages: 0 });
       })
     );
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('renders the audit logs page title', () => {

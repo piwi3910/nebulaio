@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '../test/utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '../test/utils';
 import { DashboardPage } from './DashboardPage';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/mocks/server';
@@ -23,6 +23,10 @@ describe('DashboardPage', () => {
         return HttpResponse.json({ used: 0, total: 10000 });
       })
     );
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('renders the dashboard title', () => {

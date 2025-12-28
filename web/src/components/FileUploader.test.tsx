@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '../test/utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '../test/utils';
 import { FileUploader } from './FileUploader';
 
 // Mock the console API
@@ -54,6 +54,10 @@ vi.mock('@mantine/dropzone', () => {
 describe('FileUploader', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('renders the component', () => {

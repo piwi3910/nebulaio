@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, userEvent } from '../test/utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, userEvent, cleanup } from '../test/utils';
 import { UsersPage } from './UsersPage';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/mocks/server';
@@ -14,6 +14,10 @@ describe('UsersPage', () => {
         return HttpResponse.json([]);
       })
     );
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('renders the users page title', () => {
@@ -80,8 +84,17 @@ describe('UsersPage', () => {
     expect(screen.getByRole('heading', { name: /users/i })).toBeInTheDocument();
   });
 
-  it('validates required fields', async () => {
+  it('prevents form submission when fields are empty', async () => {
     const user = userEvent.setup();
+
+    // Set up handler to track if API is called
+    let apiWasCalled = false;
+    server.use(
+      http.post('/api/v1/admin/users', () => {
+        apiWasCalled = true;
+        return HttpResponse.json({ id: '1', username: 'test' });
+      })
+    );
 
     render(<UsersPage />);
 
@@ -95,16 +108,105 @@ describe('UsersPage', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
 
-    // Try to submit empty form - modal should stay open
-    const createButtons = screen.getAllByRole('button', { name: /create/i });
-    const submitButton = createButtons.find(btn => btn.closest('form') || btn.closest('[role="dialog"]'));
-    if (submitButton) {
-      await user.click(submitButton);
-    }
+    // Find the submit button within the dialog
+    const dialog = screen.getByRole('dialog');
+    const submitButton = dialog.querySelector('button[type="submit"]') ||
+                         screen.getByRole('button', { name: /^create$/i });
+
+    expect(submitButton).toBeInTheDocument();
+
+    // Try to submit empty form
+    await user.click(submitButton!);
+
+    // Modal should remain open because form validation failed
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    // API should NOT have been called due to validation
+    expect(apiWasCalled).toBe(false);
+  });
+
+  it('prevents form submission with short username', async () => {
+    const user = userEvent.setup();
+
+    let apiWasCalled = false;
+    server.use(
+      http.post('/api/v1/admin/users', () => {
+        apiWasCalled = true;
+        return HttpResponse.json({ id: '1', username: 'test' });
+      })
+    );
+
+    render(<UsersPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /create user/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /create user/i }));
 
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
+
+    // Enter short username (less than 3 characters)
+    const usernameInput = screen.getByLabelText(/username/i);
+    await user.type(usernameInput, 'ab');
+
+    // Submit the form
+    const submitButton = screen.getByRole('button', { name: /^create$/i });
+    await user.click(submitButton);
+
+    // Modal should remain open
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    // API should NOT have been called
+    expect(apiWasCalled).toBe(false);
+  });
+
+  it('prevents form submission with short password', async () => {
+    const user = userEvent.setup();
+
+    let apiWasCalled = false;
+    server.use(
+      http.post('/api/v1/admin/users', () => {
+        apiWasCalled = true;
+        return HttpResponse.json({ id: '1', username: 'test' });
+      })
+    );
+
+    render(<UsersPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /create user/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /create user/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    // Enter valid username but short password
+    const usernameInput = screen.getByLabelText(/username/i);
+    const passwordInput = screen.getByLabelText(/password/i);
+    await user.type(usernameInput, 'validuser');
+    await user.type(passwordInput, 'short');
+
+    // Submit the form
+    const submitButton = screen.getByRole('button', { name: /^create$/i });
+    await user.click(submitButton);
+
+    // Modal should remain open
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    // API should NOT have been called
+    expect(apiWasCalled).toBe(false);
   });
 
   it('closes modal on cancel', async () => {

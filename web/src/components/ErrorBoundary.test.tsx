@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, userEvent } from '../test/utils';
+import { render, screen, userEvent, cleanup } from '../test/utils';
 import { ErrorBoundary } from './ErrorBoundary';
 
 // Component that throws an error
@@ -29,6 +29,7 @@ describe('ErrorBoundary', () => {
 
   afterEach(() => {
     console.error = originalConsoleError;
+    cleanup();
   });
 
   it('renders children when no error occurs', () => {
