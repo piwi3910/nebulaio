@@ -11,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Config configures the DRAM cache
@@ -252,8 +254,13 @@ func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 		// Try distributed peers if enabled
 		if c.config.DistributedMode {
 			if entry, ok := c.getFromPeer(ctx, key); ok {
-				// Cache locally for future access
-				_ = c.Put(ctx, key, entry.Data, entry.ContentType, entry.ETag)
+				// Cache locally for future access - log if caching fails but don't fail the get
+				if putErr := c.Put(ctx, key, entry.Data, entry.ContentType, entry.ETag); putErr != nil {
+					log.Debug().
+						Err(putErr).
+						Str("key", key).
+						Msg("failed to cache entry retrieved from peer - entry will need to be fetched again next time")
+				}
 				atomic.AddInt64(&c.bytesServed, entry.Size)
 				return entry, true
 			}

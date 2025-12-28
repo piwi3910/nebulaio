@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // Iceberg Catalog Errors
@@ -846,9 +847,22 @@ func (c *Catalog) applyUpdate(metadata *TableMetadata, update *TableUpdate) erro
 }
 
 func (c *Catalog) copyMetadata(m *TableMetadata) *TableMetadata {
-	data, _ := json.Marshal(m)
+	data, err := json.Marshal(m)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("table_uuid", m.TableUUID).
+			Msg("failed to marshal table metadata for copy - returning nil copy")
+		return nil
+	}
 	var copy TableMetadata
-	_ = json.Unmarshal(data, &copy)
+	if err := json.Unmarshal(data, &copy); err != nil {
+		log.Error().
+			Err(err).
+			Str("table_uuid", m.TableUUID).
+			Msg("failed to unmarshal table metadata copy - returning nil copy")
+		return nil
+	}
 	return &copy
 }
 

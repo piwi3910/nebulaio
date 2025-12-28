@@ -9,6 +9,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Service manages bucket replication
@@ -102,7 +104,11 @@ func (s *Service) Stop() error {
 	}
 
 	s.workerPool.Stop()
-	_ = s.queue.Close()
+	if closeErr := s.queue.Close(); closeErr != nil {
+		log.Error().
+			Err(closeErr).
+			Msg("failed to close replication queue during service stop - some items may be lost")
+	}
 	s.started = false
 
 	return nil

@@ -13,6 +13,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/piwi3910/nebulaio/internal/metadata"
 	"github.com/piwi3910/nebulaio/internal/policy"
+	"github.com/rs/zerolog/log"
 )
 
 // Config holds auth service configuration
@@ -605,8 +606,9 @@ func parseResourceARN(resourceARN string) (bucket, key string) {
 func generateID(prefix string) string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		// Cryptographic failure is unrecoverable - panic to prevent weak IDs
-		panic(fmt.Sprintf("crypto/rand.Read failed: %v", err))
+		// Cryptographic failure is unrecoverable - log and panic to prevent weak IDs
+		log.Error().Err(err).Str("prefix", prefix).Msg("crypto/rand.Read failed while generating ID - this indicates a serious system entropy problem")
+		panic(fmt.Sprintf("crypto/rand.Read failed for prefix %s: %v", prefix, err))
 	}
 	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(b))
 }
@@ -614,8 +616,9 @@ func generateID(prefix string) string {
 func generateAccessKeyID() string {
 	b := make([]byte, 10)
 	if _, err := rand.Read(b); err != nil {
-		// Cryptographic failure is unrecoverable - panic to prevent weak access keys
-		panic(fmt.Sprintf("crypto/rand.Read failed: %v", err))
+		// Cryptographic failure is unrecoverable - log and panic to prevent weak access keys
+		log.Error().Err(err).Msg("crypto/rand.Read failed while generating access key ID - this indicates a serious system entropy problem")
+		panic(fmt.Sprintf("crypto/rand.Read failed for access key ID generation: %v", err))
 	}
 	return "AKIA" + strings.ToUpper(hex.EncodeToString(b))[:16]
 }
@@ -623,8 +626,9 @@ func generateAccessKeyID() string {
 func generateSecretAccessKey() string {
 	b := make([]byte, 30)
 	if _, err := rand.Read(b); err != nil {
-		// Cryptographic failure is unrecoverable - panic to prevent weak secret keys
-		panic(fmt.Sprintf("crypto/rand.Read failed: %v", err))
+		// Cryptographic failure is unrecoverable - log and panic to prevent weak secret keys
+		log.Error().Err(err).Msg("crypto/rand.Read failed while generating secret access key - this indicates a serious system entropy problem")
+		panic(fmt.Sprintf("crypto/rand.Read failed for secret access key generation: %v", err))
 	}
 	return hex.EncodeToString(b)[:40]
 }

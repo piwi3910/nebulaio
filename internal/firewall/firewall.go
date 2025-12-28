@@ -8,6 +8,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Config configures the data firewall
@@ -291,12 +293,23 @@ func New(config Config) (*Firewall, error) {
 		if err != nil {
 			ip := net.ParseIP(cidr)
 			if ip == nil {
+				log.Warn().
+					Str("cidr", cidr).
+					Msg("skipping invalid IP allowlist entry - not a valid IP or CIDR notation")
 				continue
 			}
+			var parseErr error
 			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32")
+				_, network, parseErr = net.ParseCIDR(cidr + "/32")
 			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128")
+				_, network, parseErr = net.ParseCIDR(cidr + "/128")
+			}
+			if parseErr != nil {
+				log.Warn().
+					Err(parseErr).
+					Str("cidr", cidr).
+					Msg("failed to convert IP to CIDR for allowlist - skipping entry")
+				continue
 			}
 		}
 		if network != nil {
@@ -310,12 +323,23 @@ func New(config Config) (*Firewall, error) {
 		if err != nil {
 			ip := net.ParseIP(cidr)
 			if ip == nil {
+				log.Warn().
+					Str("cidr", cidr).
+					Msg("skipping invalid IP blocklist entry - not a valid IP or CIDR notation")
 				continue
 			}
+			var parseErr error
 			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32")
+				_, network, parseErr = net.ParseCIDR(cidr + "/32")
 			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128")
+				_, network, parseErr = net.ParseCIDR(cidr + "/128")
+			}
+			if parseErr != nil {
+				log.Warn().
+					Err(parseErr).
+					Str("cidr", cidr).
+					Msg("failed to convert IP to CIDR for blocklist - skipping entry")
+				continue
 			}
 		}
 		if network != nil {

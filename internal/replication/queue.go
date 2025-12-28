@@ -3,7 +3,7 @@ package replication
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -115,7 +115,7 @@ func (q *Queue) Complete(id string) error {
 
 	item, ok := q.items[id]
 	if !ok {
-		return errors.New("item not found")
+		return fmt.Errorf("replication queue item not found: id=%s", id)
 	}
 
 	item.Status = QueueStatusCompleted
@@ -130,7 +130,7 @@ func (q *Queue) Fail(id string, err error) error {
 
 	item, ok := q.items[id]
 	if !ok {
-		return errors.New("item not found")
+		return fmt.Errorf("replication queue item not found: id=%s", id)
 	}
 
 	item.RetryCount++

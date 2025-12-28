@@ -13,6 +13,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/policy"
 	"github.com/piwi3910/nebulaio/pkg/s3errors"
 	"github.com/piwi3910/nebulaio/pkg/s3types"
+	"github.com/rs/zerolog/log"
 )
 
 // Tag validation constants for buckets
@@ -105,8 +106,14 @@ func (s *Service) CreateBucket(ctx context.Context, name, owner, region, storage
 
 	// Create storage
 	if err := s.storage.CreateBucket(ctx, name); err != nil {
-		// Rollback metadata
-		_ = s.store.DeleteBucket(ctx, name)
+		// Rollback metadata - log error if rollback fails
+		if rollbackErr := s.store.DeleteBucket(ctx, name); rollbackErr != nil {
+			log.Error().
+				Err(rollbackErr).
+				Str("bucket", name).
+				Str("original_error", err.Error()).
+				Msg("failed to rollback bucket metadata after storage creation failed - bucket may be in inconsistent state")
+		}
 		return nil, s3errors.ErrInternalError.WithMessage("failed to create bucket storage: " + err.Error())
 	}
 

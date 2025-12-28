@@ -9,6 +9,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/lni/dragonboat/v4/statemachine"
 	"github.com/piwi3910/nebulaio/internal/audit"
+	"github.com/rs/zerolog/log"
 )
 
 // stateMachine implements statemachine.IStateMachine for Dragonboat
@@ -57,8 +58,13 @@ func (sm *stateMachine) Update(entry statemachine.Entry) (statemachine.Result, e
 		return statemachine.Result{Value: 1}, nil // Error code
 	}
 
-	// Update applied index
-	_ = sm.updateAppliedIndex(entry.Index)
+	// Update applied index - log error if update fails to detect potential state consistency issues
+	if updateErr := sm.updateAppliedIndex(entry.Index); updateErr != nil {
+		log.Error().
+			Err(updateErr).
+			Uint64("index", entry.Index).
+			Msg("failed to update applied index in state machine - this may cause state consistency issues on restart")
+	}
 
 	return statemachine.Result{Value: 0}, nil // Success
 }
