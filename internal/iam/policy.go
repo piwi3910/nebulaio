@@ -6,12 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // PolicyVersion represents the IAM policy language version.
@@ -995,9 +997,41 @@ func (pe *PolicyEvaluator) arnPatternMatches(pattern, value string) bool {
 
 // ipMatches checks if IP matches CIDR or exact IP.
 func (pe *PolicyEvaluator) ipMatches(ip, cidr string) bool {
-	// Simple exact match for now
-	// TODO: Implement CIDR matching
-	return ip == cidr || strings.HasPrefix(ip, strings.TrimSuffix(cidr, "/*"))
+	// Parse the source IP
+	sourceIP := net.ParseIP(ip)
+	if sourceIP == nil {
+		log.Warn().
+			Str("ip", ip).
+			Msg("Invalid source IP in policy condition")
+		return false
+	}
+
+	// Check if cidr is a single IP (no slash)
+	if !strings.Contains(cidr, "/") {
+		// Exact IP match
+		targetIP := net.ParseIP(cidr)
+		if targetIP == nil {
+			log.Warn().
+				Str("cidr", cidr).
+				Msg("Invalid target IP in policy condition")
+			return false
+		}
+		return sourceIP.Equal(targetIP)
+	}
+
+	// Parse as CIDR
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		// Invalid CIDR, fall back to prefix match for backwards compatibility
+		log.Warn().
+			Str("cidr", cidr).
+			Err(err).
+			Msg("Invalid CIDR notation, falling back to prefix matching")
+		return strings.HasPrefix(ip, strings.TrimSuffix(cidr, "/*"))
+	}
+
+	// Check if the source IP is within the CIDR network
+	return network.Contains(sourceIP)
 }
 
 // Predefined policies

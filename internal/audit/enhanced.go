@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -16,6 +17,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // ComplianceMode represents the compliance standard to follow
@@ -946,11 +949,137 @@ func (o *FileOutput) rotate() error {
 	o.file = f
 	o.size = 0
 
-	// TODO: Compress old file if configured
+	// Compress old file if configured (run in background to not block writes)
+	if o.rotation.Compress {
+		go o.compressFile(rotatedPath)
+	}
 
-	// TODO: Clean up old files based on MaxBackups and MaxAgeDays
+	// Clean up old files based on MaxBackups and MaxAgeDays
+	go o.cleanupOldFiles()
 
 	return nil
+}
+
+// compressFile compresses a rotated log file using gzip
+func (o *FileOutput) compressFile(filePath string) {
+	// Read the original file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to read log file for compression")
+		return
+	}
+
+	// Create the compressed file
+	compressedPath := filePath + ".gz"
+	outFile, err := os.Create(compressedPath)
+	if err != nil {
+		log.Warn().Err(err).Str("file", compressedPath).Msg("Failed to create compressed log file")
+		return
+	}
+
+	// Create gzip writer and compress
+	gzWriter := gzip.NewWriter(outFile)
+
+	// Write data to gzip writer
+	if _, err := gzWriter.Write(data); err != nil {
+		// Close both writers before cleaning up (errors ignored during cleanup)
+		_ = gzWriter.Close()
+		_ = outFile.Close()
+		_ = os.Remove(compressedPath)
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to write compressed data")
+		return
+	}
+
+	// Close gzip writer to flush all data
+	if err := gzWriter.Close(); err != nil {
+		_ = outFile.Close()
+		_ = os.Remove(compressedPath)
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to finalize gzip compression")
+		return
+	}
+
+	// Close the output file
+	if err := outFile.Close(); err != nil {
+		_ = os.Remove(compressedPath)
+		log.Warn().Err(err).Str("file", compressedPath).Msg("Failed to close compressed log file")
+		return
+	}
+
+	// Remove the original uncompressed file
+	if err := os.Remove(filePath); err != nil {
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to remove original log file after compression")
+	}
+}
+
+// cleanupOldFiles removes old log files based on MaxBackups and MaxAgeDays
+func (o *FileOutput) cleanupOldFiles() {
+	// Get the directory and base name of the log file
+	dir := filepath.Dir(o.path)
+	baseName := filepath.Base(o.path)
+
+	// Find all rotated files (matching pattern: baseName.timestamp or baseName.timestamp.gz)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		log.Warn().Err(err).Str("dir", dir).Msg("Failed to read log directory for cleanup")
+		return
+	}
+
+	type rotatedFile struct {
+		path    string
+		modTime time.Time
+	}
+
+	var rotatedFiles []rotatedFile
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// Skip the current log file
+		if name == baseName {
+			continue
+		}
+		// Match rotated files (baseName.timestamp or baseName.timestamp.gz)
+		if strings.HasPrefix(name, baseName+".") {
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			rotatedFiles = append(rotatedFiles, rotatedFile{
+				path:    filepath.Join(dir, name),
+				modTime: info.ModTime(),
+			})
+		}
+	}
+
+	// Sort by modification time (newest first)
+	sort.Slice(rotatedFiles, func(i, j int) bool {
+		return rotatedFiles[i].modTime.After(rotatedFiles[j].modTime)
+	})
+
+	now := time.Now()
+	for i, rf := range rotatedFiles {
+		shouldDelete := false
+
+		// Check MaxBackups limit
+		if o.rotation.MaxBackups > 0 && i >= o.rotation.MaxBackups {
+			shouldDelete = true
+		}
+
+		// Check MaxAgeDays limit
+		if o.rotation.MaxAgeDays > 0 {
+			age := now.Sub(rf.modTime)
+			if age > time.Duration(o.rotation.MaxAgeDays)*24*time.Hour {
+				shouldDelete = true
+			}
+		}
+
+		if shouldDelete {
+			if err := os.Remove(rf.path); err != nil {
+				log.Warn().Err(err).Str("file", rf.path).Msg("Failed to remove old log file during cleanup")
+			}
+		}
+	}
 }
 
 func (o *FileOutput) Flush(ctx context.Context) error {

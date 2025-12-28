@@ -2,11 +2,14 @@ package lambda
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestCreateAccessPoint(t *testing.T) {
@@ -531,5 +534,199 @@ func TestNestedPIIMasking(t *testing.T) {
 	}
 	if strings.Contains(string(data), "contact1@example.com") {
 		t.Error("Array email should be masked")
+	}
+}
+
+func TestCompressTransformer(t *testing.T) {
+	transformer := &CompressTransformer{}
+	testData := "Hello, World! This is test data for compression."
+
+	tests := []struct {
+		name      string
+		params    map[string]interface{}
+		algorithm string
+	}{
+		{
+			name:      "gzip default",
+			params:    nil,
+			algorithm: "gzip",
+		},
+		{
+			name:      "gzip explicit",
+			params:    map[string]interface{}{"algorithm": "gzip"},
+			algorithm: "gzip",
+		},
+		{
+			name:      "gzip with level",
+			params:    map[string]interface{}{"algorithm": "gzip", "level": 9},
+			algorithm: "gzip",
+		},
+		{
+			name:      "zstd",
+			params:    map[string]interface{}{"algorithm": "zstd"},
+			algorithm: "zstd",
+		},
+		{
+			name:      "zstd with level",
+			params:    map[string]interface{}{"algorithm": "zstd", "level": 5},
+			algorithm: "zstd",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output, headers, err := transformer.Transform(context.Background(), strings.NewReader(testData), tt.params)
+			if err != nil {
+				t.Fatalf("Transform failed: %v", err)
+			}
+
+			// Check Content-Encoding header
+			if headers["Content-Encoding"] != tt.algorithm {
+				t.Errorf("Expected Content-Encoding '%s', got '%s'", tt.algorithm, headers["Content-Encoding"])
+			}
+
+			// Verify the output is actually compressed
+			compressed, _ := io.ReadAll(output)
+			if len(compressed) == 0 {
+				t.Fatal("Compressed output is empty")
+			}
+
+			// Decompress and verify
+			var decompressed []byte
+			switch tt.algorithm {
+			case "gzip":
+				reader, err := gzip.NewReader(bytes.NewReader(compressed))
+				if err != nil {
+					t.Fatalf("Failed to create gzip reader: %v", err)
+				}
+				decompressed, err = io.ReadAll(reader)
+				reader.Close()
+				if err != nil {
+					t.Fatalf("Failed to decompress gzip: %v", err)
+				}
+			case "zstd":
+				decoder, err := zstd.NewReader(bytes.NewReader(compressed))
+				if err != nil {
+					t.Fatalf("Failed to create zstd decoder: %v", err)
+				}
+				decompressed, err = io.ReadAll(decoder)
+				decoder.Close()
+				if err != nil {
+					t.Fatalf("Failed to decompress zstd: %v", err)
+				}
+			}
+
+			if string(decompressed) != testData {
+				t.Errorf("Decompressed data mismatch: got '%s', want '%s'", string(decompressed), testData)
+			}
+		})
+	}
+}
+
+func TestCompressTransformerUnsupportedAlgorithm(t *testing.T) {
+	transformer := &CompressTransformer{}
+	params := map[string]interface{}{"algorithm": "unsupported"}
+
+	_, _, err := transformer.Transform(context.Background(), strings.NewReader("test"), params)
+	if err == nil {
+		t.Error("Expected error for unsupported algorithm")
+	}
+	if !strings.Contains(err.Error(), "unsupported compression algorithm") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestDecompressTransformer(t *testing.T) {
+	transformer := &DecompressTransformer{}
+	testData := "Hello, World! This is test data for decompression."
+
+	tests := []struct {
+		name      string
+		compress  func([]byte) []byte
+		params    map[string]interface{}
+	}{
+		{
+			name: "gzip auto-detect",
+			compress: func(data []byte) []byte {
+				var buf bytes.Buffer
+				writer := gzip.NewWriter(&buf)
+				writer.Write(data)
+				writer.Close()
+				return buf.Bytes()
+			},
+			params: nil,
+		},
+		{
+			name: "gzip explicit",
+			compress: func(data []byte) []byte {
+				var buf bytes.Buffer
+				writer := gzip.NewWriter(&buf)
+				writer.Write(data)
+				writer.Close()
+				return buf.Bytes()
+			},
+			params: map[string]interface{}{"algorithm": "gzip"},
+		},
+		{
+			name: "zstd auto-detect",
+			compress: func(data []byte) []byte {
+				encoder, _ := zstd.NewWriter(nil)
+				return encoder.EncodeAll(data, nil)
+			},
+			params: nil,
+		},
+		{
+			name: "zstd explicit",
+			compress: func(data []byte) []byte {
+				encoder, _ := zstd.NewWriter(nil)
+				return encoder.EncodeAll(data, nil)
+			},
+			params: map[string]interface{}{"algorithm": "zstd"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			compressed := tt.compress([]byte(testData))
+
+			output, _, err := transformer.Transform(context.Background(), bytes.NewReader(compressed), tt.params)
+			if err != nil {
+				t.Fatalf("Transform failed: %v", err)
+			}
+
+			decompressed, _ := io.ReadAll(output)
+			if string(decompressed) != testData {
+				t.Errorf("Decompressed data mismatch: got '%s', want '%s'", string(decompressed), testData)
+			}
+		})
+	}
+}
+
+func TestDecompressTransformerUncompressedData(t *testing.T) {
+	transformer := &DecompressTransformer{}
+	// Data that doesn't match any compression magic bytes
+	plainData := "This is uncompressed plain text data"
+
+	output, _, err := transformer.Transform(context.Background(), strings.NewReader(plainData), nil)
+	if err != nil {
+		t.Fatalf("Transform should not fail for uncompressed data: %v", err)
+	}
+
+	result, _ := io.ReadAll(output)
+	if string(result) != plainData {
+		t.Errorf("Uncompressed data should pass through unchanged: got '%s', want '%s'", string(result), plainData)
+	}
+}
+
+func TestDecompressTransformerUnsupportedAlgorithm(t *testing.T) {
+	transformer := &DecompressTransformer{}
+	params := map[string]interface{}{"algorithm": "unsupported"}
+
+	_, _, err := transformer.Transform(context.Background(), strings.NewReader("test"), params)
+	if err == nil {
+		t.Error("Expected error for unsupported algorithm")
+	}
+	if !strings.Contains(err.Error(), "unsupported decompression algorithm") {
+		t.Errorf("Unexpected error message: %v", err)
 	}
 }

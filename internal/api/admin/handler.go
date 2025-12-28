@@ -13,6 +13,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/auth"
 	"github.com/piwi3910/nebulaio/internal/bucket"
 	"github.com/piwi3910/nebulaio/internal/cluster"
+	"github.com/piwi3910/nebulaio/internal/config"
 	"github.com/piwi3910/nebulaio/internal/metadata"
 	"github.com/piwi3910/nebulaio/internal/object"
 )
@@ -25,6 +26,7 @@ type Handler struct {
 	store          metadata.Store
 	discovery      *cluster.Discovery
 	tieringHandler *TieringHandler
+	config         *config.Config
 }
 
 // NewHandler creates a new Admin API handler
@@ -41,6 +43,11 @@ func NewHandler(authService *auth.Service, bucketService *bucket.Service, object
 // SetTieringHandler sets the tiering handler for tiering policy management
 func (h *Handler) SetTieringHandler(tieringHandler *TieringHandler) {
 	h.tieringHandler = tieringHandler
+}
+
+// SetConfig sets the configuration for feature status reporting
+func (h *Handler) SetConfig(cfg *config.Config) {
+	h.config = cfg
 }
 
 // RegisterRoutes registers Admin API routes

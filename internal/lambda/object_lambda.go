@@ -4,6 +4,7 @@ package lambda
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/klauspost/compress/zstd"
 )
 
 // TransformationType defines the type of transformation
@@ -777,29 +779,174 @@ func (t *ConvertJSONTransformer) Transform(ctx context.Context, input io.Reader,
 // CompressTransformer compresses content
 type CompressTransformer struct{}
 
+// MaxTransformSize is the maximum size of data that can be transformed in memory (100MB)
+const MaxTransformSize = 100 * 1024 * 1024
+
 func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
-	data, err := io.ReadAll(input)
+	// Use LimitReader to prevent memory exhaustion from large objects
+	limitedReader := io.LimitReader(input, MaxTransformSize+1)
+	data, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, nil, err
 	}
+	if len(data) > MaxTransformSize {
+		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", MaxTransformSize)
+	}
 
-	// TODO: Implement actual compression (gzip, zstd, etc.)
-	// For now, return as-is
-	return bytes.NewReader(data), map[string]string{"Content-Encoding": "identity"}, nil
+	// Get compression algorithm from params (default: gzip)
+	algorithm := "gzip"
+	if alg, ok := params["algorithm"].(string); ok {
+		algorithm = alg
+	}
+
+	// Get compression level from params
+	level := -1 // default level
+	if lvl, ok := params["level"].(int); ok {
+		level = lvl
+	} else if lvl, ok := params["level"].(float64); ok {
+		level = int(lvl)
+	}
+
+	var buf bytes.Buffer
+	var contentEncoding string
+
+	switch strings.ToLower(algorithm) {
+	case "gzip":
+		if err := compressGzip(&buf, data, level); err != nil {
+			return nil, nil, err
+		}
+		contentEncoding = "gzip"
+
+	case "zstd":
+		if err := compressZstd(&buf, data, level); err != nil {
+			return nil, nil, err
+		}
+		contentEncoding = "zstd"
+
+	default:
+		return nil, nil, fmt.Errorf("unsupported compression algorithm: %s", algorithm)
+	}
+
+	return bytes.NewReader(buf.Bytes()), map[string]string{"Content-Encoding": contentEncoding}, nil
+}
+
+// compressGzip compresses data using gzip and writes to the buffer
+func compressGzip(buf *bytes.Buffer, data []byte, level int) (err error) {
+	gzLevel := gzip.DefaultCompression
+	if level >= 0 && level <= 9 {
+		gzLevel = level
+	}
+	writer, err := gzip.NewWriterLevel(buf, gzLevel)
+	if err != nil {
+		return fmt.Errorf("failed to create gzip writer: %w", err)
+	}
+	defer func() {
+		if cerr := writer.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close gzip writer: %w", cerr)
+		}
+	}()
+
+	if _, err = writer.Write(data); err != nil {
+		return fmt.Errorf("failed to write gzip data: %w", err)
+	}
+	return nil
+}
+
+// compressZstd compresses data using zstd and writes to the buffer
+func compressZstd(buf *bytes.Buffer, data []byte, level int) (err error) {
+	var writer *zstd.Encoder
+	if level >= 1 && level <= 22 {
+		writer, err = zstd.NewWriter(buf, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
+	} else {
+		writer, err = zstd.NewWriter(buf, zstd.WithEncoderLevel(zstd.SpeedDefault))
+	}
+	if err != nil {
+		return fmt.Errorf("failed to create zstd writer: %w", err)
+	}
+	defer func() {
+		if cerr := writer.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close zstd writer: %w", cerr)
+		}
+	}()
+
+	if _, err = writer.Write(data); err != nil {
+		return fmt.Errorf("failed to write zstd data: %w", err)
+	}
+	return nil
 }
 
 // DecompressTransformer decompresses content
 type DecompressTransformer struct{}
 
 func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
-	data, err := io.ReadAll(input)
+	// Use LimitReader to prevent memory exhaustion from large objects
+	limitedReader := io.LimitReader(input, MaxTransformSize+1)
+	data, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, nil, err
 	}
+	if len(data) > MaxTransformSize {
+		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", MaxTransformSize)
+	}
 
-	// TODO: Implement actual decompression
-	// For now, return as-is
-	return bytes.NewReader(data), nil, nil
+	// Get compression algorithm from params (auto-detect if not specified)
+	algorithm := ""
+	if alg, ok := params["algorithm"].(string); ok {
+		algorithm = strings.ToLower(alg)
+	}
+
+	// Auto-detect compression based on magic bytes if algorithm not specified
+	if algorithm == "" {
+		if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
+			algorithm = "gzip"
+		} else if len(data) >= 4 && data[0] == 0x28 && data[1] == 0xb5 && data[2] == 0x2f && data[3] == 0xfd {
+			algorithm = "zstd"
+		} else {
+			// Data doesn't appear to be compressed, return as-is
+			return bytes.NewReader(data), nil, nil
+		}
+	}
+
+	var result []byte
+
+	switch algorithm {
+	case "gzip":
+		reader, err := gzip.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create gzip reader: %w", err)
+		}
+		defer func() { _ = reader.Close() }()
+		// Limit decompressed size to prevent decompression bombs
+		limitedReader := io.LimitReader(reader, MaxTransformSize+1)
+		result, err = io.ReadAll(limitedReader)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to decompress gzip data: %w", err)
+		}
+		if len(result) > MaxTransformSize {
+			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", MaxTransformSize)
+		}
+
+	case "zstd":
+		decoder, err := zstd.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create zstd decoder: %w", err)
+		}
+		defer decoder.Close()
+		// Limit decompressed size to prevent decompression bombs
+		limitedReader := io.LimitReader(decoder, MaxTransformSize+1)
+		result, err = io.ReadAll(limitedReader)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to decompress zstd data: %w", err)
+		}
+		if len(result) > MaxTransformSize {
+			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", MaxTransformSize)
+		}
+
+	default:
+		return nil, nil, fmt.Errorf("unsupported decompression algorithm: %s", algorithm)
+	}
+
+	return bytes.NewReader(result), nil, nil
 }
 
 // GetAccessPointForBucketConfiguration implements S3 API
