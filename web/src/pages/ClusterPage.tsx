@@ -32,13 +32,18 @@ import {
 import { adminApi } from '../api/client';
 
 interface NodeInfo {
-  id: string;
-  name: string;
-  address: string;
+  node_id: string;
+  raft_addr: string;
+  s3_addr: string;
+  admin_addr: string;
+  gossip_addr?: string;
   role: string;
+  version?: string;
   status: string;
-  joined_at: string;
-  last_heartbeat: string;
+  is_leader: boolean;
+  is_voter: boolean;
+  joined_at?: string;
+  last_seen?: string;
   storage_info?: {
     total_bytes: number;
     used_bytes: number;
@@ -53,6 +58,13 @@ interface ClusterInfo {
   leader_address: string;
   nodes: NodeInfo[];
   raft_state: string;
+}
+
+interface ListNodesResponse {
+  nodes: NodeInfo[];
+  total_nodes: number;
+  healthy_nodes: number;
+  leader_id: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -72,11 +84,14 @@ export function ClusterPage() {
     refetchInterval: refreshInterval,
   });
 
-  const { data: nodes, isLoading: nodesLoading } = useQuery({
+  const { data: nodesResponse, isLoading: nodesLoading } = useQuery({
     queryKey: ['cluster-nodes'],
-    queryFn: () => adminApi.listNodes().then((res) => res.data as NodeInfo[]),
+    queryFn: () => adminApi.listNodes().then((res) => res.data as ListNodesResponse),
     refetchInterval: refreshInterval,
   });
+
+  // Extract nodes array from response
+  const nodes = nodesResponse?.nodes || [];
 
   const { data: storageInfo, isLoading: storageLoading } = useQuery({
     queryKey: ['storage-info'],
@@ -95,6 +110,7 @@ export function ClusterPage() {
   const getStatusColor = (status: string): string => {
     switch (status?.toLowerCase()) {
       case 'healthy':
+      case 'alive':
       case 'leader':
       case 'follower':
         return 'green';
@@ -102,6 +118,7 @@ export function ClusterPage() {
         return 'yellow';
       case 'unhealthy':
       case 'down':
+      case 'dead':
         return 'red';
       default:
         return 'gray';
@@ -138,7 +155,7 @@ export function ClusterPage() {
     ? Math.round((totalStorage.used / totalStorage.total) * 100)
     : 0;
 
-  const healthyNodes = nodes?.filter((n) => n.status === 'healthy').length || 0;
+  const healthyNodes = nodes?.filter((n) => n.status === 'healthy' || n.status === 'alive').length || 0;
   const totalNodes = nodes?.length || 1;
 
   return (
@@ -387,7 +404,7 @@ export function ClusterPage() {
                 ? (node.storage_info.used_bytes / node.storage_info.total_bytes) * 100
                 : 0;
               return (
-                <div key={node.id} style={{ textAlign: 'center' }}>
+                <div key={node.node_id} style={{ textAlign: 'center' }}>
                   <RingProgress
                     sections={[{ value: nodeUsage, color: nodeUsage > 90 ? 'red' : nodeUsage > 70 ? 'yellow' : 'blue' }]}
                     label={
@@ -399,7 +416,7 @@ export function ClusterPage() {
                     thickness={8}
                   />
                   <Text size="sm" fw={500} mt="xs">
-                    {node.name || node.id.slice(0, 8)}
+                    {node.node_id.slice(0, 8)}
                   </Text>
                   <Text size="xs" c="dimmed">
                     {node.storage_info
@@ -446,7 +463,7 @@ export function ClusterPage() {
             </Table.Thead>
             <Table.Tbody>
               {nodes.map((node: NodeInfo) => (
-                <Table.Tr key={node.id}>
+                <Table.Tr key={node.node_id}>
                   <Table.Td>
                     <Group gap="xs">
                       <ThemeIcon color="blue" variant="light" size="sm">
@@ -454,18 +471,18 @@ export function ClusterPage() {
                       </ThemeIcon>
                       <div>
                         <Text size="sm" fw={500}>
-                          {node.name || node.id.slice(0, 8)}
+                          {node.node_id.slice(0, 8)}
                         </Text>
-                        <Tooltip label={node.id}>
+                        <Tooltip label={node.node_id}>
                           <Text size="xs" c="dimmed" style={{ cursor: 'pointer' }}>
-                            {node.id.slice(0, 12)}...
+                            {node.node_id.slice(0, 12)}...
                           </Text>
                         </Tooltip>
                       </div>
                     </Group>
                   </Table.Td>
                   <Table.Td>
-                    <Code fz="sm">{node.address}</Code>
+                    <Code fz="sm">{node.admin_addr}</Code>
                   </Table.Td>
                   <Table.Td>
                     <Badge
@@ -477,13 +494,13 @@ export function ClusterPage() {
                   </Table.Td>
                   <Table.Td>
                     <Group gap="xs">
-                      {node.status === 'healthy' ? (
+                      {node.status === 'healthy' || node.status === 'alive' ? (
                         <IconCheck size={16} color="var(--mantine-color-green-6)" />
                       ) : (
                         <IconX size={16} color="var(--mantine-color-red-6)" />
                       )}
                       <Badge color={getStatusColor(node.status)} variant="light">
-                        {node.status || 'healthy'}
+                        {node.status || 'alive'}
                       </Badge>
                     </Group>
                   </Table.Td>
@@ -517,8 +534,8 @@ export function ClusterPage() {
                     <Group gap="xs">
                       <IconClock size={14} />
                       <Text size="sm">
-                        {node.last_heartbeat
-                          ? new Date(node.last_heartbeat).toLocaleTimeString()
+                        {node.last_seen
+                          ? new Date(node.last_seen).toLocaleTimeString()
                           : 'N/A'}
                       </Text>
                     </Group>
