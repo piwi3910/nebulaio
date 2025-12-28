@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -9,6 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// errLeaderNotAvailable is used in tests to simulate leader election errors
+var errLeaderNotAvailable = errors.New("leader not available")
 
 func TestInit(t *testing.T) {
 	nodeID := "test-node-1"
@@ -280,7 +284,7 @@ func TestCollectDragonboatMetrics(t *testing.T) {
 
 	t.Run("error getting leader", func(t *testing.T) {
 		nodeHost := &MockNodeHost{
-			leaderErr: assert.AnError,
+			leaderErr: errLeaderNotAvailable,
 		}
 
 		CollectDragonboatMetrics(shardID, nodeHost, replicaID)

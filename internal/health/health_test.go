@@ -10,6 +10,7 @@ import (
 
 	"github.com/piwi3910/nebulaio/internal/metadata"
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
+	"github.com/piwi3910/nebulaio/pkg/s3errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -322,7 +323,7 @@ func TestCheckMetadata(t *testing.T) {
 		{
 			name: "store error",
 			store: &MockMetadataStore{
-				listBucketsErr: assert.AnError,
+				listBucketsErr: s3errors.ErrInternalError,
 			},
 			expectedStatus: StatusUnhealthy,
 		},

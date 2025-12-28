@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/piwi3910/nebulaio/internal/metadata"
+	"github.com/piwi3910/nebulaio/pkg/s3errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,7 +52,7 @@ func (m *MockMetadataStore) GetBucket(ctx context.Context, name string) (*metada
 	if b, ok := m.buckets[name]; ok {
 		return b, nil
 	}
-	return nil, assert.AnError
+	return nil, s3errors.ErrNoSuchBucket
 }
 
 func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*metadata.ObjectListing, error) {

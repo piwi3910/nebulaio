@@ -2,6 +2,7 @@ package bucket
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 // MockMetadataStore implements metadata.Store interface for testing
 type MockMetadataStore struct {
+	mu        sync.RWMutex
 	buckets   map[string]*metadata.Bucket
 	objects   map[string]map[string]*metadata.ObjectMeta
 	createErr error
@@ -28,13 +30,17 @@ func NewMockMetadataStore() *MockMetadataStore {
 }
 
 func (m *MockMetadataStore) GetBucket(ctx context.Context, name string) (*metadata.Bucket, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if bucket, ok := m.buckets[name]; ok {
 		return bucket, nil
 	}
-	return nil, assert.AnError
+	return nil, s3errors.ErrNoSuchBucket
 }
 
 func (m *MockMetadataStore) CreateBucket(ctx context.Context, bucket *metadata.Bucket) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.createErr != nil {
 		return m.createErr
 	}
@@ -44,6 +50,8 @@ func (m *MockMetadataStore) CreateBucket(ctx context.Context, bucket *metadata.B
 }
 
 func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.Bucket) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.updateErr != nil {
 		return m.updateErr
 	}
@@ -52,6 +60,8 @@ func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.B
 }
 
 func (m *MockMetadataStore) DeleteBucket(ctx context.Context, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.deleteErr != nil {
 		return m.deleteErr
 	}
@@ -61,6 +71,8 @@ func (m *MockMetadataStore) DeleteBucket(ctx context.Context, name string) error
 }
 
 func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*metadata.Bucket, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	buckets := make([]*metadata.Bucket, 0)
 	for _, b := range m.buckets {
 		if owner == "" || b.Owner == owner {
@@ -71,6 +83,8 @@ func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*m
 }
 
 func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*metadata.ObjectListing, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	objs := m.objects[bucket]
 	listing := &metadata.ObjectListing{
 		Objects: make([]*metadata.ObjectMeta, 0),
