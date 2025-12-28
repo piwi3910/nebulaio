@@ -604,18 +604,27 @@ func parseResourceARN(resourceARN string) (bucket, key string) {
 
 func generateID(prefix string) string {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Cryptographic failure is unrecoverable - panic to prevent weak IDs
+		panic(fmt.Sprintf("crypto/rand.Read failed: %v", err))
+	}
 	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(b))
 }
 
 func generateAccessKeyID() string {
 	b := make([]byte, 10)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Cryptographic failure is unrecoverable - panic to prevent weak access keys
+		panic(fmt.Sprintf("crypto/rand.Read failed: %v", err))
+	}
 	return "AKIA" + strings.ToUpper(hex.EncodeToString(b))[:16]
 }
 
 func generateSecretAccessKey() string {
 	b := make([]byte, 30)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Cryptographic failure is unrecoverable - panic to prevent weak secret keys
+		panic(fmt.Sprintf("crypto/rand.Read failed: %v", err))
+	}
 	return hex.EncodeToString(b)[:40]
 }

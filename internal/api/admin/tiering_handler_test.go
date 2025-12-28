@@ -437,21 +437,63 @@ func (h *TestTieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Generate ID if not provided
+	policyID := req.ID
+	if policyID == "" {
+		policyID = fmt.Sprintf("policy-%d", time.Now().UnixNano())
+	}
+
+	// Convert simple triggers/actions to internal format
+	triggers := convertSimpleTriggers(req.Triggers)
+	actions := convertSimpleActions(req.Actions)
+
+	// Build selector from bucket/prefix patterns
+	selector := tiering.PolicySelector{}
+	if req.BucketPattern != "" {
+		selector.Buckets = []string{req.BucketPattern}
+	}
+	if req.PrefixPattern != "" {
+		selector.Prefixes = []string{req.PrefixPattern}
+	}
+
+	// Build schedule config
+	var schedule tiering.ScheduleConfig
+	schedule.Enabled = req.CronExpression != ""
+
+	// Build anti-thrash config from advanced options
+	var antiThrash tiering.AntiThrashConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.AntiThrashHours > 0 {
+		antiThrash.Enabled = true
+		antiThrash.MinTimeInTier = (time.Duration(req.AdvancedOptions.AntiThrashHours) * time.Hour).String()
+	}
+
+	// Build rate limit config
+	var rateLimit tiering.RateLimitConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.RateLimit > 0 {
+		rateLimit.Enabled = true
+		rateLimit.MaxObjectsPerSecond = req.AdvancedOptions.RateLimit
+	}
+
+	// Build distributed config
+	var distributed tiering.DistributedConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.DistributedExecution {
+		distributed.Enabled = true
+	}
+
 	policy := &tiering.AdvancedPolicy{
-		ID:          req.ID,
+		ID:          policyID,
 		Name:        req.Name,
 		Description: req.Description,
 		Type:        req.Type,
 		Scope:       req.Scope,
 		Enabled:     req.Enabled,
-		Priority:    req.Priority,
-		Selector:    req.Selector,
-		Triggers:    req.Triggers,
-		Actions:     req.Actions,
-		AntiThrash:  req.AntiThrash,
-		Schedule:    req.Schedule,
-		RateLimit:   req.RateLimit,
-		Distributed: req.Distributed,
+		Selector:    selector,
+		Triggers:    triggers,
+		Actions:     actions,
+		AntiThrash:  antiThrash,
+		Schedule:    schedule,
+		RateLimit:   rateLimit,
+		Distributed: distributed,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 		Version:     1,
@@ -509,19 +551,55 @@ func (h *TestTieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Convert simple triggers/actions to internal format
+	triggers := convertSimpleTriggers(req.Triggers)
+	actions := convertSimpleActions(req.Actions)
+
+	// Build selector from bucket/prefix patterns
+	selector := tiering.PolicySelector{}
+	if req.BucketPattern != "" {
+		selector.Buckets = []string{req.BucketPattern}
+	}
+	if req.PrefixPattern != "" {
+		selector.Prefixes = []string{req.PrefixPattern}
+	}
+
+	// Build schedule config
+	var schedule tiering.ScheduleConfig
+	schedule.Enabled = req.CronExpression != ""
+
+	// Build anti-thrash config from advanced options
+	var antiThrash tiering.AntiThrashConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.AntiThrashHours > 0 {
+		antiThrash.Enabled = true
+		antiThrash.MinTimeInTier = (time.Duration(req.AdvancedOptions.AntiThrashHours) * time.Hour).String()
+	}
+
+	// Build rate limit config
+	var rateLimit tiering.RateLimitConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.RateLimit > 0 {
+		rateLimit.Enabled = true
+		rateLimit.MaxObjectsPerSecond = req.AdvancedOptions.RateLimit
+	}
+
+	// Build distributed config
+	var distributed tiering.DistributedConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.DistributedExecution {
+		distributed.Enabled = true
+	}
+
 	existing.Name = req.Name
 	existing.Description = req.Description
 	existing.Type = req.Type
 	existing.Scope = req.Scope
 	existing.Enabled = req.Enabled
-	existing.Priority = req.Priority
-	existing.Selector = req.Selector
-	existing.Triggers = req.Triggers
-	existing.Actions = req.Actions
-	existing.AntiThrash = req.AntiThrash
-	existing.Schedule = req.Schedule
-	existing.RateLimit = req.RateLimit
-	existing.Distributed = req.Distributed
+	existing.Selector = selector
+	existing.Triggers = triggers
+	existing.Actions = actions
+	existing.AntiThrash = antiThrash
+	existing.Schedule = schedule
+	existing.RateLimit = rateLimit
+	existing.Distributed = distributed
 	existing.UpdatedAt = time.Now()
 
 	if err := h.policyStore.Update(ctx, existing); err != nil {
@@ -1064,16 +1142,16 @@ func TestCreateTieringPolicy(t *testing.T) {
 			Type:    tiering.PolicyTypeScheduled,
 			Scope:   tiering.PolicyScopeGlobal,
 			Enabled: true,
-			Triggers: []tiering.PolicyTrigger{
+			Triggers: []SimpleTieringTrigger{
 				{
-					Type: tiering.TriggerTypeAge,
-					Age:  &tiering.AgeTrigger{DaysSinceCreation: 30},
+					Type:    "age",
+					AgeDays: 30,
 				},
 			},
-			Actions: []tiering.PolicyAction{
+			Actions: []SimpleTieringAction{
 				{
-					Type:       tiering.ActionTransition,
-					Transition: &tiering.TransitionActionConfig{TargetTier: tiering.TierCold},
+					Type:       "transition",
+					TargetTier: "cold",
 				},
 			},
 		}
@@ -1121,11 +1199,11 @@ func TestCreateTieringPolicy(t *testing.T) {
 			Type:    tiering.PolicyTypeScheduled,
 			Scope:   tiering.PolicyScopeGlobal,
 			Enabled: true,
-			Triggers: []tiering.PolicyTrigger{
-				{Type: tiering.TriggerTypeAge, Age: &tiering.AgeTrigger{DaysSinceCreation: 30}},
+			Triggers: []SimpleTieringTrigger{
+				{Type: "age", AgeDays: 30},
 			},
-			Actions: []tiering.PolicyAction{
-				{Type: tiering.ActionTransition, Transition: &tiering.TransitionActionConfig{TargetTier: tiering.TierCold}},
+			Actions: []SimpleTieringAction{
+				{Type: "transition", TargetTier: "cold"},
 			},
 		}
 
@@ -1149,8 +1227,8 @@ func TestCreateTieringPolicy(t *testing.T) {
 			Scope:   tiering.PolicyScopeGlobal,
 			Enabled: true,
 			// Missing triggers
-			Actions: []tiering.PolicyAction{
-				{Type: tiering.ActionTransition, Transition: &tiering.TransitionActionConfig{TargetTier: tiering.TierCold}},
+			Actions: []SimpleTieringAction{
+				{Type: "transition", TargetTier: "cold"},
 			},
 		}
 
@@ -1211,11 +1289,11 @@ func TestUpdateTieringPolicy(t *testing.T) {
 			Type:    tiering.PolicyTypeScheduled,
 			Scope:   tiering.PolicyScopeGlobal,
 			Enabled: false,
-			Triggers: []tiering.PolicyTrigger{
-				{Type: tiering.TriggerTypeAge, Age: &tiering.AgeTrigger{DaysSinceCreation: 60}},
+			Triggers: []SimpleTieringTrigger{
+				{Type: "age", AgeDays: 60},
 			},
-			Actions: []tiering.PolicyAction{
-				{Type: tiering.ActionTransition, Transition: &tiering.TransitionActionConfig{TargetTier: tiering.TierArchive}},
+			Actions: []SimpleTieringAction{
+				{Type: "transition", TargetTier: "archive"},
 			},
 		}
 

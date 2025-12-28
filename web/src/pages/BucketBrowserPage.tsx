@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -78,6 +78,15 @@ export function BucketBrowserPage() {
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [isUploading, setIsUploading] = useState(false);
 
+  // Track component mounted state to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const prefix = path || '';
 
   const { data, isLoading, refetch } = useQuery({
@@ -90,6 +99,8 @@ export function BucketBrowserPage() {
 
   const uploadMutation = useMutation({
     mutationFn: async (files: File[]) => {
+      if (!isMountedRef.current) return [];
+
       setIsUploading(true);
       const newProgress: Record<string, number> = {};
       files.forEach((f) => {
@@ -104,7 +115,10 @@ export function BucketBrowserPage() {
             file,
             prefix || undefined,
             (progress) => {
-              setUploadProgress((prev) => ({ ...prev, [file.name]: progress }));
+              // Only update state if component is still mounted
+              if (isMountedRef.current) {
+                setUploadProgress((prev) => ({ ...prev, [file.name]: progress }));
+              }
             }
           )
         )
@@ -112,6 +126,7 @@ export function BucketBrowserPage() {
       return results;
     },
     onSuccess: () => {
+      if (!isMountedRef.current) return;
       queryClient.invalidateQueries({ queryKey: ['bucket-objects', bucketName] });
       setUploadModalOpen(false);
       setUploadProgress({});
@@ -123,6 +138,7 @@ export function BucketBrowserPage() {
       });
     },
     onError: () => {
+      if (!isMountedRef.current) return;
       setIsUploading(false);
       notifications.show({
         title: 'Upload failed',

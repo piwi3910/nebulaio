@@ -3,6 +3,8 @@ package metadata
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,19 +16,39 @@ import (
 	"github.com/piwi3910/nebulaio/internal/audit"
 )
 
+// getFreePort returns a free port for testing by binding to port 0
+// and immediately releasing it. This avoids hardcoded port conflicts.
+func getFreePort(t *testing.T) int {
+	t.Helper()
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+	return port
+}
+
+// getRaftAddress returns a localhost address with a free port
+func getRaftAddress(t *testing.T) string {
+	t.Helper()
+	return fmt.Sprintf("localhost:%d", getFreePort(t))
+}
+
 // TestDragonboatStoreCreation tests the creation and initialization of DragonboatStore
 func TestDragonboatStoreCreation(t *testing.T) {
 	t.Run("SuccessfulCreation", func(t *testing.T) {
 		tmpDir := t.TempDir()
+		raftAddr := getRaftAddress(t)
 
 		cfg := DragonboatConfig{
 			NodeID:      1,
 			ShardID:     1,
 			DataDir:     tmpDir,
-			RaftAddress: "localhost:9001",
+			RaftAddress: raftAddr,
 			Bootstrap:   true,
 			InitialMembers: map[uint64]string{
-				1: "localhost:9001",
+				1: raftAddr,
 			},
 		}
 
@@ -46,15 +68,16 @@ func TestDragonboatStoreCreation(t *testing.T) {
 
 	t.Run("DirectoryCreation", func(t *testing.T) {
 		tmpDir := t.TempDir()
+		raftAddr := getRaftAddress(t)
 
 		cfg := DragonboatConfig{
 			NodeID:      2,
 			ShardID:     1,
 			DataDir:     tmpDir,
-			RaftAddress: "localhost:9002",
+			RaftAddress: raftAddr,
 			Bootstrap:   true,
 			InitialMembers: map[uint64]string{
-				2: "localhost:9002",
+				2: raftAddr,
 			},
 		}
 
@@ -331,15 +354,16 @@ func TestStateMachineSnapshot(t *testing.T) {
 // TestBucketOperations tests bucket CRUD operations
 func TestBucketOperations(t *testing.T) {
 	tmpDir := t.TempDir()
+	raftAddr := getRaftAddress(t)
 
 	cfg := DragonboatConfig{
 		NodeID:      1,
 		ShardID:     1,
 		DataDir:     tmpDir,
-		RaftAddress: "localhost:9003",
+		RaftAddress: raftAddr,
 		Bootstrap:   true,
 		InitialMembers: map[uint64]string{
-			1: "localhost:9003",
+			1: raftAddr,
 		},
 	}
 
@@ -453,15 +477,16 @@ func TestBucketOperations(t *testing.T) {
 // TestObjectMetadataOperations tests object metadata CRUD operations
 func TestObjectMetadataOperations(t *testing.T) {
 	tmpDir := t.TempDir()
+	raftAddr := getRaftAddress(t)
 
 	cfg := DragonboatConfig{
 		NodeID:      1,
 		ShardID:     1,
 		DataDir:     tmpDir,
-		RaftAddress: "localhost:9004",
+		RaftAddress: raftAddr,
 		Bootstrap:   true,
 		InitialMembers: map[uint64]string{
-			1: "localhost:9004",
+			1: raftAddr,
 		},
 	}
 
@@ -553,15 +578,16 @@ func TestObjectMetadataOperations(t *testing.T) {
 // TestUserOperations tests user CRUD operations
 func TestUserOperations(t *testing.T) {
 	tmpDir := t.TempDir()
+	raftAddr := getRaftAddress(t)
 
 	cfg := DragonboatConfig{
 		NodeID:      1,
 		ShardID:     1,
 		DataDir:     tmpDir,
-		RaftAddress: "localhost:9005",
+		RaftAddress: raftAddr,
 		Bootstrap:   true,
 		InitialMembers: map[uint64]string{
-			1: "localhost:9005",
+			1: raftAddr,
 		},
 	}
 
@@ -676,15 +702,16 @@ func TestUserOperations(t *testing.T) {
 // TestAccessKeyOperations tests access key CRUD operations
 func TestAccessKeyOperations(t *testing.T) {
 	tmpDir := t.TempDir()
+	raftAddr := getRaftAddress(t)
 
 	cfg := DragonboatConfig{
 		NodeID:      1,
 		ShardID:     1,
 		DataDir:     tmpDir,
-		RaftAddress: "localhost:9006",
+		RaftAddress: raftAddr,
 		Bootstrap:   true,
 		InitialMembers: map[uint64]string{
-			1: "localhost:9006",
+			1: raftAddr,
 		},
 	}
 
@@ -760,15 +787,16 @@ func TestAccessKeyOperations(t *testing.T) {
 // TestPolicyOperations tests policy CRUD operations
 func TestPolicyOperations(t *testing.T) {
 	tmpDir := t.TempDir()
+	raftAddr := getRaftAddress(t)
 
 	cfg := DragonboatConfig{
 		NodeID:      1,
 		ShardID:     1,
 		DataDir:     tmpDir,
-		RaftAddress: "localhost:9007",
+		RaftAddress: raftAddr,
 		Bootstrap:   true,
 		InitialMembers: map[uint64]string{
-			1: "localhost:9007",
+			1: raftAddr,
 		},
 	}
 
@@ -867,15 +895,16 @@ func TestPolicyOperations(t *testing.T) {
 // TestLeaderElectionHelpers tests leader-related helper functions
 func TestLeaderElectionHelpers(t *testing.T) {
 	tmpDir := t.TempDir()
+	raftAddr := getRaftAddress(t)
 
 	cfg := DragonboatConfig{
 		NodeID:      1,
 		ShardID:     1,
 		DataDir:     tmpDir,
-		RaftAddress: "localhost:9008",
+		RaftAddress: raftAddr,
 		Bootstrap:   true,
 		InitialMembers: map[uint64]string{
-			1: "localhost:9008",
+			1: raftAddr,
 		},
 	}
 
@@ -939,15 +968,17 @@ func TestLeaderElectionHelpers(t *testing.T) {
 // TestClusterMembershipOperations tests cluster membership management
 func TestClusterMembershipOperations(t *testing.T) {
 	tmpDir := t.TempDir()
+	raftAddr := getRaftAddress(t)
+	nodeAddr := getRaftAddress(t) // Separate address for the test node
 
 	cfg := DragonboatConfig{
 		NodeID:      1,
 		ShardID:     1,
 		DataDir:     tmpDir,
-		RaftAddress: "localhost:9009",
+		RaftAddress: raftAddr,
 		Bootstrap:   true,
 		InitialMembers: map[uint64]string{
-			1: "localhost:9009",
+			1: raftAddr,
 		},
 	}
 
@@ -966,7 +997,7 @@ func TestClusterMembershipOperations(t *testing.T) {
 		node := &NodeInfo{
 			ID:      "node-2",
 			Name:    "node-2",
-			Address: "localhost:9010",
+			Address: nodeAddr,
 			Role:    "gateway",
 			Status:  "active",
 		}
@@ -1038,15 +1069,16 @@ func TestClusterMembershipOperations(t *testing.T) {
 // TestAuditOperations tests audit event operations
 func TestAuditOperations(t *testing.T) {
 	tmpDir := t.TempDir()
+	raftAddr := getRaftAddress(t)
 
 	cfg := DragonboatConfig{
 		NodeID:      1,
 		ShardID:     1,
 		DataDir:     tmpDir,
-		RaftAddress: "localhost:9010",
+		RaftAddress: raftAddr,
 		Bootstrap:   true,
 		InitialMembers: map[uint64]string{
-			1: "localhost:9010",
+			1: raftAddr,
 		},
 	}
 
@@ -1126,15 +1158,16 @@ func TestAuditOperations(t *testing.T) {
 // TestMultipartUploadOperations tests multipart upload operations
 func TestMultipartUploadOperations(t *testing.T) {
 	tmpDir := t.TempDir()
+	raftAddr := getRaftAddress(t)
 
 	cfg := DragonboatConfig{
 		NodeID:      1,
 		ShardID:     1,
 		DataDir:     tmpDir,
-		RaftAddress: "localhost:9011",
+		RaftAddress: raftAddr,
 		Bootstrap:   true,
 		InitialMembers: map[uint64]string{
-			1: "localhost:9011",
+			1: raftAddr,
 		},
 	}
 
@@ -1239,15 +1272,16 @@ func TestMultipartUploadOperations(t *testing.T) {
 // TestSnapshotOperations tests snapshot-related operations
 func TestSnapshotOperations(t *testing.T) {
 	tmpDir := t.TempDir()
+	raftAddr := getRaftAddress(t)
 
 	cfg := DragonboatConfig{
 		NodeID:      1,
 		ShardID:     1,
 		DataDir:     tmpDir,
-		RaftAddress: "localhost:9012",
+		RaftAddress: raftAddr,
 		Bootstrap:   true,
 		InitialMembers: map[uint64]string{
-			1: "localhost:9012",
+			1: raftAddr,
 		},
 	}
 
@@ -1382,15 +1416,16 @@ func TestErrorHandling(t *testing.T) {
 
 	t.Run("ApplyWithoutLeader", func(t *testing.T) {
 		tmpDir := t.TempDir()
+		raftAddr := getRaftAddress(t)
 
 		cfg := DragonboatConfig{
 			NodeID:      99,
 			ShardID:     99,
 			DataDir:     tmpDir,
-			RaftAddress: "localhost:9099",
+			RaftAddress: raftAddr,
 			Bootstrap:   true,
 			InitialMembers: map[uint64]string{
-				99: "localhost:9099",
+				99: raftAddr,
 			},
 		}
 
