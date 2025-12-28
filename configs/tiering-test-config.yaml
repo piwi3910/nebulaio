@@ -20,9 +20,66 @@ cluster:
 
 # Storage configuration with tiered volumes
 storage:
-  backend: volume
+  backend: erasure
   path: /data/objects
   default_storage_class: STANDARD
+
+  # Default redundancy configuration
+  default_redundancy:
+    enabled: true
+    data_shards: 4        # Lower for testing
+    parity_shards: 2
+    placement_policy: spread
+    replication_factor: 0  # No cross-PG replication for single node test
+
+  # Placement groups configuration (single node for testing)
+  placement_groups:
+    local_group_id: pg-test
+    min_nodes_for_erasure: 1
+    groups:
+      - id: pg-test
+        name: "Test Placement Group"
+        datacenter: local
+        region: local
+        min_nodes: 1
+        max_nodes: 3
+
+  # Tiering configuration with per-tier backends
+  tiering:
+    enabled: true
+    tiers:
+      hot:
+        backend: erasure
+        data_dir: /data/tiering/hot
+        erasure_config:
+          data_shards: 4
+          parity_shards: 2
+        priority: 1
+        capacity_threshold: 0.85
+      warm:
+        backend: volume
+        data_dir: /data/tiering/warm
+        priority: 2
+        capacity_threshold: 0.90
+      cold:
+        backend: fs
+        data_dir: /data/tiering/cold
+        priority: 3
+    policies:
+      - name: age-based-warm
+        enabled: true
+        source_tier: hot
+        destination_tier: warm
+        condition:
+          type: age
+          age_days: 7
+      - name: age-based-cold
+        enabled: true
+        source_tier: warm
+        destination_tier: cold
+        condition:
+          type: age
+          age_days: 30
 
   # Volume configuration
   volume:

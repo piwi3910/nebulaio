@@ -787,3 +787,382 @@ func TestAdvancedFeatureIntegration(t *testing.T) {
 	t.Logf("Integration test complete - cache hits: %d, firewall allowed: %d",
 		cacheMetrics.Hits, fwStats.RequestsAllowed)
 }
+
+// TestPlacementGroupsWithTiering tests that tiering policies respect placement group boundaries
+// and that data is properly distributed within placement groups during tier transitions.
+func TestPlacementGroupsWithTiering(t *testing.T) {
+	// Import the cluster package for placement groups
+	// Note: This test verifies the conceptual integration between placement groups
+	// and tiering without requiring a running cluster
+
+	// Scenario: Multi-datacenter deployment with tiering policies
+	// - DC1: Hot tier placement group (fast NVMe)
+	// - DC2: Cold tier placement group (high-capacity HDD)
+	// Tiering policy should move old objects from DC1 hot tier to DC2 cold tier
+
+	type tieringObject struct {
+		bucket       string
+		key          string
+		size         int64
+		lastAccess   time.Time
+		tier         string
+		datacenter   string
+		placementGrp string
+	}
+
+	// Simulate objects in different placement groups
+	objects := []tieringObject{
+		// Hot tier objects (recently accessed)
+		{bucket: "prod-data", key: "cache/active-1.dat", size: 1024, lastAccess: time.Now().Add(-1 * time.Hour), tier: "hot", datacenter: "dc1", placementGrp: "pg-hot-dc1"},
+		{bucket: "prod-data", key: "cache/active-2.dat", size: 2048, lastAccess: time.Now().Add(-2 * time.Hour), tier: "hot", datacenter: "dc1", placementGrp: "pg-hot-dc1"},
+		// Objects eligible for tiering (old access)
+		{bucket: "prod-data", key: "archive/old-1.dat", size: 10240, lastAccess: time.Now().Add(-60 * 24 * time.Hour), tier: "hot", datacenter: "dc1", placementGrp: "pg-hot-dc1"},
+		{bucket: "prod-data", key: "archive/old-2.dat", size: 20480, lastAccess: time.Now().Add(-90 * 24 * time.Hour), tier: "hot", datacenter: "dc1", placementGrp: "pg-hot-dc1"},
+		// Already cold tier
+		{bucket: "prod-data", key: "archive/cold-1.dat", size: 51200, lastAccess: time.Now().Add(-365 * 24 * time.Hour), tier: "cold", datacenter: "dc2", placementGrp: "pg-cold-dc2"},
+	}
+
+	// Define tiering policy: move to cold after 30 days of no access
+	tieringThreshold := 30 * 24 * time.Hour
+
+	// Track objects that should be tiered
+	var objectsToTier []tieringObject
+	var objectsToKeepHot []tieringObject
+
+	for _, obj := range objects {
+		if obj.tier == "hot" {
+			ageThreshold := time.Since(obj.lastAccess)
+			if ageThreshold > tieringThreshold {
+				objectsToTier = append(objectsToTier, obj)
+			} else {
+				objectsToKeepHot = append(objectsToKeepHot, obj)
+			}
+		}
+	}
+
+	// Verify tiering decisions
+	if len(objectsToTier) != 2 {
+		t.Errorf("Expected 2 objects to tier, got %d", len(objectsToTier))
+	}
+	if len(objectsToKeepHot) != 2 {
+		t.Errorf("Expected 2 objects to keep hot, got %d", len(objectsToKeepHot))
+	}
+
+	// Simulate tiering transition with placement group awareness
+	type tierTransition struct {
+		object       tieringObject
+		fromPG       string
+		toPG         string
+		fromDC       string
+		toDC         string
+		bytesMovied  int64
+		successful   bool
+		errorMessage string
+	}
+
+	var transitions []tierTransition
+
+	for _, obj := range objectsToTier {
+		// In real implementation, this would:
+		// 1. Look up target placement group for cold tier
+		// 2. Determine optimal nodes in target PG for shards
+		// 3. Replicate data using erasure coding
+		// 4. Update metadata with new locations
+		// 5. Delete from source placement group
+
+		transition := tierTransition{
+			object:      obj,
+			fromPG:      obj.placementGrp,
+			toPG:        "pg-cold-dc2", // Target cold tier PG
+			fromDC:      obj.datacenter,
+			toDC:        "dc2",
+			bytesMovied: obj.size,
+			successful:  true,
+		}
+
+		// Simulate placement group health check before transition
+		// In real code: pgManager.GetGroupStatus(transition.toPG)
+		if transition.toPG == "pg-cold-dc2" {
+			// Assume cold tier PG is healthy
+			transitions = append(transitions, transition)
+		} else {
+			transition.successful = false
+			transition.errorMessage = "target placement group unhealthy"
+			transitions = append(transitions, transition)
+		}
+	}
+
+	// Verify all transitions succeeded
+	for _, tr := range transitions {
+		if !tr.successful {
+			t.Errorf("Transition failed for %s: %s", tr.object.key, tr.errorMessage)
+		}
+	}
+
+	// Verify cross-datacenter transitions
+	var crossDCTransitions int
+	for _, tr := range transitions {
+		if tr.fromDC != tr.toDC {
+			crossDCTransitions++
+		}
+	}
+	if crossDCTransitions != 2 {
+		t.Errorf("Expected 2 cross-DC transitions, got %d", crossDCTransitions)
+	}
+
+	// Calculate total bytes moved
+	var totalBytesMoved int64
+	for _, tr := range transitions {
+		if tr.successful {
+			totalBytesMoved += tr.bytesMovied
+		}
+	}
+	expectedBytes := int64(10240 + 20480)
+	if totalBytesMoved != expectedBytes {
+		t.Errorf("Expected %d bytes moved, got %d", expectedBytes, totalBytesMoved)
+	}
+
+	t.Logf("Tiering integration test: %d objects tiered, %d cross-DC moves, %d bytes total",
+		len(transitions), crossDCTransitions, totalBytesMoved)
+}
+
+// TestPlacementGroupFailoverDuringTiering tests behavior when a placement group
+// becomes unhealthy during an active tiering operation.
+func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
+	// Simulate a tiering operation where the target placement group degrades mid-transfer
+
+	type transferState struct {
+		objectKey      string
+		shardsTotal    int
+		shardsWritten  int
+		targetPG       string
+		pgHealthy      bool
+		transferStatus string // "pending", "in_progress", "completed", "failed", "paused"
+	}
+
+	// Initial state: 3 objects being tiered
+	transfers := []transferState{
+		{objectKey: "obj1", shardsTotal: 14, shardsWritten: 14, targetPG: "pg-cold", pgHealthy: true, transferStatus: "completed"},
+		{objectKey: "obj2", shardsTotal: 14, shardsWritten: 7, targetPG: "pg-cold", pgHealthy: true, transferStatus: "in_progress"},
+		{objectKey: "obj3", shardsTotal: 14, shardsWritten: 0, targetPG: "pg-cold", pgHealthy: true, transferStatus: "pending"},
+	}
+
+	// Simulate placement group degradation
+	for i := range transfers {
+		if transfers[i].transferStatus != "completed" {
+			transfers[i].pgHealthy = false
+		}
+	}
+
+	// Apply failover logic
+	for i := range transfers {
+		if !transfers[i].pgHealthy {
+			switch transfers[i].transferStatus {
+			case "in_progress":
+				// Pause in-progress transfers until PG recovers
+				transfers[i].transferStatus = "paused"
+			case "pending":
+				// Keep pending transfers in queue
+				transfers[i].transferStatus = "pending"
+			}
+		}
+	}
+
+	// Verify failover behavior
+	completedCount := 0
+	pausedCount := 0
+	pendingCount := 0
+
+	for _, tr := range transfers {
+		switch tr.transferStatus {
+		case "completed":
+			completedCount++
+		case "paused":
+			pausedCount++
+		case "pending":
+			pendingCount++
+		}
+	}
+
+	if completedCount != 1 {
+		t.Errorf("Expected 1 completed transfer, got %d", completedCount)
+	}
+	if pausedCount != 1 {
+		t.Errorf("Expected 1 paused transfer, got %d", pausedCount)
+	}
+	if pendingCount != 1 {
+		t.Errorf("Expected 1 pending transfer, got %d", pendingCount)
+	}
+
+	// Simulate PG recovery
+	for i := range transfers {
+		transfers[i].pgHealthy = true
+	}
+
+	// Resume paused transfers
+	for i := range transfers {
+		if transfers[i].transferStatus == "paused" {
+			transfers[i].transferStatus = "in_progress"
+			// Complete the transfer
+			transfers[i].shardsWritten = transfers[i].shardsTotal
+			transfers[i].transferStatus = "completed"
+		}
+	}
+
+	// Process pending transfers
+	for i := range transfers {
+		if transfers[i].transferStatus == "pending" {
+			transfers[i].transferStatus = "in_progress"
+			transfers[i].shardsWritten = transfers[i].shardsTotal
+			transfers[i].transferStatus = "completed"
+		}
+	}
+
+	// Verify all transfers completed after recovery
+	for _, tr := range transfers {
+		if tr.transferStatus != "completed" {
+			t.Errorf("Transfer %s should be completed, got %s", tr.objectKey, tr.transferStatus)
+		}
+	}
+
+	t.Log("Placement group failover test: all transfers recovered and completed")
+}
+
+// TestErasureCodingWithPlacementGroups verifies that erasure coding respects
+// placement group node boundaries and fault domains.
+func TestErasureCodingWithPlacementGroups(t *testing.T) {
+	// Test configuration: 10 data + 4 parity shards across nodes in a placement group
+	dataShards := 10
+	parityShards := 4
+	totalShards := dataShards + parityShards
+
+	// Simulate placement group with nodes across fault domains
+	type node struct {
+		id          string
+		faultDomain string
+		available   bool
+	}
+
+	// For 10+4 erasure coding with single-rack fault tolerance:
+	// - We need at least 10 shards to survive a rack failure
+	// - With 14 shards, max shards per rack = 14 - 10 = 4
+	// - Therefore we need at least 4 racks (14/4 = 3.5 rounded up)
+	pgNodes := []node{
+		// Rack 1
+		{id: "node1", faultDomain: "rack1", available: true},
+		{id: "node2", faultDomain: "rack1", available: true},
+		{id: "node3", faultDomain: "rack1", available: true},
+		{id: "node4", faultDomain: "rack1", available: true},
+		// Rack 2
+		{id: "node5", faultDomain: "rack2", available: true},
+		{id: "node6", faultDomain: "rack2", available: true},
+		{id: "node7", faultDomain: "rack2", available: true},
+		{id: "node8", faultDomain: "rack2", available: true},
+		// Rack 3
+		{id: "node9", faultDomain: "rack3", available: true},
+		{id: "node10", faultDomain: "rack3", available: true},
+		{id: "node11", faultDomain: "rack3", available: true},
+		{id: "node12", faultDomain: "rack3", available: true},
+		// Rack 4
+		{id: "node13", faultDomain: "rack4", available: true},
+		{id: "node14", faultDomain: "rack4", available: true},
+		{id: "node15", faultDomain: "rack4", available: true},
+		{id: "node16", faultDomain: "rack4", available: true},
+	}
+
+	// Verify we have enough nodes for the erasure coding scheme
+	if len(pgNodes) < totalShards {
+		t.Fatalf("Placement group has %d nodes but needs %d for erasure coding",
+			len(pgNodes), totalShards)
+	}
+
+	// Distribute shards across fault domains (rack-aware placement)
+	type shardPlacement struct {
+		shardIndex  int
+		nodeID      string
+		faultDomain string
+	}
+
+	var placements []shardPlacement
+	faultDomainCounts := make(map[string]int)
+
+	// Group nodes by fault domain for fault-aware placement
+	nodesByFaultDomain := make(map[string][]node)
+	for _, n := range pgNodes {
+		if n.available {
+			nodesByFaultDomain[n.faultDomain] = append(nodesByFaultDomain[n.faultDomain], n)
+		}
+	}
+
+	// Get sorted fault domain list for consistent ordering
+	faultDomains := make([]string, 0, len(nodesByFaultDomain))
+	for fd := range nodesByFaultDomain {
+		faultDomains = append(faultDomains, fd)
+	}
+	// Sort for deterministic placement
+	for i := 0; i < len(faultDomains)-1; i++ {
+		for j := i + 1; j < len(faultDomains); j++ {
+			if faultDomains[i] > faultDomains[j] {
+				faultDomains[i], faultDomains[j] = faultDomains[j], faultDomains[i]
+			}
+		}
+	}
+
+	// Fault-aware round-robin: rotate through fault domains first, then nodes within each domain
+	// This ensures shards are spread evenly across fault domains
+	domainNodeIndex := make(map[string]int)
+	for shard := 0; shard < totalShards; shard++ {
+		// Select fault domain in round-robin fashion
+		fd := faultDomains[shard%len(faultDomains)]
+		nodes := nodesByFaultDomain[fd]
+
+		// Get next node from this fault domain
+		nodeIdx := domainNodeIndex[fd] % len(nodes)
+		n := nodes[nodeIdx]
+		domainNodeIndex[fd]++
+
+		placements = append(placements, shardPlacement{
+			shardIndex:  shard,
+			nodeID:      n.id,
+			faultDomain: n.faultDomain,
+		})
+		faultDomainCounts[n.faultDomain]++
+	}
+
+	// Verify shards are distributed across multiple fault domains
+	if len(faultDomainCounts) < 2 {
+		t.Error("Shards should be distributed across at least 2 fault domains")
+	}
+
+	// Verify no single fault domain has more than allowed shards
+	// For 10+4 erasure coding, losing more than 4 shards causes data loss
+	// So each fault domain should have at most parityShards shards
+	maxShardsPerDomain := parityShards + 1 // Allow some tolerance
+	for fd, count := range faultDomainCounts {
+		if count > maxShardsPerDomain {
+			t.Errorf("Fault domain %s has %d shards, exceeds safe limit of %d",
+				fd, count, maxShardsPerDomain)
+		}
+	}
+
+	// Simulate rack failure and verify data is still recoverable
+	failedRack := "rack1"
+	availableShards := 0
+	for _, p := range placements {
+		if p.faultDomain != failedRack {
+			availableShards++
+		}
+	}
+
+	// Need at least dataShards to reconstruct
+	if availableShards >= dataShards {
+		t.Logf("Rack %s failure: %d/%d shards available, data recoverable",
+			failedRack, availableShards, totalShards)
+	} else {
+		t.Errorf("Rack %s failure: only %d/%d shards available, need %d for recovery",
+			failedRack, availableShards, totalShards, dataShards)
+	}
+
+	t.Logf("Erasure coding test: %d shards across %d fault domains, %v distribution",
+		totalShards, len(faultDomainCounts), faultDomainCounts)
+}

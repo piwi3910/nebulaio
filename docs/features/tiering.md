@@ -48,6 +48,105 @@ tiering:
       min_retention_days: 180
 ```
 
+## Placement Groups
+
+Placement groups define how nodes are organized for distributed storage operations. Within a placement group, erasure coding and tiering operate locally. Cross-placement group operations are used for disaster recovery replication.
+
+### Architecture
+
+```
+┌─────────────────────────────────────┐   ┌─────────────────────────────────────┐
+│   Placement Group 1 (Datacenter A)  │   │   Placement Group 2 (Datacenter B)  │
+│  ┌─────┐  ┌─────┐  ┌─────┐          │   │  ┌─────┐  ┌─────┐  ┌─────┐          │
+│  │Node1│  │Node2│  │Node3│          │   │  │Node4│  │Node5│  │Node6│          │
+│  └──┬──┘  └──┬──┘  └──┬──┘          │   │  └──┬──┘  └──┬──┘  └──┬──┘          │
+│     │        │        │              │   │     │        │        │              │
+│     └────────┼────────┘              │   │     └────────┼────────┘              │
+│              │                       │   │              │                       │
+│   Erasure coding (local shards)      │   │   Erasure coding (local shards)      │
+│   Tiering (hot→warm→cold)            │   │   Tiering (hot→warm→cold)            │
+└──────────────────┬───────────────────┘   └──────────────────┬───────────────────┘
+                   │                                          │
+                   └──────── DR Replication ──────────────────┘
+                          (full object copies)
+```
+
+### Key Concepts
+
+| Concept | Scope | Description |
+|---------|-------|-------------|
+| **Placement Group** | Datacenter | Nodes in the same datacenter that share local storage operations |
+| **Erasure Coding** | Within PG | Reed-Solomon shards distributed across nodes in the same placement group |
+| **Tiering** | Within PG | Hot/warm/cold transitions happen locally within a placement group |
+| **DR Replication** | Cross-PG | Full object copies replicated to other placement groups for disaster recovery |
+
+### Configuration
+
+```yaml
+storage:
+  placement_groups:
+    # This node's placement group
+    local_group_id: pg-dc1
+
+    # Minimum nodes for distributed erasure coding
+    min_nodes_for_erasure: 3
+
+    # Placement groups to replicate to for DR
+    replication_targets:
+      - pg-dc2
+
+    # Define all placement groups
+    groups:
+      - id: pg-dc1
+        name: "Datacenter 1 - US East"
+        datacenter: dc1
+        region: us-east-1
+        min_nodes: 3
+        max_nodes: 10
+
+      - id: pg-dc2
+        name: "Datacenter 2 - US West"
+        datacenter: dc2
+        region: us-west-1
+        min_nodes: 3
+        max_nodes: 10
+```
+
+### Single Node vs. Multi-Node
+
+| Mode | Behavior |
+|------|----------|
+| **Single Node** | All policies apply to local storage only. Erasure coding creates shards on local disk. |
+| **Multi-Node (Same PG)** | Erasure shards distributed across nodes in the placement group. Tiering policies coordinated. |
+| **Multi-Node (Cross-PG)** | Same as above, plus DR replication creates full object copies in remote placement groups. |
+
+### Replication Policies
+
+Configure cross-placement group replication for disaster recovery:
+
+```yaml
+storage:
+  default_redundancy:
+    enabled: true
+    data_shards: 10
+    parity_shards: 4
+    placement_policy: spread
+
+    # DR: replicate to 1 other placement group
+    replication_factor: 1
+    replication_targets:
+      - pg-dc2
+
+# Per-bucket override
+buckets:
+  critical-data:
+    redundancy:
+      replication_factor: 2  # Replicate to 2 placement groups
+      replication_targets:
+        - pg-dc2
+        - pg-dc3
+```
+
 ## Physical Device Configuration
 
 NebulaIO supports assigning different physical devices (NVMe, SSD, HDD) to different storage tiers for optimal performance and cost efficiency.

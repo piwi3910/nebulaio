@@ -16,6 +16,7 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 
 #### Data Durability
 - **Erasure Coding** - Reed-Solomon encoding with configurable data/parity shards (default: 10+4)
+- **Placement Groups** - Data locality boundaries for fault isolation, with per-group status tracking and cross-datacenter DR replication
 - **Data Compression** - Support for Zstandard, LZ4, and Gzip compression with automatic content-type detection
 
 #### Replication

@@ -83,6 +83,170 @@ DELETE /admin/cluster/nodes/{nodeId}          # Remove from cluster
 
 ---
 
+## Placement Groups
+
+Placement groups manage data locality and fault isolation for erasure coding and tiering.
+
+### List Placement Groups
+```
+GET /admin/cluster/placement-groups
+```
+```json
+{
+  "placement_groups": [
+    {
+      "id": "pg-dc1",
+      "name": "US East Datacenter",
+      "datacenter": "dc1",
+      "region": "us-east-1",
+      "status": "healthy",
+      "node_count": 14,
+      "min_nodes": 14,
+      "max_nodes": 50,
+      "is_local": true
+    }
+  ]
+}
+```
+
+### Get Placement Group
+```
+GET /admin/cluster/placement-groups/{groupId}
+```
+```json
+{
+  "id": "pg-dc1",
+  "name": "US East Datacenter",
+  "datacenter": "dc1",
+  "region": "us-east-1",
+  "status": "healthy",
+  "nodes": ["node-1", "node-2", "node-3", "..."],
+  "min_nodes": 14,
+  "max_nodes": 50,
+  "is_local": true,
+  "replication_targets": ["pg-dc2"]
+}
+```
+
+### Create Placement Group
+```
+POST /admin/cluster/placement-groups
+```
+**Request:**
+```json
+{
+  "id": "pg-dc2",
+  "name": "US West Datacenter",
+  "datacenter": "dc2",
+  "region": "us-west-2",
+  "min_nodes": 14,
+  "max_nodes": 50
+}
+```
+**Response:** `201 Created`
+```json
+{
+  "id": "pg-dc2",
+  "status": "offline",
+  "message": "Placement group created. Add nodes to activate."
+}
+```
+
+### Update Placement Group
+```
+PATCH /admin/cluster/placement-groups/{groupId}
+```
+**Request:**
+```json
+{
+  "name": "Updated Name",
+  "min_nodes": 10,
+  "max_nodes": 100
+}
+```
+
+### Delete Placement Group
+```
+DELETE /admin/cluster/placement-groups/{groupId}
+```
+**Note:** Only empty placement groups (no nodes) can be deleted.
+
+### Add Node to Placement Group
+```
+POST /admin/cluster/placement-groups/{groupId}/nodes
+```
+**Request:**
+```json
+{
+  "node_id": "new-node-1"
+}
+```
+**Response:** `201 Created`
+```json
+{
+  "group_id": "pg-dc1",
+  "node_id": "new-node-1",
+  "node_count": 15,
+  "status": "healthy"
+}
+```
+
+### Remove Node from Placement Group
+```
+DELETE /admin/cluster/placement-groups/{groupId}/nodes/{nodeId}
+```
+**Response:** `200 OK`
+```json
+{
+  "group_id": "pg-dc1",
+  "node_id": "removed-node",
+  "node_count": 13,
+  "status": "degraded"
+}
+```
+
+### Get Placement Group Status
+```
+GET /admin/cluster/placement-groups/{groupId}/status
+```
+```json
+{
+  "id": "pg-dc1",
+  "status": "healthy",
+  "node_count": 14,
+  "min_nodes": 14,
+  "healthy_nodes": 14,
+  "degraded_nodes": 0,
+  "offline_nodes": 0,
+  "storage_used_bytes": 10737418240,
+  "storage_total_bytes": 107374182400,
+  "storage_used_pct": 10.0
+}
+```
+
+### Configure Replication Targets
+```
+PUT /admin/cluster/placement-groups/{groupId}/replication
+```
+**Request:**
+```json
+{
+  "targets": ["pg-dc2", "pg-dc3"],
+  "replication_factor": 2
+}
+```
+
+### Placement Group Status Values
+
+| Status | Value | Description |
+|--------|-------|-------------|
+| healthy | 1 | Node count >= min_nodes, all operations normal |
+| degraded | 2 | Node count < min_nodes, reduced redundancy |
+| offline | 3 | No nodes available, read-only or unavailable |
+| unknown | 0 | Status not yet determined |
+
+---
+
 ## User and IAM Management
 
 ### Users

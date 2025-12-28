@@ -28,8 +28,10 @@ import {
   IconDatabase,
   IconFiles,
   IconNetwork,
+  IconBuildingCommunity,
+  IconWorld,
 } from '@tabler/icons-react';
-import { adminApi } from '../api/client';
+import { adminApi, PlacementGroup, PlacementGroupsResponse } from '../api/client';
 
 interface NodeInfo {
   node_id: string;
@@ -105,6 +107,12 @@ export function ClusterPage() {
     refetchInterval: refreshInterval,
   });
 
+  const { data: placementGroupsData, isLoading: placementGroupsLoading } = useQuery({
+    queryKey: ['placement-groups'],
+    queryFn: () => adminApi.listPlacementGroups().then((res) => res.data as PlacementGroupsResponse),
+    refetchInterval: refreshInterval,
+  });
+
   const isLoading = clusterLoading || nodesLoading || storageLoading;
 
   const getStatusColor = (status: string): string => {
@@ -135,6 +143,32 @@ export function ClusterPage() {
         return 'yellow';
       default:
         return 'gray';
+    }
+  };
+
+  const getPlacementGroupStatusColor = (status: string): string => {
+    switch (status?.toLowerCase()) {
+      case 'healthy':
+        return 'green';
+      case 'degraded':
+        return 'yellow';
+      case 'offline':
+        return 'red';
+      default:
+        return 'gray';
+    }
+  };
+
+  const getPlacementGroupStatusIcon = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'healthy':
+        return <IconCheck size={14} color="var(--mantine-color-green-6)" />;
+      case 'degraded':
+        return <IconClock size={14} color="var(--mantine-color-yellow-6)" />;
+      case 'offline':
+        return <IconX size={14} color="var(--mantine-color-red-6)" />;
+      default:
+        return null;
     }
   };
 
@@ -431,6 +465,148 @@ export function ClusterPage() {
           <Text c="dimmed" ta="center">
             Single-node mode - no distribution data available
           </Text>
+        )}
+      </Card>
+
+      {/* Placement Groups Section */}
+      <Card withBorder radius="md" p="lg" mb="lg">
+        <Group justify="space-between" mb="md">
+          <Group>
+            <ThemeIcon color="violet" variant="light" size="lg">
+              <IconBuildingCommunity size={20} />
+            </ThemeIcon>
+            <div>
+              <Text fw={500} size="lg">Placement Groups</Text>
+              <Text size="xs" c="dimmed">Data locality and fault isolation domains</Text>
+            </div>
+          </Group>
+          {placementGroupsData && (
+            <Group gap="xs">
+              <Badge color="green" variant="light">
+                {placementGroupsData.healthy_groups} healthy
+              </Badge>
+              {placementGroupsData.degraded_groups > 0 && (
+                <Badge color="yellow" variant="light">
+                  {placementGroupsData.degraded_groups} degraded
+                </Badge>
+              )}
+              <Badge variant="light">
+                {placementGroupsData.total_groups} total
+              </Badge>
+            </Group>
+          )}
+        </Group>
+
+        {placementGroupsLoading ? (
+          <Skeleton height={200} />
+        ) : placementGroupsData?.placement_groups?.length ? (
+          <Grid>
+            {placementGroupsData.placement_groups.map((pg: PlacementGroup) => (
+              <Grid.Col key={pg.id} span={{ base: 12, sm: 6, lg: 4 }}>
+                <Card withBorder radius="md" p="md" h="100%">
+                  <Group justify="space-between" mb="sm">
+                    <Group gap="xs">
+                      <ThemeIcon
+                        color={getPlacementGroupStatusColor(pg.status)}
+                        variant="light"
+                        size="sm"
+                      >
+                        <IconBuildingCommunity size={14} />
+                      </ThemeIcon>
+                      <div>
+                        <Text fw={500} size="sm">{pg.name}</Text>
+                        <Code fz="xs">{pg.id}</Code>
+                      </div>
+                    </Group>
+                    <Group gap="xs">
+                      {pg.is_local && (
+                        <Tooltip label="This is the local placement group for this node">
+                          <Badge size="xs" color="blue" variant="light">Local</Badge>
+                        </Tooltip>
+                      )}
+                      <Badge
+                        color={getPlacementGroupStatusColor(pg.status)}
+                        variant="light"
+                        leftSection={getPlacementGroupStatusIcon(pg.status)}
+                      >
+                        {pg.status}
+                      </Badge>
+                    </Group>
+                  </Group>
+
+                  <Stack gap="xs">
+                    <Group gap="xs">
+                      <IconWorld size={14} style={{ color: 'var(--mantine-color-dimmed)' }} />
+                      <Text size="xs" c="dimmed">Region:</Text>
+                      <Text size="xs" fw={500}>{pg.region}</Text>
+                    </Group>
+                    <Group gap="xs">
+                      <IconBuildingCommunity size={14} style={{ color: 'var(--mantine-color-dimmed)' }} />
+                      <Text size="xs" c="dimmed">Datacenter:</Text>
+                      <Text size="xs" fw={500}>{pg.datacenter}</Text>
+                    </Group>
+                    <Group gap="xs">
+                      <IconServer size={14} style={{ color: 'var(--mantine-color-dimmed)' }} />
+                      <Text size="xs" c="dimmed">Nodes:</Text>
+                      <Group gap={4}>
+                        <Text size="xs" fw={500}>{pg.nodes.length}</Text>
+                        <Text size="xs" c="dimmed">
+                          (min: {pg.min_nodes}, max: {pg.max_nodes > 0 ? pg.max_nodes : '∞'})
+                        </Text>
+                      </Group>
+                    </Group>
+                  </Stack>
+
+                  {/* Node health progress */}
+                  <div style={{ marginTop: 'var(--mantine-spacing-sm)' }}>
+                    <Group justify="space-between" mb={4}>
+                      <Text size="xs" c="dimmed">Node capacity</Text>
+                      <Text size="xs" fw={500}>
+                        {pg.nodes.length} / {pg.min_nodes} required
+                      </Text>
+                    </Group>
+                    <Progress
+                      value={Math.min((pg.nodes.length / pg.min_nodes) * 100, 100)}
+                      color={pg.nodes.length >= pg.min_nodes ? 'green' : 'yellow'}
+                      size="sm"
+                    />
+                  </div>
+
+                  {/* Node list */}
+                  {pg.nodes.length > 0 && (
+                    <div style={{ marginTop: 'var(--mantine-spacing-sm)' }}>
+                      <Text size="xs" c="dimmed" mb={4}>Member nodes:</Text>
+                      <Group gap={4}>
+                        {pg.nodes.slice(0, 5).map((nodeId) => (
+                          <Tooltip key={nodeId} label={nodeId}>
+                            <Badge size="xs" variant="outline" style={{ cursor: 'pointer' }}>
+                              {nodeId.slice(0, 8)}
+                            </Badge>
+                          </Tooltip>
+                        ))}
+                        {pg.nodes.length > 5 && (
+                          <Badge size="xs" variant="light">
+                            +{pg.nodes.length - 5} more
+                          </Badge>
+                        )}
+                      </Group>
+                    </div>
+                  )}
+                </Card>
+              </Grid.Col>
+            ))}
+          </Grid>
+        ) : (
+          <div style={{ textAlign: 'center', padding: 'var(--mantine-spacing-xl)' }}>
+            <ThemeIcon color="gray" variant="light" size={48} mb="md">
+              <IconBuildingCommunity size={24} />
+            </ThemeIcon>
+            <Text c="dimmed" mb="xs">No placement groups configured</Text>
+            <Text size="sm" c="dimmed">
+              Placement groups provide data locality and fault isolation for distributed storage.
+              Configure them in your server settings to enable multi-datacenter support.
+            </Text>
+          </div>
         )}
       </Card>
 

@@ -53,6 +53,60 @@ data:
       path: /data/objects
       default_storage_class: STANDARD
 
+      # Default redundancy configuration (for erasure backend)
+      # Applies to all buckets unless overridden
+      # default_redundancy:
+      #   enabled: true
+      #   data_shards: 10           # Reed-Solomon data shards
+      #   parity_shards: 4          # Reed-Solomon parity shards
+      #   placement_policy: spread  # spread | local | rack-aware | zone-aware
+      #   replication_factor: 1     # Cross-placement group DR copies
+
+      # Placement groups for distributed storage
+      # Erasure coding and tiering happen within a placement group
+      # Cross-placement group replication for DR uses full object copies
+      # placement_groups:
+      #   local_group_id: pg-dc1
+      #   min_nodes_for_erasure: 3
+      #   replication_targets:
+      #     - pg-dc2
+      #   groups:
+      #     - id: pg-dc1
+      #       name: "Datacenter 1"
+      #       datacenter: dc1
+      #       region: us-east-1
+      #       min_nodes: 3
+      #       max_nodes: 10
+
+      # Per-tier storage backends (enables mixed backend types)
+      # tiering:
+      #   enabled: true
+      #   tiers:
+      #     hot:
+      #       backend: erasure       # Use erasure for hot tier
+      #       data_dir: /data/hot
+      #       erasure_config:
+      #         data_shards: 10
+      #         parity_shards: 4
+      #       priority: 1
+      #       capacity_threshold: 0.85
+      #     warm:
+      #       backend: volume        # Use volume for warm tier
+      #       data_dir: /data/warm
+      #       priority: 2
+      #     cold:
+      #       backend: fs            # Use filesystem for cold tier
+      #       data_dir: /data/cold
+      #       priority: 3
+      #   policies:
+      #     - name: age-based-cold
+      #       enabled: true
+      #       source_tier: hot
+      #       destination_tier: cold
+      #       condition:
+      #         type: age
+      #         age_days: 30
+
       # Volume storage (when backend: volume)
       # High-performance block-based storage with pre-allocated volume files
       # volume:

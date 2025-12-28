@@ -1,0 +1,223 @@
+# Prometheus Alert Rules for NebulaIO Placement Groups
+#
+# These alerts monitor placement group health and help operators respond
+# to degraded or offline conditions before they impact data availability.
+#
+# To use these alerts, include this file in your Prometheus configuration:
+#
+# rule_files:
+#   - /etc/prometheus/rules/placement-group-alerts.yaml
+#
+
+groups:
+  - name: nebulaio.placement_groups
+    interval: 30s
+    rules:
+      # =====================================================
+      # CRITICAL ALERTS (Immediate Action Required)
+      # =====================================================
+
+      - alert: PlacementGroupOffline
+        expr: nebulaio_placement_group_status == 3
+        for: 1m
+        labels:
+          severity: critical
+          service: nebulaio
+          component: placement-group
+        annotations:
+          summary: "Placement group {{ $labels.group_id }} is offline"
+          description: |
+            Placement group {{ $labels.group_id }} in datacenter {{ $labels.datacenter }}
+            (region: {{ $labels.region }}) has been offline for more than 1 minute.
+
+            This means the group has no active nodes and data stored in this group
+            may be unavailable.
+
+            Immediate action required:
+            1. Check node health in the affected datacenter
+            2. Review network connectivity
+            3. Check for hardware failures
+            4. Review recent deployments or configuration changes
+          runbook_url: "https://docs.nebulaio.io/runbooks/placement-group-offline"
+          dashboard_url: "https://grafana.example.com/d/nebulaio-placement-groups"
+
+      - alert: PlacementGroupNodesBelowMinimum
+        expr: nebulaio_placement_group_nodes < nebulaio_placement_group_min_nodes
+        for: 5m
+        labels:
+          severity: critical
+          service: nebulaio
+          component: placement-group
+        annotations:
+          summary: "Placement group {{ $labels.group_id }} has fewer nodes than minimum required"
+          description: |
+            Placement group {{ $labels.group_id }} has {{ $value }} nodes but requires
+            at least {{ $labels.min_nodes }} nodes for safe erasure coding.
+
+            This impacts data durability. If more nodes fail, data loss may occur.
+
+            Immediate action required:
+            1. Add nodes to the placement group
+            2. Investigate why nodes left the group
+            3. Check for cascade failures
+          runbook_url: "https://docs.nebulaio.io/runbooks/placement-group-under-capacity"
+
+      # =====================================================
+      # WARNING ALERTS (Action Required Soon)
+      # =====================================================
+
+      - alert: PlacementGroupDegraded
+        expr: nebulaio_placement_group_status == 2
+        for: 5m
+        labels:
+          severity: warning
+          service: nebulaio
+          component: placement-group
+        annotations:
+          summary: "Placement group {{ $labels.group_id }} is degraded"
+          description: |
+            Placement group {{ $labels.group_id }} in datacenter {{ $labels.datacenter }}
+            has been in degraded state for more than 5 minutes.
+
+            The group has fewer nodes than recommended and is operating with reduced
+            redundancy. This increases the risk of data unavailability if more nodes fail.
+
+            Recommended actions:
+            1. Investigate node health
+            2. Plan to add replacement nodes
+            3. Monitor closely for further degradation
+          runbook_url: "https://docs.nebulaio.io/runbooks/placement-group-degraded"
+
+      - alert: PlacementGroupHighNodeChurn
+        expr: |
+          (
+            increase(nebulaio_placement_group_node_joined_total[1h]) +
+            increase(nebulaio_placement_group_node_left_total[1h])
+          ) > 10
+        for: 0m
+        labels:
+          severity: warning
+          service: nebulaio
+          component: placement-group
+        annotations:
+          summary: "High node churn in placement group {{ $labels.group_id }}"
+          description: |
+            Placement group {{ $labels.group_id }} has experienced {{ $value | humanize }}
+            node join/leave events in the past hour.
+
+            High churn can indicate:
+            - Network instability
+            - Node health issues
+            - Configuration problems
+            - Potential attack attempts
+
+            Investigate the root cause to prevent service instability.
+          runbook_url: "https://docs.nebulaio.io/runbooks/placement-group-high-churn"
+
+      - alert: PlacementGroupNodeCapacityLow
+        expr: |
+          (nebulaio_placement_group_nodes / nebulaio_placement_group_min_nodes) < 1.2
+          and nebulaio_placement_group_nodes >= nebulaio_placement_group_min_nodes
+        for: 15m
+        labels:
+          severity: warning
+          service: nebulaio
+          component: placement-group
+        annotations:
+          summary: "Placement group {{ $labels.group_id }} is near minimum node capacity"
+          description: |
+            Placement group {{ $labels.group_id }} has only {{ $value | humanizePercentage }}
+            of the recommended node headroom above minimum.
+
+            The group is healthy but has limited capacity to handle node failures.
+            Consider adding more nodes to improve resilience.
+          runbook_url: "https://docs.nebulaio.io/runbooks/placement-group-capacity-planning"
+
+      # =====================================================
+      # INFO ALERTS (Awareness)
+      # =====================================================
+
+      - alert: PlacementGroupStatusChanged
+        expr: changes(nebulaio_placement_group_status[5m]) > 0
+        for: 0m
+        labels:
+          severity: info
+          service: nebulaio
+          component: placement-group
+        annotations:
+          summary: "Placement group {{ $labels.group_id }} status changed"
+          description: |
+            Placement group {{ $labels.group_id }} status has changed in the last 5 minutes.
+            Current status: {{ $value }}
+
+            This is an informational alert to track status transitions.
+
+      - alert: PlacementGroupNodeJoined
+        expr: increase(nebulaio_placement_group_node_joined_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: info
+          service: nebulaio
+          component: placement-group
+        annotations:
+          summary: "Node(s) joined placement group {{ $labels.group_id }}"
+          description: |
+            {{ $value | humanize }} node(s) joined placement group {{ $labels.group_id }}
+            in the last 5 minutes.
+
+      - alert: PlacementGroupNodeLeft
+        expr: increase(nebulaio_placement_group_node_left_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: info
+          service: nebulaio
+          component: placement-group
+        annotations:
+          summary: "Node(s) left placement group {{ $labels.group_id }}"
+          description: |
+            {{ $value | humanize }} node(s) left placement group {{ $labels.group_id }}
+            in the last 5 minutes.
+
+      # =====================================================
+      # RECORDING RULES
+      # =====================================================
+
+      # Pre-computed metrics for dashboards and alerts
+
+      - record: nebulaio:placement_group:health_score
+        expr: |
+          (nebulaio_placement_group_status == 1) * 1 +
+          (nebulaio_placement_group_status == 2) * 0.5 +
+          (nebulaio_placement_group_status == 3) * 0
+        labels:
+          __name__: nebulaio_placement_group_health_score
+
+      - record: nebulaio:placement_group:node_utilization
+        expr: |
+          nebulaio_placement_group_nodes / nebulaio_placement_group_max_nodes
+        labels:
+          __name__: nebulaio_placement_group_node_utilization
+
+      - record: nebulaio:placement_group:overall_health
+        expr: |
+          avg(
+            (nebulaio_placement_group_status == 1) * 1 +
+            (nebulaio_placement_group_status == 2) * 0.5 +
+            (nebulaio_placement_group_status == 3) * 0
+          )
+        labels:
+          __name__: nebulaio_placement_group_overall_health
+
+      - record: nebulaio:placement_group:total_nodes
+        expr: sum(nebulaio_placement_group_nodes)
+        labels:
+          __name__: nebulaio_placement_group_total_nodes
+
+      - record: nebulaio:placement_group:churn_rate_1h
+        expr: |
+          sum by (group_id) (
+            increase(nebulaio_placement_group_node_joined_total[1h]) +
+            increase(nebulaio_placement_group_node_left_total[1h])
+          )
+        labels:
+          __name__: nebulaio_placement_group_churn_rate_1h

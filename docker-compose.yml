@@ -98,6 +98,32 @@ services:
       # - NEBULAIO_NIM_CACHE_RESULTS=true
       # - NEBULAIO_NIM_PROCESS_ON_UPLOAD=false
 
+      # =========================================================================
+      # Placement Groups & Redundancy (for distributed deployments)
+      # =========================================================================
+
+      # Placement Groups (uncomment to enable)
+      # - NEBULAIO_PLACEMENT_GROUP_LOCAL_ID=pg-default
+      # - NEBULAIO_PLACEMENT_GROUP_MIN_NODES_FOR_ERASURE=3
+      # - NEBULAIO_PLACEMENT_GROUP_DATACENTER=dc1
+      # - NEBULAIO_PLACEMENT_GROUP_REGION=us-east-1
+
+      # Default Redundancy Configuration (for erasure coding)
+      # - NEBULAIO_REDUNDANCY_ENABLED=true
+      # - NEBULAIO_REDUNDANCY_DATA_SHARDS=10
+      # - NEBULAIO_REDUNDANCY_PARITY_SHARDS=4
+      # - NEBULAIO_REDUNDANCY_PLACEMENT_POLICY=spread
+      # - NEBULAIO_REDUNDANCY_REPLICATION_FACTOR=0
+
+      # Storage Tiering (uncomment to enable)
+      # - NEBULAIO_TIERING_ENABLED=true
+      # - NEBULAIO_TIERING_HOT_BACKEND=erasure
+      # - NEBULAIO_TIERING_HOT_DIR=/data/tiering/hot
+      # - NEBULAIO_TIERING_WARM_BACKEND=volume
+      # - NEBULAIO_TIERING_WARM_DIR=/data/tiering/warm
+      # - NEBULAIO_TIERING_COLD_BACKEND=fs
+      # - NEBULAIO_TIERING_COLD_DIR=/data/tiering/cold
+
     restart: unless-stopped
     healthcheck:
       # Use HTTPS since TLS is enabled by default

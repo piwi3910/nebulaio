@@ -124,6 +124,36 @@ export interface TracingStats {
   propagator: string;
 }
 
+// Placement Group Types
+export interface PlacementGroup {
+  id: string;
+  name: string;
+  datacenter: string;
+  region: string;
+  nodes: string[];
+  min_nodes: number;
+  max_nodes: number;
+  is_local: boolean;
+  status: 'healthy' | 'degraded' | 'offline' | 'unknown';
+}
+
+export interface PlacementGroupStats {
+  group_id: string;
+  node_count: number;
+  total_capacity_bytes: number;
+  used_capacity_bytes: number;
+  object_count: number;
+  shard_count: number;
+}
+
+export interface PlacementGroupsResponse {
+  placement_groups: PlacementGroup[];
+  local_group_id: string;
+  total_groups: number;
+  healthy_groups: number;
+  degraded_groups: number;
+}
+
 // Tiering Policy Types
 export interface TieringTrigger {
   type: 'age' | 'access' | 'capacity';
@@ -364,6 +394,11 @@ export const adminApi = {
   getSecurityConfig: () => apiClient.get('/admin/security/config'),
   updateSecurityConfig: (data: { analytics_enabled?: boolean; key_rotation_enabled?: boolean; mtls_enabled?: boolean; tracing_enabled?: boolean }) =>
     apiClient.put('/admin/security/config', data),
+
+  // Placement Groups
+  listPlacementGroups: () => apiClient.get('/admin/cluster/placement-groups'),
+  getPlacementGroup: (id: string) => apiClient.get(`/admin/cluster/placement-groups/${id}`),
+  getPlacementGroupStats: (id: string) => apiClient.get(`/admin/cluster/placement-groups/${id}/stats`),
 
   // Tiering Policies
   listTieringPolicies: (params?: { type?: string; scope?: string; enabled?: boolean }) =>

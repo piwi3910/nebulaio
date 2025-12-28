@@ -61,6 +61,18 @@ services:
       - NEBULAIO_S3_PORT=9000
       - NEBULAIO_ADMIN_PORT=9001
       - NEBULAIO_CONSOLE_PORT=9002
+
+      # Placement Groups - All nodes in same datacenter/placement group
+      - NEBULAIO_PLACEMENT_GROUP_LOCAL_ID=pg-dc1
+      - NEBULAIO_PLACEMENT_GROUP_MIN_NODES_FOR_ERASURE=3
+      - NEBULAIO_PLACEMENT_GROUP_DATACENTER=dc1
+      - NEBULAIO_PLACEMENT_GROUP_REGION=local
+
+      # Redundancy Configuration (4+2 for 3-node cluster)
+      - NEBULAIO_REDUNDANCY_ENABLED=true
+      - NEBULAIO_REDUNDANCY_DATA_SHARDS=4
+      - NEBULAIO_REDUNDANCY_PARITY_SHARDS=2
+      - NEBULAIO_REDUNDANCY_PLACEMENT_POLICY=spread
     networks:
       nebulaio-cluster:
         aliases:
@@ -111,6 +123,18 @@ services:
       - NEBULAIO_S3_PORT=9000
       - NEBULAIO_ADMIN_PORT=9001
       - NEBULAIO_CONSOLE_PORT=9002
+
+      # Placement Groups - All nodes in same datacenter/placement group
+      - NEBULAIO_PLACEMENT_GROUP_LOCAL_ID=pg-dc1
+      - NEBULAIO_PLACEMENT_GROUP_MIN_NODES_FOR_ERASURE=3
+      - NEBULAIO_PLACEMENT_GROUP_DATACENTER=dc1
+      - NEBULAIO_PLACEMENT_GROUP_REGION=local
+
+      # Redundancy Configuration (4+2 for 3-node cluster)
+      - NEBULAIO_REDUNDANCY_ENABLED=true
+      - NEBULAIO_REDUNDANCY_DATA_SHARDS=4
+      - NEBULAIO_REDUNDANCY_PARITY_SHARDS=2
+      - NEBULAIO_REDUNDANCY_PLACEMENT_POLICY=spread
     networks:
       nebulaio-cluster:
         aliases:
@@ -164,6 +188,18 @@ services:
       - NEBULAIO_S3_PORT=9000
       - NEBULAIO_ADMIN_PORT=9001
       - NEBULAIO_CONSOLE_PORT=9002
+
+      # Placement Groups - All nodes in same datacenter/placement group
+      - NEBULAIO_PLACEMENT_GROUP_LOCAL_ID=pg-dc1
+      - NEBULAIO_PLACEMENT_GROUP_MIN_NODES_FOR_ERASURE=3
+      - NEBULAIO_PLACEMENT_GROUP_DATACENTER=dc1
+      - NEBULAIO_PLACEMENT_GROUP_REGION=local
+
+      # Redundancy Configuration (4+2 for 3-node cluster)
+      - NEBULAIO_REDUNDANCY_ENABLED=true
+      - NEBULAIO_REDUNDANCY_DATA_SHARDS=4
+      - NEBULAIO_REDUNDANCY_PARITY_SHARDS=2
+      - NEBULAIO_REDUNDANCY_PLACEMENT_POLICY=spread
     networks:
       nebulaio-cluster:
         aliases:

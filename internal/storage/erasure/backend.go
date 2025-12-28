@@ -13,6 +13,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/piwi3910/nebulaio/internal/cluster"
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 	"github.com/rs/zerolog/log"
 )
@@ -40,6 +41,10 @@ type Backend struct {
 
 	// Local node info
 	localNodeID string
+
+	// Placement group manager for distributed shard placement (optional)
+	// When set, uses cluster placement groups for node selection
+	placementGroupMgr *cluster.PlacementGroupManager
 }
 
 // New creates a new erasure coding backend
@@ -68,16 +73,30 @@ func New(config Config, localNodeID string) (*Backend, error) {
 		return nil, fmt.Errorf("failed to create uploads directory: %w", err)
 	}
 
-	return &Backend{
-		config:       config,
-		encoder:      encoder,
-		decoder:      decoder,
-		shardManager: shardManager,
-		placement:    NewConsistentHashPlacement(100),
-		nodes:        make([]NodeInfo, 0),
-		uploadsDir:   uploadsDir,
-		localNodeID:  localNodeID,
-	}, nil
+	b := &Backend{
+		config:            config,
+		encoder:           encoder,
+		decoder:           decoder,
+		shardManager:      shardManager,
+		placement:         NewConsistentHashPlacement(100),
+		nodes:             make([]NodeInfo, 0),
+		uploadsDir:        uploadsDir,
+		localNodeID:       localNodeID,
+		placementGroupMgr: config.PlacementGroupManager,
+	}
+
+	// If placement group manager is provided, log distributed mode
+	if b.placementGroupMgr != nil {
+		localGroup := b.placementGroupMgr.LocalGroup()
+		if localGroup != nil {
+			log.Info().
+				Str("placement_group", string(localGroup.ID)).
+				Int("nodes_in_group", len(localGroup.Nodes)).
+				Msg("Erasure backend using placement group for shard distribution")
+		}
+	}
+
+	return b, nil
 }
 
 // Init initializes the storage backend
@@ -110,6 +129,35 @@ func (b *Backend) GetNodes() []NodeInfo {
 	return b.nodes
 }
 
+// GetPlacementNodesForObject returns the nodes that should store shards for an object.
+// If a placement group manager is configured, uses hash-based distribution across
+// the placement group nodes. Otherwise, falls back to the local consistent hash placement.
+func (b *Backend) GetPlacementNodesForObject(bucket, key string) ([]string, error) {
+	if b.placementGroupMgr != nil {
+		totalShards := b.config.DataShards + b.config.ParityShards
+		return b.placementGroupMgr.GetShardPlacementNodesForObject(bucket, key, totalShards)
+	}
+	// Fallback to local placement (single-node mode)
+	return nil, nil
+}
+
+// HasPlacementGroup returns true if this backend is configured with a placement group manager
+func (b *Backend) HasPlacementGroup() bool {
+	return b.placementGroupMgr != nil
+}
+
+// GetPlacementGroupID returns the local placement group ID if configured
+func (b *Backend) GetPlacementGroupID() string {
+	if b.placementGroupMgr == nil {
+		return ""
+	}
+	localGroup := b.placementGroupMgr.LocalGroup()
+	if localGroup == nil {
+		return ""
+	}
+	return string(localGroup.ID)
+}
+
 // metadataPath returns the filesystem path for object metadata
 func (b *Backend) metadataPath(bucket, key string) string {
 	hash := md5.Sum([]byte(fmt.Sprintf("%s/%s", bucket, key)))
@@ -131,12 +179,13 @@ func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) 
 	}
 
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	// Use 0600 permissions to protect metadata from unauthorized access
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath) // Best effort cleanup
 		return fmt.Errorf("failed to rename metadata: %w", err)
 	}
 
@@ -173,10 +222,24 @@ func (b *Backend) deleteObjectMetadata(bucket, key string) error {
 
 // PutObject stores an object with erasure coding
 func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
+	// Check for context cancellation before starting expensive operation
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Encode the data
 	encoded, err := b.encoder.Encode(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode object: %w", err)
+	}
+
+	// Check for context cancellation after encoding
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
 	}
 
 	// Get node assignments for shards
@@ -198,48 +261,64 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		return nil, fmt.Errorf("failed to place shards: %w", err)
 	}
 
-	// Store shards
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(encoded.Shards))
-	pathChan := make(chan struct {
+	// Store shards concurrently
+	// Use a struct to track results for proper cleanup on failure
+	type shardResult struct {
 		index int
 		path  string
-	}, len(encoded.Shards))
+		err   error
+	}
+
+	var wg sync.WaitGroup
+	results := make([]shardResult, len(encoded.Shards))
+	var resultsMu sync.Mutex
 
 	for i, shard := range encoded.Shards {
 		wg.Add(1)
 		go func(index int, data []byte, assignment NodeAssignment) {
 			defer wg.Done()
 
-			// For now, all shards go to local node (distributed mode would send to remote nodes)
-			path, writeErr := b.shardManager.WriteShard(ctx, bucket, key, index, data)
-			if writeErr != nil {
-				errChan <- fmt.Errorf("failed to write shard %d: %w", index, writeErr)
+			// Check for context cancellation before writing
+			select {
+			case <-ctx.Done():
+				resultsMu.Lock()
+				results[index] = shardResult{index: index, err: ctx.Err()}
+				resultsMu.Unlock()
 				return
+			default:
 			}
 
-			pathChan <- struct {
-				index int
-				path  string
-			}{index, path}
+			// For now, all shards go to local node (distributed mode would send to remote nodes)
+			path, writeErr := b.shardManager.WriteShard(ctx, bucket, key, index, data)
+
+			resultsMu.Lock()
+			if writeErr != nil {
+				results[index] = shardResult{index: index, err: fmt.Errorf("failed to write shard %d: %w", index, writeErr)}
+			} else {
+				results[index] = shardResult{index: index, path: path}
+			}
+			resultsMu.Unlock()
 		}(i, shard, assignments[i])
 	}
 
 	wg.Wait()
-	close(errChan)
-	close(pathChan)
 
-	// Check for errors
+	// Count errors and collect successful paths for potential cleanup
 	var errs []error
-	for err := range errChan {
-		errs = append(errs, err)
+	var successPaths []string
+	for _, result := range results {
+		if result.err != nil {
+			errs = append(errs, result.err)
+		} else if result.path != "" {
+			successPaths = append(successPaths, result.path)
+		}
 	}
 
 	// Allow some shard failures (up to parityShards)
 	if len(errs) > b.config.ParityShards {
 		// Clean up written shards on failure
-		for result := range pathChan {
-			_ = b.shardManager.DeleteShardByPath(ctx, result.path)
+		for _, path := range successPaths {
+			_ = b.shardManager.DeleteShardByPath(ctx, path)
 		}
 		return nil, fmt.Errorf("too many shard write failures (%d): %v", len(errs), errs[0])
 	}
@@ -268,20 +347,12 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 
 // GetObject retrieves an object using erasure coding
 func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
-	// Read object metadata for original size
+	// Read object metadata for original size - this is required for correct data reconstruction
 	objMeta, err := b.readObjectMetadata(bucket, key)
 	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("bucket", bucket).
-			Str("key", key).
-			Msg("Failed to read object metadata, attempting recovery without size info")
-		// Continue without metadata - data may have padding
-		objMeta = &objectMetadata{
-			OriginalSize: 0,
-			DataShards:   b.config.DataShards,
-			ParityShards: b.config.ParityShards,
-		}
+		// Without metadata, we cannot properly trim padding from reconstructed data
+		// This would result in data corruption, so we must fail
+		return nil, fmt.Errorf("failed to read object metadata for %s/%s: %w", bucket, key, err)
 	}
 
 	// Collect available shards
