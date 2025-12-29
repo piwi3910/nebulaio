@@ -25,21 +25,21 @@ type MockStorageBackend struct {
 	storageInfo *backend.StorageInfo
 
 	// Error injection
-	initErr                   error
-	closeErr                  error
-	createBucketErr           error
-	deleteBucketErr           error
-	bucketExistsErr           error
-	putObjectErr              error
-	getObjectErr              error
-	deleteObjectErr           error
-	objectExistsErr           error
-	getStorageInfoErr         error
-	createMultipartUploadErr  error
-	putPartErr                error
-	getPartErr                error
-	completePartsErr          error
-	abortMultipartUploadErr   error
+	initErr                  error
+	closeErr                 error
+	createBucketErr          error
+	deleteBucketErr          error
+	bucketExistsErr          error
+	putObjectErr             error
+	getObjectErr             error
+	deleteObjectErr          error
+	objectExistsErr          error
+	getStorageInfoErr        error
+	createMultipartUploadErr error
+	putPartErr               error
+	getPartErr               error
+	completePartsErr         error
+	abortMultipartUploadErr  error
 }
 
 // NewMockStorageBackend creates a new MockStorageBackend with initialized maps.

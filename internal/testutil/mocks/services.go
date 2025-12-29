@@ -17,9 +17,9 @@ type MockObjectService struct {
 	transitions     []TransitionRecord
 
 	// Error injection
-	deleteObjectErr      error
-	deleteVersionErr     error
-	transitionErr        error
+	deleteObjectErr  error
+	deleteVersionErr error
+	transitionErr    error
 }
 
 // DeletedObjectRecord records a deleted object.
@@ -228,10 +228,10 @@ func (m *MockMultipartService) GetAbortedUploadIDs() []string {
 type MockEventTarget struct {
 	mu sync.RWMutex
 
-	name       string
-	published  int
-	healthy    bool
-	publishFn  func(event interface{}) error
+	name      string
+	published int
+	healthy   bool
+	publishFn func(event interface{}) error
 
 	// Error injection
 	publishErr error
