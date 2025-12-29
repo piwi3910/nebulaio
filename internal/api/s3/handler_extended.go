@@ -103,10 +103,10 @@ func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
 	// Set response headers
 	w.Header().Set("Last-Modified", meta.ModifiedAt.Format(http.TimeFormat))
 	if versionID != "" {
-		w.Header().Set("x-amz-version-id", versionID)
+		w.Header().Set("X-Amz-Version-Id", versionID)
 	}
 	if meta.DeleteMarker {
-		w.Header().Set("x-amz-delete-marker", "true")
+		w.Header().Set("X-Amz-Delete-Marker", "true")
 	}
 
 	writeXML(w, http.StatusOK, response)
