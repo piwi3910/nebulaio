@@ -666,8 +666,8 @@ func TestGPUDirectDefaults(t *testing.T) {
 
 	// GPUDirect defaults
 	assert.False(t, cfg.GPUDirect.Enabled)
-	assert.Equal(t, int64(1024*1024*1024), cfg.GPUDirect.BufferPoolSize)    // 1GB
-	assert.Equal(t, int64(256*1024*1024), cfg.GPUDirect.MaxTransferSize)    // 256MB
+	assert.Equal(t, int64(1024*1024*1024), cfg.GPUDirect.BufferPoolSize) // 1GB
+	assert.Equal(t, int64(256*1024*1024), cfg.GPUDirect.MaxTransferSize) // 256MB
 	assert.True(t, cfg.GPUDirect.EnableAsync)
 	assert.Equal(t, 4, cfg.GPUDirect.CUDAStreamCount)
 	assert.True(t, cfg.GPUDirect.EnableP2P)

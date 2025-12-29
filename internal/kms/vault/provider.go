@@ -376,13 +376,13 @@ func (p *Provider) metadataToKeyInfo(keyID string, meta *KeyMetadata) *kms.KeyIn
 	}
 
 	return &kms.KeyInfo{
-		KeyID:       keyID,
-		Name:        meta.Name,
-		Algorithm:   vaultTypeToAlgorithm(meta.Type),
-		Usage:       kms.KeyUsageEncrypt,
-		State:       kms.KeyStateEnabled,
-		CreatedAt:   createdAt,
-		RotatedAt:   rotatedAt,
+		KeyID:     keyID,
+		Name:      meta.Name,
+		Algorithm: vaultTypeToAlgorithm(meta.Type),
+		Usage:     kms.KeyUsageEncrypt,
+		State:     kms.KeyStateEnabled,
+		CreatedAt: createdAt,
+		RotatedAt: rotatedAt,
 	}
 }
 
