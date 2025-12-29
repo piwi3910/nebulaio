@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -807,7 +808,11 @@ type OllamaProvider struct {
 // NewOllamaProvider creates a new Ollama provider for local LLMs
 func NewOllamaProvider(endpoint string) *OllamaProvider {
 	if endpoint == "" {
-		endpoint = "http://localhost:11434"
+		// Use OLLAMA_HOST environment variable if set, otherwise use default
+		endpoint = os.Getenv("OLLAMA_HOST")
+		if endpoint == "" {
+			endpoint = "http://localhost:11434"
+		}
 	}
 	return &OllamaProvider{
 		endpoint: endpoint,

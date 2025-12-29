@@ -127,7 +127,8 @@ storage:
 # Authentication
 auth:
   root_user: admin
-  root_password: Admin123
+  # Password is set via NEBULAIO_AUTH_ROOT_PASSWORD environment variable
+  # root_password: ""  # Set via env var for security
   jwt_secret: ""  # Auto-generated
 
 # Storage Tiering configuration

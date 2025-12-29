@@ -3,6 +3,8 @@ package targets
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -56,6 +58,11 @@ type NATSConfig struct {
 
 // DefaultNATSConfig returns a default NATS configuration
 func DefaultNATSConfig() NATSConfig {
+	// Use NATS_URL environment variable if set, otherwise use default
+	servers := []string{"nats://localhost:4222"}
+	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
+		servers = strings.Split(natsURL, ",")
+	}
 	return NATSConfig{
 		TargetConfig: events.TargetConfig{
 			Type:       "nats",
@@ -63,7 +70,7 @@ func DefaultNATSConfig() NATSConfig {
 			QueueSize:  10000,
 			MaxRetries: 3,
 		},
-		Servers:       []string{"nats://localhost:4222"},
+		Servers:       servers,
 		Subject:       "s3.events",
 		MaxReconnects: 10,
 		ReconnectWait: 2 * time.Second,

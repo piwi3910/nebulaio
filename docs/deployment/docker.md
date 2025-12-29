@@ -19,7 +19,7 @@ docker run -d \
   -p 9001:9001 \
   -p 9002:9002 \
   -v nebulaio-data:/data \
-  -e NEBULAIO_AUTH_ROOT_PASSWORD=changeme \
+  -e NEBULAIO_AUTH_ROOT_PASSWORD=YourSecurePass123 \
   ghcr.io/piwi3910/nebulaio:latest
 ```
 
@@ -42,7 +42,7 @@ docker run -d \
   -p 9002:9002 \
   -v nebulaio-data:/data \
   -e NEBULAIO_AUTH_ROOT_USER=admin \
-  -e NEBULAIO_AUTH_ROOT_PASSWORD=your-secure-password \
+  -e NEBULAIO_AUTH_ROOT_PASSWORD=YourSecurePass123 \  # min 12 chars, uppercase, lowercase, number
   -e NEBULAIO_LOG_LEVEL=info \
   ghcr.io/piwi3910/nebulaio:latest
 ```
@@ -68,7 +68,7 @@ services:
     environment:
       - NEBULAIO_DATA_DIR=/data
       - NEBULAIO_AUTH_ROOT_USER=admin
-      - NEBULAIO_AUTH_ROOT_PASSWORD=changeme
+      - NEBULAIO_AUTH_ROOT_PASSWORD=YourSecurePass123
       - NEBULAIO_LOG_LEVEL=info
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9001/health/ready"]
@@ -155,7 +155,7 @@ services:
       - NEBULAIO_NODE_NAME=nebulaio-1
       - NEBULAIO_DATA_DIR=/data
       - NEBULAIO_AUTH_ROOT_USER=admin
-      - NEBULAIO_AUTH_ROOT_PASSWORD=changeme
+      - NEBULAIO_AUTH_ROOT_PASSWORD=YourSecurePass123
       - NEBULAIO_CLUSTER_BOOTSTRAP=true
       - NEBULAIO_CLUSTER_ADVERTISE_ADDRESS=nebulaio-1
       - NEBULAIO_CLUSTER_RAFT_PORT=9003
@@ -190,7 +190,7 @@ services:
       - NEBULAIO_NODE_NAME=nebulaio-2
       - NEBULAIO_DATA_DIR=/data
       - NEBULAIO_AUTH_ROOT_USER=admin
-      - NEBULAIO_AUTH_ROOT_PASSWORD=changeme
+      - NEBULAIO_AUTH_ROOT_PASSWORD=YourSecurePass123
       - NEBULAIO_CLUSTER_BOOTSTRAP=false
       - NEBULAIO_CLUSTER_JOIN_ADDRESSES=nebulaio-1:9004
       - NEBULAIO_CLUSTER_ADVERTISE_ADDRESS=nebulaio-2
@@ -228,7 +228,7 @@ services:
       - NEBULAIO_NODE_NAME=nebulaio-3
       - NEBULAIO_DATA_DIR=/data
       - NEBULAIO_AUTH_ROOT_USER=admin
-      - NEBULAIO_AUTH_ROOT_PASSWORD=changeme
+      - NEBULAIO_AUTH_ROOT_PASSWORD=YourSecurePass123
       - NEBULAIO_CLUSTER_BOOTSTRAP=false
       - NEBULAIO_CLUSTER_JOIN_ADDRESSES=nebulaio-1:9004
       - NEBULAIO_CLUSTER_ADVERTISE_ADDRESS=nebulaio-3

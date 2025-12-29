@@ -209,9 +209,17 @@ storage:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `auth.root_user` | string | `admin` | Root/admin username |
-| `auth.root_password` | string | - | Root/admin password (required) |
+| `auth.root_password` | string | - | Root/admin password (**required**) |
 | `auth.jwt_secret` | string | auto-generated | Secret for JWT signing |
 | `auth.jwt_expiry` | duration | `24h` | JWT token expiry time |
+
+> **Password Requirements:** The root password must meet the following criteria:
+> - Minimum 12 characters
+> - At least one uppercase letter
+> - At least one lowercase letter
+> - At least one number
+>
+> Set via environment variable: `export NEBULAIO_AUTH_ROOT_PASSWORD="YourSecurePass123"`
 
 ### LDAP Integration
 

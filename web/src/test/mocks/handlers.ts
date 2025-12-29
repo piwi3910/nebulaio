@@ -1,12 +1,17 @@
 import { http, HttpResponse } from 'msw';
 
+// Test credentials - these are only used in mock handlers for testing
+// In production, credentials are configured via environment variables
+const TEST_USERNAME = 'admin';
+const TEST_PASSWORD = 'TestPassword123';
+
 // Define handlers that mock the API responses
 export const handlers = [
   // Auth endpoints
   http.post('/api/v1/admin/auth/login', async ({ request }) => {
     const body = await request.json() as { username: string; password: string };
 
-    if (body.username === 'admin' && body.password === 'Admin123') {
+    if (body.username === TEST_USERNAME && body.password === TEST_PASSWORD) {
       return HttpResponse.json({
         token: 'mock-jwt-token',
         refresh_token: 'mock-refresh-token',

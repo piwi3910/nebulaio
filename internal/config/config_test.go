@@ -8,9 +8,31 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
+// testPassword is a valid password for testing that meets all requirements:
+// - 12+ characters, uppercase, lowercase, number
+const testPassword = "TestPassword123"
+
+// setTestPassword sets a valid password environment variable for tests
+// Returns a cleanup function to restore the original value
+func setTestPassword(t *testing.T) {
+	t.Helper()
+	originalValue := os.Getenv("NEBULAIO_AUTH_ROOT_PASSWORD")
+	os.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", testPassword)
+	t.Cleanup(func() {
+		if originalValue == "" {
+			os.Unsetenv("NEBULAIO_AUTH_ROOT_PASSWORD")
+		} else {
+			os.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", originalValue)
+		}
+	})
+}
+
 func TestLoadDefaultConfig(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -33,6 +55,7 @@ func TestLoadDefaultConfig(t *testing.T) {
 }
 
 func TestLoadWithOptions(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir:     tempDir,
@@ -52,6 +75,7 @@ func TestLoadWithOptions(t *testing.T) {
 }
 
 func TestLoadFromConfigFile(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "nebulaio.yaml")
 
@@ -89,6 +113,7 @@ tls:
 }
 
 func TestLoadWithEnvironmentVariables(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 
 	// Set environment variables
@@ -116,6 +141,7 @@ func TestLoadInvalidConfigFile(t *testing.T) {
 }
 
 func TestValidateCreatesDataDirectory(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	newDataDir := filepath.Join(tempDir, "nested", "data")
 
@@ -134,6 +160,7 @@ func TestValidateCreatesDataDirectory(t *testing.T) {
 }
 
 func TestNodeIDGeneration(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -158,6 +185,7 @@ func TestNodeIDGeneration(t *testing.T) {
 }
 
 func TestJWTSecretGeneration(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -181,6 +209,7 @@ func TestJWTSecretGeneration(t *testing.T) {
 }
 
 func TestReplicaIDGeneration(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -204,6 +233,7 @@ func TestReplicaIDGeneration(t *testing.T) {
 }
 
 func TestWALDirectoryCreation(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -223,6 +253,7 @@ func TestWALDirectoryCreation(t *testing.T) {
 }
 
 func TestClusterDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -247,6 +278,7 @@ func TestClusterDefaults(t *testing.T) {
 }
 
 func TestStorageDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -281,6 +313,7 @@ func TestStorageDefaults(t *testing.T) {
 }
 
 func TestCacheDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -306,6 +339,7 @@ func TestCacheDefaults(t *testing.T) {
 }
 
 func TestFirewallDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -341,6 +375,7 @@ func TestFirewallDefaults(t *testing.T) {
 }
 
 func TestAuditDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -372,6 +407,7 @@ func TestAuditDefaults(t *testing.T) {
 }
 
 func TestAuthDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -383,12 +419,138 @@ func TestAuthDefaults(t *testing.T) {
 
 	// Verify auth defaults
 	assert.Equal(t, "admin", cfg.Auth.RootUser)
-	assert.Equal(t, "admin123", cfg.Auth.RootPassword)
-	assert.Equal(t, 60, cfg.Auth.TokenExpiry)          // 1 hour
-	assert.Equal(t, 168, cfg.Auth.RefreshTokenExpiry) // 7 days
+	assert.Equal(t, testPassword, cfg.Auth.RootPassword) // Set via env var
+	assert.Equal(t, 60, cfg.Auth.TokenExpiry)            // 1 hour
+	assert.Equal(t, 168, cfg.Auth.RefreshTokenExpiry)    // 7 days
+}
+
+func TestPasswordValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		password    string
+		expectError bool
+		errorType   error
+	}{
+		{
+			name:        "empty password",
+			password:    "",
+			expectError: true,
+			errorType:   auth.ErrPasswordEmpty,
+		},
+		{
+			name:        "too short",
+			password:    "Short1Aa",
+			expectError: true,
+			errorType:   auth.ErrPasswordTooShort,
+		},
+		{
+			name:        "no uppercase",
+			password:    "lowercaseonly123",
+			expectError: true,
+			errorType:   auth.ErrPasswordNoUpper,
+		},
+		{
+			name:        "no lowercase",
+			password:    "UPPERCASEONLY123",
+			expectError: true,
+			errorType:   auth.ErrPasswordNoLower,
+		},
+		{
+			name:        "no number",
+			password:    "NoNumbersHere",
+			expectError: true,
+			errorType:   auth.ErrPasswordNoNumber,
+		},
+		{
+			name:        "valid password",
+			password:    "ValidPassword123",
+			expectError: false,
+		},
+		{
+			name:        "valid password with special chars",
+			password:    "Valid@Pass#123!",
+			expectError: false,
+		},
+		{
+			name:        "exactly 12 characters",
+			password:    "Exactly12Aa1",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := auth.ValidatePasswordStrength(tt.password)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tt.errorType)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestLoadFailsWithEmptyPassword(t *testing.T) {
+	// Ensure no password is set
+	os.Unsetenv("NEBULAIO_AUTH_ROOT_PASSWORD")
+
+	tempDir := t.TempDir()
+	opts := Options{
+		DataDir: tempDir,
+	}
+
+	_, err := Load("", opts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid root password")
+}
+
+func TestLoadFailsWithWeakPassword(t *testing.T) {
+	// Set a weak password
+	os.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", "weak")
+	defer os.Unsetenv("NEBULAIO_AUTH_ROOT_PASSWORD")
+
+	tempDir := t.TempDir()
+	opts := Options{
+		DataDir: tempDir,
+	}
+
+	_, err := Load("", opts)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid root password")
+}
+
+func TestEnvVarPrecedenceOverConfigFile(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "nebulaio.yaml")
+
+	// Create a config file with one password
+	configContent := `
+auth:
+  root_password: "ConfigFilePass123"
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	// Set a different password via environment variable
+	envPassword := "EnvVarPassword123"
+	os.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", envPassword)
+	defer os.Unsetenv("NEBULAIO_AUTH_ROOT_PASSWORD")
+
+	opts := Options{
+		DataDir: tempDir,
+	}
+
+	cfg, err := Load(configPath, opts)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	// Environment variable should take precedence over config file
+	assert.Equal(t, envPassword, cfg.Auth.RootPassword)
 }
 
 func TestTLSDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -408,6 +570,7 @@ func TestTLSDefaults(t *testing.T) {
 }
 
 func TestFeatureFlagDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -428,6 +591,7 @@ func TestFeatureFlagDefaults(t *testing.T) {
 }
 
 func TestS3ExpressDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -446,6 +610,7 @@ func TestS3ExpressDefaults(t *testing.T) {
 }
 
 func TestIcebergDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -467,6 +632,7 @@ func TestIcebergDefaults(t *testing.T) {
 }
 
 func TestMCPDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -488,6 +654,7 @@ func TestMCPDefaults(t *testing.T) {
 }
 
 func TestGPUDirectDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -499,8 +666,8 @@ func TestGPUDirectDefaults(t *testing.T) {
 
 	// GPUDirect defaults
 	assert.False(t, cfg.GPUDirect.Enabled)
-	assert.Equal(t, int64(1024*1024*1024), cfg.GPUDirect.BufferPoolSize)    // 1GB
-	assert.Equal(t, int64(256*1024*1024), cfg.GPUDirect.MaxTransferSize)    // 256MB
+	assert.Equal(t, int64(1024*1024*1024), cfg.GPUDirect.BufferPoolSize) // 1GB
+	assert.Equal(t, int64(256*1024*1024), cfg.GPUDirect.MaxTransferSize) // 256MB
 	assert.True(t, cfg.GPUDirect.EnableAsync)
 	assert.Equal(t, 4, cfg.GPUDirect.CUDAStreamCount)
 	assert.True(t, cfg.GPUDirect.EnableP2P)
@@ -508,6 +675,7 @@ func TestGPUDirectDefaults(t *testing.T) {
 }
 
 func TestDPUDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -532,6 +700,7 @@ func TestDPUDefaults(t *testing.T) {
 }
 
 func TestRDMADefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,
@@ -557,6 +726,7 @@ func TestRDMADefaults(t *testing.T) {
 }
 
 func TestNIMDefaults(t *testing.T) {
+	setTestPassword(t)
 	tempDir := t.TempDir()
 	opts := Options{
 		DataDir: tempDir,

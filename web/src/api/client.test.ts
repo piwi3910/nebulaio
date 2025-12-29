@@ -66,7 +66,8 @@ describe('adminApi', () => {
 
   describe('auth', () => {
     it('login calls correct endpoint', async () => {
-      const response = await adminApi.login('admin', 'Admin123');
+      // Use test credentials matching mock handlers
+      const response = await adminApi.login('admin', 'TestPassword123');
 
       expect(response.data).toHaveProperty('token');
       expect(response.data).toHaveProperty('user');

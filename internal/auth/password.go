@@ -1,3 +1,24 @@
+// Package auth provides authentication and authorization functionality for NebulaIO.
+// It includes password validation, hashing, username and email validation, and
+// credential management utilities.
+//
+// Password Requirements:
+//   - Minimum 12 characters
+//   - At least one uppercase letter (A-Z)
+//   - At least one lowercase letter (a-z)
+//   - At least one number (0-9)
+//
+// Example usage:
+//
+//	err := auth.ValidatePasswordStrength("MySecurePass123")
+//	if err != nil {
+//	    log.Fatal("Invalid password:", err)
+//	}
+//
+//	hash, err := auth.HashPassword("MySecurePass123")
+//	if err != nil {
+//	    log.Fatal("Failed to hash password:", err)
+//	}
 package auth
 
 import (
@@ -10,7 +31,8 @@ import (
 
 // Password validation errors
 var (
-	ErrPasswordTooShort = errors.New("password must be at least 8 characters long")
+	ErrPasswordEmpty    = errors.New("password is required and cannot be empty")
+	ErrPasswordTooShort = errors.New("password must be at least 12 characters long")
 	ErrPasswordNoUpper  = errors.New("password must contain at least one uppercase letter")
 	ErrPasswordNoLower  = errors.New("password must contain at least one lowercase letter")
 	ErrPasswordNoNumber = errors.New("password must contain at least one number")
@@ -38,12 +60,15 @@ var (
 
 // ValidatePasswordStrength validates password meets minimum security requirements.
 // Requirements:
-// - Minimum 8 characters
+// - Minimum 12 characters
 // - At least one uppercase letter
 // - At least one lowercase letter
 // - At least one number
 func ValidatePasswordStrength(password string) error {
-	if len(password) < 8 {
+	if password == "" {
+		return ErrPasswordEmpty
+	}
+	if len(password) < 12 {
 		return ErrPasswordTooShort
 	}
 

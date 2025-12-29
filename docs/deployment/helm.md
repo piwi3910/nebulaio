@@ -109,8 +109,8 @@ helm install nebulaio ./nebulaio \
 | `image.repository` | Image repository | `ghcr.io/piwi3910/nebulaio` |
 | `image.tag` | Image tag | Chart appVersion |
 | `auth.rootUser` | Admin username | `admin` |
-| `auth.rootPassword` | Admin password | `changeme` |
-| `auth.existingSecret` | Use existing secret | `""` |
+| `auth.rootPassword` | Admin password (min 12 chars, mixed case, number) | `CHANGE_ME_Min12Chars1` |
+| `auth.existingSecret` | Use existing secret (recommended for production) | `""` |
 
 ### Cluster Configuration
 

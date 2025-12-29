@@ -22,6 +22,13 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// Test constants - these are only used in mock server tests
+// For integration tests against real servers, use NEBULAIO_TEST_USER and NEBULAIO_TEST_PASSWORD env vars
+const (
+	mockTestUser     = "admin"
+	mockTestPassword = "TestPassword123"
+)
+
 // IntegrationTestSuite is the base test suite for integration tests.
 type IntegrationTestSuite struct {
 	suite.Suite
@@ -67,7 +74,7 @@ func (s *IntegrationTestSuite) SetupTest() {
 func (s *IntegrationTestSuite) authenticate() {
 	body := map[string]string{
 		"username": getEnvOrDefault("NEBULAIO_TEST_USER", "admin"),
-		"password": getEnvOrDefault("NEBULAIO_TEST_PASSWORD", "Admin123"),
+		"password": getEnvOrDefault("NEBULAIO_TEST_PASSWORD", "TestPassword123"),
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -129,9 +136,10 @@ type AuthTestSuite struct {
 }
 
 func (s *AuthTestSuite) TestLoginWithValidCredentials() {
+	// Use environment variables for test credentials
 	body := map[string]string{
-		"username": "admin",
-		"password": "Admin123",
+		"username": getEnvOrDefault("NEBULAIO_TEST_USER", "admin"),
+		"password": getEnvOrDefault("NEBULAIO_TEST_PASSWORD", "TestPassword123"),
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -489,7 +497,7 @@ func (s *MockServerTestSuite) SetupSuite() {
 		var body map[string]string
 		json.NewDecoder(r.Body).Decode(&body)
 
-		if body["username"] == "admin" && body["password"] == "Admin123" {
+		if body["username"] == mockTestUser && body["password"] == mockTestPassword {
 			json.NewEncoder(w).Encode(map[string]string{
 				"access_token":  "test-token",
 				"refresh_token": "test-refresh-token",
@@ -517,8 +525,8 @@ func (s *MockServerTestSuite) TestMockHealth() {
 
 func (s *MockServerTestSuite) TestMockLogin() {
 	body := map[string]string{
-		"username": "admin",
-		"password": "Admin123",
+		"username": mockTestUser,
+		"password": mockTestPassword,
 	}
 	jsonBody, _ := json.Marshal(body)
 

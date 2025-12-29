@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+
+	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
 // Config holds all configuration for NebulaIO
@@ -1034,7 +1036,7 @@ func setDefaults(v *viper.Viper) {
 
 	// Cache defaults (DRAM Cache)
 	v.SetDefault("cache.enabled", false)
-	v.SetDefault("cache.max_size", 8*1024*1024*1024)   // 8GB
+	v.SetDefault("cache.max_size", 8*1024*1024*1024) // 8GB
 	v.SetDefault("cache.shard_count", 256)
 	v.SetDefault("cache.entry_max_size", 256*1024*1024) // 256MB
 	v.SetDefault("cache.ttl", 3600)                     // 1 hour
@@ -1060,8 +1062,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("firewall.rate_limiting.per_bucket", false)
 	// Bandwidth defaults
 	v.SetDefault("firewall.bandwidth.enabled", false)
-	v.SetDefault("firewall.bandwidth.max_bytes_per_second", 1024*1024*1024)      // 1 GB/s
-	v.SetDefault("firewall.bandwidth.max_bytes_per_second_per_user", 100*1024*1024)  // 100 MB/s
+	v.SetDefault("firewall.bandwidth.max_bytes_per_second", 1024*1024*1024)           // 1 GB/s
+	v.SetDefault("firewall.bandwidth.max_bytes_per_second_per_user", 100*1024*1024)   // 100 MB/s
 	v.SetDefault("firewall.bandwidth.max_bytes_per_second_per_bucket", 500*1024*1024) // 500 MB/s
 	// Connection limits defaults
 	v.SetDefault("firewall.connections.enabled", false)
@@ -1090,16 +1092,17 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("audit.webhook.flush_interval_seconds", 30)
 
 	// Auth defaults
+	// Note: root_password has no default - must be set via NEBULAIO_AUTH_ROOT_PASSWORD env var or config file
 	v.SetDefault("auth.root_user", "admin")
-	v.SetDefault("auth.root_password", "admin123") // Should be changed!
+	v.SetDefault("auth.root_password", "")         // Must be configured - no default for security
 	v.SetDefault("auth.token_expiry", 60)          // 1 hour
 	v.SetDefault("auth.refresh_token_expiry", 168) // 7 days
 
 	// S3 Express defaults
 	v.SetDefault("s3_express.enabled", false)
 	v.SetDefault("s3_express.default_zone", "use1-az1")
-	v.SetDefault("s3_express.session_duration", 3600)              // 1 hour
-	v.SetDefault("s3_express.max_append_size", 5*1024*1024*1024)   // 5GB
+	v.SetDefault("s3_express.session_duration", 3600)            // 1 hour
+	v.SetDefault("s3_express.max_append_size", 5*1024*1024*1024) // 5GB
 	v.SetDefault("s3_express.enable_atomic_append", true)
 
 	// Iceberg defaults
@@ -1125,8 +1128,8 @@ func setDefaults(v *viper.Viper) {
 
 	// GPUDirect defaults
 	v.SetDefault("gpudirect.enabled", false)
-	v.SetDefault("gpudirect.buffer_pool_size", 1024*1024*1024)    // 1GB
-	v.SetDefault("gpudirect.max_transfer_size", 256*1024*1024)    // 256MB
+	v.SetDefault("gpudirect.buffer_pool_size", 1024*1024*1024) // 1GB
+	v.SetDefault("gpudirect.max_transfer_size", 256*1024*1024) // 256MB
 	v.SetDefault("gpudirect.enable_async", true)
 	v.SetDefault("gpudirect.cuda_stream_count", 4)
 	v.SetDefault("gpudirect.enable_p2p", true)
@@ -1155,7 +1158,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("rdma.max_send_sge", 1)
 	v.SetDefault("rdma.max_recv_sge", 1)
 	v.SetDefault("rdma.max_inline_data", 64)
-	v.SetDefault("rdma.memory_pool_size", 1024*1024*1024)  // 1GB
+	v.SetDefault("rdma.memory_pool_size", 1024*1024*1024) // 1GB
 	v.SetDefault("rdma.enable_zero_copy", true)
 	v.SetDefault("rdma.fallback_to_tcp", true)
 
@@ -1168,7 +1171,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("nim.max_batch_size", 100)
 	v.SetDefault("nim.enable_streaming", true)
 	v.SetDefault("nim.cache_results", true)
-	v.SetDefault("nim.cache_ttl", 3600)  // 1 hour
+	v.SetDefault("nim.cache_ttl", 3600) // 1 hour
 	v.SetDefault("nim.enable_metrics", true)
 	v.SetDefault("nim.process_on_upload", false)
 	v.SetDefault("nim.process_content_types", []string{"image/jpeg", "image/png", "text/plain", "application/json"})
@@ -1216,6 +1219,12 @@ func (c *Config) validate() error {
 				return fmt.Errorf("failed to write JWT secret: %w", err)
 			}
 		}
+	}
+
+	// Validate root password - fail fast if missing or weak
+	// Password must be: min 12 chars, with uppercase, lowercase, and number
+	if err := auth.ValidatePasswordStrength(c.Auth.RootPassword); err != nil {
+		return fmt.Errorf("invalid root password: %w. Set via NEBULAIO_AUTH_ROOT_PASSWORD environment variable", err)
 	}
 
 	// Generate or load replica ID if not set

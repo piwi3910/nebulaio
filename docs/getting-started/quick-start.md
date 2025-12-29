@@ -78,6 +78,7 @@ Configuration via environment variables:
 ```bash
 export NEBULAIO_DATA_DIR=/var/lib/nebulaio
 export NEBULAIO_AUTH_ROOT_USER=admin
+# Password must be: min 12 chars, with uppercase, lowercase, and number
 export NEBULAIO_AUTH_ROOT_PASSWORD="YourSecurePassword123!"  # Required
 
 ./bin/nebulaio
