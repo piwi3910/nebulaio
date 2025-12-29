@@ -365,6 +365,7 @@ func (m *MockMetadataStore) GetObjects(bucket string) map[string]*metadata.Objec
 func (m *MockMetadataStore) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Reset data storage
 	m.buckets = make(map[string]*metadata.Bucket)
 	m.objects = make(map[string]map[string]*metadata.ObjectMeta)
 	m.versions = make(map[string]map[string][]*metadata.ObjectMeta)
@@ -375,6 +376,10 @@ func (m *MockMetadataStore) Reset() {
 	m.policies = make(map[string]*metadata.Policy)
 	m.nodes = make(map[string]*metadata.NodeInfo)
 	m.auditEvents = make([]*audit.AuditEvent, 0)
+	// Reset cluster state
+	m.isLeader = true
+	m.leaderAddress = "localhost:9003"
+	m.clusterInfo = nil
 	// Reset error injections
 	m.createBucketErr = nil
 	m.updateBucketErr = nil

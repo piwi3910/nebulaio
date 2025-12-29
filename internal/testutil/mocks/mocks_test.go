@@ -214,9 +214,15 @@ func TestMockMetadataStore_Reset(t *testing.T) {
 	store.AddObject("test-bucket", &metadata.ObjectMeta{Bucket: "test-bucket", Key: "key"})
 	store.SetCreateBucketError(errors.New("test error"))
 
+	// Modify cluster state
+	store.SetIsLeader(false)
+	store.SetLeaderAddress("other-host:9003")
+	store.SetClusterInfo(&metadata.ClusterInfo{RaftState: "Follower"})
+
 	// Verify data exists
 	buckets := store.GetBuckets()
 	require.Len(t, buckets, 1)
+	assert.False(t, store.IsLeader())
 
 	// Reset
 	store.Reset()
@@ -225,8 +231,14 @@ func TestMockMetadataStore_Reset(t *testing.T) {
 	buckets = store.GetBuckets()
 	assert.Len(t, buckets, 0)
 
+	// Verify cluster state is reset
+	assert.True(t, store.IsLeader())
+	addr, err := store.LeaderAddress()
+	assert.NoError(t, err)
+	assert.Equal(t, "localhost:9003", addr)
+
 	// Verify errors are cleared
-	err := store.CreateBucket(ctx, &metadata.Bucket{Name: "new-bucket"})
+	err = store.CreateBucket(ctx, &metadata.Bucket{Name: "new-bucket"})
 	assert.NoError(t, err)
 }
 
