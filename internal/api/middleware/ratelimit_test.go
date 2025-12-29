@@ -15,8 +15,8 @@ func TestTokenBucketLimiter(t *testing.T) {
 		limiter := NewTokenBucketLimiter(10, 5)
 
 		// Should allow 5 requests immediately (burst size)
-		for i := 0; i < 5; i++ {
-			assert.True(t, limiter.Allow(), "request %d should be allowed", i+1)
+		for range 5 {
+			assert.True(t, limiter.Allow(), "request should be allowed")
 		}
 	})
 
@@ -24,7 +24,7 @@ func TestTokenBucketLimiter(t *testing.T) {
 		limiter := NewTokenBucketLimiter(10, 3)
 
 		// Exhaust burst
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			require.True(t, limiter.Allow())
 		}
 
@@ -52,10 +52,11 @@ func TestRateLimiter(t *testing.T) {
 	t.Run("disabled allows all requests", func(t *testing.T) {
 		config := DefaultRateLimitConfig()
 		config.Enabled = false
+
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			assert.True(t, rl.Allow("192.168.1.1"))
 		}
 	})
@@ -65,6 +66,7 @@ func TestRateLimiter(t *testing.T) {
 		config.Enabled = true
 		config.BurstSize = 2
 		config.PerIP = true
+
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
@@ -82,6 +84,7 @@ func TestRateLimiter(t *testing.T) {
 		config.Enabled = true
 		config.BurstSize = 3
 		config.PerIP = false
+
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
@@ -96,6 +99,7 @@ func TestRateLimiter(t *testing.T) {
 		config := DefaultRateLimitConfig()
 		config.Enabled = true
 		config.ExcludedPaths = []string{"/health", "/metrics"}
+
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
@@ -109,14 +113,15 @@ func TestRateLimitMiddleware(t *testing.T) {
 	t.Run("allows requests when disabled", func(t *testing.T) {
 		config := DefaultRateLimitConfig()
 		config.Enabled = false
+
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
-		handler := RateLimitMiddleware(rl)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := RateLimitMiddleware(rl)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 
-		req := httptest.NewRequest("GET", "/api/buckets", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/buckets", nil)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
@@ -128,22 +133,23 @@ func TestRateLimitMiddleware(t *testing.T) {
 		config.Enabled = true
 		config.BurstSize = 1
 		config.PerIP = true
+
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
-		handler := RateLimitMiddleware(rl)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := RateLimitMiddleware(rl)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 
 		// First request succeeds
-		req1 := httptest.NewRequest("GET", "/api/buckets", nil)
+		req1 := httptest.NewRequest(http.MethodGet, "/api/buckets", nil)
 		req1.RemoteAddr = "192.168.1.1:12345"
 		rec1 := httptest.NewRecorder()
 		handler.ServeHTTP(rec1, req1)
 		assert.Equal(t, http.StatusOK, rec1.Code)
 
 		// Second request is rate limited
-		req2 := httptest.NewRequest("GET", "/api/buckets", nil)
+		req2 := httptest.NewRequest(http.MethodGet, "/api/buckets", nil)
 		req2.RemoteAddr = "192.168.1.1:12346"
 		rec2 := httptest.NewRecorder()
 		handler.ServeHTTP(rec2, req2)
@@ -156,14 +162,15 @@ func TestRateLimitMiddleware(t *testing.T) {
 		config.Enabled = true
 		config.BurstSize = 0 // Would block all requests
 		config.ExcludedPaths = []string{"/health"}
+
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
-		handler := RateLimitMiddleware(rl)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := RateLimitMiddleware(rl)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 
-		req := httptest.NewRequest("GET", "/health", nil)
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
@@ -218,11 +225,13 @@ func TestExtractClientIP(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/", nil)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.RemoteAddr = tc.remoteAddr
+
 			if tc.xff != "" {
 				req.Header.Set("X-Forwarded-For", tc.xff)
 			}
+
 			if tc.xri != "" {
 				req.Header.Set("X-Real-IP", tc.xri)
 			}

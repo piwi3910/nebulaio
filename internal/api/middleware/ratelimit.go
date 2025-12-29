@@ -4,6 +4,7 @@ package middleware
 import (
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,53 +12,60 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// RateLimitConfig configures the rate limiting middleware
+// Default rate limiting configuration values.
+const (
+	defaultRequestsPerSecond = 100
+	defaultBurstSize         = 50
+	defaultStaleTimeoutMins  = 5
+)
+
+// RateLimitConfig configures the rate limiting middleware.
 type RateLimitConfig struct {
-	// Enabled enables rate limiting
-	Enabled bool
+	// ExcludedPaths are paths that should not be rate limited (e.g., health checks).
+	ExcludedPaths []string
 
-	// RequestsPerSecond is the default requests per second limit
-	RequestsPerSecond int
-
-	// BurstSize is the maximum burst size
-	BurstSize int
-
-	// PerIP enables per-IP rate limiting
-	PerIP bool
-
-	// CleanupInterval is how often to clean up stale rate limiters
+	// CleanupInterval is how often to clean up stale rate limiters.
 	CleanupInterval time.Duration
 
-	// StaleTimeout is how long a rate limiter can be unused before cleanup
+	// StaleTimeout is how long a rate limiter can be unused before cleanup.
 	StaleTimeout time.Duration
 
-	// ExcludedPaths are paths that should not be rate limited (e.g., health checks)
-	ExcludedPaths []string
+	// RequestsPerSecond is the default requests per second limit.
+	RequestsPerSecond int
+
+	// BurstSize is the maximum burst size.
+	BurstSize int
+
+	// Enabled enables rate limiting.
+	Enabled bool
+
+	// PerIP enables per-IP rate limiting.
+	PerIP bool
 }
 
-// DefaultRateLimitConfig returns sensible defaults for rate limiting
+// DefaultRateLimitConfig returns sensible defaults for rate limiting.
 func DefaultRateLimitConfig() RateLimitConfig {
 	return RateLimitConfig{
 		Enabled:           false,
-		RequestsPerSecond: 100,
-		BurstSize:         50,
+		RequestsPerSecond: defaultRequestsPerSecond,
+		BurstSize:         defaultBurstSize,
 		PerIP:             true,
 		CleanupInterval:   time.Minute,
-		StaleTimeout:      5 * time.Minute,
+		StaleTimeout:      defaultStaleTimeoutMins * time.Minute,
 		ExcludedPaths:     []string{"/health", "/ready", "/metrics"},
 	}
 }
 
-// TokenBucketLimiter implements a token bucket rate limiter
+// TokenBucketLimiter implements a token bucket rate limiter.
 type TokenBucketLimiter struct {
 	tokens     atomic.Int64
-	maxTokens  int64
-	refillRate int64 // tokens per second
 	lastRefill atomic.Int64
 	lastUsed   atomic.Int64
+	maxTokens  int64
+	refillRate int64 // tokens per second
 }
 
-// NewTokenBucketLimiter creates a new token bucket rate limiter
+// NewTokenBucketLimiter creates a new token bucket rate limiter.
 func NewTokenBucketLimiter(rps, burst int) *TokenBucketLimiter {
 	l := &TokenBucketLimiter{
 		maxTokens:  int64(burst),
@@ -66,10 +74,11 @@ func NewTokenBucketLimiter(rps, burst int) *TokenBucketLimiter {
 	l.tokens.Store(int64(burst))
 	l.lastRefill.Store(time.Now().UnixNano())
 	l.lastUsed.Store(time.Now().UnixNano())
+
 	return l
 }
 
-// Allow checks if a request is allowed under the rate limit
+// Allow checks if a request is allowed under the rate limit.
 func (l *TokenBucketLimiter) Allow() bool {
 	now := time.Now().UnixNano()
 	l.lastUsed.Store(now)
@@ -82,10 +91,12 @@ func (l *TokenBucketLimiter) Allow() bool {
 	if tokensToAdd > 0 {
 		if l.lastRefill.CompareAndSwap(lastRefill, now) {
 			current := l.tokens.Load()
+
 			newTokens := current + tokensToAdd
 			if newTokens > l.maxTokens {
 				newTokens = l.maxTokens
 			}
+
 			l.tokens.Store(newTokens)
 		}
 	}
@@ -96,20 +107,23 @@ func (l *TokenBucketLimiter) Allow() bool {
 		if current <= 0 {
 			return false
 		}
+
 		if l.tokens.CompareAndSwap(current, current-1) {
 			return true
 		}
 	}
 }
 
-// RateLimiter manages per-IP rate limiters
+// RateLimiter manages per-IP rate limiters.
+//
+//nolint:govet // sync.Map has internal alignment requirements that prevent optimization
 type RateLimiter struct {
+	stopCh   chan struct{}
 	config   RateLimitConfig
 	limiters sync.Map // map[string]*TokenBucketLimiter
-	stopCh   chan struct{}
 }
 
-// NewRateLimiter creates a new rate limiter
+// NewRateLimiter creates a new rate limiter.
 func NewRateLimiter(config RateLimitConfig) *RateLimiter {
 	rl := &RateLimiter{
 		config: config,
@@ -123,7 +137,7 @@ func NewRateLimiter(config RateLimitConfig) *RateLimiter {
 	return rl
 }
 
-// cleanupLoop periodically removes stale rate limiters
+// cleanupLoop periodically removes stale rate limiters.
 func (rl *RateLimiter) cleanupLoop() {
 	ticker := time.NewTicker(rl.config.CleanupInterval)
 	defer ticker.Stop()
@@ -138,27 +152,29 @@ func (rl *RateLimiter) cleanupLoop() {
 	}
 }
 
-// cleanup removes stale rate limiters
+// cleanup removes stale rate limiters.
 func (rl *RateLimiter) cleanup() {
 	now := time.Now().UnixNano()
 	staleTimeout := rl.config.StaleTimeout.Nanoseconds()
 
 	rl.limiters.Range(func(key, value interface{}) bool {
 		limiter := value.(*TokenBucketLimiter)
+
 		lastUsed := limiter.lastUsed.Load()
 		if now-lastUsed > staleTimeout {
 			rl.limiters.Delete(key)
 		}
+
 		return true
 	})
 }
 
-// Close stops the cleanup goroutine
+// Close stops the cleanup goroutine.
 func (rl *RateLimiter) Close() {
 	close(rl.stopCh)
 }
 
-// Allow checks if a request from the given IP is allowed
+// Allow checks if a request from the given IP is allowed.
 func (rl *RateLimiter) Allow(ip string) bool {
 	if !rl.config.Enabled {
 		return true
@@ -182,17 +198,18 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	return limiter.Allow()
 }
 
-// isExcludedPath checks if a path should be excluded from rate limiting
+// isExcludedPath checks if a path should be excluded from rate limiting.
 func (rl *RateLimiter) isExcludedPath(path string) bool {
 	for _, excluded := range rl.config.ExcludedPaths {
 		if path == excluded {
 			return true
 		}
 	}
+
 	return false
 }
 
-// RateLimitMiddleware returns a middleware that applies rate limiting
+// RateLimitMiddleware returns a middleware that applies rate limiting.
 func RateLimitMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -219,6 +236,7 @@ func RateLimitMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
 
 				w.Header().Set("Retry-After", "1")
 				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+
 				return
 			}
 
@@ -227,19 +245,16 @@ func RateLimitMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
 	}
 }
 
-// extractClientIP extracts the client IP from the request
+// extractClientIP extracts the client IP from the request.
 func extractClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header first (for requests behind proxy)
 	xff := r.Header.Get("X-Forwarded-For")
 	if xff != "" {
 		// Take the first IP in the chain
-		if idx := len(xff) - 1; idx >= 0 {
-			for i := 0; i < len(xff); i++ {
-				if xff[i] == ',' {
-					return xff[:i]
-				}
-			}
+		if idx := strings.Index(xff, ","); idx > 0 {
+			return xff[:idx]
 		}
+
 		return xff
 	}
 
@@ -254,5 +269,6 @@ func extractClientIP(r *http.Request) string {
 	if err != nil {
 		return r.RemoteAddr
 	}
+
 	return ip
 }
