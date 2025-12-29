@@ -91,6 +91,36 @@ func TestMockMetadataStore_ErrorInjection(t *testing.T) {
 				return err
 			},
 		},
+		{
+			name: "DeleteObjectVersion",
+			setError: func(m *MockMetadataStore) {
+				m.SetDeleteObjectVersionError(expectedErr)
+			},
+			operation: func(m *MockMetadataStore) error {
+				return m.DeleteObjectVersion(ctx, "test", "key", "v1")
+			},
+		},
+		{
+			name: "PutObjectMetaVersioned",
+			setError: func(m *MockMetadataStore) {
+				m.SetPutObjectMetaVersionedError(expectedErr)
+			},
+			operation: func(m *MockMetadataStore) error {
+				return m.PutObjectMetaVersioned(ctx, &metadata.ObjectMeta{
+					Bucket: "test", Key: "key", VersionID: "v1",
+				}, true)
+			},
+		},
+		{
+			name: "GetParts",
+			setError: func(m *MockMetadataStore) {
+				m.SetGetPartsError(expectedErr)
+			},
+			operation: func(m *MockMetadataStore) error {
+				_, err := m.GetParts(ctx, "test", "key", "upload-id")
+				return err
+			},
+		},
 	}
 
 	for _, tt := range tests {
