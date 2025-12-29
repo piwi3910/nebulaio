@@ -408,17 +408,17 @@ func validateBucketName(name string) error {
 		return s3errors.ErrInvalidBucketName.WithMessage("bucket name must be between 3 and 63 characters")
 	}
 
-	if !bucketNameRegex.MatchString(name) {
-		return s3errors.ErrInvalidBucketName.WithMessage("bucket name can only contain lowercase letters, numbers, hyphens, and periods")
-	}
-
-	// Additional checks
+	// Check for leading/trailing dots and hyphens before regex
 	if name[0] == '.' || name[len(name)-1] == '.' {
 		return s3errors.ErrInvalidBucketName.WithMessage("bucket name cannot start or end with a period")
 	}
 
 	if name[0] == '-' || name[len(name)-1] == '-' {
 		return s3errors.ErrInvalidBucketName.WithMessage("bucket name cannot start or end with a hyphen")
+	}
+
+	if !bucketNameRegex.MatchString(name) {
+		return s3errors.ErrInvalidBucketName.WithMessage("bucket name can only contain lowercase letters, numbers, hyphens, and periods")
 	}
 
 	// Cannot look like an IP address
@@ -429,6 +429,7 @@ func validateBucketName(name string) error {
 
 	return nil
 }
+
 
 // FindMatchingCORSRule finds a CORS rule that matches the given origin and method
 func (s *Service) FindMatchingCORSRule(rules []metadata.CORSRule, origin, method string) *metadata.CORSRule {

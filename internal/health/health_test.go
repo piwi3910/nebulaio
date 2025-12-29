@@ -42,10 +42,18 @@ func (m *MockMetadataStore) GetClusterInfo(ctx context.Context) (*metadata.Clust
 }
 
 func (m *MockMetadataStore) IsLeader() bool {
+	// Handle nil receiver (when metadata store itself is nil)
+	if m == nil {
+		return false
+	}
 	return m.isLeader
 }
 
 func (m *MockMetadataStore) LeaderAddress() (string, error) {
+	// Handle nil receiver (when metadata store itself is nil)
+	if m == nil {
+		return "", s3errors.ErrInternalError
+	}
 	if m.leaderAddress == "" {
 		return "", s3errors.ErrInternalError
 	}
@@ -53,6 +61,10 @@ func (m *MockMetadataStore) LeaderAddress() (string, error) {
 }
 
 func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*metadata.Bucket, error) {
+	// Handle nil receiver (when metadata store itself is nil)
+	if m == nil {
+		return nil, s3errors.ErrInternalError
+	}
 	if m.listBucketsErr != nil {
 		return nil, m.listBucketsErr
 	}
@@ -113,6 +125,10 @@ type MockStorageBackend struct {
 }
 
 func (m *MockStorageBackend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, error) {
+	// Handle nil receiver (when storage backend itself is nil)
+	if m == nil {
+		return nil, s3errors.ErrInternalError
+	}
 	if m.storageInfoErr != nil {
 		return nil, m.storageInfoErr
 	}
