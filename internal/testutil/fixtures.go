@@ -32,12 +32,12 @@ func NewTestBucket(name string) *metadata.Bucket {
 	}
 	now := time.Now()
 	return &metadata.Bucket{
-		Name:      name,
-		Owner:     DefaultTestOwner,
-		Region:    DefaultTestRegion,
-		Created:   now,
-		Updated:   now,
-		ACL:       "private",
+		Name:       name,
+		Owner:      DefaultTestOwner,
+		Region:     DefaultTestRegion,
+		Created:    now,
+		Updated:    now,
+		ACL:        "private",
 		Versioning: "Suspended",
 	}
 }

@@ -36,6 +36,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/cluster"
 	"github.com/piwi3910/nebulaio/internal/config"
 	"github.com/piwi3910/nebulaio/internal/health"
+	"github.com/piwi3910/nebulaio/internal/lambda"
 	"github.com/piwi3910/nebulaio/internal/lifecycle"
 	"github.com/piwi3910/nebulaio/internal/metadata"
 	"github.com/piwi3910/nebulaio/internal/metrics"
@@ -46,7 +47,6 @@ import (
 	"github.com/piwi3910/nebulaio/internal/storage/fs"
 	"github.com/piwi3910/nebulaio/internal/storage/volume"
 	"github.com/piwi3910/nebulaio/internal/tiering"
-	"github.com/piwi3910/nebulaio/internal/lambda"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -173,8 +173,8 @@ func New(cfg *config.Config) (*Server, error) {
 
 	// Initialize placement group manager for distributed storage
 	pgConfig := cluster.PlacementGroupConfig{
-		LocalGroupID: cluster.PlacementGroupID(cfg.Storage.PlacementGroups.LocalGroupID),
-		Groups:       make([]cluster.PlacementGroup, 0, len(cfg.Storage.PlacementGroups.Groups)),
+		LocalGroupID:       cluster.PlacementGroupID(cfg.Storage.PlacementGroups.LocalGroupID),
+		Groups:             make([]cluster.PlacementGroup, 0, len(cfg.Storage.PlacementGroups.Groups)),
 		MinNodesForErasure: cfg.Storage.PlacementGroups.MinNodesForErasure,
 		ReplicationTargets: make([]cluster.PlacementGroupID, 0, len(cfg.Storage.PlacementGroups.ReplicationTargets)),
 	}
@@ -442,9 +442,9 @@ func (s *Server) setupS3Server() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
-	r.Use(apimiddleware.S3SecurityHeaders())     // S3-appropriate security headers
-	r.Use(apimiddleware.MetricsMiddleware)       // Add metrics middleware
-	r.Use(apimiddleware.RequestID)               // Add S3 request ID and x-amz-id-2 headers
+	r.Use(apimiddleware.S3SecurityHeaders()) // S3-appropriate security headers
+	r.Use(apimiddleware.MetricsMiddleware)   // Add metrics middleware
+	r.Use(apimiddleware.RequestID)           // Add S3 request ID and x-amz-id-2 headers
 	r.Use(s3LoggerMiddleware)
 
 	// Audit middleware for S3 operations

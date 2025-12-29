@@ -35,25 +35,25 @@ type PlacementGroupID string
 // Erasure coding and tiering happen within a placement group.
 // Cross-placement group operations are for disaster recovery (full object copies).
 type PlacementGroup struct {
-	ID          PlacementGroupID `json:"id"`
-	Name        string           `json:"name"`
-	Datacenter  string           `json:"datacenter"`
-	Region      string           `json:"region"`
-	Nodes       []string         `json:"nodes"` // Node IDs in this group
-	MinNodes    int              `json:"min_nodes"`
-	MaxNodes    int              `json:"max_nodes"`
-	IsLocal     bool             `json:"is_local"` // True if this node belongs to this group
-	Status      PlacementGroupStatus `json:"status"`
+	ID         PlacementGroupID     `json:"id"`
+	Name       string               `json:"name"`
+	Datacenter string               `json:"datacenter"`
+	Region     string               `json:"region"`
+	Nodes      []string             `json:"nodes"` // Node IDs in this group
+	MinNodes   int                  `json:"min_nodes"`
+	MaxNodes   int                  `json:"max_nodes"`
+	IsLocal    bool                 `json:"is_local"` // True if this node belongs to this group
+	Status     PlacementGroupStatus `json:"status"`
 }
 
 // PlacementGroupStatus represents the health status of a placement group
 type PlacementGroupStatus string
 
 const (
-	PlacementGroupStatusHealthy   PlacementGroupStatus = "healthy"
-	PlacementGroupStatusDegraded  PlacementGroupStatus = "degraded"
-	PlacementGroupStatusOffline   PlacementGroupStatus = "offline"
-	PlacementGroupStatusUnknown   PlacementGroupStatus = "unknown"
+	PlacementGroupStatusHealthy  PlacementGroupStatus = "healthy"
+	PlacementGroupStatusDegraded PlacementGroupStatus = "degraded"
+	PlacementGroupStatusOffline  PlacementGroupStatus = "offline"
+	PlacementGroupStatusUnknown  PlacementGroupStatus = "unknown"
 )
 
 // PlacementGroupConfig holds configuration for placement group management

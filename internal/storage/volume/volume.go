@@ -38,8 +38,8 @@ type Volume struct {
 	compactionStats CompactionStats
 
 	// State
-	closed   bool
-	dirty    bool
+	closed    bool
+	dirty     bool
 	dioConfig DirectIOConfig
 }
 
@@ -57,8 +57,8 @@ type CompactionStats struct {
 
 // VolumeConfig holds configuration for creating a new volume
 type VolumeConfig struct {
-	Size      uint64       // Volume size (default: 32GB)
-	BlockSize uint32       // Block size (default: 4MB)
+	Size      uint64         // Volume size (default: 32GB)
+	BlockSize uint32         // Block size (default: 4MB)
 	DirectIO  DirectIOConfig // Direct I/O configuration
 }
 

@@ -9,10 +9,10 @@ import (
 
 // PackedBlock represents a block containing multiple small objects
 type PackedBlock struct {
-	header  BlockHeader
-	data    []byte
+	header   BlockHeader
+	data     []byte
 	blockNum uint32
-	dirty   bool
+	dirty    bool
 }
 
 // NewPackedBlock creates a new empty packed block
@@ -490,11 +490,11 @@ func (v *Volume) List(bucket, prefix string, maxKeys int) ([]ObjectInfo, error) 
 		}
 
 		result[i] = ObjectInfo{
-			Bucket:   bucket,
-			Key:      objKey,
-			Size:     int64(entry.Size),
-			Created:  time.Unix(0, entry.Created),
-			KeyHash:  entry.KeyHash,
+			Bucket:  bucket,
+			Key:     objKey,
+			Size:    int64(entry.Size),
+			Created: time.Unix(0, entry.Created),
+			KeyHash: entry.KeyHash,
 		}
 	}
 
