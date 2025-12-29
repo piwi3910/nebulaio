@@ -10,12 +10,14 @@ repos:
       - id: golangci-lint
         args: [--timeout=5m]
 
-  # Markdown linting
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.39.0
+  # Markdown linting (using markdownlint-cli2 to match CI)
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.20.0
     hooks:
-      - id: markdownlint
-        args: [--fix, --config, .markdownlint.json]
+      - id: markdownlint-cli2
+        args: ['--config', '.markdownlint.json']
+        files: \.md$
+        exclude: ^(node_modules/|web/node_modules/)
 
   # General pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
