@@ -457,6 +457,43 @@ func TestCreateBucket(t *testing.T) {
 		_, err = service.CreateBucket(ctx, "test-bucket", "owner2", "", "")
 		assert.Error(t, err)
 	})
+
+	t.Run("storage failure triggers metadata rollback", func(t *testing.T) {
+		store := NewMockMetadataStore()
+		storage := NewMockStorageBackend()
+		// Simulate storage creation failure
+		storage.createErr = assert.AnError
+		service := NewService(store, storage)
+
+		_, err := service.CreateBucket(ctx, "test-bucket", "owner1", "us-east-1", "STANDARD")
+
+		// Should return an error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "storage")
+
+		// Metadata should be rolled back - bucket should not exist in store
+		store.mu.RLock()
+		_, exists := store.buckets["test-bucket"]
+		store.mu.RUnlock()
+		assert.False(t, exists, "bucket metadata should be rolled back after storage failure")
+	})
+
+	t.Run("storage failure with rollback failure", func(t *testing.T) {
+		store := NewMockMetadataStore()
+		storage := NewMockStorageBackend()
+		// Simulate storage creation failure
+		storage.createErr = assert.AnError
+		// Simulate metadata deletion (rollback) failure
+		store.deleteErr = assert.AnError
+		service := NewService(store, storage)
+
+		_, err := service.CreateBucket(ctx, "test-bucket", "owner1", "us-east-1", "STANDARD")
+
+		// Should return an error that mentions both failures
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "storage")
+		assert.Contains(t, err.Error(), "rollback")
+	})
 }
 
 func TestGetBucket(t *testing.T) {
