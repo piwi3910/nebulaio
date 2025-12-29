@@ -149,6 +149,7 @@ NebulaIO provides transparent object compression to reduce storage costs. Three 
 | `storage.compression.auto_detect` | bool | `true` | Skip already-compressed content types |
 
 **Auto-detected compressed content types (skipped when `auto_detect: true`):**
+
 - Images: `image/jpeg`, `image/png`, `image/gif`, `image/webp`
 - Video: `video/mp4`, `video/webm`, `video/mpeg`
 - Audio: `audio/mpeg`, `audio/mp4`, `audio/ogg`
