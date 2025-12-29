@@ -143,7 +143,7 @@ The volume backend stores objects in pre-allocated volume files with block-based
 NebulaIO provides transparent object compression to reduce storage costs. Three algorithms are supported with automatic content-type detection.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `storage.compression.enabled` | bool | `false` | Enable compression |
 | `storage.compression.algorithm` | string | `zstd` | Algorithm: `zstd`, `lz4`, `gzip` |
 | `storage.compression.level` | int | `3` | Compression level: 1 (fastest), 3 (default), 9 (best ratio) |
@@ -160,7 +160,7 @@ NebulaIO provides transparent object compression to reduce storage costs. Three 
 **Environment Variables:**
 
 | Config Key | Environment Variable |
-|------------|---------------------|
+| ------------ | --------------------- |
 | `storage.compression.enabled` | `NEBULAIO_STORAGE_COMPRESSION_ENABLED` |
 | `storage.compression.algorithm` | `NEBULAIO_STORAGE_COMPRESSION_ALGORITHM` |
 | `storage.compression.level` | `NEBULAIO_STORAGE_COMPRESSION_LEVEL` |
@@ -183,7 +183,7 @@ storage:
 **Algorithm Comparison:**
 
 | Algorithm | Compression Ratio | Speed | Best For |
-|-----------|-------------------|-------|----------|
+| ----------- | ------------------- | ------- | ---------- |
 | Zstandard | Excellent (3-5x) | Fast | General purpose (recommended) |
 | LZ4 | Good (2-3x) | Very Fast | Real-time, high-throughput |
 | Gzip | Good (3-4x) | Moderate | Legacy compatibility |
@@ -263,7 +263,7 @@ storage:
 NebulaIO supports automatic data movement between storage tiers (Hot/Warm/Cold/Archive) based on configurable policies.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `tiering.enabled` | bool | `false` | Enable storage tiering |
 | `tiering.scanner_interval` | duration | `1h` | How often to scan for objects to transition |
 | `tiering.max_transitions_per_scan` | int | `10000` | Maximum transitions per scan cycle |
@@ -271,7 +271,7 @@ NebulaIO supports automatic data movement between storage tiers (Hot/Warm/Cold/A
 #### Tier Definitions
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `tiering.tiers.hot.backend` | string | `erasure` | Storage backend for hot tier |
 | `tiering.tiers.hot.data_dir` | string | - | Data directory for hot tier |
 | `tiering.tiers.warm.backend` | string | `volume` | Storage backend for warm tier |
@@ -286,7 +286,7 @@ NebulaIO supports automatic data movement between storage tiers (Hot/Warm/Cold/A
 Policies define when and how objects transition between tiers.
 
 | Option | Type | Description |
-|--------|------|-------------|
+| -------- | ------ | ------------- |
 | `name` | string | Unique policy name |
 | `enabled` | bool | Whether policy is active |
 | `priority` | int | Execution order (lower = higher priority) |
@@ -360,7 +360,7 @@ tiering:
 **Transition Mechanisms:**
 
 | Type | Trigger | Best For |
-|------|---------|----------|
+| ------ | --------- | ---------- |
 | `age` | Days since last access | General lifecycle management |
 | `access` | Access count threshold | Promoting/demoting by popularity |
 | `size` | Object size threshold | Moving large objects to cold storage |
@@ -369,7 +369,7 @@ tiering:
 **Performance Considerations:**
 
 | Tier | Typical Media | Latency | Cost | Use Case |
-|------|---------------|---------|------|----------|
+| ------ | --------------- | --------- | ------ | ---------- |
 | Hot | NVMe/SSD | < 1ms | $$$$ | Active data, ML training |
 | Warm | SSD/HDD | 5-20ms | $$$ | Recent data, moderate access |
 | Cold | HDD/NAS | 50-200ms | $$ | Backups, infrequent access |
@@ -378,7 +378,7 @@ tiering:
 **Backend Support Matrix:**
 
 | Backend | Hot | Warm | Cold | Archive |
-|---------|-----|------|------|---------|
+| --------- | ----- | ------ | ------ | --------- |
 | `erasure` | ✓ (recommended) | ✓ | ✓ | - |
 | `volume` | ✓ | ✓ (recommended) | ✓ | - |
 | `fs` | ✓ | ✓ | ✓ (recommended) | ✓ |

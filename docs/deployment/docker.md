@@ -646,7 +646,7 @@ docker service logs -f nebulaio_nebulaio
 ### Compression
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_STORAGE_COMPRESSION_ENABLED` | Enable compression | `false` |
 | `NEBULAIO_STORAGE_COMPRESSION_ALGORITHM` | Algorithm: zstd, lz4, gzip | `zstd` |
 | `NEBULAIO_STORAGE_COMPRESSION_LEVEL` | Compression level (1-19) | `3` |

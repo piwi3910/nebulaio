@@ -163,7 +163,7 @@ Handles object data storage with multiple backend options.
 ### Storage Backend Performance
 
 | Backend | IOPS (typical) | Throughput | CPU Usage | Best For |
-|---------|----------------|------------|-----------|----------|
+| --------- | ---------------- | ------------ | ----------- | ---------- |
 | **Filesystem (fs)** | ~10k | Low-Medium | Low | Development, simple deployments |
 | **Volume** | ~50k | High | Medium | Production, high-throughput workloads |
 | **Erasure Coding** | ~30k | Medium | High | Durability-critical, large datasets |
@@ -171,7 +171,7 @@ Handles object data storage with multiple backend options.
 **Backend Requirements:**
 
 | Backend | Requirements | Notes |
-|---------|--------------|-------|
+| --------- | -------------- | ------- |
 | Filesystem | Any POSIX filesystem | NFS/EFS supported but adds latency |
 | Volume | 4KB block alignment, dedicated storage | Pre-allocated volume files, Direct I/O |
 | Erasure | Minimum 6 nodes (4+2), 14 nodes (10+4) | Distributed across placement groups |
@@ -183,7 +183,7 @@ Handles object data storage with multiple backend options.
 ### Hardware Requirements
 
 | Configuration | CPU | RAM | Storage | Network | Use Case |
-|---------------|-----|-----|---------|---------|----------|
+| --------------- | ----- | ----- | --------- | --------- | ---------- |
 | **Minimum** | 2 cores | 4 GB | 100 GB SSD | 1 Gbps | Development, testing |
 | **Recommended** | 8 cores | 32 GB | 1 TB NVMe | 10 Gbps | Production workloads |
 | **High-Performance** | 32+ cores | 128+ GB | Multiple NVMe | 25-100 Gbps | AI/ML training, analytics |
@@ -193,14 +193,14 @@ Handles object data storage with multiple backend options.
 The DRAM cache accelerates hot data access. Sizing recommendations:
 
 | Cache Size | Working Set Coverage | Recommendation |
-|------------|---------------------|----------------|
+| ------------ | --------------------- | ---------------- |
 | 10-20% of working set | Good hit rates | General purpose workloads |
 | 50%+ of working set | Excellent hit rates | Read-heavy, predictable access |
 
 **Eviction Policy Selection:**
 
 | Policy | Best For |
-|--------|----------|
+| -------- | ---------- |
 | **ARC** (Adaptive Replacement Cache) | Mixed workloads, default recommended |
 | **LRU** (Least Recently Used) | Sequential access patterns |
 | **LFU** (Least Frequently Used) | Frequency-based access patterns |
@@ -214,7 +214,7 @@ The DRAM cache accelerates hot data access. Sizing recommendations:
 ### Cluster Sizing
 
 | Cluster Size | Raft Quorum | Fault Tolerance | Use Case |
-|--------------|-------------|-----------------|----------|
+| -------------- | ------------- | ----------------- | ---------- |
 | 1 node | N/A | None | Development only |
 | 3 nodes | 2 | 1 node failure | Small production |
 | 5 nodes | 3 | 2 node failures | Standard production |
@@ -225,7 +225,7 @@ The DRAM cache accelerates hot data access. Sizing recommendations:
 The following are representative benchmarks. Actual performance depends on hardware, network, and workload characteristics.
 
 | Metric | Single Node | 3-Node Cluster | Notes |
-|--------|-------------|----------------|-------|
+| -------- | ------------- | ---------------- | ------- |
 | Object PUT (1 MB) | 500-1000/s | 300-600/s | Consensus overhead |
 | Object GET (1 MB) | 1000-2000/s | 2000-4000/s | Scales with nodes |
 | Metadata ops | 10k-50k/s | 5k-20k/s | Raft-limited |
@@ -244,7 +244,7 @@ The following are representative benchmarks. Actual performance depends on hardw
 **Test Environment Details:**
 
 | Component | Specification |
-|-----------|---------------|
+| ----------- | --------------- |
 | CPU | Intel Xeon 8375C @ 2.9 GHz |
 | Memory | 64 GB DDR4-3200 ECC |
 | Storage | Samsung PM9A3 NVMe (3.84 TB) |
@@ -284,7 +284,7 @@ warp mixed --host=localhost:9000 --access-key=admin --secret-key=password \
 **Storage Overhead:**
 
 | Feature | Overhead | Notes |
-|---------|----------|-------|
+| --------- | ---------- | ------- |
 | Erasure coding (4+2) | 50% | 2 parity shards per 4 data |
 | Erasure coding (10+4) | 40% | 4 parity shards per 10 data |
 | Versioning | Variable | Depends on version count |
@@ -293,7 +293,7 @@ warp mixed --host=localhost:9000 --access-key=admin --secret-key=password \
 **Network Bandwidth:**
 
 | Operation | Bandwidth Usage |
-|-----------|-----------------|
+| ----------- | ----------------- |
 | Object replication | 1x object size per replica |
 | Erasure coding | ~1.5x object size during encode |
 | Cross-region replication | Full object size per target |

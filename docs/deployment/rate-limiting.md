@@ -46,7 +46,7 @@ firewall:
 ### Environment Variables
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `NEBULAIO_FIREWALL_ENABLED` | `false` | Enable the data firewall |
 | `NEBULAIO_FIREWALL_RATE_LIMITING_ENABLED` | `true` | Enable rate limiting |
 | `NEBULAIO_FIREWALL_RATE_LIMIT_RPS` | `1000` | Global requests per second |
@@ -70,7 +70,7 @@ Hash DoS (Hash-based Denial of Service) attacks exploit hash table implementatio
 NebulaIO provides specialized rate limiting for object creation operations:
 
 | Operation | Protected | Description |
-|-----------|-----------|-------------|
+| ----------- | ----------- | ------------- |
 | `PutObject` | Yes | Standard object uploads |
 | `CopyObject` | Yes | Server-side object copies |
 | `CompleteMultipartUpload` | Yes | Multipart upload completion |
@@ -94,7 +94,7 @@ firewall:
 ### Recommended Settings
 
 | Workload Type | object_creation_limit | object_creation_burst_size |
-|---------------|----------------------|---------------------------|
+| --------------- | ---------------------- | --------------------------- |
 | Development | 100 | 200 |
 | Standard Production | 1000 | 2000 |
 | High-Throughput | 5000 | 10000 |
@@ -204,7 +204,7 @@ Content-Type: application/xml
 ## Prometheus Metrics
 
 | Metric | Type | Description |
-|--------|------|-------------|
+| -------- | ------ | ------------- |
 | `nebulaio_requests_total` | Counter | Total requests by operation and status |
 | `nebulaio_object_creation_rate_limited_total` | Counter | Object creation requests rate limited |
 | `nebulaio_active_connections` | Gauge | Current active connections |
@@ -233,7 +233,7 @@ Rate limiting is applied at different stages of request processing:
 2. **Post-authentication limits** (user-based): Applied after successful authentication for resource protection
 
 | Endpoint Type | Rate Limit Application | Notes |
-|---------------|------------------------|-------|
+| --------------- | ------------------------ | ------- |
 | Public (health, metrics) | IP-based only | No authentication required |
 | S3 API | Both IP and user-based | After SigV4 validation |
 | Admin API | Both IP and user-based | After JWT validation |

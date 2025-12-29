@@ -53,7 +53,7 @@ NebulaIO uses an abstract level scale (1-9) that maps to algorithm-specific rang
 **Algorithm-Specific Level Mapping:**
 
 | Abstract Level | Zstd (1-19) | LZ4 (1-16) | Gzip (1-9) |
-|----------------|-------------|------------|------------|
+| ---------------- | ------------- | ------------ | ------------ |
 | 1 | 1 | 1 | 1 |
 | 3 | 3 | 4 | 3 |
 | 5 | 6 | 8 | 5 |
