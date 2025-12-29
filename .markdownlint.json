@@ -1,16 +1,8 @@
 {
   "default": true,
   "MD013": false,
-  "MD033": false,
-  "MD040": false,
-  "MD041": false,
-  "MD060": false,
-  "line-length": false,
-  "no-inline-html": false,
-  "fenced-code-language": false,
-  "first-line-heading": false,
-  "table-column-style": false,
-  "no-duplicate-heading": {
-    "siblings_only": true
-  }
+  "MD033": {
+    "allowed_elements": ["details", "summary", "kbd", "br"]
+  },
+  "MD041": false
 }

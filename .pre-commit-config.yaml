@@ -1,0 +1,70 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  # Go linting with golangci-lint
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.1.6
+    hooks:
+      - id: golangci-lint
+        args: [--timeout=5m]
+
+  # Markdown linting (using markdownlint-cli2 to match CI)
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.20.0
+    hooks:
+      - id: markdownlint-cli2
+        args: ['--config', '.markdownlint.json']
+        files: \.md$
+        exclude: ^(node_modules/|web/node_modules/)
+
+  # General pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        # Only exclude test fixtures (.golden), markdownlint handles .md files
+        exclude: ^(.*\.golden)$
+      - id: end-of-file-fixer
+        exclude: ^(.*\.golden)$
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Go-specific checks
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: go fmt
+        entry: gofmt -w
+        language: system
+        files: \.go$
+
+      - id: go-mod-tidy
+        name: go mod tidy
+        # Run on any .go file change to ensure dependencies are up-to-date
+        entry: bash -c 'go mod tidy && git diff --exit-code go.mod go.sum'
+        language: system
+        files: \.go$
+        pass_filenames: false
+
+      # Web/Frontend checks (requires Node.js and npm dependencies)
+      - id: eslint
+        name: ESLint (web)
+        entry: bash -c 'cd web && npm run lint'
+        language: system
+        files: ^web/.*\.(js|jsx|ts|tsx)$
+        pass_filenames: false
+
+      - id: typescript-check
+        name: TypeScript type check (web)
+        entry: bash -c 'cd web && npm run type-check'
+        language: system
+        files: ^web/.*\.(ts|tsx)$
+        pass_filenames: false

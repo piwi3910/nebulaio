@@ -1,308 +1,244 @@
 # Contributing to NebulaIO
 
-Welcome to NebulaIO! We are thrilled that you are interested in contributing to this S3-compatible object storage system. Whether you are fixing a bug, adding a feature, improving documentation, or suggesting ideas, your contributions are valued and appreciated.
-
-This document provides guidelines to help you contribute effectively.
-
-## Code of Conduct
-
-We are committed to providing a welcoming and inclusive environment for everyone. By participating in this project, you agree to:
-
-- Be respectful and considerate in all interactions
-- Welcome newcomers and help them get started
-- Focus on constructive feedback and collaboration
-- Accept responsibility for your mistakes and learn from them
-- Prioritize the health of the community over individual interests
-
-Harassment, discrimination, and disrespectful behavior will not be tolerated. If you witness or experience unacceptable behavior, please report it to the project maintainers.
-
-## How to Contribute
-
-### Reporting Issues
-
-If you find a bug or have a feature request:
-
-1. **Search existing issues** to avoid duplicates
-2. **Create a new issue** with a clear, descriptive title
-3. **Provide context**:
-   - For bugs: steps to reproduce, expected vs. actual behavior, environment details
-   - For features: use case, proposed solution, alternatives considered
-4. **Add appropriate labels** (bug, enhancement, documentation, etc.)
-
-### Submitting Pull Requests
-
-1. **Fork the repository** and create a feature branch from `main`
-2. **Use descriptive branch names**: `fix-multipart-upload-timeout` or `add-bucket-policy-support`
-3. **Make focused changes** - one logical change per PR
-4. **Write tests** for new functionality
-5. **Update documentation** if your changes affect usage or APIs
-6. **Ensure all checks pass** before requesting review
+Thank you for your interest in contributing to NebulaIO! This guide will help you get started with development.
 
 ## Development Setup
 
 ### Prerequisites
 
-- **Go 1.23+** - Download from [golang.org](https://golang.org/dl/)
-- **Node.js 20+** - For web console development
-- **Make** - For running build commands
-- **Git** - For version control
-- **Docker** (optional) - For containerized development
+- **Go**: 1.24 or later
+- **Node.js**: 20 or later (for web console)
+- **Docker**: For running with Docker Compose (optional)
+- **pre-commit**: For automatic code quality checks (recommended)
 
-### Building from Source
+### Initial Setup
+
+1. **Clone the repository**:
+
+   ```bash
+   git clone https://github.com/piwi3910/nebulaio.git
+   cd nebulaio
+   ```
+
+2. **Install dependencies**:
+
+   ```bash
+   # Go dependencies
+   make deps
+
+   # Web console dependencies (optional)
+   make web
+   ```
+
+3. **Install pre-commit hooks** (highly recommended):
+
+   ```bash
+   # Install pre-commit (choose one):
+   pip install pre-commit
+   # OR on macOS:
+   brew install pre-commit
+
+   # Install the hooks
+   make install-hooks
+   ```
+
+## Pre-commit Hooks
+
+We use pre-commit hooks to catch issues **before** they're committed, saving you time and keeping the CI pipeline green.
+
+### What gets checked?
+
+The pre-commit hooks automatically run:
+
+**Backend (Go):**
+
+- **golangci-lint**: Go code linting (same as CI)
+- **gofmt**: Go code formatting
+- **go mod tidy**: Ensure go.mod/go.sum is clean (runs on any .go file change)
+
+**Frontend (Web Console):**
+
+- **ESLint**: JavaScript/TypeScript linting
+- **TypeScript**: Type checking (only when .ts/.tsx files changed)
+
+**Documentation:**
+
+- **markdownlint**: Markdown formatting and style
+
+**General:**
+
+- **trailing whitespace**: Remove trailing spaces
+- **YAML/JSON validation**: Check syntax
+- **merge conflicts**: Detect conflict markers
+- **large files**: Prevent files >1MB from being committed
+
+### How it works
+
+When you run `git commit`, the hooks automatically:
+
+1. Run linting on **only the files you're committing** (fast!)
+2. Auto-fix simple issues (formatting, trailing spaces)
+3. Block the commit if there are errors
+4. Show you exactly what needs to be fixed
+
+### Example workflow
 
 ```bash
-# Clone the repository
-git clone https://github.com/piwi3910/nebulaio.git
-cd nebulaio
+# Make your changes
+vim internal/bucket/service.go
 
-# Download Go dependencies
-make deps
+# Stage changes
+git add internal/bucket/service.go
 
-# Build the binary
-make build
+# Commit (hooks run automatically)
+git commit -m "feat: add bucket validation"
 
-# The binary will be at ./bin/nebulaio
+# If hooks pass:
+# ✓ All checks passed!
+# Commit successful
+
+# If hooks fail:
+# ✗ golangci-lint found 2 issues
+# Fix the issues, stage again, and recommit
 ```
 
-### Building the Web Console
+### Commands
 
 ```bash
-# Install Node.js dependencies
-make web
+# Install hooks
+make install-hooks
 
-# Build the web console
-make web-build
+# Run hooks manually on all files (useful for testing)
+make run-hooks
 
-# Or for development with hot reload
-make web-dev
+# Run hooks on staged files only
+pre-commit run
+
+# Skip hooks for urgent commits (use sparingly!)
+git commit --no-verify
 ```
 
-### Running the Server
+### Troubleshooting
+
+**Hooks not running?**
+
+- Ensure you ran `make install-hooks`
+- Check `.git/hooks/pre-commit` exists and is executable
+
+**Web hooks failing with "command not found"?**
+
+- You need Node.js dependencies installed: `cd web && npm install`
+- Web hooks (ESLint, TypeScript) only run when you modify web files
+- If you don't work on the frontend, these hooks won't affect you
+
+**Hooks too slow?**
+
+- They only check staged files, not the entire codebase
+- First run downloads tools (cached for future runs)
+- Typical run time: 5-30 seconds
+- Web hooks add ~5-10 seconds when modifying frontend files
+
+**Need to bypass hooks temporarily?**
 
 ```bash
-# Run in debug mode
-make run
-
-# Or run the binary directly
-./bin/nebulaio --debug
+git commit --no-verify -m "your message"
 ```
 
-The server exposes three ports:
+*Use sparingly - you'll still need to fix issues for CI to pass!*
 
-- **9000**: S3 API
-- **9001**: Admin API
-- **9002**: Web Console
+**Large file size limit:**
 
-### Running Tests
+- Files >1MB are blocked by default
+- This prevents accidental commits of binaries, videos, or large datasets
+- If you need to commit a legitimate large file, use `--no-verify` or adjust `.pre-commit-config.yaml`
+
+## Code Quality Standards
+
+### Go Code
+
+- Follow standard Go formatting (`gofmt`)
+- Pass all golangci-lint checks (no `//nolint` comments)
+- Write tests for new functionality
+- Maintain or improve test coverage
+- Document exported functions and types
+
+### Markdown Documentation
+
+- Use proper heading hierarchy
+- Wrap long lines for readability
+- Include code examples where helpful
+- Run `markdownlint --fix` to auto-format
+
+### Git Commits
+
+- Write clear, descriptive commit messages
+- Use conventional commit format when possible:
+  - `feat:` - New features
+  - `fix:` - Bug fixes
+  - `docs:` - Documentation changes
+  - `refactor:` - Code refactoring
+  - `test:` - Test additions/changes
+  - `chore:` - Build/tooling changes
+
+## Testing
 
 ```bash
-# Run all Go tests
+# Run all tests
 make test
 
-# Run tests with coverage report
+# Run tests with coverage
 make test-coverage
 
-# Run web console tests
-cd web && npm test
+# Run specific package tests
+go test -v ./internal/bucket/
 
-# Run web console tests with coverage
-cd web && npm run test:coverage
+# Run specific test
+go test -v -run TestBucketValidation ./internal/bucket/
 ```
 
-### Linting and Formatting
+## Building
 
 ```bash
-# Run Go linter
-make lint
+# Build binary
+make build
 
-# Format Go code
-make fmt
+# Build for specific platforms
+make build-linux
+make build-darwin
+make build-all
 
-# Run go vet
-make vet
+# Run locally
+make run
 
-# Lint web console
-cd web && npm run lint
-
-# Fix linting issues in web console
-cd web && npm run lint:fix
-
-# Type check web console
-cd web && npm run type-check
-```
-
-## Code Style Guidelines
-
-### Go Code Style
-
-We follow standard Go conventions with these specifics:
-
-- **Package names**: lowercase, single word when possible
-- **Exported types**: PascalCase (`Handler`, `BucketService`)
-- **Unexported**: camelCase (`parseRequest`, `validateInput`)
-- **Constants**: PascalCase or SCREAMING_SNAKE_CASE for groups
-- **Interfaces**: Use -er suffix for behaviors (`Store`, `Validator`)
-
-**Handler pattern:**
-
-```go
-type Handler struct {
-    service *bucket.Service
-    store   metadata.Store
-}
-
-func NewHandler(service *bucket.Service, store metadata.Store) *Handler {
-    return &Handler{service: service, store: store}
-}
-
-func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
-    // Implementation
-}
-```
-
-**Error handling:**
-
-```go
-if err != nil {
-    return fmt.Errorf("failed to create bucket: %w", err)
-}
-```
-
-### TypeScript/React Code Style
-
-- **Function components**: Always use typed props with interfaces
-- **Hooks**: Use React Query for server state, Zustand for client state
-- **Naming**: PascalCase for components, camelCase for functions/variables
-- **Imports**: Group external imports, then internal, then types
-
-**Component pattern:**
-
-```typescript
-interface BucketListProps {
-  onSelect: (bucket: Bucket) => void;
-  filter?: string;
-}
-
-export function BucketList({ onSelect, filter }: BucketListProps) {
-  // Implementation
-}
-```
-
-## Commit Message Format
-
-We follow a structured commit message format:
-
-```
-[Type] Short summary (50 chars or less)
-
-More detailed explanation if needed. Wrap at 72 characters.
-Explain the what and why, not the how.
-
-Resolves #123
-```
-
-**Types:**
-
-- `[Feature]` - New functionality
-- `[Fix]` - Bug fixes
-- `[Refactor]` - Code restructuring without behavior change
-- `[Docs]` - Documentation updates
-- `[Test]` - Test additions or modifications
-- `[Chore]` - Maintenance tasks, dependency updates
-
-**Examples:**
-
-```
-[Feature] Add bucket versioning support
-
-Implements S3-compatible versioning for buckets. Users can now
-enable versioning per bucket and retrieve previous object versions.
-
-Resolves #42
-```
-
-```
-[Fix] Correct multipart upload part ordering
-
-Parts were being assembled in upload order rather than part number
-order, causing corrupted files for parallel uploads.
-
-Resolves #87
+# Development mode with hot reload (requires air)
+make dev
 ```
 
 ## Pull Request Process
 
-1. **Create your PR** with a clear title and description
-2. **Fill out the PR template** with:
-   - Summary of changes
-   - Related issue numbers
-   - Testing performed
+1. **Create a feature branch**: `git checkout -b feature/your-feature`
+2. **Make your changes** with frequent, logical commits
+3. **Ensure hooks pass**: They run automatically on commit
+4. **Run tests**: `make test` to ensure nothing broke
+5. **Update documentation**: If you changed APIs or added features
+6. **Push your branch**: `git push origin feature/your-feature`
+7. **Create a Pull Request** with:
+   - Clear description of changes
+   - Link to related issues
    - Screenshots for UI changes
-3. **Ensure CI passes** - all tests and linting must succeed
-4. **Request review** from maintainers
-5. **Address feedback** - respond to comments and make requested changes
-6. **Squash commits** if requested for a cleaner history
-
-### PR Checklist
-
-Before submitting, verify:
-
-- [ ] Code compiles without errors
-- [ ] All tests pass (`make test` and `cd web && npm test`)
-- [ ] Linting passes (`make lint` and `cd web && npm run lint`)
-- [ ] New code has appropriate test coverage
-- [ ] Documentation is updated if needed
-- [ ] Commit messages follow the format
-- [ ] PR description explains the changes
-
-## Release Process
-
-NebulaIO follows semantic versioning (MAJOR.MINOR.PATCH):
-
-1. **MAJOR**: Breaking changes to S3 API compatibility
-2. **MINOR**: New features, backward compatible
-3. **PATCH**: Bug fixes, backward compatible
-
-### Creating a Release
-
-Releases are created by maintainers:
-
-```bash
-# Create release binaries
-make release
-
-# Tag the release
-git tag -a v1.2.0 -m "Release v1.2.0"
-git push origin v1.2.0
-```
-
-Release binaries are built for:
-
-- Linux (amd64)
-- macOS (arm64)
-
-Docker images are published to the container registry with each release.
+   - Test plan or steps to verify
 
 ## Getting Help
 
-If you need assistance:
+- **Documentation**: Check `/docs` directory
+- **Issues**: Browse existing [GitHub issues](https://github.com/piwi3910/nebulaio/issues)
+- **Questions**: Open a new issue with the `question` label
 
-- **GitHub Issues**: For bugs and feature requests
-- **GitHub Discussions**: For questions and general discussion
-- **Documentation**: Check the `/docs` directory for guides
+## Code of Conduct
 
-### Tips for New Contributors
+Be respectful, inclusive, and collaborative. We're all here to build something great together!
 
-1. Start with issues labeled `good first issue`
-2. Read through existing code to understand patterns
-3. Ask questions early - we are happy to help
-4. Small, focused PRs are easier to review and merge
+---
 
-## Recognition
-
-Contributors are recognized in:
-
-- Release notes for significant contributions
-- The project README for major features
-
-Thank you for contributing to NebulaIO!
+Thank you for contributing to NebulaIO! 🚀
+test
