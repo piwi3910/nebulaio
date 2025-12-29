@@ -9,6 +9,7 @@ import (
 
 	"github.com/piwi3910/nebulaio/internal/audit"
 	"github.com/piwi3910/nebulaio/internal/metadata"
+	"github.com/piwi3910/nebulaio/internal/testutil"
 	"github.com/piwi3910/nebulaio/pkg/s3errors"
 )
 
@@ -396,7 +397,7 @@ func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*m
 	if m.listBucketsErr != nil {
 		return nil, m.listBucketsErr
 	}
-	buckets := make([]*metadata.Bucket, 0)
+	buckets := make([]*metadata.Bucket, 0, len(m.buckets))
 	for _, b := range m.buckets {
 		if owner == "" || b.Owner == owner {
 			buckets = append(buckets, b)
@@ -510,8 +511,8 @@ func (m *MockMetadataStore) CreateMultipartUpload(ctx context.Context, upload *m
 	if m.createMultipartUploadErr != nil {
 		return m.createMultipartUploadErr
 	}
-	key := upload.Bucket + "/" + upload.Key + "/" + upload.UploadID
-	m.multipartUploads[key] = upload
+	mpKey := testutil.MultipartUploadKey(upload.Bucket, upload.Key, upload.UploadID)
+	m.multipartUploads[mpKey] = upload
 	return nil
 }
 
@@ -522,7 +523,7 @@ func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key,
 	if m.getMultipartUploadErr != nil {
 		return nil, m.getMultipartUploadErr
 	}
-	mpKey := bucket + "/" + key + "/" + uploadID
+	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	if upload, ok := m.multipartUploads[mpKey]; ok {
 		return upload, nil
 	}
@@ -536,7 +537,7 @@ func (m *MockMetadataStore) AbortMultipartUpload(ctx context.Context, bucket, ke
 	if m.abortMultipartUploadErr != nil {
 		return m.abortMultipartUploadErr
 	}
-	mpKey := bucket + "/" + key + "/" + uploadID
+	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	delete(m.multipartUploads, mpKey)
 	return nil
 }
@@ -548,7 +549,7 @@ func (m *MockMetadataStore) CompleteMultipartUpload(ctx context.Context, bucket,
 	if m.completeMultipartErr != nil {
 		return m.completeMultipartErr
 	}
-	mpKey := bucket + "/" + key + "/" + uploadID
+	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	delete(m.multipartUploads, mpKey)
 	return nil
 }
@@ -560,7 +561,7 @@ func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uplo
 	if m.addUploadPartErr != nil {
 		return m.addUploadPartErr
 	}
-	mpKey := bucket + "/" + key + "/" + uploadID
+	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	m.uploadParts[mpKey] = append(m.uploadParts[mpKey], part)
 	return nil
 }
@@ -569,7 +570,7 @@ func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uplo
 func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID string) ([]*metadata.UploadPart, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	mpKey := bucket + "/" + key + "/" + uploadID
+	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	if parts, ok := m.uploadParts[mpKey]; ok {
 		return parts, nil
 	}
@@ -583,7 +584,7 @@ func (m *MockMetadataStore) ListMultipartUploads(ctx context.Context, bucket str
 	if m.listMultipartUploadsErr != nil {
 		return nil, m.listMultipartUploadsErr
 	}
-	uploads := make([]*metadata.MultipartUpload, 0)
+	uploads := make([]*metadata.MultipartUpload, 0, len(m.multipartUploads))
 	for _, upload := range m.multipartUploads {
 		if upload.Bucket == bucket {
 			uploads = append(uploads, upload)
@@ -700,7 +701,7 @@ func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID str
 func (m *MockMetadataStore) ListAccessKeys(ctx context.Context, userID string) ([]*metadata.AccessKey, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	keys := make([]*metadata.AccessKey, 0)
+	keys := make([]*metadata.AccessKey, 0, len(m.accessKeys))
 	for _, key := range m.accessKeys {
 		if key.UserID == userID {
 			keys = append(keys, key)

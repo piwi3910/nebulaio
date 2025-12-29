@@ -194,7 +194,7 @@ func (m *MockMultipartService) ListMultipartUploads(ctx context.Context, bucket 
 	if m.listUploadsErr != nil {
 		return nil, m.listUploadsErr
 	}
-	result := make([]*metadata.MultipartUpload, 0)
+	result := make([]*metadata.MultipartUpload, 0, len(m.uploads))
 	for _, upload := range m.uploads {
 		if upload.Bucket == bucket {
 			result = append(result, upload)

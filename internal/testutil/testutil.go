@@ -29,22 +29,33 @@
 package testutil
 
 import (
+	"os"
 	"strings"
 )
 
-// ContainsString checks if the string s contains the substring substr
-// Case-insensitive version available via ContainsStringInsensitive
+// ContainsString checks if the string s contains the substring substr.
+// This is a convenience wrapper around strings.Contains for test assertions.
 func ContainsString(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
 
-// ContainsStringInsensitive checks if the string s contains the substring substr (case-insensitive)
+// ContainsStringInsensitive checks if the string s contains the substring substr (case-insensitive).
+// Useful for comparing error messages or log output where case may vary.
 func ContainsStringInsensitive(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
-// GetEnvOrDefault returns the environment variable value or a default if not set
-// This is useful for configurable test parameters
+// GetEnvOrDefault returns the environment variable value or a default if not set.
+// This is useful for configurable test parameters like test timeouts or resource limits.
 func GetEnvOrDefault(key, defaultValue string) string {
-	return defaultValue // Override in tests as needed
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// MultipartUploadKey generates a consistent key for multipart upload storage.
+// Format: "bucket/key/uploadID"
+func MultipartUploadKey(bucket, key, uploadID string) string {
+	return bucket + "/" + key + "/" + uploadID
 }
