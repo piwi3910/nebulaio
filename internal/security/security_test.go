@@ -311,9 +311,9 @@ func TestCORSValidation(t *testing.T) {
 // TestAccessControlBypass tests for access control bypass vulnerabilities.
 func TestAccessControlBypass(t *testing.T) {
 	t.Run("HTTP method override is blocked", func(t *testing.T) {
-		// Ensure X-HTTP-Method-Override is not honored
+		// Ensure X-Http-Method-Override is not honored
 		req := httptest.NewRequest("POST", "/admin/delete", nil)
-		req.Header.Set("X-HTTP-Method-Override", "DELETE")
+		req.Header.Set("X-Http-Method-Override", "DELETE")
 
 		method := getEffectiveMethod(req)
 		assert.Equal(t, "POST", method, "Should not honor method override header")
@@ -582,7 +582,7 @@ func (v *CORSValidator) IsAllowed(origin string) bool {
 }
 
 func getEffectiveMethod(r *http.Request) string {
-	// Do not honor X-HTTP-Method-Override
+	// Do not honor X-Http-Method-Override
 	return r.Method
 }
 

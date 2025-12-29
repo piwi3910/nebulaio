@@ -123,7 +123,7 @@ func extractS3Operation(r *http.Request) string {
 			if _, ok := query["partNumber"]; ok {
 				return "UploadPart"
 			}
-			if r.Header.Get("x-amz-copy-source") != "" {
+			if r.Header.Get("X-Amz-Copy-Source") != "" {
 				return "CopyObject"
 			}
 			return "PutObject"

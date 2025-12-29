@@ -27,14 +27,14 @@ var requestCounter uint64
 func RequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if request ID was already set (e.g., from a load balancer)
-		requestID := r.Header.Get("x-amz-request-id")
+		requestID := r.Header.Get("X-Amz-Request-Id")
 		if requestID == "" {
 			requestID = generateRequestID()
 		}
 
 		// Add request ID to response headers
-		w.Header().Set("x-amz-request-id", requestID)
-		w.Header().Set("x-amz-id-2", generateExtendedRequestID())
+		w.Header().Set("X-Amz-Request-Id", requestID)
+		w.Header().Set("X-Amz-Id-2", generateExtendedRequestID())
 
 		// Add request ID to context
 		ctx := context.WithValue(r.Context(), requestIDKey, requestID)
@@ -100,12 +100,12 @@ func generateExtendedRequestID() string {
 // RequestIDFromHeader extracts the request ID from response headers.
 // This is useful for logging and debugging.
 func RequestIDFromHeader(h http.Header) string {
-	return h.Get("x-amz-request-id")
+	return h.Get("X-Amz-Request-Id")
 }
 
 // ExtendedRequestIDFromHeader extracts the extended request ID from response headers.
 func ExtendedRequestIDFromHeader(h http.Header) string {
-	return h.Get("x-amz-id-2")
+	return h.Get("X-Amz-Id-2")
 }
 
 // RequestLogger is a middleware that logs request information including the request ID.
