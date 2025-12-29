@@ -147,6 +147,52 @@ React 19 + TypeScript + Mantine UI + TanStack Query:
 - Use `make lint` before committing Go changes
 - Frontend uses strict TypeScript (`npm run type-check`)
 
+## Testing Standards
+
+### Go Testing
+
+**Framework:** Use [testify](https://github.com/stretchr/testify) for all Go tests
+
+- **Assertions**: Use `assert` or `require` from testify, not plain Go conditionals
+- **Mocking**: Use testify's mock package for interfaces
+- **Common Mocks**: Use centralized mock implementations from `internal/testutil/mocks/`
+
+**Example:**
+
+```go
+import (
+    "testing"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+    "github.com/yourusername/nebulaio/internal/testutil/mocks"
+)
+
+func TestBucketCreation(t *testing.T) {
+    // Use common mock backend
+    mockStorage := mocks.NewMockStorageBackend()
+    mockMetadata := mocks.NewMockMetadataStore()
+
+    // Setup expectations
+    mockMetadata.On("CreateBucket", mock.Anything, "test-bucket").Return(nil)
+
+    // Test assertions
+    err := service.CreateBucket(ctx, "test-bucket")
+    require.NoError(t, err)
+    assert.True(t, mockStorage.BucketExists("test-bucket"))
+
+    // Verify mock expectations
+    mockMetadata.AssertExpectations(t)
+}
+```
+
+**Don't:**
+
+- Create duplicate mock implementations in each test file
+- Use plain `if err != nil { t.Fatal() }` - use `require.NoError(t, err)`
+- Skip mock verification - always call `AssertExpectations(t)`
+
+**Related:** See Issue #101 for test standardization migration plan
+
 ## Feature Flags (Environment Variables)
 
 Advanced features are disabled by default and enabled via config:
