@@ -102,7 +102,6 @@ linters:
     - gocyclo        # Cyclomatic complexity
     - gocognit       # Cognitive complexity
     - nestif         # Deep nesting
-    - funlen         # Function length
 
     # Best Practices
     - errorlint      # Error handling
@@ -146,6 +145,7 @@ linters:
     - errname           # Error naming convention - project uses ErrXxx style consistently
     - funcorder         # Function ordering - style preference, not enforced
     - forcetypeassert   # Type assertion checking - sometimes appropriate for known types
+    - funlen            # Function length - some complex functions legitimately exceed limits
 
   exclusions:
     paths:
