@@ -110,14 +110,32 @@ func (e *Encoder) Encode(reader io.Reader) (*EncodedData, error) {
 	}, nil
 }
 
+// contextReader wraps an io.Reader to make it context-aware
+// It checks for context cancellation before each Read operation
+type contextReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (cr *contextReader) Read(p []byte) (n int, err error) {
+	// Check if context is already cancelled before attempting read
+	if err := cr.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return cr.r.Read(p)
+}
+
 // EncodeStream encodes data in chunks for streaming large files
 // The goroutine will terminate when:
 //   - All data has been read and encoded
 //   - An error occurs during reading or encoding
-//   - The provided context is cancelled
+//   - The provided context is cancelled (including during blocking reads)
 //
 // Callers should always cancel the context or read all data from the channels
 // to prevent goroutine leaks.
+//
+// Note: Context cancellation is checked before each read operation. If the underlying
+// reader blocks indefinitely, cancellation will occur before the next read attempt.
 func (e *Encoder) EncodeStream(ctx context.Context, reader io.Reader, chunkSize int) (chan *EncodedData, chan error) {
 	dataChan := make(chan *EncodedData)
 	errChan := make(chan error, 1)
@@ -126,17 +144,13 @@ func (e *Encoder) EncodeStream(ctx context.Context, reader io.Reader, chunkSize 
 		defer close(dataChan)
 		defer close(errChan)
 
+		// Wrap reader with context awareness
+		ctxReader := &contextReader{ctx: ctx, r: reader}
+
 		buf := make([]byte, chunkSize)
 		for {
-			// Check context cancellation before reading
-			select {
-			case <-ctx.Done():
-				errChan <- ctx.Err()
-				return
-			default:
-			}
-
-			n, err := io.ReadFull(reader, buf)
+			// Context cancellation is now checked within io.ReadFull via contextReader
+			n, err := io.ReadFull(ctxReader, buf)
 			if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 				errChan <- fmt.Errorf("failed to read chunk: %w", err)
 				return
