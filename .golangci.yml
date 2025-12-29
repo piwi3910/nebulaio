@@ -142,20 +142,18 @@ run:
   tests: true
   build-tags:
     - integration
+  skip-dirs:
+    - vendor
+    - node_modules
+    - web
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*generated.*\\.go$"
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   exclude-use-default: false
-
-  # Directory and file exclusions (moved from run section in v2)
-  exclude-dirs:
-    - vendor
-    - node_modules
-    - web
-  exclude-files:
-    - ".*\\.pb\\.go$"
-    - ".*generated.*\\.go$"
 
   exclude-rules:
     # Exclude test files from certain checks
