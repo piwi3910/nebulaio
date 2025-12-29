@@ -200,6 +200,35 @@ func (m *MockStorageBackend) GetStoredObject(bucket, key string) ([]byte, bool) 
 	return nil, false
 }
 
+// Reset clears all mock state for reuse between tests.
+func (m *MockStorageBackend) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.buckets = make(map[string]bool)
+	m.objects = make(map[string]map[string][]byte)
+	m.parts = make(map[string]map[int][]byte)
+	m.storageInfo = &backend.StorageInfo{
+		TotalBytes: 1000000000,
+		UsedBytes:  500000000,
+	}
+	// Reset error injections
+	m.initErr = nil
+	m.closeErr = nil
+	m.createBucketErr = nil
+	m.deleteBucketErr = nil
+	m.bucketExistsErr = nil
+	m.putObjectErr = nil
+	m.getObjectErr = nil
+	m.deleteObjectErr = nil
+	m.objectExistsErr = nil
+	m.getStorageInfoErr = nil
+	m.createMultipartUploadErr = nil
+	m.putPartErr = nil
+	m.getPartErr = nil
+	m.completePartsErr = nil
+	m.abortMultipartUploadErr = nil
+}
+
 // Init implements backend.Backend interface.
 func (m *MockStorageBackend) Init(ctx context.Context) error {
 	m.mu.RLock()

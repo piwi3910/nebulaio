@@ -204,6 +204,101 @@ func TestMockMetadataStore_NilReceiverHandling(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TestMockMetadataStore_Reset verifies Reset clears all state.
+func TestMockMetadataStore_Reset(t *testing.T) {
+	ctx := context.Background()
+	store := NewMockMetadataStore()
+
+	// Add some data
+	store.AddBucket(&metadata.Bucket{Name: "test-bucket"})
+	store.AddObject("test-bucket", &metadata.ObjectMeta{Bucket: "test-bucket", Key: "key"})
+	store.SetCreateBucketError(errors.New("test error"))
+
+	// Verify data exists
+	buckets := store.GetBuckets()
+	require.Len(t, buckets, 1)
+
+	// Reset
+	store.Reset()
+
+	// Verify data is cleared
+	buckets = store.GetBuckets()
+	assert.Len(t, buckets, 0)
+
+	// Verify errors are cleared
+	err := store.CreateBucket(ctx, &metadata.Bucket{Name: "new-bucket"})
+	assert.NoError(t, err)
+}
+
+// TestMockMetadataStore_AdditionalHelpers verifies additional helper methods.
+func TestMockMetadataStore_AdditionalHelpers(t *testing.T) {
+	ctx := context.Background()
+	store := NewMockMetadataStore()
+
+	// Test AddVersion
+	store.AddVersion("bucket", &metadata.ObjectMeta{
+		Bucket: "bucket", Key: "key", VersionID: "v1",
+	})
+	store.AddVersion("bucket", &metadata.ObjectMeta{
+		Bucket: "bucket", Key: "key", VersionID: "v2",
+	})
+	versions, err := store.ListObjectVersions(ctx, "bucket", "", "", "", "", 100)
+	require.NoError(t, err)
+	assert.Len(t, versions.Versions, 2)
+
+	// Test AddUser
+	store.AddUser(&metadata.User{ID: "user1", Username: "testuser"})
+	user, err := store.GetUser(ctx, "user1")
+	require.NoError(t, err)
+	assert.Equal(t, "testuser", user.Username)
+
+	// Test AddAccessKey
+	store.AddAccessKey(&metadata.AccessKey{AccessKeyID: "AKID123", UserID: "user1"})
+	key, err := store.GetAccessKey(ctx, "AKID123")
+	require.NoError(t, err)
+	assert.Equal(t, "user1", key.UserID)
+
+	// Test AddPolicy
+	store.AddPolicy(&metadata.Policy{Name: "policy1"})
+	policy, err := store.GetPolicy(ctx, "policy1")
+	require.NoError(t, err)
+	assert.Equal(t, "policy1", policy.Name)
+
+	// Test AddMultipartUpload
+	store.AddMultipartUpload(&metadata.MultipartUpload{
+		Bucket: "bucket", Key: "key", UploadID: "upload-1",
+	})
+	upload, err := store.GetMultipartUpload(ctx, "bucket", "key", "upload-1")
+	require.NoError(t, err)
+	assert.Equal(t, "upload-1", upload.UploadID)
+}
+
+// TestMockStorageBackend_Reset verifies Reset clears all state.
+func TestMockStorageBackend_Reset(t *testing.T) {
+	ctx := context.Background()
+	backend := NewMockStorageBackend()
+
+	// Add some data
+	backend.AddBucket("test-bucket")
+	backend.AddObject("test-bucket", "key", []byte("content"))
+	backend.SetCreateBucketError(errors.New("test error"))
+
+	// Verify data exists
+	exists, _ := backend.BucketExists(ctx, "test-bucket")
+	assert.True(t, exists)
+
+	// Reset
+	backend.Reset()
+
+	// Verify data is cleared
+	exists, _ = backend.BucketExists(ctx, "test-bucket")
+	assert.False(t, exists)
+
+	// Verify errors are cleared
+	err := backend.CreateBucket(ctx, "new-bucket")
+	assert.NoError(t, err)
+}
+
 // TestMockStorageBackend_ErrorInjection verifies error injection works correctly.
 func TestMockStorageBackend_ErrorInjection(t *testing.T) {
 	ctx := context.Background()

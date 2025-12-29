@@ -361,6 +361,78 @@ func (m *MockMetadataStore) GetObjects(bucket string) map[string]*metadata.Objec
 	return result
 }
 
+// Reset clears all mock state for reuse between tests.
+func (m *MockMetadataStore) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.buckets = make(map[string]*metadata.Bucket)
+	m.objects = make(map[string]map[string]*metadata.ObjectMeta)
+	m.versions = make(map[string]map[string][]*metadata.ObjectMeta)
+	m.multipartUploads = make(map[string]*metadata.MultipartUpload)
+	m.uploadParts = make(map[string][]*metadata.UploadPart)
+	m.users = make(map[string]*metadata.User)
+	m.accessKeys = make(map[string]*metadata.AccessKey)
+	m.policies = make(map[string]*metadata.Policy)
+	m.nodes = make(map[string]*metadata.NodeInfo)
+	m.auditEvents = make([]*audit.AuditEvent, 0)
+	// Reset error injections
+	m.createBucketErr = nil
+	m.updateBucketErr = nil
+	m.deleteBucketErr = nil
+	m.getBucketErr = nil
+	m.listBucketsErr = nil
+	m.putObjectMetaErr = nil
+	m.getObjectMetaErr = nil
+	m.deleteObjectMetaErr = nil
+	m.listObjectsErr = nil
+	m.getClusterInfoErr = nil
+	m.createMultipartUploadErr = nil
+	m.getMultipartUploadErr = nil
+	m.listMultipartUploadsErr = nil
+	m.deleteObjectVersionErr = nil
+	m.putObjectMetaVersionedErr = nil
+	m.getPartsErr = nil
+}
+
+// AddVersion adds an object version directly to the mock store (for test setup).
+func (m *MockMetadataStore) AddVersion(bucket string, obj *metadata.ObjectMeta) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.versions[bucket] == nil {
+		m.versions[bucket] = make(map[string][]*metadata.ObjectMeta)
+	}
+	m.versions[bucket][obj.Key] = append(m.versions[bucket][obj.Key], obj)
+}
+
+// AddUser adds a user directly to the mock store (for test setup).
+func (m *MockMetadataStore) AddUser(user *metadata.User) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.users[user.ID] = user
+}
+
+// AddAccessKey adds an access key directly to the mock store (for test setup).
+func (m *MockMetadataStore) AddAccessKey(key *metadata.AccessKey) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.accessKeys[key.AccessKeyID] = key
+}
+
+// AddPolicy adds a policy directly to the mock store (for test setup).
+func (m *MockMetadataStore) AddPolicy(policy *metadata.Policy) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.policies[policy.Name] = policy
+}
+
+// AddMultipartUpload adds a multipart upload directly to the mock store (for test setup).
+func (m *MockMetadataStore) AddMultipartUpload(upload *metadata.MultipartUpload) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	mpKey := testutil.MultipartUploadKey(upload.Bucket, upload.Key, upload.UploadID)
+	m.multipartUploads[mpKey] = upload
+}
+
 // Close implements metadata.Store interface.
 func (m *MockMetadataStore) Close() error {
 	return nil
