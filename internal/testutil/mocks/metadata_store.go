@@ -3,6 +3,7 @@ package mocks
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +22,7 @@ type MockMetadataStore struct {
 	objects          map[string]map[string]*metadata.ObjectMeta
 	versions         map[string]map[string][]*metadata.ObjectMeta
 	multipartUploads map[string]*metadata.MultipartUpload
+	uploadParts      map[string][]*metadata.UploadPart // uploadKey -> parts
 	users            map[string]*metadata.User
 	accessKeys       map[string]*metadata.AccessKey
 	policies         map[string]*metadata.Policy
@@ -46,6 +48,12 @@ type MockMetadataStore struct {
 	createMultipartUploadErr error
 	getMultipartUploadErr    error
 	listMultipartUploadsErr  error
+	createUserErr            error
+	getUserErr               error
+	createAccessKeyErr       error
+	getAccessKeyErr          error
+	createPolicyErr          error
+	getPolicyErr             error
 }
 
 // NewMockMetadataStore creates a new MockMetadataStore with initialized maps.
@@ -55,6 +63,7 @@ func NewMockMetadataStore() *MockMetadataStore {
 		objects:          make(map[string]map[string]*metadata.ObjectMeta),
 		versions:         make(map[string]map[string][]*metadata.ObjectMeta),
 		multipartUploads: make(map[string]*metadata.MultipartUpload),
+		uploadParts:      make(map[string][]*metadata.UploadPart),
 		users:            make(map[string]*metadata.User),
 		accessKeys:       make(map[string]*metadata.AccessKey),
 		policies:         make(map[string]*metadata.Policy),
@@ -133,6 +142,48 @@ func (m *MockMetadataStore) SetGetClusterInfoError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.getClusterInfoErr = err
+}
+
+// SetCreateUserError sets the error to return on CreateUser calls.
+func (m *MockMetadataStore) SetCreateUserError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.createUserErr = err
+}
+
+// SetGetUserError sets the error to return on GetUser calls.
+func (m *MockMetadataStore) SetGetUserError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.getUserErr = err
+}
+
+// SetCreateAccessKeyError sets the error to return on CreateAccessKey calls.
+func (m *MockMetadataStore) SetCreateAccessKeyError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.createAccessKeyErr = err
+}
+
+// SetGetAccessKeyError sets the error to return on GetAccessKey calls.
+func (m *MockMetadataStore) SetGetAccessKeyError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.getAccessKeyErr = err
+}
+
+// SetCreatePolicyError sets the error to return on CreatePolicy calls.
+func (m *MockMetadataStore) SetCreatePolicyError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.createPolicyErr = err
+}
+
+// SetGetPolicyError sets the error to return on GetPolicy calls.
+func (m *MockMetadataStore) SetGetPolicyError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.getPolicyErr = err
 }
 
 // SetIsLeader sets whether this mock is the leader.
@@ -355,8 +406,13 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 		Objects: make([]*metadata.ObjectMeta, 0),
 	}
 	for _, obj := range objs {
+		// Filter by prefix if specified
+		if prefix != "" && !strings.HasPrefix(obj.Key, prefix) {
+			continue
+		}
 		listing.Objects = append(listing.Objects, obj)
 		if maxKeys > 0 && len(listing.Objects) >= maxKeys {
+			listing.IsTruncated = true
 			break
 		}
 	}
@@ -429,7 +485,22 @@ func (m *MockMetadataStore) CompleteMultipartUpload(ctx context.Context, bucket,
 
 // AddUploadPart implements metadata.Store interface.
 func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uploadID string, part *metadata.UploadPart) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	mpKey := bucket + "/" + key + "/" + uploadID
+	m.uploadParts[mpKey] = append(m.uploadParts[mpKey], part)
 	return nil
+}
+
+// GetParts implements metadata.Store interface.
+func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID string) ([]*metadata.UploadPart, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	mpKey := bucket + "/" + key + "/" + uploadID
+	if parts, ok := m.uploadParts[mpKey]; ok {
+		return parts, nil
+	}
+	return nil, nil
 }
 
 // ListMultipartUploads implements metadata.Store interface.
@@ -452,6 +523,9 @@ func (m *MockMetadataStore) ListMultipartUploads(ctx context.Context, bucket str
 func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.createUserErr != nil {
+		return m.createUserErr
+	}
 	m.users[user.ID] = user
 	return nil
 }
@@ -460,6 +534,9 @@ func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User)
 func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.User, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	if m.getUserErr != nil {
+		return nil, m.getUserErr
+	}
 	if user, ok := m.users[id]; ok {
 		return user, nil
 	}
@@ -509,6 +586,9 @@ func (m *MockMetadataStore) ListUsers(ctx context.Context) ([]*metadata.User, er
 func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.AccessKey) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.createAccessKeyErr != nil {
+		return m.createAccessKeyErr
+	}
 	m.accessKeys[key.AccessKeyID] = key
 	return nil
 }
@@ -517,6 +597,9 @@ func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.A
 func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string) (*metadata.AccessKey, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	if m.getAccessKeyErr != nil {
+		return nil, m.getAccessKeyErr
+	}
 	if key, ok := m.accessKeys[accessKeyID]; ok {
 		return key, nil
 	}
@@ -548,6 +631,9 @@ func (m *MockMetadataStore) ListAccessKeys(ctx context.Context, userID string) (
 func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.Policy) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.createPolicyErr != nil {
+		return m.createPolicyErr
+	}
 	m.policies[policy.Name] = policy
 	return nil
 }
@@ -556,6 +642,9 @@ func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.P
 func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metadata.Policy, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	if m.getPolicyErr != nil {
+		return nil, m.getPolicyErr
+	}
 	if policy, ok := m.policies[name]; ok {
 		return policy, nil
 	}

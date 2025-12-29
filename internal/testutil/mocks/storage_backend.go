@@ -285,6 +285,17 @@ func (m *MockStorageBackend) GetStorageInfo(ctx context.Context) (*backend.Stora
 	return m.storageInfo, nil
 }
 
+// ListBuckets implements backend.Backend interface.
+func (m *MockStorageBackend) ListBuckets(ctx context.Context) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	buckets := make([]string, 0, len(m.buckets))
+	for name := range m.buckets {
+		buckets = append(buckets, name)
+	}
+	return buckets, nil
+}
+
 // CreateMultipartUpload implements backend.MultipartBackend interface.
 func (m *MockStorageBackend) CreateMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	m.mu.Lock()
