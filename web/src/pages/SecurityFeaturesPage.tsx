@@ -44,6 +44,8 @@ import {
   IconRotate,
   IconActivity,
   IconUsers,
+  IconFlame,
+  IconExternalLink,
 } from '@tabler/icons-react';
 import {
   adminApi,
@@ -855,6 +857,157 @@ function TracingTab() {
   );
 }
 
+// Rate Limiting Tab
+function RateLimitingTab() {
+  return (
+    <Stack>
+      <Alert icon={<IconInfoCircle />} color="blue">
+        Rate limiting protects your storage infrastructure from abuse and DoS attacks.
+        Configuration is managed via server configuration files or environment variables.
+      </Alert>
+
+      <Grid>
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <Card withBorder p="md">
+            <Group mb="md">
+              <ThemeIcon color="orange" variant="light" size="lg">
+                <IconFlame size={20} />
+              </ThemeIcon>
+              <div>
+                <Text fw={500}>Request Rate Limiting</Text>
+                <Text size="xs" c="dimmed">Control API request rates</Text>
+              </div>
+            </Group>
+            <Stack gap="xs">
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Global RPS Limit</Text>
+                <Code>NEBULAIO_FIREWALL_RATE_LIMIT_RPS</Code>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Burst Size</Text>
+                <Code>NEBULAIO_FIREWALL_RATE_LIMIT_BURST</Code>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Per-User Limiting</Text>
+                <Code>NEBULAIO_FIREWALL_RATE_LIMIT_PER_USER</Code>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Per-IP Limiting</Text>
+                <Code>NEBULAIO_FIREWALL_RATE_LIMIT_PER_IP</Code>
+              </Group>
+            </Stack>
+          </Card>
+        </Grid.Col>
+
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <Card withBorder p="md">
+            <Group mb="md">
+              <ThemeIcon color="red" variant="light" size="lg">
+                <IconShield size={20} />
+              </ThemeIcon>
+              <div>
+                <Text fw={500}>Hash DoS Protection</Text>
+                <Text size="xs" c="dimmed">Object creation rate limiting</Text>
+              </div>
+            </Group>
+            <Stack gap="xs">
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Object Creation Limit</Text>
+                <Code>NEBULAIO_FIREWALL_OBJECT_CREATION_LIMIT</Code>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Object Creation Burst</Text>
+                <Code>NEBULAIO_FIREWALL_OBJECT_CREATION_BURST</Code>
+              </Group>
+              <Text size="xs" c="dimmed" mt="xs">
+                Protects against attacks targeting object key distribution.
+                Applies to PutObject, CopyObject, CompleteMultipartUpload.
+              </Text>
+            </Stack>
+          </Card>
+        </Grid.Col>
+
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <Card withBorder p="md">
+            <Group mb="md">
+              <ThemeIcon color="blue" variant="light" size="lg">
+                <IconActivity size={20} />
+              </ThemeIcon>
+              <div>
+                <Text fw={500}>Bandwidth Throttling</Text>
+                <Text size="xs" c="dimmed">Control data transfer rates</Text>
+              </div>
+            </Group>
+            <Stack gap="xs">
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Max Bytes/Second</Text>
+                <Code>NEBULAIO_FIREWALL_BANDWIDTH_MAX_BPS</Code>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Per-User Limit</Text>
+                <Code>NEBULAIO_FIREWALL_BANDWIDTH_MAX_BPS_PER_USER</Code>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Per-Bucket Limit</Text>
+                <Code>NEBULAIO_FIREWALL_BANDWIDTH_MAX_BPS_PER_BUCKET</Code>
+              </Group>
+            </Stack>
+          </Card>
+        </Grid.Col>
+
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <Card withBorder p="md">
+            <Group mb="md">
+              <ThemeIcon color="green" variant="light" size="lg">
+                <IconUsers size={20} />
+              </ThemeIcon>
+              <div>
+                <Text fw={500}>Connection Limits</Text>
+                <Text size="xs" c="dimmed">Control concurrent connections</Text>
+              </div>
+            </Group>
+            <Stack gap="xs">
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Max Connections</Text>
+                <Code>NEBULAIO_FIREWALL_MAX_CONNECTIONS</Code>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Per-IP Limit</Text>
+                <Code>NEBULAIO_FIREWALL_MAX_CONNECTIONS_PER_IP</Code>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Per-User Limit</Text>
+                <Code>NEBULAIO_FIREWALL_MAX_CONNECTIONS_PER_USER</Code>
+              </Group>
+            </Stack>
+          </Card>
+        </Grid.Col>
+      </Grid>
+
+      <Card withBorder p="md">
+        <Group justify="space-between">
+          <div>
+            <Text fw={500}>Documentation</Text>
+            <Text size="sm" c="dimmed">
+              For detailed configuration options, deployment examples, and best practices,
+              see the rate limiting documentation.
+            </Text>
+          </div>
+          <Button
+            component="a"
+            href="https://github.com/piwi3910/nebulaio/blob/main/docs/deployment/rate-limiting.md"
+            target="_blank"
+            variant="light"
+            rightSection={<IconExternalLink size={16} />}
+          >
+            View Documentation
+          </Button>
+        </Group>
+      </Card>
+    </Stack>
+  );
+}
+
 // Configuration Tab
 function ConfigurationTab() {
   const queryClient = useQueryClient();
@@ -1052,6 +1205,9 @@ export function SecurityFeaturesPage() {
           <Tabs.Tab value="analytics" leftSection={<IconShield size={16} />}>
             Access Analytics
           </Tabs.Tab>
+          <Tabs.Tab value="ratelimiting" leftSection={<IconFlame size={16} />}>
+            Rate Limiting
+          </Tabs.Tab>
           <Tabs.Tab value="keys" leftSection={<IconKey size={16} />}>
             Key Rotation
           </Tabs.Tab>
@@ -1068,6 +1224,10 @@ export function SecurityFeaturesPage() {
 
         <Tabs.Panel value="analytics" pt="md">
           <AccessAnalyticsTab />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="ratelimiting" pt="md">
+          <RateLimitingTab />
         </Tabs.Panel>
 
         <Tabs.Panel value="keys" pt="md">
