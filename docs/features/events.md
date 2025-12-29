@@ -17,7 +17,7 @@ Event notifications enable reactive architectures by triggering actions when obj
 ### Object Created Events
 
 | Event Type | Description |
-|------------|-------------|
+| ------------ | ------------- |
 | `s3:ObjectCreated:*` | Any object creation event |
 | `s3:ObjectCreated:Put` | Object uploaded via PUT |
 | `s3:ObjectCreated:Post` | Object uploaded via POST form |
@@ -27,7 +27,7 @@ Event notifications enable reactive architectures by triggering actions when obj
 ### Object Removed Events
 
 | Event Type | Description |
-|------------|-------------|
+| ------------ | ------------- |
 | `s3:ObjectRemoved:*` | Any object removal event |
 | `s3:ObjectRemoved:Delete` | Object permanently deleted |
 | `s3:ObjectRemoved:DeleteMarkerCreated` | Delete marker created (versioned bucket) |
@@ -35,7 +35,7 @@ Event notifications enable reactive architectures by triggering actions when obj
 ### Object Access Events
 
 | Event Type | Description |
-|------------|-------------|
+| ------------ | ------------- |
 | `s3:ObjectAccessed:*` | Any object access event |
 | `s3:ObjectAccessed:Get` | Object downloaded |
 | `s3:ObjectAccessed:Head` | Object metadata retrieved |
@@ -43,14 +43,14 @@ Event notifications enable reactive architectures by triggering actions when obj
 ### Object Restore Events
 
 | Event Type | Description |
-|------------|-------------|
+| ------------ | ------------- |
 | `s3:ObjectRestore:Post` | Restore from archive initiated |
 | `s3:ObjectRestore:Completed` | Restore from archive completed |
 
 ### Replication Events
 
 | Event Type | Description |
-|------------|-------------|
+| ------------ | ------------- |
 | `s3:Replication:OperationFailedReplication` | Replication failed |
 | `s3:Replication:OperationCompletedReplication` | Replication completed |
 
@@ -61,6 +61,7 @@ Event notifications enable reactive architectures by triggering actions when obj
 Deliver events to any HTTP endpoint:
 
 ```yaml
+
 notifications:
   targets:
     - name: my-webhook
@@ -72,13 +73,15 @@ notifications:
       timeout: 30s
       retry_count: 3
       retry_delay: 5s
-```
+
+```bash
 
 ### Apache Kafka
 
 Stream events to Kafka topics for high-throughput processing:
 
 ```yaml
+
 notifications:
   targets:
     - name: kafka-events
@@ -95,13 +98,15 @@ notifications:
       tls:
         enabled: true
         ca_cert: /etc/ssl/kafka-ca.pem
-```
+
+```bash
 
 ### AMQP (RabbitMQ)
 
 Publish events to RabbitMQ exchanges:
 
 ```yaml
+
 notifications:
   targets:
     - name: rabbitmq-events
@@ -112,13 +117,15 @@ notifications:
       routing_key: nebulaio.objects
       durable: true
       mandatory: true
-```
+
+```bash
 
 ### Redis (Pub/Sub and Streams)
 
 Publish events to Redis channels or streams:
 
 ```yaml
+
 notifications:
   targets:
     - name: redis-pubsub
@@ -129,13 +136,15 @@ notifications:
       channel: s3-events    # For pubsub mode
       # stream: s3-events   # For stream mode
       # max_len: 10000      # Stream max length
-```
+
+```bash
 
 ### NATS
 
 Publish events to NATS subjects:
 
 ```yaml
+
 notifications:
   targets:
     - name: nats-events
@@ -147,13 +156,15 @@ notifications:
       credentials: /etc/nats/creds.txt
       tls:
         enabled: true
-```
+
+```bash
 
 ## Bucket Notification Configuration
 
 ### Using AWS CLI
 
 ```bash
+
 # Create notification configuration
 cat > notification.json << 'EOF'
 {
@@ -183,28 +194,34 @@ aws s3api put-bucket-notification-configuration \
   --endpoint-url http://localhost:9000 \
   --bucket my-bucket \
   --notification-configuration file://notification.json
-```
+
+```bash
 
 ### View Configuration
 
 ```bash
+
 aws s3api get-bucket-notification-configuration \
   --endpoint-url http://localhost:9000 \
   --bucket my-bucket
-```
+
+```bash
 
 ### Delete Configuration
 
 ```bash
+
 aws s3api put-bucket-notification-configuration \
   --endpoint-url http://localhost:9000 \
   --bucket my-bucket \
   --notification-configuration '{}'
-```
+
+```bash
 
 ### Using Admin API
 
 ```bash
+
 # Configure bucket notifications
 curl -X PUT "http://localhost:9000/admin/buckets/my-bucket/notifications" \
   -H "Authorization: Bearer $TOKEN" \
@@ -222,7 +239,8 @@ curl -X PUT "http://localhost:9000/admin/buckets/my-bucket/notifications" \
       }
     ]
   }'
-```
+
+```bash
 
 ## Event Filtering
 
@@ -231,6 +249,7 @@ curl -X PUT "http://localhost:9000/admin/buckets/my-bucket/notifications" \
 Match objects with a specific key prefix:
 
 ```json
+
 {
   "Filter": {
     "Key": {
@@ -240,13 +259,15 @@ Match objects with a specific key prefix:
     }
   }
 }
-```
+
+```bash
 
 ### Suffix Filtering
 
 Match objects with a specific file extension:
 
 ```json
+
 {
   "Filter": {
     "Key": {
@@ -256,13 +277,15 @@ Match objects with a specific file extension:
     }
   }
 }
-```
+
+```bash
 
 ### Combined Filtering
 
 Match objects with both prefix and suffix:
 
 ```json
+
 {
   "Filter": {
     "Key": {
@@ -273,11 +296,13 @@ Match objects with both prefix and suffix:
     }
   }
 }
-```
+
+```bash
 
 ### Multiple Rules Example
 
 ```bash
+
 cat > multi-notification.json << 'EOF'
 {
   "CloudFunctionConfigurations": [
@@ -319,13 +344,15 @@ aws s3api put-bucket-notification-configuration \
   --endpoint-url http://localhost:9000 \
   --bucket my-bucket \
   --notification-configuration file://multi-notification.json
-```
+
+```bash
 
 ## Event Payload Format
 
 ### Standard Event Structure
 
 ```json
+
 {
   "Records": [
     {
@@ -366,11 +393,13 @@ aws s3api put-bucket-notification-configuration \
     }
   ]
 }
-```
+
+```bash
 
 ### Delete Event Example
 
 ```json
+
 {
   "Records": [
     {
@@ -391,13 +420,15 @@ aws s3api put-bucket-notification-configuration \
     }
   ]
 }
-```
+
+```bash
 
 ## Monitoring Event Delivery
 
 ### Prometheus Metrics
 
-```
+```bash
+
 # Events published by type
 nebulaio_events_published_total{bucket="...",event_type="...",target="..."}
 
@@ -412,19 +443,23 @@ nebulaio_events_queue_depth{target="..."}
 
 # Failed deliveries pending retry
 nebulaio_events_retry_queue_depth{target="..."}
-```
+
+```bash
 
 ### Admin API Endpoints
 
 ```bash
+
 # Get event delivery statistics
 curl -X GET "http://localhost:9000/admin/events/stats" \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```text
 
 Response:
 
 ```json
+
 {
   "total_events": 150000,
   "delivered": 149500,
@@ -443,9 +478,11 @@ Response:
     }
   }
 }
-```
+
+```text
 
 ```bash
+
 # List failed deliveries
 curl -X GET "http://localhost:9000/admin/events/failed?limit=10" \
   -H "Authorization: Bearer $TOKEN"
@@ -457,11 +494,13 @@ curl -X POST "http://localhost:9000/admin/events/retry-failed" \
 # Check target health
 curl -X GET "http://localhost:9000/admin/events/targets/health" \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```bash
 
 ### Alerting Rules
 
 ```yaml
+
 groups:
   - name: event-notifications
     rules:
@@ -488,7 +527,8 @@ groups:
           severity: critical
         annotations:
           summary: "Event notification target unreachable"
-```
+
+```bash
 
 ## Best Practices
 
@@ -508,17 +548,21 @@ groups:
 1. Verify notification configuration exists:
 
    ```bash
+
    aws s3api get-bucket-notification-configuration \
      --endpoint-url http://localhost:9000 \
      --bucket my-bucket
-   ```
+
+   ```text
 
 2. Check target health:
 
    ```bash
+
    curl -X GET "http://localhost:9000/admin/events/targets/health" \
      -H "Authorization: Bearer $TOKEN"
-   ```
+
+   ```text
 
 3. Review filter rules match your object keys
 
@@ -528,9 +572,11 @@ groups:
 2. Increase worker count in configuration:
 
    ```yaml
+
    notifications:
      workers: 20
      batch_size: 100
+
    ```
 
 ### Duplicate Events

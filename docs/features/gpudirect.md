@@ -30,15 +30,18 @@ GPUDirect Storage provides:
 ### Basic Setup
 
 ```yaml
+
 gpudirect:
   enabled: true
   buffer_pool_size: 1073741824  # 1GB buffer pool
   enable_async: true
-```
+
+```bash
 
 ### Advanced Configuration
 
 ```yaml
+
 gpudirect:
   enabled: true
   device_ids: [0, 1]            # Specific GPUs (empty = auto-detect)
@@ -47,12 +50,13 @@ gpudirect:
   enable_async: true            # Asynchronous operations
   enable_p2p: true              # Peer-to-peer GPU transfers
   queue_depth: 64               # I/O queue depth
-```
+
+```bash
 
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_GPUDIRECT_ENABLED` | Enable GPUDirect | `false` |
 | `NEBULAIO_GPUDIRECT_BUFFER_POOL_SIZE` | Buffer pool size | `1073741824` |
 
@@ -61,6 +65,7 @@ gpudirect:
 ### Python with cuPy
 
 ```python
+
 import cupy as cp
 from nebulaio import GPUDirectClient
 
@@ -90,11 +95,13 @@ client.write_from_gpu(
     key="output/processed.bin",
     gpu_buffer=result
 )
-```
+
+```bash
 
 ### PyTorch DataLoader
 
 ```python
+
 import torch
 from nebulaio.pytorch import GPUDirectDataset
 
@@ -117,11 +124,13 @@ loader = torch.utils.data.DataLoader(
     num_workers=4,
     pin_memory=False  # Not needed with GPUDirect
 )
-```
+
+```bash
 
 ### NVIDIA DALI
 
 ```python
+
 from nvidia.dali import pipeline_def
 from nvidia.dali.plugin.pytorch import DALIGenericIterator
 from nebulaio.dali import GPUDirectReader
@@ -136,11 +145,13 @@ def training_pipeline():
     return images
 
 pipe = training_pipeline(batch_size=64, num_threads=4, device_id=0)
-```
+
+```bash
 
 ### C++ cuFile API
 
 ```cpp
+
 #include <cufile.h>
 #include "nebulaio/gpudirect.h"
 
@@ -167,45 +178,52 @@ ssize_t bytes_written = cuFileWrite(cf_handle, gpu_buffer, size, 0, 0);
 // Cleanup
 cuFileHandleDeregister(cf_handle);
 cudaFree(gpu_buffer);
-```
+
+```bash
 
 ## Performance Tuning
 
 ### Buffer Pool Sizing
 
 ```yaml
+
 gpudirect:
   # For training workloads: 4-8GB
   buffer_pool_size: 4294967296
 
   # For inference: 1-2GB
   buffer_pool_size: 1073741824
-```
+
+```bash
 
 ### Queue Depth
 
 ```yaml
+
 gpudirect:
   # High throughput: 128
   queue_depth: 128
 
   # Low latency: 16-32
   queue_depth: 32
-```
+
+```bash
 
 ### Multi-GPU Configuration
 
 ```yaml
+
 gpudirect:
   enabled: true
   device_ids: [0, 1, 2, 3]  # All 4 GPUs
   enable_p2p: true          # Enable peer-to-peer
-```
+
+```bash
 
 ## Benchmarks
 
 | Operation | Without GDS | With GDS | Improvement |
-|-----------|-------------|----------|-------------|
+| ----------- | ------------- | ---------- | ------------- |
 | 1GB Read | 850ms | 120ms | 7x faster |
 | 1GB Write | 920ms | 140ms | 6.5x faster |
 | Batch Load | 2.1s | 280ms | 7.5x faster |
@@ -213,7 +231,7 @@ gpudirect:
 ### Bandwidth
 
 | Configuration | Throughput |
-|---------------|------------|
+| --------------- | ------------ |
 | Single GPU | ~12 GB/s |
 | Dual GPU | ~24 GB/s |
 | Quad GPU + NVLink | ~48 GB/s |
@@ -223,22 +241,26 @@ gpudirect:
 ### S3 Express
 
 ```yaml
+
 s3_express:
   enabled: true
 gpudirect:
   enabled: true
 # Express buckets automatically optimized for GPUDirect
-```
+
+```bash
 
 ### RDMA
 
 ```yaml
+
 rdma:
   enabled: true
 gpudirect:
   enabled: true
 # Combines RDMA network with GPUDirect for maximum throughput
-```
+
+```bash
 
 ## Troubleshooting
 
@@ -261,20 +283,24 @@ gpudirect:
 ### Diagnostics
 
 ```bash
+
 # Check GDS status
 nvidia-smi nvlink --status
 nvidia-smi topo -m
 
 # Verify cuFile
 ldconfig -p | grep cufile
-```
+
+```bash
 
 ### Logs
 
 Enable debug logging:
 
 ```yaml
+
 log_level: debug
+
 ```
 
 Look for logs with `gpudirect` tag.
@@ -284,7 +310,7 @@ Look for logs with `gpudirect` tag.
 ### GPUDirectClient Methods
 
 | Method | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `read_to_gpu(bucket, key, buffer)` | Read object directly to GPU |
 | `write_from_gpu(bucket, key, buffer)` | Write GPU buffer to object |
 | `async_read(bucket, key, buffer)` | Async read with callback |

@@ -16,6 +16,7 @@ Lifecycle policies enable:
 A lifecycle configuration consists of rules that define actions based on conditions:
 
 ```xml
+
 <LifecycleConfiguration>
   <Rule>
     <ID>rule-id</ID>
@@ -28,13 +29,15 @@ A lifecycle configuration consists of rules that define actions based on conditi
     </Expiration>
   </Rule>
 </LifecycleConfiguration>
-```
+
+```bash
 
 ## Configuration
 
 ### Using AWS CLI
 
 ```bash
+
 # Create lifecycle policy
 aws s3api put-bucket-lifecycle-configuration \
   --bucket my-bucket \
@@ -50,11 +53,13 @@ aws s3api get-bucket-lifecycle-configuration \
 aws s3api delete-bucket-lifecycle \
   --bucket my-bucket \
   --endpoint-url http://localhost:9000
-```
+
+```bash
 
 ### Using nebulaio-cli
 
 ```bash
+
 # Set lifecycle policy
 nebulaio-cli bucket lifecycle set my-bucket --config lifecycle.json
 
@@ -63,7 +68,8 @@ nebulaio-cli bucket lifecycle get my-bucket
 
 # Remove lifecycle policy
 nebulaio-cli bucket lifecycle remove my-bucket
-```
+
+```bash
 
 ## Rule Examples
 
@@ -72,6 +78,7 @@ nebulaio-cli bucket lifecycle remove my-bucket
 Delete objects older than 90 days:
 
 ```json
+
 {
   "Rules": [
     {
@@ -84,13 +91,15 @@ Delete objects older than 90 days:
     }
   ]
 }
-```
+
+```bash
 
 ### Prefix-Based Expiration
 
 Delete log files after 30 days:
 
 ```json
+
 {
   "Rules": [
     {
@@ -105,13 +114,15 @@ Delete log files after 30 days:
     }
   ]
 }
-```
+
+```bash
 
 ### Tag-Based Expiration
 
 Delete objects with specific tags:
 
 ```json
+
 {
   "Rules": [
     {
@@ -129,13 +140,15 @@ Delete objects with specific tags:
     }
   ]
 }
-```
+
+```bash
 
 ### Expire on Specific Date
 
 Delete objects after a specific date:
 
 ```json
+
 {
   "Rules": [
     {
@@ -150,13 +163,15 @@ Delete objects after a specific date:
     }
   ]
 }
-```
+
+```bash
 
 ### Storage Class Transition
 
 Transition objects to cheaper storage:
 
 ```json
+
 {
   "Rules": [
     {
@@ -176,13 +191,15 @@ Transition objects to cheaper storage:
     }
   ]
 }
-```
+
+```bash
 
 ### Version Expiration
 
 Clean up old object versions:
 
 ```json
+
 {
   "Rules": [
     {
@@ -201,13 +218,15 @@ Clean up old object versions:
     }
   ]
 }
-```
+
+```bash
 
 ### Delete Markers Cleanup
 
 Remove expired delete markers:
 
 ```json
+
 {
   "Rules": [
     {
@@ -220,13 +239,15 @@ Remove expired delete markers:
     }
   ]
 }
-```
+
+```bash
 
 ### Abort Incomplete Multipart Uploads
 
 Clean up abandoned uploads:
 
 ```json
+
 {
   "Rules": [
     {
@@ -239,13 +260,15 @@ Clean up abandoned uploads:
     }
   ]
 }
-```
+
+```bash
 
 ### Combined Rules
 
 Multiple rules in one configuration:
 
 ```json
+
 {
   "Rules": [
     {
@@ -284,7 +307,8 @@ Multiple rules in one configuration:
     }
   ]
 }
-```
+
+```bash
 
 ## Filter Types
 
@@ -293,18 +317,21 @@ Multiple rules in one configuration:
 Match objects by key prefix:
 
 ```json
+
 {
   "Filter": {
     "Prefix": "documents/2024/"
   }
 }
-```
+
+```bash
 
 ### Tag Filter
 
 Match objects by tag:
 
 ```json
+
 {
   "Filter": {
     "Tag": {
@@ -313,13 +340,15 @@ Match objects by tag:
     }
   }
 }
-```
+
+```bash
 
 ### Combined Filters
 
 Use AND logic for multiple conditions:
 
 ```json
+
 {
   "Filter": {
     "And": {
@@ -337,13 +366,15 @@ Use AND logic for multiple conditions:
     }
   }
 }
-```
+
+```bash
 
 ### Object Size Filter
 
 Match objects by size (in bytes):
 
 ```json
+
 {
   "Filter": {
     "And": {
@@ -353,14 +384,15 @@ Match objects by size (in bytes):
     }
   }
 }
-```
+
+```bash
 
 ## Storage Classes
 
 NebulaIO supports these storage classes for transitions:
 
 | Storage Class | Description | Use Case |
-|---------------|-------------|----------|
+| --------------- | ------------- | ---------- |
 | STANDARD | Default, frequent access | Active data |
 | STANDARD_IA | Infrequent access | Backups, older data |
 | GLACIER | Archive storage | Long-term retention |
@@ -376,6 +408,7 @@ NebulaIO supports these storage classes for transitions:
 ## Configuration via YAML
 
 ```yaml
+
 # config.yaml
 lifecycle:
   evaluation_interval: 24h  # How often to check rules
@@ -388,16 +421,19 @@ lifecycle:
       status: Enabled
       abort_incomplete_multipart_upload:
         days_after_initiation: 7
-```
+
+```bash
 
 ## Monitoring
 
 ### Lifecycle Metrics
 
 ```bash
+
 # Get lifecycle processing stats
 curl -X GET "http://localhost:9001/api/v1/admin/lifecycle/stats" \
   -H "Authorization: Bearer $TOKEN"
+
 ```
 
 Metrics exposed:

@@ -18,6 +18,7 @@ The Model Context Protocol (MCP) is an open standard for AI agent integration. N
 AI agents can execute storage operations:
 
 ```json
+
 {
   "jsonrpc": "2.0",
   "method": "tools/call",
@@ -29,13 +30,15 @@ AI agents can execute storage operations:
     }
   }
 }
-```
+
+```bash
 
 ### Resource Access
 
 Browse and read bucket contents:
 
 ```json
+
 {
   "jsonrpc": "2.0",
   "method": "resources/read",
@@ -43,12 +46,13 @@ Browse and read bucket contents:
     "uri": "s3://my-bucket/data/report.json"
   }
 }
-```
+
+```bash
 
 ### Available Tools
 
 | Tool | Description |
-|------|-------------|
+| ------ | ------------- |
 | `list_buckets` | List all accessible buckets |
 | `list_objects` | List objects in a bucket |
 | `read_object` | Read object content |
@@ -62,17 +66,20 @@ Browse and read bucket contents:
 ### Basic Setup
 
 ```yaml
+
 mcp:
   enabled: true
   port: 9005
   enable_tools: true
   enable_resources: true
   enable_prompts: true
-```
+
+```bash
 
 ### Advanced Configuration
 
 ```yaml
+
 mcp:
   enabled: true
   port: 9005
@@ -83,12 +90,13 @@ mcp:
   allowed_buckets: []          # Empty = all buckets
   auth_required: true          # Require authentication
   rate_limit: 100              # Requests per minute per client
-```
+
+```bash
 
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_MCP_ENABLED` | Enable MCP Server | `false` |
 | `NEBULAIO_MCP_PORT` | MCP Server port | `9005` |
 
@@ -99,6 +107,7 @@ mcp:
 Add to your Claude Desktop MCP configuration:
 
 ```json
+
 {
   "mcpServers": {
     "nebulaio": {
@@ -112,11 +121,13 @@ Add to your Claude Desktop MCP configuration:
     }
   }
 }
-```
+
+```bash
 
 ### Using MCP Client Libraries
 
 ```typescript
+
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
@@ -136,11 +147,13 @@ const tools = await client.listTools();
 
 // Call a tool
 const result = await client.callTool("list_buckets", {});
-```
+
+```bash
 
 ### Python MCP Client
 
 ```python
+
 from mcp import ClientSession
 from mcp.client.http import HTTPClient
 
@@ -158,13 +171,15 @@ async with HTTPClient("http://localhost:9005/mcp") as client:
             }
         )
         print(result.content)
-```
+
+```bash
 
 ## Usage Examples
 
 ### List Buckets
 
 ```json
+
 {
   "jsonrpc": "2.0",
   "id": 1,
@@ -174,11 +189,13 @@ async with HTTPClient("http://localhost:9005/mcp") as client:
     "arguments": {}
   }
 }
-```
+
+```text
 
 Response:
 
 ```json
+
 {
   "jsonrpc": "2.0",
   "id": 1,
@@ -191,11 +208,13 @@ Response:
     ]
   }
 }
-```
+
+```bash
 
 ### Read Object
 
 ```json
+
 {
   "jsonrpc": "2.0",
   "id": 2,
@@ -208,11 +227,13 @@ Response:
     }
   }
 }
-```
+
+```bash
 
 ### Write Object
 
 ```json
+
 {
   "jsonrpc": "2.0",
   "id": 3,
@@ -227,11 +248,13 @@ Response:
     }
   }
 }
-```
+
+```bash
 
 ### List Objects with Prefix
 
 ```json
+
 {
   "jsonrpc": "2.0",
   "id": 4,
@@ -245,24 +268,28 @@ Response:
     }
   }
 }
-```
+
+```bash
 
 ## Resources
 
 ### Browse Resources
 
 ```json
+
 {
   "jsonrpc": "2.0",
   "id": 1,
   "method": "resources/list",
   "params": {}
 }
-```
+
+```bash
 
 ### Read Resource
 
 ```json
+
 {
   "jsonrpc": "2.0",
   "id": 2,
@@ -271,7 +298,8 @@ Response:
     "uri": "s3://my-bucket/data/report.csv"
   }
 }
-```
+
+```bash
 
 ## Security
 
@@ -280,39 +308,47 @@ Response:
 Enable authentication for production:
 
 ```yaml
+
 mcp:
   enabled: true
   auth_required: true
-```
+
+```text
 
 Include credentials in requests:
 
 ```bash
+
 curl -X POST http://localhost:9005/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ACCESS_KEY:SECRET_KEY" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
-```
+
+```bash
 
 ### Bucket Restrictions
 
 Limit access to specific buckets:
 
 ```yaml
+
 mcp:
   enabled: true
   allowed_buckets:
     - "public-data"
     - "shared-resources"
-```
+
+```bash
 
 ### Rate Limiting
 
 ```yaml
+
 mcp:
   enabled: true
   rate_limit: 60  # 60 requests per minute
-```
+
+```bash
 
 ## Integration with AI Workflows
 
@@ -328,6 +364,7 @@ When using Claude with MCP, the assistant can:
 ### LangChain Integration
 
 ```python
+
 from langchain.tools import Tool
 from mcp import ClientSession
 
@@ -344,7 +381,8 @@ s3_read_tool = Tool(
     description="Read an object from S3 storage",
     func=read_s3_object
 )
-```
+
+```bash
 
 ## Troubleshooting
 
@@ -359,17 +397,21 @@ s3_read_tool = Tool(
 Enable debug logging:
 
 ```yaml
+
 log_level: debug
-```
+
+```text
 
 Look for logs with `mcp` tag.
 
 ### Testing Connection
 
 ```bash
+
 curl -X POST http://localhost:9005/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+
 ```
 
 ## API Reference
@@ -377,7 +419,7 @@ curl -X POST http://localhost:9005/mcp \
 ### JSON-RPC Methods
 
 | Method | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `tools/list` | List available tools |
 | `tools/call` | Execute a tool |
 | `resources/list` | List available resources |

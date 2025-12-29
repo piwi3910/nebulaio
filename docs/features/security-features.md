@@ -5,7 +5,7 @@ NebulaIO provides comprehensive enterprise security features including access an
 ## Feature Overview
 
 | Feature | Description | Status |
-|---------|-------------|--------|
+| --------- | ------------- | -------- |
 | [Access Analytics](#access-analytics) | Real-time anomaly detection and behavior analysis | Production |
 | [Key Rotation](#encryption-key-rotation) | Automated encryption key lifecycle management | Production |
 | [mTLS](#mtls-internal-communication) | Mutual TLS for secure internal communication | Production |
@@ -25,7 +25,7 @@ Real-time access monitoring with machine learning-based anomaly detection to ide
 ### Anomaly Types Detected
 
 | Anomaly Type | Description | Default Severity |
-|-------------|-------------|------------------|
+| ------------- | ------------- | ------------------ |
 | Unusual Time Access | Access outside normal hours | Medium |
 | High Volume Requests | Request rate exceeds baseline | High |
 | Bulk Operations | Mass delete/modify operations | Critical |
@@ -38,6 +38,7 @@ Real-time access monitoring with machine learning-based anomaly detection to ide
 ### Configuration
 
 ```yaml
+
 # config.yaml
 analytics:
   enabled: true
@@ -61,11 +62,13 @@ analytics:
       enabled: true
       recipients:
         - security@example.com
-```
+
+```bash
 
 ### Custom Rules
 
 ```yaml
+
 analytics:
   custom_rules:
     - id: sensitive-bucket-access
@@ -82,11 +85,13 @@ analytics:
       actions:
         - type: alert
         - type: log
-```
+
+```bash
 
 ### API Examples
 
 ```bash
+
 # Get anomalies
 curl -X GET "http://localhost:9001/api/v1/analytics/anomalies?severity=HIGH&limit=100" \
   -H "Authorization: Bearer $TOKEN"
@@ -109,7 +114,8 @@ curl -X POST "http://localhost:9001/api/v1/analytics/reports" \
 curl -X POST "http://localhost:9001/api/v1/analytics/anomalies/anom-123/acknowledge" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"resolution": "Verified as authorized access"}'
-```
+
+```bash
 
 ## Encryption Key Rotation
 
@@ -126,7 +132,7 @@ Automated encryption key lifecycle management with zero-downtime rotation and re
 ### Key Types
 
 | Type | Purpose | Default Rotation |
-|------|---------|------------------|
+| ------ | --------- | ------------------ |
 | Master | Wraps all other keys | 1 year |
 | Data | Encrypts object data | 90 days |
 | Bucket | Per-bucket encryption | 6 months |
@@ -136,6 +142,7 @@ Automated encryption key lifecycle management with zero-downtime rotation and re
 ### Configuration
 
 ```yaml
+
 # config.yaml
 encryption:
   enabled: true
@@ -176,11 +183,13 @@ encryption:
       address: https://vault.example.com
       mount: transit
       key_name: nebulaio-master
-```
+
+```bash
 
 ### API Examples
 
 ```bash
+
 # Create a new key
 curl -X POST "http://localhost:9001/api/v1/keys" \
   -H "Authorization: Bearer $TOKEN" \
@@ -214,7 +223,8 @@ curl -X POST "http://localhost:9001/api/v1/keys/key-123/reencrypt" \
     "buckets": ["my-bucket"],
     "concurrency": 10
   }'
-```
+
+```bash
 
 ## mTLS Internal Communication
 
@@ -231,6 +241,7 @@ Mutual TLS authentication for secure communication between NebulaIO cluster node
 ### Configuration
 
 ```yaml
+
 # config.yaml
 mtls:
   enabled: true
@@ -257,12 +268,13 @@ mtls:
   crl:
     enabled: true
     update_interval: 24h
-```
+
+```bash
 
 ### Certificate Types
 
 | Type | Purpose | Key Usage |
-|------|---------|-----------|
+| ------ | --------- | ----------- |
 | Server | Node-to-node server auth | Digital Signature, Key Encipherment |
 | Client | Node-to-node client auth | Digital Signature |
 | Peer | Both server and client | Digital Signature, Key Encipherment |
@@ -270,6 +282,7 @@ mtls:
 ### API Examples
 
 ```bash
+
 # Initialize CA
 curl -X POST "http://localhost:9001/api/v1/mtls/ca/init" \
   -H "Authorization: Bearer $TOKEN" \
@@ -301,7 +314,8 @@ curl -X GET "http://localhost:9001/api/v1/mtls/crl" \
 # Export CA certificate
 curl -X GET "http://localhost:9001/api/v1/mtls/ca/certificate" \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```bash
 
 ## OpenTelemetry Tracing
 
@@ -318,7 +332,7 @@ Distributed tracing for complete request visibility across the NebulaIO cluster.
 ### Propagation Formats
 
 | Format | Header | Use Case |
-|--------|--------|----------|
+| -------- | -------- | ---------- |
 | W3C Trace Context | `traceparent`, `tracestate` | Standard (recommended) |
 | B3 | `X-B3-TraceId`, `X-B3-SpanId` | Zipkin compatibility |
 | Jaeger | `uber-trace-id` | Jaeger compatibility |
@@ -326,6 +340,7 @@ Distributed tracing for complete request visibility across the NebulaIO cluster.
 ### Configuration
 
 ```yaml
+
 # config.yaml
 tracing:
   enabled: true
@@ -347,11 +362,13 @@ tracing:
     max_size: 512
 
   propagator: w3c          # w3c, b3, jaeger
-```
+
+```bash
 
 ### Kubernetes Deployment
 
 ```yaml
+
 # deployments/kubernetes/tracing.yaml
 apiVersion: v1
 kind: ConfigMap
@@ -375,14 +392,15 @@ spec:
           envFrom:
             - configMapRef:
                 name: nebulaio-tracing
-```
+
+```bash
 
 ### Trace Attributes
 
 Standard attributes added to all spans:
 
 | Attribute | Description |
-|-----------|-------------|
+| ----------- | ------------- |
 | `service.name` | Service name (nebulaio) |
 | `service.version` | Service version |
 | `deployment.environment` | Environment (production, staging) |
@@ -405,7 +423,8 @@ Traces can be viewed in:
 
 ## Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        NebulaIO Security Layer                           │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -429,6 +448,7 @@ Traces can be viewed in:
 │  │                        S3 API / Admin API                             │ │
 │  └───────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
+
 ```
 
 ## Compliance Integration
@@ -436,7 +456,7 @@ Traces can be viewed in:
 These security features support compliance with:
 
 | Framework | Features Used |
-|-----------|---------------|
+| ----------- | --------------- |
 | SOC 2 | Access Analytics, Audit Logs, Key Rotation |
 | PCI DSS | Encryption, Key Management, mTLS |
 | HIPAA | Access Controls, Audit Trails, Encryption |
@@ -446,7 +466,7 @@ These security features support compliance with:
 ## Performance Impact
 
 | Feature | Overhead | Notes |
-|---------|----------|-------|
+| --------- | ---------- | ------- |
 | Access Analytics | < 1ms per request | Async processing |
 | Key Rotation | Zero-downtime | Background re-encryption |
 | mTLS | ~2-5ms handshake | Connection pooling helps |

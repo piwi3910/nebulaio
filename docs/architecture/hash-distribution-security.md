@@ -13,11 +13,13 @@ NebulaIO uses consistent hashing to distribute data shards across storage nodes 
 NebulaIO uses SHA-256 for consistent hashing:
 
 ```go
+
 func hashKey(key string) uint64 {
     h := sha256.Sum256([]byte(key))
     return binary.BigEndian.Uint64(h[:8])
 }
-```
+
+```text
 
 **Security Properties:**
 
@@ -28,7 +30,7 @@ func hashKey(key string) uint64 {
 ### Why SHA-256?
 
 | Property | Benefit |
-|----------|---------|
+| ---------- | --------- |
 | Preimage Resistance | Attackers cannot reverse-engineer keys to target specific nodes |
 | Second Preimage Resistance | Cannot find alternate keys that hash to same location |
 | Avalanche Effect | Small key changes produce completely different hash values |
@@ -41,10 +43,12 @@ func hashKey(key string) uint64 {
 Each physical node is represented by multiple virtual nodes on the hash ring:
 
 ```go
+
 type ConsistentHashPlacement struct {
     virtualNodes int  // Default: 100 virtual nodes per physical node
 }
-```
+
+```text
 
 **Security Benefits:**
 
@@ -109,8 +113,10 @@ For each object:
 2. **Capacity-Aware Placement**: Optional strategy considers node capacity:
 
    ```go
+
    NewCapacityAwarePlacement()  // Excludes nodes at capacity
-   ```
+
+   ```text
 
 3. **Load Balancing**: Virtual nodes distribute load even for adversarial patterns
 4. **Monitoring**: Prometheus metrics expose per-node shard counts
@@ -122,8 +128,10 @@ NebulaIO supports multiple placement strategies with different security characte
 ### Consistent Hash Placement (Default)
 
 ```go
+
 NewConsistentHashPlacement(virtualNodes int)
-```
+
+```text
 
 **Best For**: General use, unpredictable key patterns
 **Security**: Highest resistance to adversarial key crafting
@@ -131,8 +139,10 @@ NewConsistentHashPlacement(virtualNodes int)
 ### Round Robin Placement
 
 ```go
+
 NewRoundRobinPlacement()
-```
+
+```text
 
 **Best For**: Predictable key sequences, testing
 **Security**: Deterministic placement (less suitable for untrusted key sources)
@@ -140,8 +150,10 @@ NewRoundRobinPlacement()
 ### Capacity-Aware Placement
 
 ```go
+
 NewCapacityAwarePlacement()
-```
+
+```text
 
 **Best For**: Heterogeneous clusters, preventing node exhaustion
 **Security**: Combines consistent hashing with capacity checks
@@ -150,9 +162,11 @@ NewCapacityAwarePlacement()
 
 Hash distribution works with Reed-Solomon erasure coding:
 
-```
+```text
+
 Object -> Data Shards (K) + Parity Shards (M) -> Hash Distribution -> Nodes
-```
+
+```text
 
 **Security Properties:**
 
@@ -166,8 +180,10 @@ Object -> Data Shards (K) + Parity Shards (M) -> Hash Distribution -> Nodes
 The system validates that placement groups can support the configured redundancy:
 
 ```go
+
 // Ensures min_nodes >= data_shards + parity_shards
 validateRedundancyVsNodes()
+
 ```
 
 ## Audit Trail
@@ -175,7 +191,7 @@ validateRedundancyVsNodes()
 All placement-related operations are audited:
 
 | Event Type | Description |
-|------------|-------------|
+| ------------ | ------------- |
 | `cluster:PlacementGroup:NodeJoined` | Node added to placement group |
 | `cluster:PlacementGroup:NodeLeft` | Node removed from placement group |
 | `cluster:PlacementGroup:StatusChanged` | Group health status changed |

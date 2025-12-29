@@ -3,6 +3,7 @@
 ## Build Commands
 
 ```bash
+
 # Build the binary
 make build
 
@@ -17,11 +18,13 @@ make build-all
 
 # Clean build artifacts
 make clean
-```
+
+```bash
 
 ## Development Commands
 
 ```bash
+
 # Download dependencies
 make deps
 
@@ -33,11 +36,13 @@ make run
 
 # Run in dev mode with hot reload (requires air)
 make dev
-```
+
+```bash
 
 ## Code Quality Commands
 
 ```bash
+
 # Format code
 make fmt
 
@@ -52,11 +57,13 @@ make test
 
 # Run tests with coverage
 make test-coverage
-```
+
+```bash
 
 ## Docker Commands
 
 ```bash
+
 # Build Docker image
 make docker-build
 
@@ -68,11 +75,13 @@ make docker-compose-up
 
 # Stop docker-compose
 make docker-compose-down
-```
+
+```bash
 
 ## Web Console Commands
 
 ```bash
+
 # Install web dependencies
 make web
 
@@ -81,21 +90,25 @@ make web-build
 
 # Run web dev server
 make web-dev
-```
+
+```bash
 
 ## Utility Commands
 
 ```bash
+
 # Initialize data directory
 make init-data
 
 # Show help
 make help
-```
+
+```bash
 
 ## Direct Go Commands
 
 ```bash
+
 # Build all packages
 go build ./...
 
@@ -110,4 +123,5 @@ gofmt -d .
 
 # Check syntax only
 gofmt -e ./internal/auth/*.go
+
 ```

@@ -7,7 +7,7 @@ This document outlines the plan to migrate NebulaIO's distributed consensus laye
 ### Why Migrate?
 
 | Aspect | HashiCorp Raft | Dragonboat |
-|--------|---------------|------------|
+| -------- | --------------- | ------------ |
 | Performance | Good | **1.25M writes/sec** (16-byte payloads) |
 | Latency | ~5-10ms | **1.3ms avg, 2.6ms P99** |
 | Multi-group | No | **Yes (native)** |
@@ -17,7 +17,7 @@ This document outlines the plan to migrate NebulaIO's distributed consensus laye
 ### Scope of Changes
 
 | Category | Files Affected | Effort |
-|----------|---------------|--------|
+| ---------- | --------------- | -------- |
 | Core Implementation | 3 files (~1,800 lines) | High |
 | Configuration | 2 files | Medium |
 | API Handlers | 3 files | Medium |
@@ -37,6 +37,7 @@ This document outlines the plan to migrate NebulaIO's distributed consensus laye
 Replace HashiCorp Raft with Dragonboat NodeHost:
 
 ```go
+
 package metadata
 
 import (
@@ -64,12 +65,13 @@ type DragonboatStore struct {
     replicaID uint64
     badger   *badger.DB
 }
-```
+
+```text
 
 **Key API Mappings:**
 
 | HashiCorp Raft | Dragonboat |
-|----------------|------------|
+| ---------------- | ------------ |
 | `raft.NewRaft()` | `dragonboat.NewNodeHost()` + `nh.StartReplica()` |
 | `raft.Apply()` | `nh.SyncPropose()` |
 | `raft.State() == Leader` | `nh.GetLeaderID()` |
@@ -85,6 +87,7 @@ type DragonboatStore struct {
 **File: `internal/metadata/dragonboat_fsm.go`** (NEW)
 
 ```go
+
 package metadata
 
 import (
@@ -126,7 +129,8 @@ func (s *stateMachine) RecoverFromSnapshot(r io.Reader,
 func (s *stateMachine) Close() error {
     return nil // BadgerDB closed separately
 }
-```
+
+```bash
 
 ### 1.3 Update Store Interface Methods
 
@@ -135,6 +139,7 @@ func (s *stateMachine) Close() error {
 Implement all metadata operations using Dragonboat:
 
 ```go
+
 func (s *DragonboatStore) CreateBucket(ctx context.Context, bucket *Bucket) error {
     cmd := Command{Type: CmdCreateBucket, Data: bucket}
     data, _ := json.Marshal(cmd)
@@ -164,12 +169,13 @@ func (s *DragonboatStore) GetLeaderAddress() (string, error) {
     }
     return membership.Nodes[leaderID], nil
 }
-```
+
+```bash
 
 ### 1.4 Breaking Changes to Address
 
 | Change | Migration Action |
-|--------|-----------------|
+| -------- | ----------------- |
 | NodeID: string → uint64 | Add ID mapping/hashing function |
 | Single cluster → ShardID concept | Use ShardID=1 for metadata shard |
 | BoltDB log store → Built-in | Remove raft-boltdb dependency |
@@ -185,6 +191,7 @@ func (s *DragonboatStore) GetLeaderAddress() (string, error) {
 **File: `internal/config/config.go`**
 
 ```go
+
 type ClusterConfig struct {
     // Existing fields
     NodeID         string   `mapstructure:"node_id"`
@@ -203,11 +210,13 @@ type ClusterConfig struct {
     // Deprecated (remove in future)
     // RaftBind - now derived from RaftPort
 }
-```
+
+```bash
 
 ### 2.2 Update Default Configuration
 
 ```yaml
+
 cluster:
   shard_id: 1                    # Metadata shard ID
   replica_id: 0                  # Auto-assign based on node_id hash
@@ -215,7 +224,8 @@ cluster:
   wal_dir: ""                    # Empty = use data_dir/wal
   snapshot_count: 10000          # Snapshot every 10k entries
   compaction_overhead: 5000
-```
+
+```text
 
 ---
 
@@ -226,6 +236,7 @@ cluster:
 **File: `internal/cluster/discovery.go`**
 
 ```go
+
 import (
     "github.com/lni/dragonboat/v4"
 )
@@ -280,7 +291,8 @@ func (d *Discovery) addRaftVoter(node *NodeInfo) error {
         membership.ConfigChangeID,
     )
 }
-```
+
+```text
 
 ---
 
@@ -291,6 +303,7 @@ func (d *Discovery) addRaftVoter(node *NodeInfo) error {
 **File: `internal/api/admin/cluster.go`**
 
 ```go
+
 type ClusterHandler struct {
     store     *metadata.DragonboatStore  // Type change
     discovery *cluster.Discovery
@@ -329,7 +342,8 @@ func (h *ClusterHandler) GetRaftStats(w http.ResponseWriter, r *http.Request) {
     info := h.store.GetNodeHostInfo()
     // Map to stats response
 }
-```
+
+```bash
 
 ### 4.2 Update Handler Factory
 
@@ -346,6 +360,7 @@ Update `GetRaftState()` to use Dragonboat API.
 **File: `internal/server/server.go`**
 
 ```go
+
 func NewServer(cfg *config.Config) (*Server, error) {
     // ...
 
@@ -383,7 +398,8 @@ func NewServer(cfg *config.Config) (*Server, error) {
 
     // ...
 }
-```
+
+```text
 
 ---
 
@@ -394,6 +410,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 **File: `internal/metrics/metrics.go`**
 
 ```go
+
 // Update metric names and collection
 var (
     raftState = prometheus.NewGaugeVec(
@@ -439,7 +456,8 @@ func CollectRaftMetrics(store *metadata.DragonboatStore) {
         }
     }
 }
-```
+
+```text
 
 ---
 
@@ -450,6 +468,7 @@ func CollectRaftMetrics(store *metadata.DragonboatStore) {
 **File: `deployments/kubernetes/base/statefulset.yaml`**
 
 ```yaml
+
 # Port remains the same (9003)
 ports:
   - name: raft
@@ -473,13 +492,15 @@ volumeClaimTemplates:
       resources:
         requests:
           storage: 5Gi
-```
+
+```bash
 
 ### 7.2 ConfigMap Updates
 
 **File: `deployments/kubernetes/base/configmap.yaml`**
 
 ```yaml
+
 data:
   nebulaio.yaml: |
     cluster:
@@ -487,13 +508,15 @@ data:
       raft_port: 9003
       wal_dir: /data/wal
       snapshot_count: 10000
-```
+
+```bash
 
 ### 7.3 Docker Compose Updates
 
 **File: `docker-compose.cluster.yml`**
 
 ```yaml
+
 services:
   nebulaio-1:
     environment:
@@ -503,20 +526,23 @@ services:
     volumes:
       - node1-data:/data
       - node1-wal:/data/wal  # Separate WAL volume
-```
+
+```bash
 
 ### 7.4 Helm Chart Updates
 
 **File: `deployments/helm/nebulaio/values.yaml`**
 
 ```yaml
+
 cluster:
   shardId: 1
   raftPort: 9003
   walDir: "/data/wal"
   snapshotCount: 10000
   compactionOverhead: 5000
-```
+
+```text
 
 ---
 
@@ -525,7 +551,7 @@ cluster:
 ### 8.1 Files to Update
 
 | File | Changes Required |
-|------|-----------------|
+| ------ | ----------------- |
 | `README.md` | Update feature description |
 | `docs/architecture/clustering.md` | Complete rewrite for Dragonboat |
 | `docs/architecture/overview.md` | Update consensus section |
@@ -553,30 +579,36 @@ Migration guide for existing deployments.
 **File: `internal/metadata/dragonboat_test.go`** (NEW)
 
 ```go
+
 func TestDragonboatStore_CreateBucket(t *testing.T) { ... }
 func TestDragonboatStore_LeaderElection(t *testing.T) { ... }
 func TestDragonboatStore_Snapshot(t *testing.T) { ... }
 func TestDragonboatStore_MembershipChange(t *testing.T) { ... }
-```
+
+```bash
 
 ### 9.2 Integration Tests
 
 **File: `internal/metadata/dragonboat_integration_test.go`** (NEW)
 
 ```go
+
 //go:build integration
 
 func TestDragonboat_ThreeNodeCluster(t *testing.T) { ... }
 func TestDragonboat_LeaderFailover(t *testing.T) { ... }
 func TestDragonboat_NodeJoinLeave(t *testing.T) { ... }
-```
+
+```bash
 
 ### 9.3 Benchmark Tests
 
 ```go
+
 func BenchmarkDragonboat_Propose(b *testing.B) { ... }
 func BenchmarkDragonboat_Read(b *testing.B) { ... }
-```
+
+```text
 
 ---
 
@@ -601,6 +633,7 @@ func BenchmarkDragonboat_Read(b *testing.B) { ... }
 ### 10.2 Breaking Changes Notice
 
 ```markdown
+
 ## Breaking Changes in vX.0.0
 
 ### Raft Implementation Change
@@ -618,7 +651,8 @@ NebulaIO has migrated from HashiCorp Raft to Dragonboat for improved performance
 **Data Migration:**
 - Existing Raft logs are NOT compatible
 - See migration guide: docs/migration/hashicorp-to-dragonboat.md
-```
+
+```text
 
 ---
 
@@ -664,18 +698,22 @@ NebulaIO has migrated from HashiCorp Raft to Dragonboat for improved performance
 ### Add
 
 ```go
+
 require (
     github.com/lni/dragonboat/v4 v4.0.0
 )
-```
+
+```bash
 
 ### Remove
 
 ```go
+
 // These can be removed after migration
 github.com/hashicorp/raft v1.7.3
 github.com/hashicorp/raft-boltdb v0.0.0-...
-```
+
+```text
 
 ---
 
@@ -687,14 +725,16 @@ If issues arise during migration:
 2. Use build tags to switch implementations:
 
    ```go
+
    //go:build !dragonboat
    // hashicorp implementation
 
    //go:build dragonboat
    // dragonboat implementation
+
    ```
 
-3. Document rollback procedure in operations guide
+1. Document rollback procedure in operations guide
 
 ---
 

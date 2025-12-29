@@ -22,6 +22,7 @@
 ### Struct Patterns
 
 ```go
+
 // Handler pattern used across API packages
 type Handler struct {
     auth   *auth.Service
@@ -34,42 +35,46 @@ type Handler struct {
 func NewHandler(...) *Handler {
     return &Handler{...}
 }
-```
+
+```bash
 
 ### HTTP Handler Pattern
 
 ```go
+
 func (h *Handler) SomeEndpoint(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
-    
+
     // Parse request
     var req RequestType
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         writeError(w, "Invalid request body", http.StatusBadRequest)
         return
     }
-    
+
     // Validate
     if req.Field == "" {
         writeError(w, "Field is required", http.StatusBadRequest)
         return
     }
-    
+
     // Business logic
     result, err := h.service.DoSomething(ctx, req)
     if err != nil {
         writeError(w, err.Error(), http.StatusInternalServerError)
         return
     }
-    
+
     // Response
     writeJSON(w, http.StatusOK, result)
 }
-```
+
+```bash
 
 ### Request/Response Types
 
 ```go
+
 // Request types with json tags
 type CreateSomethingRequest struct {
     Name        string `json:"name"`
@@ -82,7 +87,8 @@ type SomethingResponse struct {
     Name      string    `json:"name"`
     CreatedAt time.Time `json:"created_at"`
 }
-```
+
+```bash
 
 ### Error Handling
 
@@ -94,38 +100,43 @@ type SomethingResponse struct {
 ### Router Registration Pattern
 
 ```go
+
 func (h *Handler) RegisterRoutes(r chi.Router) {
     r.Use(h.authMiddleware)
-    
+
     r.Get("/resource", h.ListResources)
     r.Post("/resource", h.CreateResource)
     r.Get("/resource/{id}", h.GetResource)
     r.Put("/resource/{id}", h.UpdateResource)
     r.Delete("/resource/{id}", h.DeleteResource)
 }
-```
+
+```bash
 
 ### Middleware Pattern
 
 ```go
+
 func SomeMiddleware(config Config) func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             // Pre-processing
             ctx := r.Context()
-            
+
             // Add to context if needed
             ctx = context.WithValue(ctx, key, value)
-            
+
             next.ServeHTTP(w, r.WithContext(ctx))
         })
     }
 }
-```
+
+```bash
 
 ### Helper Functions
 
 ```go
+
 // JSON response helper
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
     w.Header().Set("Content-Type", "application/json")
@@ -137,6 +148,7 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 func writeError(w http.ResponseWriter, message string, status int) {
     writeJSON(w, status, map[string]string{"error": message})
 }
+
 ```
 
 ## Testing Conventions

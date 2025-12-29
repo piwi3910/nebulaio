@@ -16,23 +16,28 @@ Thank you for your interest in contributing to NebulaIO! This guide will help yo
 1. **Clone the repository**:
 
    ```bash
+
    git clone https://github.com/piwi3910/nebulaio.git
    cd nebulaio
-   ```
+
+   ```text
 
 2. **Install dependencies**:
 
    ```bash
+
    # Go dependencies
    make deps
 
    # Web console dependencies (optional)
    make web
-   ```
+
+   ```text
 
 3. **Install pre-commit hooks** (highly recommended):
 
    ```bash
+
    # Install pre-commit (choose one):
    pip install pre-commit
    # OR on macOS:
@@ -40,7 +45,8 @@ Thank you for your interest in contributing to NebulaIO! This guide will help yo
 
    # Install the hooks
    make install-hooks
-   ```
+
+   ```bash
 
 ## Pre-commit Hooks
 
@@ -84,6 +90,7 @@ When you run `git commit`, the hooks automatically:
 ### Example workflow
 
 ```bash
+
 # Make your changes
 vim internal/bucket/service.go
 
@@ -100,11 +107,13 @@ git commit -m "feat: add bucket validation"
 # If hooks fail:
 # ✗ golangci-lint found 2 issues
 # Fix the issues, stage again, and recommit
-```
+
+```bash
 
 ### Commands
 
 ```bash
+
 # Install hooks
 make install-hooks
 
@@ -116,7 +125,8 @@ pre-commit run
 
 # Skip hooks for urgent commits (use sparingly!)
 git commit --no-verify
-```
+
+```bash
 
 ### Troubleshooting
 
@@ -141,8 +151,10 @@ git commit --no-verify
 **Need to bypass hooks temporarily?**
 
 ```bash
+
 git commit --no-verify -m "your message"
-```
+
+```text
 
 *Use sparingly - you'll still need to fix issues for CI to pass!*
 
@@ -183,6 +195,7 @@ git commit --no-verify -m "your message"
 ## Testing
 
 ```bash
+
 # Run all tests
 make test
 
@@ -194,11 +207,13 @@ go test -v ./internal/bucket/
 
 # Run specific test
 go test -v -run TestBucketValidation ./internal/bucket/
-```
+
+```bash
 
 ## Building
 
 ```bash
+
 # Build binary
 make build
 
@@ -212,6 +227,7 @@ make run
 
 # Development mode with hot reload (requires air)
 make dev
+
 ```
 
 ## Pull Request Process

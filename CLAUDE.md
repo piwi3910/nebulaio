@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Backend (Go)
 
 ```bash
+
 # Build the binary
 make build
 
@@ -26,11 +27,13 @@ make vet                     # Run go vet
 # Build for specific platforms
 make build-linux             # Linux amd64
 make build-darwin            # macOS arm64
-```
+
+```bash
 
 ### Frontend (React/TypeScript)
 
 ```bash
+
 cd web
 
 npm install                  # Install dependencies
@@ -40,21 +43,26 @@ npm run lint                 # ESLint
 npm run type-check           # TypeScript check
 npm run test                 # Vitest tests
 npm run test:run             # Run tests once
-```
+
+```bash
 
 ### Docker
 
 ```bash
+
 docker-compose up -d                    # Start with docker-compose
 docker-compose -f docker-compose.yml -f docker-compose.production.yml up -d  # Production
-```
+
+```bash
 
 ### Running the Server
 
 ```bash
+
 ./bin/nebulaio --debug                  # Debug mode
 ./bin/nebulaio --data ./data --s3-port 9000 --admin-port 9001
-```
+
+```text
 
 **Note:** TLS is enabled by default. Access via HTTPS (e.g., `https://localhost:9001`). Certificates are auto-generated in `data/certs/`.
 
@@ -92,7 +100,8 @@ NebulaIO is an S3-compatible object storage system with distributed consensus.
 
 ### Request Flow
 
-```
+```text
+
 Client Request
      │
      ▼
@@ -106,7 +115,8 @@ Metadata Store (internal/metadata/) ─── Raft consensus
      │
      ▼
 Storage Backend (internal/storage/) ─── actual data I/O
-```
+
+```bash
 
 ### Web Console (`web/`)
 
@@ -218,6 +228,7 @@ When adding features:
 Every feature should expose metrics:
 
 ```go
+
 // Counter - for events
 requestsTotal := prometheus.NewCounterVec(
     prometheus.CounterOpts{
@@ -244,17 +255,20 @@ activeConnections := prometheus.NewGauge(
         Help: "Current active connections",
     },
 )
-```
+
+```bash
 
 ## Frontend Page Template
 
 New features requiring configuration should have a settings page:
 
-```
+```text
+
 web/src/pages/
 ├── FeatureNamePage.tsx      # Main feature page
 └── settings/
     └── FeatureSettings.tsx  # Configuration UI
+
 ```
 
 Include:

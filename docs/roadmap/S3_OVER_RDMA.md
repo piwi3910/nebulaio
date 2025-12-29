@@ -9,7 +9,7 @@ This document outlines the roadmap for implementing S3 over RDMA (Remote Direct 
 ### Performance Benefits
 
 | Metric | Traditional TCP | RDMA |
-|--------|-----------------|------|
+| -------- | ----------------- | ------ |
 | Latency (p50) | 100-500 μs | 1-5 μs |
 | Latency (p99) | 1-5 ms | 10-50 μs |
 | CPU Usage | High | Near-zero |
@@ -39,7 +39,8 @@ This document outlines the roadmap for implementing S3 over RDMA (Remote Direct 
 
 ### Protocol Stack Comparison
 
-```
+```text
+
 Traditional S3:
 ┌─────────────────┐
 │   S3 Client     │
@@ -63,19 +64,21 @@ S3 over RDMA:
 ├─────────────────┤
 │   RDMA NIC      │
 └─────────────────┘
-```
+
+```bash
 
 ### RDMA Transport Options
 
 | Transport | Hardware Required | Performance | Cost |
-|-----------|-------------------|-------------|------|
+| ----------- | ------------------- | ------------- | ------ |
 | InfiniBand | InfiniBand NICs + Switches | Highest | $$$ |
 | RoCE v2 | RDMA-capable Ethernet NICs | Very High | $$ |
 | iWARP | iWARP NICs | High | $ |
 
 ### Proposed Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────┐
 │                        S3 Client                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -109,7 +112,8 @@ S3 over RDMA:
 │  │  - Memory region lifecycle management                │   │
 │  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ## Implementation Phases
 
@@ -127,6 +131,7 @@ S3 over RDMA:
 **Technical Details**:
 
 ```go
+
 // internal/transport/rdma/transport.go
 
 type RDMATransport struct {
@@ -156,7 +161,8 @@ type S3OverRDMARequest struct {
     RemoteAddr  uint64
     RemoteKey   uint32
 }
-```
+
+```text
 
 **Dependencies**:
 
@@ -178,7 +184,8 @@ type S3OverRDMARequest struct {
 
 **Zero-Copy Data Path**:
 
-```
+```text
+
 Client PutObject:
 1. Client registers memory containing object data
 2. Client sends request with remote memory address
@@ -191,7 +198,8 @@ Client GetObject:
 2. Client sends request with buffer address
 3. Server performs RDMA WRITE directly to client buffer
 4. Client receives completion notification
-```
+
+```bash
 
 ### Phase 3: Performance Optimization (Q4 2025)
 
@@ -230,6 +238,7 @@ Client GetObject:
 ### Go Client Example
 
 ```go
+
 package main
 
 import (
@@ -260,11 +269,13 @@ func main() {
     copy(data, myData)
     err = client.PutObject(ctx, "bucket", "key", data)
 }
-```
+
+```bash
 
 ### Python Client Example
 
 ```python
+
 from nebulaio import RDMAClient
 
 # Create client with automatic RDMA detection
@@ -281,14 +292,15 @@ array = client.get_object_numpy("bucket", "model_weights.npy")
 
 # Direct save from numpy array (zero-copy)
 client.put_object_numpy("bucket", "checkpoint.npy", weights_array)
-```
+
+```bash
 
 ## Hardware Requirements
 
 ### Minimum Requirements
 
 | Component | Specification |
-|-----------|---------------|
+| ----------- | --------------- |
 | RDMA NIC | ConnectX-4 or newer (Mellanox/NVIDIA) |
 | Switch | RoCE v2 capable (for Ethernet) or InfiniBand |
 | Memory | 32GB+ for memory regions |
@@ -297,7 +309,7 @@ client.put_object_numpy("bucket", "checkpoint.npy", weights_array)
 ### Recommended Setup
 
 | Component | Specification |
-|-----------|---------------|
+| ----------- | --------------- |
 | NIC | NVIDIA ConnectX-6 Dx (100/200 GbE) |
 | Switch | Ethernet with ECN, PFC (lossless) |
 | CPU | AMD EPYC or Intel Xeon with NUMA |
@@ -307,6 +319,7 @@ client.put_object_numpy("bucket", "checkpoint.npy", weights_array)
 ### Network Configuration
 
 ```yaml
+
 # Required for RoCE v2 performance
 network:
   # Enable Priority Flow Control
@@ -324,13 +337,15 @@ network:
 
   # MTU (jumbo frames recommended)
   mtu: 9000
-```
+
+```bash
 
 ## Integration with Existing Features
 
 ### DRAM Cache + RDMA
 
-```
+```text
+
 ┌──────────────┐    RDMA READ     ┌──────────────┐
 │    Client    │◄────────────────►│  DRAM Cache  │
 └──────────────┘                  └──────────────┘
@@ -345,11 +360,13 @@ Benefits:
 - Sub-microsecond cache hits via RDMA
 - Zero CPU overhead on cache path
 - Direct GPU memory access (GPUDirect)
-```
+
+```bash
 
 ### Erasure Coding + RDMA
 
-```
+```text
+
 Client writes 1 object:
 
 ┌──────────────┐
@@ -368,6 +385,7 @@ Client writes 1 object:
 │   ▼        ▼        ▼        ▼        ▼  │
 │ Node1   Node2    Node3   ...       Node14│
 └──────────────────────────────────────────┘
+
 ```
 
 ## Benchmarking Plan
@@ -405,7 +423,7 @@ Client writes 1 object:
 ## Risk Assessment
 
 | Risk | Mitigation |
-|------|------------|
+| ------ | ------------ |
 | Hardware availability | Hybrid mode with HTTP fallback |
 | Driver compatibility | Support multiple RDMA libraries |
 | Network configuration complexity | Provide automated setup tools |
@@ -415,7 +433,7 @@ Client writes 1 object:
 ## Timeline Summary
 
 | Phase | Timeline | Status |
-|-------|----------|--------|
+| ------- | ---------- | -------- |
 | Research & Design | Q1 2025 | ✅ Complete |
 | Phase 1: Foundation | Q2 2025 | ✅ Complete |
 | Phase 2: Core Operations | Q3 2025 | In Progress |
@@ -429,7 +447,7 @@ Client writes 1 object:
 The following components have been implemented in `internal/transport/rdma/`:
 
 | Component | File | Status |
-|-----------|------|--------|
+| ----------- | ------ | -------- |
 | RDMA transport abstraction | `transport.go` | ✅ |
 | Connection management | `transport.go` | ✅ |
 | Memory region pool | `transport.go` | ✅ |

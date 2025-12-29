@@ -19,28 +19,33 @@ Bucket replication automatically copies objects from a source bucket to one or m
 Objects are queued for background replication with eventual consistency:
 
 ```yaml
+
 replication:
   mode: async
   workers: 10
   retry_max: 3
-```
+
+```bash
 
 ### Synchronous Replication
 
 Waits for destination confirmation before acknowledging writes:
 
 ```yaml
+
 replication:
   mode: sync
   timeout: 30s
   require_all_destinations: true
-```
+
+```bash
 
 ## Configuration via Replication Rules
 
 ### Basic Replication Configuration
 
 ```bash
+
 cat > replication.json << 'EOF'
 {
   "Role": "arn:aws:iam::123456789012:role/replication-role",
@@ -58,20 +63,24 @@ aws s3api put-bucket-replication \
   --endpoint-url http://localhost:9000 \
   --bucket source-bucket \
   --replication-configuration file://replication.json
-```
+
+```bash
 
 ### View and Delete Configuration
 
 ```bash
+
 aws s3api get-bucket-replication --endpoint-url http://localhost:9000 --bucket source-bucket
 aws s3api delete-bucket-replication --endpoint-url http://localhost:9000 --bucket source-bucket
-```
+
+```bash
 
 ## Filtering
 
 ### Prefix Filtering
 
 ```bash
+
 cat > prefix-filter.json << 'EOF'
 {
   "Role": "arn:aws:iam::123456789012:role/replication-role",
@@ -89,11 +98,13 @@ aws s3api put-bucket-replication \
   --endpoint-url http://localhost:9000 \
   --bucket source-bucket \
   --replication-configuration file://prefix-filter.json
-```
+
+```bash
 
 ### Tag Filtering
 
 ```bash
+
 cat > tag-filter.json << 'EOF'
 {
   "Role": "arn:aws:iam::123456789012:role/replication-role",
@@ -111,11 +122,13 @@ aws s3api put-bucket-replication \
   --endpoint-url http://localhost:9000 \
   --bucket source-bucket \
   --replication-configuration file://tag-filter.json
-```
+
+```bash
 
 ### Combined Prefix and Tag Filtering
 
 ```bash
+
 cat > combined-filter.json << 'EOF'
 {
   "Role": "arn:aws:iam::123456789012:role/replication-role",
@@ -138,47 +151,57 @@ aws s3api put-bucket-replication \
   --endpoint-url http://localhost:9000 \
   --bucket source-bucket \
   --replication-configuration file://combined-filter.json
-```
+
+```bash
 
 ## Replication Status Tracking
 
 ### Object-Level Status
 
 ```bash
+
 aws s3api head-object \
   --endpoint-url http://localhost:9000 \
   --bucket source-bucket \
   --key path/to/object.txt
-```
+
+```text
 
 Status values: `PENDING`, `COMPLETED`, `FAILED`, `REPLICA`
 
 ### Queue Statistics
 
 ```bash
+
 curl -X GET "http://localhost:9000/admin/replication/stats" -H "Authorization: Bearer $TOKEN"
-```
+
+```text
 
 Response:
 
 ```json
+
 {"total": 1500, "pending": 150, "in_progress": 25, "completed": 1300, "failed": 25}
-```
+
+```bash
 
 ## Monitoring Replication Lag
 
 ### Prometheus Metrics
 
-```
+```bash
+
 nebulaio_replication_queue_depth{bucket="source-bucket"}
 nebulaio_replication_lag_seconds{bucket="source-bucket"}
 nebulaio_replication_bytes_per_second{bucket="source-bucket"}
 nebulaio_replication_errors_total{bucket="source-bucket",error_type="network"}
-```
+
+```bash
 
 ### Alerting Rules
 
 ```yaml
+
 groups:
   - name: replication
     rules:
@@ -192,16 +215,19 @@ groups:
         for: 10m
         labels:
           severity: critical
-```
+
+```bash
 
 ## Troubleshooting Common Issues
 
 ### Objects Not Replicating
 
 ```bash
+
 aws s3api get-bucket-replication --endpoint-url http://localhost:9000 --bucket source-bucket
 curl -X GET "http://localhost:9000/admin/replication/health" -H "Authorization: Bearer $TOKEN"
-```
+
+```text
 
 Common causes: Rule disabled, filter mismatch, destination unreachable, invalid credentials.
 
@@ -210,20 +236,24 @@ Common causes: Rule disabled, filter mismatch, destination unreachable, invalid 
 Increase workers in configuration:
 
 ```yaml
+
 replication:
   workers: 20
   batch_size: 100
-```
+
+```bash
 
 ### Failed Replications
 
 ```bash
+
 # Get failed items
 curl -X GET "http://localhost:9000/admin/replication/failed?limit=10" -H "Authorization: Bearer $TOKEN"
 
 # Retry failed
 curl -X POST "http://localhost:9000/admin/replication/retry-failed" -H "Authorization: Bearer $TOKEN"
-```
+
+```bash
 
 ### Permission Errors
 
@@ -234,10 +264,12 @@ curl -X POST "http://localhost:9000/admin/replication/retry-failed" -H "Authoriz
 ### Network Timeouts
 
 ```yaml
+
 replication:
   timeout: 60s
   retry_delay: 10s
   retry_max: 5
+
 ```
 
 ## Best Practices

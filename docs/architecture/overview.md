@@ -5,6 +5,7 @@ NebulaIO is a distributed, S3-compatible object storage system designed for high
 ## High-Level Architecture
 
 ```mermaid
+
 flowchart TB
     subgraph LB[Load Balancer]
         lb[HAProxy / Nginx / Cloud LB]
@@ -43,11 +44,13 @@ flowchart TB
     Node1 --> store1
     Node2 --> store2
     Node3 --> store3
-```
+
+```bash
 
 ### ASCII Diagram (for terminal viewing)
 
-```
+```text
+
                                     ┌─────────────────────────────────────────┐
                                     │             Load Balancer               │
                                     │        (HAProxy / Nginx / Cloud LB)     │
@@ -68,7 +71,8 @@ flowchart TB
            │  Local Storage  │            │  Local Storage  │            │  Local Storage  │
            │    /data/node1  │            │    /data/node2  │            │    /data/node3  │
            └─────────────────┘            └─────────────────┘            └─────────────────┘
-```
+
+```bash
 
 ## Core Components
 
@@ -163,6 +167,7 @@ Handles object data storage with multiple backend options.
 ### Object Upload (PutObject)
 
 ```mermaid
+
 sequenceDiagram
     participant C as Client
     participant LB as Load Balancer
@@ -180,11 +185,13 @@ sequenceDiagram
     S-->>N: Success
     N-->>LB: 200 OK
     LB-->>C: 200 OK
-```
+
+```bash
 
 ### Object Download (GetObject)
 
 ```mermaid
+
 sequenceDiagram
     participant C as Client
     participant LB as Load Balancer
@@ -205,13 +212,15 @@ sequenceDiagram
     end
     N-->>LB: 200 OK + body
     LB-->>C: Stream response
-```
+
+```bash
 
 ### ASCII Diagrams (for terminal viewing)
 
 **Object Upload:**
 
-```
+```text
+
 Client                  Load Balancer           Node (Leader)           Storage
   │                          │                       │                     │
   │── PUT /bucket/key ──────►│                       │                     │
@@ -223,11 +232,13 @@ Client                  Load Balancer           Node (Leader)           Storage
   │                          │                       │── Write data ──────►│
   │                          │                       │◄── Success ─────────│
   │◄── 200 OK ───────────────│◄──────────────────────│                     │
-```
+
+```text
 
 **Object Download:**
 
-```
+```text
+
 Client                  Load Balancer           Any Node                Storage
   │                          │                       │                     │
   │── GET /bucket/key ──────►│                       │                     │
@@ -237,7 +248,8 @@ Client                  Load Balancer           Any Node                Storage
   │                          │                       │── Read data ───────►│
   │                          │                       │◄── Stream data ─────│
   │◄── 200 OK + body ────────│◄──────────────────────│                     │
-```
+
+```text
 
 ---
 
@@ -247,7 +259,8 @@ Client                  Load Balancer           Any Node                Storage
 
 Simple deployment for development or testing.
 
-```
+```text
+
 ┌──────────────────────┐
 │     NebulaIO         │
 │  ┌────────────────┐  │
@@ -260,13 +273,15 @@ Simple deployment for development or testing.
 │  │   Storage    │    │
 │  └──────────────┘    │
 └──────────────────────┘
-```
+
+```bash
 
 ### HA Cluster (3+ nodes)
 
 Production deployment with high availability.
 
-```
+```text
+
                     ┌───────────────┐
                     │ Load Balancer │
                     └───────┬───────┘
@@ -280,13 +295,15 @@ Production deployment with high availability.
 │  Raft: Voter  │   │  Raft: Voter  │   │  Raft: Voter  │
 │  Role: Hybrid │   │  Role: Hybrid │   │  Role: Hybrid │
 └───────────────┘   └───────────────┘   └───────────────┘
-```
+
+```bash
 
 ### Separated Planes (Large Scale)
 
 For large deployments, separate management and storage planes.
 
-```
+```text
+
                     ┌───────────────┐
                     │ Load Balancer │
                     └───────┬───────┘
@@ -309,7 +326,8 @@ For large deployments, separate management and storage planes.
     │  └─────────┘ └─────────┘ └─────────┘          │
     │                                               │
     └───────────────────────────────────────────────┘
-```
+
+```text
 
 **Management Plane**:
 
@@ -352,7 +370,8 @@ NebulaIO uses an embedded key-value store for metadata.
 
 ## Storage Layout
 
-```
+```text
+
 /data
 ├── metadata/              # Dragonboat and metadata
 │   ├── dragonboat/        # Dragonboat directories
@@ -378,7 +397,8 @@ NebulaIO uses an embedded key-value store for metadata.
 │   └── audit.log
 ├── iceberg/               # Iceberg table metadata
 └── temp/                  # Temporary uploads
-```
+
+```text
 
 ---
 
@@ -440,7 +460,7 @@ NebulaIO is **secure by default** with TLS enabled for all communications.
 ### Limits
 
 | Component | Default Limit | Configurable |
-|-----------|---------------|--------------|
+| ----------- | --------------- | -------------- |
 | Max object size | 5 GB | Yes |
 | Max bucket count | Unlimited | No |
 | Max objects per bucket | Unlimited | No |
@@ -453,6 +473,7 @@ NebulaIO is **secure by default** with TLS enabled for all communications.
 NebulaIO includes advanced AI/ML capabilities for high-performance workloads.
 
 ```mermaid
+
 flowchart TB
     subgraph API[API Endpoints]
         s3[S3 API :9000]
@@ -492,12 +513,13 @@ flowchart TB
     express --> cache
     iceberg --> tiering
     tiering --> fs & volume & erasure
-```
+
+```bash
 
 ### AI/ML Features
 
 | Feature | Port | Description |
-|---------|------|-------------|
+| --------- | ------ | ------------- |
 | **S3 Express One Zone** | 9000 | Sub-millisecond latency, atomic appends |
 | **Apache Iceberg** | 9006 | ACID transactions, REST catalog |
 | **MCP Server** | 9005 | AI agent integration (Claude, ChatGPT) |
@@ -511,6 +533,7 @@ flowchart TB
 ## Complete Component Diagram
 
 ```mermaid
+
 flowchart TB
     subgraph Clients[Clients]
         awscli[AWS CLI]
@@ -569,6 +592,7 @@ flowchart TB
     Core --> Storage
     Consensus --> badger
     Storage --> Acceleration
+
 ```
 
 ---
@@ -576,7 +600,7 @@ flowchart TB
 ## Network Ports Summary
 
 | Port | Service | Protocol | Description |
-|------|---------|----------|-------------|
+| ------ | --------- | ---------- | ------------- |
 | 9000 | S3 API | HTTPS | S3-compatible object storage API |
 | 9001 | Admin API | HTTPS | Management REST API + Prometheus metrics |
 | 9002 | Console | HTTPS | Web UI static files |

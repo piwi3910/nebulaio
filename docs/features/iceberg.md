@@ -19,6 +19,7 @@ Apache Iceberg is an open table format designed for huge analytic datasets. Nebu
 Create and manage Iceberg tables directly through NebulaIO:
 
 ```sql
+
 -- Create table via Spark with NebulaIO catalog
 CREATE TABLE nebulaio.db.events (
     id BIGINT,
@@ -28,25 +29,29 @@ CREATE TABLE nebulaio.db.events (
 )
 USING iceberg
 PARTITIONED BY (days(timestamp));
-```
+
+```bash
 
 ### REST Catalog
 
 Standard Iceberg REST Catalog API on port 9006:
 
 ```bash
+
 # List namespaces
 curl http://localhost:9006/iceberg/v1/namespaces
 
 # Get table metadata
 curl http://localhost:9006/iceberg/v1/namespaces/db/tables/events
-```
+
+```bash
 
 ### ACID Transactions
 
 Full transaction support with snapshot isolation:
 
 ```python
+
 from pyiceberg.catalog import load_catalog
 
 catalog = load_catalog("nebulaio")
@@ -55,13 +60,15 @@ table = catalog.load_table("db.events")
 # Atomic write
 with table.new_append() as writer:
     writer.append(dataframe)
-```
+
+```bash
 
 ## Configuration
 
 ### Basic Setup
 
 ```yaml
+
 iceberg:
   enabled: true
   catalog_type: rest         # rest | hive | glue
@@ -69,11 +76,13 @@ iceberg:
   catalog_name: nebulaio
   enable_acid: true
   snapshot_retention: 5      # Keep last 5 snapshots
-```
+
+```bash
 
 ### Advanced Configuration
 
 ```yaml
+
 iceberg:
   enabled: true
   catalog_type: rest
@@ -92,12 +101,13 @@ iceberg:
   glue:
     catalog_id: "123456789012"
     region: us-east-1
-```
+
+```bash
 
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_ICEBERG_ENABLED` | Enable Iceberg support | `false` |
 | `NEBULAIO_ICEBERG_CATALOG_TYPE` | Catalog type | `rest` |
 | `NEBULAIO_ICEBERG_WAREHOUSE` | Warehouse location | `s3://warehouse/` |
@@ -107,6 +117,7 @@ iceberg:
 ### Spark Integration
 
 ```python
+
 from pyspark.sql import SparkSession
 
 spark = SparkSession.builder \
@@ -134,11 +145,13 @@ spark.sql("""
 
 # Insert data
 df.writeTo("nebulaio.analytics.events").append()
-```
+
+```bash
 
 ### PyIceberg
 
 ```python
+
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import NestedField, LongType, StringType
@@ -168,11 +181,13 @@ catalog.create_table("analytics.users", schema=schema)
 table = catalog.load_table("analytics.users")
 scan = table.scan()
 df = scan.to_pandas()
-```
+
+```bash
 
 ### Trino Integration
 
 ```sql
+
 -- Configure Trino connector
 -- In etc/catalog/nebulaio.properties:
 -- connector.name=iceberg
@@ -186,13 +201,15 @@ WHERE timestamp > TIMESTAMP '2024-01-01 00:00:00';
 -- Time travel
 SELECT * FROM nebulaio.analytics.events
 FOR VERSION AS OF 123456789;
-```
+
+```bash
 
 ## Time Travel
 
 Query historical snapshots:
 
 ```python
+
 # Get table snapshots
 table = catalog.load_table("db.events")
 for snapshot in table.snapshots():
@@ -201,13 +218,15 @@ for snapshot in table.snapshots():
 # Query specific snapshot
 scan = table.scan(snapshot_id=123456789)
 df = scan.to_pandas()
-```
+
+```bash
 
 ## Schema Evolution
 
 Safely evolve schemas:
 
 ```python
+
 # Add column
 table.update_schema() \
     .add_column("new_field", StringType()) \
@@ -222,13 +241,15 @@ table.update_schema() \
 table.update_schema() \
     .update_column("field", IntegerType(), LongType()) \
     .commit()
-```
+
+```bash
 
 ## Partition Evolution
 
 Change partitioning without rewriting data:
 
 ```python
+
 # Add new partition field
 table.update_spec() \
     .add_field("category") \
@@ -236,13 +257,15 @@ table.update_spec() \
 
 # New writes use updated spec
 # Old data remains unchanged
-```
+
+```bash
 
 ## Performance Tuning
 
 ### Optimal Settings
 
 ```yaml
+
 iceberg:
   enabled: true
   snapshot_retention: 10
@@ -251,25 +274,28 @@ iceberg:
 # Combine with S3 Express for fast metadata
 s3_express:
   enabled: true
-```
+
+```bash
 
 ### Table Properties
 
 ```sql
+
 ALTER TABLE nebulaio.db.events
 SET TBLPROPERTIES (
     'write.target-file-size-bytes' = '134217728',  -- 128MB
     'write.parquet.compression-codec' = 'zstd',
     'read.split.target-size' = '134217728'
 );
-```
+
+```bash
 
 ## REST Catalog API
 
 ### Endpoints
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
+| ---------- | -------- | ------------- |
 | `/v1/namespaces` | GET | List namespaces |
 | `/v1/namespaces` | POST | Create namespace |
 | `/v1/namespaces/{ns}` | GET | Get namespace |
@@ -280,6 +306,7 @@ SET TBLPROPERTIES (
 ### Example Requests
 
 ```bash
+
 # Create namespace
 curl -X POST http://localhost:9006/iceberg/v1/namespaces \
   -H "Content-Type: application/json" \
@@ -298,7 +325,8 @@ curl -X POST http://localhost:9006/iceberg/v1/namespaces/analytics/tables \
       ]
     }
   }'
-```
+
+```bash
 
 ## Troubleshooting
 
@@ -313,7 +341,9 @@ curl -X POST http://localhost:9006/iceberg/v1/namespaces/analytics/tables \
 Enable debug logging:
 
 ```yaml
+
 log_level: debug
+
 ```
 
 Look for logs with `iceberg` tag.

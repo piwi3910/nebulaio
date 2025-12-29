@@ -16,6 +16,7 @@ IAM policies enable:
 IAM policies use JSON format with these elements:
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -28,12 +29,13 @@ IAM policies use JSON format with these elements:
     }
   ]
 }
-```
+
+```bash
 
 ### Policy Elements
 
 | Element | Description | Required |
-|---------|-------------|----------|
+| --------- | ------------- | ---------- |
 | Version | Policy version (always "2012-10-17") | Yes |
 | Statement | Array of permission statements | Yes |
 | Effect | Allow or Deny | Yes |
@@ -49,39 +51,46 @@ IAM policies use JSON format with these elements:
 Attached directly to users:
 
 ```bash
+
 # Create user policy
 nebulaio-cli admin policy create readonly-policy --file policy.json
 
 # Attach to user
 nebulaio-cli admin user attach-policy alice readonly-policy
-```
+
+```bash
 
 ### Group Policies
 
 Applied to all members of a group:
 
 ```bash
+
 # Attach policy to group
 nebulaio-cli admin group attach-policy developers dev-policy
-```
+
+```bash
 
 ### Bucket Policies
 
 Resource-based policies on buckets:
 
 ```bash
+
 # Set bucket policy
 aws s3api put-bucket-policy \
   --bucket my-bucket \
   --policy file://bucket-policy.json \
   --endpoint-url http://localhost:9000
-```
+
+```bash
 
 ## Common Policy Examples
 
 ### Read-Only Access
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -100,11 +109,13 @@ aws s3api put-bucket-policy \
     }
   ]
 }
-```
+
+```bash
 
 ### Read-Write Access
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -123,11 +134,13 @@ aws s3api put-bucket-policy \
     }
   ]
 }
-```
+
+```bash
 
 ### Admin Access
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -138,13 +151,15 @@ aws s3api put-bucket-policy \
     }
   ]
 }
-```
+
+```bash
 
 ### Prefix-Based Access
 
 Restrict access to specific prefixes:
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -158,13 +173,15 @@ Restrict access to specific prefixes:
     }
   ]
 }
-```
+
+```bash
 
 ### Public Read Access
 
 Allow public read (use carefully):
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -176,13 +193,15 @@ Allow public read (use carefully):
     }
   ]
 }
-```
+
+```bash
 
 ### Deny Delete
 
 Prevent deletions:
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -198,13 +217,15 @@ Prevent deletions:
     }
   ]
 }
-```
+
+```bash
 
 ### IP-Based Access
 
 Restrict access to specific IPs:
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -220,13 +241,15 @@ Restrict access to specific IPs:
     }
   ]
 }
-```
+
+```bash
 
 ### Time-Based Access
 
 Restrict access to specific times:
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -241,13 +264,15 @@ Restrict access to specific times:
     }
   ]
 }
-```
+
+```bash
 
 ### Require Encryption
 
 Require server-side encryption:
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -263,13 +288,15 @@ Require server-side encryption:
     }
   ]
 }
-```
+
+```bash
 
 ### Require TLS
 
 Deny non-HTTPS requests:
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -285,14 +312,15 @@ Deny non-HTTPS requests:
     }
   ]
 }
-```
+
+```bash
 
 ## Supported Actions
 
 ### Bucket Actions
 
 | Action | Description |
-|--------|-------------|
+| -------- | ------------- |
 | s3:CreateBucket | Create buckets |
 | s3:DeleteBucket | Delete buckets |
 | s3:ListBucket | List objects in bucket |
@@ -305,7 +333,7 @@ Deny non-HTTPS requests:
 ### Object Actions
 
 | Action | Description |
-|--------|-------------|
+| -------- | ------------- |
 | s3:GetObject | Download objects |
 | s3:PutObject | Upload objects |
 | s3:DeleteObject | Delete objects |
@@ -319,7 +347,7 @@ Deny non-HTTPS requests:
 ### Global Condition Keys
 
 | Key | Description |
-|-----|-------------|
+| ----- | ------------- |
 | aws:CurrentTime | Current UTC time |
 | aws:SourceIp | Client IP address |
 | aws:SecureTransport | Request uses HTTPS |
@@ -328,7 +356,7 @@ Deny non-HTTPS requests:
 ### S3 Condition Keys
 
 | Key | Description |
-|-----|-------------|
+| ----- | ------------- |
 | s3:prefix | Object key prefix |
 | s3:max-keys | Maximum keys in list |
 | s3:x-amz-acl | Canned ACL being applied |
@@ -340,7 +368,7 @@ Deny non-HTTPS requests:
 Use variables in policies for dynamic values:
 
 | Variable | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | ${aws:username} | Current user's name |
 | ${aws:userid} | Current user's ID |
 | ${s3:prefix} | Requested prefix |
@@ -348,6 +376,7 @@ Use variables in policies for dynamic values:
 Example with variables:
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -360,45 +389,58 @@ Example with variables:
     }
   ]
 }
-```
+
+```bash
 
 ## Policy Management
 
 ### Create Policy
 
 ```bash
+
 nebulaio-cli admin policy create developer-policy --file developer.json
-```
+
+```bash
 
 ### List Policies
 
 ```bash
+
 nebulaio-cli admin policy list
-```
+
+```bash
 
 ### View Policy
 
 ```bash
+
 nebulaio-cli admin policy get developer-policy
-```
+
+```bash
 
 ### Delete Policy
 
 ```bash
+
 nebulaio-cli admin policy delete developer-policy
-```
+
+```bash
 
 ### Attach Policy to User
 
 ```bash
+
 nebulaio-cli admin user attach-policy alice developer-policy
-```
+
+```bash
 
 ### Detach Policy from User
 
 ```bash
+
 nebulaio-cli admin user detach-policy alice developer-policy
-```
+
+```bash
 
 ## Policy Evaluation
 
@@ -408,11 +450,13 @@ Policies are evaluated in this order:
 2. **Explicit Allow**: Allow statements grant access
 3. **Implicit Deny**: No matching allow means denied
 
-```
+```text
+
 Request → Check Deny → Check Allow → Default Deny
            ↓            ↓             ↓
          DENIED       ALLOWED      DENIED
-```
+
+```bash
 
 ## Best Practices
 
@@ -436,18 +480,22 @@ Request → Check Deny → Check Allow → Default Deny
 ### Policy Validation
 
 ```bash
+
 # Validate policy syntax
 nebulaio-cli admin policy validate --file policy.json
-```
+
+```bash
 
 ### Policy Simulator
 
 ```bash
+
 # Test if action would be allowed
 nebulaio-cli admin policy simulate \
   --user alice \
   --action s3:GetObject \
   --resource arn:aws:s3:::my-bucket/file.txt
+
 ```
 
 ## Related Documentation

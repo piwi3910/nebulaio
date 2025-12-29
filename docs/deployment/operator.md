@@ -25,38 +25,48 @@ The NebulaIO Operator provides automated management of NebulaIO clusters on Kube
 ### Install CRDs
 
 ```bash
+
 kubectl apply -f https://raw.githubusercontent.com/piwi3910/nebulaio/main/deployments/operator/config/crd/bases/storage.nebulaio.io_nebulaios.yaml
 kubectl apply -f https://raw.githubusercontent.com/piwi3910/nebulaio/main/deployments/operator/config/crd/bases/storage.nebulaio.io_nebulaiobackups.yaml
-```
+
+```text
 
 Or from local checkout:
 
 ```bash
+
 kubectl apply -k deployments/operator/config/crd/bases/
-```
+
+```bash
 
 ### Install the Operator
 
 ```bash
+
 kubectl apply -k https://github.com/piwi3910/nebulaio//deployments/operator/config/default
-```
+
+```text
 
 Or from local checkout:
 
 ```bash
+
 kubectl apply -k deployments/operator/config/default/
-```
+
+```bash
 
 ### Verify Installation
 
 ```bash
+
 # Check CRDs
 kubectl get crd | grep nebulaio
 
 # Check operator
 kubectl get pods -n nebulaio-system
 kubectl logs -n nebulaio-system deployment/nebulaio-operator
-```
+
+```text
 
 ---
 
@@ -67,6 +77,7 @@ kubectl logs -n nebulaio-system deployment/nebulaio-operator
 The `NebulaIO` custom resource defines a NebulaIO cluster.
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIO
 metadata:
@@ -101,13 +112,15 @@ spec:
   podDisruptionBudget:
     enabled: true
     minAvailable: 2
-```
+
+```bash
 
 ### NebulaIOBackup
 
 The `NebulaIOBackup` custom resource defines backup configurations.
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIOBackup
 metadata:
@@ -129,7 +142,8 @@ spec:
   retention:
     keepLast: 7
     maxAge: 30d
-```
+
+```text
 
 ---
 
@@ -138,6 +152,7 @@ spec:
 ### Single Node {#single-node}
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIO
 metadata:
@@ -154,11 +169,13 @@ spec:
     size: 50Gi
   monitoring:
     enabled: true
-```
+
+```text
 
 Deploy:
 
 ```bash
+
 # Create namespace and credentials
 kubectl create namespace nebulaio
 # Password must be: min 12 chars, uppercase, lowercase, number
@@ -171,11 +188,13 @@ kubectl apply -f nebulaio-dev.yaml
 
 # Watch the deployment
 kubectl get nebulaio -n nebulaio -w
-```
+
+```bash
 
 ### HA Cluster {#ha-cluster}
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIO
 metadata:
@@ -209,11 +228,13 @@ spec:
   podDisruptionBudget:
     enabled: true
     minAvailable: 2
-```
+
+```bash
 
 ### Production Cluster {#production}
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIO
 metadata:
@@ -272,7 +293,8 @@ spec:
     - key: node-role.kubernetes.io/storage
       operator: Exists
       effect: NoSchedule
-```
+
+```text
 
 ---
 
@@ -283,6 +305,7 @@ For large-scale deployments, use separate management and storage plane clusters:
 ### Management Plane
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIO
 metadata:
@@ -304,11 +327,13 @@ spec:
       memory: 4Gi
   nodeSelector:
     node-role.kubernetes.io/control-plane: ""
-```
+
+```bash
 
 ### Storage Plane
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIO
 metadata:
@@ -331,7 +356,8 @@ spec:
       memory: 32Gi
   nodeSelector:
     node-role.kubernetes.io/storage: "true"
-```
+
+```text
 
 ---
 
@@ -340,24 +366,29 @@ spec:
 ### Scaling
 
 ```bash
+
 # Scale up
 kubectl patch nebulaio my-cluster --type merge -p '{"spec":{"replicas":5}}'
 
 # Scale down (maintain Raft quorum)
 kubectl patch nebulaio my-cluster --type merge -p '{"spec":{"replicas":3}}'
-```
+
+```bash
 
 ### Upgrading
 
 ```bash
+
 # Update image tag
 kubectl patch nebulaio my-cluster --type merge \
   -p '{"spec":{"image":{"tag":"v1.1.0"}}}'
-```
+
+```bash
 
 ### Backup
 
 ```yaml
+
 # One-time backup
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIOBackup
@@ -373,18 +404,22 @@ spec:
       prefix: manual/
       credentialsSecretRef:
         name: backup-credentials
-```
+
+```text
 
 Apply:
 
 ```bash
+
 kubectl apply -f backup.yaml
 kubectl get nebulaiobackup -w
-```
+
+```bash
 
 ### Scheduled Backups
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIOBackup
 metadata:
@@ -403,7 +438,8 @@ spec:
   retention:
     keepLast: 10
     maxAge: 7d
-```
+
+```text
 
 ---
 
@@ -412,8 +448,10 @@ spec:
 ### Check Cluster Status
 
 ```bash
+
 kubectl get nebulaio my-cluster -o yaml
-```
+
+```text
 
 Status fields:
 
@@ -426,14 +464,18 @@ Status fields:
 ### Watch Status
 
 ```bash
+
 kubectl get nebulaio -w
-```
+
+```bash
 
 ### Check Events
 
 ```bash
+
 kubectl get events --field-selector involvedObject.name=my-cluster
-```
+
+```text
 
 ---
 
@@ -442,14 +484,18 @@ kubectl get events --field-selector involvedObject.name=my-cluster
 ### Operator Logs
 
 ```bash
+
 kubectl logs -n nebulaio-system deployment/nebulaio-operator -f
-```
+
+```bash
 
 ### Cluster Pod Logs
 
 ```bash
+
 kubectl logs -l app.kubernetes.io/instance=my-cluster -f
-```
+
+```bash
 
 ### Common Issues
 
@@ -478,23 +524,29 @@ kubectl logs -l app.kubernetes.io/instance=my-cluster -f
 ### Delete Clusters
 
 ```bash
+
 kubectl delete nebulaio --all -A
 kubectl delete nebulaiobackup --all -A
-```
+
+```bash
 
 ### Delete Operator
 
 ```bash
+
 kubectl delete -k deployments/operator/config/default/
-```
+
+```bash
 
 ### Delete CRDs
 
 **Warning**: This removes all NebulaIO resources!
 
 ```bash
+
 kubectl delete crd nebulaios.storage.nebulaio.io
 kubectl delete crd nebulaiobackups.storage.nebulaio.io
+
 ```
 
 ---

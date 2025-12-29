@@ -5,7 +5,7 @@ The NebulaIO Admin API provides RESTful endpoints for managing the object storag
 ## Overview
 
 | Property | Value |
-|----------|-------|
+| ---------- | ------- |
 | **Base URL** | `http://<host>:9001/api/v1` |
 | **Default Port** | `9001` |
 | **Protocol** | HTTP/HTTPS |
@@ -22,34 +22,42 @@ All endpoints (except `/admin/auth/login` and health checks) require JWT bearer 
 ### Obtaining a Token
 
 ```bash
+
 curl -X POST http://localhost:9001/api/v1/admin/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "password": "your-password"}'
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "access_token": "eyJhbGciOiJIUzI1NiIs...",
   "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
   "expires_in": 86400
 }
-```
+
+```bash
 
 ### Using the Token
 
 ```bash
+
 curl -H "Authorization: Bearer <access_token>" http://localhost:9001/api/v1/admin/users
-```
+
+```bash
 
 ### Refreshing Tokens
 
 ```bash
+
 curl -X POST http://localhost:9001/api/v1/admin/auth/refresh \
   -H "Content-Type: application/json" \
   -d '{"refresh_token": "<refresh_token>"}'
-```
+
+```text
 
 ---
 
@@ -57,35 +65,45 @@ curl -X POST http://localhost:9001/api/v1/admin/auth/refresh \
 
 ### Get Cluster Status
 
-```
+```text
+
 GET /admin/cluster/status
-```
+
+```text
 
 ```json
+
 {"status": "healthy", "leader": "node-1", "nodes": 3, "quorum": true}
-```
+
+```bash
 
 ### List Cluster Nodes
 
-```
+```text
+
 GET /admin/cluster/nodes
-```
+
+```text
 
 ```json
+
 {
   "nodes": [{
     "id": "node-1", "address": "10.0.1.10:9003", "status": "leader",
     "healthy": true, "last_contact": "2024-01-15T10:30:00Z"
   }]
 }
-```
+
+```bash
 
 ### Node Operations
 
-```
+```text
+
 POST /admin/cluster/nodes/{nodeId}/promote    # Promote to voter
 DELETE /admin/cluster/nodes/{nodeId}          # Remove from cluster
-```
+
+```text
 
 ---
 
@@ -95,11 +113,14 @@ Placement groups manage data locality and fault isolation for erasure coding and
 
 ### List Placement Groups
 
-```
+```text
+
 GET /admin/cluster/placement-groups
-```
+
+```text
 
 ```json
+
 {
   "placement_groups": [
     {
@@ -115,15 +136,19 @@ GET /admin/cluster/placement-groups
     }
   ]
 }
-```
+
+```bash
 
 ### Get Placement Group
 
-```
+```text
+
 GET /admin/cluster/placement-groups/{groupId}
-```
+
+```text
 
 ```json
+
 {
   "id": "pg-dc1",
   "name": "US East Datacenter",
@@ -136,17 +161,21 @@ GET /admin/cluster/placement-groups/{groupId}
   "is_local": true,
   "replication_targets": ["pg-dc2"]
 }
-```
+
+```bash
 
 ### Create Placement Group
 
-```
+```text
+
 POST /admin/cluster/placement-groups
-```
+
+```text
 
 **Request:**
 
 ```json
+
 {
   "id": "pg-dc2",
   "name": "US West Datacenter",
@@ -155,91 +184,113 @@ POST /admin/cluster/placement-groups
   "min_nodes": 14,
   "max_nodes": 50
 }
-```
+
+```text
 
 **Response:** `201 Created`
 
 ```json
+
 {
   "id": "pg-dc2",
   "status": "offline",
   "message": "Placement group created. Add nodes to activate."
 }
-```
+
+```bash
 
 ### Update Placement Group
 
-```
+```text
+
 PATCH /admin/cluster/placement-groups/{groupId}
-```
+
+```text
 
 **Request:**
 
 ```json
+
 {
   "name": "Updated Name",
   "min_nodes": 10,
   "max_nodes": 100
 }
-```
+
+```bash
 
 ### Delete Placement Group
 
-```
+```text
+
 DELETE /admin/cluster/placement-groups/{groupId}
-```
+
+```text
 
 **Note:** Only empty placement groups (no nodes) can be deleted.
 
 ### Add Node to Placement Group
 
-```
+```text
+
 POST /admin/cluster/placement-groups/{groupId}/nodes
-```
+
+```text
 
 **Request:**
 
 ```json
+
 {
   "node_id": "new-node-1"
 }
-```
+
+```text
 
 **Response:** `201 Created`
 
 ```json
+
 {
   "group_id": "pg-dc1",
   "node_id": "new-node-1",
   "node_count": 15,
   "status": "healthy"
 }
-```
+
+```bash
 
 ### Remove Node from Placement Group
 
-```
+```text
+
 DELETE /admin/cluster/placement-groups/{groupId}/nodes/{nodeId}
-```
+
+```text
 
 **Response:** `200 OK`
 
 ```json
+
 {
   "group_id": "pg-dc1",
   "node_id": "removed-node",
   "node_count": 13,
   "status": "degraded"
 }
-```
+
+```bash
 
 ### Get Placement Group Status
 
-```
+```text
+
 GET /admin/cluster/placement-groups/{groupId}/status
-```
+
+```text
 
 ```json
+
 {
   "id": "pg-dc1",
   "status": "healthy",
@@ -252,27 +303,32 @@ GET /admin/cluster/placement-groups/{groupId}/status
   "storage_total_bytes": 107374182400,
   "storage_used_pct": 10.0
 }
-```
+
+```bash
 
 ### Configure Replication Targets
 
-```
+```text
+
 PUT /admin/cluster/placement-groups/{groupId}/replication
-```
+
+```text
 
 **Request:**
 
 ```json
+
 {
   "targets": ["pg-dc2", "pg-dc3"],
   "replication_factor": 2
 }
-```
+
+```bash
 
 ### Placement Group Status Values
 
 | Status | Value | Description |
-|--------|-------|-------------|
+| -------- | ------- | ------------- |
 | healthy | 1 | Node count >= min_nodes, all operations normal |
 | degraded | 2 | Node count < min_nodes, reduced redundancy |
 | offline | 3 | No nodes available, read-only or unavailable |
@@ -285,7 +341,7 @@ PUT /admin/cluster/placement-groups/{groupId}/replication
 ### Users
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
+| ---------- | -------- | ------------- |
 | `/admin/users` | GET | List all users |
 | `/admin/users` | POST | Create user |
 | `/admin/users/{userId}` | GET | Get user details |
@@ -295,33 +351,37 @@ PUT /admin/cluster/placement-groups/{groupId}/replication
 **Create User Request:**
 
 ```json
+
 {"username": "bob", "password": "secure-password", "email": "bob@example.com", "role": "user"}
-```
+
+```text
 
 **Roles:** `superadmin`, `admin`, `user`, `readonly`, `service`
 
 ### Policies
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
+| ---------- | -------- | ------------- |
 | `/admin/policies` | GET | List policies |
 | `/admin/policies` | POST | Create policy |
 
 **Create Policy Request:**
 
 ```json
+
 {
   "name": "dev-access",
   "document": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:*\"],\"Resource\":[\"arn:aws:s3:::dev-*/*\"]}]}"
 }
-```
+
+```text
 
 ---
 
 ## Bucket Administration
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
+| ---------- | -------- | ------------- |
 | `/admin/buckets` | GET | List all buckets |
 | `/admin/buckets` | POST | Create bucket |
 | `/admin/buckets/{name}` | GET | Get bucket details |
@@ -331,18 +391,22 @@ PUT /admin/cluster/placement-groups/{groupId}/replication
 **Create Bucket Request:**
 
 ```json
+
 {"name": "new-bucket", "region": "us-east-1", "storage_class": "STANDARD"}
-```
+
+```text
 
 **Bucket Details Response:**
 
 ```json
+
 {
   "name": "production-data", "size": 1073741824, "object_count": 15420,
   "versioning_enabled": true, "encryption_enabled": true,
   "lifecycle_rules": [{"id": "archive", "prefix": "logs/", "expiration_days": 365}]
 }
-```
+
+```text
 
 ---
 
@@ -350,28 +414,32 @@ PUT /admin/cluster/placement-groups/{groupId}/replication
 
 ### Server Configuration
 
-```
+```text
+
 GET /admin/config     # Get configuration
 PUT /admin/config     # Update configuration
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "s3_express": {"enabled": true, "enable_atomic_append": true},
   "iceberg": {"enabled": true, "warehouse": "s3://warehouse/"},
   "gpudirect": {"enabled": false},
   "rdma": {"enabled": false}
 }
-```
+
+```bash
 
 ### Storage Metrics
 
 Available via Prometheus endpoint at `/metrics`:
 
 | Metric | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `nebulaio_storage_capacity_bytes` | Total capacity |
 | `nebulaio_storage_used_bytes` | Used space |
 | `nebulaio_storage_available_bytes` | Available space |
@@ -383,33 +451,41 @@ Available via Prometheus endpoint at `/metrics`:
 
 ### Site Replication Status
 
-```
+```text
+
 GET /admin/site-replication/status
-```
+
+```text
 
 ```json
+
 {
   "site": "us-east-1", "status": "healthy",
   "peers": [{"name": "eu-west-1", "status": "connected", "lag_seconds": 0.5}]
 }
-```
+
+```bash
 
 ### Initialize and Configure
 
-```
+```text
+
 POST /admin/site-replication/init
 POST /admin/site-replication/peers
 PUT /admin/site-replication/buckets/{bucketName}
-```
+
+```text
 
 **Add Peer Request:**
 
 ```json
+
 {
   "name": "eu-west-1", "endpoint": "https://nebulaio-eu.example.com:9000",
   "access_key": "...", "secret_key": "...", "region": "eu-west"
 }
-```
+
+```text
 
 ---
 
@@ -418,7 +494,7 @@ PUT /admin/site-replication/buckets/{bucketName}
 ### Health Endpoints
 
 | Endpoint | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | `/health` | Detailed health status |
 | `/health/live` | Liveness probe (process running) |
 | `/health/ready` | Readiness probe (service ready) |
@@ -427,6 +503,7 @@ PUT /admin/site-replication/buckets/{bucketName}
 **Health Response:**
 
 ```json
+
 {
   "status": "healthy", "version": "1.0.0", "uptime_seconds": 86400,
   "components": {
@@ -434,17 +511,21 @@ PUT /admin/site-replication/buckets/{bucketName}
     "cluster": {"status": "healthy", "role": "leader", "members": 3}
   }
 }
-```
+
+```bash
 
 ### Audit Logs
 
-```
+```text
+
 GET /admin/audit-logs?bucket=my-bucket&user_id=usr_123&page=1&page_size=20
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "logs": [{
     "id": "log_xyz", "timestamp": "2024-01-15T10:30:00Z", "event_type": "PutObject",
@@ -452,7 +533,8 @@ GET /admin/audit-logs?bucket=my-bucket&user_id=usr_123&page=1&page_size=20
   }],
   "total": 1250, "page": 1, "page_size": 20
 }
-```
+
+```text
 
 ---
 
@@ -461,13 +543,15 @@ GET /admin/audit-logs?bucket=my-bucket&user_id=usr_123&page=1&page_size=20
 **Error Response Format:**
 
 ```json
+
 {"error": "NotFound", "message": "User not found", "code": "USER_NOT_FOUND"}
-```
+
+```bash
 
 ### HTTP Status Codes
 
 | Code | Description |
-|------|-------------|
+| ------ | ------------- |
 | `200/201/204` | Success |
 | `400` | Bad request |
 | `401` | Unauthorized |
@@ -493,7 +577,7 @@ NebulaIO provides comprehensive tiering policy management for automated data lif
 ### Overview
 
 | Property | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | **Tiers** | `hot`, `warm`, `cold`, `archive` |
 | **Storage Classes** | `STANDARD`, `STANDARD_IA`, `ONEZONE_IA`, `INTELLIGENT_TIERING`, `GLACIER`, `GLACIER_IR`, `DEEP_ARCHIVE` |
 | **Policy Types** | `scheduled`, `realtime`, `threshold`, `s3_lifecycle` |
@@ -505,14 +589,16 @@ NebulaIO provides comprehensive tiering policy management for automated data lif
 
 #### List All Policies
 
-```
+```text
+
 GET /admin/tiering/policies
-```
+
+```text
 
 **Query Parameters:**
 
 | Parameter | Type | Description |
-|-----------|------|-------------|
+| ----------- | ------ | ------------- |
 | `type` | string | Filter by policy type (`scheduled`, `realtime`, `threshold`, `s3_lifecycle`) |
 | `scope` | string | Filter by policy scope (`global`, `bucket`, `prefix`, `object`) |
 | `enabled` | boolean | Filter by enabled status (`true` or `false`) |
@@ -520,6 +606,7 @@ GET /admin/tiering/policies
 **Response:**
 
 ```json
+
 {
   "policies": [
     {
@@ -605,19 +692,23 @@ GET /admin/tiering/policies
   ],
   "total_count": 1
 }
-```
+
+```text
 
 ---
 
 #### Create Policy
 
-```
+```text
+
 POST /admin/tiering/policies
-```
+
+```text
 
 **Request:**
 
 ```json
+
 {
   "id": "promote-hot-objects",
   "name": "Promote Frequently Accessed Objects",
@@ -659,11 +750,13 @@ POST /admin/tiering/policies
     "maxTransitionsPerDay": 5
   }
 }
-```
+
+```text
 
 **Response (201 Created):**
 
 ```json
+
 {
   "id": "promote-hot-objects",
   "name": "Promote Frequently Accessed Objects",
@@ -674,19 +767,23 @@ POST /admin/tiering/policies
   "updatedAt": "2024-01-21T10:00:00Z",
   "version": 1
 }
-```
+
+```text
 
 ---
 
 #### Get Policy
 
-```
+```text
+
 GET /admin/tiering/policies/{id}
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "id": "archive-logs-policy",
   "name": "Archive Old Logs",
@@ -720,19 +817,23 @@ GET /admin/tiering/policies/{id}
   "updatedAt": "2024-01-20T15:30:00Z",
   "version": 3
 }
-```
+
+```text
 
 ---
 
 #### Update Policy
 
-```
+```text
+
 PUT /admin/tiering/policies/{id}
-```
+
+```text
 
 **Request:**
 
 ```json
+
 {
   "name": "Archive Old Logs (Updated)",
   "description": "Updated: Move log files to archive tier after 60 days",
@@ -762,26 +863,31 @@ PUT /admin/tiering/policies/{id}
     }
   ]
 }
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "id": "archive-logs-policy",
   "name": "Archive Old Logs (Updated)",
   "updatedAt": "2024-01-21T12:00:00Z",
   "version": 4
 }
-```
+
+```text
 
 ---
 
 #### Delete Policy
 
-```
+```text
+
 DELETE /admin/tiering/policies/{id}
-```
+
+```text
 
 **Response:** `204 No Content`
 
@@ -789,49 +895,60 @@ DELETE /admin/tiering/policies/{id}
 
 #### Enable Policy
 
-```
+```text
+
 POST /admin/tiering/policies/{id}/enable
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "id": "archive-logs-policy",
   "enabled": true,
   "message": "Policy enabled successfully"
 }
-```
+
+```text
 
 ---
 
 #### Disable Policy
 
-```
+```text
+
 POST /admin/tiering/policies/{id}/disable
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "id": "archive-logs-policy",
   "enabled": false,
   "message": "Policy disabled successfully"
 }
-```
+
+```text
 
 ---
 
 #### Get Policy Statistics
 
-```
+```text
+
 GET /admin/tiering/policies/{id}/stats
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "policy_id": "archive-logs-policy",
   "policy_name": "Archive Old Logs",
@@ -845,7 +962,8 @@ GET /admin/tiering/policies/{id}/stats
   "errors": 12,
   "last_error": "timeout connecting to cold storage backend"
 }
-```
+
+```text
 
 ---
 
@@ -853,41 +971,48 @@ GET /admin/tiering/policies/{id}/stats
 
 #### Get Bucket Access Statistics
 
-```
+```text
+
 GET /admin/tiering/access-stats/{bucket}
-```
+
+```text
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| ----------- | ------ | --------- | ------------- |
 | `limit` | integer | 100 | Maximum results (1-1000) |
 | `offset` | integer | 0 | Pagination offset |
 
 **Response:**
 
 ```json
+
 {
   "bucket": "my-data",
   "limit": 100,
   "offset": 0,
   "stats": []
 }
-```
+
+```text
 
 ---
 
 #### Get Object Access Statistics
 
-```
+```text
+
 GET /admin/tiering/access-stats/{bucket}/{key}
-```
+
+```text
 
 **Note:** For keys containing special characters, use the `key` query parameter instead.
 
 **Response (when tracked):**
 
 ```json
+
 {
   "bucket": "my-data",
   "key": "reports/2024/q1-summary.pdf",
@@ -900,18 +1025,21 @@ GET /admin/tiering/access-stats/{bucket}/{key}
   "average_accesses_day": 29.67,
   "access_trend": "increasing"
 }
-```
+
+```text
 
 **Response (when not tracked):**
 
 ```json
+
 {
   "bucket": "my-data",
   "key": "archive/old-file.dat",
   "tracked": false,
   "message": "No access stats tracked for this object"
 }
-```
+
+```text
 
 ---
 
@@ -919,33 +1047,39 @@ GET /admin/tiering/access-stats/{bucket}/{key}
 
 #### Manual Object Transition
 
-```
+```text
+
 POST /admin/tiering/transition
-```
+
+```text
 
 **Request:**
 
 ```json
+
 {
   "bucket": "production-data",
   "key": "datasets/large-dataset.parquet",
   "target_tier": "cold",
   "force": false
 }
-```
+
+```text
 
 **Tier Values:** `hot`, `warm`, `cold`, `archive`
 
 **Response:**
 
 ```json
+
 {
   "bucket": "production-data",
   "key": "datasets/large-dataset.parquet",
   "target_tier": "cold",
   "message": "Object transition initiated successfully"
 }
-```
+
+```text
 
 ---
 
@@ -955,9 +1089,11 @@ NebulaIO supports S3-compatible lifecycle configuration for bucket-level tiering
 
 #### Get Bucket Lifecycle Configuration
 
-```
+```text
+
 GET /admin/tiering/s3-lifecycle/{bucket}
-```
+
+```text
 
 **Headers:**
 
@@ -966,6 +1102,7 @@ GET /admin/tiering/s3-lifecycle/{bucket}
 **Response (JSON):**
 
 ```json
+
 {
   "Rules": [
     {
@@ -990,11 +1127,13 @@ GET /admin/tiering/s3-lifecycle/{bucket}
     }
   ]
 }
-```
+
+```text
 
 **Response (XML):**
 
 ```xml
+
 <?xml version="1.0" encoding="UTF-8"?>
 <LifecycleConfiguration>
   <Rule>
@@ -1016,15 +1155,18 @@ GET /admin/tiering/s3-lifecycle/{bucket}
     </Expiration>
   </Rule>
 </LifecycleConfiguration>
-```
+
+```text
 
 ---
 
 #### Set Bucket Lifecycle Configuration
 
-```
+```text
+
 PUT /admin/tiering/s3-lifecycle/{bucket}
-```
+
+```text
 
 **Headers:**
 
@@ -1033,6 +1175,7 @@ PUT /admin/tiering/s3-lifecycle/{bucket}
 **Request (JSON):**
 
 ```json
+
 {
   "Rules": [
     {
@@ -1067,25 +1210,30 @@ PUT /admin/tiering/s3-lifecycle/{bucket}
     }
   ]
 }
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "bucket": "my-bucket",
   "message": "Lifecycle configuration applied successfully",
   "rules": 2
 }
-```
+
+```text
 
 ---
 
 #### Delete Bucket Lifecycle Configuration
 
-```
+```text
+
 DELETE /admin/tiering/s3-lifecycle/{bucket}
-```
+
+```text
 
 **Response:** `204 No Content`
 
@@ -1095,13 +1243,16 @@ DELETE /admin/tiering/s3-lifecycle/{bucket}
 
 #### Get Tiering System Status
 
-```
+```text
+
 GET /admin/tiering/status
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "status": "running",
   "total_policies": 15,
@@ -1118,19 +1269,23 @@ GET /admin/tiering/status
     "prefix": 3
   }
 }
-```
+
+```text
 
 ---
 
 #### Get Tiering Metrics
 
-```
+```text
+
 GET /admin/tiering/metrics
-```
+
+```text
 
 **Response:**
 
 ```json
+
 {
   "total_executions": 45678,
   "total_objects_transitioned": 2500000,
@@ -1138,7 +1293,8 @@ GET /admin/tiering/metrics
   "total_errors": 234,
   "policy_count": 15
 }
-```
+
+```text
 
 ---
 
@@ -1148,15 +1304,18 @@ NebulaIO includes ML-based predictive analytics for intelligent tiering decision
 
 #### Get Access Prediction for Object
 
-```
+```text
+
 GET /admin/tiering/predictions/{bucket}/{key}
-```
+
+```text
 
 **Note:** For keys containing special characters, use the `key` query parameter.
 
 **Response (with sufficient data):**
 
 ```json
+
 {
   "bucket": "production-data",
   "key": "datasets/analytics.parquet",
@@ -1178,35 +1337,41 @@ GET /admin/tiering/predictions/{bucket}/{key}
   "confidence": 0.85,
   "reasoning": "Predicted moderate access rate (12.2/day, declining trend). Recommend warm tier for balanced cost/performance."
 }
-```
+
+```text
 
 **Response (insufficient data):**
 
 ```json
+
 {
   "bucket": "production-data",
   "key": "new-file.dat",
   "message": "Insufficient data for prediction"
 }
-```
+
+```text
 
 ---
 
 #### Get Tier Recommendations
 
-```
+```text
+
 GET /admin/tiering/predictions/recommendations
-```
+
+```text
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| ----------- | ------ | --------- | ------------- |
 | `limit` | integer | 100 | Maximum recommendations (1-1000) |
 
 **Response:**
 
 ```json
+
 {
   "recommendations": [
     {
@@ -1230,25 +1395,29 @@ GET /admin/tiering/predictions/recommendations
   ],
   "count": 2
 }
-```
+
+```text
 
 ---
 
 #### Get Predicted Hot Objects
 
-```
+```text
+
 GET /admin/tiering/predictions/hot-objects
-```
+
+```text
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| ----------- | ------ | --------- | ------------- |
 | `limit` | integer | 50 | Maximum results (1-500) |
 
 **Response:**
 
 ```json
+
 {
   "hot_objects": [
     {
@@ -1266,26 +1435,30 @@ GET /admin/tiering/predictions/hot-objects
   ],
   "count": 1
 }
-```
+
+```text
 
 ---
 
 #### Get Predicted Cold Objects
 
-```
+```text
+
 GET /admin/tiering/predictions/cold-objects
-```
+
+```text
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| ----------- | ------ | --------- | ------------- |
 | `limit` | integer | 50 | Maximum results (1-500) |
 | `inactive_days` | integer | 30 | Days of inactivity threshold (1-365) |
 
 **Response:**
 
 ```json
+
 {
   "cold_objects": [
     {
@@ -1304,25 +1477,29 @@ GET /admin/tiering/predictions/cold-objects
   "count": 1,
   "inactive_days": 30
 }
-```
+
+```text
 
 ---
 
 #### Get Access Anomalies
 
-```
+```text
+
 GET /admin/tiering/anomalies
-```
+
+```text
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| ----------- | ------ | --------- | ------------- |
 | `limit` | integer | 50 | Maximum anomalies (1-500) |
 
 **Response:**
 
 ```json
+
 {
   "anomalies": [
     {
@@ -1348,6 +1525,7 @@ GET /admin/tiering/anomalies
   ],
   "count": 2
 }
+
 ```
 
 ---
@@ -1357,7 +1535,7 @@ GET /admin/tiering/anomalies
 #### Trigger Types
 
 | Type | Description | Configuration |
-|------|-------------|---------------|
+| ------ | ------------- | --------------- |
 | `age` | Object age-based trigger | `daysSinceCreation`, `daysSinceModification`, `daysSinceAccess`, `hoursSinceAccess` |
 | `access` | Access pattern trigger | `operation`, `direction`, `countThreshold`, `periodMinutes`, `promoteOnAnyRead` |
 | `capacity` | Tier capacity trigger | `tier`, `highWatermark`, `lowWatermark`, `bytesThreshold`, `objectCountThreshold` |
@@ -1367,7 +1545,7 @@ GET /admin/tiering/anomalies
 #### Action Types
 
 | Type | Description | Configuration |
-|------|-------------|---------------|
+| ------ | ------------- | --------------- |
 | `transition` | Move to different tier | `targetTier`, `targetStorageClass`, `preserveCopy`, `compression`, `compressionAlgorithm` |
 | `delete` | Delete object | `daysAfterTransition`, `expireDeleteMarkers`, `nonCurrentVersionDays` |
 | `replicate` | Copy to another location | `destination`, `storageClass` |

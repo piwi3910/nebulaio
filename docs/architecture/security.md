@@ -6,7 +6,8 @@ This document describes the security architecture of NebulaIO, covering authenti
 
 NebulaIO implements a defense-in-depth security model with multiple layers:
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────┐
 │                       Client Applications                            │
 └─────────────────────────────────────────────────────────────────────┘
@@ -22,7 +23,8 @@ NebulaIO implements a defense-in-depth security model with multiple layers:
     ├─────────────────────────────┼─────────────────────────────┤
     │  Audit & Monitoring: Logging, Analytics, Tracing          │
     └─────────────────────────────┴─────────────────────────────┘
-```
+
+```text
 
 ---
 
@@ -33,25 +35,30 @@ NebulaIO implements a defense-in-depth security model with multiple layers:
 The primary S3 API authentication uses AWS Signature Version 4.
 
 ```yaml
+
 auth:
   signature_version: v4
   access_key_min_length: 16
   secret_key_min_length: 32
-```
+
+```text
 
 ```bash
+
 # Create user with access keys
 nebulaio-cli admin user add alice --generate-keys
 
 # Rotate access keys
 nebulaio-cli admin user keys rotate alice
-```
+
+```bash
 
 ### LDAP Integration
 
 Enterprise authentication via LDAP or Active Directory:
 
 ```yaml
+
 auth:
   ldap:
     enabled: true
@@ -66,13 +73,15 @@ auth:
         policy: admin
       - ldap_group: "cn=developers,ou=groups,dc=example,dc=com"
         policy: readwrite
-```
+
+```bash
 
 ### OIDC / SSO
 
 OpenID Connect for single sign-on with identity providers:
 
 ```yaml
+
 auth:
   oidc:
     enabled: true
@@ -86,7 +95,8 @@ auth:
     group_mappings:
       - claim_value: storage-admins
         policy: admin
-```
+
+```text
 
 ---
 
@@ -97,6 +107,7 @@ auth:
 AWS-compatible policies defining user/group permissions:
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [{
@@ -105,20 +116,24 @@ AWS-compatible policies defining user/group permissions:
     "Resource": ["arn:aws:s3:::my-bucket", "arn:aws:s3:::my-bucket/*"]
   }]
 }
-```
+
+```text
 
 **Built-in Policies**: `admin`, `readwrite`, `readonly`, `writeonly`, `diagnostics`
 
 ```bash
+
 nebulaio-cli admin policy attach alice readwrite
 nebulaio-cli admin policy create dev-policy policy.json
-```
+
+```bash
 
 ### Bucket Policies
 
 Fine-grained bucket-level access control with conditions:
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [{
@@ -131,14 +146,15 @@ Fine-grained bucket-level access control with conditions:
     }
   }]
 }
-```
+
+```bash
 
 ### Access Control Lists (ACLs)
 
 S3-compatible canned ACLs for object-level permissions:
 
 | ACL | Description |
-|-----|-------------|
+| ----- | ------------- |
 | `private` | Owner has full control (default) |
 | `public-read` | Owner full control, public read |
 | `authenticated-read` | Owner full control, authenticated users read |
@@ -153,6 +169,7 @@ S3-compatible canned ACLs for object-level permissions:
 NebulaIO is **secure by default** with TLS enabled and automatic certificate generation. All external communication is encrypted with TLS 1.2+:
 
 ```yaml
+
 # TLS is enabled by default - this shows the defaults
 tls:
   enabled: true              # TLS enabled by default
@@ -162,18 +179,21 @@ tls:
   require_client_cert: false # Enable for mTLS
   organization: NebulaIO
   validity_days: 365
-```
+
+```text
 
 **Using custom certificates:**
 
 ```yaml
+
 tls:
   enabled: true
   cert_file: /etc/nebulaio/certs/server.crt
   key_file: /etc/nebulaio/certs/server.key
   ca_file: /etc/nebulaio/certs/ca.crt  # Optional, for mTLS
   min_version: "1.3"
-```
+
+```text
 
 **Auto-generated certificate features:**
 
@@ -188,19 +208,22 @@ tls:
 NebulaIO-managed AES-256 encryption at rest:
 
 ```bash
+
 aws s3api put-bucket-encryption \
   --endpoint-url http://localhost:9000 \
   --bucket my-bucket \
   --server-side-encryption-configuration '{
     "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]
   }'
-```
+
+```bash
 
 ### Server-Side Encryption with KMS (SSE-KMS)
 
 External key management integration:
 
 ```yaml
+
 encryption:
   kms:
     provider: vault  # vault, aws, azure, gcp
@@ -208,13 +231,16 @@ encryption:
       address: https://vault.example.com
       mount: transit
       key_name: nebulaio-master
-```
+
+```text
 
 ```bash
+
 aws s3 cp file.txt s3://my-bucket/ \
   --endpoint-url http://localhost:9000 \
   --sse aws:kms --sse-kms-key-id arn:aws:kms:...
-```
+
+```bash
 
 ### Client-Side Encryption
 
@@ -229,6 +255,7 @@ NebulaIO supports client-side encryption where data is encrypted before upload. 
 Built-in traffic control with rate limiting and IP filtering:
 
 ```yaml
+
 firewall:
   enabled: true
   ip_allowlist: ["10.0.0.0/8", "192.168.0.0/16"]
@@ -239,13 +266,15 @@ firewall:
     burst_size: 100
   bandwidth:
     max_bytes_per_second: 1073741824  # 1 GB/s
-```
+
+```bash
 
 ### mTLS for Internal Communication
 
 Mutual TLS between cluster nodes:
 
 ```yaml
+
 mtls:
   enabled: true
   ca:
@@ -253,11 +282,13 @@ mtls:
   tls:
     min_version: "1.2"
     require_client_cert: true
-```
+
+```bash
 
 ### Kubernetes Network Policies
 
 ```yaml
+
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -273,7 +304,8 @@ spec:
               name: production
       ports:
         - port: 9000
-```
+
+```text
 
 ---
 
@@ -282,6 +314,7 @@ spec:
 Comprehensive audit trails with cryptographic integrity:
 
 ```yaml
+
 audit:
   enabled: true
   compliance_mode: soc2  # soc2, pci, hipaa, gdpr, fedramp
@@ -290,7 +323,8 @@ audit:
   mask_sensitive_data: true
   webhook:
     url: https://siem.example.com/events
-```
+
+```text
 
 **Logged Events**: Object operations, authentication, IAM changes, bucket modifications.
 
@@ -305,6 +339,7 @@ See [Audit Logging](../features/audit-logging.md) for details.
 Write-Once-Read-Many protection for compliance:
 
 ```bash
+
 aws s3api create-bucket \
   --endpoint-url http://localhost:9000 \
   --bucket compliance-bucket \
@@ -316,17 +351,20 @@ aws s3api put-object-lock-configuration \
     "ObjectLockEnabled": "Enabled",
     "Rule": {"DefaultRetention": {"Mode": "COMPLIANCE", "Days": 365}}
   }'
-```
+
+```bash
 
 ### Versioning
 
 Protection against accidental deletion:
 
 ```bash
+
 aws s3api put-bucket-versioning \
   --endpoint-url http://localhost:9000 \
   --bucket my-bucket \
   --versioning-configuration Status=Enabled
+
 ```
 
 ---
@@ -368,7 +406,7 @@ aws s3api put-bucket-versioning \
 ## Compliance Support
 
 | Framework | Key Features |
-|-----------|--------------|
+| ----------- | -------------- |
 | SOC 2 | Audit logging, access controls, encryption |
 | PCI DSS | Encryption, key management, audit trails |
 | HIPAA | Access controls, audit logging, data masking |

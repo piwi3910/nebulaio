@@ -7,7 +7,7 @@ This section documents the advanced features available in NebulaIO for productio
 ### Core Features
 
 | Feature | Description | Status |
-|---------|-------------|--------|
+| --------- | ------------- | -------- |
 | [Erasure Coding](erasure-coding.md) | Reed-Solomon data protection with configurable redundancy | Production |
 | [Storage Tiering](tiering.md) | Hot/Warm/Cold/Archive tiers with lifecycle policies | Production |
 | [DRAM Cache](dram-cache.md) | High-performance in-memory cache for AI/ML workloads | Production |
@@ -21,7 +21,7 @@ This section documents the advanced features available in NebulaIO for productio
 ### Security Features
 
 | Feature | Description | Status |
-|---------|-------------|--------|
+| --------- | ------------- | -------- |
 | [Access Analytics](security-features.md#access-analytics) | Real-time anomaly detection and behavior analysis | Production |
 | [Key Rotation](security-features.md#encryption-key-rotation) | Automated encryption key lifecycle management | Production |
 | [mTLS](security-features.md#mtls-internal-communication) | Mutual TLS for internal cluster communication | Production |
@@ -32,7 +32,7 @@ This section documents the advanced features available in NebulaIO for productio
 ### AI/ML Features (2025)
 
 | Feature | Description | Status |
-|---------|-------------|--------|
+| --------- | ------------- | -------- |
 | [S3 Express One Zone](s3-express.md) | Ultra-low latency storage with atomic appends | Production |
 | [Apache Iceberg](iceberg.md) | Native table format for data lakehouse workloads | Production |
 | [MCP Server](mcp-server.md) | AI agent integration (Claude, ChatGPT, etc.) | Production |
@@ -48,6 +48,7 @@ This section documents the advanced features available in NebulaIO for productio
 Enable features in your configuration:
 
 ```yaml
+
 # DRAM Cache
 cache:
   enabled: true
@@ -70,11 +71,13 @@ audit:
   enabled: true
   compliance_mode: soc2
   integrity_enabled: true
-```
+
+```bash
 
 ### AI/ML Features Quick Start
 
 ```yaml
+
 # S3 Express One Zone - Ultra-low latency storage
 s3_express:
   enabled: true
@@ -119,7 +122,8 @@ nim:
   enabled: true
   api_key: your-nvidia-api-key
   default_model: meta/llama-3.1-8b-instruct
-```
+
+```bash
 
 ## Compliance Support
 
@@ -137,7 +141,8 @@ See [Audit Logging](audit-logging.md) for compliance configuration details.
 
 ### Core Features
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────┐
 │                        NebulaIO Gateway                          │
 ├─────────────────────────────────────────────────────────────────┤
@@ -159,11 +164,13 @@ See [Audit Logging](audit-logging.md) for compliance configuration details.
 │  │                    Storage Backend                         │  │
 │  └────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### AI/ML Acceleration Layer
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────┐
 │                     AI/ML API Endpoints                          │
 │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────────┐ │
@@ -190,6 +197,7 @@ See [Audit Logging](audit-logging.md) for compliance configuration details.
 │                  S3 Express One Zone                              │
 │        (Sub-ms Latency, Atomic Appends, Directory Buckets)        │
 └──────────────────────────────────────────────────────────────────┘
+
 ```
 
 ## Performance Benchmarks
@@ -197,7 +205,7 @@ See [Audit Logging](audit-logging.md) for compliance configuration details.
 ### Core Features
 
 | Feature | Metric | Value |
-|---------|--------|-------|
+| --------- | -------- | ------- |
 | DRAM Cache | Read Latency | < 100μs |
 | DRAM Cache | Throughput | 10GB/s+ |
 | S3 Select | Query Speed | 10x faster than full download |
@@ -207,7 +215,7 @@ See [Audit Logging](audit-logging.md) for compliance configuration details.
 ### AI/ML Features
 
 | Feature | Metric | Value |
-|---------|--------|-------|
+| --------- | -------- | ------- |
 | S3 Express | PUT/GET Latency | < 1ms |
 | S3 Express | Atomic Append | Up to 5GB per operation |
 | RDMA | Object Access Latency | < 10μs |

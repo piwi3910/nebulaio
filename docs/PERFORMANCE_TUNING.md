@@ -22,7 +22,7 @@ This guide provides comprehensive recommendations for optimizing NebulaIO perfor
 ### Minimum Requirements
 
 | Component | Development | Production | High-Performance |
-|-----------|-------------|------------|------------------|
+| ----------- | ------------- | ------------ | ------------------ |
 | CPU | 4 cores | 16 cores | 32+ cores |
 | RAM | 8 GB | 64 GB | 256+ GB |
 | Storage | SSD 100GB | NVMe 1TB+ | NVMe RAID 10TB+ |
@@ -31,6 +31,7 @@ This guide provides comprehensive recommendations for optimizing NebulaIO perfor
 ### Recommended Hardware for AI/ML Workloads
 
 ```yaml
+
 # High-performance AI/ML configuration
 compute:
   cpu: AMD EPYC 7763 or Intel Xeon Platinum 8380
@@ -54,7 +55,8 @@ network:
 accelerators:
   gpu: NVIDIA A100/H100 (for GPUDirect)
   dpu: NVIDIA BlueField-3 (optional)
-```
+
+```text
 
 ---
 
@@ -65,6 +67,7 @@ accelerators:
 Add to `/etc/sysctl.conf`:
 
 ```bash
+
 # Network tuning
 net.core.somaxconn = 65535
 net.core.netdev_max_backlog = 65535
@@ -96,19 +99,23 @@ fs.aio-max-nr = 1048576
 # IPC tuning
 kernel.shmmax = 68719476736
 kernel.shmall = 4294967296
-```
+
+```text
 
 Apply changes:
 
 ```bash
+
 sudo sysctl -p
-```
+
+```bash
 
 ### File Descriptor Limits
 
 Edit `/etc/security/limits.conf`:
 
 ```bash
+
 # NebulaIO user limits
 nebulaio soft nofile 1048576
 nebulaio hard nofile 1048576
@@ -116,16 +123,19 @@ nebulaio soft nproc 65535
 nebulaio hard nproc 65535
 nebulaio soft memlock unlimited
 nebulaio hard memlock unlimited
-```
+
+```bash
 
 ### Transparent Huge Pages
 
 Disable THP for consistent performance:
 
 ```bash
+
 echo never > /sys/kernel/mm/transparent_hugepage/enabled
 echo never > /sys/kernel/mm/transparent_hugepage/defrag
-```
+
+```text
 
 Add to `/etc/rc.local` for persistence.
 
@@ -136,17 +146,20 @@ Add to `/etc/rc.local` for persistence.
 ### TCP Tuning
 
 ```bash
+
 # Enable TCP BBR congestion control
 echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
 echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
 
 # Enable TCP Fast Open
 echo "net.ipv4.tcp_fastopen=3" >> /etc/sysctl.conf
-```
+
+```bash
 
 ### Network Interface Tuning
 
 ```bash
+
 # Increase ring buffer sizes
 ethtool -G eth0 rx 4096 tx 4096
 
@@ -158,13 +171,15 @@ ethtool -C eth0 rx-usecs 0 tx-usecs 0
 
 # Enable jumbo frames (if supported)
 ip link set eth0 mtu 9000
-```
+
+```bash
 
 ### RDMA Configuration
 
 For RDMA-enabled deployments:
 
 ```bash
+
 # Load RDMA kernel modules
 modprobe ib_core
 modprobe rdma_ucm
@@ -175,7 +190,8 @@ rdma link add rxe0 type rxe netdev eth0
 
 # Verify RDMA
 ibv_devinfo
-```
+
+```text
 
 ---
 
@@ -184,6 +200,7 @@ ibv_devinfo
 ### NVMe Tuning
 
 ```bash
+
 # Set I/O scheduler to none for NVMe
 echo none > /sys/block/nvme0n1/queue/scheduler
 
@@ -192,23 +209,27 @@ blockdev --setra 2048 /dev/nvme0n1
 
 # Set optimal queue depth
 echo 1024 > /sys/block/nvme0n1/queue/nr_requests
-```
+
+```bash
 
 ### Filesystem Configuration
 
 ```bash
+
 # Mount options for XFS (recommended)
 mount -o noatime,nodiratime,logbufs=8,logbsize=256k,allocsize=64m /dev/nvme0n1 /data
 
 # Mount options for ext4
 mount -o noatime,nodiratime,data=writeback,barrier=0,nobh /dev/nvme0n1 /data
-```
+
+```bash
 
 ### RAID Configuration
 
 For software RAID with mdadm:
 
 ```bash
+
 # Create RAID 10 array
 mdadm --create /dev/md0 --level=10 --raid-devices=4 /dev/nvme[0-3]n1
 
@@ -217,7 +238,8 @@ echo 32768 > /sys/block/md0/md/stripe_cache_size
 
 # Set read-ahead
 blockdev --setra 65536 /dev/md0
-```
+
+```text
 
 ---
 
@@ -226,6 +248,7 @@ blockdev --setra 65536 /dev/md0
 ### NebulaIO Memory Configuration
 
 ```yaml
+
 # config.yaml
 memory:
   # Total cache size (recommend 60-70% of available RAM)
@@ -254,11 +277,13 @@ memory:
     medium: 64KB
     large: 1MB
     count: 10000
-```
+
+```bash
 
 ### Garbage Collection Tuning
 
 ```bash
+
 # Set Go garbage collection target (lower = more frequent GC)
 export GOGC=100
 
@@ -267,11 +292,13 @@ export GOMEMLIMIT=200GB
 
 # Enable memory ballast for reduced GC frequency
 export NEBULAIO_MEMORY_BALLAST=10GB
-```
+
+```bash
 
 ### NUMA Optimization
 
 ```bash
+
 # Pin NebulaIO to specific NUMA nodes
 numactl --cpunodebind=0 --membind=0 ./nebulaio
 
@@ -279,7 +306,8 @@ numactl --cpunodebind=0 --membind=0 ./nebulaio
 # /etc/systemd/system/nebulaio.service
 [Service]
 ExecStart=/usr/bin/numactl --interleave=all /usr/local/bin/nebulaio
-```
+
+```text
 
 ---
 
@@ -288,6 +316,7 @@ ExecStart=/usr/bin/numactl --interleave=all /usr/local/bin/nebulaio
 ### CPU Governor
 
 ```bash
+
 # Set performance governor
 for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
     echo performance > $cpu
@@ -295,11 +324,13 @@ done
 
 # Disable CPU frequency scaling
 cpupower frequency-set -g performance
-```
+
+```bash
 
 ### CPU Affinity
 
 ```yaml
+
 # config.yaml
 cpu:
   # Number of worker threads
@@ -318,19 +349,22 @@ cpu:
 
   # Enable CPU pinning
   pin_threads: true
-```
+
+```bash
 
 ### SIMD Optimization
 
 NebulaIO automatically uses SIMD instructions when available:
 
 ```bash
+
 # Verify CPU capabilities
 cat /proc/cpuinfo | grep -E "avx|sse|neon"
 
 # Enable specific optimizations
 export NEBULAIO_SIMD=avx512
-```
+
+```text
 
 ---
 
@@ -339,6 +373,7 @@ export NEBULAIO_SIMD=avx512
 ### Request Handling
 
 ```yaml
+
 # config.yaml
 s3:
   # Maximum concurrent requests
@@ -371,11 +406,13 @@ s3:
 
     # Concurrent part uploads
     concurrent_parts: 10
-```
+
+```bash
 
 ### Compression Settings
 
 ```yaml
+
 # config.yaml
 compression:
   # Enable automatic compression
@@ -397,11 +434,13 @@ compression:
     - video/*
     - application/gzip
     - application/zip
-```
+
+```bash
 
 ### Caching Configuration
 
 ```yaml
+
 # config.yaml
 caching:
   # Enable response caching
@@ -422,7 +461,8 @@ caching:
     enabled: true
     size: 10MB
     trigger_sequential_reads: 3
-```
+
+```text
 
 ---
 
@@ -431,6 +471,7 @@ caching:
 ### GPUDirect Storage
 
 ```yaml
+
 # config.yaml
 gpudirect:
   enabled: true
@@ -450,11 +491,13 @@ gpudirect:
     enabled: true
     max_batch_size: 100
     max_wait_time: 10ms
-```
+
+```bash
 
 ### RDMA Configuration
 
 ```yaml
+
 # config.yaml
 rdma:
   enabled: true
@@ -478,11 +521,13 @@ rdma:
   performance:
     use_odp: true
     use_prefetch: true
-```
+
+```bash
 
 ### S3 Express Configuration
 
 ```yaml
+
 # config.yaml
 s3_express:
   enabled: true
@@ -499,11 +544,13 @@ s3_express:
 
   # Availability zone
   availability_zone: us-east-1a
-```
+
+```bash
 
 ### Iceberg Integration
 
 ```yaml
+
 # config.yaml
 iceberg:
   enabled: true
@@ -530,7 +577,8 @@ iceberg:
     compaction:
       target_file_size: 512MB
       min_files: 5
-```
+
+```text
 
 ---
 
@@ -541,6 +589,7 @@ iceberg:
 Dragonboat uses `config.Config` for Raft shard configuration and `config.NodeHostConfig` for the NodeHost.
 
 ```yaml
+
 # config.yaml
 cluster:
   # Shard and replica configuration (config.Config)
@@ -562,11 +611,13 @@ cluster:
 
   # Quorum checking (recommended for production)
   check_quorum: true
-```
+
+```text
 
 **NodeHost Configuration** (applied at NodeHost level):
 
 ```yaml
+
 cluster:
   # NodeHost settings
   raft_address: 10.0.1.10:9003  # Address for Raft communication
@@ -574,7 +625,8 @@ cluster:
   # Advanced NodeHost tuning (config.NodeHostConfig)
   max_send_queue_size: 0  # 0 = use Dragonboat defaults
   max_receive_queue_size: 0
-```
+
+```text
 
 **Performance Notes**:
 
@@ -596,6 +648,7 @@ cluster:
 ### Replication Settings
 
 ```yaml
+
 # config.yaml
 replication:
   # Synchronous replication factor
@@ -612,11 +665,13 @@ replication:
     timeout: 30s
     retry_attempts: 3
     retry_delay: 1s
-```
+
+```bash
 
 ### Load Balancing
 
 ```yaml
+
 # config.yaml
 load_balancing:
   # Algorithm: round_robin, least_connections, weighted
@@ -633,7 +688,8 @@ load_balancing:
   drain:
     enabled: true
     timeout: 30s
-```
+
+```text
 
 ---
 
@@ -644,6 +700,7 @@ load_balancing:
 Key metrics to monitor:
 
 ```yaml
+
 # Latency metrics
 nebulaio_s3_request_duration_seconds:
   - p50 target: < 10ms
@@ -663,13 +720,15 @@ nebulaio_cpu_usage_percent:
   - target: < 80%
 nebulaio_memory_usage_bytes:
   - target: < 85% of allocated
-```
+
+```bash
 
 ### Profiling
 
 Enable runtime profiling:
 
 ```yaml
+
 # config.yaml
 profiling:
   enabled: true
@@ -684,11 +743,13 @@ profiling:
     enabled: true
     interval: 1m
     retention: 24h
-```
+
+```text
 
 Access profiling data:
 
 ```bash
+
 # CPU profile
 go tool pprof http://localhost:6060/debug/pprof/profile?seconds=30
 
@@ -700,13 +761,15 @@ go tool pprof http://localhost:6060/debug/pprof/goroutine
 
 # Block profile
 go tool pprof http://localhost:6060/debug/pprof/block
-```
+
+```bash
 
 ### Tracing
 
 Enable distributed tracing:
 
 ```yaml
+
 # config.yaml
 tracing:
   enabled: true
@@ -724,7 +787,8 @@ tracing:
   export:
     batch_size: 512
     interval: 5s
-```
+
+```text
 
 ---
 
@@ -735,6 +799,7 @@ tracing:
 Run NebulaIO benchmarks:
 
 ```bash
+
 # Run all benchmarks
 nebulaio benchmark --all
 
@@ -745,12 +810,13 @@ nebulaio benchmark --type=list --prefix=/data --concurrency=20
 
 # Compare results
 nebulaio benchmark --compare=baseline.json
-```
+
+```bash
 
 ### Expected Performance Targets
 
 | Operation | Target (Single Node) | Target (Cluster) |
-|-----------|---------------------|------------------|
+| ----------- | --------------------- | ------------------ |
 | GET (1KB) | 500K ops/s | 2M ops/s |
 | GET (1MB) | 10 GB/s | 40 GB/s |
 | PUT (1KB) | 200K ops/s | 800K ops/s |
@@ -761,6 +827,7 @@ nebulaio benchmark --compare=baseline.json
 ### Stress Testing
 
 ```bash
+
 # Generate load with warp
 warp mixed \
   --host=localhost:9000 \
@@ -772,7 +839,8 @@ warp mixed \
 
 # Analyze results
 warp analyze warp-mixed-*.csv.zst
-```
+
+```text
 
 ---
 
@@ -808,6 +876,7 @@ warp analyze warp-mixed-*.csv.zst
 ### Diagnostic Commands
 
 ```bash
+
 # Check system resources
 nebulaio diag system
 
@@ -819,6 +888,7 @@ nebulaio diag network --target=node2:9000
 
 # Generate diagnostic report
 nebulaio diag report --output=diag-$(date +%Y%m%d).tar.gz
+
 ```
 
 ---

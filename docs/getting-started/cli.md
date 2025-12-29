@@ -7,28 +7,33 @@ The `nebulaio-cli` is a command-line tool for managing NebulaIO storage. It prov
 ### From Source
 
 ```bash
+
 # Build the CLI
 cd nebulaio
 make build-cli
 
 # The binary will be at ./bin/nebulaio-cli
-```
+
+```bash
 
 ### Add to PATH
 
 ```bash
+
 # Linux/macOS
 sudo cp ./bin/nebulaio-cli /usr/local/bin/
 
 # Or add to PATH
 export PATH=$PATH:/path/to/nebulaio/bin
-```
+
+```bash
 
 ## Configuration
 
 ### Initial Setup
 
 ```bash
+
 # Set endpoint (use HTTPS since TLS is enabled by default)
 nebulaio-cli config set endpoint https://localhost:9000
 nebulaio-cli config set skip-verify true  # For self-signed certificates
@@ -39,36 +44,42 @@ nebulaio-cli config set secret-key "$NEBULAIO_AUTH_ROOT_PASSWORD"
 
 # Optional: Set region
 nebulaio-cli config set region us-east-1
-```
+
+```bash
 
 ### View Configuration
 
 ```bash
+
 # Show all settings
 nebulaio-cli config show
 
 # Get specific value
 nebulaio-cli config get endpoint
-```
+
+```bash
 
 ### Configuration File
 
 Configuration is stored in `~/.nebulaio/config.yaml`:
 
 ```yaml
+
 endpoint: https://localhost:9000
 access_key: YOUR_ACCESS_KEY
 secret_key: YOUR_SECRET_KEY
 region: us-east-1
 use_ssl: true
 skip_verify: true  # Set to false when using trusted certificates
-```
+
+```bash
 
 ### Environment Variables
 
 You can also use environment variables (they override config file):
 
 ```bash
+
 export NEBULAIO_ENDPOINT=https://localhost:9000
 export NEBULAIO_ACCESS_KEY=YOUR_ACCESS_KEY
 export NEBULAIO_SECRET_KEY=YOUR_SECRET_KEY
@@ -79,13 +90,15 @@ export NEBULAIO_SKIP_VERIFY=true  # For self-signed certificates
 export AWS_ACCESS_KEY_ID=YOUR_ACCESS_KEY
 export AWS_SECRET_ACCESS_KEY=YOUR_SECRET_KEY
 export AWS_REGION=us-east-1
-```
+
+```bash
 
 ## Commands
 
 ### Bucket Operations
 
 ```bash
+
 # List all buckets
 nebulaio-cli bucket list
 nebulaio-cli bucket ls
@@ -102,11 +115,13 @@ nebulaio-cli bucket delete my-bucket --force       # Delete all objects first
 
 # Get bucket info
 nebulaio-cli bucket info my-bucket
-```
+
+```bash
 
 ### Object Operations
 
 ```bash
+
 # List objects
 nebulaio-cli object list s3://my-bucket
 nebulaio-cli ls s3://my-bucket                    # Short form
@@ -133,13 +148,15 @@ nebulaio-cli cat s3://my-bucket/file.txt
 
 # Get object metadata
 nebulaio-cli object head s3://my-bucket/file.txt
-```
+
+```bash
 
 ### Admin Operations
 
 #### Versioning
 
 ```bash
+
 # Enable versioning
 nebulaio-cli admin versioning enable my-bucket
 
@@ -148,11 +165,13 @@ nebulaio-cli admin versioning disable my-bucket
 
 # Check status
 nebulaio-cli admin versioning status my-bucket
-```
+
+```bash
 
 #### Bucket Policies
 
 ```bash
+
 # Set policy from file
 nebulaio-cli admin policy set my-bucket policy.json
 
@@ -161,11 +180,13 @@ nebulaio-cli admin policy get my-bucket
 
 # Delete policy
 nebulaio-cli admin policy delete my-bucket
-```
+
+```text
 
 Example policy file (`policy.json`):
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -177,11 +198,13 @@ Example policy file (`policy.json`):
     }
   ]
 }
-```
+
+```bash
 
 #### Lifecycle Rules
 
 ```bash
+
 # Set lifecycle configuration
 nebulaio-cli admin lifecycle set my-bucket lifecycle.json
 
@@ -193,11 +216,13 @@ nebulaio-cli admin lifecycle list my-bucket
 
 # Delete lifecycle configuration
 nebulaio-cli admin lifecycle delete my-bucket
-```
+
+```text
 
 Example lifecycle configuration (`lifecycle.json`):
 
 ```json
+
 {
   "Rules": [
     {
@@ -225,11 +250,13 @@ Example lifecycle configuration (`lifecycle.json`):
     }
   ]
 }
-```
+
+```bash
 
 #### Replication
 
 ```bash
+
 # Set replication configuration
 nebulaio-cli admin replication set my-bucket replication.json
 
@@ -238,11 +265,13 @@ nebulaio-cli admin replication get my-bucket
 
 # Delete replication configuration
 nebulaio-cli admin replication delete my-bucket
-```
+
+```text
 
 Example replication configuration (`replication.json`):
 
 ```json
+
 {
   "Role": "arn:aws:iam::account-id:role/replication-role",
   "Rules": [
@@ -260,13 +289,15 @@ Example replication configuration (`replication.json`):
     }
   ]
 }
-```
+
+```bash
 
 ## Examples
 
 ### Backup Script
 
 ```bash
+
 #!/bin/bash
 # Backup local directory to NebulaIO
 
@@ -276,50 +307,61 @@ DATE=$(date +%Y-%m-%d)
 
 nebulaio-cli cp -r "$SOURCE_DIR" "$BUCKET/$DATE/"
 echo "Backup completed: $BUCKET/$DATE/"
-```
+
+```bash
 
 ### Sync Script
 
 ```bash
+
 #!/bin/bash
 # Sync local directory with bucket
 
 nebulaio-cli cp -r ./local-folder s3://my-bucket/folder/
-```
+
+```bash
 
 ### List Large Objects
 
 ```bash
+
 # List objects and filter by size (using external tools)
 nebulaio-cli ls s3://my-bucket -r | awk '$1 > 1000000000'
-```
+
+```bash
 
 ## Troubleshooting
 
 ### Connection Issues
 
 ```bash
+
 # Verify endpoint is reachable
 curl -v http://localhost:9000
 
 # Check configuration
 nebulaio-cli config show
-```
+
+```bash
 
 ### Authentication Errors
 
 ```bash
+
 # Verify credentials
 nebulaio-cli bucket list
 
 # If using environment variables, check they're set
 env | grep NEBULAIO
 env | grep AWS
-```
+
+```bash
 
 ### SSL/TLS Issues
 
 ```bash
+
 # Skip certificate verification (development only)
 nebulaio-cli config set skip-verify true
+
 ```

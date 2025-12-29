@@ -56,7 +56,7 @@ Welcome to the NebulaIO documentation. This guide covers everything from getting
 ## Quick Links
 
 | Deployment Type | Single Node | HA Cluster | Production |
-|----------------|-------------|------------|------------|
+| ---------------- | ------------- | ------------ | ------------ |
 | **Standalone** | [Guide](deployment/standalone.md#single-node) | [Guide](deployment/standalone.md#ha-cluster) | [Guide](deployment/standalone.md#production) |
 | **Docker** | [Guide](deployment/docker.md#single-node) | [Guide](deployment/docker.md#ha-cluster) | [Guide](deployment/docker.md#production) |
 | **Kubernetes** | [Guide](deployment/kubernetes.md#single-node) | [Guide](deployment/kubernetes.md#ha-cluster) | [Guide](deployment/kubernetes.md#production) |
@@ -64,7 +64,8 @@ Welcome to the NebulaIO documentation. This guide covers everything from getting
 
 ## Architecture Diagram
 
-```
+```text
+
                                     ┌─────────────────────────────────────────┐
                                     │             Load Balancer               │
                                     │        (HAProxy / Nginx / Cloud LB)     │
@@ -84,6 +85,7 @@ Welcome to the NebulaIO documentation. This guide covers everything from getting
            │  Local Storage  │            │  Local Storage  │            │  Local Storage  │
            │    /data/node1  │            │    /data/node2  │            │    /data/node3  │
            └─────────────────┘            └─────────────────┘            └─────────────────┘
+
 ```
 
 ## Getting Help

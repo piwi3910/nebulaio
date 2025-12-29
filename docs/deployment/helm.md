@@ -18,6 +18,7 @@ This guide covers deploying NebulaIO using the Helm chart.
 ### From Helm Repository
 
 ```bash
+
 # Add the NebulaIO Helm repository
 helm repo add nebulaio https://piwi3910.github.io/nebulaio/charts
 helm repo update
@@ -27,11 +28,13 @@ helm install nebulaio nebulaio/nebulaio
 
 # Install with custom namespace
 helm install nebulaio nebulaio/nebulaio --namespace nebulaio --create-namespace
-```
+
+```bash
 
 ### From Local Chart
 
 ```bash
+
 cd deployments/helm
 
 # Install with default values
@@ -39,7 +42,8 @@ helm install nebulaio ./nebulaio
 
 # Install with custom values
 helm install nebulaio ./nebulaio -f my-values.yaml
-```
+
+```text
 
 ---
 
@@ -48,54 +52,66 @@ helm install nebulaio ./nebulaio -f my-values.yaml
 ### Single Node (Development) {#single-node}
 
 ```bash
+
 helm install nebulaio ./nebulaio -f values-single-node.yaml
-```
+
+```text
 
 Or with inline values:
 
 ```bash
+
 helm install nebulaio ./nebulaio \
   --set replicaCount=1 \
   --set cluster.enabled=false \
   --set persistence.size=50Gi
-```
+
+```bash
 
 ### HA Cluster (3 nodes) {#ha-cluster}
 
 ```bash
+
 helm install nebulaio ./nebulaio -f values-ha.yaml
-```
+
+```text
 
 Or with inline values:
 
 ```bash
+
 helm install nebulaio ./nebulaio \
   --set replicaCount=3 \
   --set cluster.enabled=true \
   --set podAntiAffinityPreset=hard \
   --set podDisruptionBudget.minAvailable=2
-```
+
+```bash
 
 ### Production (5 nodes) {#production}
 
 First, create the credentials secret:
 
 ```bash
+
 kubectl create namespace nebulaio-production
 
 kubectl create secret generic nebulaio-credentials \
   --namespace nebulaio-production \
   --from-literal=root-user=admin \
   --from-literal=root-password=$(openssl rand -base64 32)
-```
+
+```text
 
 Then install:
 
 ```bash
+
 helm install nebulaio ./nebulaio \
   --namespace nebulaio-production \
   -f values-production.yaml
-```
+
+```text
 
 ---
 
@@ -104,7 +120,7 @@ helm install nebulaio ./nebulaio \
 ### Essential Parameters
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `replicaCount` | Number of nodes | `1` |
 | `image.repository` | Image repository | `ghcr.io/piwi3910/nebulaio` |
 | `image.tag` | Image tag | Chart appVersion |
@@ -115,7 +131,7 @@ helm install nebulaio ./nebulaio \
 ### Cluster Configuration
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `cluster.enabled` | Enable clustering | `true` |
 | `cluster.name` | Cluster name | `nebulaio-cluster` |
 | `cluster.nodeRole` | Node role | `storage` |
@@ -123,7 +139,7 @@ helm install nebulaio ./nebulaio \
 ### Storage Configuration
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `persistence.enabled` | Enable persistence | `true` |
 | `persistence.storageClass` | Storage class | `""` |
 | `persistence.size` | Volume size | `10Gi` |
@@ -132,7 +148,7 @@ helm install nebulaio ./nebulaio \
 ### Service Configuration
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `service.type` | Service type | `ClusterIP` |
 | `service.s3Port` | S3 API port | `9000` |
 | `service.adminPort` | Admin API port | `9001` |
@@ -141,7 +157,7 @@ helm install nebulaio ./nebulaio \
 ### Ingress Configuration
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `ingress.enabled` | Enable ingress | `false` |
 | `ingress.className` | Ingress class | `nginx` |
 | `ingress.s3.host` | S3 API hostname | `s3.example.com` |
@@ -152,7 +168,7 @@ helm install nebulaio ./nebulaio \
 ### Resource Configuration
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `resources.requests.cpu` | CPU request | `100m` |
 | `resources.requests.memory` | Memory request | `256Mi` |
 | `resources.limits.cpu` | CPU limit | `2000m` |
@@ -161,7 +177,7 @@ helm install nebulaio ./nebulaio \
 ### High Availability
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `podAntiAffinityPreset` | Anti-affinity: soft/hard | `soft` |
 | `podDisruptionBudget.enabled` | Enable PDB | `true` |
 | `podDisruptionBudget.minAvailable` | Min available pods | `""` |
@@ -170,7 +186,7 @@ helm install nebulaio ./nebulaio \
 ### Monitoring
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `metrics.enabled` | Enable metrics | `true` |
 | `metrics.serviceMonitor.enabled` | Create ServiceMonitor | `false` |
 | `metrics.prometheusRule.enabled` | Create PrometheusRule | `false` |
@@ -179,7 +195,7 @@ helm install nebulaio ./nebulaio \
 ### Network Policy
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `networkPolicy.enabled` | Enable network policy | `false` |
 | `networkPolicy.allowS3FromAnywhere` | Open S3 API | `true` |
 | `networkPolicy.adminAllowedNamespaces` | Admin access namespaces | `[]` |
@@ -191,6 +207,7 @@ helm install nebulaio ./nebulaio \
 ### values-single-node.yaml
 
 ```yaml
+
 replicaCount: 1
 
 cluster:
@@ -209,11 +226,13 @@ resources:
 
 podDisruptionBudget:
   enabled: false
-```
+
+```bash
 
 ### values-ha.yaml
 
 ```yaml
+
 replicaCount: 3
 
 cluster:
@@ -240,11 +259,13 @@ podDisruptionBudget:
 metrics:
   serviceMonitor:
     enabled: true
-```
+
+```bash
 
 ### values-production.yaml
 
 ```yaml
+
 replicaCount: 5
 
 auth:
@@ -298,7 +319,8 @@ metrics:
 
 networkPolicy:
   enabled: true
-```
+
+```text
 
 ---
 
@@ -309,17 +331,20 @@ For large deployments, deploy separate management and storage releases:
 ### Management Plane
 
 ```bash
+
 helm install nebulaio-mgmt ./nebulaio \
   --namespace nebulaio-system \
   --set replicaCount=3 \
   --set cluster.nodeRole=management \
   --set persistence.size=10Gi \
   --set nodeSelector."node-role\.kubernetes\.io/control-plane"=""
-```
+
+```bash
 
 ### Storage Plane
 
 ```bash
+
 helm install nebulaio-storage ./nebulaio \
   --namespace nebulaio-system \
   --set replicaCount=10 \
@@ -327,7 +352,8 @@ helm install nebulaio-storage ./nebulaio \
   --set persistence.size=500Gi \
   --set persistence.storageClass=fast-ssd \
   --set nodeSelector."node-role\.kubernetes\.io/storage"="true"
-```
+
+```text
 
 ---
 
@@ -336,23 +362,29 @@ helm install nebulaio-storage ./nebulaio \
 ### Minor Version Upgrade
 
 ```bash
+
 helm upgrade nebulaio ./nebulaio -f my-values.yaml
-```
+
+```bash
 
 ### Image Upgrade
 
 ```bash
+
 helm upgrade nebulaio ./nebulaio \
   --set image.tag=v1.1.0 \
   --reuse-values
-```
+
+```bash
 
 ### Check Upgrade Status
 
 ```bash
+
 helm status nebulaio
 kubectl rollout status statefulset/nebulaio
-```
+
+```text
 
 ---
 
@@ -361,33 +393,41 @@ kubectl rollout status statefulset/nebulaio
 ### Scale Up
 
 ```bash
+
 helm upgrade nebulaio ./nebulaio \
   --set replicaCount=5 \
   --reuse-values
-```
+
+```bash
 
 ### Scale Down
 
 ```bash
+
 # Ensure you maintain Raft quorum (majority)
 helm upgrade nebulaio ./nebulaio \
   --set replicaCount=3 \
   --reuse-values
-```
+
+```text
 
 ---
 
 ## Uninstalling
 
 ```bash
+
 helm uninstall nebulaio
-```
+
+```text
 
 **Note**: PVCs are not deleted automatically. To remove all data:
 
 ```bash
+
 kubectl delete pvc -l app.kubernetes.io/instance=nebulaio
-```
+
+```text
 
 ---
 
@@ -396,30 +436,38 @@ kubectl delete pvc -l app.kubernetes.io/instance=nebulaio
 ### View Rendered Templates
 
 ```bash
+
 helm template nebulaio ./nebulaio -f my-values.yaml
-```
+
+```bash
 
 ### Check Release Status
 
 ```bash
+
 helm status nebulaio
 helm history nebulaio
-```
+
+```bash
 
 ### Rollback
 
 ```bash
+
 # Rollback to previous revision
 helm rollback nebulaio
 
 # Rollback to specific revision
 helm rollback nebulaio 2
-```
+
+```bash
 
 ### Debug Installation
 
 ```bash
+
 helm install nebulaio ./nebulaio --dry-run --debug
+
 ```
 
 ---

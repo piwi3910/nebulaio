@@ -5,7 +5,7 @@ NebulaIO provides comprehensive backup and recovery capabilities to protect data
 ## Backup Strategies Overview
 
 | Strategy | RPO | RTO | Use Case |
-|----------|-----|-----|----------|
+| ---------- | ----- | ----- | ---------- |
 | Continuous Replication | Near-zero | Minutes | Mission-critical data |
 | Point-in-Time Recovery | Configurable | Hours | Compliance, audit trails |
 | Scheduled Snapshots | Hours | Hours | General production |
@@ -18,6 +18,7 @@ NebulaIO provides comprehensive backup and recovery capabilities to protect data
 ### Full Bucket Backup
 
 ```bash
+
 # Backup bucket to another NebulaIO cluster
 nebulaio-cli admin backup create \
   --source-bucket production-data \
@@ -28,17 +29,20 @@ nebulaio-cli admin backup create \
 nebulaio-cli admin backup create \
   --source-bucket production-data \
   --destination file:///mnt/backup/production-data-$(date +%Y%m%d)
-```
+
+```bash
 
 ### Incremental Backup
 
 ```bash
+
 nebulaio-cli admin backup create \
   --source-bucket production-data \
   --destination s3://backup-cluster/backups/production-data \
   --incremental \
   --since-marker /var/lib/nebulaio/backup-markers/production-data.marker
-```
+
+```text
 
 ---
 
@@ -47,24 +51,28 @@ nebulaio-cli admin backup create \
 Export cluster configuration, policies, and user definitions.
 
 ```bash
+
 nebulaio-cli admin metadata export \
   --output /backup/metadata/cluster-metadata-$(date +%Y%m%d).json
 
 nebulaio-cli admin metadata export \
   --include users,policies,buckets,replication-rules \
   --output /backup/metadata/config-backup.json
-```
+
+```bash
 
 ### Automated Metadata Backup
 
 ```yaml
+
 metadata_backup:
   enabled: true
   schedule: "0 2 * * *"
   destination: s3://backup-bucket/metadata/
   retention_days: 90
   include: [users, groups, policies, bucket_configurations]
-```
+
+```text
 
 ---
 
@@ -75,6 +83,7 @@ PITR enables recovery to any point within the configured retention window.
 ### Enable PITR
 
 ```yaml
+
 pitr:
   enabled: true
   retention_period: 7d
@@ -82,18 +91,21 @@ pitr:
   storage:
     type: s3
     bucket: pitr-data
-```
+
+```bash
 
 ### Recover to Point in Time
 
 ```bash
+
 nebulaio-cli admin pitr list-points --bucket critical-data
 
 nebulaio-cli admin pitr recover \
   --bucket critical-data \
   --target-bucket critical-data-recovered \
   --point-in-time "2024-01-15T14:30:00Z"
-```
+
+```text
 
 ---
 
@@ -102,6 +114,7 @@ nebulaio-cli admin pitr recover \
 ### Configure Remote Backup Target
 
 ```yaml
+
 backup:
   remote_targets:
     - name: dr-site
@@ -112,11 +125,13 @@ backup:
       encryption:
         enabled: true
         key_id: backup-encryption-key
-```
+
+```bash
 
 ### Scheduled Cross-Site Backup
 
 ```yaml
+
 backup:
   schedules:
     - name: daily-dr-backup
@@ -125,7 +140,8 @@ backup:
       schedule: "0 3 * * *"
       retention_count: 30
       type: incremental
-```
+
+```text
 
 ---
 
@@ -134,31 +150,37 @@ backup:
 ### Full Bucket Restore
 
 ```bash
+
 nebulaio-cli admin restore \
   --source s3://backup-cluster/backups/production-data/20240115 \
   --source-endpoint https://backup.example.com:9000 \
   --target-bucket production-data-restored
-```
+
+```bash
 
 ### Selective Restore
 
 ```bash
+
 nebulaio-cli admin restore \
   --source s3://backup-cluster/backups/production-data/20240115 \
   --target-bucket production-data \
   --prefix "reports/2024/"
-```
+
+```bash
 
 ### Metadata Restore
 
 ```bash
+
 nebulaio-cli admin metadata import \
   --input /backup/metadata/cluster-metadata-20240115.json
 
 nebulaio-cli admin metadata import \
   --input /backup/metadata/cluster-metadata-20240115.json \
   --dry-run
-```
+
+```text
 
 ---
 
@@ -167,6 +189,7 @@ nebulaio-cli admin metadata import \
 ### Automated Verification
 
 ```yaml
+
 backup:
   verification:
     enabled: true
@@ -174,16 +197,19 @@ backup:
     sample_percentage: 10
     checksum_validation: true
     report_destination: s3://backup-bucket/verification-reports/
-```
+
+```bash
 
 ### Manual Verification
 
 ```bash
+
 nebulaio-cli admin backup verify \
   --backup-path s3://backup-cluster/backups/production-data/20240115 \
   --source-bucket production-data \
   --checksum
-```
+
+```text
 
 ---
 
@@ -192,6 +218,7 @@ nebulaio-cli admin backup verify \
 ### Backup Schedule Configuration
 
 ```yaml
+
 backup:
   global_settings:
     default_retention_days: 30
@@ -218,23 +245,28 @@ backup:
       schedule: "0 3 * * 0"
       type: full
       retention_count: 12
-```
+
+```bash
 
 ### Monitoring Backup Jobs
 
 ```bash
+
 nebulaio-cli admin backup list-jobs
 nebulaio-cli admin backup job-status --job-id backup-123
 nebulaio-cli admin backup history --bucket production-data --limit 10
-```
+
+```bash
 
 ### Prometheus Metrics
 
-```
+```bash
+
 nebulaio_backup_jobs_total{status="success|failed|running"}
 nebulaio_backup_duration_seconds{bucket="...",type="full|incremental"}
 nebulaio_backup_last_success_timestamp{bucket="..."}
 nebulaio_pitr_checkpoint_lag_seconds{bucket="..."}
+
 ```
 
 ---

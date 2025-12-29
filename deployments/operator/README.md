@@ -23,37 +23,46 @@ The NebulaIO Operator automates the deployment and management of NebulaIO cluste
 ### Install CRDs
 
 ```bash
+
 kubectl apply -k config/crd/bases/
-```
+
+```bash
 
 ### Install the Operator
 
 ```bash
+
 kubectl apply -k config/default/
-```
+
+```bash
 
 ### Verify Installation
 
 ```bash
+
 kubectl get pods -n nebulaio-system
 kubectl get crd | grep nebulaio
-```
+
+```bash
 
 ## Usage
 
 ### Create a Credentials Secret
 
 ```bash
+
 kubectl create namespace nebulaio
 
 kubectl create secret generic nebulaio-credentials \
   --namespace nebulaio \
   --from-literal=password=your-secure-password
-```
+
+```bash
 
 ### Deploy a Single-Node Instance
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIO
 metadata:
@@ -68,17 +77,21 @@ spec:
       key: password
   storage:
     size: 50Gi
-```
+
+```text
 
 Apply with:
 
 ```bash
+
 kubectl apply -f config/samples/nebulaio_v1alpha1_nebulaio.yaml
-```
+
+```bash
 
 ### Deploy an HA Cluster
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIO
 metadata:
@@ -103,11 +116,13 @@ spec:
   podDisruptionBudget:
     enabled: true
     minAvailable: 2
-```
+
+```bash
 
 ### Schedule Backups
 
 ```yaml
+
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIOBackup
 metadata:
@@ -126,14 +141,15 @@ spec:
         name: backup-s3-credentials
   retention:
     keepLast: 7
-```
+
+```bash
 
 ## Custom Resource Reference
 
 ### NebulaIO
 
 | Field | Description | Default |
-|-------|-------------|---------|
+| ------- | ------------- | --------- |
 | `spec.replicas` | Number of nodes | 1 |
 | `spec.image.repository` | Image repository | ghcr.io/piwi3910/nebulaio |
 | `spec.image.tag` | Image tag | latest |
@@ -150,7 +166,7 @@ spec:
 ### NebulaIOBackup
 
 | Field | Description | Default |
-|-------|-------------|---------|
+| ------- | ------------- | --------- |
 | `spec.clusterRef.name` | Target cluster name | - |
 | `spec.schedule` | Cron schedule (empty for one-time) | - |
 | `spec.destination.type` | Backup type: s3, pvc | - |
@@ -164,8 +180,10 @@ spec:
 Check the status of your NebulaIO cluster:
 
 ```bash
+
 kubectl get nebulaio nebulaio-ha -n nebulaio -o yaml
-```
+
+```text
 
 Status fields:
 
@@ -179,23 +197,29 @@ Status fields:
 ### Scale Up
 
 ```bash
+
 kubectl patch nebulaio nebulaio-ha -n nebulaio --type merge -p '{"spec":{"replicas":5}}'
-```
+
+```bash
 
 ### Scale Down
 
 ```bash
+
 kubectl patch nebulaio nebulaio-ha -n nebulaio --type merge -p '{"spec":{"replicas":3}}'
-```
+
+```bash
 
 ## Upgrading
 
 Update the image tag:
 
 ```bash
+
 kubectl patch nebulaio nebulaio-ha -n nebulaio --type merge \
   -p '{"spec":{"image":{"tag":"v1.1.0"}}}'
-```
+
+```text
 
 The operator will perform a rolling update.
 
@@ -204,6 +228,7 @@ The operator will perform a rolling update.
 For large deployments, deploy separate management and storage clusters:
 
 ```yaml
+
 # Management plane (3 voters)
 apiVersion: storage.nebulaio.io/v1alpha1
 kind: NebulaIO
@@ -227,11 +252,13 @@ spec:
     nodeRole: storage
   storage:
     size: 500Gi
-```
+
+```bash
 
 ## Uninstalling
 
 ```bash
+
 # Delete NebulaIO instances
 kubectl delete nebulaio --all -A
 
@@ -240,26 +267,33 @@ kubectl delete -k config/default/
 
 # Delete CRDs (this removes all NebulaIO resources!)
 kubectl delete -k config/crd/bases/
-```
+
+```bash
 
 ## Troubleshooting
 
 ### Check Operator Logs
 
 ```bash
+
 kubectl logs -n nebulaio-system deployment/nebulaio-operator
-```
+
+```bash
 
 ### Check NebulaIO Pod Logs
 
 ```bash
+
 kubectl logs -n nebulaio -l app.kubernetes.io/name=nebulaio
-```
+
+```bash
 
 ### Check Events
 
 ```bash
+
 kubectl get events -n nebulaio --sort-by='.lastTimestamp'
+
 ```
 
 ## License

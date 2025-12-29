@@ -14,7 +14,7 @@ OpenID Connect integration provides:
 ## Supported Providers
 
 | Provider | Status | Notes |
-|----------|--------|-------|
+| ---------- | -------- | ------- |
 | Keycloak | Production | Full support with group claims |
 | Okta | Production | Standard OIDC with groups scope |
 | Auth0 | Production | Custom claims via Rules/Actions |
@@ -24,6 +24,7 @@ OpenID Connect integration provides:
 ## Configuration Settings
 
 ```yaml
+
 auth:
   oidc:
     enabled: true
@@ -44,12 +45,13 @@ auth:
       - claimValue: developers
         internalPolicy: readwrite
     defaultPolicy: readonly
-```
+
+```bash
 
 ## Claims Mapping to Policies
 
 | OIDC Claim | NebulaIO Field | Description |
-|------------|----------------|-------------|
+| ------------ | ---------------- | ------------- |
 | `sub` | `uniqueId` | Unique subject identifier |
 | `preferred_username` | `username` | Login username |
 | `email` | `email` | Email address |
@@ -58,6 +60,7 @@ auth:
 ### Group-to-Policy Mapping
 
 ```yaml
+
 groupMappings:
   - claimValue: storage-admins
     internalPolicy: admin
@@ -66,11 +69,13 @@ groupMappings:
   - claimValue: auditors
     internalPolicy: readonly
 defaultPolicy: readonly
-```
+
+```bash
 
 ## Token Validation
 
 ```yaml
+
 auth:
   oidc:
     tokenValidation:
@@ -80,11 +85,13 @@ auth:
       clockSkew: 60s
       jwksRefreshInterval: 1h
       allowedAlgorithms: [RS256, RS384, ES256]
-```
+
+```bash
 
 ## Session Management
 
 ```yaml
+
 auth:
   oidc:
     session:
@@ -93,13 +100,15 @@ auth:
       idleTimeout: 1h
       enableRefresh: true
       secureCookie: true
-```
+
+```bash
 
 ## Example Configurations for Popular Providers
 
 ### Keycloak
 
 ```yaml
+
 auth:
   oidc:
     enabled: true
@@ -110,11 +119,13 @@ auth:
     groupMappings:
       - claimValue: /storage-admins
         internalPolicy: admin
-```
+
+```bash
 
 ### Okta
 
 ```yaml
+
 auth:
   oidc:
     enabled: true
@@ -124,11 +135,13 @@ auth:
     scopes: [openid, profile, email, groups]
     tokenValidation:
       audience: api://nebulaio
-```
+
+```bash
 
 ### Auth0
 
 ```yaml
+
 auth:
   oidc:
     enabled: true
@@ -139,11 +152,13 @@ auth:
       groups: https://nebulaio.example.com/groups
     tokenValidation:
       audience: https://api.nebulaio.example.com
-```
+
+```bash
 
 ### Azure AD (Microsoft Entra ID)
 
 ```yaml
+
 auth:
   oidc:
     enabled: true
@@ -153,11 +168,13 @@ auth:
     scopes: [openid, profile, email, GroupMember.Read.All]
     tokenValidation:
       audience: api://nebulaio
-```
+
+```bash
 
 ### Google Workspace
 
 ```yaml
+
 auth:
   oidc:
     enabled: true
@@ -167,11 +184,13 @@ auth:
     claims:
       username: email
     domainRestriction: example.com
-```
+
+```bash
 
 ## Testing Configuration
 
 ```bash
+
 # Test OIDC provider connectivity
 nebulaio-cli admin oidc test-connection
 
@@ -180,7 +199,8 @@ nebulaio-cli admin oidc validate-token --token "$ID_TOKEN"
 
 # List active sessions
 nebulaio-cli admin oidc sessions list
-```
+
+```bash
 
 ## Troubleshooting
 
@@ -199,10 +219,12 @@ nebulaio-cli admin oidc sessions list
 ### Debug Logging
 
 ```yaml
+
 logging:
   level: debug
   components:
     auth.oidc: trace
+
 ```
 
 ## Related Documentation

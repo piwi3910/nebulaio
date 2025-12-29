@@ -21,7 +21,7 @@ NVIDIA NIM integration provides:
 ### Supported Models
 
 | Type | Examples |
-|------|----------|
+| ------ | ---------- |
 | LLM | Llama 3.1, Mixtral, Phi-3 |
 | Vision | Grounding DINO, CLIP, SAM |
 | Audio | Whisper, RIVA |
@@ -33,15 +33,18 @@ NVIDIA NIM integration provides:
 ### Basic Setup
 
 ```yaml
+
 nim:
   enabled: true
   api_key: nvapi-XXXXXXXXXXXX
   default_model: meta/llama-3.1-8b-instruct
-```
+
+```bash
 
 ### Advanced Configuration
 
 ```yaml
+
 nim:
   enabled: true
   api_key: ${NIM_API_KEY}
@@ -52,12 +55,13 @@ nim:
   max_retries: 3             # Retry failed requests
   cache_responses: true      # Cache inference results
   cache_ttl: 3600            # Cache TTL in seconds
-```
+
+```bash
 
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_NIM_ENABLED` | Enable NIM integration | `false` |
 | `NEBULAIO_NIM_API_KEY` | NVIDIA API key | - |
 | `NEBULAIO_NIM_DEFAULT_MODEL` | Default model | `meta/llama-3.1-8b-instruct` |
@@ -67,6 +71,7 @@ nim:
 ### Python SDK
 
 ```python
+
 from nebulaio import NIMClient
 
 client = NIMClient(
@@ -97,11 +102,13 @@ result = client.infer_audio(
     key="meeting.mp3",
     model="nvidia/parakeet-ctc-1.1b"
 )
-```
+
+```bash
 
 ### REST API
 
 ```bash
+
 # Text inference
 curl -X POST "http://localhost:9001/api/v1/nim/infer" \
   -H "Content-Type: application/json" \
@@ -123,11 +130,13 @@ curl -X POST "http://localhost:9001/api/v1/nim/infer" \
     "task": "detection",
     "labels": ["person", "car", "dog"]
   }'
-```
+
+```bash
 
 ### Streaming Inference
 
 ```python
+
 # Stream LLM response
 for chunk in client.infer_stream(
     bucket="documents",
@@ -136,11 +145,13 @@ for chunk in client.infer_stream(
     model="meta/llama-3.1-70b-instruct"
 ):
     print(chunk, end="", flush=True)
-```
+
+```bash
 
 ### Batch Inference
 
 ```python
+
 # Process multiple objects
 results = client.infer_batch(
     bucket="images",
@@ -151,13 +162,15 @@ results = client.infer_batch(
 
 for key, embedding in results.items():
     print(f"{key}: {len(embedding)} dimensions")
-```
+
+```bash
 
 ## Model Categories
 
 ### Large Language Models (LLM)
 
 ```python
+
 # Chat completion
 result = client.chat(
     bucket="docs",
@@ -168,7 +181,8 @@ result = client.chat(
     ],
     model="meta/llama-3.1-8b-instruct"
 )
-```
+
+```text
 
 Supported models:
 
@@ -180,6 +194,7 @@ Supported models:
 ### Vision Models
 
 ```python
+
 # Object detection
 result = client.detect_objects(
     bucket="images",
@@ -201,11 +216,13 @@ result = client.segment(
     key="photo.jpg",
     model="nvidia/segment-anything"
 )
-```
+
+```bash
 
 ### Audio Models
 
 ```python
+
 # Speech-to-text
 result = client.transcribe(
     bucket="audio",
@@ -219,11 +236,13 @@ result = client.diarize(
     key="meeting.wav",
     model="nvidia/riva-diarization"
 )
-```
+
+```bash
 
 ### Embedding Models
 
 ```python
+
 # Generate embeddings
 embedding = client.embed(
     bucket="documents",
@@ -237,18 +256,21 @@ results = client.semantic_search(
     query="machine learning applications",
     model="nvidia/nv-embed-v2"
 )
-```
+
+```bash
 
 ## Caching
 
 ### Enable Response Caching
 
 ```yaml
+
 nim:
   enabled: true
   cache_responses: true
   cache_ttl: 3600  # 1 hour
-```
+
+```bash
 
 ### Cache Behavior
 
@@ -257,24 +279,29 @@ nim:
 - Manual cache invalidation via API
 
 ```bash
+
 # Clear cache for specific object
 curl -X DELETE "http://localhost:9001/api/v1/nim/cache?bucket=docs&key=file.txt"
-```
+
+```bash
 
 ## Self-Hosted NIM
 
 ### Deploy Local NIM
 
 ```yaml
+
 nim:
   enabled: true
   endpoint: http://nim-server:8000/v1
   # No API key needed for self-hosted
-```
+
+```bash
 
 ### Docker Compose
 
 ```yaml
+
 services:
   nebulaio:
     image: nebulaio:latest
@@ -291,13 +318,15 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-```
+
+```bash
 
 ## Integration with Other Features
 
 ### With Apache Iceberg
 
 ```python
+
 # Analyze Iceberg table data
 result = client.analyze_table(
     bucket="warehouse",
@@ -305,13 +334,15 @@ result = client.analyze_table(
     prompt="What are the trends in this data?",
     model="meta/llama-3.1-70b-instruct"
 )
-```
+
+```bash
 
 ### With MCP Server
 
 AI agents can use NIM through MCP:
 
 ```json
+
 {
   "method": "tools/call",
   "params": {
@@ -324,14 +355,15 @@ AI agents can use NIM through MCP:
     }
   }
 }
-```
+
+```bash
 
 ## Performance
 
 ### Latency
 
 | Model Type | Typical Latency |
-|------------|-----------------|
+| ------------ | ----------------- |
 | Embedding | 50-200ms |
 | Vision | 100-500ms |
 | LLM (short) | 200-1000ms |
@@ -340,13 +372,15 @@ AI agents can use NIM through MCP:
 ### Optimization
 
 ```yaml
+
 nim:
   enabled: true
   # Use streaming for long responses
   enable_streaming: true
   # Increase timeout for large models
   timeout: 600
-```
+
+```bash
 
 ## Troubleshooting
 
@@ -369,8 +403,10 @@ nim:
 Enable debug logging:
 
 ```yaml
+
 log_level: debug
-```
+
+```text
 
 Look for logs with `nim` tag.
 
@@ -378,7 +414,8 @@ Look for logs with `nim` tag.
 
 ### Inference Endpoint
 
-```
+```text
+
 POST /api/v1/nim/infer
 Content-Type: application/json
 
@@ -391,12 +428,13 @@ Content-Type: application/json
   "temperature": 0.7,
   "stream": false
 }
+
 ```
 
 ### Available Tasks
 
 | Task | Description |
-|------|-------------|
+| ------ | ------------- |
 | `chat` | Conversational AI |
 | `completion` | Text completion |
 | `embedding` | Generate embeddings |
