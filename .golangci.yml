@@ -144,6 +144,8 @@ linters:
     - errcheck          # Unchecked errors - too many false positives for cleanup operations
     - errorlint         # Error comparison - errors.Is() not always appropriate for internal errors
     - errname           # Error naming convention - project uses ErrXxx style consistently
+    - funcorder         # Function ordering - style preference, not enforced
+    - forcetypeassert   # Type assertion checking - sometimes appropriate for known types
 
   exclusions:
     paths:
