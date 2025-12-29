@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
 // testPassword is a valid password for testing that meets all requirements:
@@ -433,31 +435,31 @@ func TestPasswordValidation(t *testing.T) {
 			name:        "empty password",
 			password:    "",
 			expectError: true,
-			errorType:   ErrPasswordEmpty,
+			errorType:   auth.ErrPasswordEmpty,
 		},
 		{
 			name:        "too short",
 			password:    "Short1Aa",
 			expectError: true,
-			errorType:   ErrPasswordTooShort,
+			errorType:   auth.ErrPasswordTooShort,
 		},
 		{
 			name:        "no uppercase",
 			password:    "lowercaseonly123",
 			expectError: true,
-			errorType:   ErrPasswordNoUpper,
+			errorType:   auth.ErrPasswordNoUpper,
 		},
 		{
 			name:        "no lowercase",
 			password:    "UPPERCASEONLY123",
 			expectError: true,
-			errorType:   ErrPasswordNoLower,
+			errorType:   auth.ErrPasswordNoLower,
 		},
 		{
 			name:        "no number",
 			password:    "NoNumbersHere",
 			expectError: true,
-			errorType:   ErrPasswordNoNumber,
+			errorType:   auth.ErrPasswordNoNumber,
 		},
 		{
 			name:        "valid password",
@@ -469,11 +471,16 @@ func TestPasswordValidation(t *testing.T) {
 			password:    "Valid@Pass#123!",
 			expectError: false,
 		},
+		{
+			name:        "exactly 12 characters",
+			password:    "Exactly12Aa1",
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateRootPassword(tt.password)
+			err := auth.ValidatePasswordStrength(tt.password)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.ErrorIs(t, err, tt.errorType)
@@ -511,6 +518,35 @@ func TestLoadFailsWithWeakPassword(t *testing.T) {
 	_, err := Load("", opts)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid root password")
+}
+
+func TestEnvVarPrecedenceOverConfigFile(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "nebulaio.yaml")
+
+	// Create a config file with one password
+	configContent := `
+auth:
+  root_password: "ConfigFilePass123"
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	// Set a different password via environment variable
+	envPassword := "EnvVarPassword123"
+	os.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", envPassword)
+	defer os.Unsetenv("NEBULAIO_AUTH_ROOT_PASSWORD")
+
+	opts := Options{
+		DataDir: tempDir,
+	}
+
+	cfg, err := Load(configPath, opts)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	// Environment variable should take precedence over config file
+	assert.Equal(t, envPassword, cfg.Auth.RootPassword)
 }
 
 func TestTLSDefaults(t *testing.T) {
