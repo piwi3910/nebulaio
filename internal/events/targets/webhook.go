@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/piwi3910/nebulaio/internal/events"
+	"github.com/rs/zerolog/log"
 )
 
 // WebhookConfig configures a webhook target
@@ -77,6 +78,9 @@ func NewWebhookTarget(config WebhookConfig) (*WebhookTarget, error) {
 	}
 
 	if config.SkipTLSVerify {
+		log.Warn().
+			Str("url", config.URL).
+			Msg("WARNING: TLS certificate verification disabled for webhook target - this should only be used in development/testing")
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 
