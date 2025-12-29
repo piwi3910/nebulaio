@@ -54,6 +54,14 @@ type MockMetadataStore struct {
 	getAccessKeyErr          error
 	createPolicyErr          error
 	getPolicyErr             error
+	updateUserErr            error
+	deleteUserErr            error
+	deleteAccessKeyErr       error
+	updatePolicyErr          error
+	deletePolicyErr          error
+	addUploadPartErr         error
+	completeMultipartErr     error
+	abortMultipartUploadErr  error
 }
 
 // NewMockMetadataStore creates a new MockMetadataStore with initialized maps.
@@ -184,6 +192,62 @@ func (m *MockMetadataStore) SetGetPolicyError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.getPolicyErr = err
+}
+
+// SetUpdateUserError sets the error to return on UpdateUser calls.
+func (m *MockMetadataStore) SetUpdateUserError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.updateUserErr = err
+}
+
+// SetDeleteUserError sets the error to return on DeleteUser calls.
+func (m *MockMetadataStore) SetDeleteUserError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deleteUserErr = err
+}
+
+// SetDeleteAccessKeyError sets the error to return on DeleteAccessKey calls.
+func (m *MockMetadataStore) SetDeleteAccessKeyError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deleteAccessKeyErr = err
+}
+
+// SetUpdatePolicyError sets the error to return on UpdatePolicy calls.
+func (m *MockMetadataStore) SetUpdatePolicyError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.updatePolicyErr = err
+}
+
+// SetDeletePolicyError sets the error to return on DeletePolicy calls.
+func (m *MockMetadataStore) SetDeletePolicyError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deletePolicyErr = err
+}
+
+// SetAddUploadPartError sets the error to return on AddUploadPart calls.
+func (m *MockMetadataStore) SetAddUploadPartError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.addUploadPartErr = err
+}
+
+// SetCompleteMultipartUploadError sets the error to return on CompleteMultipartUpload calls.
+func (m *MockMetadataStore) SetCompleteMultipartUploadError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.completeMultipartErr = err
+}
+
+// SetAbortMultipartUploadError sets the error to return on AbortMultipartUpload calls.
+func (m *MockMetadataStore) SetAbortMultipartUploadError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.abortMultipartUploadErr = err
 }
 
 // SetIsLeader sets whether this mock is the leader.
@@ -469,6 +533,9 @@ func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key,
 func (m *MockMetadataStore) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.abortMultipartUploadErr != nil {
+		return m.abortMultipartUploadErr
+	}
 	mpKey := bucket + "/" + key + "/" + uploadID
 	delete(m.multipartUploads, mpKey)
 	return nil
@@ -478,6 +545,9 @@ func (m *MockMetadataStore) AbortMultipartUpload(ctx context.Context, bucket, ke
 func (m *MockMetadataStore) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.completeMultipartErr != nil {
+		return m.completeMultipartErr
+	}
 	mpKey := bucket + "/" + key + "/" + uploadID
 	delete(m.multipartUploads, mpKey)
 	return nil
@@ -487,6 +557,9 @@ func (m *MockMetadataStore) CompleteMultipartUpload(ctx context.Context, bucket,
 func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uploadID string, part *metadata.UploadPart) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.addUploadPartErr != nil {
+		return m.addUploadPartErr
+	}
 	mpKey := bucket + "/" + key + "/" + uploadID
 	m.uploadParts[mpKey] = append(m.uploadParts[mpKey], part)
 	return nil
@@ -559,6 +632,9 @@ func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username stri
 func (m *MockMetadataStore) UpdateUser(ctx context.Context, user *metadata.User) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.updateUserErr != nil {
+		return m.updateUserErr
+	}
 	m.users[user.ID] = user
 	return nil
 }
@@ -567,6 +643,9 @@ func (m *MockMetadataStore) UpdateUser(ctx context.Context, user *metadata.User)
 func (m *MockMetadataStore) DeleteUser(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.deleteUserErr != nil {
+		return m.deleteUserErr
+	}
 	delete(m.users, id)
 	return nil
 }
@@ -610,6 +689,9 @@ func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string
 func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.deleteAccessKeyErr != nil {
+		return m.deleteAccessKeyErr
+	}
 	delete(m.accessKeys, accessKeyID)
 	return nil
 }
@@ -655,6 +737,9 @@ func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metada
 func (m *MockMetadataStore) UpdatePolicy(ctx context.Context, policy *metadata.Policy) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.updatePolicyErr != nil {
+		return m.updatePolicyErr
+	}
 	m.policies[policy.Name] = policy
 	return nil
 }
@@ -663,6 +748,9 @@ func (m *MockMetadataStore) UpdatePolicy(ctx context.Context, policy *metadata.P
 func (m *MockMetadataStore) DeletePolicy(ctx context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.deletePolicyErr != nil {
+		return m.deletePolicyErr
+	}
 	delete(m.policies, name)
 	return nil
 }
