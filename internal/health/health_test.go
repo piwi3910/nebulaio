@@ -3,159 +3,22 @@ package health
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/piwi3910/nebulaio/internal/audit"
 	"github.com/piwi3910/nebulaio/internal/metadata"
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
+	"github.com/piwi3910/nebulaio/internal/testutil/mocks"
 	"github.com/piwi3910/nebulaio/pkg/s3errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// MockMetadataStore implements metadata.Store interface for testing
-type MockMetadataStore struct {
-	isLeader      bool
-	leaderAddress string
-	clusterInfo   *metadata.ClusterInfo
-	clusterInfoErr error
-	buckets       []*metadata.Bucket
-	listBucketsErr error
-}
-
-func (m *MockMetadataStore) GetClusterInfo(ctx context.Context) (*metadata.ClusterInfo, error) {
-	if m.clusterInfoErr != nil {
-		return nil, m.clusterInfoErr
-	}
-	if m.clusterInfo == nil {
-		return &metadata.ClusterInfo{
-			RaftState:     "Follower",
-			LeaderAddress: m.leaderAddress,
-		}, nil
-	}
-	return m.clusterInfo, nil
-}
-
-func (m *MockMetadataStore) IsLeader() bool {
-	// Handle nil receiver (when metadata store itself is nil)
-	if m == nil {
-		return false
-	}
-	return m.isLeader
-}
-
-func (m *MockMetadataStore) LeaderAddress() (string, error) {
-	// Handle nil receiver (when metadata store itself is nil)
-	if m == nil {
-		return "", s3errors.ErrInternalError
-	}
-	if m.leaderAddress == "" {
-		return "", s3errors.ErrInternalError
-	}
-	return m.leaderAddress, nil
-}
-
-func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*metadata.Bucket, error) {
-	// Handle nil receiver (when metadata store itself is nil)
-	if m == nil {
-		return nil, s3errors.ErrInternalError
-	}
-	if m.listBucketsErr != nil {
-		return nil, m.listBucketsErr
-	}
-	return m.buckets, nil
-}
-
-// Implement remaining interface methods as no-ops
-func (m *MockMetadataStore) GetBucket(ctx context.Context, name string) (*metadata.Bucket, error) { return nil, nil }
-func (m *MockMetadataStore) CreateBucket(ctx context.Context, bucket *metadata.Bucket) error { return nil }
-func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.Bucket) error { return nil }
-func (m *MockMetadataStore) DeleteBucket(ctx context.Context, name string) error { return nil }
-func (m *MockMetadataStore) GetObject(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) { return nil, nil }
-func (m *MockMetadataStore) PutObject(ctx context.Context, bucket string, obj *metadata.ObjectMeta) error { return nil }
-func (m *MockMetadataStore) DeleteObject(ctx context.Context, bucket, key string) error { return nil }
-func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*metadata.ObjectListing, error) { return nil, nil }
-func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionMarker string, maxKeys int) (*metadata.VersionListing, error) { return nil, nil }
-func (m *MockMetadataStore) GetObjectVersion(ctx context.Context, bucket, key, versionID string) (*metadata.ObjectMeta, error) { return nil, nil }
-func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error { return nil }
-func (m *MockMetadataStore) CreateMultipartUpload(ctx context.Context, upload *metadata.MultipartUpload) error { return nil }
-func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*metadata.MultipartUpload, error) { return nil, nil }
-func (m *MockMetadataStore) DeleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error { return nil }
-func (m *MockMetadataStore) ListMultipartUploads(ctx context.Context, bucket string) ([]*metadata.MultipartUpload, error) { return nil, nil }
-func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uploadID string, part *metadata.UploadPart) error { return nil }
-func (m *MockMetadataStore) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error { return nil }
-func (m *MockMetadataStore) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error { return nil }
-func (m *MockMetadataStore) AddNode(ctx context.Context, node *metadata.NodeInfo) error { return nil }
-func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID string) ([]*metadata.UploadPart, error) { return nil, nil }
-func (m *MockMetadataStore) PutObjectMeta(ctx context.Context, meta *metadata.ObjectMeta) error { return nil }
-func (m *MockMetadataStore) GetObjectMeta(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) { return nil, nil }
-func (m *MockMetadataStore) DeleteObjectMeta(ctx context.Context, bucket, key string) error { return nil }
-func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *metadata.ObjectMeta, preserveOldVersions bool) error { return nil }
-func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User) error { return nil }
-func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.User, error) { return nil, nil }
-func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username string) (*metadata.User, error) { return nil, nil }
-func (m *MockMetadataStore) UpdateUser(ctx context.Context, user *metadata.User) error { return nil }
-func (m *MockMetadataStore) DeleteUser(ctx context.Context, id string) error { return nil }
-func (m *MockMetadataStore) ListUsers(ctx context.Context) ([]*metadata.User, error) { return nil, nil }
-func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.AccessKey) error { return nil }
-func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string) (*metadata.AccessKey, error) { return nil, nil }
-func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID string) error { return nil }
-func (m *MockMetadataStore) ListAccessKeys(ctx context.Context, userID string) ([]*metadata.AccessKey, error) { return nil, nil }
-func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.Policy) error { return nil }
-func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metadata.Policy, error) { return nil, nil }
-func (m *MockMetadataStore) UpdatePolicy(ctx context.Context, policy *metadata.Policy) error { return nil }
-func (m *MockMetadataStore) DeletePolicy(ctx context.Context, name string) error { return nil }
-func (m *MockMetadataStore) ListPolicies(ctx context.Context) ([]*metadata.Policy, error) { return nil, nil }
-func (m *MockMetadataStore) RemoveNode(ctx context.Context, nodeID string) error { return nil }
-func (m *MockMetadataStore) ListNodes(ctx context.Context) ([]*metadata.NodeInfo, error) { return nil, nil }
-func (m *MockMetadataStore) StoreAuditEvent(ctx context.Context, event *audit.AuditEvent) error { return nil }
-func (m *MockMetadataStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) { return nil, nil }
-func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error) { return 0, nil }
-func (m *MockMetadataStore) Close() error { return nil }
-
-// MockStorageBackend implements backend.Backend interface for testing
-type MockStorageBackend struct {
-	storageInfo    *backend.StorageInfo
-	storageInfoErr error
-}
-
-func (m *MockStorageBackend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, error) {
-	// Handle nil receiver (when storage backend itself is nil)
-	if m == nil {
-		return nil, s3errors.ErrInternalError
-	}
-	if m.storageInfoErr != nil {
-		return nil, m.storageInfoErr
-	}
-	if m.storageInfo == nil {
-		return &backend.StorageInfo{
-			TotalBytes: 1000000000,
-			UsedBytes:  500000000,
-		}, nil
-	}
-	return m.storageInfo, nil
-}
-
-// Implement remaining interface methods as no-ops
-func (m *MockStorageBackend) Init(ctx context.Context) error { return nil }
-func (m *MockStorageBackend) CreateBucket(ctx context.Context, name string) error { return nil }
-func (m *MockStorageBackend) DeleteBucket(ctx context.Context, name string) error { return nil }
-func (m *MockStorageBackend) BucketExists(ctx context.Context, name string) (bool, error) { return false, nil }
-func (m *MockStorageBackend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) { return nil, nil }
-func (m *MockStorageBackend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("")), nil }
-func (m *MockStorageBackend) DeleteObject(ctx context.Context, bucket, key string) error { return nil }
-func (m *MockStorageBackend) ObjectExists(ctx context.Context, bucket, key string) (bool, error) { return false, nil }
-func (m *MockStorageBackend) ListBuckets(ctx context.Context) ([]string, error) { return nil, nil }
-func (m *MockStorageBackend) Close() error { return nil }
-
 func TestNewChecker(t *testing.T) {
-	store := &MockMetadataStore{}
-	storage := &MockStorageBackend{}
+	store := mocks.NewMockMetadataStore()
+	storage := mocks.NewMockStorageBackend()
 
 	checker := NewChecker(store, storage)
 
@@ -164,20 +27,18 @@ func TestNewChecker(t *testing.T) {
 }
 
 func TestCheckHealthy(t *testing.T) {
-	store := &MockMetadataStore{
-		isLeader:      true,
-		leaderAddress: "localhost:9003",
-		clusterInfo: &metadata.ClusterInfo{
-			RaftState:     "Leader",
-			LeaderAddress: "localhost:9003",
-		},
-	}
-	storage := &MockStorageBackend{
-		storageInfo: &backend.StorageInfo{
-			TotalBytes: 1000000000,
-			UsedBytes:  500000000,
-		},
-	}
+	store := mocks.NewMockMetadataStore()
+	store.SetIsLeader(true)
+	store.SetLeaderAddress("localhost:9003")
+	store.SetClusterInfo(&metadata.ClusterInfo{
+		RaftState:     "Leader",
+		LeaderAddress: "localhost:9003",
+	})
+	storage := mocks.NewMockStorageBackend()
+	storage.SetStorageInfo(&backend.StorageInfo{
+		TotalBytes: 1000000000,
+		UsedBytes:  500000000,
+	})
 
 	checker := NewChecker(store, storage)
 	ctx := context.Background()
@@ -195,20 +56,18 @@ func TestCheckHealthy(t *testing.T) {
 }
 
 func TestCheckDegraded(t *testing.T) {
-	store := &MockMetadataStore{
-		isLeader:      false,
-		leaderAddress: "", // No leader
-		clusterInfo: &metadata.ClusterInfo{
-			RaftState:     "Candidate",
-			LeaderAddress: "",
-		},
-	}
-	storage := &MockStorageBackend{
-		storageInfo: &backend.StorageInfo{
-			TotalBytes: 1000000000,
-			UsedBytes:  500000000,
-		},
-	}
+	store := mocks.NewMockMetadataStore()
+	store.SetIsLeader(false)
+	store.SetLeaderAddress("") // No leader
+	store.SetClusterInfo(&metadata.ClusterInfo{
+		RaftState:     "Candidate",
+		LeaderAddress: "",
+	})
+	storage := mocks.NewMockStorageBackend()
+	storage.SetStorageInfo(&backend.StorageInfo{
+		TotalBytes: 1000000000,
+		UsedBytes:  500000000,
+	})
 
 	checker := NewChecker(store, storage)
 	ctx := context.Background()
@@ -232,208 +91,157 @@ func TestCheckUnhealthy(t *testing.T) {
 }
 
 func TestCheckRaft(t *testing.T) {
-	tests := []struct {
-		name           string
-		store          *MockMetadataStore
-		expectedStatus Status
-	}{
-		{
-			name:           "nil store",
-			store:          nil,
-			expectedStatus: StatusUnhealthy,
-		},
-		{
-			name: "healthy leader",
-			store: &MockMetadataStore{
-				isLeader:      true,
-				leaderAddress: "localhost:9003",
-				clusterInfo: &metadata.ClusterInfo{
-					RaftState:     "Leader",
-					LeaderAddress: "localhost:9003",
-				},
-			},
-			expectedStatus: StatusHealthy,
-		},
-		{
-			name: "healthy follower",
-			store: &MockMetadataStore{
-				isLeader:      false,
-				leaderAddress: "localhost:9003",
-				clusterInfo: &metadata.ClusterInfo{
-					RaftState:     "Follower",
-					LeaderAddress: "localhost:9003",
-				},
-			},
-			expectedStatus: StatusHealthy,
-		},
-		{
-			name: "no leader",
-			store: &MockMetadataStore{
-				clusterInfo: &metadata.ClusterInfo{
-					RaftState:     "Candidate",
-					LeaderAddress: "",
-				},
-			},
-			expectedStatus: StatusDegraded,
-		},
-		{
-			name: "unknown state",
-			store: &MockMetadataStore{
-				clusterInfo: &metadata.ClusterInfo{
-					RaftState:     "",
-					LeaderAddress: "localhost:9003",
-				},
-			},
-			expectedStatus: StatusDegraded,
-		},
-	}
+	t.Run("nil store", func(t *testing.T) {
+		checker := &Checker{store: nil}
+		check := checker.CheckRaft(context.Background())
+		assert.Equal(t, StatusUnhealthy, check.Status)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var checker *Checker
-			if tt.store == nil {
-				checker = &Checker{store: nil}
-			} else {
-				checker = &Checker{store: tt.store}
-			}
-
-			check := checker.CheckRaft(context.Background())
-			assert.Equal(t, tt.expectedStatus, check.Status)
+	t.Run("healthy leader", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetIsLeader(true)
+		store.SetLeaderAddress("localhost:9003")
+		store.SetClusterInfo(&metadata.ClusterInfo{
+			RaftState:     "Leader",
+			LeaderAddress: "localhost:9003",
 		})
-	}
+		checker := &Checker{store: store}
+		check := checker.CheckRaft(context.Background())
+		assert.Equal(t, StatusHealthy, check.Status)
+	})
+
+	t.Run("healthy follower", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetIsLeader(false)
+		store.SetLeaderAddress("localhost:9003")
+		store.SetClusterInfo(&metadata.ClusterInfo{
+			RaftState:     "Follower",
+			LeaderAddress: "localhost:9003",
+		})
+		checker := &Checker{store: store}
+		check := checker.CheckRaft(context.Background())
+		assert.Equal(t, StatusHealthy, check.Status)
+	})
+
+	t.Run("no leader", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetClusterInfo(&metadata.ClusterInfo{
+			RaftState:     "Candidate",
+			LeaderAddress: "",
+		})
+		checker := &Checker{store: store}
+		check := checker.CheckRaft(context.Background())
+		assert.Equal(t, StatusDegraded, check.Status)
+	})
+
+	t.Run("unknown state", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetClusterInfo(&metadata.ClusterInfo{
+			RaftState:     "",
+			LeaderAddress: "localhost:9003",
+		})
+		checker := &Checker{store: store}
+		check := checker.CheckRaft(context.Background())
+		assert.Equal(t, StatusDegraded, check.Status)
+	})
 }
 
 func TestCheckStorage(t *testing.T) {
-	tests := []struct {
-		name           string
-		storage        *MockStorageBackend
-		expectedStatus Status
-	}{
-		{
-			name:           "nil storage",
-			storage:        nil,
-			expectedStatus: StatusUnhealthy,
-		},
-		{
-			name: "healthy storage",
-			storage: &MockStorageBackend{
-				storageInfo: &backend.StorageInfo{
-					TotalBytes: 1000000000,
-					UsedBytes:  500000000, // 50%
-				},
-			},
-			expectedStatus: StatusHealthy,
-		},
-		{
-			name: "storage nearly full",
-			storage: &MockStorageBackend{
-				storageInfo: &backend.StorageInfo{
-					TotalBytes: 1000000000,
-					UsedBytes:  910000000, // 91%
-				},
-			},
-			expectedStatus: StatusDegraded,
-		},
-		{
-			name: "storage critically full",
-			storage: &MockStorageBackend{
-				storageInfo: &backend.StorageInfo{
-					TotalBytes: 1000000000,
-					UsedBytes:  960000000, // 96%
-				},
-			},
-			expectedStatus: StatusUnhealthy,
-		},
-	}
+	t.Run("nil storage", func(t *testing.T) {
+		checker := &Checker{storage: nil}
+		check := checker.CheckStorage(context.Background())
+		assert.Equal(t, StatusUnhealthy, check.Status)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			checker := &Checker{storage: tt.storage}
-			check := checker.CheckStorage(context.Background())
-			assert.Equal(t, tt.expectedStatus, check.Status)
+	t.Run("healthy storage", func(t *testing.T) {
+		storage := mocks.NewMockStorageBackend()
+		storage.SetStorageInfo(&backend.StorageInfo{
+			TotalBytes: 1000000000,
+			UsedBytes:  500000000, // 50%
 		})
-	}
+		checker := &Checker{storage: storage}
+		check := checker.CheckStorage(context.Background())
+		assert.Equal(t, StatusHealthy, check.Status)
+	})
+
+	t.Run("storage nearly full", func(t *testing.T) {
+		storage := mocks.NewMockStorageBackend()
+		storage.SetStorageInfo(&backend.StorageInfo{
+			TotalBytes: 1000000000,
+			UsedBytes:  910000000, // 91%
+		})
+		checker := &Checker{storage: storage}
+		check := checker.CheckStorage(context.Background())
+		assert.Equal(t, StatusDegraded, check.Status)
+	})
+
+	t.Run("storage critically full", func(t *testing.T) {
+		storage := mocks.NewMockStorageBackend()
+		storage.SetStorageInfo(&backend.StorageInfo{
+			TotalBytes: 1000000000,
+			UsedBytes:  960000000, // 96%
+		})
+		checker := &Checker{storage: storage}
+		check := checker.CheckStorage(context.Background())
+		assert.Equal(t, StatusUnhealthy, check.Status)
+	})
 }
 
 func TestCheckMetadata(t *testing.T) {
-	tests := []struct {
-		name           string
-		store          *MockMetadataStore
-		expectedStatus Status
-	}{
-		{
-			name:           "nil store",
-			store:          nil,
-			expectedStatus: StatusUnhealthy,
-		},
-		{
-			name: "healthy store",
-			store: &MockMetadataStore{
-				buckets: []*metadata.Bucket{},
-			},
-			expectedStatus: StatusHealthy,
-		},
-		{
-			name: "store error",
-			store: &MockMetadataStore{
-				listBucketsErr: s3errors.ErrInternalError,
-			},
-			expectedStatus: StatusUnhealthy,
-		},
-	}
+	t.Run("nil store", func(t *testing.T) {
+		checker := &Checker{store: nil}
+		check := checker.CheckMetadata(context.Background())
+		assert.Equal(t, StatusUnhealthy, check.Status)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			checker := &Checker{store: tt.store}
-			check := checker.CheckMetadata(context.Background())
-			assert.Equal(t, tt.expectedStatus, check.Status)
-		})
-	}
+	t.Run("healthy store", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		checker := &Checker{store: store}
+		check := checker.CheckMetadata(context.Background())
+		assert.Equal(t, StatusHealthy, check.Status)
+	})
+
+	t.Run("store error", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetListBucketsError(s3errors.ErrInternalError)
+		checker := &Checker{store: store}
+		check := checker.CheckMetadata(context.Background())
+		assert.Equal(t, StatusUnhealthy, check.Status)
+	})
 }
 
 func TestIsReady(t *testing.T) {
-	tests := []struct {
-		name     string
-		store    *MockMetadataStore
-		expected bool
-	}{
-		{
-			name:     "nil store",
-			store:    nil,
-			expected: false,
-		},
-		{
-			name: "is leader",
-			store: &MockMetadataStore{
-				isLeader: true,
-			},
-			expected: true,
-		},
-		{
-			name: "has leader",
-			store: &MockMetadataStore{
-				isLeader:      false,
-				leaderAddress: "localhost:9003",
-			},
-			expected: true,
-		},
-		{
-			name: "no leader",
-			store: &MockMetadataStore{
-				isLeader:      false,
-				leaderAddress: "",
-			},
-			expected: false,
-		},
-	}
+	t.Run("nil store", func(t *testing.T) {
+		checker := &Checker{store: nil}
+		result := checker.IsReady(context.Background())
+		assert.False(t, result)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			checker := &Checker{store: tt.store}
-			result := checker.IsReady(context.Background())
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+	t.Run("is leader", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetIsLeader(true)
+		checker := &Checker{store: store}
+		result := checker.IsReady(context.Background())
+		assert.True(t, result)
+	})
+
+	t.Run("has leader", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetIsLeader(false)
+		store.SetLeaderAddress("localhost:9003")
+		checker := &Checker{store: store}
+		result := checker.IsReady(context.Background())
+		assert.True(t, result)
+	})
+
+	t.Run("no leader", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetIsLeader(false)
+		store.SetLeaderAddress("")
+		checker := &Checker{store: store}
+		result := checker.IsReady(context.Background())
+		assert.False(t, result)
+	})
 }
 
 func TestIsLive(t *testing.T) {
@@ -495,15 +303,14 @@ func TestDetermineOverallStatus(t *testing.T) {
 }
 
 func TestCaching(t *testing.T) {
-	store := &MockMetadataStore{
-		isLeader:      true,
-		leaderAddress: "localhost:9003",
-		clusterInfo: &metadata.ClusterInfo{
-			RaftState:     "Leader",
-			LeaderAddress: "localhost:9003",
-		},
-	}
-	storage := &MockStorageBackend{}
+	store := mocks.NewMockMetadataStore()
+	store.SetIsLeader(true)
+	store.SetLeaderAddress("localhost:9003")
+	store.SetClusterInfo(&metadata.ClusterInfo{
+		RaftState:     "Leader",
+		LeaderAddress: "localhost:9003",
+	})
+	storage := mocks.NewMockStorageBackend()
 
 	checker := NewChecker(store, storage)
 	checker.cacheTTL = 100 * time.Millisecond
@@ -526,8 +333,8 @@ func TestCaching(t *testing.T) {
 }
 
 func TestNewHandler(t *testing.T) {
-	store := &MockMetadataStore{}
-	storage := &MockStorageBackend{}
+	store := mocks.NewMockMetadataStore()
+	storage := mocks.NewMockStorageBackend()
 	checker := NewChecker(store, storage)
 
 	handler := NewHandler(checker)
@@ -535,67 +342,58 @@ func TestNewHandler(t *testing.T) {
 }
 
 func TestHealthHandler(t *testing.T) {
-	tests := []struct {
-		name           string
-		store          *MockMetadataStore
-		storage        *MockStorageBackend
-		expectedCode   int
-	}{
-		{
-			name: "healthy",
-			store: &MockMetadataStore{
-				isLeader:      true,
-				leaderAddress: "localhost:9003",
-				clusterInfo: &metadata.ClusterInfo{
-					RaftState:     "Leader",
-					LeaderAddress: "localhost:9003",
-				},
-			},
-			storage: &MockStorageBackend{
-				storageInfo: &backend.StorageInfo{
-					TotalBytes: 1000000000,
-					UsedBytes:  500000000,
-				},
-			},
-			expectedCode: http.StatusOK,
-		},
-		{
-			name: "unhealthy",
-			store: nil,
-			storage: nil,
-			expectedCode: http.StatusServiceUnavailable,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var checker *Checker
-			if tt.store == nil {
-				checker = NewChecker(nil, nil)
-			} else {
-				checker = NewChecker(tt.store, tt.storage)
-			}
-			handler := NewHandler(checker)
-
-			req := httptest.NewRequest(http.MethodGet, "/health", nil)
-			w := httptest.NewRecorder()
-
-			handler.HealthHandler(w, req)
-
-			assert.Equal(t, tt.expectedCode, w.Code)
-			assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-
-			var response map[string]string
-			err := json.Unmarshal(w.Body.Bytes(), &response)
-			require.NoError(t, err)
-			assert.Contains(t, response, "status")
+	t.Run("healthy", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetIsLeader(true)
+		store.SetLeaderAddress("localhost:9003")
+		store.SetClusterInfo(&metadata.ClusterInfo{
+			RaftState:     "Leader",
+			LeaderAddress: "localhost:9003",
 		})
-	}
+		storage := mocks.NewMockStorageBackend()
+		storage.SetStorageInfo(&backend.StorageInfo{
+			TotalBytes: 1000000000,
+			UsedBytes:  500000000,
+		})
+		checker := NewChecker(store, storage)
+		handler := NewHandler(checker)
+
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		w := httptest.NewRecorder()
+
+		handler.HealthHandler(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+		var response map[string]string
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Contains(t, response, "status")
+	})
+
+	t.Run("unhealthy", func(t *testing.T) {
+		checker := NewChecker(nil, nil)
+		handler := NewHandler(checker)
+
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		w := httptest.NewRecorder()
+
+		handler.HealthHandler(w, req)
+
+		assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+		var response map[string]string
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Contains(t, response, "status")
+	})
 }
 
 func TestLivenessHandler(t *testing.T) {
-	store := &MockMetadataStore{}
-	storage := &MockStorageBackend{}
+	store := mocks.NewMockMetadataStore()
+	storage := mocks.NewMockStorageBackend()
 	checker := NewChecker(store, storage)
 	handler := NewHandler(checker)
 
@@ -609,59 +407,51 @@ func TestLivenessHandler(t *testing.T) {
 }
 
 func TestReadinessHandler(t *testing.T) {
-	tests := []struct {
-		name         string
-		store        *MockMetadataStore
-		expectedCode int
-	}{
-		{
-			name: "ready",
-			store: &MockMetadataStore{
-				isLeader: true,
-			},
-			expectedCode: http.StatusOK,
-		},
-		{
-			name: "not ready",
-			store: &MockMetadataStore{
-				isLeader:      false,
-				leaderAddress: "",
-			},
-			expectedCode: http.StatusServiceUnavailable,
-		},
-	}
+	t.Run("ready", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetIsLeader(true)
+		storage := mocks.NewMockStorageBackend()
+		checker := NewChecker(store, storage)
+		handler := NewHandler(checker)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			storage := &MockStorageBackend{}
-			checker := NewChecker(tt.store, storage)
-			handler := NewHandler(checker)
+		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+		w := httptest.NewRecorder()
 
-			req := httptest.NewRequest(http.MethodGet, "/ready", nil)
-			w := httptest.NewRecorder()
+		handler.ReadinessHandler(w, req)
 
-			handler.ReadinessHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
 
-			assert.Equal(t, tt.expectedCode, w.Code)
-		})
-	}
+	t.Run("not ready", func(t *testing.T) {
+		store := mocks.NewMockMetadataStore()
+		store.SetIsLeader(false)
+		store.SetLeaderAddress("")
+		storage := mocks.NewMockStorageBackend()
+		checker := NewChecker(store, storage)
+		handler := NewHandler(checker)
+
+		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+		w := httptest.NewRecorder()
+
+		handler.ReadinessHandler(w, req)
+
+		assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	})
 }
 
 func TestDetailedHandler(t *testing.T) {
-	store := &MockMetadataStore{
-		isLeader:      true,
-		leaderAddress: "localhost:9003",
-		clusterInfo: &metadata.ClusterInfo{
-			RaftState:     "Leader",
-			LeaderAddress: "localhost:9003",
-		},
-	}
-	storage := &MockStorageBackend{
-		storageInfo: &backend.StorageInfo{
-			TotalBytes: 1000000000,
-			UsedBytes:  500000000,
-		},
-	}
+	store := mocks.NewMockMetadataStore()
+	store.SetIsLeader(true)
+	store.SetLeaderAddress("localhost:9003")
+	store.SetClusterInfo(&metadata.ClusterInfo{
+		RaftState:     "Leader",
+		LeaderAddress: "localhost:9003",
+	})
+	storage := mocks.NewMockStorageBackend()
+	storage.SetStorageInfo(&backend.StorageInfo{
+		TotalBytes: 1000000000,
+		UsedBytes:  500000000,
+	})
 
 	checker := NewChecker(store, storage)
 	handler := NewHandler(checker)
