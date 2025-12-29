@@ -6,7 +6,6 @@ linters:
   settings:
     cyclop:
       max-complexity: 15
-      skip-tests: true
 
     funlen:
       lines: 100
