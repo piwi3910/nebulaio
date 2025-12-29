@@ -36,8 +36,8 @@ type CopyObjectResult struct {
 // MultipartCopyOptions holds options for multipart copy operations.
 type MultipartCopyOptions struct {
 	// Source bucket and key
-	SourceBucket string
-	SourceKey    string
+	SourceBucket    string
+	SourceKey       string
 	SourceVersionID string
 
 	// Destination bucket and key
@@ -63,9 +63,9 @@ type MultipartCopyOptions struct {
 	StorageClass      string
 
 	// Server-side encryption
-	SSECustomerAlgorithm       string
-	SSECustomerKey             string
-	SSECustomerKeyMD5          string
+	SSECustomerAlgorithm           string
+	SSECustomerKey                 string
+	SSECustomerKeyMD5              string
 	CopySourceSSECustomerAlgorithm string
 	CopySourceSSECustomerKey       string
 	CopySourceSSECustomerKeyMD5    string
@@ -75,8 +75,8 @@ type MultipartCopyOptions struct {
 	TaggingDirective string // COPY or REPLACE
 
 	// Object lock
-	ObjectLockMode         string
-	ObjectLockRetainUntil  *time.Time
+	ObjectLockMode            string
+	ObjectLockRetainUntil     *time.Time
 	ObjectLockLegalHoldStatus string
 }
 
@@ -127,17 +127,17 @@ type GetObjectOptions struct {
 
 // PutObjectOptions holds options for PutObject.
 type PutObjectOptions struct {
-	ContentType       string
-	ContentEncoding   string
-	ContentDisposition string
-	CacheControl      string
-	Metadata          map[string]string
-	StorageClass      string
-	Tagging           string
-	SSEAlgorithm      string
-	SSECustomerKey    string
-	ObjectLockMode    string
-	ObjectLockRetain  *time.Time
+	ContentType         string
+	ContentEncoding     string
+	ContentDisposition  string
+	CacheControl        string
+	Metadata            map[string]string
+	StorageClass        string
+	Tagging             string
+	SSEAlgorithm        string
+	SSECustomerKey      string
+	ObjectLockMode      string
+	ObjectLockRetain    *time.Time
 	ObjectLockLegalHold string
 }
 
@@ -149,38 +149,38 @@ type PutObjectResult struct {
 
 // ObjectMetadata contains object metadata.
 type ObjectMetadata struct {
-	Key           string
-	Size          int64
-	ETag          string
-	LastModified  time.Time
-	ContentType   string
-	StorageClass  string
-	VersionID     string
-	Metadata      map[string]string
-	PartsCount    int
-	ObjectLockMode string
+	Key                       string
+	Size                      int64
+	ETag                      string
+	LastModified              time.Time
+	ContentType               string
+	StorageClass              string
+	VersionID                 string
+	Metadata                  map[string]string
+	PartsCount                int
+	ObjectLockMode            string
 	ObjectLockRetainUntilDate *time.Time
 	ObjectLockLegalHoldStatus string
 }
 
 // MultipartUploadOptions holds options for creating multipart uploads.
 type MultipartUploadOptions struct {
-	ContentType    string
-	Metadata       map[string]string
-	StorageClass   string
-	SSEAlgorithm   string
-	SSECustomerKey string
-	Tagging        string
-	ObjectLockMode string
-	ObjectLockRetain *time.Time
+	ContentType         string
+	Metadata            map[string]string
+	StorageClass        string
+	SSEAlgorithm        string
+	SSECustomerKey      string
+	Tagging             string
+	ObjectLockMode      string
+	ObjectLockRetain    *time.Time
 	ObjectLockLegalHold string
 }
 
 // MultipartUpload represents an active multipart upload.
 type MultipartUpload struct {
-	UploadID string
-	Bucket   string
-	Key      string
+	UploadID  string
+	Bucket    string
+	Key       string
 	Initiated time.Time
 }
 
@@ -208,22 +208,22 @@ type CompleteMultipartUploadResult struct {
 
 // UploadPartCopyParams holds parameters for UploadPartCopy.
 type UploadPartCopyParams struct {
-	DestBucket      string
-	DestKey         string
-	UploadID        string
-	PartNumber      int
-	SourceBucket    string
-	SourceKey       string
-	SourceVersionID string
-	CopySourceRange string
-	CopySourceIfMatch string
-	CopySourceIfNoneMatch string
-	CopySourceIfModifiedSince *time.Time
-	CopySourceIfUnmodifiedSince *time.Time
-	SSECustomerAlgorithm string
-	SSECustomerKey string
+	DestBucket                     string
+	DestKey                        string
+	UploadID                       string
+	PartNumber                     int
+	SourceBucket                   string
+	SourceKey                      string
+	SourceVersionID                string
+	CopySourceRange                string
+	CopySourceIfMatch              string
+	CopySourceIfNoneMatch          string
+	CopySourceIfModifiedSince      *time.Time
+	CopySourceIfUnmodifiedSince    *time.Time
+	SSECustomerAlgorithm           string
+	SSECustomerKey                 string
 	CopySourceSSECustomerAlgorithm string
-	CopySourceSSECustomerKey string
+	CopySourceSSECustomerKey       string
 }
 
 // DefaultPartSize is the default part size for multipart copies (64MB).
@@ -479,18 +479,18 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 
 			// Copy part
 			params := &UploadPartCopyParams{
-				DestBucket:      opts.DestBucket,
-				DestKey:         opts.DestKey,
-				UploadID:        upload.UploadID,
-				PartNumber:      int(partNum + 1),
-				SourceBucket:    opts.SourceBucket,
-				SourceKey:       opts.SourceKey,
-				SourceVersionID: opts.SourceVersionID,
-				CopySourceRange: copyRange,
-				SSECustomerAlgorithm: opts.SSECustomerAlgorithm,
-				SSECustomerKey: opts.SSECustomerKey,
+				DestBucket:                     opts.DestBucket,
+				DestKey:                        opts.DestKey,
+				UploadID:                       upload.UploadID,
+				PartNumber:                     int(partNum + 1),
+				SourceBucket:                   opts.SourceBucket,
+				SourceKey:                      opts.SourceKey,
+				SourceVersionID:                opts.SourceVersionID,
+				CopySourceRange:                copyRange,
+				SSECustomerAlgorithm:           opts.SSECustomerAlgorithm,
+				SSECustomerKey:                 opts.SSECustomerKey,
 				CopySourceSSECustomerAlgorithm: opts.CopySourceSSECustomerAlgorithm,
-				CopySourceSSECustomerKey: opts.CopySourceSSECustomerKey,
+				CopySourceSSECustomerKey:       opts.CopySourceSSECustomerKey,
 			}
 
 			result, err := m.storage.UploadPartCopy(ctx, params)
@@ -592,7 +592,7 @@ func (e *S3Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-// ParseCopySource parses the x-amz-copy-source header.
+// ParseCopySource parses the X-Amz-Copy-Source header.
 func ParseCopySource(copySource string) (bucket, key, versionID string, err error) {
 	// Remove leading slash if present
 	copySource = strings.TrimPrefix(copySource, "/")
@@ -618,7 +618,7 @@ func ParseCopySource(copySource string) (bucket, key, versionID string, err erro
 	return pathParts[0], pathParts[1], versionID, nil
 }
 
-// ParseCopySourceRange parses the x-amz-copy-source-range header.
+// ParseCopySourceRange parses the X-Amz-Copy-Source-Range header.
 func ParseCopySourceRange(rangeHeader string) (start, end int64, err error) {
 	if rangeHeader == "" {
 		return 0, 0, nil
@@ -718,7 +718,7 @@ func (h *MultipartCopyHandler) HandleUploadPartCopy(w http.ResponseWriter, r *ht
 	}
 
 	// Parse copy source
-	copySource := r.Header.Get("x-amz-copy-source")
+	copySource := r.Header.Get("X-Amz-Copy-Source")
 	if copySource == "" {
 		writeS3Error(w, &S3Error{
 			Code:       "InvalidArgument",
@@ -739,7 +739,7 @@ func (h *MultipartCopyHandler) HandleUploadPartCopy(w http.ResponseWriter, r *ht
 	}
 
 	// Parse copy source range
-	copyRange := r.Header.Get("x-amz-copy-source-range")
+	copyRange := r.Header.Get("X-Amz-Copy-Source-Range")
 
 	// Build parameters
 	params := &UploadPartCopyParams{
@@ -754,28 +754,28 @@ func (h *MultipartCopyHandler) HandleUploadPartCopy(w http.ResponseWriter, r *ht
 	}
 
 	// Parse conditional headers
-	if h := r.Header.Get("x-amz-copy-source-if-match"); h != "" {
+	if h := r.Header.Get("X-Amz-Copy-Source-If-Match"); h != "" {
 		params.CopySourceIfMatch = h
 	}
-	if h := r.Header.Get("x-amz-copy-source-if-none-match"); h != "" {
+	if h := r.Header.Get("X-Amz-Copy-Source-If-None-Match"); h != "" {
 		params.CopySourceIfNoneMatch = h
 	}
-	if h := r.Header.Get("x-amz-copy-source-if-modified-since"); h != "" {
+	if h := r.Header.Get("X-Amz-Copy-Source-If-Modified-Since"); h != "" {
 		if t, err := time.Parse(time.RFC1123, h); err == nil {
 			params.CopySourceIfModifiedSince = &t
 		}
 	}
-	if h := r.Header.Get("x-amz-copy-source-if-unmodified-since"); h != "" {
+	if h := r.Header.Get("X-Amz-Copy-Source-If-Unmodified-Since"); h != "" {
 		if t, err := time.Parse(time.RFC1123, h); err == nil {
 			params.CopySourceIfUnmodifiedSince = &t
 		}
 	}
 
 	// Parse SSE headers
-	params.SSECustomerAlgorithm = r.Header.Get("x-amz-server-side-encryption-customer-algorithm")
-	params.SSECustomerKey = r.Header.Get("x-amz-server-side-encryption-customer-key")
-	params.CopySourceSSECustomerAlgorithm = r.Header.Get("x-amz-copy-source-server-side-encryption-customer-algorithm")
-	params.CopySourceSSECustomerKey = r.Header.Get("x-amz-copy-source-server-side-encryption-customer-key")
+	params.SSECustomerAlgorithm = r.Header.Get("X-Amz-Server-Side-Encryption-Customer-Algorithm")
+	params.SSECustomerKey = r.Header.Get("X-Amz-Server-Side-Encryption-Customer-Key")
+	params.CopySourceSSECustomerAlgorithm = r.Header.Get("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm")
+	params.CopySourceSSECustomerKey = r.Header.Get("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key")
 
 	// Execute copy
 	result, err := h.manager.storage.UploadPartCopy(ctx, params)
@@ -807,7 +807,7 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 	destKey := r.PathValue("key")
 
 	// Parse copy source
-	copySource := r.Header.Get("x-amz-copy-source")
+	copySource := r.Header.Get("X-Amz-Copy-Source")
 	if copySource == "" {
 		writeS3Error(w, &S3Error{
 			Code:       "InvalidArgument",
@@ -834,11 +834,11 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 		SourceVersionID:   sourceVersionID,
 		DestBucket:        destBucket,
 		DestKey:           destKey,
-		MetadataDirective: r.Header.Get("x-amz-metadata-directive"),
-		TaggingDirective:  r.Header.Get("x-amz-tagging-directive"),
+		MetadataDirective: r.Header.Get("X-Amz-Metadata-Directive"),
+		TaggingDirective:  r.Header.Get("X-Amz-Tagging-Directive"),
 		ContentType:       r.Header.Get("Content-Type"),
-		StorageClass:      r.Header.Get("x-amz-storage-class"),
-		Tagging:           r.Header.Get("x-amz-tagging"),
+		StorageClass:      r.Header.Get("X-Amz-Storage-Class"),
+		Tagging:           r.Header.Get("X-Amz-Tagging"),
 	}
 
 	// Parse metadata
@@ -851,39 +851,39 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 	}
 
 	// Parse conditional headers
-	if h := r.Header.Get("x-amz-copy-source-if-match"); h != "" {
+	if h := r.Header.Get("X-Amz-Copy-Source-If-Match"); h != "" {
 		opts.CopySourceIfMatch = h
 	}
-	if h := r.Header.Get("x-amz-copy-source-if-none-match"); h != "" {
+	if h := r.Header.Get("X-Amz-Copy-Source-If-None-Match"); h != "" {
 		opts.CopySourceIfNoneMatch = h
 	}
-	if h := r.Header.Get("x-amz-copy-source-if-modified-since"); h != "" {
+	if h := r.Header.Get("X-Amz-Copy-Source-If-Modified-Since"); h != "" {
 		if t, err := time.Parse(time.RFC1123, h); err == nil {
 			opts.CopySourceIfModifiedSince = &t
 		}
 	}
-	if h := r.Header.Get("x-amz-copy-source-if-unmodified-since"); h != "" {
+	if h := r.Header.Get("X-Amz-Copy-Source-If-Unmodified-Since"); h != "" {
 		if t, err := time.Parse(time.RFC1123, h); err == nil {
 			opts.CopySourceIfUnmodifiedSince = &t
 		}
 	}
 
 	// Parse object lock headers
-	opts.ObjectLockMode = r.Header.Get("x-amz-object-lock-mode")
-	if h := r.Header.Get("x-amz-object-lock-retain-until-date"); h != "" {
+	opts.ObjectLockMode = r.Header.Get("X-Amz-Object-Lock-Mode")
+	if h := r.Header.Get("X-Amz-Object-Lock-Retain-Until-Date"); h != "" {
 		if t, err := time.Parse(time.RFC3339, h); err == nil {
 			opts.ObjectLockRetainUntil = &t
 		}
 	}
-	opts.ObjectLockLegalHoldStatus = r.Header.Get("x-amz-object-lock-legal-hold")
+	opts.ObjectLockLegalHoldStatus = r.Header.Get("X-Amz-Object-Lock-Legal-Hold")
 
 	// Parse SSE headers
-	opts.SSECustomerAlgorithm = r.Header.Get("x-amz-server-side-encryption-customer-algorithm")
-	opts.SSECustomerKey = r.Header.Get("x-amz-server-side-encryption-customer-key")
-	opts.SSECustomerKeyMD5 = r.Header.Get("x-amz-server-side-encryption-customer-key-MD5")
-	opts.CopySourceSSECustomerAlgorithm = r.Header.Get("x-amz-copy-source-server-side-encryption-customer-algorithm")
-	opts.CopySourceSSECustomerKey = r.Header.Get("x-amz-copy-source-server-side-encryption-customer-key")
-	opts.CopySourceSSECustomerKeyMD5 = r.Header.Get("x-amz-copy-source-server-side-encryption-customer-key-MD5")
+	opts.SSECustomerAlgorithm = r.Header.Get("X-Amz-Server-Side-Encryption-Customer-Algorithm")
+	opts.SSECustomerKey = r.Header.Get("X-Amz-Server-Side-Encryption-Customer-Key")
+	opts.SSECustomerKeyMD5 = r.Header.Get("X-Amz-Server-Side-Encryption-Customer-Key-Md5")
+	opts.CopySourceSSECustomerAlgorithm = r.Header.Get("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm")
+	opts.CopySourceSSECustomerKey = r.Header.Get("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key")
+	opts.CopySourceSSECustomerKeyMD5 = r.Header.Get("X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-Md5")
 
 	// Execute copy
 	result, err := h.manager.CopyObject(ctx, opts)

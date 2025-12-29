@@ -183,7 +183,7 @@ func (v *SignatureValidator) validateHeaderSignature(r *http.Request, auth *Auth
 	canonicalQueryString := buildSortedQueryString(r.URL.Query())
 
 	// Get the payload hash
-	payloadHash := r.Header.Get("X-Amz-Content-SHA256")
+	payloadHash := r.Header.Get("X-Amz-Content-Sha256")
 	if payloadHash == "" {
 		payloadHash = "UNSIGNED-PAYLOAD"
 	}
