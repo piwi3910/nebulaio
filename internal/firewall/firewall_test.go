@@ -58,8 +58,8 @@ func TestIPBlocklist(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		ip        string
+		name       string
+		ip         string
 		expectDeny bool
 	}{
 		{"Blocked IP", "192.168.1.100", true},

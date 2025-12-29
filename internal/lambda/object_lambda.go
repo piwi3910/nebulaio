@@ -599,9 +599,9 @@ func (t *RedactTransformer) Transform(ctx context.Context, input io.Reader, para
 	// Default patterns to redact
 	patterns := []string{
 		`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`, // Email
-		`\b\d{3}[-.]?\d{3}[-.]?\d{4}\b`,                        // Phone
-		`\b\d{3}[-]?\d{2}[-]?\d{4}\b`,                          // SSN
-		`\b\d{16}\b`,                                           // Credit card (simple)
+		`\b\d{3}[-.]?\d{3}[-.]?\d{4}\b`,                       // Phone
+		`\b\d{3}[-]?\d{2}[-]?\d{4}\b`,                         // SSN
+		`\b\d{16}\b`,                                          // Credit card (simple)
 	}
 
 	// Override with custom patterns if provided
