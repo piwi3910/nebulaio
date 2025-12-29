@@ -2,6 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Core Policies
+
+### Always Use Latest Tool Versions
+
+**CRITICAL POLICY**: When updating tools and dependencies, ALWAYS use the latest stable version. NEVER downgrade versions to avoid fixing compatibility issues.
+
+- **golangci-lint**: Always use `version: latest` in CI workflows
+- **Dependencies**: Keep all tools current and fix compatibility issues in configuration
+- **Rationale**: Using outdated versions accumulates technical debt and misses bug fixes, performance improvements, and security patches
+
+When tool updates introduce breaking changes:
+
+1. Update the configuration to match the new schema/requirements
+2. Fix any compatibility issues
+3. Document the changes
+4. NEVER revert to older versions as a workaround
+
 ## Build and Development Commands
 
 ### Backend (Go)
