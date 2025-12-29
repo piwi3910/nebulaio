@@ -11,7 +11,7 @@ Object Lock prevents objects from being deleted or overwritten for a specified r
 - **Ransomware Protection**: Prevent malicious deletion or encryption
 
 | Concept | Description |
-|---------|-------------|
+| --------- | ------------- |
 | Retention Period | Duration during which an object cannot be deleted |
 | Retention Mode | Governance or Compliance - determines bypass rules |
 | Legal Hold | Indefinite hold independent of retention |
@@ -24,6 +24,7 @@ Object Lock prevents objects from being deleted or overwritten for a specified r
 Protects objects but allows bypass with `s3:BypassGovernanceRetention` permission:
 
 ```bash
+
 # Apply Governance mode retention
 aws s3api put-object-retention --endpoint-url http://localhost:9000 \
   --bucket compliance-bucket --key financial-report.pdf \
@@ -33,20 +34,23 @@ aws s3api put-object-retention --endpoint-url http://localhost:9000 \
 aws s3api delete-object --endpoint-url http://localhost:9000 \
   --bucket compliance-bucket --key financial-report.pdf \
   --version-id abc123 --bypass-governance-retention
-```
+
+```bash
 
 ### Compliance Mode
 
 Strongest protection - no user can bypass until retention expires:
 
 ```bash
+
 aws s3api put-object-retention --endpoint-url http://localhost:9000 \
   --bucket sec-records --key trade-confirmation.pdf \
   --retention '{"Mode":"COMPLIANCE","RetainUntilDate":"2032-12-31T00:00:00Z"}'
-```
+
+```text
 
 | Feature | Governance | Compliance |
-|---------|------------|------------|
+| --------- | ------------ | ------------ |
 | Delete before expiry | With permission | Never |
 | Shorten retention | With permission | Never |
 | Extend retention | Yes | Yes |
@@ -57,6 +61,7 @@ aws s3api put-object-retention --endpoint-url http://localhost:9000 \
 Legal holds provide indefinite protection independent of retention periods:
 
 ```bash
+
 # Place legal hold
 aws s3api put-object-legal-hold --endpoint-url http://localhost:9000 \
   --bucket evidence-bucket --key contract-2024.pdf \
@@ -70,13 +75,15 @@ aws s3api get-object-legal-hold --endpoint-url http://localhost:9000 \
 aws s3api put-object-legal-hold --endpoint-url http://localhost:9000 \
   --bucket evidence-bucket --key contract-2024.pdf \
   --legal-hold '{"Status":"OFF"}'
-```
+
+```bash
 
 ## Default Bucket Retention
 
 Object Lock must be enabled when creating the bucket:
 
 ```bash
+
 # Create bucket with Object Lock enabled
 aws s3api create-bucket --endpoint-url http://localhost:9000 \
   --bucket compliance-bucket --object-lock-enabled-for-bucket
@@ -87,13 +94,15 @@ aws s3api put-object-lock-configuration --endpoint-url http://localhost:9000 \
     "ObjectLockEnabled": "Enabled",
     "Rule": {"DefaultRetention": {"Mode": "COMPLIANCE", "Years": 7}}
   }'
-```
+
+```bash
 
 ## Configuring Object Lock
 
 ### Server Configuration
 
 ```yaml
+
 object_lock:
   enabled: true
   defaults:
@@ -103,11 +112,13 @@ object_lock:
     require_versioning: true
     audit_logging: true
     prevent_bucket_deletion: true
-```
+
+```bash
 
 ### IAM Policy
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [{
@@ -120,14 +131,15 @@ object_lock:
     "Resource": ["arn:aws:s3:::compliance-bucket/*"]
   }]
 }
-```
+
+```bash
 
 ## Compliance Considerations
 
 ### Regulatory Requirements
 
 | Regulation | Retention Mode | Duration |
-|------------|----------------|----------|
+| ------------ | ---------------- | ---------- |
 | SEC 17a-4 | Compliance | 6-7 years |
 | FINRA 4511 | Compliance | 6 years |
 | HIPAA | Compliance | 6 years |
@@ -147,6 +159,7 @@ object_lock:
 ### Complete Workflow
 
 ```bash
+
 # 1. Create Object Lock enabled bucket
 aws s3api create-bucket --endpoint-url http://localhost:9000 \
   --bucket financial-records --object-lock-enabled-for-bucket
@@ -174,6 +187,7 @@ aws s3api put-object-legal-hold --endpoint-url http://localhost:9000 \
 aws s3api put-object-retention --endpoint-url http://localhost:9000 \
   --bucket financial-records --key quarterly-report.pdf \
   --retention '{"Mode":"COMPLIANCE","RetainUntilDate":"2035-12-31T00:00:00Z"}'
+
 ```
 
 ## Next Steps

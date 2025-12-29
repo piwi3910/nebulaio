@@ -16,7 +16,7 @@ Bucket versioning provides:
 Buckets can be in one of three versioning states:
 
 | State | Description |
-|-------|-------------|
+| ------- | ------------- |
 | Unversioned | Default state, no version history |
 | Enabled | All objects get unique version IDs |
 | Suspended | New objects get null version ID, existing versions preserved |
@@ -26,6 +26,7 @@ Buckets can be in one of three versioning states:
 ### Enable Versioning
 
 ```bash
+
 # Using AWS CLI
 aws s3api put-bucket-versioning \
   --bucket my-bucket \
@@ -34,11 +35,13 @@ aws s3api put-bucket-versioning \
 
 # Using nebulaio-cli
 nebulaio-cli bucket versioning enable my-bucket
-```
+
+```bash
 
 ### Suspend Versioning
 
 ```bash
+
 # Using AWS CLI
 aws s3api put-bucket-versioning \
   --bucket my-bucket \
@@ -47,11 +50,13 @@ aws s3api put-bucket-versioning \
 
 # Using nebulaio-cli
 nebulaio-cli bucket versioning suspend my-bucket
-```
+
+```bash
 
 ### Check Versioning Status
 
 ```bash
+
 # Using AWS CLI
 aws s3api get-bucket-versioning \
   --bucket my-bucket \
@@ -59,24 +64,28 @@ aws s3api get-bucket-versioning \
 
 # Using nebulaio-cli
 nebulaio-cli bucket versioning status my-bucket
-```
+
+```bash
 
 ## Working with Versions
 
 ### Upload Object (Creates New Version)
 
 ```bash
+
 # Each upload creates a new version
 aws s3 cp file.txt s3://my-bucket/file.txt \
   --endpoint-url http://localhost:9000
 
 # Response includes VersionId
 # VersionId: abc123def456
-```
+
+```bash
 
 ### List Object Versions
 
 ```bash
+
 # List all versions
 aws s3api list-object-versions \
   --bucket my-bucket \
@@ -87,11 +96,13 @@ aws s3api list-object-versions \
   --bucket my-bucket \
   --prefix documents/ \
   --endpoint-url http://localhost:9000
-```
+
+```bash
 
 ### Get Specific Version
 
 ```bash
+
 # Get specific version of an object
 aws s3api get-object \
   --bucket my-bucket \
@@ -99,29 +110,34 @@ aws s3api get-object \
   --version-id abc123def456 \
   output.txt \
   --endpoint-url http://localhost:9000
-```
+
+```bash
 
 ### Delete Specific Version
 
 ```bash
+
 # Permanently delete a specific version
 aws s3api delete-object \
   --bucket my-bucket \
   --key file.txt \
   --version-id abc123def456 \
   --endpoint-url http://localhost:9000
-```
+
+```bash
 
 ### Restore Previous Version
 
 ```bash
+
 # Copy a previous version to become the current version
 aws s3api copy-object \
   --bucket my-bucket \
   --key file.txt \
   --copy-source my-bucket/file.txt?versionId=abc123def456 \
   --endpoint-url http://localhost:9000
-```
+
+```bash
 
 ## Delete Markers
 
@@ -134,6 +150,7 @@ When you delete an object in a versioned bucket:
 ### Remove Delete Marker
 
 ```bash
+
 # List versions to find the delete marker
 aws s3api list-object-versions \
   --bucket my-bucket \
@@ -146,7 +163,8 @@ aws s3api delete-object \
   --key file.txt \
   --version-id DELETE_MARKER_VERSION_ID \
   --endpoint-url http://localhost:9000
-```
+
+```bash
 
 ## MFA Delete
 
@@ -158,21 +176,25 @@ For additional protection, enable MFA Delete to require multi-factor authenticat
 ### Enable MFA Delete
 
 ```yaml
+
 # config.yaml
 buckets:
   mfa_delete:
     enabled: true
     serial_number: arn:aws:iam::123456789:mfa/admin
-```
+
+```text
 
 ```bash
+
 # Enable via API (requires MFA)
 aws s3api put-bucket-versioning \
   --bucket my-bucket \
   --versioning-configuration Status=Enabled,MFADelete=Enabled \
   --mfa "arn:aws:iam::123456789:mfa/admin 123456" \
   --endpoint-url http://localhost:9000
-```
+
+```bash
 
 ## Storage Considerations
 
@@ -191,6 +213,7 @@ Combine versioning with lifecycle policies to:
 - Keep only the last N versions
 
 ```yaml
+
 # Example lifecycle rule
 lifecycle:
   rules:
@@ -201,6 +224,7 @@ lifecycle:
       noncurrent_version_transitions:
         - noncurrent_days: 30
           storage_class: GLACIER
+
 ```
 
 See [Lifecycle Policies](lifecycle.md) for more details.
@@ -218,7 +242,7 @@ See [Lifecycle Policies](lifecycle.md) for more details.
 ### Supported Operations
 
 | Operation | Description |
-|-----------|-------------|
+| ----------- | ------------- |
 | PutBucketVersioning | Enable/suspend versioning |
 | GetBucketVersioning | Get versioning status |
 | ListObjectVersions | List all object versions |
@@ -229,7 +253,7 @@ See [Lifecycle Policies](lifecycle.md) for more details.
 ### Response Headers
 
 | Header | Description |
-|--------|-------------|
+| -------- | ------------- |
 | x-amz-version-id | Version ID of the object |
 | x-amz-delete-marker | True if object is a delete marker |
 

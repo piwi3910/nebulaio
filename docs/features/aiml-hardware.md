@@ -5,7 +5,7 @@ This guide details the hardware requirements for NebulaIO's AI/ML features inclu
 ## Feature Overview
 
 | Feature | Required Hardware | Optional Hardware | Minimum Driver |
-|---------|------------------|-------------------|----------------|
+| --------- | ------------------ | ------------------- | ---------------- |
 | GPUDirect Storage | NVIDIA GPU (Volta+) | NVMe with P2P | CUDA 11.4+ |
 | BlueField DPU | BlueField-2/3 DPU | - | DOCA 2.0+ |
 | S3 over RDMA | InfiniBand/RoCE NIC | - | OFED 5.4+ |
@@ -19,7 +19,7 @@ This guide details the hardware requirements for NebulaIO's AI/ML features inclu
 ### Supported GPUs
 
 | GPU Generation | Models | GDS Support |
-|----------------|--------|-------------|
+| ---------------- | -------- | ------------- |
 | NVIDIA Hopper | H100, H200 | Full |
 | NVIDIA Ada | RTX 4090, L4, L40 | Full |
 | NVIDIA Ampere | A100, A30, A10 | Full |
@@ -29,6 +29,7 @@ This guide details the hardware requirements for NebulaIO's AI/ML features inclu
 ### Minimum Requirements
 
 ```yaml
+
 gpudirect:
   gpu:
     generation: volta              # Volta or newer
@@ -48,11 +49,13 @@ gpudirect:
     cuda: "11.4"                   # Minimum CUDA version
     nvidia_driver: "470"           # Minimum driver version
     gds: "1.0"                     # GPUDirect Storage
-```
+
+```bash
 
 ### Recommended Configuration
 
 ```yaml
+
 # High-performance GPUDirect setup
 gpudirect:
   gpu:
@@ -77,11 +80,13 @@ gpudirect:
     version: 4.0
     lanes_per_gpu: 16
     topology: "direct"             # Direct GPU-NVMe paths
-```
+
+```bash
 
 ### Topology Requirements
 
-```
+```text
+
 Optimal Topology (Direct Path):
 ┌─────────────────────────────────────────────────────────────┐
 │                    PCIe Root Complex                         │
@@ -98,11 +103,13 @@ Suboptimal Topology (Avoid):
 ┌─────────────┐              ┌─────────────┐
 │    GPU      │──── CPU ─────│    NVMe     │
 └─────────────┘  (Bottleneck) └─────────────┘
-```
+
+```bash
 
 ### Verification Commands
 
 ```bash
+
 # Check GPU and GDS support
 nvidia-smi
 gdscheck -p
@@ -116,7 +123,8 @@ gdsio -d /dev/nvme0n1 -s 1G -i 1M -x 0 -w 4
 # Expected output:
 # GPU 0 -> NVMe0: Direct path available
 # Throughput: ~6.5 GB/s
-```
+
+```text
 
 ---
 
@@ -125,13 +133,14 @@ gdsio -d /dev/nvme0n1 -s 1G -i 1M -x 0 -w 4
 ### Supported DPUs
 
 | Model | Generation | Crypto | Compression | RDMA |
-|-------|------------|--------|-------------|------|
+| ------- | ------------ | -------- | ------------- | ------ |
 | BlueField-3 | 3rd Gen | AES-XTS, AES-GCM | LZ4, Deflate | 400Gb/s |
 | BlueField-2 | 2nd Gen | AES-XTS, AES-GCM | LZ4 | 200Gb/s |
 
 ### Minimum Requirements
 
 ```yaml
+
 dpu:
   model: "BlueField-2"             # BF-2 or BF-3
   firmware: "24.35"                # Minimum firmware
@@ -141,11 +150,13 @@ dpu:
     pcie_slot: x16                 # Full x16 required
     numa_node: 0                   # Match with storage
     iommu: enabled                 # Required for security
-```
+
+```bash
 
 ### Recommended Configuration
 
 ```yaml
+
 # Production DPU setup
 dpu:
   model: "BlueField-3"
@@ -171,11 +182,13 @@ dpu:
     count: 16
     frequency: "2.5GHz"
     memory: "32GB"
-```
+
+```bash
 
 ### Installation
 
 ```bash
+
 # Check DPU detection
 lspci | grep -i mellanox
 
@@ -191,7 +204,8 @@ mlxconfig -d /dev/mst/mt41686_pciconf0 q | grep DPU_MODE
 
 # Output:
 # DPU_MODE: DPU_MODE_EMBEDDED(1)
-```
+
+```text
 
 ---
 
@@ -200,7 +214,7 @@ mlxconfig -d /dev/mst/mt41686_pciconf0 q | grep DPU_MODE
 ### Supported NICs
 
 | NIC Family | Models | Max Speed | RDMA Type |
-|------------|--------|-----------|-----------|
+| ------------ | -------- | ----------- | ----------- |
 | ConnectX-7 | MCX75xxxx | 400GbE | RoCE v2, InfiniBand |
 | ConnectX-6 | MCX65xxxx | 200GbE | RoCE v2, InfiniBand |
 | ConnectX-5 | MCX55xxxx | 100GbE | RoCE v2, InfiniBand |
@@ -208,6 +222,7 @@ mlxconfig -d /dev/mst/mt41686_pciconf0 q | grep DPU_MODE
 ### Minimum Requirements
 
 ```yaml
+
 rdma:
   nic:
     type: "ConnectX-5"             # ConnectX-5 or newer
@@ -226,11 +241,13 @@ rdma:
   network:
     mtu: 9000                      # Jumbo frames
     pfc: enabled                   # Priority Flow Control
-```
+
+```bash
 
 ### Recommended Configuration
 
 ```yaml
+
 # High-performance RDMA setup
 rdma:
   nic:
@@ -256,11 +273,13 @@ rdma:
   memory:
     registered_memory: "16GB"
     hugepages: enabled
-```
+
+```bash
 
 ### Network Requirements
 
 ```yaml
+
 # Network infrastructure for RDMA
 network:
   switches:
@@ -280,11 +299,13 @@ network:
     storage_vlan: 100
     priority: 5                    # High priority for RoCE
     pfc_priority: 3                # PFC on priority 3
-```
+
+```bash
 
 ### Verification Commands
 
 ```bash
+
 # Check RDMA devices
 ibv_devinfo
 
@@ -297,7 +318,8 @@ mlnx_qos -i ens1f0np0
 # Expected output:
 # PFC enabled: 3 (priority 3)
 # Trust mode: dscp
-```
+
+```text
 
 ---
 
@@ -308,6 +330,7 @@ mlnx_qos -i ens1f0np0
 For running NIM inference locally:
 
 ```yaml
+
 nim_local:
   gpu:
     type: "NVIDIA GPU"
@@ -326,13 +349,15 @@ nim_local:
     grounding_dino:
       gpu_memory: 24GB
       cpu_memory: 32GB
-```
+
+```bash
 
 ### API-Only Integration
 
 For cloud NIM (no local GPU required):
 
 ```yaml
+
 nim_cloud:
   # No GPU required
   requirements:
@@ -342,11 +367,13 @@ nim_cloud:
 
     cpu: 4                         # For request processing
     ram: 8GB
-```
+
+```bash
 
 ### Recommended Configuration
 
 ```yaml
+
 # Hybrid NIM setup
 nim:
   local:
@@ -365,7 +392,8 @@ nim:
     models:
       - "nvidia/grounding-dino"          # Cloud for vision
       - "nvidia/parakeet-tdt-1.1b"       # Cloud for audio
-```
+
+```text
 
 ---
 
@@ -374,6 +402,7 @@ nim:
 ### Storage Requirements
 
 ```yaml
+
 s3_express:
   storage:
     type: "nvme"
@@ -391,7 +420,8 @@ s3_express:
       type: "stripe"
       drives: 4
       expected_iops: 4000000       # 4M IOPS
-```
+
+```text
 
 ---
 
@@ -400,17 +430,20 @@ s3_express:
 ### Development Environment
 
 ```yaml
+
 development:
   cpu: "8 cores"
   ram: "32GB"
   storage: "500GB NVMe"
   gpu: "Optional (GTX 1080 Ti+)"
   network: "10GbE"
-```
+
+```bash
 
 ### Production Environment
 
 ```yaml
+
 production:
   cpu: "32+ cores (EPYC/Xeon)"
   ram: "256GB+"
@@ -423,11 +456,13 @@ production:
     storage: "100GbE RoCE"
     frontend: "25GbE"
   dpu: "BlueField-3 (optional)"
-```
+
+```bash
 
 ### High-Performance AI/ML
 
 ```yaml
+
 high_performance:
   cpu: "2x AMD EPYC 9654 (192 cores)"
   ram: "2TB DDR5"
@@ -442,6 +477,7 @@ high_performance:
     rdma: "400GbE InfiniBand"
     frontend: "100GbE"
   dpu: "2x BlueField-3"
+
 ```
 
 ---
@@ -449,7 +485,7 @@ high_performance:
 ## Compatibility Matrix
 
 | Feature | Linux | Windows | Container |
-|---------|-------|---------|-----------|
+| --------- | ------- | --------- | ----------- |
 | GPUDirect Storage | Yes | No | Limited |
 | BlueField DPU | Yes | No | Yes (privileged) |
 | S3 over RDMA | Yes | No | Yes (host network) |
@@ -459,7 +495,7 @@ high_performance:
 ### Linux Distribution Support
 
 | Distribution | GPUDirect | DPU | RDMA |
-|--------------|-----------|-----|------|
+| -------------- | ----------- | ----- | ------ |
 | Ubuntu 22.04 | Yes | Yes | Yes |
 | RHEL 9 | Yes | Yes | Yes |
 | Rocky 9 | Yes | Yes | Yes |

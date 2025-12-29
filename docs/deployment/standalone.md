@@ -14,6 +14,7 @@ This guide covers deploying NebulaIO as a standalone binary on bare metal or vir
 ### Method 1: Download Pre-built Binary
 
 ```bash
+
 # Download latest release (Linux amd64)
 curl -LO https://github.com/piwi3910/nebulaio/releases/latest/download/nebulaio-linux-amd64.tar.gz
 tar -xzf nebulaio-linux-amd64.tar.gz
@@ -21,7 +22,8 @@ sudo mv nebulaio /usr/local/bin/
 
 # Verify installation
 nebulaio --version
-```
+
+```text
 
 Available binaries:
 
@@ -34,6 +36,7 @@ Available binaries:
 ### Method 2: Build from Source
 
 ```bash
+
 # Prerequisites
 # - Go 1.24+
 # - Node.js 20+ (for web console)
@@ -47,7 +50,8 @@ make all
 
 # Binary is at ./bin/nebulaio
 sudo cp bin/nebulaio /usr/local/bin/
-```
+
+```text
 
 ---
 
@@ -56,19 +60,22 @@ sudo cp bin/nebulaio /usr/local/bin/
 ### Quick Start
 
 ```bash
+
 # Create data directory
 sudo mkdir -p /var/lib/nebulaio
 sudo chown $USER:$USER /var/lib/nebulaio
 
 # Run with defaults
 nebulaio --data /var/lib/nebulaio
-```
+
+```bash
 
 ### Configuration File
 
 Create `/etc/nebulaio/config.yaml`:
 
 ```yaml
+
 # Node Configuration
 node_id: node-1
 node_name: nebulaio-primary
@@ -103,19 +110,23 @@ auth:
 # Logging
 log_level: info
 log_format: json
-```
+
+```text
 
 Run with config file:
 
 ```bash
+
 nebulaio --config /etc/nebulaio/config.yaml
-```
+
+```bash
 
 ### Systemd Service
 
 Create `/etc/systemd/system/nebulaio.service`:
 
 ```ini
+
 [Unit]
 Description=NebulaIO S3-Compatible Object Storage
 Documentation=https://github.com/piwi3910/nebulaio
@@ -140,11 +151,13 @@ PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target
-```
+
+```text
 
 Setup and start:
 
 ```bash
+
 # Create user
 sudo useradd -r -s /bin/false nebulaio
 sudo mkdir -p /var/lib/nebulaio /var/log/nebulaio /etc/nebulaio
@@ -158,7 +171,8 @@ sudo systemctl start nebulaio
 # Check status
 sudo systemctl status nebulaio
 journalctl -u nebulaio -f
-```
+
+```text
 
 ---
 
@@ -169,7 +183,7 @@ A minimum of 3 nodes is recommended for high availability (Raft consensus requir
 ### Network Requirements
 
 | Port | Protocol | Purpose |
-|------|----------|---------|
+| ------ | ---------- | --------- |
 | 9000 | TCP | S3 API (client traffic) |
 | 9001 | TCP | Admin/Console API |
 | 9002 | TCP | Web Console (static files) |
@@ -183,6 +197,7 @@ Ensure all nodes can communicate on ports 9003 and 9004.
 `/etc/nebulaio/config.yaml` on node1:
 
 ```yaml
+
 node_id: node-1
 node_name: nebulaio-node1
 data_dir: /var/lib/nebulaio
@@ -209,13 +224,15 @@ storage:
 auth:
   root_user: admin
   root_password: your-secure-password-here
-```
+
+```bash
 
 ### Node 2 & Node 3 (Join Nodes)
 
 `/etc/nebulaio/config.yaml` on node2:
 
 ```yaml
+
 node_id: node-2
 node_name: nebulaio-node2
 data_dir: /var/lib/nebulaio
@@ -243,13 +260,15 @@ storage:
 auth:
   root_user: admin
   root_password: your-secure-password-here
-```
+
+```text
 
 Node 3 is identical but with `node_id: node-3`, `advertise_address: 10.0.1.12`.
 
 ### Start Cluster
 
 ```bash
+
 # Start node 1 first (bootstrap)
 sudo systemctl start nebulaio  # on node1
 
@@ -259,11 +278,13 @@ curl http://10.0.1.10:9001/health/ready
 # Start node 2 and 3
 sudo systemctl start nebulaio  # on node2
 sudo systemctl start nebulaio  # on node3
-```
+
+```bash
 
 ### Verify Cluster
 
 ```bash
+
 # Check cluster status
 curl http://10.0.1.10:9001/api/v1/admin/cluster/nodes | jq
 
@@ -272,7 +293,8 @@ curl http://10.0.1.10:9001/api/v1/admin/cluster/leader | jq
 
 # Cluster health
 curl http://10.0.1.10:9001/api/v1/admin/cluster/health | jq
-```
+
+```text
 
 ---
 
@@ -285,6 +307,7 @@ For production, place a load balancer in front of all nodes:
 #### HAProxy Configuration
 
 ```haproxy
+
 # /etc/haproxy/haproxy.cfg
 
 frontend s3_frontend
@@ -313,11 +336,13 @@ backend admin_backend
     server node1 10.0.1.10:9001 check
     server node2 10.0.1.11:9001 check
     server node3 10.0.1.12:9001 check
-```
+
+```bash
 
 #### Nginx Configuration
 
 ```nginx
+
 # /etc/nginx/conf.d/nebulaio.conf
 
 upstream nebulaio_s3 {
@@ -363,13 +388,15 @@ server {
         access_log off;
     }
 }
-```
+
+```bash
 
 ### TLS/SSL Configuration
 
 For production, enable TLS:
 
 ```yaml
+
 # config.yaml
 tls:
   enabled: true
@@ -378,11 +405,13 @@ tls:
   # Optional: mutual TLS
   ca_file: /etc/nebulaio/certs/ca.crt
   client_auth: require  # none, request, require
-```
+
+```text
 
 Generate self-signed certificates (for testing):
 
 ```bash
+
 # Generate CA
 openssl genrsa -out ca.key 4096
 openssl req -x509 -new -nodes -key ca.key -sha256 -days 1825 -out ca.crt -subj "/CN=NebulaIO CA"
@@ -391,13 +420,15 @@ openssl req -x509 -new -nodes -key ca.key -sha256 -days 1825 -out ca.crt -subj "
 openssl genrsa -out server.key 2048
 openssl req -new -key server.key -out server.csr -subj "/CN=nebulaio.local"
 openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365 -sha256
-```
+
+```bash
 
 ### Resource Limits
 
 Production configuration recommendations:
 
 ```yaml
+
 # config.yaml
 resources:
   max_connections: 10000
@@ -411,19 +442,23 @@ performance:
 cache:
   metadata_cache_size: 10000
   metadata_cache_ttl: 60s
-```
+
+```bash
 
 ### Monitoring Setup
 
 NebulaIO exposes Prometheus metrics at `/metrics` on the admin port:
 
 ```bash
+
 curl http://localhost:9001/metrics
-```
+
+```text
 
 Prometheus scrape config:
 
 ```yaml
+
 # prometheus.yml
 scrape_configs:
   - job_name: 'nebulaio'
@@ -433,7 +468,8 @@ scrape_configs:
         - '10.0.1.11:9001'
         - '10.0.1.12:9001'
     metrics_path: /metrics
-```
+
+```text
 
 Key metrics to monitor:
 
@@ -459,9 +495,11 @@ To add a new node to an existing cluster:
 ### Removing Nodes
 
 ```bash
+
 # Graceful removal
 curl -X DELETE http://localhost:9001/api/v1/admin/cluster/nodes/node-4
-```
+
+```bash
 
 ### Separate Management and Storage Planes
 
@@ -470,22 +508,26 @@ For larger deployments, you can run separate management and storage nodes:
 **Management Node** (Raft voter, no storage):
 
 ```yaml
+
 node_role: management
 cluster:
   voter: true
 storage:
   enabled: false
-```
+
+```text
 
 **Storage Node** (Raft non-voter, storage only):
 
 ```yaml
+
 node_role: storage
 cluster:
   voter: false
 storage:
   enabled: true
-```
+
+```text
 
 This allows scaling storage independently from the Raft consensus group.
 
@@ -498,6 +540,7 @@ This allows scaling storage independently from the Raft consensus group.
 #### Node won't join cluster
 
 ```bash
+
 # Check gossip connectivity
 nc -zv <bootstrap-node> 9004
 
@@ -506,11 +549,13 @@ journalctl -u nebulaio -f
 
 # Verify cluster name matches
 grep cluster_name /etc/nebulaio/config.yaml
-```
+
+```bash
 
 #### Leader election timeout
 
 ```bash
+
 # Check Raft port connectivity
 nc -zv <other-node> 9003
 
@@ -519,7 +564,8 @@ nc -zv <other-node> 9003
 cluster:
   raft_election_timeout: 5s
   raft_heartbeat_timeout: 2s
-```
+
+```bash
 
 #### Split-brain scenario
 
@@ -530,11 +576,13 @@ cluster:
 ### Log Levels
 
 ```bash
+
 # Enable debug logging
 nebulaio --config /etc/nebulaio/config.yaml --log-level debug
 
 # Or in config.yaml
 log_level: debug
+
 ```
 
 ---

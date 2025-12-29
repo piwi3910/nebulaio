@@ -7,7 +7,7 @@ This guide covers upgrading NebulaIO to newer versions across all deployment typ
 NebulaIO follows semantic versioning (MAJOR.MINOR.PATCH):
 
 | Version Change | Compatibility | Data Migration |
-|----------------|---------------|----------------|
+| ---------------- | --------------- | ---------------- |
 | Patch (x.x.1 to x.x.2) | Fully compatible | None required |
 | Minor (x.1.x to x.2.x) | Backward compatible | Automatic |
 | Major (1.x.x to 2.x.x) | May break compatibility | Manual required |
@@ -21,23 +21,29 @@ All nodes in a cluster must run the same minor version. Mixed versions are only 
 ### 1. Review Release Notes
 
 ```bash
+
 nebulaio --version
 curl -s https://api.github.com/repos/piwi3910/nebulaio/releases/tags/v1.3.0 | jq '.body'
-```
+
+```bash
 
 ### 2. Backup Current State
 
 ```bash
+
 cp -r /etc/nebulaio /etc/nebulaio.backup.$(date +%Y%m%d)
 nebulaio admin backup create --output /backup/pre-upgrade-$(date +%Y%m%d).tar.gz
-```
+
+```bash
 
 ### 3. Verify Cluster Health
 
 ```bash
+
 curl -s http://localhost:9001/api/v1/admin/cluster/health | jq
 curl -s http://localhost:9001/api/v1/admin/cluster/nodes | jq '.nodes[] | {name, status}'
-```
+
+```text
 
 ---
 
@@ -46,6 +52,7 @@ curl -s http://localhost:9001/api/v1/admin/cluster/nodes | jq '.nodes[] | {name,
 ### Standalone Upgrade {#standalone}
 
 ```bash
+
 sudo systemctl stop nebulaio
 sudo cp /usr/local/bin/nebulaio /usr/local/bin/nebulaio.backup
 
@@ -55,11 +62,13 @@ sudo mv nebulaio /usr/local/bin/
 
 sudo systemctl start nebulaio
 curl -s http://localhost:9001/health/ready
-```
+
+```bash
 
 ### Docker Upgrade {#docker}
 
 ```bash
+
 docker pull ghcr.io/piwi3910/nebulaio:v1.3.0
 docker stop nebulaio && docker rm nebulaio
 
@@ -67,21 +76,26 @@ docker run -d --name nebulaio \
   -p 9000:9000 -p 9001:9001 -p 9002:9002 \
   -v nebulaio-data:/data \
   ghcr.io/piwi3910/nebulaio:v1.3.0
-```
+
+```text
 
 For Docker Compose, update the image tag and run:
 
 ```bash
+
 docker-compose pull && docker-compose up -d
-```
+
+```bash
 
 ### Kubernetes Upgrade {#kubernetes}
 
 ```bash
+
 kubectl set image statefulset/nebulaio \
   nebulaio=ghcr.io/piwi3910/nebulaio:v1.3.0 -n nebulaio
 kubectl rollout status statefulset/nebulaio -n nebulaio --timeout=10m
-```
+
+```text
 
 ---
 
@@ -97,6 +111,7 @@ Rolling upgrades minimize downtime by upgrading nodes one at a time.
 ### Procedure
 
 ```bash
+
 # Identify leader (upgrade last)
 LEADER=$(curl -s http://localhost:9001/api/v1/admin/cluster/leader | jq -r '.node_id')
 
@@ -111,7 +126,8 @@ done
 # Upgrade leader last
 curl -X POST "http://$LEADER:9001/api/v1/admin/node/drain"
 # Perform upgrade on leader
-```
+
+```text
 
 Kubernetes StatefulSets handle rolling updates automatically with `updateStrategy: RollingUpdate`.
 
@@ -122,33 +138,40 @@ Kubernetes StatefulSets handle rolling updates automatically with `updateStrateg
 ### Standalone
 
 ```bash
+
 sudo systemctl stop nebulaio
 sudo mv /usr/local/bin/nebulaio.backup /usr/local/bin/nebulaio
 sudo systemctl start nebulaio
-```
+
+```bash
 
 ### Docker
 
 ```bash
+
 docker stop nebulaio && docker rm nebulaio
 docker run -d --name nebulaio \
   -p 9000:9000 -p 9001:9001 -p 9002:9002 \
   -v nebulaio-data:/data \
   ghcr.io/piwi3910/nebulaio:v1.2.0  # Previous version
-```
+
+```bash
 
 ### Kubernetes
 
 ```bash
+
 kubectl rollout history statefulset/nebulaio -n nebulaio
 kubectl rollout undo statefulset/nebulaio -n nebulaio
-```
+
+```text
 
 ---
 
 ## Post-Upgrade Verification {#verification}
 
 ```bash
+
 # Version and health
 curl -s http://localhost:9001/api/v1/admin/info | jq '.version'
 curl -s http://localhost:9001/api/v1/admin/cluster/health | jq
@@ -161,7 +184,8 @@ aws s3 --endpoint-url http://localhost:9000 rb s3://upgrade-test --force
 
 # Metrics
 curl -s http://localhost:9001/metrics | grep nebulaio_http_requests
-```
+
+```text
 
 ---
 
@@ -186,8 +210,10 @@ curl -s http://localhost:9001/metrics | grep nebulaio_http_requests
 ### Migration Tools
 
 ```bash
+
 nebulaio admin migrate-config --from-version 1.2.0 --input /etc/nebulaio/config.yaml
 nebulaio admin validate-config --config /etc/nebulaio/config.yaml.migrated
+
 ```
 
 ---

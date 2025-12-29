@@ -104,7 +104,8 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 
 ## Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────┐
 │                        Web Console                          │
 │                    (React + Mantine)                        │
@@ -141,7 +142,8 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 │                                    │  (Iceberg Tables)   │ │
 │                                    └─────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ## Quick Start
 
@@ -154,6 +156,7 @@ An S3-compatible object storage system with a full-featured web GUI, designed to
 ### Build
 
 ```bash
+
 # Clone the repository
 git clone https://github.com/piwi3910/nebulaio.git
 cd nebulaio
@@ -164,35 +167,40 @@ make build
 # Or build with web console
 make web-build
 make build
-```
+
+```bash
 
 ### Run
 
 ```bash
+
 # Run with default settings
 ./bin/nebulaio
 
 # Or with custom options
 ./bin/nebulaio --data ./data --s3-port 9000 --admin-port 9001 --debug
-```
+
+```bash
 
 ### Docker
 
 ```bash
+
 # Build and run with Docker
 docker-compose up -d
 
 # Or build manually
 docker build -t nebulaio:latest -f deployments/docker/Dockerfile .
 docker run -p 9000:9000 -p 9001:9001 -v nebulaio-data:/data nebulaio:latest
-```
+
+```bash
 
 ## Configuration
 
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_DATA_DIR` | Data directory path | `./data` |
 | `NEBULAIO_S3_PORT` | S3 API port | `9000` |
 | `NEBULAIO_ADMIN_PORT` | Admin/Console API port | `9001` |
@@ -203,7 +211,7 @@ docker run -p 9000:9000 -p 9001:9001 -v nebulaio-data:/data nebulaio:latest
 #### AI/ML Feature Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_S3_EXPRESS_ENABLED` | Enable S3 Express One Zone | `false` |
 | `NEBULAIO_ICEBERG_ENABLED` | Enable Apache Iceberg support | `false` |
 | `NEBULAIO_MCP_ENABLED` | Enable MCP Server for AI agents | `false` |
@@ -216,6 +224,7 @@ docker run -p 9000:9000 -p 9001:9001 -v nebulaio-data:/data nebulaio:latest
 ### Configuration File
 
 ```yaml
+
 # nebulaio.yaml
 node_name: node-1
 data_dir: /data/nebulaio
@@ -285,7 +294,8 @@ nim:
   api_key: your-nvidia-api-key
   default_model: meta/llama-3.1-8b-instruct
   enable_streaming: true
-```
+
+```bash
 
 ## API Endpoints
 
@@ -304,26 +314,30 @@ Standard S3-compatible API supporting:
 
 RESTful API for system management:
 
-```
+```text
+
 POST   /api/v1/admin/auth/login       # Login
 GET    /api/v1/admin/users            # List users
 POST   /api/v1/admin/users            # Create user
 GET    /api/v1/admin/buckets          # List buckets
 POST   /api/v1/admin/buckets          # Create bucket
 GET    /api/v1/admin/cluster/status   # Cluster status
-```
+
+```bash
 
 ### MCP Server (Port 9005)
 
 Model Context Protocol for AI agent integration:
 
-```
+```text
+
 POST   /mcp                           # JSON-RPC 2.0 endpoint
        - tools/list                   # List available tools
        - tools/call                   # Execute a tool
        - resources/list               # List resources
        - resources/read               # Read resource content
-```
+
+```bash
 
 ### RDMA (Port 9100)
 
@@ -338,6 +352,7 @@ Ultra-low latency S3 access via RDMA:
 ### Claude Desktop / MCP
 
 ```json
+
 {
   "mcpServers": {
     "nebulaio": {
@@ -346,11 +361,13 @@ Ultra-low latency S3 access via RDMA:
     }
   }
 }
-```
+
+```bash
 
 ### Python with NIM
 
 ```python
+
 from nebulaio import NIMClient
 
 client = NIMClient(
@@ -366,13 +383,15 @@ result = client.infer_object(
     model="nvidia/grounding-dino",
     task="detection"
 )
-```
+
+```bash
 
 ## Development
 
 ### Project Structure
 
-```
+```text
+
 nebulaio/
 ├── cmd/
 │   ├── nebulaio/           # Main server binary
@@ -408,22 +427,27 @@ nebulaio/
 ├── deployments/            # Docker, K8s, Helm, Operator
 ├── examples/               # Usage examples
 └── docs/                   # Documentation
-```
+
+```bash
 
 ### Running in Development
 
 ```bash
+
 # Backend (with hot reload)
 make dev
 
 # Frontend (in separate terminal)
 cd web && npm run dev
-```
+
+```bash
 
 ### Running Tests
 
 ```bash
+
 make test
+
 ```
 
 ## Roadmap

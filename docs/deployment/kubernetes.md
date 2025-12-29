@@ -16,7 +16,7 @@ For operator-based deployment, see [Operator Deployment](operator.md).
 ## Deployment Options
 
 | Deployment Type | Replicas | Use Case |
-|-----------------|----------|----------|
+| ----------------- | ---------- | ---------- |
 | Single Node | 1 | Development, testing |
 | HA Cluster | 3 | Small production |
 | Production | 5+ | Large-scale production |
@@ -28,31 +28,38 @@ For operator-based deployment, see [Operator Deployment](operator.md).
 ### Single Node Deployment
 
 ```bash
+
 # Apply the base configuration
 kubectl apply -k https://github.com/piwi3910/nebulaio//deployments/kubernetes/overlays/single-node
 
 # Or from local checkout
 cd deployments/kubernetes
 kubectl apply -k overlays/single-node
-```
+
+```bash
 
 ### HA Cluster Deployment
 
 ```bash
+
 kubectl apply -k https://github.com/piwi3910/nebulaio//deployments/kubernetes/overlays/ha-cluster
-```
+
+```bash
 
 ### Production Deployment
 
 ```bash
+
 kubectl apply -k https://github.com/piwi3910/nebulaio//deployments/kubernetes/overlays/production
-```
+
+```text
 
 ---
 
 ## Directory Structure
 
-```
+```text
+
 deployments/kubernetes/
 ├── base/                          # Base manifests
 │   ├── kustomization.yaml
@@ -73,7 +80,8 @@ deployments/kubernetes/
         ├── ingress.yaml
         ├── servicemonitor.yaml
         └── network-policy.yaml
-```
+
+```text
 
 ---
 
@@ -84,8 +92,10 @@ The single-node deployment is ideal for development and testing.
 ### Deploy
 
 ```bash
+
 kubectl apply -k overlays/single-node
-```
+
+```bash
 
 ### What Gets Deployed
 
@@ -99,6 +109,7 @@ kubectl apply -k overlays/single-node
 ### Access the Services
 
 ```bash
+
 # Port-forward to access locally
 kubectl port-forward -n nebulaio svc/nebulaio 9000:9000 9001:9001 9002:9002
 
@@ -107,7 +118,8 @@ curl http://localhost:9000
 
 # Access Web Console
 open http://localhost:9002
-```
+
+```text
 
 ---
 
@@ -118,8 +130,10 @@ The HA cluster deployment provides high availability with 3 nodes.
 ### Deploy
 
 ```bash
+
 kubectl apply -k overlays/ha-cluster
-```
+
+```bash
 
 ### Configuration
 
@@ -133,6 +147,7 @@ The HA overlay includes:
 ### Verify Cluster
 
 ```bash
+
 # Check pods
 kubectl get pods -n nebulaio-ha
 
@@ -141,7 +156,8 @@ kubectl exec -n nebulaio-ha nebulaio-0 -- curl -s http://localhost:9001/api/v1/a
 
 # Check leader
 kubectl exec -n nebulaio-ha nebulaio-0 -- curl -s http://localhost:9001/api/v1/admin/cluster/leader | jq
-```
+
+```text
 
 ---
 
@@ -159,13 +175,16 @@ The production overlay includes additional security and monitoring features.
 ### Prepare Nodes
 
 ```bash
+
 # Label storage nodes
 kubectl label nodes node1 node2 node3 node4 node5 node-role.kubernetes.io/storage=true
-```
+
+```bash
 
 ### Create Credentials Secret
 
 ```bash
+
 kubectl create namespace nebulaio-production
 
 kubectl create secret generic nebulaio-credentials \
@@ -173,13 +192,15 @@ kubectl create secret generic nebulaio-credentials \
   --from-literal=root-user=admin \
   --from-literal=root-password=$(openssl rand -base64 32) \
   --from-literal=jwt-secret=$(openssl rand -base64 64)
-```
+
+```bash
 
 ### Customize the Configuration
 
 Edit `overlays/production/kustomization.yaml`:
 
 ```yaml
+
 # Adjust storage class and size
 patches:
   - patch: |-
@@ -192,13 +213,15 @@ patches:
     target:
       kind: StatefulSet
       name: nebulaio
-```
+
+```bash
 
 ### Configure Ingress
 
 Edit `overlays/production/ingress.yaml`:
 
 ```yaml
+
 spec:
   rules:
     - host: s3.your-domain.com
@@ -213,18 +236,21 @@ spec:
         - admin.your-domain.com
         - console.your-domain.com
       secretName: nebulaio-tls
-```
+
+```bash
 
 ### Deploy
 
 ```bash
+
 kubectl apply -k overlays/production
-```
+
+```bash
 
 ### Production Configuration Details
 
 | Feature | Configuration |
-|---------|---------------|
+| --------- | --------------- |
 | Replicas | 5 |
 | Storage | 100Gi fast-ssd per node |
 | Anti-affinity | Required (hard) |
@@ -239,12 +265,15 @@ kubectl apply -k overlays/production
 Create your own overlay for specific requirements:
 
 ```bash
+
 mkdir -p overlays/my-cluster
-```
+
+```text
 
 Create `overlays/my-cluster/kustomization.yaml`:
 
 ```yaml
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -300,13 +329,16 @@ configMapGenerator:
     behavior: merge
     literals:
       - NEBULAIO_LOG_LEVEL=debug
-```
+
+```text
 
 Deploy:
 
 ```bash
+
 kubectl apply -k overlays/my-cluster
-```
+
+```text
 
 ---
 
@@ -319,6 +351,7 @@ For large deployments, separate the management (Raft) and storage planes.
 Create `overlays/management/kustomization.yaml`:
 
 ```yaml
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -363,13 +396,15 @@ patches:
     target:
       kind: StatefulSet
       name: nebulaio
-```
+
+```bash
 
 ### Storage Plane
 
 Create `overlays/storage/kustomization.yaml`:
 
 ```yaml
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -435,14 +470,17 @@ patches:
     target:
       kind: StatefulSet
       name: nebulaio
-```
+
+```bash
 
 ### Deploy Both Planes
 
 ```bash
+
 kubectl apply -k overlays/management
 kubectl apply -k overlays/storage
-```
+
+```text
 
 ---
 
@@ -451,6 +489,7 @@ kubectl apply -k overlays/storage
 ### Scale Up
 
 ```bash
+
 # Edit the overlay kustomization.yaml and change replicas
 # Or use kubectl scale
 kubectl scale statefulset nebulaio -n nebulaio --replicas=5
@@ -460,14 +499,17 @@ kubectl rollout status statefulset/nebulaio -n nebulaio
 
 # Verify cluster
 kubectl exec -n nebulaio nebulaio-0 -- curl -s http://localhost:9001/api/v1/admin/cluster/nodes | jq
-```
+
+```bash
 
 ### Scale Down
 
 ```bash
+
 # Scale down carefully - ensure data is replicated
 kubectl scale statefulset nebulaio -n nebulaio --replicas=3
-```
+
+```text
 
 **Important**: When scaling down, the Raft cluster needs a majority of voters. Never scale below 3 nodes for an HA cluster.
 
@@ -480,6 +522,7 @@ kubectl scale statefulset nebulaio -n nebulaio --replicas=3
 The production overlay includes a ServiceMonitor:
 
 ```yaml
+
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -492,12 +535,13 @@ spec:
     - port: admin
       path: /metrics
       interval: 30s
-```
+
+```bash
 
 ### Key Metrics
 
 | Metric | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `nebulaio_http_requests_total` | Request counts |
 | `nebulaio_http_request_duration_seconds` | Request latency |
 | `nebulaio_storage_bytes_total` | Total storage |
@@ -515,13 +559,15 @@ Import the NebulaIO dashboard from the `monitoring/` directory.
 ### Pod Stuck in Pending
 
 ```bash
+
 # Check events
 kubectl describe pod -n nebulaio nebulaio-0
 
 # Check PVC
 kubectl get pvc -n nebulaio
 kubectl describe pvc -n nebulaio data-nebulaio-0
-```
+
+```text
 
 Common causes:
 
@@ -532,6 +578,7 @@ Common causes:
 ### Cluster Not Forming
 
 ```bash
+
 # Check logs
 kubectl logs -n nebulaio nebulaio-0
 
@@ -540,16 +587,19 @@ kubectl exec -n nebulaio nebulaio-0 -- nc -zv nebulaio-1.nebulaio-headless 9004
 
 # Check Raft connectivity
 kubectl exec -n nebulaio nebulaio-0 -- nc -zv nebulaio-1.nebulaio-headless 9003
-```
+
+```bash
 
 ### Leader Election Issues
 
 ```bash
+
 # Check all pod logs
 for i in 0 1 2; do
   echo "=== nebulaio-$i ==="
   kubectl logs -n nebulaio nebulaio-$i --tail=50 | grep -i raft
 done
+
 ```
 
 ---

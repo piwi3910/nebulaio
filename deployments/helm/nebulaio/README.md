@@ -13,22 +13,28 @@ This Helm chart deploys NebulaIO, an S3-compatible object storage system, on Kub
 ### Add the Helm repository
 
 ```bash
+
 helm repo add nebulaio https://piwi3910.github.io/nebulaio/charts
 helm repo update
-```
+
+```bash
 
 ### Install with default configuration
 
 ```bash
+
 helm install nebulaio nebulaio/nebulaio
-```
+
+```bash
 
 ### Install from local chart
 
 ```bash
+
 cd deployments/helm
 helm install nebulaio ./nebulaio
-```
+
+```bash
 
 ## Configuration
 
@@ -37,18 +43,23 @@ helm install nebulaio ./nebulaio
 #### Single Node
 
 ```bash
+
 helm install nebulaio ./nebulaio -f values-single-node.yaml
-```
+
+```bash
 
 #### High Availability (3 nodes)
 
 ```bash
+
 helm install nebulaio ./nebulaio -f values-ha.yaml
-```
+
+```bash
 
 #### Production
 
 ```bash
+
 # First, create the credentials secret
 kubectl create secret generic nebulaio-credentials \
   --from-literal=root-user=admin \
@@ -56,14 +67,15 @@ kubectl create secret generic nebulaio-credentials \
 
 # Install with production values
 helm install nebulaio ./nebulaio -f values-production.yaml
-```
+
+```bash
 
 ### Parameters
 
 #### Global Parameters
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `replicaCount` | Number of replicas | `1` |
 | `image.repository` | Image repository | `ghcr.io/piwi3910/nebulaio` |
 | `image.tag` | Image tag | `""` (uses Chart appVersion) |
@@ -74,7 +86,7 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 #### Authentication
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `auth.rootUser` | Root admin username | `admin` |
 | `auth.rootPassword` | Root admin password | `changeme` |
 | `auth.existingSecret` | Use existing secret | `""` |
@@ -85,7 +97,7 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 #### Cluster Configuration
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `cluster.enabled` | Enable clustering | `true` |
 | `cluster.name` | Cluster name | `nebulaio-cluster` |
 | `cluster.nodeRole` | Node role: storage, management, hybrid | `storage` |
@@ -94,7 +106,7 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 #### Service Configuration
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `service.type` | Service type | `ClusterIP` |
 | `service.s3Port` | S3 API port | `9000` |
 | `service.adminPort` | Admin API port | `9001` |
@@ -104,7 +116,7 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 #### Ingress Configuration
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `ingress.enabled` | Enable ingress | `false` |
 | `ingress.className` | Ingress class name | `nginx` |
 | `ingress.annotations` | Ingress annotations | `{}` |
@@ -116,7 +128,7 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 #### Persistence
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `persistence.enabled` | Enable persistence | `true` |
 | `persistence.storageClass` | Storage class | `""` (default) |
 | `persistence.accessMode` | Access mode | `ReadWriteOnce` |
@@ -125,7 +137,7 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 #### Resources
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `resources.requests.cpu` | CPU request | `100m` |
 | `resources.requests.memory` | Memory request | `256Mi` |
 | `resources.limits.cpu` | CPU limit | `2000m` |
@@ -134,7 +146,7 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 #### Pod Configuration
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `podAntiAffinityPreset` | Pod anti-affinity: soft, hard | `soft` |
 | `nodeSelector` | Node selector | `{}` |
 | `tolerations` | Tolerations | `[]` |
@@ -143,7 +155,7 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 #### Pod Disruption Budget
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `podDisruptionBudget.enabled` | Enable PDB | `true` |
 | `podDisruptionBudget.minAvailable` | Minimum available | `""` |
 | `podDisruptionBudget.maxUnavailable` | Maximum unavailable | `1` |
@@ -151,7 +163,7 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 #### Monitoring
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `metrics.enabled` | Enable metrics | `true` |
 | `metrics.serviceMonitor.enabled` | Enable ServiceMonitor | `false` |
 | `metrics.serviceMonitor.interval` | Scrape interval | `30s` |
@@ -161,7 +173,7 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 #### Network Policy
 
 | Parameter | Description | Default |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `networkPolicy.enabled` | Enable network policy | `false` |
 | `networkPolicy.allowS3FromAnywhere` | Allow S3 from anywhere | `true` |
 | `networkPolicy.adminAllowedNamespaces` | Namespaces for admin access | `[]` |
@@ -171,17 +183,20 @@ helm install nebulaio ./nebulaio -f values-production.yaml
 ### Single Node (Development/Testing)
 
 ```yaml
+
 # values-single-node.yaml
 replicaCount: 1
 cluster:
   enabled: false
 persistence:
   size: 50Gi
-```
+
+```bash
 
 ### High Availability (Production)
 
 ```yaml
+
 # values-ha.yaml
 replicaCount: 3
 cluster:
@@ -190,13 +205,15 @@ podAntiAffinityPreset: hard
 podDisruptionBudget:
   enabled: true
   minAvailable: 2
-```
+
+```bash
 
 ### Separate Management and Storage Planes
 
 For large deployments, you can separate the management plane (Raft voters) from the storage plane:
 
 ```bash
+
 # Deploy management nodes (3 nodes for Raft consensus)
 helm install nebulaio-mgmt ./nebulaio \
   --set replicaCount=3 \
@@ -208,50 +225,65 @@ helm install nebulaio-storage ./nebulaio \
   --set replicaCount=10 \
   --set cluster.nodeRole=storage \
   --set persistence.size=500Gi
-```
+
+```bash
 
 ## Upgrading
 
 ```bash
+
 helm upgrade nebulaio ./nebulaio -f your-values.yaml
-```
+
+```bash
 
 ## Uninstalling
 
 ```bash
+
 helm uninstall nebulaio
-```
+
+```text
 
 **Note**: PVCs are not automatically deleted. To remove all data:
 
 ```bash
+
 kubectl delete pvc -l app.kubernetes.io/instance=nebulaio
-```
+
+```bash
 
 ## Troubleshooting
 
 ### Check pod status
 
 ```bash
+
 kubectl get pods -l app.kubernetes.io/name=nebulaio
-```
+
+```bash
 
 ### View logs
 
 ```bash
+
 kubectl logs -l app.kubernetes.io/name=nebulaio -f
-```
+
+```bash
 
 ### Check cluster status
 
 ```bash
+
 kubectl exec nebulaio-0 -- curl -s http://localhost:9001/api/v1/admin/cluster/nodes | jq
-```
+
+```bash
 
 ### Check health
 
 ```bash
+
 kubectl exec nebulaio-0 -- curl -s http://localhost:9001/health/ready
+
 ```
 
 ## License

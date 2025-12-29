@@ -15,6 +15,7 @@ Get NebulaIO running in minutes with this guide covering installation, configura
 ### Option 1: Download Binary Release
 
 ```bash
+
 # Linux (amd64)
 curl -LO https://github.com/piwi3910/nebulaio/releases/latest/download/nebulaio-linux-amd64.tar.gz
 tar -xzf nebulaio-linux-amd64.tar.gz
@@ -27,11 +28,13 @@ sudo mv nebulaio /usr/local/bin/
 
 # Verify installation
 nebulaio --version
-```
+
+```bash
 
 ### Option 2: Using Docker
 
 ```bash
+
 docker run -d \
   --name nebulaio \
   -p 9000:9000 \
@@ -40,11 +43,13 @@ docker run -d \
   -e NEBULAIO_AUTH_ROOT_USER=admin \
   -e NEBULAIO_AUTH_ROOT_PASSWORD=changeme \
   ghcr.io/piwi3910/nebulaio:latest
-```
+
+```bash
 
 ### Option 3: Build from Source
 
 ```bash
+
 git clone https://github.com/piwi3910/nebulaio.git
 cd nebulaio
 make build
@@ -52,7 +57,8 @@ make build
 # Binaries are in ./bin/
 # nebulaio      - Main server
 # nebulaio-cli  - Command-line client
-```
+
+```text
 
 ---
 
@@ -61,8 +67,10 @@ make build
 Run with default settings:
 
 ```bash
+
 ./bin/nebulaio
-```
+
+```text
 
 Default configuration:
 
@@ -76,19 +84,22 @@ Default configuration:
 Configuration via environment variables:
 
 ```bash
+
 export NEBULAIO_DATA_DIR=/var/lib/nebulaio
 export NEBULAIO_AUTH_ROOT_USER=admin
 # Password must be: min 12 chars, with uppercase, lowercase, and number
 export NEBULAIO_AUTH_ROOT_PASSWORD="YourSecurePassword123!"  # Required
 
 ./bin/nebulaio
-```
+
+```text
 
 ---
 
 ## Verify Installation
 
 ```bash
+
 # Health check (use -k for self-signed certificates since TLS is enabled by default)
 curl -k https://localhost:9001/health
 # {"status":"healthy"}
@@ -98,7 +109,8 @@ curl -k https://localhost:9001/health/detailed
 
 # Readiness probe
 curl -k https://localhost:9001/health/ready
-```
+
+```text
 
 ---
 
@@ -107,6 +119,7 @@ curl -k https://localhost:9001/health/ready
 Configure the AWS CLI with your credentials:
 
 ```bash
+
 # Use the credentials you configured when starting NebulaIO
 aws configure set aws_access_key_id admin
 aws configure set aws_secret_access_key "$NEBULAIO_AUTH_ROOT_PASSWORD"
@@ -114,11 +127,13 @@ aws configure set region us-east-1
 
 # Create endpoint alias (use https:// since TLS is enabled by default)
 alias nebulaio='aws --endpoint-url https://localhost:9000 --no-verify-ssl s3'
-```
+
+```bash
 
 ### Create a Bucket and Upload an Object
 
 ```bash
+
 # Create bucket
 nebulaio mb s3://my-bucket
 
@@ -131,13 +146,15 @@ nebulaio ls s3://my-bucket/
 
 # Download file
 nebulaio cp s3://my-bucket/hello.txt downloaded.txt
-```
+
+```text
 
 ---
 
 ## Alternative: MinIO Client (mc)
 
 ```bash
+
 # Configure mc with your credentials
 mc alias set nebulaio https://localhost:9000 admin "$NEBULAIO_AUTH_ROOT_PASSWORD" --insecure
 
@@ -145,13 +162,15 @@ mc alias set nebulaio https://localhost:9000 admin "$NEBULAIO_AUTH_ROOT_PASSWORD
 mc mb nebulaio/my-bucket --insecure
 mc cp myfile.txt nebulaio/my-bucket/ --insecure
 mc ls nebulaio/my-bucket/ --insecure
-```
+
+```text
 
 ---
 
 ## Using the NebulaIO CLI
 
 ```bash
+
 # Configure with your credentials
 ./bin/nebulaio-cli config set endpoint https://localhost:9000
 ./bin/nebulaio-cli config set access-key admin
@@ -162,6 +181,7 @@ mc ls nebulaio/my-bucket/ --insecure
 ./bin/nebulaio-cli bucket create my-bucket
 ./bin/nebulaio-cli cp myfile.txt s3://my-bucket/
 ./bin/nebulaio-cli ls s3://my-bucket/
+
 ```
 
 See the [CLI documentation](cli.md) for complete reference.

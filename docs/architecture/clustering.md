@@ -57,21 +57,25 @@ Uses Hashicorp's memberlist for cluster membership.
 The first node in a cluster bootstraps a new Raft cluster.
 
 ```yaml
+
 cluster:
   bootstrap: true
   advertise_address: 10.0.1.10
-```
+
+```bash
 
 ### Join Mode
 
 Subsequent nodes join the existing cluster.
 
 ```yaml
+
 cluster:
   bootstrap: false
   join_addresses:
     - 10.0.1.10:9004
-```
+
+```text
 
 ---
 
@@ -82,27 +86,33 @@ cluster:
 Handles both metadata and object storage.
 
 ```yaml
+
 cluster:
   node_role: storage
-```
+
+```bash
 
 ### Management Node
 
 Handles only metadata operations. No object storage.
 
 ```yaml
+
 cluster:
   node_role: management
-```
+
+```bash
 
 ### Hybrid Node (Default)
 
 Handles both metadata and storage.
 
 ```yaml
+
 cluster:
   node_role: hybrid
-```
+
+```text
 
 ---
 
@@ -110,19 +120,22 @@ cluster:
 
 ### Minimum HA Setup (3 nodes)
 
-```
+```text
+
 ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
 │    Node 1     │◄───►│    Node 2     │◄───►│    Node 3     │
 │   (Leader)    │     │  (Follower)   │     │  (Follower)   │
 │   Voter: Yes  │     │   Voter: Yes  │     │   Voter: Yes  │
 └───────────────┘     └───────────────┘     └───────────────┘
-```
+
+```text
 
 **Configuration**:
 
 Node 1 (Bootstrap):
 
 ```yaml
+
 node_id: node-1
 cluster:
   bootstrap: true
@@ -130,11 +143,13 @@ cluster:
   replica_id: 1
   advertise_address: 10.0.1.10
   expect_nodes: 3
-```
+
+```text
 
 Node 2 & 3 (Join):
 
 ```yaml
+
 node_id: node-2  # or node-3
 cluster:
   bootstrap: false
@@ -143,11 +158,13 @@ cluster:
   join_addresses:
     - 10.0.1.10:9004
   advertise_address: 10.0.1.11  # or 10.0.1.12
-```
+
+```bash
 
 ### Production Setup (5 nodes)
 
-```
+```text
+
 ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐
 │  Node 1   │  │  Node 2   │  │  Node 3   │  │  Node 4   │  │  Node 5   │
 │  (Leader) │  │ (Follower)│  │ (Follower)│  │ (Follower)│  │ (Follower)│
@@ -156,7 +173,8 @@ cluster:
       │              │              │              │              │
       └──────────────┴──────────────┴──────────────┴──────────────┘
                               Gossip Mesh
-```
+
+```text
 
 ---
 
@@ -172,10 +190,12 @@ For large deployments, separate management and storage concerns.
 - Small storage footprint
 
 ```yaml
+
 cluster:
   node_role: management
   voter: true
-```
+
+```bash
 
 ### Storage Plane
 
@@ -185,14 +205,17 @@ cluster:
 - Scales independently
 
 ```yaml
+
 cluster:
   node_role: storage
   voter: false
-```
+
+```bash
 
 ### Architecture
 
-```
+```text
+
                     MANAGEMENT PLANE
                     (Raft Voters)
     ┌─────────────────────────────────────────┐
@@ -213,7 +236,8 @@ cluster:
     │              STORAGE PLANE              │
     │            (Raft Non-Voters)            │
     └─────────────────────────────────────────┘
-```
+
+```bash
 
 ### Benefits
 
@@ -235,7 +259,8 @@ cluster:
 
 ### Network Partition
 
-```
+```text
+
     Partition A          │          Partition B
   ┌─────────────────┐    │    ┌─────────────────┐
   │ Node 1 (Leader) │    │    │     Node 3      │
@@ -243,7 +268,8 @@ cluster:
   └─────────────────┘    │    └─────────────────┘
         Majority         │        Minority
     (Can operate)        │    (Read-only/Unavailable)
-```
+
+```text
 
 **Behavior**:
 
@@ -272,6 +298,7 @@ cluster:
 5. Promote to voter if needed (via `SyncRequestAddReplica`)
 
 ```bash
+
 # Check cluster status
 curl http://localhost:9001/api/v1/admin/cluster/nodes
 
@@ -280,7 +307,8 @@ curl http://localhost:9001/api/v1/admin/cluster/membership
 
 # Promote to voter (internally calls SyncRequestAddReplica)
 curl -X POST http://localhost:9001/api/v1/admin/cluster/nodes/{node-id}/promote
-```
+
+```bash
 
 ### Removing Nodes
 
@@ -289,16 +317,20 @@ curl -X POST http://localhost:9001/api/v1/admin/cluster/nodes/{node-id}/promote
 3. Stop the node
 
 ```bash
+
 # Remove node (internally calls SyncRequestDeleteReplica)
 curl -X DELETE http://localhost:9001/api/v1/admin/cluster/nodes/{node-id}
-```
+
+```bash
 
 ### Graceful Shutdown
 
 ```bash
+
 # Graceful shutdown transfers leadership
 kill -SIGTERM <pid>
-```
+
+```text
 
 ---
 
@@ -322,6 +354,7 @@ Dragonboat performance depends on network latency:
 - Tune RTT and election timeouts for high-latency networks
 
 ```yaml
+
 cluster:
   # RTT-based timeouts (Dragonboat uses RTT multiples)
   rtt_millisecond: 500  # Higher for cross-datacenter
@@ -330,7 +363,8 @@ cluster:
   wal_dir: /fast/nvme/wal  # Separate fast storage for WAL
   snapshot_entries: 10000  # Snapshot every N entries
   compaction_overhead: 500  # Log entries to keep after snapshot
-```
+
+```bash
 
 ### Memory Usage
 
@@ -344,6 +378,7 @@ Each node maintains:
 Tune based on cluster size:
 
 ```yaml
+
 performance:
   metadata_cache_size: 100000  # entries
 
@@ -352,7 +387,8 @@ cluster:
   snapshot_entries: 10000  # Snapshot frequency
   compaction_overhead: 500  # Entries to retain post-snapshot
   check_quorum: true  # Verify quorum before serving reads
-```
+
+```text
 
 ---
 
@@ -361,7 +397,7 @@ cluster:
 ### Key Metrics
 
 | Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
+| -------- | ------------- | ----------------- |
 | `nebulaio_dragonboat_state` | Dragonboat state (1=follower, 2=leader) | No leader for 2min |
 | `nebulaio_dragonboat_peers` | Number of Dragonboat peers | < expected |
 | `nebulaio_gossip_nodes` | Nodes in gossip cluster | < expected |
@@ -371,12 +407,14 @@ cluster:
 ### Health Checks
 
 ```bash
+
 # Cluster health
 curl http://localhost:9001/api/v1/admin/cluster/health
 
 # Individual node health
 curl http://localhost:9001/health/ready
 curl http://localhost:9001/health/live
+
 ```
 
 ---

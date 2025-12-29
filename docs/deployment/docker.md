@@ -12,6 +12,7 @@ This guide covers deploying NebulaIO using Docker and Docker Compose.
 ## Quick Start
 
 ```bash
+
 # Pull and run
 docker run -d \
   --name nebulaio \
@@ -21,7 +22,8 @@ docker run -d \
   -v nebulaio-data:/data \
   -e NEBULAIO_AUTH_ROOT_PASSWORD=YourSecurePass123 \
   ghcr.io/piwi3910/nebulaio:latest
-```
+
+```text
 
 ---
 
@@ -30,6 +32,7 @@ docker run -d \
 ### Using Docker Run
 
 ```bash
+
 # Create data volume
 docker volume create nebulaio-data
 
@@ -45,13 +48,15 @@ docker run -d \
   -e NEBULAIO_AUTH_ROOT_PASSWORD=YourSecurePass123 \  # min 12 chars, uppercase, lowercase, number
   -e NEBULAIO_LOG_LEVEL=info \
   ghcr.io/piwi3910/nebulaio:latest
-```
+
+```bash
 
 ### Using Docker Compose
 
 Create `docker-compose.yml`:
 
 ```yaml
+
 version: '3.8'
 
 services:
@@ -80,20 +85,24 @@ services:
 volumes:
   nebulaio-data:
     driver: local
-```
+
+```text
 
 Run:
 
 ```bash
+
 docker-compose up -d
 docker-compose logs -f
-```
+
+```bash
 
 ### With Custom Configuration
 
 Mount a configuration file:
 
 ```yaml
+
 version: '3.8'
 
 services:
@@ -118,7 +127,8 @@ services:
 volumes:
   nebulaio-data:
     driver: local
-```
+
+```text
 
 ---
 
@@ -129,6 +139,7 @@ volumes:
 Create `docker-compose.cluster.yml`:
 
 ```yaml
+
 version: '3.8'
 
 # 3-Node NebulaIO HA Cluster
@@ -261,11 +272,13 @@ networks:
     ipam:
       config:
         - subnet: 172.28.0.0/16
-```
+
+```text
 
 Run:
 
 ```bash
+
 docker-compose -f docker-compose.cluster.yml up -d
 
 # Watch logs
@@ -274,7 +287,8 @@ docker-compose -f docker-compose.cluster.yml logs -f
 # Check cluster status
 curl http://localhost:9001/api/v1/admin/cluster/nodes | jq
 curl http://localhost:9001/api/v1/admin/cluster/health | jq
-```
+
+```text
 
 ---
 
@@ -283,6 +297,7 @@ curl http://localhost:9001/api/v1/admin/cluster/health | jq
 ### With Traefik (Reverse Proxy + TLS)
 
 ```yaml
+
 version: '3.8'
 
 services:
@@ -392,11 +407,13 @@ networks:
     external: true
   nebulaio-cluster:
     driver: bridge
-```
+
+```bash
 
 ### With Prometheus & Grafana
 
 ```yaml
+
 version: '3.8'
 
 services:
@@ -432,11 +449,13 @@ services:
 volumes:
   prometheus-data:
   grafana-data:
-```
+
+```text
 
 `prometheus.yml`:
 
 ```yaml
+
 global:
   scrape_interval: 15s
 
@@ -448,7 +467,8 @@ scrape_configs:
         - 'nebulaio-2:9001'
         - 'nebulaio-3:9001'
     metrics_path: /metrics
-```
+
+```text
 
 ---
 
@@ -457,6 +477,7 @@ scrape_configs:
 ### Multi-Architecture Build
 
 ```bash
+
 # Build for multiple architectures
 docker buildx create --use
 docker buildx build \
@@ -464,13 +485,15 @@ docker buildx build \
   -t ghcr.io/piwi3910/nebulaio:latest \
   -f deployments/docker/Dockerfile \
   --push .
-```
+
+```bash
 
 ### Minimal Image (No Web Console)
 
 Create `Dockerfile.minimal`:
 
 ```dockerfile
+
 FROM golang:1.24-alpine AS builder
 
 RUN apk add --no-cache git
@@ -485,13 +508,15 @@ COPY --from=builder /nebulaio /nebulaio
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 EXPOSE 9000 9001 9003
 ENTRYPOINT ["/nebulaio"]
-```
+
+```text
 
 ---
 
 ## Docker Swarm Deployment
 
 ```yaml
+
 version: '3.8'
 
 services:
@@ -534,14 +559,17 @@ networks:
   nebulaio-overlay:
     driver: overlay
     attachable: true
-```
+
+```text
 
 Deploy:
 
 ```bash
+
 docker stack deploy -c docker-compose.swarm.yml nebulaio
 docker service ls
 docker service logs -f nebulaio_nebulaio
+
 ```
 
 ---
@@ -551,7 +579,7 @@ docker service logs -f nebulaio_nebulaio
 ### Core Settings
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_DATA_DIR` | Data directory path | `/data` |
 | `NEBULAIO_S3_PORT` | S3 API port | `9000` |
 | `NEBULAIO_ADMIN_PORT` | Admin/Console API port | `9001` |
@@ -565,7 +593,7 @@ docker service logs -f nebulaio_nebulaio
 > **Security Warning**: Never use weak or default passwords in production. The root password must be explicitly set and meet minimum security requirements.
 
 | Variable | Description | Default | Requirements |
-|----------|-------------|---------|--------------|
+| ---------- | ------------- | --------- | -------------- |
 | `NEBULAIO_AUTH_ROOT_USER` | Initial admin username | `admin` | - |
 | `NEBULAIO_AUTH_ROOT_PASSWORD` | Initial admin password | **Required** | Min 12 chars, mixed case, numbers |
 | `NEBULAIO_AUTH_JWT_SECRET` | JWT signing secret | Auto-generated | - |
@@ -575,7 +603,7 @@ docker service logs -f nebulaio_nebulaio
 ### TLS Configuration
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_TLS_ENABLED` | Enable TLS (secure by default) | `true` |
 | `NEBULAIO_TLS_CERT_DIR` | Certificate directory | `./data/certs` |
 | `NEBULAIO_TLS_CERT_FILE` | Custom certificate path | - |
@@ -589,7 +617,7 @@ docker service logs -f nebulaio_nebulaio
 ### Clustering
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_CLUSTER_BOOTSTRAP` | Bootstrap new cluster | `true` |
 | `NEBULAIO_CLUSTER_JOIN_ADDRESSES` | Comma-separated join addresses | - |
 | `NEBULAIO_CLUSTER_ADVERTISE_ADDRESS` | Address to advertise | Auto-detected |
@@ -604,7 +632,7 @@ docker service logs -f nebulaio_nebulaio
 ### Storage
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_STORAGE_BACKEND` | Backend: fs, volume, erasure | `fs` |
 | `NEBULAIO_STORAGE_DEFAULT_STORAGE_CLASS` | Default storage class | `STANDARD` |
 | `NEBULAIO_STORAGE_MAX_OBJECT_SIZE` | Maximum object size (bytes) | `5497558138880` (5TB) |
@@ -618,7 +646,7 @@ docker service logs -f nebulaio_nebulaio
 ### DRAM Cache
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_CACHE_ENABLED` | Enable DRAM cache | `false` |
 | `NEBULAIO_CACHE_MAX_SIZE` | Maximum cache size (bytes) | `8589934592` (8GB) |
 | `NEBULAIO_CACHE_SHARD_COUNT` | Cache shards | `256` |
@@ -630,7 +658,7 @@ docker service logs -f nebulaio_nebulaio
 ### Data Firewall (QoS)
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_FIREWALL_ENABLED` | Enable data firewall | `false` |
 | `NEBULAIO_FIREWALL_DEFAULT_POLICY` | Default policy: allow, deny | `allow` |
 | `NEBULAIO_FIREWALL_RATE_LIMITING_ENABLED` | Enable rate limiting | `false` |
@@ -644,7 +672,7 @@ docker service logs -f nebulaio_nebulaio
 ### Audit Logging
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_AUDIT_ENABLED` | Enable audit logging | `true` |
 | `NEBULAIO_AUDIT_COMPLIANCE_MODE` | Compliance: none, soc2, pci, hipaa, gdpr, fedramp | `none` |
 | `NEBULAIO_AUDIT_FILE_PATH` | Audit log file path | `./data/audit/audit.log` |
@@ -656,7 +684,7 @@ docker service logs -f nebulaio_nebulaio
 #### S3 Express One Zone
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_S3_EXPRESS_ENABLED` | Enable S3 Express | `false` |
 | `NEBULAIO_S3_EXPRESS_DEFAULT_ZONE` | Default zone | `use1-az1` |
 | `NEBULAIO_S3_EXPRESS_SESSION_DURATION` | Session duration (seconds) | `3600` |
@@ -665,7 +693,7 @@ docker service logs -f nebulaio_nebulaio
 #### Apache Iceberg
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_ICEBERG_ENABLED` | Enable Iceberg | `false` |
 | `NEBULAIO_ICEBERG_CATALOG_TYPE` | Catalog: rest, hive, glue | `rest` |
 | `NEBULAIO_ICEBERG_CATALOG_URI` | Catalog URI | `http://localhost:8181` |
@@ -675,7 +703,7 @@ docker service logs -f nebulaio_nebulaio
 #### MCP Server
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_MCP_ENABLED` | Enable MCP server | `false` |
 | `NEBULAIO_MCP_PORT` | MCP server port | `9005` |
 | `NEBULAIO_MCP_ENABLE_TOOLS` | Enable tool execution | `true` |
@@ -686,7 +714,7 @@ docker service logs -f nebulaio_nebulaio
 #### GPUDirect Storage
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_GPUDIRECT_ENABLED` | Enable GPUDirect | `false` |
 | `NEBULAIO_GPUDIRECT_BUFFER_POOL_SIZE` | Buffer pool (bytes) | `1073741824` (1GB) |
 | `NEBULAIO_GPUDIRECT_MAX_TRANSFER_SIZE` | Max transfer (bytes) | `268435456` (256MB) |
@@ -696,7 +724,7 @@ docker service logs -f nebulaio_nebulaio
 #### BlueField DPU
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_DPU_ENABLED` | Enable DPU offload | `false` |
 | `NEBULAIO_DPU_DEVICE_INDEX` | DPU device index | `0` |
 | `NEBULAIO_DPU_ENABLE_CRYPTO` | Crypto offload | `true` |
@@ -707,7 +735,7 @@ docker service logs -f nebulaio_nebulaio
 #### S3 over RDMA
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_RDMA_ENABLED` | Enable RDMA | `false` |
 | `NEBULAIO_RDMA_PORT` | RDMA port | `9100` |
 | `NEBULAIO_RDMA_DEVICE_NAME` | RDMA device | `mlx5_0` |
@@ -718,7 +746,7 @@ docker service logs -f nebulaio_nebulaio
 #### NVIDIA NIM
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_NIM_ENABLED` | Enable NIM | `false` |
 | `NEBULAIO_NIM_API_KEY` | NVIDIA API key | - |
 | `NEBULAIO_NIM_DEFAULT_MODEL` | Default model | `meta/llama-3.1-8b-instruct` |

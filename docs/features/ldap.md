@@ -17,6 +17,7 @@ LDAP integration provides:
 ### Basic Configuration
 
 ```yaml
+
 # config.yaml
 auth:
   ldap:
@@ -69,13 +70,15 @@ auth:
       connectTimeout: 10s
       requestTimeout: 30s
       idleTimeout: 5m
-```
+
+```bash
 
 ### Active Directory Configuration
 
 For Microsoft Active Directory, use the optimized preset:
 
 ```yaml
+
 auth:
   ldap:
     enabled: true
@@ -113,11 +116,13 @@ auth:
         internalPolicy: admin
       - externalGroup: Storage-Users
         internalPolicy: readwrite
-```
+
+```bash
 
 ### TLS/STARTTLS Configuration
 
 ```yaml
+
 auth:
   ldap:
     serverUrl: ldap://ldap.example.com:389
@@ -134,7 +139,8 @@ auth:
       # Client certificate authentication (optional)
       clientCertFile: /etc/nebulaio/certs/client.crt
       clientKeyFile: /etc/nebulaio/certs/client.key
-```
+
+```bash
 
 ## User and Group Mapping
 
@@ -143,7 +149,7 @@ auth:
 Map LDAP attributes to NebulaIO user fields:
 
 | NebulaIO Field | LDAP (OpenLDAP) | Active Directory | Description |
-|----------------|-----------------|------------------|-------------|
+| ---------------- | ----------------- | ------------------ | ------------- |
 | `username` | `uid` | `sAMAccountName` | Login username |
 | `displayName` | `cn` | `displayName` | User's full name |
 | `email` | `mail` | `mail` | Email address |
@@ -155,6 +161,7 @@ Map LDAP attributes to NebulaIO user fields:
 Retrieve additional attributes for policy decisions:
 
 ```yaml
+
 userSearch:
   attributes:
     username: uid
@@ -164,7 +171,8 @@ userSearch:
       department: departmentNumber
       employeeType: employeeType
       costCenter: costCenter
-```
+
+```bash
 
 ### Group Membership Resolution
 
@@ -174,6 +182,7 @@ NebulaIO supports two methods for group resolution:
 2. **Group Search**: Query groups that contain the user as a member
 
 ```yaml
+
 # Method 1: Using memberOf attribute (faster)
 userSearch:
   attributes:
@@ -184,14 +193,15 @@ groupSearch:
   baseDn: "ou=groups,dc=example,dc=com"
   filter: "(&(objectClass=groupOfNames)(member={dn}))"
   nameAttribute: cn
-```
+
+```bash
 
 ## Search Filters and Base DN
 
 ### Search Scopes
 
 | Scope | Description | Use Case |
-|-------|-------------|----------|
+| ------- | ------------- | ---------- |
 | `base` | Search only the base DN entry | Single entry lookup |
 | `one` | Search immediate children only | Flat OU structure |
 | `sub` | Search entire subtree | Default, nested OUs |
@@ -199,13 +209,14 @@ groupSearch:
 ### Filter Placeholders
 
 | Placeholder | Description | Example |
-|-------------|-------------|---------|
+| ------------- | ------------- | --------- |
 | `{username}` | User-provided username | `(uid={username})` |
 | `{dn}` | User's distinguished name | `(member={dn})` |
 
 ### Example Filters
 
 ```yaml
+
 # Standard OpenLDAP user filter
 userSearch:
   filter: "(&(objectClass=inetOrgPerson)(uid={username}))"
@@ -221,7 +232,8 @@ userSearch:
 # Group filter with specific OU
 groupSearch:
   filter: "(&(objectClass=groupOfNames)(member={dn})(ou:dn:=storage-access))"
-```
+
+```bash
 
 ## Policy Mapping from LDAP Groups
 
@@ -230,6 +242,7 @@ groupSearch:
 Map LDAP groups to NebulaIO built-in or custom policies:
 
 ```yaml
+
 groupMappings:
   # Administrative access
   - externalGroup: cn=storage-admins,ou=groups,dc=example,dc=com
@@ -249,12 +262,13 @@ groupMappings:
 
 # Fallback policy when no groups match
 defaultPolicy: readonly
-```
+
+```bash
 
 ### Built-in Policies
 
 | Policy | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `admin` | Full administrative access |
 | `readwrite` | Read and write to all buckets |
 | `readonly` | Read-only access to all buckets |
@@ -266,6 +280,7 @@ defaultPolicy: readonly
 Enable periodic synchronization to cache LDAP users locally:
 
 ```yaml
+
 auth:
   ldap:
     sync:
@@ -275,12 +290,13 @@ auth:
       deleteOrphans: false
       pageSize: 500
       filter: "(employeeType=active)"
-```
+
+```bash
 
 ### Sync Configuration Options
 
 | Option | Default | Description |
-|--------|---------|-------------|
+| -------- | --------- | ------------- |
 | `enabled` | `false` | Enable user synchronization |
 | `interval` | `15m` | Sync frequency |
 | `syncOnStartup` | `true` | Run sync when service starts |
@@ -293,6 +309,7 @@ auth:
 ### Using the CLI
 
 ```bash
+
 # Test LDAP connection
 nebulaio-cli admin ldap test-connection
 
@@ -307,11 +324,13 @@ nebulaio-cli admin ldap sync --force
 
 # View sync status
 nebulaio-cli admin ldap sync-status
-```
+
+```bash
 
 ### Using the API
 
 ```bash
+
 # Test connection
 curl -X POST "http://localhost:9001/api/v1/admin/ldap/test" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -326,7 +345,8 @@ curl -X POST "http://localhost:9001/api/v1/admin/ldap/test-auth" \
 # Get sync status
 curl -X GET "http://localhost:9001/api/v1/admin/ldap/sync/status" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+
+```bash
 
 ## Troubleshooting
 
@@ -334,9 +354,11 @@ curl -X GET "http://localhost:9001/api/v1/admin/ldap/sync/status" \
 
 #### Connection Refused
 
-```
+```text
+
 Error: failed to connect to LDAP server: dial tcp: connection refused
-```
+
+```text
 
 **Solutions**:
 
@@ -346,9 +368,11 @@ Error: failed to connect to LDAP server: dial tcp: connection refused
 
 #### Bind Failed
 
-```
+```text
+
 Error: failed to bind: LDAP Result Code 49 "Invalid Credentials"
-```
+
+```text
 
 **Solutions**:
 
@@ -358,9 +382,11 @@ Error: failed to bind: LDAP Result Code 49 "Invalid Credentials"
 
 #### User Not Found
 
-```
+```text
+
 Error: user not found: alice
-```
+
+```text
 
 **Solutions**:
 
@@ -371,9 +397,11 @@ Error: user not found: alice
 
 #### Certificate Errors
 
-```
+```text
+
 Error: x509: certificate signed by unknown authority
-```
+
+```text
 
 **Solutions**:
 
@@ -386,17 +414,20 @@ Error: x509: certificate signed by unknown authority
 Enable debug logging for LDAP operations:
 
 ```yaml
+
 logging:
   level: debug
   components:
     auth.ldap: trace
-```
+
+```bash
 
 ### Testing with ldapsearch
 
 Verify LDAP connectivity and queries directly:
 
 ```bash
+
 # Test user search
 ldapsearch -x -H ldap://ldap.example.com:389 \
   -D "cn=nebulaio-svc,ou=service-accounts,dc=example,dc=com" \
@@ -410,19 +441,22 @@ ldapsearch -x -H ldap://ldap.example.com:389 \
   -W \
   -b "ou=groups,dc=example,dc=com" \
   "(member=uid=alice,ou=users,dc=example,dc=com)"
-```
+
+```bash
 
 ### Connection Pool Issues
 
 If experiencing connection timeouts or pool exhaustion:
 
 ```yaml
+
 pool:
   maxConnections: 20      # Increase pool size
   maxIdleConnections: 10
   connectTimeout: 15s     # Increase timeout
   requestTimeout: 60s
   idleTimeout: 10m
+
 ```
 
 ## Related Documentation

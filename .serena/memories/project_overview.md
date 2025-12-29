@@ -28,7 +28,8 @@ NebulaIO is an S3-compatible object storage system written in Go. It provides a 
 
 ## Project Structure
 
-```
+```text
+
 nebulaio/
 ├── cmd/nebulaio/       # Main entry point
 ├── internal/
@@ -57,6 +58,7 @@ nebulaio/
 ├── docs/               # Documentation
 ├── scripts/            # Build/deployment scripts
 └── deployments/        # Deployment configurations
+
 ```
 
 ## Ports

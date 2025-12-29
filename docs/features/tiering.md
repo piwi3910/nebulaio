@@ -4,7 +4,8 @@ NebulaIO provides intelligent storage tiering to optimize costs while maintainin
 
 ## Overview
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           Storage Tiering Flow                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -15,12 +16,13 @@ NebulaIO provides intelligent storage tiering to optimize costs while maintainin
 │               │ DRAM Cache  │                          ARCHIVE (Tape)       │
 │               └─────────────┘                                                │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ## Tier Definitions
 
 | Tier | Storage Class | Media | Latency | Cost | Use Case |
-|------|--------------|-------|---------|------|----------|
+| ------ | -------------- | ------- | --------- | ------ | ---------- |
 | Hot | STANDARD | NVMe/SSD | < 1ms | $$$$ | Active workloads, ML training |
 | Warm | STANDARD_IA | SSD/HDD | 5-20ms | $$$ | Moderate access, recent data |
 | Cold | GLACIER_IR | HDD/NAS | 50-200ms | $$ | Infrequent access, backups |
@@ -29,6 +31,7 @@ NebulaIO provides intelligent storage tiering to optimize costs while maintainin
 ### Configuration
 
 ```yaml
+
 tiering:
   enabled: true
   tiers:
@@ -46,7 +49,8 @@ tiering:
       storage_class: DEEP_ARCHIVE
       media_type: tape
       min_retention_days: 180
-```
+
+```bash
 
 ## Placement Groups
 
@@ -54,7 +58,8 @@ Placement groups define how nodes are organized for distributed storage operatio
 
 ### Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────┐   ┌─────────────────────────────────────┐
 │   Placement Group 1 (Datacenter A)  │   │   Placement Group 2 (Datacenter B)  │
 │  ┌─────┐  ┌─────┐  ┌─────┐          │   │  ┌─────┐  ┌─────┐  ┌─────┐          │
@@ -69,12 +74,13 @@ Placement groups define how nodes are organized for distributed storage operatio
                    │                                          │
                    └──────── DR Replication ──────────────────┘
                           (full object copies)
-```
+
+```bash
 
 ### Key Concepts
 
 | Concept | Scope | Description |
-|---------|-------|-------------|
+| --------- | ------- | ------------- |
 | **Placement Group** | Datacenter | Nodes in the same datacenter that share local storage operations |
 | **Erasure Coding** | Within PG | Reed-Solomon shards distributed across nodes in the same placement group |
 | **Tiering** | Within PG | Hot/warm/cold transitions happen locally within a placement group |
@@ -83,6 +89,7 @@ Placement groups define how nodes are organized for distributed storage operatio
 ### Configuration
 
 ```yaml
+
 storage:
   placement_groups:
     # This node's placement group
@@ -110,12 +117,13 @@ storage:
         region: us-west-1
         min_nodes: 3
         max_nodes: 10
-```
+
+```bash
 
 ### Single Node vs. Multi-Node
 
 | Mode | Behavior |
-|------|----------|
+| ------ | ---------- |
 | **Single Node** | All policies apply to local storage only. Erasure coding creates shards on local disk. |
 | **Multi-Node (Same PG)** | Erasure shards distributed across nodes in the placement group. Tiering policies coordinated. |
 | **Multi-Node (Cross-PG)** | Same as above, plus DR replication creates full object copies in remote placement groups. |
@@ -125,6 +133,7 @@ storage:
 Configure cross-placement group replication for disaster recovery:
 
 ```yaml
+
 storage:
   default_redundancy:
     enabled: true
@@ -145,7 +154,8 @@ buckets:
       replication_targets:
         - pg-dc2
         - pg-dc3
-```
+
+```bash
 
 ## Physical Device Configuration
 
@@ -156,6 +166,7 @@ NebulaIO supports assigning different physical devices (NVMe, SSD, HDD) to diffe
 For maximum performance, use raw block devices directly without filesystem overhead:
 
 ```yaml
+
 storage:
   backend: volume
 
@@ -197,13 +208,15 @@ tiering:
         - days: 30
           from_tier: warm
           to_tier: cold
-```
+
+```bash
 
 ### File-Based Volume Tiering
 
 For environments where raw device access isn't possible, use directory-based tiering:
 
 ```yaml
+
 storage:
   backend: volume
 
@@ -218,12 +231,13 @@ storage:
 
 tiering:
   enabled: true
-```
+
+```bash
 
 ### Tier Capacity Planning
 
 | Tier | Recommended Media | Typical Capacity | Data Retention |
-|------|------------------|------------------|----------------|
+| ------ | ------------------ | ------------------ | ---------------- |
 | Hot | NVMe | 5-10% of total | < 7 days since access |
 | Warm | SSD | 20-30% of total | 7-30 days since access |
 | Cold | HDD | 60-70% of total | > 30 days since access |
@@ -231,6 +245,7 @@ tiering:
 ### Device Discovery
 
 ```bash
+
 # List available block devices
 nebulaio-cli storage device discover
 # DEVICE         TYPE    SIZE      MOUNT     ELIGIBLE
@@ -249,7 +264,8 @@ nebulaio-cli storage tier devices
 # hot     /dev/nvme0n1, /dev/nvme1n1 2.0 TB
 # warm    /dev/sda                    4.0 TB
 # cold    /dev/sdc, /dev/sdd          32.0 TB
-```
+
+```text
 
 ---
 
@@ -262,7 +278,7 @@ NebulaIO's advanced policy system provides fine-grained control over object life
 NebulaIO supports four distinct policy types, each optimized for different use cases:
 
 | Policy Type | Execution Model | Use Case |
-|-------------|-----------------|----------|
+| ------------- | ----------------- | ---------- |
 | Scheduled | Cron-based or maintenance windows | Regular batch transitions, off-peak processing |
 | Realtime | Event-driven | Immediate response to access patterns |
 | Threshold | Capacity/metric-based | Storage management, quota enforcement |
@@ -273,6 +289,7 @@ NebulaIO supports four distinct policy types, each optimized for different use c
 Scheduled policies execute at defined intervals using cron expressions or during maintenance windows.
 
 ```yaml
+
 tiering:
   policies:
     - name: nightly-archival
@@ -305,13 +322,15 @@ tiering:
       filters:
         bucket_patterns:
           - "temp-*"
-```
+
+```bash
 
 #### Realtime Policies
 
 Realtime policies respond immediately to events such as object access, creation, or modification.
 
 ```yaml
+
 tiering:
   policies:
     - name: hot-data-promotion
@@ -339,13 +358,15 @@ tiering:
       actions:
         - type: notify
           webhook: "https://ops.example.com/webhooks/tier-events"
-```
+
+```bash
 
 #### Threshold Policies
 
 Threshold policies activate when storage metrics exceed defined limits.
 
 ```yaml
+
 tiering:
   policies:
     - name: hot-tier-pressure-relief
@@ -376,13 +397,15 @@ tiering:
         - type: notify
           webhook: "https://ops.example.com/webhooks/capacity-alerts"
           template: capacity_warning
-```
+
+```bash
 
 #### S3 Lifecycle Policies
 
 S3-compatible lifecycle policies for seamless migration from AWS S3.
 
 ```yaml
+
 tiering:
   s3_lifecycle:
     enabled: true
@@ -407,13 +430,15 @@ tiering:
             storage_class: GLACIER_IR
         noncurrent_version_expiration:
           noncurrent_days: 365
-```
+
+```bash
 
 ### Policy Priority and Conflict Resolution
 
 When multiple policies apply to the same object, NebulaIO uses priority-based conflict resolution:
 
 ```yaml
+
 tiering:
   policy_resolution:
     mode: priority                     # priority | first_match | merge
@@ -431,7 +456,8 @@ tiering:
     - name: default-lifecycle
       priority: 100
       # ... policy definition
-```
+
+```text
 
 ---
 
@@ -444,6 +470,7 @@ Triggers define the conditions that activate a policy. Multiple triggers can be 
 Age-based triggers evaluate objects based on time since creation, modification, or last access.
 
 ```yaml
+
 tiering:
   policies:
     - name: age-based-transitions
@@ -468,13 +495,15 @@ tiering:
               days_since_creation: 7
             - type: age
               days_since_access: 3
-```
+
+```bash
 
 ### Access-Based Triggers
 
 Access-based triggers evaluate objects based on access patterns and frequency.
 
 ```yaml
+
 tiering:
   policies:
     - name: access-based-tiering
@@ -499,13 +528,15 @@ tiering:
         # Last access time
         - type: last_access
           hours_ago: 168               # 7 days
-```
+
+```bash
 
 ### Capacity-Based Triggers
 
 Capacity triggers activate based on storage tier utilization or object counts.
 
 ```yaml
+
 tiering:
   policies:
     - name: capacity-management
@@ -533,13 +564,15 @@ tiering:
           bucket: "ml-datasets"
           threshold_percent: 90
           direction: above
-```
+
+```bash
 
 ### Cron-Based Triggers
 
 Cron triggers activate at scheduled times using standard cron expressions.
 
 ```yaml
+
 tiering:
   policies:
     - name: scheduled-maintenance
@@ -558,13 +591,15 @@ tiering:
           expressions:
             - "0 2 * * 1-5"            # Weekdays at 2 AM
             - "0 4 * * 0,6"            # Weekends at 4 AM
-```
+
+```bash
 
 ### Composite Triggers
 
 Combine multiple triggers with logical operators for complex conditions.
 
 ```yaml
+
 tiering:
   policies:
     - name: complex-trigger-policy
@@ -586,11 +621,13 @@ tiering:
                   direction: above
                 - type: object_size
                   min_size: 100MB
-```
+
+```bash
 
 ### Trigger CLI Commands
 
 ```bash
+
 # List triggers for a policy
 nebulaio-cli policy triggers list --policy nightly-archival
 
@@ -609,7 +646,8 @@ nebulaio-cli policy triggers history --policy hot-tier-pressure-relief --days 7
 
 # Manually activate a trigger (for testing)
 nebulaio-cli policy triggers fire --policy test-policy --dry-run
-```
+
+```text
 
 ---
 
@@ -622,6 +660,7 @@ Actions define what happens when policy triggers activate. NebulaIO supports mul
 Move objects between storage tiers.
 
 ```yaml
+
 tiering:
   policies:
     - name: tiered-transitions
@@ -646,13 +685,15 @@ tiering:
             exclude_patterns:
               - "*.index"
               - "*.manifest"
-```
+
+```bash
 
 ### Delete Actions
 
 Remove objects based on policy conditions.
 
 ```yaml
+
 tiering:
   policies:
     - name: cleanup-policy
@@ -676,13 +717,15 @@ tiering:
           notify_before: true
           notify_webhook: "https://ops.example.com/webhooks/deletions"
           delay_hours: 24              # Wait 24h after notification
-```
+
+```bash
 
 ### Replicate Actions
 
 Copy objects to other tiers, regions, or clusters.
 
 ```yaml
+
 tiering:
   policies:
     - name: replication-policy
@@ -715,13 +758,15 @@ tiering:
             mode: async
             retry_count: 3
             retry_delay: 5m
-```
+
+```bash
 
 ### Notify Actions
 
 Send notifications via webhooks or messaging systems.
 
 ```yaml
+
 tiering:
   policies:
     - name: notification-policy
@@ -761,13 +806,15 @@ tiering:
           sns:
             topic_arn: "arn:aws:sns:us-east-1:123456789:tier-events"
             message_template: tier_event_json
-```
+
+```bash
 
 ### Action Chaining
 
 Execute multiple actions in sequence or parallel.
 
 ```yaml
+
 tiering:
   policies:
     - name: complex-action-policy
@@ -794,11 +841,13 @@ tiering:
               destination:
                 region: ap-northeast-1
           on_failure: continue         # continue | abort
-```
+
+```bash
 
 ### Action CLI Commands
 
 ```bash
+
 # List actions for a policy
 nebulaio-cli policy actions list --policy nightly-archival
 
@@ -816,7 +865,8 @@ nebulaio-cli policy actions history --policy nightly-archival --days 30
 # TIMESTAMP           ACTION      STATUS      OBJECTS     SIZE
 # 2024-01-15 02:15    transition  completed   8,234       123.4 GB
 # 2024-01-14 02:12    transition  completed   7,891       118.2 GB
-```
+
+```text
 
 ---
 
@@ -829,6 +879,7 @@ NebulaIO provides flexible scheduling options including maintenance windows and 
 Define specific time windows for policy execution to minimize impact on production workloads.
 
 ```yaml
+
 tiering:
   scheduling:
     maintenance_windows:
@@ -863,13 +914,15 @@ tiering:
           timezone: "UTC"
         policies:
           - monthly-compliance-archive
-```
+
+```bash
 
 ### Blackout Windows
 
 Prevent policy execution during critical periods.
 
 ```yaml
+
 tiering:
   scheduling:
     blackout_windows:
@@ -904,13 +957,15 @@ tiering:
           duration: 1h
         applies_to:
           policy_types: [scheduled, threshold]
-```
+
+```bash
 
 ### Cron Expression Reference
 
 NebulaIO supports standard 5-field cron expressions with extensions.
 
 ```yaml
+
 # Cron expression format: minute hour day_of_month month day_of_week
 # Extended format: second minute hour day_of_month month day_of_week
 
@@ -941,11 +996,13 @@ tiering:
 
         # Timezone specification
         timezone: "Europe/London"
-```
+
+```bash
 
 ### Scheduling CLI Commands
 
 ```bash
+
 # List all maintenance windows
 nebulaio-cli schedule windows list
 # NAME              SCHEDULE                    POLICIES
@@ -971,7 +1028,8 @@ nebulaio-cli schedule calendar --days 7
 # 2024-01-15    02:00 EST     nightly-archival     scheduled
 # 2024-01-15    08:00 EST     -                    blackout start
 # 2024-01-15    18:00 EST     -                    blackout end
-```
+
+```text
 
 ---
 
@@ -982,6 +1040,7 @@ Anti-thrash protection prevents objects from rapidly transitioning between tiers
 ### Configuration
 
 ```yaml
+
 tiering:
   anti_thrash:
     enabled: true
@@ -1011,11 +1070,13 @@ tiering:
     tracking:
       enabled: true
       history_retention: 30d
-```
+
+```bash
 
 ### Transition State Machine
 
 ```yaml
+
 tiering:
   anti_thrash:
     state_machine:
@@ -1045,11 +1106,13 @@ tiering:
           - from: hot
             to: cold
             require_days_since_access: 90
-```
+
+```bash
 
 ### Exception Handling
 
 ```yaml
+
 tiering:
   anti_thrash:
     exceptions:
@@ -1078,11 +1141,13 @@ tiering:
           bypass_min_time: true
           bypass_cooldown: true
           max_duration: 1h
-```
+
+```bash
 
 ### Anti-Thrash CLI Commands
 
 ```bash
+
 # View anti-thrash status
 nebulaio-cli tier anti-thrash status
 # STATUS              ENABLED
@@ -1113,7 +1178,8 @@ nebulaio-cli tier anti-thrash metrics
 # Transitions blocked (24h)       1,234
 # Objects in cooldown             5,678
 # Emergency mode activations      0
-```
+
+```text
 
 ---
 
@@ -1124,6 +1190,7 @@ Rate limiting controls the pace of tier transitions to prevent system overload a
 ### Per-Policy Rate Limits
 
 ```yaml
+
 tiering:
   rate_limiting:
     enabled: true
@@ -1146,11 +1213,13 @@ tiering:
         low-priority-cleanup:
           transitions_per_second: 10
           bytes_per_second: 10MB
-```
+
+```bash
 
 ### Global Rate Limits
 
 ```yaml
+
 tiering:
   rate_limiting:
     global:
@@ -1178,11 +1247,13 @@ tiering:
         total: 100
         per_tier: 30
         per_bucket: 10
-```
+
+```bash
 
 ### Burst Handling
 
 ```yaml
+
 tiering:
   rate_limiting:
     burst:
@@ -1211,11 +1282,13 @@ tiering:
         cpu_threshold: 70             # Reduce burst above 70% CPU
         memory_threshold: 80          # Reduce burst above 80% memory
         iops_threshold: 80            # Reduce burst above 80% IOPS
-```
+
+```bash
 
 ### Queue Management
 
 ```yaml
+
 tiering:
   rate_limiting:
     queue:
@@ -1239,11 +1312,13 @@ tiering:
       overflow:
         strategy: drop_lowest_priority  # drop_oldest | drop_newest | reject
         notify: true
-```
+
+```bash
 
 ### Rate Limiting CLI Commands
 
 ```bash
+
 # View rate limit status
 nebulaio-cli tier rate-limit status
 # LIMIT TYPE          CURRENT         LIMIT           UTILIZATION
@@ -1276,7 +1351,8 @@ nebulaio-cli tier rate-limit metrics --interval 1h
 # TIMESTAMP           TPS     BPS         THROTTLED    QUEUED
 # 2024-01-15 14:00    456     234 MB/s    12           1,234
 # 2024-01-15 13:00    678     345 MB/s    45           2,345
-```
+
+```text
 
 ---
 
@@ -1286,7 +1362,8 @@ NebulaIO includes an optional machine learning module that predicts access patte
 
 ### Overview
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        ML Predictive Tiering Pipeline                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -1304,11 +1381,13 @@ NebulaIO includes an optional machine learning module that predicts access patte
 │                     └──────────────┘    └──────────────┘    └───────────┘ │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Configuration
 
 ```yaml
+
 tiering:
   ml_prediction:
     enabled: true
@@ -1350,11 +1429,13 @@ tiering:
       horizon: 7d                     # Predict 7 days ahead
       confidence_threshold: 0.75      # Minimum confidence for actions
       update_frequency: 1h
-```
+
+```bash
 
 ### Access Pattern Prediction
 
 ```yaml
+
 tiering:
   ml_prediction:
     access_prediction:
@@ -1395,11 +1476,13 @@ tiering:
         declining_pattern:
           trend_direction: negative
           confidence: 0.8
-```
+
+```bash
 
 ### Time Series Analysis
 
 ```yaml
+
 tiering:
   ml_prediction:
     time_series:
@@ -1435,11 +1518,13 @@ tiering:
         holidays:
           enabled: true
           region: US
-```
+
+```bash
 
 ### Tier Recommendations
 
 ```yaml
+
 tiering:
   ml_prediction:
     recommendations:
@@ -1474,11 +1559,13 @@ tiering:
             webhook: "https://ops.example.com/webhooks/ml-recommendations"
             email: "ml-review@example.com"
           approval_required_above: 1000  # Objects
-```
+
+```bash
 
 ### Anomaly Detection
 
 ```yaml
+
 tiering:
   ml_prediction:
     anomaly_detection:
@@ -1524,11 +1611,13 @@ tiering:
             urgency: high
           - type: throttle_transitions
             until_reviewed: true
-```
+
+```bash
 
 ### ML Model Management
 
 ```yaml
+
 tiering:
   ml_prediction:
     model_management:
@@ -1560,11 +1649,13 @@ tiering:
         enabled: true
         method: shap                  # shap | lime
         sample_explanations: 100
-```
+
+```bash
 
 ### ML CLI Commands
 
 ```bash
+
 # View ML model status
 nebulaio-cli tier ml status
 # MODEL               VERSION     ACCURACY    LAST TRAINED        STATUS
@@ -1614,7 +1705,8 @@ nebulaio-cli tier ml explain --model tier_recommendation
 # object_size                 0.15
 # content_type                0.12
 # hour_of_day                 0.11
-```
+
+```text
 
 ---
 
@@ -1623,6 +1715,7 @@ nebulaio-cli tier ml explain --model tier_recommendation
 Automate object transitions with lifecycle policies based on age or access patterns.
 
 ```yaml
+
 tiering:
   lifecycle_policies:
     - name: standard-lifecycle
@@ -1641,21 +1734,25 @@ tiering:
       transitions:
         - days: 7
           storage_class: STANDARD_IA
-```
+
+```bash
 
 ### S3 API Compatible
 
 ```bash
+
 aws s3api put-bucket-lifecycle-configuration --bucket my-bucket \
   --lifecycle-configuration '{
     "Rules": [{"ID": "archive-logs", "Filter": {"Prefix": "logs/"},
       "Transitions": [{"Days": 30, "StorageClass": "GLACIER_IR"}]}]
   }' --endpoint-url http://localhost:9000
-```
+
+```bash
 
 ## Manual Tier Transitions
 
 ```bash
+
 # Transition object to cold tier
 nebulaio-cli admin tier transition --bucket my-bucket --key data.bin --target-tier cold
 
@@ -1664,11 +1761,13 @@ nebulaio-cli admin tier transition --bucket my-bucket --prefix archived/ --targe
 
 # Restore from archive
 nebulaio-cli admin tier restore --bucket my-bucket --key data.tar.gz --days 7 --tier bulk
-```
+
+```bash
 
 ### S3 API
 
 ```bash
+
 # Transition via CopyObject
 aws s3 cp s3://bucket/data.bin s3://bucket/data.bin \
   --storage-class GLACIER_IR --endpoint-url http://localhost:9000
@@ -1677,49 +1776,56 @@ aws s3 cp s3://bucket/data.bin s3://bucket/data.bin \
 aws s3api restore-object --bucket my-bucket --key data.tar.gz \
   --restore-request '{"Days":7,"GlacierJobParameters":{"Tier":"Bulk"}}' \
   --endpoint-url http://localhost:9000
-```
+
+```bash
 
 ## DRAM Cache Integration
 
 The DRAM cache accelerates hot data access regardless of storage tier. Objects accessed frequently are automatically cached and optionally promoted to warmer tiers.
 
 ```yaml
+
 cache:
   enabled: true
   tier_integration:
     cache_on_tier_access: true
     auto_promote_threshold: 10  # accesses/day to promote cold to warm
     ml_prefetch_tiers: [hot, warm]
-```
+
+```bash
 
 ## Cost Optimization Strategies
 
 ### Access-Based Tiering
 
 ```yaml
+
 tiering:
   access_based:
     enabled: true
     hot_to_warm: {days_since_access: 30, min_accesses_to_stay: 5}
     warm_to_cold: {days_since_access: 60}
     cold_to_archive: {days_since_access: 180}
-```
+
+```bash
 
 ### Intelligent Tiering
 
 ```yaml
+
 tiering:
   intelligent:
     enabled: true
     optimization_frequency: daily
     cost_weight: 0.7
     performance_weight: 0.3
-```
+
+```bash
 
 ### Cost Savings
 
 | Scenario | Hot Only | With Tiering | Savings |
-|----------|----------|--------------|---------|
+| ---------- | ---------- | -------------- | --------- |
 | 100TB, 10% active | $2,500/mo | $850/mo | 66% |
 | 1PB, 5% active | $25,000/mo | $5,200/mo | 79% |
 
@@ -1727,7 +1833,8 @@ tiering:
 
 ### Prometheus Metrics
 
-```
+```bash
+
 nebulaio_tier_objects_total{tier="hot|warm|cold|archive"}
 nebulaio_tier_bytes_total{tier="hot|warm|cold|archive"}
 nebulaio_tier_transitions_total{from="hot",to="warm"}
@@ -1753,11 +1860,13 @@ nebulaio_tier_cooldown_objects{tier="hot|warm|cold|archive"}
 nebulaio_ml_prediction_accuracy{model="name"}
 nebulaio_ml_recommendations_total{status="applied|rejected|pending"}
 nebulaio_ml_anomalies_detected_total{type="access|cost|capacity"}
-```
+
+```bash
 
 ### CLI Monitoring
 
 ```bash
+
 nebulaio-cli admin tier stats
 # Tier       Objects      Size          Percentage
 # hot        1,234,567    45.2 TB       15.2%
@@ -1778,6 +1887,7 @@ nebulaio-cli policy stats --policy nightly-archival --days 30
 # 2024-01-15    8,234       123 GB      12m         success
 # 2024-01-14    7,891       118 GB      11m         success
 # 2024-01-13    0           0           1s          skipped (blackout)
+
 ```
 
 ## Best Practices
@@ -1796,7 +1906,7 @@ nebulaio-cli policy stats --policy nightly-archival --days 30
 ## Troubleshooting
 
 | Issue | Solution |
-|-------|----------|
+| ------- | ---------- |
 | Objects not transitioning | Check lifecycle policy filters and scanner interval |
 | Slow archive retrieval | Use expedited tier (higher cost) or pre-warm objects |
 | High transition costs | Increase age thresholds or use size filters |

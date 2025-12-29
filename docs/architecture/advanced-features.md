@@ -5,6 +5,7 @@ This document provides architectural diagrams for NebulaIO's advanced features.
 ## System Overview
 
 ```mermaid
+
 graph TB
     subgraph "Client Layer"
         CLI[CLI Tools]
@@ -68,11 +69,13 @@ graph TB
     S3API --> Audit
     AdminAPI --> Audit
     Audit --> Integrity
-```
+
+```bash
 
 ## DRAM Cache Architecture
 
 ```mermaid
+
 graph TB
     subgraph "Request Flow"
         Client[S3 Client]
@@ -113,11 +116,13 @@ graph TB
 
     Prefetch -.->|Sequential Access| Backend
     Prefetch -.->|Preload| T1
-```
+
+```bash
 
 ### Cache Data Flow
 
 ```mermaid
+
 sequenceDiagram
     participant C as Client
     participant A as S3 API
@@ -147,11 +152,13 @@ sequenceDiagram
         L-->>A: data
         A-->>C: 200 OK (data)
     end
-```
+
+```bash
 
 ## Data Firewall Architecture
 
 ```mermaid
+
 graph TB
     subgraph "Incoming Request"
         Req[HTTP Request]
@@ -195,11 +202,13 @@ graph TB
 
     Allow -->|Allowed| Pass
     Allow -->|Denied| Block
-```
+
+```bash
 
 ### Rate Limiting Flow
 
 ```mermaid
+
 sequenceDiagram
     participant C as Client
     participant RL as Rate Limiter
@@ -227,11 +236,13 @@ sequenceDiagram
         TB-->>RL: rate limited
         RL-->>C: 429 TooManyRequests
     end
-```
+
+```bash
 
 ## S3 Select Architecture
 
 ```mermaid
+
 graph TB
     subgraph "Request"
         Client[Client]
@@ -280,11 +291,13 @@ graph TB
     Parquet --> Obj
 
     Obj --> Cache
-```
+
+```bash
 
 ### S3 Select Query Flow
 
 ```mermaid
+
 sequenceDiagram
     participant C as Client
     participant A as S3 API
@@ -311,11 +324,13 @@ sequenceDiagram
 
     E-->>A: stats
     A-->>C: end of results
-```
+
+```bash
 
 ## Batch Replication Architecture
 
 ```mermaid
+
 graph TB
     subgraph "Job Management"
         API[Admin API]
@@ -367,11 +382,13 @@ graph TB
     Progress --> Retry
 
     Retry --> Queue
-```
+
+```bash
 
 ### Batch Job Lifecycle
 
 ```mermaid
+
 stateDiagram-v2
     [*] --> Pending: Create Job
     Pending --> Running: Start
@@ -385,11 +402,13 @@ stateDiagram-v2
     Completed --> [*]
     Failed --> [*]
     Cancelled --> [*]
-```
+
+```bash
 
 ## Enhanced Audit Logging Architecture
 
 ```mermaid
+
 graph TB
     subgraph "Event Sources"
         S3[S3 API]
@@ -441,11 +460,13 @@ graph TB
 
     Chain --> Verify
     Export --> Verify
-```
+
+```bash
 
 ### Integrity Chain
 
 ```mermaid
+
 sequenceDiagram
     participant E as Event
     participant C as Chain
@@ -460,11 +481,13 @@ sequenceDiagram
     C->>S: store(event)
 
     Note over C: Each event's hash includes<br/>the previous event's hash,<br/>creating an unbreakable chain
-```
+
+```bash
 
 ## Compliance Mode Configuration
 
 ```mermaid
+
 graph LR
     subgraph "Compliance Modes"
         None[None]
@@ -504,11 +527,13 @@ graph LR
     FedRAMP --> Masking
     FedRAMP --> Retention
     FedRAMP --> Alerts
-```
+
+```bash
 
 ## Complete Feature Integration
 
 ```mermaid
+
 graph TB
     subgraph "Request Path"
         Client[Client Request]
@@ -553,12 +578,13 @@ graph TB
 
     Batch -->|Replicate| External[Remote Cluster]
     Audit -->|Export| SIEM[SIEM System]
+
 ```
 
 ## Performance Characteristics
 
 | Component | Metric | Value |
-|-----------|--------|-------|
+| ----------- | -------- | ------- |
 | DRAM Cache | Read Latency (p50) | < 50μs |
 | DRAM Cache | Read Latency (p99) | < 150μs |
 | DRAM Cache | Throughput | 10+ GB/s |

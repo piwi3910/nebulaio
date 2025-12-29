@@ -18,28 +18,33 @@ S3 Express One Zone is designed for:
 Append data to existing objects without overwriting:
 
 ```bash
+
 # Append data to an object
 curl -X POST "http://localhost:9000/my-express-bucket--use1-az1--x-s3/data.log?append" \
   -H "Content-Type: text/plain" \
   -d "New log entry at $(date)"
-```
+
+```bash
 
 ### Session-Based Authentication
 
 Create sessions for reduced authentication overhead:
 
 ```bash
+
 # Create a session
 curl -X POST "http://localhost:9000/?session" \
   -H "X-Amz-Create-Session-Mode: ReadWrite" \
   -H "Authorization: AWS4-HMAC-SHA256 ..."
-```
+
+```bash
 
 ### Directory Buckets
 
 Organize objects in a hierarchical structure optimized for single-zone deployments:
 
-```
+```text
+
 bucket--zone--x-s3/
 ├── project-a/
 │   ├── data/
@@ -47,24 +52,28 @@ bucket--zone--x-s3/
 └── project-b/
     ├── data/
     └── models/
-```
+
+```bash
 
 ## Configuration
 
 ### Basic Setup
 
 ```yaml
+
 s3_express:
   enabled: true
   default_zone: use1-az1
   session_duration: 300        # Session validity in seconds
   max_append_size: 5368709120  # 5GB max append size
   enable_atomic_append: true
-```
+
+```bash
 
 ### Multiple Zones
 
 ```yaml
+
 s3_express:
   enabled: true
   default_zone: use1-az1
@@ -77,12 +86,13 @@ s3_express:
       name: US West 2 AZ2
       region: us-west-2
       storage_class: EXPRESS_ONEZONE
-```
+
+```bash
 
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_S3_EXPRESS_ENABLED` | Enable S3 Express | `false` |
 | `NEBULAIO_S3_EXPRESS_DEFAULT_ZONE` | Default availability zone | `use1-az1` |
 
@@ -91,6 +101,7 @@ s3_express:
 ### Python (boto3)
 
 ```python
+
 import boto3
 
 # Create S3 Express client
@@ -117,11 +128,13 @@ s3.put_object(
     Key='training/batch-001.parquet',
     Body=training_data
 )
-```
+
+```bash
 
 ### Go SDK
 
 ```go
+
 import (
     "github.com/aws/aws-sdk-go-v2/service/s3"
     "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -141,11 +154,13 @@ _, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
         },
     },
 })
-```
+
+```bash
 
 ### Atomic Append for Streaming
 
 ```python
+
 import requests
 
 # Append log entries
@@ -158,13 +173,15 @@ for entry in log_stream:
             "Authorization": auth_header
         }
     )
-```
+
+```bash
 
 ## Performance Tuning
 
 ### Optimal Settings for AI/ML
 
 ```yaml
+
 s3_express:
   enabled: true
   default_zone: use1-az1
@@ -176,12 +193,13 @@ s3_express:
       name: GPU Zone
       region: us-east-1
       storage_class: EXPRESS_ONEZONE
-```
+
+```bash
 
 ### Benchmarks
 
 | Operation | Latency | Throughput |
-|-----------|---------|------------|
+| ----------- | --------- | ------------ |
 | PUT (small) | < 1ms | 10,000+ ops/sec |
 | GET (small) | < 500μs | 20,000+ ops/sec |
 | Append | < 2ms | 5,000+ ops/sec |
@@ -192,23 +210,27 @@ s3_express:
 ### GPUDirect Storage
 
 ```yaml
+
 s3_express:
   enabled: true
 gpudirect:
   enabled: true
   # Express buckets are automatically optimized for GPUDirect
-```
+
+```bash
 
 ### Apache Iceberg
 
 ```yaml
+
 s3_express:
   enabled: true
 iceberg:
   enabled: true
   warehouse: s3://warehouse--use1-az1--x-s3/
   # Iceberg metadata stored in Express for fast commits
-```
+
+```bash
 
 ## Troubleshooting
 
@@ -223,8 +245,10 @@ iceberg:
 Enable debug logging:
 
 ```yaml
+
 log_level: debug
-```
+
+```text
 
 Look for logs with `s3_express` tag.
 
@@ -232,20 +256,24 @@ Look for logs with `s3_express` tag.
 
 ### CreateSession
 
-```
+```text
+
 POST /?session HTTP/1.1
 Host: bucket--zone--x-s3.localhost:9000
 X-Amz-Create-Session-Mode: ReadWrite
-```
+
+```bash
 
 ### AppendObject
 
-```
+```text
+
 POST /object-key?append HTTP/1.1
 Host: bucket--zone--x-s3.localhost:9000
 Content-Type: application/octet-stream
 
 [data to append]
+
 ```
 
 ## See Also

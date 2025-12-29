@@ -16,15 +16,17 @@ Configuration values are applied in the following order (highest priority first)
 The default location is `/etc/nebulaio/config.yaml`. Use the `--config` flag for an alternative path:
 
 ```bash
+
 nebulaio --config /path/to/config.yaml
-```
+
+```bash
 
 ## Environment Variables
 
 All options can be set via environment variables using the `NEBULAIO_` prefix. Nested keys use underscores:
 
 | Config Key | Environment Variable |
-|------------|---------------------|
+| ------------ | --------------------- |
 | `node_id` | `NEBULAIO_NODE_ID` |
 | `s3_port` | `NEBULAIO_S3_PORT` |
 | `cluster.bootstrap` | `NEBULAIO_CLUSTER_BOOTSTRAP` |
@@ -36,7 +38,7 @@ All options can be set via environment variables using the `NEBULAIO_` prefix. N
 ## Server Settings
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `node_id` | string | auto-generated | Unique identifier for this node |
 | `node_name` | string | hostname | Human-readable node name |
 | `s3_port` | int | `9000` | Port for S3 API traffic |
@@ -49,7 +51,7 @@ All options can be set via environment variables using the `NEBULAIO_` prefix. N
 NebulaIO is **secure by default** with TLS enabled and automatic certificate generation.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `tls.enabled` | bool | `true` | Enable TLS encryption (enabled by default) |
 | `tls.auto_generate` | bool | `true` | Auto-generate self-signed certificates if none provided |
 | `tls.cert_dir` | string | `./data/certs` | Directory for storing certificates |
@@ -75,7 +77,7 @@ NebulaIO is **secure by default** with TLS enabled and automatic certificate gen
 ## Storage Settings
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `storage.data_dir` | string | `/var/lib/nebulaio` | Root data directory |
 | `storage.backend` | string | `fs` | Storage backend: `fs`, `erasure`, `volume` |
 | `storage.path` | string | `{data_dir}/objects` | Object storage path |
@@ -86,14 +88,14 @@ NebulaIO is **secure by default** with TLS enabled and automatic certificate gen
 The volume backend stores objects in pre-allocated volume files with block-based allocation, optimized for high-throughput workloads.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `storage.volume.max_volume_size` | uint64 | `34359738368` | Maximum volume file size (32GB) |
 | `storage.volume.auto_create` | bool | `true` | Automatically create new volumes when needed |
 
 #### Direct I/O Configuration
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `storage.volume.direct_io.enabled` | bool | `true` | Enable O_DIRECT to bypass kernel cache |
 | `storage.volume.direct_io.block_alignment` | int | `4096` | Buffer/offset alignment (bytes) |
 | `storage.volume.direct_io.use_memory_pool` | bool | `true` | Pool aligned buffers for reduced allocations |
@@ -102,7 +104,7 @@ The volume backend stores objects in pre-allocated volume files with block-based
 #### Raw Device Configuration
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `storage.volume.raw_devices.enabled` | bool | `false` | Enable raw block device access |
 | `storage.volume.raw_devices.safety.check_filesystem` | bool | `true` | Verify no filesystem exists |
 | `storage.volume.raw_devices.safety.require_confirmation` | bool | `true` | Require explicit confirmation |
@@ -113,7 +115,7 @@ The volume backend stores objects in pre-allocated volume files with block-based
 #### Tier Directories (Alternative to Raw Devices)
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `storage.volume.tier_directories.hot` | string | - | Hot tier directory (NVMe) |
 | `storage.volume.tier_directories.warm` | string | - | Warm tier directory (SSD) |
 | `storage.volume.tier_directories.cold` | string | - | Cold tier directory (HDD) |
@@ -127,7 +129,7 @@ The volume backend stores objects in pre-allocated volume files with block-based
 ### Erasure Coding
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `storage.erasure_coding.enabled` | bool | `true` | Enable erasure coding |
 | `storage.erasure_coding.data_shards` | int | `4` | Number of data shards |
 | `storage.erasure_coding.parity_shards` | int | `2` | Number of parity shards |
@@ -139,7 +141,7 @@ The volume backend stores objects in pre-allocated volume files with block-based
 Placement groups define data locality boundaries for erasure coding and tiering operations.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `storage.placement_groups.local_group_id` | string | - | ID of this node's placement group |
 | `storage.placement_groups.min_nodes_for_erasure` | int | `14` | Global minimum nodes for erasure coding |
 | `storage.placement_groups.groups` | list | - | List of placement group definitions |
@@ -147,7 +149,7 @@ Placement groups define data locality boundaries for erasure coding and tiering 
 **Placement Group Definition:**
 
 | Option | Type | Required | Description |
-|--------|------|----------|-------------|
+| -------- | ------ | ---------- | ------------- |
 | `id` | string | Yes | Unique placement group identifier |
 | `name` | string | No | Human-readable name |
 | `datacenter` | string | Yes | Datacenter identifier |
@@ -158,6 +160,7 @@ Placement groups define data locality boundaries for erasure coding and tiering 
 **Example Configuration:**
 
 ```yaml
+
 storage:
   default_redundancy:
     enabled: true
@@ -185,12 +188,13 @@ storage:
 
     replication_targets:
       - pg-dc2  # Cross-datacenter replication
-```
+
+```text
 
 **Environment Variables:**
 
 | Config Key | Environment Variable |
-|------------|---------------------|
+| ------------ | --------------------- |
 | `storage.placement_groups.local_group_id` | `NEBULAIO_STORAGE_PLACEMENT_GROUPS_LOCAL_GROUP_ID` |
 | `storage.placement_groups.min_nodes_for_erasure` | `NEBULAIO_STORAGE_PLACEMENT_GROUPS_MIN_NODES_FOR_ERASURE` |
 
@@ -207,13 +211,14 @@ storage:
 ### Root Credentials
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `auth.root_user` | string | `admin` | Root/admin username |
 | `auth.root_password` | string | - | Root/admin password (**required**) |
 | `auth.jwt_secret` | string | auto-generated | Secret for JWT signing |
 | `auth.jwt_expiry` | duration | `24h` | JWT token expiry time |
 
 > **Password Requirements:** The root password must meet the following criteria:
+>
 > - Minimum 12 characters
 > - At least one uppercase letter
 > - At least one lowercase letter
@@ -224,7 +229,7 @@ storage:
 ### LDAP Integration
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `auth.ldap.enabled` | bool | `false` | Enable LDAP authentication |
 | `auth.ldap.server` | string | - | LDAP server address |
 | `auth.ldap.port` | int | `389` | LDAP port (636 for TLS) |
@@ -237,7 +242,7 @@ storage:
 ### OIDC Integration
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `auth.oidc.enabled` | bool | `false` | Enable OIDC authentication |
 | `auth.oidc.issuer` | string | - | OIDC issuer URL |
 | `auth.oidc.client_id` | string | - | OIDC client ID |
@@ -254,7 +259,7 @@ storage:
 NebulaIO uses [Dragonboat](https://github.com/lni/dragonboat), a high-performance multi-group Raft consensus library.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `cluster.bootstrap` | bool | `false` | Bootstrap new cluster (first node only) |
 | `cluster.shard_id` | uint64 | `1` | Raft shard/group identifier |
 | `cluster.replica_id` | uint64 | auto | Unique replica ID within shard (derived from node_id if not set) |
@@ -280,7 +285,7 @@ NebulaIO uses [Dragonboat](https://github.com/lni/dragonboat), a high-performanc
 ### Gossip Protocol
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `cluster.gossip_port` | int | `9004` | Gossip protocol port |
 | `cluster.gossip_interval` | duration | `200ms` | Gossip interval |
 | `cluster.cluster_name` | string | `default` | Cluster name (must match on all nodes) |
@@ -294,7 +299,7 @@ NebulaIO uses [Dragonboat](https://github.com/lni/dragonboat), a high-performanc
 ### DRAM Cache
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `cache.enabled` | bool | `false` | Enable DRAM cache |
 | `cache.max_size` | int64 | `8589934592` | Maximum cache size (8GB) |
 | `cache.shard_count` | int | `256` | Number of cache shards (reduces lock contention) |
@@ -319,7 +324,7 @@ The data firewall provides rate limiting, bandwidth throttling, and connection m
 ### General Settings
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `firewall.enabled` | bool | `false` | Enable data firewall |
 | `firewall.default_policy` | string | `allow` | Default policy: `allow`, `deny` |
 | `firewall.ip_allowlist` | list | `[]` | Allowed IP addresses/CIDRs |
@@ -329,7 +334,7 @@ The data firewall provides rate limiting, bandwidth throttling, and connection m
 ### Rate Limiting
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `firewall.rate_limiting.enabled` | bool | `false` | Enable rate limiting |
 | `firewall.rate_limiting.requests_per_second` | int | `1000` | Global requests per second limit |
 | `firewall.rate_limiting.burst_size` | int | `100` | Maximum burst size |
@@ -340,7 +345,7 @@ The data firewall provides rate limiting, bandwidth throttling, and connection m
 ### Bandwidth Throttling
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `firewall.bandwidth.enabled` | bool | `false` | Enable bandwidth throttling |
 | `firewall.bandwidth.max_bytes_per_second` | int64 | `1073741824` | Global max bandwidth (1GB/s) |
 | `firewall.bandwidth.max_bytes_per_second_per_user` | int64 | `104857600` | Per-user bandwidth (100MB/s) |
@@ -349,7 +354,7 @@ The data firewall provides rate limiting, bandwidth throttling, and connection m
 ### Connection Limits
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `firewall.connections.enabled` | bool | `false` | Enable connection limiting |
 | `firewall.connections.max_connections` | int | `10000` | Maximum concurrent connections |
 | `firewall.connections.max_connections_per_ip` | int | `100` | Per-IP connection limit |
@@ -363,7 +368,7 @@ The data firewall provides rate limiting, bandwidth throttling, and connection m
 Enhanced audit logging for compliance and security monitoring.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `audit.enabled` | bool | `true` | Enable audit logging |
 | `audit.compliance_mode` | string | `none` | Compliance standard: `none`, `soc2`, `pci`, `hipaa`, `gdpr`, `fedramp` |
 | `audit.file_path` | string | `./data/audit/audit.log` | Audit log file path |
@@ -376,7 +381,7 @@ Enhanced audit logging for compliance and security monitoring.
 ### Audit Log Rotation
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `audit.rotation.enabled` | bool | `true` | Enable log rotation |
 | `audit.rotation.max_size_mb` | int | `100` | Max file size before rotation |
 | `audit.rotation.max_backups` | int | `10` | Max rotated files to keep |
@@ -386,7 +391,7 @@ Enhanced audit logging for compliance and security monitoring.
 ### Audit Webhook
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `audit.webhook.enabled` | bool | `false` | Enable webhook output |
 | `audit.webhook.url` | string | - | Webhook endpoint URL |
 | `audit.webhook.auth_token` | string | - | Authentication token |
@@ -398,7 +403,7 @@ Enhanced audit logging for compliance and security monitoring.
 ## Logging and Metrics
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `log_level` | string | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `log_format` | string | `json` | Log format: `json`, `text` |
 | `log_output` | string | `stdout` | Output: `stdout`, `stderr`, or file path |
@@ -416,7 +421,7 @@ All AI/ML features are disabled by default and enabled via configuration.
 Ultra-low latency storage with atomic append operations.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `s3_express.enabled` | bool | `false` | Enable S3 Express One Zone |
 | `s3_express.default_zone` | string | `use1-az1` | Default availability zone |
 | `s3_express.session_duration` | int | `3600` | Session token duration (seconds) |
@@ -428,7 +433,7 @@ Ultra-low latency storage with atomic append operations.
 Native table format support for data lakehouse workloads.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `iceberg.enabled` | bool | `false` | Enable Iceberg support |
 | `iceberg.catalog_type` | string | `rest` | Catalog type: `rest`, `hive`, `glue` |
 | `iceberg.catalog_uri` | string | `http://localhost:8181` | Catalog service URI |
@@ -444,7 +449,7 @@ Native table format support for data lakehouse workloads.
 Model Context Protocol server for Claude, ChatGPT, and other AI agents.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `mcp.enabled` | bool | `false` | Enable MCP server |
 | `mcp.port` | int | `9005` | MCP server port |
 | `mcp.max_connections` | int | `100` | Maximum concurrent connections |
@@ -460,7 +465,7 @@ Model Context Protocol server for Claude, ChatGPT, and other AI agents.
 Zero-copy GPU-to-storage transfers for ML training workloads.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `gpudirect.enabled` | bool | `false` | Enable GPUDirect Storage |
 | `gpudirect.devices` | list | `[]` | GPU device IDs to use |
 | `gpudirect.buffer_pool_size` | int64 | `1073741824` | Buffer pool size (1GB) |
@@ -475,7 +480,7 @@ Zero-copy GPU-to-storage transfers for ML training workloads.
 NVIDIA BlueField SmartNIC offload for crypto and compression.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `dpu.enabled` | bool | `false` | Enable DPU offload |
 | `dpu.device_index` | int | `0` | DPU device index |
 | `dpu.enable_crypto` | bool | `true` | Enable crypto offload |
@@ -493,7 +498,7 @@ NVIDIA BlueField SmartNIC offload for crypto and compression.
 Ultra-low latency object access via InfiniBand/RoCE.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `rdma.enabled` | bool | `false` | Enable RDMA transport |
 | `rdma.port` | int | `9100` | RDMA listener port |
 | `rdma.device_name` | string | `mlx5_0` | RDMA device name |
@@ -512,7 +517,7 @@ Ultra-low latency object access via InfiniBand/RoCE.
 AI inference on stored objects using NVIDIA NIM.
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| -------- | ------ | --------- | ------------- |
 | `nim.enabled` | bool | `false` | Enable NIM integration |
 | `nim.endpoints` | list | `[https://integrate.api.nvidia.com/v1]` | NIM server endpoints |
 | `nim.api_key` | string | - | NVIDIA API key |
@@ -535,6 +540,7 @@ AI inference on stored objects using NVIDIA NIM.
 ### Development (Single Node)
 
 ```yaml
+
 node_id: dev-node
 s3_port: 9000
 admin_port: 9001
@@ -556,11 +562,13 @@ auth:
 
 log_level: debug
 log_format: text
-```
+
+```bash
 
 ### High-Performance Volume Storage
 
 ```yaml
+
 node_id: volume-node
 s3_port: 9000
 admin_port: 9001
@@ -580,11 +588,13 @@ auth:
   root_password: ${NEBULAIO_AUTH_ROOT_PASSWORD}
 
 log_level: info
-```
+
+```bash
 
 ### Production (3-Node Cluster)
 
 ```yaml
+
 node_id: prod-node-1
 node_name: nebulaio-prod-1
 
@@ -646,11 +656,13 @@ metrics:
 audit:
   enabled: true
   output: /var/log/nebulaio/audit.log
-```
+
+```bash
 
 ### High-Performance Configuration
 
 ```yaml
+
 storage:
   erasure_coding:
     data_shards: 8
@@ -669,11 +681,13 @@ resources:
   max_connections: 50000
   workers: 0  # auto (NumCPU)
   io_threads: 8
-```
+
+```bash
 
 ### LDAP Authentication
 
 ```yaml
+
 auth:
   ldap:
     enabled: true
@@ -684,11 +698,13 @@ auth:
     bind_password: ${NEBULAIO_LDAP_BIND_PASSWORD}
     base_dn: ou=users,dc=example,dc=com
     user_filter: "(uid=%s)"
-```
+
+```bash
 
 ### OIDC Authentication
 
 ```yaml
+
 auth:
   oidc:
     enabled: true
@@ -697,18 +713,21 @@ auth:
     client_secret: ${NEBULAIO_OIDC_CLIENT_SECRET}
     redirect_url: https://storage.example.com/oauth/callback
     scopes: [openid, profile, email, groups]
-```
+
+```text
 
 ---
 
 ## Validating Configuration
 
 ```bash
+
 # Check configuration syntax
 nebulaio config validate --config /etc/nebulaio/config.yaml
 
 # Show effective configuration (with defaults)
 nebulaio config show --config /etc/nebulaio/config.yaml
+
 ```
 
 ---

@@ -15,7 +15,8 @@ Enhanced Audit Logging delivers:
 
 ## Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────┐
 │                  Enhanced Audit Logger                       │
 ├─────────────────────────────────────────────────────────────┤
@@ -36,11 +37,13 @@ Enhanced Audit Logging delivers:
 │        │ (Rotate) │   │  (HTTP/S)    │  │  (CEF/JSON)  │    │
 │        └──────────┘   └──────────────┘  └──────────────┘    │
 └─────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ## Configuration
 
 ```yaml
+
 audit:
   enabled: true
   compliance_mode: soc2              # none | soc2 | pci | hipaa | gdpr | fedramp
@@ -82,7 +85,8 @@ audit:
     batch_size: 100
     flush_interval: 5s
     retry_count: 3
-```
+
+```bash
 
 ## Compliance Modes
 
@@ -91,9 +95,11 @@ audit:
 Focuses on security, availability, and confidentiality:
 
 ```yaml
+
 audit:
   compliance_mode: soc2
-```
+
+```text
 
 Captures:
 
@@ -108,6 +114,7 @@ Captures:
 Payment Card Industry compliance:
 
 ```yaml
+
 audit:
   compliance_mode: pci
   mask_sensitive_data: true
@@ -115,7 +122,8 @@ audit:
     - credit_card
     - cvv
     - pan
-```
+
+```text
 
 Captures:
 
@@ -129,6 +137,7 @@ Captures:
 Healthcare data protection:
 
 ```yaml
+
 audit:
   compliance_mode: hipaa
   mask_sensitive_data: true
@@ -136,7 +145,8 @@ audit:
     - patient_id
     - ssn
     - medical_record
-```
+
+```text
 
 Captures:
 
@@ -150,10 +160,12 @@ Captures:
 EU data protection:
 
 ```yaml
+
 audit:
   compliance_mode: gdpr
   mask_sensitive_data: true
-```
+
+```text
 
 Captures:
 
@@ -167,10 +179,12 @@ Captures:
 US government compliance:
 
 ```yaml
+
 audit:
   compliance_mode: fedramp
   integrity_enabled: true
-```
+
+```text
 
 Captures:
 
@@ -184,6 +198,7 @@ Captures:
 ### Standard Event
 
 ```json
+
 {
   "id": "evt_abc123",
   "timestamp": "2024-01-15T10:30:00.000Z",
@@ -210,11 +225,13 @@ Captures:
   "duration_ms": 45,
   "bytes_out": 1048576
 }
-```
+
+```bash
 
 ### Enhanced Event (with Compliance)
 
 ```json
+
 {
   "id": "evt_abc123",
   "timestamp": "2024-01-15T10:30:00.000Z",
@@ -237,14 +254,15 @@ Captures:
     "city": "San Francisco"
   }
 }
-```
+
+```bash
 
 ## Event Types
 
 ### S3 Object Events
 
 | Event Type | Description |
-|------------|-------------|
+| ------------ | ------------- |
 | s3:ObjectCreated:Put | Object uploaded |
 | s3:ObjectCreated:Post | Object uploaded via POST |
 | s3:ObjectCreated:Copy | Object copied |
@@ -257,7 +275,7 @@ Captures:
 ### S3 Bucket Events
 
 | Event Type | Description |
-|------------|-------------|
+| ------------ | ------------- |
 | s3:BucketCreated | Bucket created |
 | s3:BucketRemoved | Bucket deleted |
 | s3:BucketListed | Bucket contents listed |
@@ -265,7 +283,7 @@ Captures:
 ### Authentication Events
 
 | Event Type | Description |
-|------------|-------------|
+| ------------ | ------------- |
 | auth:Login | User logged in |
 | auth:LoginFailed | Failed login attempt |
 | auth:Logout | User logged out |
@@ -274,7 +292,7 @@ Captures:
 ### IAM Events
 
 | Event Type | Description |
-|------------|-------------|
+| ------------ | ------------- |
 | iam:UserCreated | User account created |
 | iam:UserUpdated | User account modified |
 | iam:UserDeleted | User account deleted |
@@ -290,18 +308,21 @@ Captures:
 
 Each event includes a cryptographic hash that chains to the previous event:
 
-```
+```text
+
 Event 1: hash(event_1 + secret) = H1
 Event 2: hash(event_2 + H1 + secret) = H2
 Event 3: hash(event_3 + H2 + secret) = H3
 ...
-```
+
+```text
 
 This creates an immutable chain where tampering is detectable.
 
 ### Verification
 
 ```bash
+
 curl -X POST http://localhost:9000/admin/audit/verify \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -309,11 +330,13 @@ curl -X POST http://localhost:9000/admin/audit/verify \
     "start_time": "2024-01-01T00:00:00Z",
     "end_time": "2024-01-31T23:59:59Z"
   }'
-```
+
+```text
 
 Response:
 
 ```json
+
 {
   "valid": true,
   "events_verified": 125678,
@@ -321,7 +344,8 @@ Response:
   "first_event": "evt_abc123",
   "last_event": "evt_xyz789"
 }
-```
+
+```bash
 
 ## Data Masking
 
@@ -330,6 +354,7 @@ Response:
 Sensitive fields are automatically masked:
 
 ```json
+
 {
   "user_identity": {
     "username": "alice",
@@ -340,11 +365,13 @@ Sensitive fields are automatically masked:
     "ssn": "***-**-6789"
   }
 }
-```
+
+```bash
 
 ### Custom Patterns
 
 ```yaml
+
 audit:
   mask_sensitive_data: true
   sensitive_fields:
@@ -355,13 +382,15 @@ audit:
   mask_patterns:
     - "\\b\\d{3}-\\d{2}-\\d{4}\\b"  # SSN pattern
     - "\\b\\d{16}\\b"               # Credit card
-```
+
+```bash
 
 ## Output Destinations
 
 ### File Output
 
 ```yaml
+
 audit:
   file_path: /var/log/nebulaio/audit.log
   rotation:
@@ -370,11 +399,13 @@ audit:
     max_age_days: 7
     max_backups: 10
     compress: true
-```
+
+```bash
 
 ### Webhook Output
 
 ```yaml
+
 audit:
   webhook:
     enabled: true
@@ -386,11 +417,13 @@ audit:
     flush_interval: 5s
     retry_count: 3
     timeout: 30s
-```
+
+```bash
 
 ### Multiple Outputs
 
 ```yaml
+
 audit:
   outputs:
     - type: file
@@ -399,53 +432,64 @@ audit:
       url: https://siem.example.com/events
     - type: webhook
       url: https://backup-siem.example.com/events
-```
+
+```bash
 
 ## Export Formats
 
 ### JSON Export
 
 ```bash
+
 curl -X GET "http://localhost:9000/admin/audit/export?format=json&start=2024-01-01&end=2024-01-31" \
   -H "Authorization: Bearer $TOKEN" \
   -o audit-export.json
-```
+
+```bash
 
 ### CSV Export
 
 ```bash
+
 curl -X GET "http://localhost:9000/admin/audit/export?format=csv&start=2024-01-01&end=2024-01-31" \
   -H "Authorization: Bearer $TOKEN" \
   -o audit-export.csv
-```
+
+```bash
 
 ### CEF Export (SIEM Integration)
 
 ```bash
+
 curl -X GET "http://localhost:9000/admin/audit/export?format=cef&start=2024-01-01&end=2024-01-31" \
   -H "Authorization: Bearer $TOKEN" \
   -o audit-export.cef
-```
+
+```text
 
 CEF format example:
 
-```
+```text
+
 CEF:0|NebulaIO|AuditLog|1.0|s3:ObjectAccessed:Get|Object Access|5|src=192.168.1.100 suser=alice dst=my-bucket/file.pdf outcome=success
-```
+
+```bash
 
 ## API Usage
 
 ### Query Audit Events
 
 ```bash
+
 curl -X GET "http://localhost:9000/admin/audit/events?bucket=my-bucket&user=alice&start=2024-01-01" \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```bash
 
 ### Filter Options
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | start_time | Start of time range | 2024-01-01T00:00:00Z |
 | end_time | End of time range | 2024-01-31T23:59:59Z |
 | bucket | Filter by bucket | my-bucket |
@@ -459,13 +503,16 @@ curl -X GET "http://localhost:9000/admin/audit/events?bucket=my-bucket&user=alic
 ### Get Audit Statistics
 
 ```bash
+
 curl -X GET "http://localhost:9000/admin/audit/stats?start=2024-01-01&end=2024-01-31" \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```text
 
 Response:
 
 ```json
+
 {
   "total_events": 1234567,
   "events_by_type": {
@@ -483,81 +530,97 @@ Response:
   ],
   "integrity_status": "valid"
 }
-```
+
+```bash
 
 ## Log Rotation
 
 ### Size-Based
 
 ```yaml
+
 rotation:
   enabled: true
   max_size_mb: 100    # Rotate when file reaches 100MB
-```
+
+```bash
 
 ### Time-Based
 
 ```yaml
+
 rotation:
   enabled: true
   max_age_days: 7     # Rotate weekly
-```
+
+```bash
 
 ### Retention
 
 ```yaml
+
 rotation:
   max_backups: 10     # Keep 10 rotated files
   compress: true      # Compress with gzip
-```
+
+```bash
 
 ### Rotated File Naming
 
-```
+```text
+
 audit.log           # Current log
 audit.log.1.gz      # Most recent rotation
 audit.log.2.gz      # Second most recent
 ...
 audit.log.10.gz     # Oldest (will be deleted on next rotation)
-```
+
+```bash
 
 ## SIEM Integration
 
 ### Splunk
 
 ```yaml
+
 audit:
   webhook:
     url: https://splunk.example.com:8088/services/collector/event
     headers:
       Authorization: "Splunk YOUR-HEC-TOKEN"
-```
+
+```bash
 
 ### Elasticsearch
 
 ```yaml
+
 audit:
   webhook:
     url: https://elasticsearch.example.com:9200/nebulaio-audit/_doc
     headers:
       Authorization: "Basic base64-credentials"
-```
+
+```bash
 
 ### Datadog
 
 ```yaml
+
 audit:
   webhook:
     url: https://http-intake.logs.datadoghq.com/v1/input
     headers:
       DD-API-KEY: "your-api-key"
-```
+
+```bash
 
 ## Monitoring
 
 ### Prometheus Metrics
 
-```
+```bash
+
 # Audit events by type
 nebulaio_audit_events_total{event_type="...",result="success|failure"}
 
@@ -570,6 +633,7 @@ nebulaio_audit_integrity_valid
 # Webhook delivery
 nebulaio_audit_webhook_deliveries_total{status="success|failure"}
 nebulaio_audit_webhook_latency_seconds
+
 ```
 
 ## Best Practices

@@ -19,7 +19,7 @@ Gzip provides wide compatibility with existing tools and systems. Preferred for 
 ## Algorithm Comparison
 
 | Algorithm | Compression Ratio | Compression Speed | Decompression Speed | Best For |
-|-----------|-------------------|-------------------|---------------------|----------|
+| ----------- | ------------------- | ------------------- | --------------------- | ---------- |
 | Zstandard | Excellent (3-5x) | Fast (500 MB/s) | Very Fast (1500 MB/s) | General purpose, default |
 | LZ4 | Good (2-3x) | Very Fast (800 MB/s) | Extremely Fast (4000 MB/s) | Real-time workloads |
 | Gzip | Good (3-4x) | Moderate (100 MB/s) | Fast (400 MB/s) | Legacy compatibility |
@@ -27,6 +27,7 @@ Gzip provides wide compatibility with existing tools and systems. Preferred for 
 ## Configuration Options
 
 ```yaml
+
 compression:
   algorithm: zstd           # none, zstd, lz4, gzip
   level: 3                  # 1=fastest, 3=default, 9=best ratio
@@ -36,12 +37,13 @@ compression:
     - image/png
     - video/mp4
     - application/zip
-```
+
+```bash
 
 ### Compression Levels
 
 | Level | Name | Description | Use Case |
-|-------|------|-------------|----------|
+| ------- | ------ | ------------- | ---------- |
 | 1 | Fastest | Minimal compression, maximum speed | Real-time streaming |
 | 3 | Default | Balanced speed and compression | General workloads |
 | 9 | Best | Maximum compression, slower speed | Archival storage |
@@ -51,17 +53,19 @@ compression:
 Configure compression per bucket:
 
 ```bash
+
 # Set bucket compression via CLI
 nebulaio bucket set-compression my-bucket --algorithm zstd --level 5
 
 # Disable compression for media bucket
 nebulaio bucket set-compression media-bucket --algorithm none
-```
+
+```bash
 
 ### Recommended Settings by Bucket Type
 
 | Bucket Type | Algorithm | Level | Min Size |
-|-------------|-----------|-------|----------|
+| ------------- | ----------- | ------- | ---------- |
 | Log archives | zstd | 9 | 1KB |
 | Hot data cache | lz4 | 1 | 4KB |
 | Media storage | none | - | - |
@@ -83,18 +87,20 @@ NebulaIO automatically skips compression for already-compressed content types:
 ### Custom Exclusions
 
 ```yaml
+
 compression:
   exclude_types:
     - application/x-custom-compressed
     - application/octet-stream
-```
+
+```bash
 
 ## Performance Benchmarks
 
 ### Compression Ratios by Data Type
 
 | Data Type | Zstd Ratio | LZ4 Ratio | Gzip Ratio |
-|-----------|------------|-----------|------------|
+| ----------- | ------------ | ----------- | ------------ |
 | JSON logs | 5.5x | 3.5x | 5.0x |
 | CSV data | 4.5x | 3.1x | 4.2x |
 | XML documents | 6.6x | 4.0x | 5.9x |
@@ -104,7 +110,7 @@ compression:
 ### Throughput Benchmarks
 
 | Algorithm | Level | Compress | Decompress | CPU Usage |
-|-----------|-------|----------|------------|-----------|
+| ----------- | ------- | ---------- | ------------ | ----------- |
 | Zstd | 1 | 650 MB/s | 1600 MB/s | Low |
 | Zstd | 3 | 450 MB/s | 1500 MB/s | Medium |
 | Zstd | 9 | 80 MB/s | 1400 MB/s | High |
@@ -130,6 +136,7 @@ compression:
 ### Monitor Compression Effectiveness
 
 ```bash
+
 nebulaio admin compression-stats
 
 # Output:
@@ -138,12 +145,13 @@ nebulaio admin compression-stats
 # Original size: 5.2 TB
 # Compressed size: 1.8 TB
 # Space saved: 3.4 TB (65%)
+
 ```
 
 ### Storage Cost Savings
 
 | Data Type | Storage Saved | Annual Savings (per TB) |
-|-----------|---------------|-------------------------|
+| ----------- | --------------- | ------------------------- |
 | Log data | 70-80% | $150-200 |
 | JSON/API | 60-75% | $120-180 |
 | Text files | 50-65% | $100-150 |

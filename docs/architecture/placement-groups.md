@@ -6,7 +6,8 @@ Placement groups are the fundamental unit of data locality and fault isolation i
 
 A placement group is a logical collection of storage nodes that share data locality for erasure coding and tiering operations. Objects are stored within a single placement group, while cross-placement group operations are reserved for disaster recovery (full object replication).
 
-```
+```text
+
                     ┌─────────────────────────────────────────────────────┐
                     │                    NebulaIO Cluster                 │
                     │                                                     │
@@ -26,7 +27,8 @@ A placement group is a logical collection of storage nodes that share data local
    │  - Tiering (hot/warm/cold)       │    │                                 │
    │  - Object versioning             │    │                                 │
    └──────────────────────────────────┘    └─────────────────────────────────┘
-```
+
+```bash
 
 ## Design Principles
 
@@ -57,6 +59,7 @@ Each placement group operates independently:
 ### PlacementGroup Structure
 
 ```go
+
 type PlacementGroup struct {
     ID          PlacementGroupID     // Unique identifier
     Name        string               // Human-readable name
@@ -68,13 +71,15 @@ type PlacementGroup struct {
     IsLocal     bool                 // True if this node belongs here
     Status      PlacementGroupStatus // Current health status
 }
-```
+
+```bash
 
 ### PlacementGroupManager
 
 The manager handles all placement group operations:
 
 ```go
+
 type PlacementGroupManager struct {
     config      PlacementGroupConfig
     localGroup  *PlacementGroup          // This node's placement group
@@ -94,14 +99,15 @@ type PlacementGroupManager struct {
     // Audit logging
     auditLogger PlacementGroupAuditLogger
 }
-```
+
+```bash
 
 ## Status Model
 
 Placement groups have four possible statuses:
 
 | Status | Condition | Impact |
-|--------|-----------|--------|
+| -------- | ----------- | -------- |
 | `healthy` | `len(Nodes) >= MinNodes` | Full functionality |
 | `degraded` | `len(Nodes) < MinNodes` | Reduced redundancy, warns |
 | `offline` | No nodes available | Read-only or unavailable |
@@ -109,7 +115,8 @@ Placement groups have four possible statuses:
 
 ### Status Transitions
 
-```
+```text
+
                     ┌──────────┐
                     │  unknown │
                     └────┬─────┘
@@ -128,7 +135,8 @@ Placement groups have four possible statuses:
 ┌───────────┐              ┌───────────┐
 │  offline  │◄─────────────│  offline  │
 └───────────┘              └───────────┘
-```
+
+```bash
 
 ## Shard Distribution
 
@@ -137,8 +145,10 @@ Placement groups have four possible statuses:
 Objects are distributed across nodes using consistent hashing:
 
 ```go
+
 func GetShardPlacementNodesForObject(bucket, key string, numShards int) ([]string, error)
-```
+
+```text
 
 **Algorithm:**
 
@@ -154,7 +164,8 @@ func GetShardPlacementNodesForObject(bucket, key string, numShards int) ([]strin
 
 ### Erasure Coding Integration
 
-```
+```text
+
 Object (1MB)
     │
     ▼
@@ -170,13 +181,15 @@ Object (1MB)
    Node1  Node2  Node3      Node10 Node11 Node14
 
    (All nodes within the same Placement Group)
-```
+
+```bash
 
 ## Configuration
 
 ### YAML Configuration
 
 ```yaml
+
 storage:
   default_redundancy:
     enabled: true
@@ -205,7 +218,8 @@ storage:
 
     replication_targets:
       - pg-dc2  # DR target for pg-dc1
-```
+
+```bash
 
 ### Configuration Validation
 
@@ -232,6 +246,7 @@ Frequently accessed data is cached to reduce lock contention:
 - Lock upgrade pattern for cache misses
 
 ```go
+
 // Read path (optimized)
 func (m *PlacementGroupManager) LocalGroupNodes() []string {
     m.mu.RLock()
@@ -249,7 +264,8 @@ func (m *PlacementGroupManager) LocalGroupNodes() []string {
     m.updateLocalNodesCache()
     // ... return copy
 }
-```
+
+```bash
 
 ## Audit Logging
 
@@ -258,7 +274,7 @@ All membership changes are logged for compliance:
 ### Event Types
 
 | Event | Description |
-|-------|-------------|
+| ------- | ------------- |
 | `cluster:PlacementGroup:NodeJoined` | Node added to group |
 | `cluster:PlacementGroup:NodeLeft` | Node removed from group |
 | `cluster:PlacementGroup:StatusChanged` | Group health status changed |
@@ -268,17 +284,19 @@ All membership changes are logged for compliance:
 ### Integration
 
 ```go
+
 // Set up audit logging
 auditAdapter := audit.NewPlacementGroupAuditAdapter(auditLogger)
 pgManager.SetAuditLogger(auditAdapter)
-```
+
+```bash
 
 ## Metrics
 
 ### Prometheus Metrics
 
 | Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
+| -------- | ------ | -------- | ------------- |
 | `nebulaio_placement_group_nodes` | Gauge | group_id, datacenter, region | Node count per group |
 | `nebulaio_placement_group_status` | Gauge | group_id | Status (1=healthy, 2=degraded, 3=offline) |
 | `nebulaio_placement_group_info` | Info | group_id, name, datacenter, region, is_local | Group metadata |
@@ -286,6 +304,7 @@ pgManager.SetAuditLogger(auditAdapter)
 ### Alerting Thresholds
 
 ```yaml
+
 # Example Prometheus alerts
 groups:
   - name: placement_groups
@@ -301,13 +320,15 @@ groups:
         for: 1m
         labels:
           severity: critical
-```
+
+```bash
 
 ## Callback System
 
 Event callbacks allow integration with other subsystems:
 
 ```go
+
 // Register callbacks
 pgManager.SetOnNodeJoinedGroup(func(groupID PlacementGroupID, nodeID string) {
     // Trigger rebalancing, update routing tables, etc.
@@ -320,7 +341,8 @@ pgManager.SetOnNodeLeftGroup(func(groupID PlacementGroupID, nodeID string) {
 pgManager.SetOnGroupStatusChange(func(groupID PlacementGroupID, status PlacementGroupStatus) {
     // Alert, update health checks, etc.
 })
-```
+
+```bash
 
 ### Callback Safety
 
@@ -335,7 +357,7 @@ Callbacks are executed with:
 The manager uses `sync.RWMutex` for concurrent access:
 
 | Operation | Lock Type |
-|-----------|-----------|
+| ----------- | ----------- |
 | Read group info | RLock |
 | Read node list | RLock |
 | Add/remove node | Lock |
@@ -389,7 +411,8 @@ Placement groups integrate with Dragonboat (Raft) for metadata consistency and m
 
 Placement group state is replicated through Raft to ensure consistency:
 
-```
+```text
+
 ┌──────────────────────────────────────────────────────────────────┐
 │                         Raft Consensus                           │
 │                                                                  │
@@ -406,7 +429,8 @@ Placement group state is replicated through Raft to ensure consistency:
 │   │  - Object location mappings              │                  │
 │   └──────────────────────────────────────────┘                  │
 └──────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Membership Coordination
 
@@ -414,9 +438,11 @@ When nodes join or leave a placement group, the changes are proposed through Raf
 
 1. **Node Join Request**
 
-   ```
+   ```text
+
    Client Request → Leader Proposes → Log Replication → Apply Locally
-   ```
+
+   ```text
 
 2. **State Machine Updates**
    - The placement group manager applies membership changes from the committed log
@@ -432,7 +458,7 @@ When nodes join or leave a placement group, the changes are proposed through Raf
 During node failures and leader elections:
 
 | Scenario | Behavior |
-|----------|----------|
+| ---------- | ---------- |
 | Leader fails | New leader elected, placement state intact |
 | Follower fails | Group continues with remaining quorum |
 | Network partition | Minority side cannot modify membership |
@@ -443,6 +469,7 @@ During node failures and leader elections:
 Placement group configuration changes flow through Raft:
 
 ```go
+
 // Configuration change proposal (pseudocode)
 type PlacementGroupConfigChange struct {
     Type     ChangeType     // AddNode, RemoveNode, UpdateConfig
@@ -465,6 +492,7 @@ func (sm *StateMachine) Apply(entry raftpb.Entry) {
         sm.pgManager.RemoveNodeFromGroup(change.GroupID, change.NodeID)
     }
 }
+
 ```
 
 ### Snapshot Strategy

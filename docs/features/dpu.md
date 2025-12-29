@@ -29,16 +29,19 @@ BlueField DPUs are SmartNICs that offload data path processing from the CPU:
 ### Basic Setup
 
 ```yaml
+
 dpu:
   enabled: true
   device_name: mlx5_0
   enable_crypto: true
   enable_compression: true
-```
+
+```bash
 
 ### Advanced Configuration
 
 ```yaml
+
 dpu:
   enabled: true
   device_name: mlx5_0
@@ -47,12 +50,13 @@ dpu:
   enable_rdma: true             # RDMA acceleration
   crypto_queue_size: 256        # Crypto work queue depth
   compression_queue_size: 256   # Compression work queue depth
-```
+
+```bash
 
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_DPU_ENABLED` | Enable DPU offload | `false` |
 | `NEBULAIO_DPU_DEVICE_NAME` | DPU device | `mlx5_0` |
 | `NEBULAIO_DPU_ENABLE_CRYPTO` | Enable crypto offload | `true` |
@@ -65,6 +69,7 @@ dpu:
 Hardware-accelerated encryption:
 
 ```yaml
+
 dpu:
   enabled: true
   enable_crypto: true
@@ -75,7 +80,8 @@ storage:
   encryption:
     enabled: true
     algorithm: AES-256-GCM  # Offloaded to DPU
-```
+
+```text
 
 Supported algorithms:
 
@@ -89,6 +95,7 @@ Supported algorithms:
 Hardware-accelerated compression:
 
 ```yaml
+
 dpu:
   enabled: true
   enable_compression: true
@@ -96,7 +103,8 @@ dpu:
 
 storage:
   compression: deflate  # Offloaded to DPU
-```
+
+```text
 
 Supported algorithms:
 
@@ -108,6 +116,7 @@ Supported algorithms:
 Network-level offload:
 
 ```yaml
+
 dpu:
   enabled: true
   enable_rdma: true
@@ -115,11 +124,13 @@ dpu:
 rdma:
   enabled: true
   device_name: mlx5_0  # Same device as DPU
-```
+
+```bash
 
 ## Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Host System                              │
 │  ┌─────────────────────────────────────────────────────────────┐│
@@ -147,21 +158,22 @@ rdma:
 │  │  └──────────────┘  └──────────────┘  └──────────────────┘   ││
 │  └─────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ## Performance
 
 ### Crypto Offload Benchmarks
 
 | Algorithm | CPU | DPU | Improvement |
-|-----------|-----|-----|-------------|
+| ----------- | ----- | ----- | ------------- |
 | AES-256-GCM | 3.2 GB/s | 25 GB/s | 7.8x |
 | AES-128-GCM | 4.1 GB/s | 25 GB/s | 6.1x |
 
 ### Compression Benchmarks
 
 | Algorithm | CPU | DPU | Improvement |
-|-----------|-----|-----|-------------|
+| ----------- | ----- | ----- | ------------- |
 | Deflate | 800 MB/s | 8 GB/s | 10x |
 | LZ4 | 2.5 GB/s | 12 GB/s | 4.8x |
 
@@ -180,6 +192,7 @@ With DPU offload enabled:
 When DPU is enabled, offload happens automatically:
 
 ```python
+
 import boto3
 
 s3 = boto3.client('s3', endpoint_url='http://localhost:9000')
@@ -192,13 +205,15 @@ s3.put_object(
     Body=large_data,
     ServerSideEncryption='AES256'
 )
-```
+
+```bash
 
 ### Monitoring Offload
 
 Check DPU utilization:
 
 ```bash
+
 # DPU statistics
 curl http://localhost:9001/api/v1/admin/dpu/stats
 
@@ -210,7 +225,8 @@ curl http://localhost:9001/api/v1/admin/dpu/stats
   "compression_ratio": 3.2,
   "rdma_operations": 345678
 }
-```
+
+```bash
 
 ## Troubleshooting
 
@@ -233,6 +249,7 @@ curl http://localhost:9001/api/v1/admin/dpu/stats
 ### Diagnostics
 
 ```bash
+
 # DPU device info
 mlxconfig -d /dev/mst/mt41686_pciconf0 query
 
@@ -241,15 +258,18 @@ doca_info
 
 # Performance counters
 mlxlink -d mlx5_0 -c
-```
+
+```bash
 
 ### Logs
 
 Enable debug logging:
 
 ```yaml
+
 log_level: debug
-```
+
+```text
 
 Look for logs with `dpu` tag.
 
@@ -258,17 +278,20 @@ Look for logs with `dpu` tag.
 ### With GPUDirect
 
 ```yaml
+
 dpu:
   enabled: true
   enable_rdma: true
 gpudirect:
   enabled: true
 # Data flows: GPU <-> DPU <-> Network (bypassing CPU)
-```
+
+```bash
 
 ### With S3 over RDMA
 
 ```yaml
+
 dpu:
   enabled: true
   enable_rdma: true
@@ -277,13 +300,15 @@ rdma:
   enabled: true
   device_name: mlx5_0
 # RDMA traffic encrypted by DPU at line rate
-```
+
+```bash
 
 ## Best Practices
 
 ### Queue Sizing
 
 ```yaml
+
 dpu:
   # High throughput workloads
   crypto_queue_size: 512
@@ -292,6 +317,7 @@ dpu:
   # Low latency workloads
   crypto_queue_size: 128
   compression_queue_size: 128
+
 ```
 
 ### Algorithm Selection

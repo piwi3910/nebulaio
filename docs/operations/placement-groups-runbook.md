@@ -28,31 +28,39 @@ This runbook provides step-by-step procedures for common placement group operati
 1. **Verify node is healthy**:
 
    ```bash
+
    curl -s http://NEW_NODE:9001/health | jq .
-   ```
+
+   ```text
 
 2. **Add node via Admin API**:
 
    ```bash
+
    curl -X POST "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1/nodes" \
      -H "Authorization: Bearer $TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"node_id": "new-node-1"}'
-   ```
+
+   ```text
 
 3. **Verify node joined**:
 
    ```bash
+
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | jq '.nodes'
-   ```
+
+   ```text
 
 4. **Monitor rebalancing** (if enabled):
 
    ```bash
+
    # Watch rebalance progress
    watch -n 5 "curl -s 'http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1/status'"
-   ```
+
+   ```text
 
 **Expected Outcome**:
 
@@ -76,40 +84,50 @@ This runbook provides step-by-step procedures for common placement group operati
 1. **Check group capacity**:
 
    ```bash
+
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | jq '{nodes: .nodes | length, min_nodes: .min_nodes}'
-   ```
+
+   ```text
 
 2. **Drain node (recommended)**:
 
    ```bash
+
    # Mark node as draining - stops new object placement
    curl -X PUT "http://NODE:9001/api/v1/admin/node/drain" \
      -H "Authorization: Bearer $TOKEN" \
      -d '{"drain": true}'
-   ```
+
+   ```text
 
 3. **Wait for active operations to complete**:
 
    ```bash
+
    # Check for in-flight operations
    curl -s "http://NODE:9001/api/v1/admin/node/operations" \
      -H "Authorization: Bearer $TOKEN" | jq '.active_operations'
-   ```
+
+   ```text
 
 4. **Remove node from group**:
 
    ```bash
+
    curl -X DELETE "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1/nodes/old-node-1" \
      -H "Authorization: Bearer $TOKEN"
-   ```
+
+   ```text
 
 5. **Verify removal**:
 
    ```bash
+
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | jq '.nodes'
-   ```
+
+   ```text
 
 **Expected Outcome**:
 
@@ -128,6 +146,7 @@ This runbook provides step-by-step procedures for common placement group operati
 1. **Define group configuration**:
 
    ```yaml
+
    # Add to config.yaml
    storage:
      placement_groups:
@@ -138,11 +157,13 @@ This runbook provides step-by-step procedures for common placement group operati
            region: us-west-2
            min_nodes: 14
            max_nodes: 50
-   ```
+
+   ```text
 
 2. **Create via Admin API**:
 
    ```bash
+
    curl -X POST "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups" \
      -H "Authorization: Bearer $TOKEN" \
      -H "Content-Type: application/json" \
@@ -154,25 +175,30 @@ This runbook provides step-by-step procedures for common placement group operati
        "min_nodes": 14,
        "max_nodes": 50
      }'
-   ```
+
+   ```text
 
 3. **Add initial nodes**:
 
    ```bash
+
    for i in {1..14}; do
      curl -X POST "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc2/nodes" \
        -H "Authorization: Bearer $TOKEN" \
        -d "{\"node_id\": \"dc2-node-$i\"}"
    done
-   ```
+
+   ```text
 
 4. **Configure replication target** (optional):
 
    ```bash
+
    curl -X PUT "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1/replication" \
      -H "Authorization: Bearer $TOKEN" \
      -d '{"targets": ["pg-dc2"]}'
-   ```
+
+   ```text
 
 ---
 
@@ -189,26 +215,32 @@ This runbook provides step-by-step procedures for common placement group operati
 1. **Assess scope**:
 
    ```bash
+
    # Check which group is offline
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups" \
      -H "Authorization: Bearer $TOKEN" | jq '.[] | select(.status == "offline")'
-   ```
+
+   ```text
 
 2. **Check node status**:
 
    ```bash
+
    # List nodes and their status
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/nodes" \
      -H "Authorization: Bearer $TOKEN" | jq '.nodes[] | {id, status, last_seen}'
-   ```
+
+   ```text
 
 3. **Check network connectivity**:
 
    ```bash
+
    # From a healthy node, ping affected nodes
    for node in node1 node2 node3; do
      ping -c 1 $node && echo "$node: OK" || echo "$node: UNREACHABLE"
    done
+
    ```
 
 4. **Check for common failures**:
@@ -224,21 +256,27 @@ This runbook provides step-by-step procedures for common placement group operati
 2. **Restart affected nodes** (if node issue):
 
    ```bash
+
    systemctl restart nebulaio
-   ```
+
+   ```text
 
 3. **Force rejoin** (if nodes are healthy but not rejoining):
 
    ```bash
+
    curl -X POST "http://NODE:9001/api/v1/admin/cluster/rejoin" \
      -H "Authorization: Bearer $TOKEN"
-   ```
+
+   ```text
 
 4. **Add replacement nodes** (if hardware failure):
 
    ```bash
+
    # See "Adding a Node" procedure above
-   ```
+
+   ```text
 
 ---
 
@@ -253,17 +291,21 @@ This runbook provides step-by-step procedures for common placement group operati
 1. **Check current status**:
 
    ```bash
+
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | jq '{status, nodes: .nodes | length, min_nodes}'
-   ```
+
+   ```text
 
 2. **Identify missing nodes**:
 
    ```bash
+
    # Compare expected vs actual
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/nodes?placement_group=pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | jq '.nodes[] | select(.status != "healthy")'
-   ```
+
+   ```text
 
 **Recovery Actions**:
 
@@ -291,14 +333,18 @@ This runbook provides step-by-step procedures for common placement group operati
 1. **Check churn metrics**:
 
    ```bash
+
    curl -s "http://ADMIN_NODE:9090/metrics" | grep nebulaio_placement_group_node
-   ```
+
+   ```text
 
 2. **Review recent events**:
 
    ```bash
+
    # Check audit log
    tail -1000 /var/log/nebulaio/audit.log | grep PlacementGroup
+
    ```
 
 3. **Common causes**:
@@ -326,63 +372,77 @@ This runbook provides step-by-step procedures for common placement group operati
 1. **Pre-flight checks**:
 
    ```bash
+
    # Ensure group is healthy
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | jq '.status'
 
    # Ensure sufficient headroom
    # nodes > min_nodes + 1
-   ```
+
+   ```text
 
 2. **For each node**:
 
    a. **Drain node**:
 
    ```bash
+
    curl -X PUT "http://NODE:9001/api/v1/admin/node/drain" \
      -H "Authorization: Bearer $TOKEN" -d '{"drain": true}'
-   ```
+
+   ```text
 
    b. **Wait for drain completion**:
 
    ```bash
+
    while true; do
      active=$(curl -s "http://NODE:9001/api/v1/admin/node/operations" | jq '.active_operations')
      [ "$active" -eq 0 ] && break
      sleep 5
    done
-   ```
+
+   ```text
 
    c. **Perform upgrade**:
 
    ```bash
+
    systemctl stop nebulaio
    apt-get update && apt-get install nebulaio
    systemctl start nebulaio
-   ```
+
+   ```text
 
    d. **Verify node health**:
 
    ```bash
+
    curl -s "http://NODE:9001/health" | jq '.status'
-   ```
+
+   ```text
 
    e. **Undrain node**:
 
    ```bash
+
    curl -X PUT "http://NODE:9001/api/v1/admin/node/drain" \
      -H "Authorization: Bearer $TOKEN" -d '{"drain": false}'
-   ```
+
+   ```text
 
    f. **Wait for stabilization** (2-5 minutes) before next node
 
 3. **Post-upgrade verification**:
 
    ```bash
+
    # Verify all nodes on same version
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/nodes" \
      -H "Authorization: Bearer $TOKEN" | jq '.nodes[] | {id, version}'
-   ```
+
+   ```text
 
 ---
 
@@ -393,9 +453,11 @@ This runbook provides step-by-step procedures for common placement group operati
 1. **Review current capacity**:
 
    ```bash
+
    curl -s "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" | \
      jq '{nodes: .nodes | length, min_nodes, max_nodes, storage_used_pct}'
+
    ```
 
 2. **Plan expansion**:
@@ -408,10 +470,12 @@ This runbook provides step-by-step procedures for common placement group operati
 4. **Update max_nodes if needed**:
 
    ```bash
+
    curl -X PATCH "http://ADMIN_NODE:9001/api/v1/admin/cluster/placement-groups/pg-dc1" \
      -H "Authorization: Bearer $TOKEN" \
      -d '{"max_nodes": 75}'
-   ```
+
+   ```text
 
 ---
 
@@ -420,7 +484,7 @@ This runbook provides step-by-step procedures for common placement group operati
 ### Key Metrics to Monitor
 
 | Metric | Warning | Critical |
-|--------|---------|----------|
+| -------- | --------- | ---------- |
 | `nebulaio_placement_group_nodes` | < min_nodes * 1.2 | < min_nodes |
 | `nebulaio_placement_group_status` | = 2 (degraded) | = 3 (offline) |
 | Node churn (joins + leaves / hour) | > 5 | > 10 |
@@ -429,6 +493,7 @@ This runbook provides step-by-step procedures for common placement group operati
 ### Dashboard Queries (Prometheus)
 
 ```promql
+
 # Placement group health overview
 nebulaio_placement_group_status
 
@@ -441,6 +506,7 @@ increase(nebulaio_placement_group_node_joined_total[1h])
 
 # Capacity headroom
 nebulaio_placement_group_nodes / nebulaio_placement_group_min_nodes
+
 ```
 
 ### Alert Configuration

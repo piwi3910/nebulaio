@@ -14,7 +14,8 @@ Site Replication provides:
 
 ## Architecture
 
-```
+```text
+
                               Global Metadata Coordinator
                                          │
                     ┌────────────────────┼────────────────────┐
@@ -36,12 +37,13 @@ Site Replication provides:
               │                         │                         │
               └─────────────────────────┴─────────────────────────┘
                               Replication Mesh
-```
+
+```bash
 
 ### Components
 
 | Component | Description |
-|-----------|-------------|
+| ----------- | ------------- |
 | Site | A complete NebulaIO cluster in a datacenter |
 | Replication Agent | Handles bidirectional sync between sites |
 | Metadata Coordinator | Tracks global state and version vectors |
@@ -52,6 +54,7 @@ Site Replication provides:
 ### Primary Site Setup
 
 ```yaml
+
 site_replication:
   enabled: true
   site_name: us-east-1
@@ -76,11 +79,13 @@ site_replication:
       access_key: ${APAC_ACCESS_KEY}
       secret_key: ${APAC_SECRET_KEY}
       region: apac
-```
+
+```bash
 
 ### Peer Site Setup
 
 ```yaml
+
 site_replication:
   enabled: true
   site_name: eu-west-1
@@ -97,7 +102,8 @@ site_replication:
       endpoint: https://nebulaio-apac.example.com:9000
       access_key: ${APAC_ACCESS_KEY}
       secret_key: ${APAC_SECRET_KEY}
-```
+
+```bash
 
 ## Setting Up Site Replication
 
@@ -106,15 +112,18 @@ site_replication:
 Ensure each site has a running NebulaIO cluster:
 
 ```bash
+
 # Verify cluster health on each site
 curl https://us-east.example.com:9000/health/ready
 curl https://eu-west.example.com:9000/health/ready
 curl https://apac.example.com:9000/health/ready
-```
+
+```bash
 
 ### Step 2: Initialize Primary Site
 
 ```bash
+
 # Initialize site replication on primary
 curl -X POST https://us-east.example.com:9000/admin/site-replication/init \
   -H "Authorization: Bearer $TOKEN" \
@@ -123,11 +132,13 @@ curl -X POST https://us-east.example.com:9000/admin/site-replication/init \
     "site_name": "us-east-1",
     "site_region": "us-east"
   }'
-```
+
+```bash
 
 ### Step 3: Add Peer Sites
 
 ```bash
+
 # Add EU site as peer
 curl -X POST https://us-east.example.com:9000/admin/site-replication/peers \
   -H "Authorization: Bearer $TOKEN" \
@@ -151,11 +162,13 @@ curl -X POST https://us-east.example.com:9000/admin/site-replication/peers \
     "secret_key": "...",
     "region": "apac"
   }'
-```
+
+```bash
 
 ### Step 4: Enable Bucket Replication
 
 ```bash
+
 # Replicate specific bucket across all sites
 curl -X PUT https://us-east.example.com:9000/admin/site-replication/buckets/my-bucket \
   -H "Authorization: Bearer $TOKEN" \
@@ -164,21 +177,24 @@ curl -X PUT https://us-east.example.com:9000/admin/site-replication/buckets/my-b
     "replicate_to": ["eu-west-1", "apac-1"],
     "sync_mode": "bidirectional"
   }'
-```
+
+```bash
 
 ### Step 5: Verify Replication Status
 
 ```bash
+
 curl https://us-east.example.com:9000/admin/site-replication/status \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```bash
 
 ## Conflict Resolution
 
 ### Resolution Strategies
 
 | Strategy | Description | Use Case |
-|----------|-------------|----------|
+| ---------- | ------------- | ---------- |
 | `last_write_wins` | Latest timestamp wins | General purpose |
 | `site_priority` | Configured site priority wins | Hierarchical deployments |
 | `version_vector` | Vector clock comparison | Strong consistency needs |
@@ -188,6 +204,7 @@ curl https://us-east.example.com:9000/admin/site-replication/status \
 ### Configuration
 
 ```yaml
+
 site_replication:
   conflict_resolution:
     strategy: last_write_wins
@@ -201,21 +218,25 @@ site_replication:
     # Conflict logging
     log_conflicts: true
     conflict_log_bucket: replication-conflicts
-```
+
+```bash
 
 ### Custom Conflict Resolver
 
 ```yaml
+
 site_replication:
   conflict_resolution:
     strategy: custom
     webhook_url: https://resolver.example.com/resolve
     timeout: 5s
-```
+
+```text
 
 Webhook receives:
 
 ```json
+
 {
   "bucket": "my-bucket",
   "key": "path/to/object",
@@ -236,13 +257,15 @@ Webhook receives:
     }
   ]
 }
-```
+
+```bash
 
 ## Monitoring and Metrics
 
 ### Prometheus Metrics
 
-```
+```bash
+
 # Replication lag by site
 nebulaio_site_replication_lag_seconds{source="us-east-1",target="eu-west-1"}
 
@@ -261,7 +284,8 @@ nebulaio_site_replication_peer_healthy{site="us-east-1",peer="eu-west-1"}
 
 # Sync status
 nebulaio_site_replication_sync_status{site="us-east-1"} # 0=syncing, 1=synced, 2=degraded
-```
+
+```bash
 
 ### Grafana Dashboard
 
@@ -276,14 +300,17 @@ Key panels to configure:
 ### Status API
 
 ```bash
+
 # Overall replication status
 curl https://localhost:9000/admin/site-replication/status \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```text
 
 Response:
 
 ```json
+
 {
   "site": "us-east-1",
   "status": "healthy",
@@ -306,7 +333,8 @@ Response:
   "conflicts_last_hour": 3,
   "bytes_replicated_last_hour": 10737418240
 }
-```
+
+```bash
 
 ## Failover Procedures
 
@@ -315,6 +343,7 @@ Response:
 NebulaIO detects site failures and automatically redirects traffic:
 
 ```yaml
+
 site_replication:
   failover:
     enabled: true
@@ -327,11 +356,13 @@ site_replication:
       enabled: true
       ttl: 30
       provider: route53             # route53, cloudflare, or custom
-```
+
+```bash
 
 ### Manual Failover
 
 ```bash
+
 # Promote peer to primary
 curl -X POST https://eu-west.example.com:9000/admin/site-replication/promote \
   -H "Authorization: Bearer $TOKEN" \
@@ -343,11 +374,13 @@ curl -X POST https://eu-west.example.com:9000/admin/site-replication/promote \
 # Demote old primary when recovered
 curl -X POST https://us-east.example.com:9000/admin/site-replication/demote \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```bash
 
 ### Failover Sequence
 
-```
+```text
+
 1. Site Failure Detected
          │
          ▼
@@ -373,11 +406,13 @@ curl -X POST https://us-east.example.com:9000/admin/site-replication/demote \
          │
          ▼
 9. Restore Normal Operations
-```
+
+```bash
 
 ### Recovery After Failover
 
 ```bash
+
 # Check recovery status
 curl https://us-east.example.com:9000/admin/site-replication/recovery-status \
   -H "Authorization: Bearer $TOKEN"
@@ -390,14 +425,15 @@ curl -X POST https://us-east.example.com:9000/admin/site-replication/resync \
     "mode": "full",
     "from_site": "eu-west-1"
   }'
-```
+
+```bash
 
 ## Network Requirements
 
 ### Port Requirements
 
 | Port | Protocol | Direction | Purpose |
-|------|----------|-----------|---------|
+| ------ | ---------- | ----------- | --------- |
 | 9000 | HTTPS | Bidirectional | S3 API and replication data |
 | 9004 | TCP | Bidirectional | Cluster gossip (if cross-cluster) |
 | 9005 | HTTPS | Bidirectional | Replication control plane |
@@ -405,7 +441,7 @@ curl -X POST https://us-east.example.com:9000/admin/site-replication/resync \
 ### Bandwidth Recommendations
 
 | Deployment Size | Minimum Bandwidth | Recommended |
-|-----------------|-------------------|-------------|
+| ----------------- | ------------------- | ------------- |
 | Small (<1TB) | 100 Mbps | 1 Gbps |
 | Medium (1-10TB) | 1 Gbps | 10 Gbps |
 | Large (>10TB) | 10 Gbps | 25+ Gbps |
@@ -413,6 +449,7 @@ curl -X POST https://us-east.example.com:9000/admin/site-replication/resync \
 ### Latency Considerations
 
 ```yaml
+
 site_replication:
   # Adjust timeouts for high-latency links
   network:
@@ -424,11 +461,13 @@ site_replication:
     max_retries: 3
     retry_backoff: exponential
     retry_max_delay: 30s
-```
+
+```bash
 
 ### Security
 
 ```yaml
+
 site_replication:
   security:
     # Require TLS for all replication traffic
@@ -446,6 +485,7 @@ site_replication:
     encryption:
       enabled: true
       key_id: replication-key
+
 ```
 
 ## Best Practices

@@ -15,6 +15,7 @@ NebulaIO's AI/ML features (S3 Express, GPUDirect, MCP Server, NIM Integration, R
 S3 Express sessions use temporary credentials with limited scope:
 
 ```yaml
+
 s3_express:
   enabled: true
 
@@ -33,11 +34,13 @@ s3_express:
     allowed_cidrs:
       - "10.0.0.0/8"
       - "192.168.0.0/16"
-```
+
+```bash
 
 ### Atomic Append Security
 
 ```yaml
+
 s3_express:
   atomic_append:
     enabled: true
@@ -49,7 +52,8 @@ s3_express:
 
     # Audit logging
     audit_appends: true
-```
+
+```bash
 
 ### Best Practices
 
@@ -65,6 +69,7 @@ s3_express:
 ### Device Access Control
 
 ```yaml
+
 gpudirect:
   enabled: true
 
@@ -83,11 +88,13 @@ gpudirect:
     dma:
       require_iommu: true            # Require IOMMU protection
       allowed_transfer_size: 268435456  # 256MB max single transfer
-```
+
+```bash
 
 ### Memory Protection
 
 ```yaml
+
 gpudirect:
   memory_protection:
     # Prevent GPU memory leaks
@@ -97,7 +104,8 @@ gpudirect:
     # Prevent data exfiltration
     disallow_peer_access: false      # Control GPU-to-GPU transfers
     require_encryption: true         # Encrypt data in GPU memory
-```
+
+```bash
 
 ### Best Practices
 
@@ -115,6 +123,7 @@ The Model Context Protocol server allows AI agents to interact with NebulaIO.
 ### Authentication & Authorization
 
 ```yaml
+
 mcp:
   enabled: true
   port: 9005
@@ -135,11 +144,13 @@ mcp:
     # Authorization
     require_explicit_grants: true    # No implicit permissions
     default_policy: deny
-```
+
+```bash
 
 ### Tool Execution Security
 
 ```yaml
+
 mcp:
   tools:
     enabled: true
@@ -162,11 +173,13 @@ mcp:
       # Sandboxing
       sandbox_enabled: true
       network_access: restricted     # restricted | none | full
-```
+
+```bash
 
 ### Resource Access Security
 
 ```yaml
+
 mcp:
   resources:
     enabled: true
@@ -188,11 +201,13 @@ mcp:
       # Rate limiting
       requests_per_minute: 60
       bytes_per_minute: 1073741824   # 1GB
-```
+
+```bash
 
 ### CORS Configuration
 
 ```yaml
+
 mcp:
   cors:
     enabled: true
@@ -206,7 +221,8 @@ mcp:
       - Authorization
       - Content-Type
     max_age: 3600
-```
+
+```bash
 
 ### Best Practices
 
@@ -223,6 +239,7 @@ mcp:
 ### API Key Management
 
 ```yaml
+
 nim:
   enabled: true
 
@@ -239,11 +256,13 @@ nim:
       - "nvidia/grounding-dino"
     blocked_models:
       - "*embedding*"                 # Block embedding models
-```
+
+```bash
 
 ### Request Security
 
 ```yaml
+
 nim:
   security:
     # Content filtering
@@ -266,11 +285,13 @@ nim:
       use_private_endpoint: true     # Use VPC endpoint if available
       require_tls: true
       verify_certificates: true
-```
+
+```bash
 
 ### Cost Controls
 
 ```yaml
+
 nim:
   security:
     cost_controls:
@@ -279,7 +300,8 @@ nim:
       monthly_limit_usd: 2000
       per_user_limit_usd: 50
       alert_threshold_percent: 80
-```
+
+```bash
 
 ### Best Practices
 
@@ -296,6 +318,7 @@ nim:
 ### Transport Security
 
 ```yaml
+
 rdma:
   enabled: true
   port: 9100
@@ -315,11 +338,13 @@ rdma:
       key_file: /etc/nebulaio/rdma/server.key
       ca_file: /etc/nebulaio/rdma/ca.crt
       require_client_cert: true
-```
+
+```bash
 
 ### Memory Registration Security
 
 ```yaml
+
 rdma:
   memory:
     # Registration limits
@@ -337,11 +362,13 @@ rdma:
     # Cleanup
     deregister_on_disconnect: true
     timeout_seconds: 300
-```
+
+```bash
 
 ### Network Isolation
 
 ```yaml
+
 rdma:
   network:
     # Device restrictions
@@ -358,7 +385,8 @@ rdma:
     # Traffic isolation
     partition_key: 0x8001
     service_level: 0
-```
+
+```bash
 
 ### Best Practices
 
@@ -375,6 +403,7 @@ rdma:
 ### Crypto Offload Security
 
 ```yaml
+
 dpu:
   enabled: true
 
@@ -395,11 +424,13 @@ dpu:
 
       # Audit
       log_crypto_operations: true
-```
+
+```bash
 
 ### Compression Offload Security
 
 ```yaml
+
 dpu:
   compression:
     enabled: true
@@ -411,7 +442,8 @@ dpu:
 
       # Rate limiting
       max_operations_per_second: 10000
-```
+
+```bash
 
 ### Best Practices
 
@@ -426,7 +458,8 @@ dpu:
 
 ### Network Segmentation
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Production Network                            │
 │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐           │
@@ -443,11 +476,13 @@ dpu:
 │  │ :9005       │   │ Storage     │   │ :9100       │           │
 │  └─────────────┘   └─────────────┘   └─────────────┘           │
 └─────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Audit Logging
 
 ```yaml
+
 audit:
   enabled: true
 
@@ -472,11 +507,13 @@ audit:
     - event: nim_inference_request
       condition: "cost > 10"
       severity: warning
-```
+
+```bash
 
 ### Rate Limiting
 
 ```yaml
+
 firewall:
   rate_limiting:
     # AI/ML endpoints
@@ -496,6 +533,7 @@ firewall:
       rdma:
         connections_per_second: 100
         operations_per_second: 100000
+
 ```
 
 ---

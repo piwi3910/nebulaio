@@ -6,7 +6,8 @@ NebulaIO's storage layer is designed for durability, performance, and flexibilit
 
 The storage subsystem consists of multiple components that work together to provide reliable, high-performance object storage.
 
-```
+```text
+
                               ┌──────────────────────────────────────────────────────────┐
                               │                    Storage Layer                         │
                               ├──────────────────────────────────────────────────────────┤
@@ -37,7 +38,8 @@ The storage subsystem consists of multiple components that work together to prov
                               │   Disk 1     │   │   Disk N     │   │   Disk M     │
                               │   /dev/sda   │   │   /dev/sdn   │   │   /dev/sdm   │
                               └──────────────┘   └──────────────┘   └──────────────┘
-```
+
+```text
 
 ---
 
@@ -47,7 +49,8 @@ NebulaIO's primary storage backend uses the local filesystem. This provides port
 
 ### Directory Structure
 
-```
+```text
+
 /data
 ├── metadata/                     # Raft and metadata storage
 │   ├── raft/                     # Raft consensus logs
@@ -78,13 +81,15 @@ NebulaIO's primary storage backend uses the local filesystem. This provides port
 └── temp/                         # Temporary upload staging
     └── {upload-id}/
         └── parts/
-```
+
+```bash
 
 ### Backend Interface
 
 The storage backend implements a clean interface for pluggability:
 
 ```go
+
 type Backend interface {
     Init(ctx context.Context) error
     Close() error
@@ -97,7 +102,8 @@ type Backend interface {
     BucketExists(ctx context.Context, bucket string) (bool, error)
     GetStorageInfo(ctx context.Context) (*StorageInfo, error)
 }
-```
+
+```text
 
 ---
 
@@ -108,7 +114,7 @@ The Volume storage backend is a high-performance alternative to the filesystem b
 ### When to Use Volume Backend
 
 | Use Case | Recommended Backend |
-|----------|---------------------|
+| ---------- | --------------------- |
 | Mixed object sizes (small + large) | **Volume** |
 | Millions of small objects (<1MB) | **Volume** |
 | Maximum IOPS performance | **Volume** |
@@ -117,7 +123,8 @@ The Volume storage backend is a high-performance alternative to the filesystem b
 
 ### Volume Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        Volume Storage Architecture                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -151,13 +158,15 @@ The Volume storage backend is a high-performance alternative to the filesystem b
 │  └────────────────────┘ └────────────────────┘ └────────────────────┘      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Volume File Format
 
 Each volume file is a pre-allocated file (default 32GB) with the following layout:
 
-```
+```text
+
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ Offset 0        │ Superblock (4KB)                                      │
 │                 │ - Magic: "NEBULAVL"                                    │
@@ -181,21 +190,23 @@ Each volume file is a pre-allocated file (default 32GB) with the following layou
 │                 │ - Block N: Last data block                             │
 │                 │ - Each block can be: Packed, Large, or Spanning        │
 └──────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Size Classes and Packing
 
 Small objects are packed together into blocks to minimize wasted space:
 
-| Size Class | Object Size    | Block Type    | Packing Behavior |
-|------------|----------------|---------------|------------------|
-| TINY       | ≤ 64KB         | PACKED_TINY   | Many per block   |
-| SMALL      | ≤ 256KB        | PACKED_SMALL  | Several per block|
-| MEDIUM     | ≤ 1MB          | PACKED_MED    | Few per block    |
-| LARGE      | ≤ 4MB          | LARGE         | One per block    |
-| SPANNING   | > 4MB          | SPANNING      | Multiple blocks  |
+| Size Class | Object Size | Block Type | Packing Behavior |
+| ------------ | ---------------- | --------------- | ------------------ |
+| TINY | ≤ 64KB | PACKED_TINY | Many per block |
+| SMALL | ≤ 256KB | PACKED_SMALL | Several per block |
+| MEDIUM | ≤ 1MB | PACKED_MED | Few per block |
+| LARGE | ≤ 4MB | LARGE | One per block |
+| SPANNING | > 4MB | SPANNING | Multiple blocks |
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      Packed Block Structure (4MB)                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -230,23 +241,26 @@ Small objects are packed together into blocks to minimize wasted space:
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Configuration
 
 ```yaml
+
 storage:
   backend: volume    # Use volume storage backend
 
   volume:
     max_volume_size: 34359738368   # 32GB per volume file
     auto_create: true               # Create new volumes as needed
-```
+
+```bash
 
 ### Performance Characteristics
 
 | Metric | Volume Backend | Filesystem Backend |
-|--------|----------------|-------------------|
+| -------- | ---------------- | ------------------- |
 | Small object write | ~50μs | ~500μs |
 | Small object read | ~20μs | ~200μs |
 | Metadata overhead | ~50 bytes/obj | ~4KB/obj (inode) |
@@ -262,7 +276,8 @@ The volume backend supports direct I/O (O_DIRECT on Linux) to bypass the kernel 
 - **Better memory utilization**: Application manages its own buffers efficiently
 - **Reduced CPU overhead**: Kernel doesn't need to copy data between buffers
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    Regular I/O vs Direct I/O                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -289,14 +304,15 @@ The volume backend supports direct I/O (O_DIRECT on Linux) to bypass the kernel 
 │  Memory: 2x (app + kernel buffers)        Memory: 1x (app buffers only)     │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 #### Alignment Requirements
 
 Direct I/O requires proper alignment:
 
 | Requirement | Value | Description |
-|-------------|-------|-------------|
+| ------------- | ------- | ------------- |
 | Buffer alignment | 4096 bytes | Memory buffers must be 4KB aligned |
 | Offset alignment | 4096 bytes | File offsets must be 4KB aligned |
 | Size alignment | 4096 bytes | Transfer sizes must be multiples of 4KB |
@@ -304,15 +320,17 @@ Direct I/O requires proper alignment:
 The volume backend automatically handles alignment using an aligned buffer pool:
 
 ```go
+
 // Automatically allocates 4KB-aligned buffers for O_DIRECT
 buf := dio.GetAlignedBuffer(BlockSize)  // 4MB aligned buffer
 defer dio.PutAlignedBuffer(buf)         // Return to pool for reuse
-```
+
+```bash
 
 #### Platform Support
 
 | Platform | O_DIRECT | Fallback |
-|----------|----------|----------|
+| ---------- | ---------- | ---------- |
 | Linux | ✅ Full support | N/A |
 | macOS | ❌ Not available | Buffered I/O |
 | Windows | ❌ Not available | Buffered I/O |
@@ -322,6 +340,7 @@ On non-Linux platforms, the volume backend automatically falls back to buffered 
 #### Configuration
 
 ```yaml
+
 storage:
   backend: volume
   volume:
@@ -332,12 +351,13 @@ storage:
       block_alignment: 4096        # 4KB alignment (standard)
       use_memory_pool: true        # Pool aligned buffers
       fallback_on_error: true      # Fall back to buffered I/O on errors
-```
+
+```bash
 
 #### Performance Impact
 
 | Metric | Buffered I/O | Direct I/O | Notes |
-|--------|--------------|------------|-------|
+| -------- | -------------- | ------------ | ------- |
 | Write latency (p50) | 100μs | 80μs | More consistent |
 | Write latency (p99) | 5ms | 1ms | No cache flush spikes |
 | Read latency (p50) | 50μs | 150μs | Cold read penalty |
@@ -366,7 +386,7 @@ For maximum I/O performance, NebulaIO can bypass the filesystem entirely and wri
 ### When to Use Raw Block Devices
 
 | Use Case | Recommended Approach |
-|----------|----------------------|
+| ---------- | ---------------------- |
 | Maximum IOPS/throughput | **Raw block device** |
 | Ultra-low latency (< 100μs) | **Raw block device** |
 | NVMe drives dedicated to storage | **Raw block device** |
@@ -375,7 +395,8 @@ For maximum I/O performance, NebulaIO can bypass the filesystem entirely and wri
 
 ### Raw Device Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      Raw Block Device Architecture                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -409,11 +430,13 @@ For maximum I/O performance, NebulaIO can bypass the filesystem entirely and wri
 │  └────────────────────┘ └────────────────────┘ └────────────────────┘      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### I/O Path Comparison
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         I/O Path Comparison                                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -447,11 +470,13 @@ For maximum I/O performance, NebulaIO can bypass the filesystem entirely and wri
 │  Overhead: FS + journaling         Overhead: None                          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Configuration
 
 ```yaml
+
 storage:
   backend: volume
 
@@ -493,13 +518,15 @@ storage:
       enabled: true            # Always use O_DIRECT for raw devices
       block_alignment: 4096
       use_memory_pool: true
-```
+
+```bash
 
 ### Tiered Device Configuration
 
 Assign different physical devices to different storage tiers:
 
 ```yaml
+
 storage:
   backend: volume
 
@@ -542,13 +569,15 @@ tiering:
         - days: 30
           from_tier: warm
           to_tier: cold
-```
+
+```bash
 
 ### Device Initialization
 
 Raw devices must be initialized before use:
 
 ```bash
+
 # Initialize a raw device for NebulaIO
 nebulaio-cli storage device init /dev/nvme0n1 --tier hot
 
@@ -561,20 +590,22 @@ nebulaio-cli storage device list
 
 # Check device health
 nebulaio-cli storage device health /dev/nvme0n1
-```
+
+```bash
 
 ### Safety Features
 
 Raw block device access requires additional safety measures:
 
 | Feature | Description |
-|---------|-------------|
+| --------- | ------------- |
 | Device validation | Verifies device is not mounted and has no filesystem |
 | Exclusive access | Uses `flock()` to prevent concurrent access |
 | Device signatures | Writes NebulaIO signature to prevent accidental reuse |
 | Graceful degradation | Falls back to file-based volumes if device unavailable |
 
 ```yaml
+
 storage:
   volume:
     raw_devices:
@@ -590,12 +621,13 @@ storage:
 
         # Lock device exclusively
         exclusive_lock: true
-```
+
+```bash
 
 ### Performance Characteristics
 
 | Metric | File-Based Volume | Raw Block Device | Improvement |
-|--------|-------------------|------------------|-------------|
+| -------- | ------------------- | ------------------ | ------------- |
 | 4KB random read | 80μs | 25μs | 3.2x |
 | 4KB random write | 100μs | 30μs | 3.3x |
 | 4MB sequential read | 2ms | 0.5ms | 4x |
@@ -610,6 +642,7 @@ storage:
 For Kubernetes deployments, raw block devices require special configuration:
 
 ```yaml
+
 # values.yaml for Helm chart
 persistence:
   enabled: true
@@ -637,7 +670,8 @@ podSecurityContext:
 nodeSelector:
   storage.nebulaio.io/nvme: "true"
   storage.nebulaio.io/tier-hot: "true"
-```
+
+```bash
 
 ### Limitations
 
@@ -656,6 +690,7 @@ Each object is stored with its content and metadata in a structured format.
 ### Object Metadata (meta.json)
 
 ```json
+
 {
   "bucket": "my-bucket",
   "key": "documents/report.pdf",
@@ -684,7 +719,8 @@ Each object is stored with its content and metadata in a structured format.
     "shard_set_id": "abc123def456"
   }
 }
-```
+
+```text
 
 ---
 
@@ -694,7 +730,8 @@ NebulaIO uses Reed-Solomon erasure coding to protect data against disk failures 
 
 ### How It Works
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        Reed-Solomon Erasure Coding                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -720,19 +757,21 @@ NebulaIO uses Reed-Solomon erasure coding to protect data against disk failures 
 │  Can lose ANY 4 shards and still recover data                              │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Configuration Presets
 
-| Preset   | Data Shards | Parity Shards | Total | Max Failures | Overhead |
-|----------|-------------|---------------|-------|--------------|----------|
-| Minimal  | 4           | 2             | 6     | 2            | 50%      |
-| Standard | 10          | 4             | 14    | 4            | 40%      |
-| Maximum  | 8           | 8             | 16    | 8            | 100%     |
+| Preset | Data Shards | Parity Shards | Total | Max Failures | Overhead |
+| ---------- | ------------- | --------------- | ------- | -------------- | ---------- |
+| Minimal | 4 | 2 | 6 | 2 | 50% |
+| Standard | 10 | 4 | 14 | 4 | 40% |
+| Maximum | 8 | 8 | 16 | 8 | 100% |
 
 ### Encoding Process
 
-```
+```text
+
 ┌─────────────┐     ┌──────────────┐     ┌─────────────┐     ┌──────────────┐
 │  Read Data  │────►│ Pad to Even  │────►│   Split     │────►│  RS Encode   │
 │  Stream     │     │  Shard Size  │     │  into N     │     │  Add Parity  │
@@ -743,13 +782,15 @@ NebulaIO uses Reed-Solomon erasure coding to protect data against disk failures 
 │   Verify    │◄────│  Distribute  │◄────│  Checksum   │◄────│   14 Total   │
 │   Storage   │     │  to Disks    │     │  Each Shard │     │   Shards     │
 └─────────────┘     └──────────────┘     └─────────────┘     └──────────────┘
-```
+
+```bash
 
 ### Decoding Process
 
 When reading an object, only the data shards are needed if all are available. If any shards are missing or corrupted, the Reed-Solomon decoder reconstructs them:
 
-```
+```text
+
 Available Shards:  D0 D1 D2 __ D4 D5 __ D7 D8 D9 P0 __ P2 P3
                             ↑       ↑          ↑
                         D3 missing  D6 missing  P1 missing
@@ -758,7 +799,8 @@ Step 1: Verify checksums of available shards
 Step 2: Reconstruct D3 and D6 using P0, P2, P3
 Step 3: Concatenate D0-D9 to recover original data
 Step 4: Remove padding and return data
-```
+
+```text
 
 ---
 
@@ -772,7 +814,8 @@ Shards are distributed across available storage devices using a placement algori
 2. **Even distribution** - Balances storage utilization
 3. **Locality awareness** - Considers rack/zone topology
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        Cluster Topology                                  │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -793,11 +836,13 @@ Shards are distributed across available storage devices using a placement algori
 │  Distribution ensures zone failure tolerance: Any zone can fail        │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Placement Algorithm
 
 ```go
+
 // Simplified placement logic
 func PlaceShards(shards []Shard, topology ClusterTopology) []Placement {
     placements := make([]Placement, len(shards))
@@ -815,7 +860,8 @@ func PlaceShards(shards []Shard, topology ClusterTopology) []Placement {
     }
     return placements
 }
-```
+
+```text
 
 ---
 
@@ -825,23 +871,24 @@ NebulaIO supports transparent compression to reduce storage costs and improve th
 
 ### Supported Algorithms
 
-| Algorithm | Speed     | Ratio    | Use Case                    |
-|-----------|-----------|----------|-----------------------------|
-| Zstandard | Fast      | Excellent| Default, balanced           |
-| LZ4       | Very Fast | Good     | High-throughput workloads   |
-| Gzip      | Moderate  | Good     | Maximum compatibility       |
+| Algorithm | Speed | Ratio | Use Case |
+| ----------- | ----------- | ---------- | ----------------------------- |
+| Zstandard | Fast | Excellent | Default, balanced |
+| LZ4 | Very Fast | Good | High-throughput workloads |
+| Gzip | Moderate | Good | Maximum compatibility |
 
 ### Compression Levels
 
-| Level   | Speed Impact | Compression Ratio |
-|---------|--------------|-------------------|
-| Fastest | Minimal      | Lower             |
-| Default | Balanced     | Balanced          |
-| Best    | Significant  | Maximum           |
+| Level | Speed Impact | Compression Ratio |
+| --------- | -------------- | ------------------- |
+| Fastest | Minimal | Lower |
+| Default | Balanced | Balanced |
+| Best | Significant | Maximum |
 
 ### Compression Decision Flow
 
-```
+```text
+
 ┌──────────────┐     ┌────────────────┐     ┌───────────────┐
 │ Object Write │────►│ Check Size     │────►│ Check Content │
 │              │     │ >= 1KB ?       │     │ Type          │
@@ -868,7 +915,8 @@ NebulaIO supports transparent compression to reduce storage costs and improve th
                │ Store Compressed    │
                │ + Metadata          │
                └─────────────────────┘
-```
+
+```bash
 
 ### Excluded Content Types
 
@@ -887,7 +935,8 @@ NebulaIO implements envelope encryption for data protection.
 
 ### Encryption Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         Envelope Encryption                                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -919,18 +968,20 @@ NebulaIO implements envelope encryption for data protection.
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Supported Algorithms
 
-| Algorithm         | Key Size | Block Size | Authentication |
-|-------------------|----------|------------|----------------|
-| AES-256-GCM       | 256 bits | 128 bits   | GHASH          |
-| ChaCha20-Poly1305 | 256 bits | Stream     | Poly1305       |
+| Algorithm | Key Size | Block Size | Authentication |
+| ------------------- | ---------- | ------------ | ---------------- |
+| AES-256-GCM | 256 bits | 128 bits | GHASH |
+| ChaCha20-Poly1305 | 256 bits | Stream | Poly1305 |
 
 ### Key Rotation
 
-```
+```text
+
 ┌────────────────┐     ┌────────────────┐     ┌────────────────┐
 │  Current DEK   │     │  New DEK       │     │  Object        │
 │  (wrapped)     │     │  (generated)   │     │  Re-encrypted  │
@@ -939,7 +990,8 @@ NebulaIO implements envelope encryption for data protection.
         ▼                      ▼                      ▼
    Decrypt data          Encrypt data           Store new
    with old DEK          with new DEK           wrapped DEK
-```
+
+```text
 
 ---
 
@@ -949,7 +1001,8 @@ NebulaIO supports multiple storage tiers for cost optimization.
 
 ### Tier Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           Storage Tiers                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -986,11 +1039,13 @@ NebulaIO supports multiple storage tiers for cost optimization.
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### Transition Policies
 
 ```yaml
+
 tiering:
   enabled: true
   policies:
@@ -1010,7 +1065,8 @@ tiering:
           operator: gt
           value: 365
       target_tier: archive
-```
+
+```text
 
 ---
 
@@ -1020,7 +1076,8 @@ NebulaIO implements background garbage collection to reclaim storage from delete
 
 ### GC Process
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         Garbage Collection                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -1051,11 +1108,13 @@ NebulaIO implements background garbage collection to reclaim storage from delete
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### GC Configuration
 
 ```yaml
+
 storage:
   gc:
     enabled: true
@@ -1063,7 +1122,8 @@ storage:
     grace_period: 24h         # Wait 24 hours before deletion
     batch_size: 1000          # Process 1000 objects per cycle
     max_workers: 4            # Parallel deletion workers
-```
+
+```text
 
 ---
 
@@ -1072,7 +1132,7 @@ storage:
 ### I/O Optimization
 
 | Optimization | Description | Impact |
-|--------------|-------------|--------|
+| -------------- | ------------- | -------- |
 | Direct I/O | Bypass kernel page cache for large objects | Reduced memory pressure |
 | Read-ahead | Prefetch sequential data | Improved throughput |
 | Write coalescing | Batch small writes | Reduced IOPS |
@@ -1081,6 +1141,7 @@ storage:
 ### Tuning Parameters
 
 ```yaml
+
 storage:
   backend:
     type: fs
@@ -1104,12 +1165,13 @@ storage:
   erasure:
     preset: standard            # 10+4 configuration
     shard_size: 1MB
+
 ```
 
 ### Performance Metrics
 
 | Metric | Description | Target |
-|--------|-------------|--------|
+| -------- | ------------- | -------- |
 | Write latency (p99) | Time to write and confirm | < 50ms |
 | Read latency (p99) | Time to first byte | < 10ms |
 | Throughput | Sustained transfer rate | > 10 GB/s aggregate |

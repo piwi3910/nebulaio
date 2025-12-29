@@ -14,7 +14,8 @@ The Data Firewall acts as a security and performance gateway between clients and
 
 ## Architecture
 
-```
+```text
+
                     ┌─────────────────────────────────────────┐
                     │              Data Firewall               │
                     ├─────────────────────────────────────────┤
@@ -34,11 +35,13 @@ The Data Firewall acts as a security and performance gateway between clients and
                               ┌─────────────────────┐
                               │   Storage Backend   │
                               └─────────────────────┘
-```
+
+```bash
 
 ## Configuration
 
 ```yaml
+
 firewall:
   enabled: true
   default_policy: allow          # allow | deny
@@ -73,7 +76,8 @@ firewall:
 
   # Audit logging
   audit_enabled: true
-```
+
+```bash
 
 ## Rate Limiting
 
@@ -81,7 +85,8 @@ firewall:
 
 The firewall uses the token bucket algorithm for precise rate limiting:
 
-```
+```text
+
 ┌─────────────────────────────────────────┐
 │             Token Bucket                 │
 ├─────────────────────────────────────────┤
@@ -94,25 +99,30 @@ The firewall uses the token bucket algorithm for precise rate limiting:
 │    - Has token? → Allow & consume        │
 │    - No token? → Reject (429)            │
 └─────────────────────────────────────────┘
-```
+
+```bash
 
 ### Configuration
 
 ```yaml
+
 rate_limiting:
   enabled: true
   requests_per_second: 1000  # Refill rate
   burst_size: 100            # Bucket capacity
-```
+
+```bash
 
 ### Per-Entity Limits
 
 ```yaml
+
 rate_limiting:
   per_user_limit: 100     # Individual user limit
   per_ip_limit: 50        # Individual IP limit
   per_bucket_limit: 500   # Per-bucket limit
-```
+
+```bash
 
 ## Bandwidth Control
 
@@ -120,7 +130,8 @@ rate_limiting:
 
 Bandwidth is tracked using a sliding window algorithm for accurate measurements:
 
-```
+```text
+
 ┌─────────────────────────────────────────┐
 │        Bandwidth Sliding Window          │
 ├─────────────────────────────────────────┤
@@ -132,23 +143,27 @@ Bandwidth is tracked using a sliding window algorithm for accurate measurements:
 │                                          │
 │  Total: 435MB / 1000MB allowed          │
 └─────────────────────────────────────────┘
-```
+
+```bash
 
 ### Configuration
 
 ```yaml
+
 bandwidth:
   enabled: true
   max_bytes_per_second: 1073741824      # 1 GB/s
   per_user_bytes_per_second: 104857600   # 100 MB/s
   per_ip_bytes_per_second: 52428800      # 50 MB/s
-```
+
+```bash
 
 ## Access Control Rules
 
 ### Rule Structure
 
 ```yaml
+
 rules:
   - id: "block-large-uploads"
     priority: 100
@@ -171,12 +186,13 @@ rules:
     rate_limit:
       requests_per_second: 10
       burst_size: 5
-```
+
+```bash
 
 ### Condition Types
 
 | Condition | Description | Example |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | source_ip | Client IP address (CIDR) | `10.0.0.0/8` |
 | user | Username or `anonymous` | `alice` |
 | bucket | Bucket name pattern | `logs-*` |
@@ -189,7 +205,7 @@ rules:
 ### Action Types
 
 | Action | Description |
-|--------|-------------|
+| -------- | ------------- |
 | allow | Allow the request |
 | deny | Reject with 403 Forbidden |
 | rate_limit | Apply specific rate limit |
@@ -201,6 +217,7 @@ rules:
 ### Business Hours Access
 
 ```yaml
+
 rules:
   - id: "business-hours-only"
     priority: 100
@@ -210,11 +227,13 @@ rules:
       time_window: "00:00-08:59,17:01-23:59"
       day_of_week: "Mon,Tue,Wed,Thu,Fri"
     message: "Access restricted to business hours"
-```
+
+```bash
 
 ### Maintenance Windows
 
 ```yaml
+
 rules:
   - id: "maintenance-window"
     priority: 1  # Highest priority
@@ -223,20 +242,24 @@ rules:
       time_window: "02:00-04:00"
       day_of_week: "Sun"
     message: "System maintenance in progress"
-```
+
+```bash
 
 ## API Usage
 
 ### Get Firewall Status
 
 ```bash
+
 curl -X GET http://localhost:9000/admin/firewall/status \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```text
 
 Response:
 
 ```json
+
 {
   "enabled": true,
   "default_policy": "allow",
@@ -253,11 +276,13 @@ Response:
     "burst_available": 75
   }
 }
-```
+
+```bash
 
 ### Update Rules
 
 ```bash
+
 curl -X PUT http://localhost:9000/admin/firewall/rules \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -273,11 +298,13 @@ curl -X PUT http://localhost:9000/admin/firewall/rules \
       }
     ]
   }'
-```
+
+```bash
 
 ### Block IP Address
 
 ```bash
+
 curl -X POST http://localhost:9000/admin/firewall/block \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -286,26 +313,31 @@ curl -X POST http://localhost:9000/admin/firewall/block \
     "reason": "Suspicious activity",
     "duration": "24h"
   }'
-```
+
+```bash
 
 ### Unblock IP Address
 
 ```bash
+
 curl -X DELETE "http://localhost:9000/admin/firewall/block?ip=192.168.1.100" \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```bash
 
 ## Connection Management
 
 ### Limits
 
 ```yaml
+
 connections:
   max_total: 10000        # Total concurrent connections
   max_per_ip: 100         # Per IP address
   max_per_user: 500       # Per authenticated user
   idle_timeout: 300       # Close idle after 5 minutes
-```
+
+```bash
 
 ### Connection Tracking
 
@@ -320,17 +352,20 @@ The firewall tracks active connections for:
 ### Audit Logging
 
 ```yaml
+
 firewall:
   audit_enabled: true
   audit_events:
     - denied
     - rate_limited
     - blocked_ip
-```
+
+```bash
 
 ### Event Notifications
 
 ```yaml
+
 events:
   targets:
     - name: security-alerts
@@ -338,13 +373,15 @@ events:
       url: https://security.example.com/alerts
       filter:
         event_type: "firewall:*"
-```
+
+```bash
 
 ## Monitoring
 
 ### Prometheus Metrics
 
-```
+```bash
+
 # Requests by action
 nebulaio_firewall_requests_total{action="allow|deny|rate_limit"}
 
@@ -362,11 +399,13 @@ nebulaio_firewall_connections_total{status="accepted|rejected"}
 
 # Rule hits
 nebulaio_firewall_rule_hits_total{rule_id="..."}
-```
+
+```bash
 
 ### Grafana Alerts
 
 ```yaml
+
 # Alert on high deny rate
 - alert: HighFirewallDenyRate
   expr: rate(nebulaio_firewall_requests_total{action="deny"}[5m]) > 100
@@ -375,6 +414,7 @@ nebulaio_firewall_rule_hits_total{rule_id="..."}
     severity: warning
   annotations:
     summary: "High firewall deny rate"
+
 ```
 
 ## Best Practices

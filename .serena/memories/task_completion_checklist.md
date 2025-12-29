@@ -12,12 +12,14 @@
 ### Syntax Verification
 
 ```bash
+
 # Quick syntax check for modified files
 gofmt -e ./path/to/modified/*.go
 
 # Build specific packages to verify compilation
 go build ./internal/package/...
-```
+
+```bash
 
 ### Documentation
 
@@ -55,6 +57,8 @@ The project may have existing issues in other packages. If you see errors in:
 These are pre-existing and not related to new changes. Focus on verifying your changes compile independently:
 
 ```bash
+
 go build ./internal/auth/...
 go build ./internal/api/middleware/...
+
 ```

@@ -9,7 +9,7 @@ The DRAM Cache uses adaptive replacement cache (ARC) algorithm to intelligently 
 ## Features
 
 | Feature | Description |
-|---------|-------------|
+| --------- | ------------- |
 | ARC Eviction | Adaptive algorithm balancing recency and frequency |
 | Prefetching | ML-aware sequential read optimization |
 | Admission Control | Prevents cache pollution from one-time reads |
@@ -19,6 +19,7 @@ The DRAM Cache uses adaptive replacement cache (ARC) algorithm to intelligently 
 ## Configuration
 
 ```yaml
+
 cache:
   enabled: true
   max_size: 8589934592        # 8GB cache size
@@ -31,7 +32,8 @@ cache:
   max_object_size: 104857600   # Maximum size to cache (100MB)
   ttl: 3600                    # Default TTL in seconds
   stats_enabled: true          # Enable statistics collection
-```
+
+```bash
 
 ## Eviction Policies
 
@@ -39,7 +41,8 @@ cache:
 
 ARC dynamically balances between LRU (recently used) and LFU (frequently used) based on workload patterns. It maintains ghost lists to learn access patterns.
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────┐
 │                        ARC Cache                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -51,7 +54,8 @@ ARC dynamically balances between LRU (recently used) and LFU (frequently used) b
 │  B1 (Ghost T1)          │     B2 (Ghost T2)                 │
 │  Evicted from T1        │     Evicted from T2               │
 └─────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### LRU (Least Recently Used)
 
@@ -68,12 +72,14 @@ Evicts based on access count. Best for workloads with stable hot sets.
 The cache detects sequential access patterns common in ML training:
 
 ```go
+
 // Training loop typically reads data sequentially
 for batch := range dataloader {
     // Cache prefetches next batches automatically
     model.Train(batch)
 }
-```
+
+```text
 
 When the prefetcher detects `prefetch_threshold` sequential reads, it automatically loads the next `prefetch_count` objects into cache.
 
@@ -82,7 +88,7 @@ When the prefetcher detects `prefetch_threshold` sequential reads, it automatica
 Prevents cache pollution from checkpoint writes and one-time reads:
 
 | Policy | Description | Use Case |
-|--------|-------------|----------|
+| -------- | ------------- | ---------- |
 | always | Cache everything | Small datasets |
 | frequency | Only cache after N accesses | Large datasets with hotspots |
 | size | Only cache objects under size limit | Mixed workloads |
@@ -92,13 +98,16 @@ Prevents cache pollution from checkpoint writes and one-time reads:
 ### Check Cache Status
 
 ```bash
+
 curl -X GET http://localhost:9000/admin/cache/stats \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```text
 
 Response:
 
 ```json
+
 {
   "enabled": true,
   "size": 4294967296,
@@ -110,13 +119,15 @@ Response:
   "prefetch_hits": 123456,
   "avg_latency_us": 45
 }
-```
+
+```bash
 
 ### Warm Cache
 
 Pre-populate cache with specific objects:
 
 ```bash
+
 curl -X POST http://localhost:9000/admin/cache/warm \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -125,13 +136,15 @@ curl -X POST http://localhost:9000/admin/cache/warm \
     "prefix": "training/epoch-1/",
     "recursive": true
   }'
-```
+
+```bash
 
 ### Invalidate Cache
 
 Clear specific entries or entire cache:
 
 ```bash
+
 # Invalidate by prefix
 curl -X DELETE "http://localhost:9000/admin/cache/invalidate?bucket=ml-datasets&prefix=checkpoints/" \
   -H "Authorization: Bearer $TOKEN"
@@ -139,12 +152,13 @@ curl -X DELETE "http://localhost:9000/admin/cache/invalidate?bucket=ml-datasets&
 # Clear entire cache
 curl -X DELETE http://localhost:9000/admin/cache/clear \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```bash
 
 ## Performance Benchmarks
 
 | Metric | Without Cache | With Cache | Improvement |
-|--------|--------------|------------|-------------|
+| -------- | -------------- | ------------ | ------------- |
 | Read Latency (p50) | 2.5ms | 45μs | 55x |
 | Read Latency (p99) | 15ms | 120μs | 125x |
 | Throughput | 500MB/s | 10GB/s | 20x |
@@ -157,6 +171,7 @@ curl -X DELETE http://localhost:9000/admin/cache/clear \
 ### PyTorch DataLoader
 
 ```python
+
 from torch.utils.data import DataLoader
 from nebulaio import S3Dataset
 
@@ -173,11 +188,13 @@ loader = DataLoader(
     num_workers=8,
     prefetch_factor=2  # Works with NebulaIO prefetching
 )
-```
+
+```bash
 
 ### TensorFlow tf.data
 
 ```python
+
 import tensorflow as tf
 
 def load_from_nebulaio(path):
@@ -187,13 +204,15 @@ def load_from_nebulaio(path):
 dataset = tf.data.Dataset.list_files("s3://ml-datasets/train/*.tfrecord")
 dataset = dataset.map(load_from_nebulaio, num_parallel_calls=tf.data.AUTOTUNE)
 dataset = dataset.prefetch(tf.data.AUTOTUNE)
-```
+
+```bash
 
 ## Monitoring
 
 ### Prometheus Metrics
 
-```
+```bash
+
 # Cache hit rate
 nebulaio_cache_hit_rate
 
@@ -209,6 +228,7 @@ nebulaio_cache_prefetch_misses_total
 
 # Latency histogram
 nebulaio_cache_latency_seconds{quantile="0.5|0.9|0.99"}
+
 ```
 
 ### Grafana Dashboard

@@ -54,7 +54,7 @@ Upgrading existing nodes with more resources.
 ### Recommended Approach
 
 | Scenario | Recommendation |
-|----------|----------------|
+| ---------- | ---------------- |
 | Capacity growth | Horizontal (add storage nodes) |
 | Performance boost | Vertical (upgrade CPU/RAM) then horizontal |
 | High availability | Horizontal (minimum 3 voters) |
@@ -79,6 +79,7 @@ Storage nodes handle object data without participating in Raft voting.
 **Step 1**: Configure the new node
 
 ```yaml
+
 # config.yaml on new node
 node_id: storage-node-4
 cluster:
@@ -94,21 +95,26 @@ cluster:
     - 10.0.1.12:9004
   advertise_address: 10.0.1.20
   wal_dir: /var/lib/nebulaio/wal
-```
+
+```text
 
 **Important**: The `replica_id` must be unique across all nodes in the shard. Dragonboat uses this to identify each node in the Raft group.
 
 **Step 2**: Start the new node
 
 ```bash
+
 nebulaio server --config /etc/nebulaio/config.yaml
-```
+
+```text
 
 **Step 3**: Verify the node joined
 
 ```bash
+
 curl http://localhost:9001/api/v1/admin/cluster/nodes | jq
-```
+
+```bash
 
 ### Adding a Voter Node
 
@@ -117,6 +123,7 @@ Voter nodes participate in Raft consensus. Only add voters in odd increments.
 **Step 1**: Configure as non-voter initially
 
 ```yaml
+
 # config.yaml
 node_id: mgmt-node-4
 cluster:
@@ -130,31 +137,39 @@ cluster:
     - 10.0.1.10:9004
   advertise_address: 10.0.1.14
   wal_dir: /var/lib/nebulaio/wal
-```
+
+```text
 
 **Note**: New nodes initially join as non-voters via `SyncRequestAddNonVoting`. This allows them to catch up with the log before participating in elections.
 
 **Step 2**: Start and let it sync
 
 ```bash
+
 nebulaio server --config /etc/nebulaio/config.yaml
-```
+
+```text
 
 **Step 3**: Promote to voter
 
 ```bash
+
 curl -X POST http://leader:9001/api/v1/admin/cluster/nodes/mgmt-node-4/promote
-```
+
+```text
 
 **Step 4**: Verify voter status
 
 ```bash
+
 curl http://localhost:9001/api/v1/admin/cluster/nodes | jq '.[] | {id, voter}'
-```
+
+```bash
 
 ### Adding Nodes in Kubernetes
 
 ```bash
+
 # Scale the StatefulSet
 kubectl scale statefulset nebulaio -n nebulaio --replicas=5
 
@@ -164,7 +179,8 @@ kubectl rollout status statefulset/nebulaio -n nebulaio
 # Verify cluster membership
 kubectl exec -n nebulaio nebulaio-0 -- \
   curl -s http://localhost:9001/api/v1/admin/cluster/nodes | jq
-```
+
+```text
 
 ---
 
@@ -175,12 +191,15 @@ kubectl exec -n nebulaio nebulaio-0 -- \
 **Step 1**: Demote from voter (if applicable)
 
 ```bash
+
 curl -X POST http://leader:9001/api/v1/admin/cluster/nodes/{node-id}/demote
-```
+
+```text
 
 **Step 2**: Wait for data migration and Dragonboat synchronization
 
 ```bash
+
 # Check rebalance progress
 curl http://leader:9001/api/v1/admin/cluster/rebalance/status
 
@@ -189,45 +208,54 @@ curl http://leader:9001/api/v1/admin/cluster/dragonboat/status
 
 # Check shard membership (shows all replicas and their addresses)
 curl http://leader:9001/api/v1/admin/cluster/membership
-```
+
+```text
 
 **Note**: Dragonboat's `SyncGetShardMembership` returns the current membership configuration, including all voting and non-voting replicas.
 
 **Step 3**: Remove from cluster
 
 ```bash
+
 curl -X DELETE http://leader:9001/api/v1/admin/cluster/nodes/{node-id}
-```
+
+```text
 
 **Step 4**: Stop and decommission the node
 
 ```bash
+
 systemctl stop nebulaio
-```
+
+```bash
 
 ### Emergency Node Removal
 
 For failed nodes that cannot be gracefully removed:
 
 ```bash
+
 # Force remove (use with caution)
 curl -X DELETE "http://leader:9001/api/v1/admin/cluster/nodes/{node-id}?force=true"
-```
+
+```bash
 
 ### Removing Nodes in Kubernetes
 
 ```bash
+
 # Scale down (removes highest-numbered pods first)
 kubectl scale statefulset nebulaio -n nebulaio --replicas=3
 
 # Delete associated PVCs if needed
 kubectl delete pvc data-nebulaio-4 data-nebulaio-3 -n nebulaio
-```
+
+```bash
 
 ### Quorum Considerations
 
 | Current Voters | Can Remove | Minimum Remaining |
-|----------------|------------|-------------------|
+| ---------------- | ------------ | ------------------- |
 | 3 | 1 | 2 (degraded) |
 | 5 | 2 | 3 |
 | 7 | 3 | 4 |
@@ -243,6 +271,7 @@ Never remove nodes below quorum. For a 3-node cluster, removing any voter degrad
 NebulaIO automatically rebalances data when nodes join or leave.
 
 ```yaml
+
 # config.yaml
 rebalancing:
   enabled: true
@@ -259,13 +288,15 @@ rebalancing:
     enabled: true
     start_time: "02:00"
     end_time: "06:00"
-```
+
+```bash
 
 ### Manual Rebalancing
 
 Trigger immediate rebalancing:
 
 ```bash
+
 # Start rebalance
 curl -X POST http://leader:9001/api/v1/admin/cluster/rebalance/start
 
@@ -274,11 +305,13 @@ curl http://leader:9001/api/v1/admin/cluster/rebalance/status
 
 # Cancel if needed
 curl -X POST http://leader:9001/api/v1/admin/cluster/rebalance/cancel
-```
+
+```bash
 
 ### Rebalance Status Response
 
 ```json
+
 {
   "status": "in_progress",
   "started_at": "2024-01-15T02:00:00Z",
@@ -294,14 +327,15 @@ curl -X POST http://leader:9001/api/v1/admin/cluster/rebalance/cancel
   },
   "estimated_completion": "2024-01-15T04:30:00Z"
 }
-```
+
+```bash
 
 ### Monitoring Rebalance
 
 Key metrics during rebalancing:
 
 | Metric | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `nebulaio_rebalance_objects_total` | Total objects to transfer |
 | `nebulaio_rebalance_objects_transferred` | Objects transferred |
 | `nebulaio_rebalance_bytes_transferred` | Bytes transferred |
@@ -315,7 +349,8 @@ Key metrics during rebalancing:
 
 Calculate required storage:
 
-```
+```text
+
 Total Storage = Raw Data * Replication Factor * Overhead Factor
 
 Example:
@@ -323,12 +358,13 @@ Example:
 - Replication Factor: 3
 - Overhead (metadata, erasure coding): 1.1
 - Total: 100 * 3 * 1.1 = 330 TB
-```
+
+```bash
 
 ### Node Sizing Guidelines
 
 | Workload | Nodes | CPU/Node | RAM/Node | Storage/Node |
-|----------|-------|----------|----------|--------------|
+| ---------- | ------- | ---------- | ---------- | -------------- |
 | Small (< 10TB) | 3 | 8 cores | 32 GB | 4 TB |
 | Medium (10-100TB) | 5 | 16 cores | 64 GB | 20 TB |
 | Large (100TB-1PB) | 10+ | 32 cores | 128 GB | 100 TB |
@@ -337,6 +373,7 @@ Example:
 ### Growth Planning
 
 ```yaml
+
 # capacity-plan.yaml
 current:
   total_storage: 50TB
@@ -360,13 +397,15 @@ projections:
     projected_usage: 195TB
     action: major_expansion
     nodes_to_add: 8
-```
+
+```bash
 
 ### Capacity Alerts
 
 Configure alerts before reaching capacity:
 
 ```yaml
+
 # prometheus-rules.yaml
 groups:
   - name: nebulaio-capacity
@@ -382,7 +421,8 @@ groups:
         for: 15m
         labels:
           severity: critical
-```
+
+```text
 
 ---
 
@@ -398,6 +438,7 @@ To increase read/write throughput:
 4. **Enable caching** - DRAM cache for frequent access
 
 ```yaml
+
 # High-throughput configuration
 performance:
   read_replicas:
@@ -412,7 +453,8 @@ performance:
     tier_hot: nvme
     tier_warm: ssd
     tier_cold: hdd
-```
+
+```bash
 
 ### Scaling for IOPS
 
@@ -424,6 +466,7 @@ To increase operations per second:
 4. **Use connection pooling** - Reduce connection overhead
 
 ```yaml
+
 # High-IOPS configuration
 performance:
   workers: 64
@@ -435,7 +478,8 @@ performance:
   metadata_cache:
     size: 32GB
     preload: true
-```
+
+```bash
 
 ### Scaling for Latency
 
@@ -455,6 +499,7 @@ To reduce request latency:
 Scale based on CPU or custom metrics:
 
 ```yaml
+
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -494,13 +539,15 @@ spec:
         - type: Pods
           value: 1
           periodSeconds: 600
-```
+
+```bash
 
 ### Vertical Pod Autoscaler (VPA)
 
 Automatically adjust resource requests:
 
 ```yaml
+
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
@@ -525,13 +572,15 @@ spec:
         controlledResources:
           - cpu
           - memory
-```
+
+```bash
 
 ### Custom Metrics for Scaling
 
 Deploy the Prometheus Adapter for custom metrics:
 
 ```yaml
+
 # prometheus-adapter-config.yaml
 rules:
   - seriesQuery: 'nebulaio_s3_requests_total{namespace!="",pod!=""}'
@@ -553,13 +602,15 @@ rules:
       matches: "^(.*)$"
       as: "$1"
     metricsQuery: '<<.Series>>{<<.LabelMatchers>>}'
-```
+
+```bash
 
 ### KEDA Integration
 
 For event-driven autoscaling:
 
 ```yaml
+
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -577,6 +628,7 @@ spec:
         metricName: nebulaio_queue_depth
         query: sum(nebulaio_request_queue_depth)
         threshold: "100"
+
 ```
 
 ---

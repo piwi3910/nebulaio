@@ -9,6 +9,7 @@ All S3 API errors follow the AWS S3 error response format.
 ### Error Response Format
 
 ```xml
+
 <?xml version="1.0" encoding="UTF-8"?>
 <Error>
     <Code>NoSuchBucket</Code>
@@ -16,23 +17,26 @@ All S3 API errors follow the AWS S3 error response format.
     <BucketName>my-bucket</BucketName>
     <RequestId>4442587FB7D0A2F9</RequestId>
 </Error>
-```
+
+```text
 
 JSON format (when `Accept: application/json` is specified):
 
 ```json
+
 {
     "Code": "NoSuchBucket",
     "Message": "The specified bucket does not exist",
     "BucketName": "my-bucket",
     "RequestId": "4442587FB7D0A2F9"
 }
-```
+
+```bash
 
 ### HTTP Status Codes
 
 | Status Code | Category | Description |
-|-------------|----------|-------------|
+| ------------- | ---------- | ------------- |
 | 400 | Client Error | Malformed request, validation errors |
 | 403 | Authorization | Access denied, signature mismatch |
 | 404 | Not Found | Bucket or object doesn't exist |
@@ -47,7 +51,7 @@ JSON format (when `Accept: application/json` is specified):
 ### Access & Authentication Errors
 
 | Error Code | HTTP Status | Description | Resolution |
-|------------|-------------|-------------|------------|
+| ------------ | ------------- | ------------- | ------------ |
 | `AccessDenied` | 403 | Access to the resource is denied | Check IAM policies and bucket policies |
 | `InvalidAccessKeyId` | 403 | Access key doesn't exist | Verify access key configuration |
 | `SignatureDoesNotMatch` | 403 | Calculated signature doesn't match | Check secret key, ensure clock is synced |
@@ -57,7 +61,7 @@ JSON format (when `Accept: application/json` is specified):
 ### Bucket Errors
 
 | Error Code | HTTP Status | Description | Resolution |
-|------------|-------------|-------------|------------|
+| ------------ | ------------- | ------------- | ------------ |
 | `NoSuchBucket` | 404 | Bucket doesn't exist | Verify bucket name, check region |
 | `BucketAlreadyExists` | 409 | Bucket name taken globally | Choose a different bucket name |
 | `BucketAlreadyOwnedByYou` | 409 | You already own this bucket | Use existing bucket |
@@ -68,7 +72,7 @@ JSON format (when `Accept: application/json` is specified):
 ### Object Errors
 
 | Error Code | HTTP Status | Description | Resolution |
-|------------|-------------|-------------|------------|
+| ------------ | ------------- | ------------- | ------------ |
 | `NoSuchKey` | 404 | Object key doesn't exist | Verify object key, check versioning |
 | `InvalidObjectState` | 403 | Object in archive/glacier | Restore object before access |
 | `EntityTooLarge` | 400 | Object exceeds size limit | Use multipart upload for large files |
@@ -79,7 +83,7 @@ JSON format (when `Accept: application/json` is specified):
 ### Multipart Upload Errors
 
 | Error Code | HTTP Status | Description | Resolution |
-|------------|-------------|-------------|------------|
+| ------------ | ------------- | ------------- | ------------ |
 | `NoSuchUpload` | 404 | Upload ID doesn't exist | Initiate new multipart upload |
 | `InvalidPart` | 400 | Part specified is invalid | Verify part number and ETag |
 | `InvalidPartOrder` | 400 | Parts not in ascending order | Sort parts by part number |
@@ -88,7 +92,7 @@ JSON format (when `Accept: application/json` is specified):
 ### Rate Limiting Errors
 
 | Error Code | HTTP Status | Description | Resolution |
-|------------|-------------|-------------|------------|
+| ------------ | ------------- | ------------- | ------------ |
 | `SlowDown` | 503 | Request rate too high | Implement exponential backoff |
 | `ServiceUnavailable` | 503 | Service temporarily unavailable | Retry with backoff |
 | `RequestThrottled` | 503 | Request was throttled | Reduce request rate |
@@ -102,6 +106,7 @@ Admin API errors use JSON format with detailed error information.
 ### Error Response Format
 
 ```json
+
 {
     "error": {
         "code": "VALIDATION_ERROR",
@@ -115,12 +120,13 @@ Admin API errors use JSON format with detailed error information.
         "timestamp": "2024-01-15T10:30:00Z"
     }
 }
-```
+
+```bash
 
 ### Admin Error Codes
 
 | Error Code | HTTP Status | Description |
-|------------|-------------|-------------|
+| ------------ | ------------- | ------------- |
 | `UNAUTHORIZED` | 401 | Missing or invalid authentication |
 | `FORBIDDEN` | 403 | Insufficient permissions |
 | `NOT_FOUND` | 404 | Resource not found |
@@ -137,6 +143,7 @@ Admin API errors use JSON format with detailed error information.
 ### 1. Implement Retry Logic
 
 ```python
+
 import time
 import random
 from botocore.exceptions import ClientError
@@ -161,11 +168,13 @@ def s3_operation_with_retry(operation, max_retries=5):
             wait_time = (2 ** attempt) + random.uniform(0, 1)
             print(f"Retrying in {wait_time:.2f}s (attempt {attempt + 1}/{max_retries})")
             time.sleep(wait_time)
-```
+
+```bash
 
 ### 2. Handle Specific Error Types
 
 ```python
+
 from botocore.exceptions import ClientError
 
 def get_object_safely(s3_client, bucket, key):
@@ -189,11 +198,13 @@ def get_object_safely(s3_client, bucket, key):
 
         else:
             raise  # Re-raise unexpected errors
-```
+
+```bash
 
 ### 3. Validate Before Operations
 
 ```python
+
 def validate_bucket_name(name):
     """Validate bucket name before creation."""
     errors = []
@@ -214,11 +225,13 @@ def validate_bucket_name(name):
         raise ValueError(f"Invalid bucket name: {'; '.join(errors)}")
 
     return True
-```
+
+```bash
 
 ### 4. Log Errors with Context
 
 ```python
+
 import logging
 import json
 
@@ -237,7 +250,8 @@ def log_s3_error(operation, bucket, key, error):
     }
 
     logger.error(f"S3 operation failed: {json.dumps(error_info)}")
-```
+
+```text
 
 ---
 
@@ -246,7 +260,7 @@ def log_s3_error(operation, bucket, key, error):
 ### Raft Consensus Errors
 
 | Error | Cause | Resolution |
-|-------|-------|------------|
+| ------- | ------- | ------------ |
 | `ErrNoLeader` | No leader elected | Wait for election, check node connectivity |
 | `ErrTimeout` | Operation timed out | Increase timeout, check network latency |
 | `ErrNotMember` | Node not in cluster | Verify cluster configuration |
@@ -256,6 +270,7 @@ def log_s3_error(operation, bucket, key, error):
 ### Handling Cluster Errors
 
 ```go
+
 // Example: Handle cluster errors in Go
 func performClusterOperation(ctx context.Context, op Operation) error {
     for retries := 0; retries < 3; retries++ {
@@ -288,7 +303,8 @@ func performClusterOperation(ctx context.Context, op Operation) error {
 
     return errors.New("max retries exceeded")
 }
-```
+
+```text
 
 ---
 
@@ -297,7 +313,7 @@ func performClusterOperation(ctx context.Context, op Operation) error {
 ### Common Storage Errors
 
 | Error | Cause | Resolution |
-|-------|-------|------------|
+| ------- | ------- | ------------ |
 | `ErrDiskFull` | Storage volume full | Add storage, clean up data |
 | `ErrCorrupted` | Data corruption detected | Run integrity check, restore from backup |
 | `ErrIOTimeout` | Disk I/O timeout | Check disk health, reduce load |
@@ -306,7 +322,7 @@ func performClusterOperation(ctx context.Context, op Operation) error {
 ### Erasure Coding Errors
 
 | Error | Cause | Resolution |
-|-------|-------|------------|
+| ------- | ------- | ------------ |
 | `ErrInsufficientShards` | Not enough shards to reconstruct | Restore missing nodes |
 | `ErrTooManyFailures` | More than parity shards failed | Data may be unrecoverable |
 | `ErrPlacementFailure` | Cannot satisfy placement policy | Add nodes in required regions |
@@ -320,6 +336,7 @@ func performClusterOperation(ctx context.Context, op Operation) error {
 NebulaIO exposes error metrics for monitoring:
 
 ```promql
+
 # S3 API error rate by error code
 sum(rate(nebulaio_s3_errors_total[5m])) by (code)
 
@@ -331,11 +348,13 @@ sum(rate(nebulaio_admin_errors_total[5m])) by (code)
 
 # Storage layer errors
 sum(rate(nebulaio_storage_errors_total[5m])) by (type)
-```
+
+```bash
 
 ### Alerting Rules
 
 ```yaml
+
 groups:
   - name: nebulaio-errors
     rules:
@@ -356,7 +375,8 @@ groups:
           severity: critical
         annotations:
           summary: "Cluster consensus errors detected"
-```
+
+```text
 
 ---
 
@@ -365,6 +385,7 @@ groups:
 ### Enable Debug Logging
 
 ```bash
+
 # Via environment variable
 export NEBULAIO_LOG_LEVEL=debug
 ./nebulaio
@@ -374,11 +395,13 @@ export NEBULAIO_LOG_LEVEL=debug
 
 # Via configuration file
 log_level: debug
-```
+
+```bash
 
 ### Trace Request Flow
 
 ```bash
+
 # Get request ID from error response
 REQUEST_ID="4442587FB7D0A2F9"
 
@@ -387,11 +410,13 @@ grep "$REQUEST_ID" /var/log/nebulaio/server.log
 
 # Or use structured query
 cat /var/log/nebulaio/server.log | jq 'select(.request_id == "'$REQUEST_ID'")'
-```
+
+```bash
 
 ### Check Component Health
 
 ```bash
+
 # Overall health
 curl -sk https://localhost:9001/health | jq
 
@@ -403,6 +428,7 @@ curl -sk https://localhost:9001/api/v1/admin/cluster/health | jq
 
 # Storage health
 curl -sk https://localhost:9001/api/v1/admin/storage/health | jq
+
 ```
 
 ---

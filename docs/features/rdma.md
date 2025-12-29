@@ -30,16 +30,19 @@ S3 over RDMA provides:
 ### Basic Setup
 
 ```yaml
+
 rdma:
   enabled: true
   port: 9100
   device_name: mlx5_0
   enable_zero_copy: true
-```
+
+```bash
 
 ### Advanced Configuration
 
 ```yaml
+
 rdma:
   enabled: true
   port: 9100
@@ -51,19 +54,21 @@ rdma:
   max_recv_wr: 128              # Receive work requests
   max_sge: 4                    # Scatter/gather elements
   cq_size: 256                  # Completion queue size
-```
+
+```bash
 
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `NEBULAIO_RDMA_ENABLED` | Enable RDMA | `false` |
 | `NEBULAIO_RDMA_PORT` | RDMA port | `9100` |
 | `NEBULAIO_RDMA_DEVICE_NAME` | RDMA device | `mlx5_0` |
 
 ## Architecture
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Client Application                        │
 │  ┌─────────────────────────────────────────────────────────────┐│
@@ -98,13 +103,15 @@ rdma:
 │  └─────────────────────────────────────────────────────────────┘│
 │                       NebulaIO Server                            │
 └─────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ## Usage Examples
 
 ### Python Client
 
 ```python
+
 from nebulaio.rdma import RDMAClient
 
 # Connect via RDMA
@@ -126,11 +133,13 @@ client.put_object(
     key="output.bin",
     body=data
 )
-```
+
+```bash
 
 ### Go Client
 
 ```go
+
 import "github.com/nebulaio/client-rdma"
 
 client, err := rdma.NewClient(rdma.Config{
@@ -144,11 +153,13 @@ data, err := client.GetObject(ctx, "my-bucket", "data.bin")
 
 // Write with RDMA
 err = client.PutObject(ctx, "my-bucket", "output.bin", data)
-```
+
+```bash
 
 ### C++ with libibverbs
 
 ```cpp
+
 #include <infiniband/verbs.h>
 #include "nebulaio/rdma.h"
 
@@ -169,14 +180,15 @@ ctx.rdma_write("my-bucket", "output.bin", buffer, size);
 
 // Cleanup
 ctx.free_mr(buffer);
-```
+
+```bash
 
 ## Performance
 
 ### Latency Benchmarks
 
 | Operation | TCP/IP | RDMA | Improvement |
-|-----------|--------|------|-------------|
+| ----------- | -------- | ------ | ------------- |
 | GET 4KB | 150μs | 8μs | 18x |
 | GET 64KB | 250μs | 12μs | 20x |
 | PUT 4KB | 180μs | 10μs | 18x |
@@ -185,7 +197,7 @@ ctx.free_mr(buffer);
 ### Throughput Benchmarks
 
 | Configuration | Bandwidth |
-|---------------|-----------|
+| --------------- | ----------- |
 | Single Connection | 12 GB/s |
 | 4 Connections | 48 GB/s |
 | 8 Connections | 90 GB/s |
@@ -193,7 +205,7 @@ ctx.free_mr(buffer);
 ### CPU Utilization
 
 | Protocol | CPU per GB/s |
-|----------|--------------|
+| ---------- | -------------- |
 | TCP/IP | 1 core |
 | RDMA | 0.1 core |
 
@@ -202,6 +214,7 @@ ctx.free_mr(buffer);
 ### InfiniBand Setup
 
 ```bash
+
 # Check IB devices
 ibv_devices
 
@@ -210,11 +223,13 @@ ibstat mlx5_0
 
 # Configure IP over IB (optional)
 ip addr add 192.168.100.1/24 dev ib0
-```
+
+```bash
 
 ### RoCE v2 Setup
 
 ```bash
+
 # Enable RoCE
 mlxconfig -d /dev/mst/mt4123_pciconf0 set ROCE_MODE=2
 
@@ -223,23 +238,27 @@ echo 1 > /sys/class/net/ens1f0/ecn/roce_np/enable
 
 # Set PFC (Priority Flow Control)
 mlnx_qos -i ens1f0 --pfc 0,0,0,1,0,0,0,0
-```
+
+```bash
 
 ## Integration
 
 ### With GPUDirect
 
 ```yaml
+
 rdma:
   enabled: true
 gpudirect:
   enabled: true
 # GPU <-> RDMA <-> Storage (full zero-copy path)
-```
+
+```bash
 
 ### With BlueField DPU
 
 ```yaml
+
 rdma:
   enabled: true
   device_name: mlx5_0
@@ -248,17 +267,20 @@ dpu:
   enable_rdma: true
   enable_crypto: true
 # RDMA traffic encrypted/decrypted at line rate
-```
+
+```bash
 
 ### With S3 Express
 
 ```yaml
+
 rdma:
   enabled: true
 s3_express:
   enabled: true
 # Express buckets accessible via RDMA
-```
+
+```bash
 
 ## Troubleshooting
 
@@ -281,6 +303,7 @@ s3_express:
 ### Diagnostics
 
 ```bash
+
 # RDMA device info
 ibv_devinfo -d mlx5_0
 
@@ -293,26 +316,31 @@ ibping -c 10 -d mlx5_0 -P 1 -L <remote_lid>
 
 # Bandwidth test
 ib_write_bw -d mlx5_0 -p 9100
-```
+
+```bash
 
 ### System Tuning
 
 ```bash
+
 # Increase locked memory
 echo "* soft memlock unlimited" >> /etc/security/limits.conf
 echo "* hard memlock unlimited" >> /etc/security/limits.conf
 
 # Increase max_mr
 echo 131072 > /sys/module/mlx5_core/parameters/prof_sel
-```
+
+```bash
 
 ### Logs
 
 Enable debug logging:
 
 ```yaml
+
 log_level: debug
-```
+
+```text
 
 Look for logs with `rdma` tag.
 
@@ -321,6 +349,7 @@ Look for logs with `rdma` tag.
 ### Queue Sizing
 
 ```yaml
+
 rdma:
   # High throughput
   max_send_wr: 256
@@ -331,6 +360,7 @@ rdma:
   max_send_wr: 64
   max_recv_wr: 64
   cq_size: 128
+
 ```
 
 ### Connection Management
@@ -350,7 +380,7 @@ rdma:
 ### RDMAClient Methods
 
 | Method | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `connect(host, port)` | Establish RDMA connection |
 | `get_object(bucket, key)` | RDMA read operation |
 | `put_object(bucket, key, data)` | RDMA write operation |

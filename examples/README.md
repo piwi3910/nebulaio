@@ -4,12 +4,14 @@ This directory contains usage examples for NebulaIO's features.
 
 ## Directory Structure
 
-```
+```text
+
 examples/
 ├── python/         # Python examples using boto3
 ├── go/             # Go examples using AWS SDK
 └── shell/          # Shell scripts using curl and AWS CLI
-```
+
+```bash
 
 ## Core Features
 
@@ -98,18 +100,22 @@ AI inference on stored objects:
 ### Python
 
 ```bash
+
 pip install boto3 pandas
 
 # For AI/ML features
 pip install pyiceberg pyspark cupy-cuda12x torch
 pip install mcp  # Model Context Protocol client
-```
+
+```bash
 
 ### Go
 
 ```bash
+
 go get github.com/aws/aws-sdk-go-v2/service/s3
-```
+
+```bash
 
 ### Shell
 
@@ -122,6 +128,7 @@ go get github.com/aws/aws-sdk-go-v2/service/s3
 Set these environment variables:
 
 ```bash
+
 export NEBULAIO_ENDPOINT="http://localhost:9000"
 export NEBULAIO_ACCESS_KEY="your-access-key"
 export NEBULAIO_SECRET_KEY="your-secret-key"
@@ -133,4 +140,5 @@ export NEBULAIO_MCP_ENDPOINT="http://localhost:9005"
 export NEBULAIO_ICEBERG_ENDPOINT="http://localhost:9006"
 export NEBULAIO_RDMA_ENDPOINT="192.168.100.1:9100"
 export NVIDIA_API_KEY="nvapi-XXXX"  # For NIM
+
 ```

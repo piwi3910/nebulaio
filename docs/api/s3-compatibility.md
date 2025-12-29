@@ -9,7 +9,7 @@ NebulaIO provides near-complete S3 API compatibility, allowing you to use standa
 ### Key Compatibility Features
 
 | Feature | Status | Notes |
-|---------|--------|-------|
+| --------- | -------- | ------- |
 | AWS Signature V4 | Full | Required for all requests |
 | AWS Signature V2 | Deprecated | Legacy support only |
 | Virtual-hosted style | Full | `bucket.endpoint.com` |
@@ -23,7 +23,7 @@ NebulaIO provides near-complete S3 API compatibility, allowing you to use standa
 Operations for managing buckets (containers for objects).
 
 | Operation | Support | Notes |
-|-----------|---------|-------|
+| ----------- | --------- | ------- |
 | `CreateBucket` | Full | Region constraints supported |
 | `DeleteBucket` | Full | Bucket must be empty |
 | `HeadBucket` | Full | Check bucket existence |
@@ -62,7 +62,7 @@ Operations for managing buckets (containers for objects).
 Operations for managing objects (files) within buckets.
 
 | Operation | Support | Notes |
-|-----------|---------|-------|
+| ----------- | --------- | ------- |
 | `PutObject` | Full | Up to 5GB single upload |
 | `GetObject` | Full | Range requests supported |
 | `HeadObject` | Full | Metadata without body |
@@ -90,7 +90,7 @@ Operations for managing objects (files) within buckets.
 Operations for uploading large objects in parts (recommended for objects > 100MB).
 
 | Operation | Support | Notes |
-|-----------|---------|-------|
+| ----------- | --------- | ------- |
 | `CreateMultipartUpload` | Full | Initiate multipart upload |
 | `UploadPart` | Full | Upload individual parts |
 | `UploadPartCopy` | Full | Copy part from existing object |
@@ -102,7 +102,7 @@ Operations for uploading large objects in parts (recommended for objects > 100MB
 ### Multipart Upload Limits
 
 | Parameter | Limit |
-|-----------|-------|
+| ----------- | ------- |
 | Minimum part size | 5 MB (except last part) |
 | Maximum part size | 5 GB |
 | Maximum parts per upload | 10,000 |
@@ -113,7 +113,7 @@ Operations for uploading large objects in parts (recommended for objects > 100MB
 Operations for managing object versions.
 
 | Operation | Support | Notes |
-|-----------|---------|-------|
+| ----------- | --------- | ------- |
 | `GetBucketVersioning` | Full | Check versioning status |
 | `PutBucketVersioning` | Full | Enable/suspend versioning |
 | `ListObjectVersions` | Full | List all versions |
@@ -126,7 +126,7 @@ Operations for managing object versions.
 Access Control List operations for fine-grained permissions.
 
 | Operation | Support | Notes |
-|-----------|---------|-------|
+| ----------- | --------- | ------- |
 | `GetBucketAcl` | Full | Bucket ACL |
 | `PutBucketAcl` | Full | Set bucket ACL |
 | `GetObjectAcl` | Full | Object ACL |
@@ -135,7 +135,7 @@ Access Control List operations for fine-grained permissions.
 ### Canned ACLs
 
 | ACL | Description |
-|-----|-------------|
+| ----- | ------------- |
 | `private` | Owner gets FULL_CONTROL (default) |
 | `public-read` | Owner FULL_CONTROL, public READ |
 | `public-read-write` | Owner FULL_CONTROL, public READ/WRITE |
@@ -148,7 +148,7 @@ Access Control List operations for fine-grained permissions.
 Operations for automated object management.
 
 | Operation | Support | Notes |
-|-----------|---------|-------|
+| ----------- | --------- | ------- |
 | `GetBucketLifecycleConfiguration` | Full | Get lifecycle rules |
 | `PutBucketLifecycleConfiguration` | Full | Set lifecycle rules |
 | `DeleteBucketLifecycle` | Full | Remove lifecycle config |
@@ -156,7 +156,7 @@ Operations for automated object management.
 ### Supported Lifecycle Actions
 
 | Action | Support | Notes |
-|--------|---------|-------|
+| -------- | --------- | ------- |
 | Expiration | Full | Delete objects after N days |
 | NoncurrentVersionExpiration | Full | Delete old versions |
 | Transition | Full | Move to different storage tier |
@@ -169,7 +169,7 @@ Operations for automated object management.
 Operations for cross-region and cross-cluster replication.
 
 | Operation | Support | Notes |
-|-----------|---------|-------|
+| ----------- | --------- | ------- |
 | `GetBucketReplication` | Full | Get replication config |
 | `PutBucketReplication` | Full | Set replication rules |
 | `DeleteBucketReplication` | Full | Remove replication |
@@ -177,7 +177,7 @@ Operations for cross-region and cross-cluster replication.
 ### Replication Features
 
 | Feature | Support | Notes |
-|---------|---------|-------|
+| --------- | --------- | ------- |
 | Cross-Region Replication (CRR) | Full | Replicate across regions |
 | Same-Region Replication (SRR) | Full | Replicate within region |
 | Bi-directional Replication | Full | Active-active sync |
@@ -192,7 +192,7 @@ Some AWS-specific features are not applicable or have limited support.
 ### Not Supported
 
 | Operation | Reason |
-|-----------|--------|
+| ----------- | -------- |
 | `GetBucketAccelerateConfiguration` | AWS-specific (CloudFront) |
 | `PutBucketAccelerateConfiguration` | AWS-specific (CloudFront) |
 | `GetBucketRequestPayment` | AWS billing feature |
@@ -206,7 +206,7 @@ Some AWS-specific features are not applicable or have limited support.
 ### Partial Support
 
 | Operation | Limitation |
-|-----------|------------|
+| ----------- | ------------ |
 | `GetBucketAnalyticsConfiguration` | Basic metrics only |
 | `GetBucketInventoryConfiguration` | Simplified inventory |
 | `GetBucketMetricsConfiguration` | Prometheus metrics preferred |
@@ -227,35 +227,41 @@ All API requests must be signed using AWS Signature V4. The signature is calcula
 
 ### Signature Components
 
-```
+```text
+
 Authorization: AWS4-HMAC-SHA256
 Credential=<access-key>/<date>/<region>/s3/aws4_request,
 SignedHeaders=<signed-headers>,
 Signature=<signature>
-```
+
+```bash
 
 ### Example Signed Request
 
 ```http
+
 GET /my-bucket/my-object HTTP/1.1
 Host: s3.nebulaio.local:9000
 X-Amz-Date: 20240115T120000Z
 X-Amz-Content-SHA256: e3b0c44298fc1c149afbf4c8996fb924...
 Authorization: AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20240115/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=5d672d79c15b13162d9279b0855cfba...
-```
+
+```bash
 
 ### Presigned URLs
 
 Generate time-limited URLs for temporary access:
 
 ```python
+
 # Python (boto3)
 url = s3.generate_presigned_url(
     'get_object',
     Params={'Bucket': 'my-bucket', 'Key': 'my-file.pdf'},
     ExpiresIn=3600  # 1 hour
 )
-```
+
+```bash
 
 ## Error Responses
 
@@ -264,6 +270,7 @@ NebulaIO returns standard S3 error responses in XML format.
 ### Error Response Format
 
 ```xml
+
 <?xml version="1.0" encoding="UTF-8"?>
 <Error>
     <Code>NoSuchBucket</Code>
@@ -272,12 +279,13 @@ NebulaIO returns standard S3 error responses in XML format.
     <RequestId>4442587FB7D0A2F9</RequestId>
     <HostId>eftixk72aD6Ap51TnqcoF8eFidJG9Z/2mkiDFu8yU9AS1ed4OpIszj7UDNEHGran</HostId>
 </Error>
-```
+
+```bash
 
 ### Common Error Codes
 
 | Code | HTTP Status | Description |
-|------|-------------|-------------|
+| ------ | ------------- | ------------- |
 | `AccessDenied` | 403 | Access to resource denied |
 | `BucketAlreadyExists` | 409 | Bucket name already taken |
 | `BucketAlreadyOwnedByYou` | 409 | You already own this bucket |
@@ -315,6 +323,7 @@ NebulaIO works with all major AWS SDKs and S3-compatible tools.
 #### Python (boto3)
 
 ```python
+
 import boto3
 from botocore.config import Config
 
@@ -339,11 +348,13 @@ s3.upload_file('local-file.txt', 'my-bucket', 'remote-file.txt')
 
 # Download file
 s3.download_file('my-bucket', 'remote-file.txt', 'downloaded.txt')
-```
+
+```bash
 
 #### JavaScript/TypeScript (AWS SDK v3)
 
 ```javascript
+
 import { S3Client, ListBucketsCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const s3 = new S3Client({
@@ -366,11 +377,13 @@ await s3.send(new PutObjectCommand({
     Key: 'my-file.txt',
     Body: 'Hello, NebulaIO!'
 }));
-```
+
+```bash
 
 #### Go
 
 ```go
+
 package main
 
 import (
@@ -400,11 +413,13 @@ func main() {
         fmt.Println(*bucket.Name)
     }
 }
-```
+
+```bash
 
 #### Java
 
 ```java
+
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -426,13 +441,15 @@ S3Client s3 = S3Client.builder()
 s3.listBuckets().buckets().forEach(bucket ->
     System.out.println(bucket.name())
 );
-```
+
+```bash
 
 ### CLI Tools
 
 #### AWS CLI
 
 ```bash
+
 # Configure AWS CLI
 aws configure set aws_access_key_id YOUR_ACCESS_KEY
 aws configure set aws_secret_access_key YOUR_SECRET_KEY
@@ -442,11 +459,13 @@ aws configure set default.region us-east-1
 aws --endpoint-url http://nebulaio.local:9000 s3 ls
 aws --endpoint-url http://nebulaio.local:9000 s3 mb s3://my-bucket
 aws --endpoint-url http://nebulaio.local:9000 s3 cp file.txt s3://my-bucket/
-```
+
+```bash
 
 #### s3cmd
 
 ```bash
+
 # Configure s3cmd (~/.s3cfg)
 cat > ~/.s3cfg << EOF
 [default]
@@ -462,11 +481,13 @@ EOF
 s3cmd ls
 s3cmd mb s3://my-bucket
 s3cmd put file.txt s3://my-bucket/
-```
+
+```bash
 
 #### rclone
 
 ```bash
+
 # Configure rclone
 rclone config create nebulaio s3 \
     provider=Other \
@@ -478,6 +499,7 @@ rclone config create nebulaio s3 \
 rclone ls nebulaio:my-bucket
 rclone copy local-dir nebulaio:my-bucket/remote-dir
 rclone sync nebulaio:source-bucket nebulaio:dest-bucket
+
 ```
 
 ## Best Practices

@@ -34,6 +34,7 @@ Copy diagram content to [Mermaid Live Editor](https://mermaid.live/)
 ### Command Line
 
 ```bash
+
 # Install mermaid-cli
 npm install -g @mermaid-js/mermaid-cli
 
@@ -45,11 +46,13 @@ mmdc -i security-architecture.mmd -o security-architecture.svg
 
 # Generate PDF
 mmdc -i security-architecture.mmd -o security-architecture.pdf
-```
+
+```bash
 
 ## Architecture Overview
 
-```
+```text
+
                     NebulaIO Architecture
     ┌─────────────────────────────────────────────────────┐
     │                  External Access                     │
@@ -83,4 +86,5 @@ mmdc -i security-architecture.mmd -o security-architecture.pdf
     │                   Storage Layer                      │
     │  Encrypted Objects | Metadata | Cache | Tiering    │
     └─────────────────────────────────────────────────────┘
+
 ```

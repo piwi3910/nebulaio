@@ -11,22 +11,24 @@ The KMS integration supports envelope encryption, where data encryption keys (DE
 - **Audit Trails**: All key operations logged by the KMS provider
 - **Compliance**: Meet regulatory requirements for key management (PCI DSS, HIPAA, SOC 2)
 
-```
+```text
+
 +------------------+     +------------------+     +------------------+
-|    NebulaIO      |     |   KMS Provider   |     |   Key Storage    |
-|    Storage       |<--->|   (Vault/AWS/    |<--->|   (HSM/Secure    |
-|    Server        |     |    Azure/GCP)    |     |    Backend)      |
+| NebulaIO |     | KMS Provider |     | Key Storage |
+| Storage | <---> | (Vault/AWS/ | <---> | (HSM/Secure |
+| Server |     | Azure/GCP) |     | Backend) |
 +------------------+     +------------------+     +------------------+
         |                        |
         v                        v
    Data encrypted           Master keys
    with DEKs                stored securely
-```
+
+```bash
 
 ## Supported Providers
 
 | Provider | Description | Status |
-|----------|-------------|--------|
+| ---------- | ------------- | -------- |
 | [HashiCorp Vault](#hashicorp-vault) | Transit secrets engine for encryption operations | Production |
 | [AWS KMS](#aws-kms) | Amazon Key Management Service | Production |
 | [Azure Key Vault](#azure-key-vault) | Microsoft Azure key management | Production |
@@ -42,6 +44,7 @@ HashiCorp Vault Transit secrets engine provides encryption-as-a-service without 
 ### Configuration
 
 ```yaml
+
 # config.yaml
 encryption:
   enabled: true
@@ -64,11 +67,13 @@ encryption:
       timeout: 30s
       max_retries: 3
       key_cache_ttl: 5m
-```
+
+```bash
 
 ### Vault Setup
 
 ```bash
+
 # Enable transit secrets engine
 vault secrets enable transit
 
@@ -102,7 +107,8 @@ vault write auth/approle/role/nebulaio \
   token_policies="nebulaio-kms" \
   token_ttl=1h \
   token_max_ttl=4h
-```
+
+```text
 
 ---
 
@@ -113,6 +119,7 @@ Amazon Web Services Key Management Service for cloud-native deployments.
 ### Configuration
 
 ```yaml
+
 # config.yaml
 encryption:
   enabled: true
@@ -137,11 +144,13 @@ encryption:
       # Connection settings
       endpoint: ""                        # Custom endpoint (LocalStack)
       key_cache_ttl: 5m
-```
+
+```bash
 
 ### IAM Policy
 
 ```json
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -158,7 +167,8 @@ encryption:
     }
   ]
 }
-```
+
+```text
 
 ---
 
@@ -169,6 +179,7 @@ Microsoft Azure Key Vault for Azure-native deployments.
 ### Configuration
 
 ```yaml
+
 # config.yaml
 encryption:
   enabled: true
@@ -190,18 +201,21 @@ encryption:
 
       # Connection settings
       key_cache_ttl: 5m
-```
+
+```bash
 
 ### Azure RBAC
 
 Assign the "Key Vault Crypto User" role to your application:
 
 ```bash
+
 az role assignment create \
   --role "Key Vault Crypto User" \
   --assignee <app-object-id> \
   --scope /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.KeyVault/vaults/<vault-name>
-```
+
+```text
 
 ---
 
@@ -212,6 +226,7 @@ Google Cloud Key Management Service for GCP-native deployments.
 ### Configuration
 
 ```yaml
+
 # config.yaml
 encryption:
   enabled: true
@@ -233,17 +248,20 @@ encryption:
 
       # Connection settings
       key_cache_ttl: 5m
-```
+
+```bash
 
 ### IAM Permissions
 
 ```bash
+
 gcloud kms keys add-iam-policy-binding nebulaio-master \
   --keyring=nebulaio-keyring \
   --location=us-central1 \
   --member="serviceAccount:nebulaio@my-project.iam.gserviceaccount.com" \
   --role="roles/cloudkms.cryptoKeyEncrypterDecrypter"
-```
+
+```text
 
 ---
 
@@ -254,6 +272,7 @@ NebulaIO supports automatic and manual key rotation with zero-downtime re-encryp
 ### Rotation Policies
 
 ```yaml
+
 # config.yaml
 encryption:
   key_rotation:
@@ -275,11 +294,13 @@ encryption:
         grace_period: 336h                # 14 days
         retain_versions: 3
         require_reencryption: false
-```
+
+```bash
 
 ### Manual Rotation
 
 ```bash
+
 # Rotate a specific key
 curl -X POST "http://localhost:9001/api/v1/keys/key-123/rotate" \
   -H "Authorization: Bearer $TOKEN" \
@@ -294,7 +315,8 @@ curl -X POST "http://localhost:9001/api/v1/keys/key-123/reencrypt" \
     "buckets": ["my-bucket"],
     "concurrency": 10
   }'
-```
+
+```text
 
 ---
 
@@ -308,7 +330,8 @@ NebulaIO uses envelope encryption for efficient and secure data protection.
 2. **Key Encryption Key (KEK)**: Master key in KMS that encrypts DEKs
 3. **Encrypted DEK**: Stored alongside the encrypted object
 
-```
+```text
+
 Object Upload:
 1. Generate random DEK (AES-256)
 2. Encrypt object data with DEK
@@ -320,18 +343,21 @@ Object Download:
 2. Send encrypted DEK to KMS for decryption
 3. Decrypt object data with plaintext DEK
 4. Return plaintext object to client
-```
+
+```bash
 
 ### Configuration
 
 ```yaml
+
 encryption:
   envelope:
     enabled: true
     dek_algorithm: AES_256_GCM
     dek_cache_ttl: 5m
     dek_cache_max_size: 10000
-```
+
+```text
 
 ---
 
@@ -342,6 +368,7 @@ Configure different encryption keys for different buckets to support data isolat
 ### Configuration
 
 ```yaml
+
 # config.yaml
 encryption:
   enabled: true
@@ -359,11 +386,13 @@ encryption:
     - bucket: healthcare-data
       key_id: azure:https://hipaa-kv.vault.azure.net/keys/hipaa-key
       algorithm: AES_256_GCM
-```
+
+```bash
 
 ### API Configuration
 
 ```bash
+
 # Set bucket encryption key
 curl -X PUT "http://localhost:9001/api/v1/buckets/pii-data/encryption" \
   -H "Authorization: Bearer $TOKEN" \
@@ -377,7 +406,8 @@ curl -X PUT "http://localhost:9001/api/v1/buckets/pii-data/encryption" \
 # Get bucket encryption configuration
 curl -X GET "http://localhost:9001/api/v1/buckets/pii-data/encryption" \
   -H "Authorization: Bearer $TOKEN"
-```
+
+```text
 
 ---
 
@@ -387,9 +417,11 @@ curl -X GET "http://localhost:9001/api/v1/buckets/pii-data/encryption" \
 
 #### Connection Failed
 
-```
+```text
+
 Error: failed to connect to KMS provider: connection refused
-```
+
+```text
 
 **Solutions:**
 
@@ -399,9 +431,11 @@ Error: failed to connect to KMS provider: connection refused
 
 #### Authentication Failed
 
-```
+```text
+
 Error: KMS authentication failed: invalid credentials
-```
+
+```text
 
 **Solutions:**
 
@@ -411,9 +445,11 @@ Error: KMS authentication failed: invalid credentials
 
 #### Key Not Found
 
-```
+```text
+
 Error: key not found: nebulaio-master
-```
+
+```text
 
 **Solutions:**
 
@@ -423,9 +459,11 @@ Error: key not found: nebulaio-master
 
 #### Decryption Failed
 
-```
+```text
+
 Error: decryption failed: key version not available
-```
+
+```text
 
 **Solutions:**
 
@@ -436,6 +474,7 @@ Error: decryption failed: key version not available
 ### Diagnostic Commands
 
 ```bash
+
 # Check KMS provider status
 nebulaio-cli admin kms status
 
@@ -450,11 +489,13 @@ nebulaio-cli admin kms keys history nebulaio-master
 
 # Check encryption metrics
 curl -s http://localhost:9001/metrics | grep nebulaio_kms_
-```
+
+```bash
 
 ### Health Checks
 
 ```yaml
+
 # Kubernetes liveness probe
 livenessProbe:
   httpGet:
@@ -462,18 +503,21 @@ livenessProbe:
     port: 9001
   initialDelaySeconds: 10
   periodSeconds: 30
-```
+
+```bash
 
 ### Logging
 
 Enable debug logging for KMS operations:
 
 ```yaml
+
 logging:
   level: debug
   components:
     kms: debug
     encryption: debug
+
 ```
 
 ---

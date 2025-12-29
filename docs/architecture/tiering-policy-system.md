@@ -4,7 +4,8 @@ This document describes the architecture of NebulaIO's comprehensive tiering pol
 
 ## System Overview
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              Tiering Policy System                                   │
 ├─────────────────────────────────────────────────────────────────────────────────────┤
@@ -67,7 +68,8 @@ This document describes the architecture of NebulaIO's comprehensive tiering pol
             │  Hot Tier    │      │  Warm Tier   │      │  Cold Tier   │
             │  (NVMe/SSD)  │      │  (SSD/HDD)   │      │  (HDD/Tape)  │
             └──────────────┘      └──────────────┘      └──────────────┘
-```
+
+```bash
 
 ## Component Details
 
@@ -75,7 +77,8 @@ This document describes the architecture of NebulaIO's comprehensive tiering pol
 
 The Policy Store manages policy persistence with a hybrid approach:
 
-```
+```text
+
 ┌────────────────────────────────────────────────────────────┐
 │                     Hybrid Policy Store                     │
 ├────────────────────────────────────────────────────────────┤
@@ -99,7 +102,8 @@ The Policy Store manages policy persistence with a hybrid approach:
 │                          └─────────────────┘               │
 │                                                             │
 └────────────────────────────────────────────────────────────┘
-```
+
+```text
 
 **Features:**
 
@@ -113,7 +117,8 @@ The Policy Store manages policy persistence with a hybrid approach:
 
 The Policy Engine orchestrates policy evaluation and execution:
 
-```
+```text
+
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                            Policy Engine                                    │
 ├────────────────────────────────────────────────────────────────────────────┤
@@ -152,11 +157,13 @@ The Policy Engine orchestrates policy evaluation and execution:
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### 3. Policy Types
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          Policy Types                                    │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -186,13 +193,15 @@ The Policy Engine orchestrates policy evaluation and execution:
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### 4. Policy Executor
 
 The Policy Executor handles safe and controlled execution:
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           Policy Executor                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -238,13 +247,15 @@ The Policy Executor handles safe and controlled execution:
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### 5. Predictive Engine
 
 The Predictive Engine provides ML-based insights:
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          Predictive Engine                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -303,11 +314,13 @@ The Predictive Engine provides ML-based insights:
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ### 6. Anomaly Detection
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          Anomaly Detector                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -347,13 +360,15 @@ The Predictive Engine provides ML-based insights:
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+
+```bash
 
 ## Data Flow
 
 ### Policy Evaluation Flow
 
-```
+```text
+
 ┌─────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
 │ Object  │────►│ Selector │────►│ Trigger  │────►│ Executor │────►│  Action  │
 │ Event   │     │ Match    │     │ Evaluate │     │ Checks   │     │ Execute  │
@@ -365,11 +380,13 @@ The Predictive Engine provides ML-based insights:
                - Size           - Capacity       - Schedule       - Replicate
                - Tags           - Frequency      - Distributed    - Notify
                - Content type   - Cron match     - Leader check
-```
+
+```bash
 
 ### Prediction Flow
 
-```
+```text
+
 ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
 │  Access  │────►│  Track   │────►│ Aggregate│────►│ Analyze  │────►│ Predict  │
 │  Event   │     │  Record  │     │ Hourly   │     │ Patterns │     │  Output  │
@@ -381,13 +398,15 @@ The Predictive Engine provides ML-based insights:
                                   │ Trend   │     │ Seasonal │     │ Residual │
                                   │ (slope) │     │ (cycles) │     │ (noise)  │
                                   └─────────┘     └──────────┘     └──────────┘
-```
+
+```bash
 
 ## Configuration
 
 ### Policy Configuration Example
 
 ```yaml
+
 tiering:
   policies:
     - name: archive-old-logs
@@ -429,11 +448,13 @@ tiering:
       distributed:
         enabled: true
         leader_only: false
-```
+
+```bash
 
 ### Predictive Engine Configuration
 
 ```yaml
+
 tiering:
   predictive:
     enabled: true
@@ -461,12 +482,13 @@ tiering:
     anomaly:
       threshold_std_devs: 3.0
       min_baseline_hours: 168  # 1 week
+
 ```
 
 ## Performance Considerations
 
 | Component | Memory Usage | CPU Impact | Storage |
-|-----------|-------------|------------|---------|
+| ----------- | ------------- | ------------ | --------- |
 | Policy Store | ~10MB per 1000 policies | Low | Disk-backed |
 | Access Tracker | ~1KB per tracked object | Low | In-memory |
 | Predictive Engine | ~500 bytes per model | Medium (analysis) | In-memory |
