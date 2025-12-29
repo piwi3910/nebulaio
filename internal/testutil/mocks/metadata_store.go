@@ -877,9 +877,17 @@ func (m *MockMetadataStore) StoreAuditEvent(ctx context.Context, event *audit.Au
 func (m *MockMetadataStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
+	// Convert []*audit.AuditEvent to []audit.AuditEvent
+	events := make([]audit.AuditEvent, 0, len(m.auditEvents))
+	for _, e := range m.auditEvents {
+		if e != nil {
+			events = append(events, *e)
+		}
+	}
+
 	return &audit.AuditListResult{
-		Events: m.auditEvents,
-		Total:  len(m.auditEvents),
+		Events: events,
 	}, nil
 }
 
