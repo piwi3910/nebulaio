@@ -489,7 +489,7 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 	}
 	objs := m.objects[bucket]
 	listing := &metadata.ObjectListing{
-		Objects: make([]*metadata.ObjectMeta, 0),
+		Objects: make([]*metadata.ObjectMeta, 0, len(objs)),
 	}
 	for _, obj := range objs {
 		// Filter by prefix if specified
@@ -564,6 +564,7 @@ func (m *MockMetadataStore) CreateMultipartUpload(ctx context.Context, upload *m
 }
 
 // GetMultipartUpload implements metadata.Store interface.
+// Returns ErrNoSuchUpload if the upload is not found.
 func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*metadata.MultipartUpload, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -574,7 +575,7 @@ func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key,
 	if upload, ok := m.multipartUploads[mpKey]; ok {
 		return upload, nil
 	}
-	return nil, nil
+	return nil, s3errors.ErrNoSuchUpload
 }
 
 // AbortMultipartUpload implements metadata.Store interface.

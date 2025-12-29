@@ -288,3 +288,152 @@ func TestMockStorageBackend_HelperMethods(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, content, stored)
 }
+
+// TestMockObjectService_ErrorInjection verifies error injection works correctly.
+func TestMockObjectService_ErrorInjection(t *testing.T) {
+	ctx := context.Background()
+	expectedErr := errors.New("injected error")
+
+	t.Run("DeleteObject", func(t *testing.T) {
+		svc := NewMockObjectService()
+		svc.SetDeleteObjectError(expectedErr)
+		err := svc.DeleteObject(ctx, "bucket", "key")
+		assert.Equal(t, expectedErr, err)
+	})
+
+	t.Run("DeleteObjectVersion", func(t *testing.T) {
+		svc := NewMockObjectService()
+		svc.SetDeleteVersionError(expectedErr)
+		err := svc.DeleteObjectVersion(ctx, "bucket", "key", "v1")
+		assert.Equal(t, expectedErr, err)
+	})
+
+	t.Run("TransitionStorageClass", func(t *testing.T) {
+		svc := NewMockObjectService()
+		svc.SetTransitionError(expectedErr)
+		err := svc.TransitionStorageClass(ctx, "bucket", "key", "GLACIER")
+		assert.Equal(t, expectedErr, err)
+	})
+}
+
+// TestMockObjectService_Tracking verifies operation tracking works correctly.
+func TestMockObjectService_Tracking(t *testing.T) {
+	ctx := context.Background()
+	svc := NewMockObjectService()
+
+	// Test delete tracking
+	err := svc.DeleteObject(ctx, "bucket1", "key1")
+	require.NoError(t, err)
+	err = svc.DeleteObject(ctx, "bucket2", "key2")
+	require.NoError(t, err)
+
+	deleted := svc.GetDeletedObjects()
+	require.Len(t, deleted, 2)
+	assert.Equal(t, "bucket1", deleted[0].Bucket)
+	assert.Equal(t, "key1", deleted[0].Key)
+
+	// Test version delete tracking
+	err = svc.DeleteObjectVersion(ctx, "bucket", "key", "v1")
+	require.NoError(t, err)
+
+	versions := svc.GetDeletedVersions()
+	require.Len(t, versions, 1)
+	assert.Equal(t, "v1", versions[0].VersionID)
+
+	// Test transition tracking
+	err = svc.TransitionStorageClass(ctx, "bucket", "key", "GLACIER")
+	require.NoError(t, err)
+
+	transitions := svc.GetTransitions()
+	require.Len(t, transitions, 1)
+	assert.Equal(t, "GLACIER", transitions[0].StorageClass)
+}
+
+// TestMockMultipartService_ErrorInjection verifies error injection works correctly.
+func TestMockMultipartService_ErrorInjection(t *testing.T) {
+	ctx := context.Background()
+	expectedErr := errors.New("injected error")
+
+	t.Run("ListUploads", func(t *testing.T) {
+		svc := NewMockMultipartService()
+		svc.SetListUploadsError(expectedErr)
+		_, err := svc.ListMultipartUploads(ctx, "bucket")
+		assert.Equal(t, expectedErr, err)
+	})
+
+	t.Run("AbortUpload", func(t *testing.T) {
+		svc := NewMockMultipartService()
+		svc.SetAbortError(expectedErr)
+		err := svc.AbortMultipartUpload(ctx, "bucket", "key", "upload-id")
+		assert.Equal(t, expectedErr, err)
+	})
+}
+
+// TestMockMultipartService_Tracking verifies operation tracking works correctly.
+func TestMockMultipartService_Tracking(t *testing.T) {
+	ctx := context.Background()
+	svc := NewMockMultipartService()
+
+	// Add uploads
+	svc.AddUpload(&metadata.MultipartUpload{
+		Bucket:   "bucket",
+		Key:      "key1",
+		UploadID: "upload-1",
+	})
+	svc.AddUpload(&metadata.MultipartUpload{
+		Bucket:   "bucket",
+		Key:      "key2",
+		UploadID: "upload-2",
+	})
+
+	// List uploads
+	uploads, err := svc.ListMultipartUploads(ctx, "bucket")
+	require.NoError(t, err)
+	assert.Len(t, uploads, 2)
+
+	// Abort upload
+	err = svc.AbortMultipartUpload(ctx, "bucket", "key1", "upload-1")
+	require.NoError(t, err)
+
+	aborted := svc.GetAbortedUploadIDs()
+	require.Len(t, aborted, 1)
+	assert.Equal(t, "upload-1", aborted[0])
+
+	// Verify upload was removed
+	uploads, err = svc.ListMultipartUploads(ctx, "bucket")
+	require.NoError(t, err)
+	assert.Len(t, uploads, 1)
+}
+
+// TestMockEventTarget_ErrorInjection verifies error injection works correctly.
+func TestMockEventTarget_ErrorInjection(t *testing.T) {
+	expectedErr := errors.New("injected error")
+
+	target := NewMockEventTarget("test-target")
+	target.SetPublishError(expectedErr)
+
+	err := target.Publish(map[string]string{"event": "test"})
+	assert.Equal(t, expectedErr, err)
+}
+
+// TestMockEventTarget_Tracking verifies event publishing tracking works correctly.
+func TestMockEventTarget_Tracking(t *testing.T) {
+	target := NewMockEventTarget("test-target")
+
+	// Verify initial state
+	assert.Equal(t, "test-target", target.Name())
+	assert.True(t, target.IsHealthy())
+	assert.Equal(t, 0, target.PublishedCount())
+
+	// Publish events
+	err := target.Publish(map[string]string{"event": "1"})
+	require.NoError(t, err)
+	err = target.Publish(map[string]string{"event": "2"})
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, target.PublishedCount())
+
+	// Test health toggle
+	target.SetHealthy(false)
+	assert.False(t, target.IsHealthy())
+}
