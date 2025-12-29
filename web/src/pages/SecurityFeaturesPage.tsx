@@ -56,6 +56,9 @@ import {
   TracingStats,
 } from '../api/client';
 
+// Documentation base URL - can be overridden via environment variable
+const DOCS_BASE_URL = import.meta.env.VITE_DOCS_URL || 'https://github.com/piwi3910/nebulaio/blob/main/docs';
+
 interface SecurityConfig {
   access_analytics?: {
     enabled?: boolean;
@@ -995,7 +998,7 @@ function RateLimitingTab() {
           </div>
           <Button
             component="a"
-            href="https://github.com/piwi3910/nebulaio/blob/main/docs/deployment/rate-limiting.md"
+            href={`${DOCS_BASE_URL}/deployment/rate-limiting.md`}
             target="_blank"
             variant="light"
             rightSection={<IconExternalLink size={16} />}
