@@ -111,6 +111,55 @@ func (m *MockStorageBackend) SetGetStorageInfoError(err error) {
 	m.getStorageInfoErr = err
 }
 
+// SetBucketExistsError sets the error to return on BucketExists calls.
+func (m *MockStorageBackend) SetBucketExistsError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.bucketExistsErr = err
+}
+
+// SetObjectExistsError sets the error to return on ObjectExists calls.
+func (m *MockStorageBackend) SetObjectExistsError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.objectExistsErr = err
+}
+
+// SetCreateMultipartUploadError sets the error to return on CreateMultipartUpload calls.
+func (m *MockStorageBackend) SetCreateMultipartUploadError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.createMultipartUploadErr = err
+}
+
+// SetPutPartError sets the error to return on PutPart calls.
+func (m *MockStorageBackend) SetPutPartError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.putPartErr = err
+}
+
+// SetGetPartError sets the error to return on GetPart calls.
+func (m *MockStorageBackend) SetGetPartError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.getPartErr = err
+}
+
+// SetCompletePartsError sets the error to return on CompleteParts calls.
+func (m *MockStorageBackend) SetCompletePartsError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.completePartsErr = err
+}
+
+// SetAbortMultipartUploadError sets the error to return on AbortMultipartUpload calls.
+func (m *MockStorageBackend) SetAbortMultipartUploadError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.abortMultipartUploadErr = err
+}
+
 // SetStorageInfo sets the storage info to return.
 func (m *MockStorageBackend) SetStorageInfo(info *backend.StorageInfo) {
 	m.mu.Lock()
@@ -343,7 +392,7 @@ func (m *MockStorageBackend) GetPart(ctx context.Context, bucket, key, uploadID 
 			return io.NopCloser(bytes.NewReader(content)), nil
 		}
 	}
-	return nil, nil
+	return nil, s3errors.ErrNoSuchKey
 }
 
 // CompleteParts implements backend.MultipartBackend interface.

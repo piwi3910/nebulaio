@@ -506,13 +506,39 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 }
 
 // GetObjectVersion implements metadata.Store interface.
+// Returns the object version if found, or ErrNoSuchKey if not found.
 func (m *MockMetadataStore) GetObjectVersion(ctx context.Context, bucket, key, versionID string) (*metadata.ObjectMeta, error) {
-	return nil, nil
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if versions, ok := m.versions[bucket]; ok {
+		if objVersions, ok := versions[key]; ok {
+			for _, v := range objVersions {
+				if v.VersionID == versionID {
+					return v, nil
+				}
+			}
+		}
+	}
+	return nil, s3errors.ErrNoSuchKey
 }
 
 // ListObjectVersions implements metadata.Store interface.
+// Returns all versions for objects matching the prefix.
 func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (*metadata.VersionListing, error) {
-	return nil, nil
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	listing := &metadata.VersionListing{
+		Versions:      make([]*metadata.ObjectMeta, 0),
+		DeleteMarkers: make([]*metadata.ObjectMeta, 0),
+	}
+	if versions, ok := m.versions[bucket]; ok {
+		for key, objVersions := range versions {
+			if prefix == "" || strings.HasPrefix(key, prefix) {
+				listing.Versions = append(listing.Versions, objVersions...)
+			}
+		}
+	}
+	return listing, nil
 }
 
 // DeleteObjectVersion implements metadata.Store interface.
