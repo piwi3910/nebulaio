@@ -142,6 +142,8 @@ linters:
     - embeddedstructfieldcheck # Embedded field ordering - style preference
     - errchkjson        # JSON marshal error checking - interface{} marshaling is safe
     - errcheck          # Unchecked errors - too many false positives for cleanup operations
+    - errorlint         # Error comparison - errors.Is() not always appropriate for internal errors
+    - errname           # Error naming convention - project uses ErrXxx style consistently
 
   exclusions:
     paths:
