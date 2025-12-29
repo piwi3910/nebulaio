@@ -153,6 +153,27 @@ func (m *MockMetadataStore) SetGetClusterInfoError(err error) {
 	m.getClusterInfoErr = err
 }
 
+// SetCreateMultipartUploadError sets the error to return on CreateMultipartUpload calls.
+func (m *MockMetadataStore) SetCreateMultipartUploadError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.createMultipartUploadErr = err
+}
+
+// SetGetMultipartUploadError sets the error to return on GetMultipartUpload calls.
+func (m *MockMetadataStore) SetGetMultipartUploadError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.getMultipartUploadErr = err
+}
+
+// SetListMultipartUploadsError sets the error to return on ListMultipartUploads calls.
+func (m *MockMetadataStore) SetListMultipartUploadsError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.listMultipartUploadsErr = err
+}
+
 // SetCreateUserError sets the error to return on CreateUser calls.
 func (m *MockMetadataStore) SetCreateUserError(err error) {
 	m.mu.Lock()
