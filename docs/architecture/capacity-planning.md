@@ -18,10 +18,8 @@ Capacity planning for NebulaIO involves:
 ### Calculating Raw Storage
 
 ```text
-
 Total Raw Storage = Data Size × Erasure Coding Overhead × Replication Factor
-
-```text
+```
 
 **Example:**
 
@@ -30,10 +28,8 @@ Total Raw Storage = Data Size × Erasure Coding Overhead × Replication Factor
 - Replication factor: 2 (cross-DC)
 
 ```text
-
 Raw Storage = 100 TB × 1.4 × 2 = 280 TB
-
-```bash
+```
 
 ### Erasure Coding Overhead
 
@@ -56,13 +52,11 @@ Raw Storage = 100 TB × 1.4 × 2 = 280 TB
 **Example for 1 PB deployment:**
 
 ```yaml
-
 storage_allocation:
   hot_tier: 100 TB    # 10%
   warm_tier: 300 TB   # 30%
   cold_tier: 600 TB   # 60%
-
-```text
+```
 
 ---
 
@@ -82,10 +76,8 @@ storage_allocation:
 **Base formula:**
 
 ```text
-
 RAM per Node = Base + (Objects × Metadata Size) + Cache + Buffers
-
-```text
+```
 
 | Component | Size Per Node |
 | ----------- | --------------- |
@@ -98,12 +90,10 @@ RAM per Node = Base + (Objects × Metadata Size) + Cache + Buffers
 **Example for 100 million objects (5 nodes):**
 
 ```text
-
 Metadata per node: 100M / 5 × 200 bytes = 4 GB
 Total RAM: 4 GB (base) + 4 GB (metadata) + 32 GB (cache) + 4 GB (buffers) = 44 GB
 Recommended: 64 GB per node
-
-```bash
+```
 
 ### CPU Requirements
 
@@ -123,7 +113,6 @@ Recommended: 64 GB per node
 Placement groups define data locality boundaries:
 
 ```text
-
 ┌─────────────────────────────────────────────────────────────┐
 │                    NebulaIO Cluster                          │
 │                                                              │
@@ -144,18 +133,15 @@ Placement groups define data locality boundaries:
 │                                                              │
 │              ↓ DR Replication (full copies) ↓               │
 └─────────────────────────────────────────────────────────────┘
-
-```bash
+```
 
 ### Sizing Placement Groups
 
 **Minimum nodes per placement group:**
 
 ```text
-
 Min Nodes = Data Shards + Parity Shards + Spare Nodes
-
-```text
+```
 
 | Erasure Config | Min Nodes | Recommended | Max Nodes |
 | --------------- | ----------- | ------------- | ----------- |
@@ -167,7 +153,6 @@ Min Nodes = Data Shards + Parity Shards + Spare Nodes
 ### Placement Group Configuration
 
 ```yaml
-
 storage:
   placement_groups:
     local_group_id: pg-east
@@ -190,27 +175,22 @@ storage:
 
     replication_targets:
       - pg-west
-
-```bash
+```
 
 ### Capacity per Placement Group
 
 **Formula:**
 
 ```text
-
 PG Capacity = (Nodes × Storage per Node) / Erasure Overhead
-
-```text
+```
 
 **Example: 10 nodes with 10 TB NVMe, 10+4 erasure:**
 
 ```text
-
 Raw capacity: 10 × 10 TB = 100 TB
 Usable capacity: 100 TB / 1.4 = 71 TB
-
-```text
+```
 
 ---
 
@@ -263,19 +243,16 @@ Usable capacity: 100 TB / 1.4 = 71 TB
 ### General Object Storage
 
 ```yaml
-
 # Balanced configuration
 nodes: 6-12
 erasure: 4+2
 cache: 8-16 GB per node
 network: 10-25 GbE
-
-```bash
+```
 
 ### AI/ML Training Data
 
 ```yaml
-
 # High-throughput configuration
 nodes: 8-20
 erasure: 8+4
@@ -285,13 +262,11 @@ storage:
 cache: 64-128 GB per node
 network: 100 GbE + RDMA
 gpu: 4-8 per node (GPUDirect)
-
-```bash
+```
 
 ### Log Aggregation
 
 ```yaml
-
 # Write-heavy configuration
 nodes: 8-16
 erasure: 10+4
@@ -301,13 +276,11 @@ storage:
   cold_tier: 60% (HDD)
 cache: 16-32 GB per node
 compression: zstd level 3
-
-```bash
+```
 
 ### Backup/Archive
 
 ```yaml
-
 # Cost-optimized configuration
 nodes: 6-10
 erasure: 16+4
@@ -319,8 +292,7 @@ compression: zstd level 7
 tiering:
   warm_to_cold: 7 days
   cold_to_archive: 30 days
-
-```text
+```
 
 ---
 
@@ -329,7 +301,6 @@ tiering:
 ### Two-Datacenter Setup
 
 ```yaml
-
 # Active-Passive
 datacenters:
   primary:
@@ -343,13 +314,11 @@ datacenters:
     nodes: 10
     capacity: 100 TB
     role: DR replica
-
-```bash
+```
 
 ### Three-Datacenter Setup
 
 ```yaml
-
 # Active-Active-Active
 datacenters:
   east:
@@ -366,8 +335,7 @@ datacenters:
     placement_group: pg-west
     nodes: 8
     replication: [pg-east, pg-central]
-
-```bash
+```
 
 ### Cross-DC Bandwidth
 
@@ -412,7 +380,6 @@ datacenters:
 ### Storage Capacity
 
 ```bash
-
 # Calculate usable capacity
 usable_capacity() {
   raw=$1
@@ -424,13 +391,11 @@ usable_capacity() {
 # Example: 100 TB raw with 10+4 erasure
 usable_capacity 100 10 4
 # Result: 71.4 TB
-
-```bash
+```
 
 ### Node Count
 
 ```bash
-
 # Minimum nodes for erasure config
 min_nodes() {
   data=$1
@@ -442,7 +407,6 @@ min_nodes() {
 # Example: 10+4 with 2 spare nodes
 min_nodes 10 4 2
 # Result: 16 nodes
-
 ```
 
 ---
