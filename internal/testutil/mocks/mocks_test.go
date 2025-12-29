@@ -423,7 +423,7 @@ func TestMockEventTarget_Tracking(t *testing.T) {
 	// Verify initial state
 	assert.Equal(t, "test-target", target.Name())
 	assert.True(t, target.IsHealthy())
-	assert.Equal(t, 0, target.PublishedCount())
+	assert.Equal(t, 0, target.GetPublishedCount())
 
 	// Publish events
 	err := target.Publish(map[string]string{"event": "1"})
@@ -431,7 +431,7 @@ func TestMockEventTarget_Tracking(t *testing.T) {
 	err = target.Publish(map[string]string{"event": "2"})
 	require.NoError(t, err)
 
-	assert.Equal(t, 2, target.PublishedCount())
+	assert.Equal(t, 2, target.GetPublishedCount())
 
 	// Test health toggle
 	target.SetHealthy(false)
