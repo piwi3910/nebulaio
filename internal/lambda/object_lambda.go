@@ -16,10 +16,12 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/klauspost/compress/zstd"
+	"github.com/rs/zerolog/log"
 )
 
 // TransformationType defines the type of transformation
@@ -783,20 +785,31 @@ type CompressTransformer struct{}
 const DefaultMaxTransformSize = 100 * 1024 * 1024
 
 // maxTransformSize is the configurable maximum transform size (defaults to DefaultMaxTransformSize)
-var maxTransformSize int64 = DefaultMaxTransformSize
+// Uses atomic operations for thread-safe access
+var maxTransformSize atomic.Int64
+
+func init() {
+	maxTransformSize.Store(DefaultMaxTransformSize)
+}
 
 // SetMaxTransformSize sets the maximum size of data that can be transformed in memory
-// This should be called during initialization before any transformations occur
+// This function is thread-safe and can be called at any time
 // Warning: Setting this too high may cause memory exhaustion during transformation operations
 func SetMaxTransformSize(size int64) {
 	if size > 0 {
-		maxTransformSize = size
+		maxTransformSize.Store(size)
+	} else {
+		log.Warn().
+			Int64("size", size).
+			Int64("current", maxTransformSize.Load()).
+			Msg("SetMaxTransformSize called with invalid size (<= 0), ignoring")
 	}
 }
 
 // GetMaxTransformSize returns the current maximum transform size
+// This function is thread-safe
 func GetMaxTransformSize() int64 {
-	return maxTransformSize
+	return maxTransformSize.Load()
 }
 
 func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {

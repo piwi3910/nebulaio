@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -311,7 +312,9 @@ func TestQueue(t *testing.T) {
 }
 
 // mockBackend implements ObjectBackend for testing
+// Thread-safe with RWMutex protection for concurrent access
 type mockBackend struct {
+	mu      sync.RWMutex
 	objects map[string][]byte
 }
 
@@ -322,6 +325,8 @@ func newMockBackend() *mockBackend {
 }
 
 func (m *mockBackend) GetObject(_ context.Context, bucket, key string) (io.ReadCloser, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	k := bucket + "/" + key
 	data, ok := m.objects[k]
 	if !ok {
@@ -331,6 +336,8 @@ func (m *mockBackend) GetObject(_ context.Context, bucket, key string) (io.ReadC
 }
 
 func (m *mockBackend) GetObjectInfo(_ context.Context, bucket, key string) (*ObjectInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	k := bucket + "/" + key
 	data, ok := m.objects[k]
 	if !ok {
@@ -345,11 +352,15 @@ func (m *mockBackend) GetObjectInfo(_ context.Context, bucket, key string) (*Obj
 }
 
 func (m *mockBackend) PutObject(bucket, key string, data []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.objects[bucket+"/"+key] = data
 }
 
 // mockMetaStore implements MetadataStore for testing
+// Thread-safe with RWMutex protection for concurrent access
 type mockMetaStore struct {
+	mu       sync.RWMutex
 	configs  map[string]*Config
 	statuses map[string]*ReplicationStatus
 }
@@ -362,6 +373,8 @@ func newMockMetaStore() *mockMetaStore {
 }
 
 func (m *mockMetaStore) GetReplicationConfig(_ context.Context, bucket string) (*Config, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	cfg, ok := m.configs[bucket]
 	if !ok {
 		return nil, io.EOF
@@ -370,16 +383,22 @@ func (m *mockMetaStore) GetReplicationConfig(_ context.Context, bucket string) (
 }
 
 func (m *mockMetaStore) SetReplicationConfig(_ context.Context, bucket string, config *Config) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.configs[bucket] = config
 	return nil
 }
 
 func (m *mockMetaStore) DeleteReplicationConfig(_ context.Context, bucket string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.configs, bucket)
 	return nil
 }
 
 func (m *mockMetaStore) GetReplicationStatus(_ context.Context, bucket, key, versionID string) (*ReplicationStatus, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	k := bucket + "/" + key + "/" + versionID
 	status, ok := m.statuses[k]
 	if !ok {
@@ -389,6 +408,8 @@ func (m *mockMetaStore) GetReplicationStatus(_ context.Context, bucket, key, ver
 }
 
 func (m *mockMetaStore) SetReplicationStatus(_ context.Context, bucket, key, versionID string, status *ReplicationStatus) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	k := bucket + "/" + key + "/" + versionID
 	m.statuses[k] = status
 	return nil
