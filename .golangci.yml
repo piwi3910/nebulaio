@@ -138,6 +138,9 @@ linters:
     - testpackage       # Test package naming - internal tests needed
     - godox             # TODO comments - tracked separately in issues
     - depguard          # Dependency restrictions - not configured for this project
+    - err113            # Dynamic errors - static errors add unnecessary boilerplate for internal errors
+    - dogsled           # Blank identifiers - sometimes necessary for ignored return values
+    - embeddedstructfieldcheck # Embedded field ordering - style preference
 
   exclusions:
     paths:
