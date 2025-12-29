@@ -171,7 +171,7 @@ func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Add user info to context (simplified)
-		r.Header.Set("X-User-ID", claims.UserID)
+		r.Header.Set("X-User-Id", claims.UserID)
 		r.Header.Set("X-User-Role", string(claims.Role))
 
 		next.ServeHTTP(w, r)
@@ -578,7 +578,7 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	owner := r.Header.Get("X-User-ID")
+	owner := r.Header.Get("X-User-Id")
 	if owner == "" {
 		owner = "admin"
 	}
@@ -774,7 +774,7 @@ type PresignResponse struct {
 // GeneratePresignedURL generates a presigned URL for S3 operations
 func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := r.Header.Get("X-User-ID")
+	userID := r.Header.Get("X-User-Id")
 
 	var req PresignRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

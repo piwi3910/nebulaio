@@ -718,8 +718,8 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("x-api-key", p.apiKey)
-	httpReq.Header.Set("anthropic-version", "2023-06-01")
+	httpReq.Header.Set("X-Api-Key", p.apiKey)
+	httpReq.Header.Set("Anthropic-Version", "2023-06-01")
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.client.Do(httpReq)

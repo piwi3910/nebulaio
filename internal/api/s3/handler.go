@@ -480,7 +480,7 @@ func (h *Handler) handleObjectPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for copy operation
-	if copySource := r.Header.Get("x-amz-copy-source"); copySource != "" {
+	if copySource := r.Header.Get("X-Amz-Copy-Source"); copySource != "" {
 		h.CopyObject(w, r)
 		return
 	}
@@ -575,7 +575,7 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 
 	// Parse x-amz-tagging header if present
 	var opts *object.PutObjectOptions
-	if taggingHeader := r.Header.Get("x-amz-tagging"); taggingHeader != "" {
+	if taggingHeader := r.Header.Get("X-Amz-Tagging"); taggingHeader != "" {
 		tags, err := object.ParseTaggingHeader(taggingHeader)
 		if err != nil {
 			writeS3Error(w, "InvalidArgument", err.Error(), http.StatusBadRequest)
@@ -822,7 +822,7 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 	owner := middleware.GetOwnerID(ctx)
 
 	// Parse copy source
-	copySource := r.Header.Get("x-amz-copy-source")
+	copySource := r.Header.Get("X-Amz-Copy-Source")
 	copySource = strings.TrimPrefix(copySource, "/")
 	parts := strings.SplitN(copySource, "/", 2)
 	if len(parts) != 2 {
@@ -833,7 +833,7 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 
 	// Parse tagging directive
 	var opts *object.CopyObjectOptions
-	taggingDirective := r.Header.Get("x-amz-tagging-directive")
+	taggingDirective := r.Header.Get("X-Amz-Tagging-Directive")
 	if taggingDirective != "" {
 		opts = &object.CopyObjectOptions{}
 		switch strings.ToUpper(taggingDirective) {
@@ -842,7 +842,7 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 		case "REPLACE":
 			opts.TaggingDirective = object.TaggingDirectiveReplace
 			// Parse tags from x-amz-tagging header
-			if taggingHeader := r.Header.Get("x-amz-tagging"); taggingHeader != "" {
+			if taggingHeader := r.Header.Get("X-Amz-Tagging"); taggingHeader != "" {
 				tags, err := object.ParseTaggingHeader(taggingHeader)
 				if err != nil {
 					writeS3Error(w, "InvalidArgument", err.Error(), http.StatusBadRequest)
