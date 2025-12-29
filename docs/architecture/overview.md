@@ -235,9 +235,11 @@ The following are representative benchmarks. Actual performance depends on hardw
 **Benchmark Methodology:**
 
 - Tests performed with 8-core nodes, NVMe storage, 10 Gbps network
-- Object sizes: 1 KB to 100 MB
+- Object sizes: 1 KB to 100 MB (table shows 1 MB results)
 - Concurrent clients: 100-1000
-- Results vary significantly based on object size and concurrency
+- Figures represent sustained throughput (not peak/burst)
+- Results vary significantly based on object size, concurrency, and compression settings
+- IOPS decrease ~50% with erasure coding enabled, ~20% with compression enabled
 
 ### Capacity Planning
 

@@ -11,6 +11,8 @@ Configuration values are applied in the following order (highest priority first)
 3. **Configuration file** - Override defaults
 4. **Built-in defaults** - Used when no other value is specified
 
+> **Conflict Resolution:** When the same setting is specified at multiple levels, the highest priority source wins. For example, if `NEBULAIO_S3_PORT=9000` is set as an environment variable but `--s3-port=9001` is passed on the command line, port 9001 will be used. This allows operators to set baseline configuration in files while enabling runtime overrides for testing or container orchestration.
+
 ## Configuration File
 
 The default location is `/etc/nebulaio/config.yaml`. Use the `--config` flag for an alternative path:
@@ -144,7 +146,7 @@ NebulaIO provides transparent object compression to reduce storage costs. Three 
 |--------|------|---------|-------------|
 | `storage.compression.enabled` | bool | `false` | Enable compression |
 | `storage.compression.algorithm` | string | `zstd` | Algorithm: `zstd`, `lz4`, `gzip` |
-| `storage.compression.level` | int | `3` | Compression level (1-19 for zstd, 1-12 for lz4/gzip) |
+| `storage.compression.level` | int | `3` | Compression level: 1 (fastest), 3 (default), 9 (best ratio) |
 | `storage.compression.min_size` | int | `1024` | Minimum object size to compress (bytes) |
 | `storage.compression.auto_detect` | bool | `true` | Skip already-compressed content types |
 

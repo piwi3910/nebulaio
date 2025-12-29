@@ -223,6 +223,28 @@ rate(nebulaio_object_creation_rate_limited_total[5m])
 rate(nebulaio_cache_peer_write_failures_total[5m])
 ```
 
+## Security Considerations
+
+### Rate Limiting and Authentication
+
+Rate limiting is applied at different stages of request processing:
+
+1. **Pre-authentication limits** (IP-based): Applied before authentication to protect against brute-force attacks
+2. **Post-authentication limits** (user-based): Applied after successful authentication for resource protection
+
+| Endpoint Type | Rate Limit Application | Notes |
+|---------------|------------------------|-------|
+| Public (health, metrics) | IP-based only | No authentication required |
+| S3 API | Both IP and user-based | After SigV4 validation |
+| Admin API | Both IP and user-based | After JWT validation |
+| Console | Session-based | CSRF protection also applies |
+
+**Authentication Failure Handling:**
+
+- Failed authentication attempts are rate-limited separately to prevent credential stuffing
+- After 5 consecutive failures from an IP, requests are delayed exponentially
+- Per-user rate limits only apply to authenticated requests
+
 ## Best Practices
 
 1. **Start Conservative**: Begin with lower limits and increase based on observed traffic
