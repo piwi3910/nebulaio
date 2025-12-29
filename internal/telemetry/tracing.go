@@ -34,8 +34,8 @@ const (
 
 // AttributeValue represents a span attribute value
 type AttributeValue struct {
-	Type    string      `json:"type"`
-	Value   interface{} `json:"value"`
+	Type  string      `json:"type"`
+	Value interface{} `json:"value"`
 }
 
 // SpanContext contains the trace context
@@ -93,33 +93,33 @@ type Resource struct {
 
 // TracerConfig contains configuration for the tracer
 type TracerConfig struct {
-	ServiceName       string            `json:"service_name"`
-	ServiceVersion    string            `json:"service_version"`
-	Environment       string            `json:"environment"`
-	SamplingRate      float64           `json:"sampling_rate"`
-	MaxSpansPerTrace  int               `json:"max_spans_per_trace"`
-	ExporterType      string            `json:"exporter_type"` // otlp, jaeger, zipkin, console
-	ExporterEndpoint  string            `json:"exporter_endpoint"`
-	ExporterHeaders   map[string]string `json:"exporter_headers,omitempty"`
-	BatchTimeout      time.Duration     `json:"batch_timeout"`
-	MaxExportBatchSize int              `json:"max_export_batch_size"`
-	EnableMetrics     bool              `json:"enable_metrics"`
-	PropagatorType    string            `json:"propagator_type"` // w3c, b3, jaeger
+	ServiceName        string            `json:"service_name"`
+	ServiceVersion     string            `json:"service_version"`
+	Environment        string            `json:"environment"`
+	SamplingRate       float64           `json:"sampling_rate"`
+	MaxSpansPerTrace   int               `json:"max_spans_per_trace"`
+	ExporterType       string            `json:"exporter_type"` // otlp, jaeger, zipkin, console
+	ExporterEndpoint   string            `json:"exporter_endpoint"`
+	ExporterHeaders    map[string]string `json:"exporter_headers,omitempty"`
+	BatchTimeout       time.Duration     `json:"batch_timeout"`
+	MaxExportBatchSize int               `json:"max_export_batch_size"`
+	EnableMetrics      bool              `json:"enable_metrics"`
+	PropagatorType     string            `json:"propagator_type"` // w3c, b3, jaeger
 }
 
 // Tracer creates and manages spans
 type Tracer struct {
-	mu           sync.RWMutex
-	config       *TracerConfig
-	resource     *Resource
-	spans        chan *Span
-	exporters    []SpanExporter
-	sampler      Sampler
-	propagator   Propagator
-	activeSpans  map[string]*Span
-	spanCount    int64
-	stopChan     chan struct{}
-	wg           sync.WaitGroup
+	mu          sync.RWMutex
+	config      *TracerConfig
+	resource    *Resource
+	spans       chan *Span
+	exporters   []SpanExporter
+	sampler     Sampler
+	propagator  Propagator
+	activeSpans map[string]*Span
+	spanCount   int64
+	stopChan    chan struct{}
+	wg          sync.WaitGroup
 }
 
 // SpanExporter defines the interface for exporting spans
@@ -150,15 +150,15 @@ const (
 func NewTracer(config *TracerConfig) (*Tracer, error) {
 	if config == nil {
 		config = &TracerConfig{
-			ServiceName:       "nebulaio",
-			ServiceVersion:    "1.0.0",
-			Environment:       "development",
-			SamplingRate:      1.0,
-			MaxSpansPerTrace:  10000,
-			ExporterType:      "console",
-			BatchTimeout:      5 * time.Second,
+			ServiceName:        "nebulaio",
+			ServiceVersion:     "1.0.0",
+			Environment:        "development",
+			SamplingRate:       1.0,
+			MaxSpansPerTrace:   10000,
+			ExporterType:       "console",
+			BatchTimeout:       5 * time.Second,
 			MaxExportBatchSize: 512,
-			PropagatorType:    "w3c",
+			PropagatorType:     "w3c",
 		}
 	}
 
@@ -544,30 +544,30 @@ func (p *W3CTraceContextPropagator) Inject(ctx context.Context, carrier http.Hea
 		return
 	}
 
-	// traceparent: version-traceid-spanid-flags
-	traceparent := fmt.Sprintf("00-%s-%s-%02x",
+	// Traceparent: version-traceid-spanid-flags
+	Traceparent := fmt.Sprintf("00-%s-%s-%02x",
 		span.SpanContext.TraceID,
 		span.SpanContext.SpanID,
 		span.SpanContext.TraceFlags)
 
-	carrier.Set("traceparent", traceparent)
+	carrier.Set("Traceparent", Traceparent)
 
 	if span.SpanContext.TraceState != "" {
-		carrier.Set("tracestate", span.SpanContext.TraceState)
+		carrier.Set("Tracestate", span.SpanContext.TraceState)
 	}
 }
 
 // Extract extracts the span context from HTTP headers
 func (p *W3CTraceContextPropagator) Extract(ctx context.Context, carrier http.Header) SpanContext {
-	traceparent := carrier.Get("traceparent")
-	if traceparent == "" {
+	Traceparent := carrier.Get("Traceparent")
+	if Traceparent == "" {
 		return SpanContext{}
 	}
 
 	var version, traceID, spanID string
 	var flags byte
 
-	_, err := fmt.Sscanf(traceparent, "%2s-%32s-%16s-%02x", &version, &traceID, &spanID, &flags)
+	_, err := fmt.Sscanf(Traceparent, "%2s-%32s-%16s-%02x", &version, &traceID, &spanID, &flags)
 	if err != nil {
 		return SpanContext{}
 	}
@@ -576,7 +576,7 @@ func (p *W3CTraceContextPropagator) Extract(ctx context.Context, carrier http.He
 		TraceID:    traceID,
 		SpanID:     spanID,
 		TraceFlags: flags,
-		TraceState: carrier.Get("tracestate"),
+		TraceState: carrier.Get("Tracestate"),
 		Remote:     true,
 	}
 }
@@ -591,10 +591,10 @@ func (p *B3Propagator) Inject(ctx context.Context, carrier http.Header) {
 		return
 	}
 
-	carrier.Set("X-B3-TraceId", span.SpanContext.TraceID)
-	carrier.Set("X-B3-SpanId", span.SpanContext.SpanID)
+	carrier.Set("X-B3-Traceid", span.SpanContext.TraceID)
+	carrier.Set("X-B3-Spanid", span.SpanContext.SpanID)
 	if span.ParentSpanID != "" {
-		carrier.Set("X-B3-ParentSpanId", span.ParentSpanID)
+		carrier.Set("X-B3-Parentspanid", span.ParentSpanID)
 	}
 	if span.SpanContext.TraceFlags&1 == 1 {
 		carrier.Set("X-B3-Sampled", "1")
@@ -605,8 +605,8 @@ func (p *B3Propagator) Inject(ctx context.Context, carrier http.Header) {
 
 // Extract extracts the span context from HTTP headers
 func (p *B3Propagator) Extract(ctx context.Context, carrier http.Header) SpanContext {
-	traceID := carrier.Get("X-B3-TraceId")
-	spanID := carrier.Get("X-B3-SpanId")
+	traceID := carrier.Get("X-B3-Traceid")
+	spanID := carrier.Get("X-B3-Spanid")
 
 	if traceID == "" || spanID == "" {
 		return SpanContext{}
@@ -635,7 +635,7 @@ func (p *JaegerPropagator) Inject(ctx context.Context, carrier http.Header) {
 		return
 	}
 
-	// uber-trace-id: {trace-id}:{span-id}:{parent-span-id}:{flags}
+	// Uber-Trace-Id: {trace-id}:{span-id}:{parent-span-id}:{flags}
 	parentID := span.ParentSpanID
 	if parentID == "" {
 		parentID = "0"
@@ -647,12 +647,12 @@ func (p *JaegerPropagator) Inject(ctx context.Context, carrier http.Header) {
 		parentID,
 		span.SpanContext.TraceFlags)
 
-	carrier.Set("uber-trace-id", header)
+	carrier.Set("Uber-Trace-Id", header)
 }
 
 // Extract extracts the span context from HTTP headers
 func (p *JaegerPropagator) Extract(ctx context.Context, carrier http.Header) SpanContext {
-	header := carrier.Get("uber-trace-id")
+	header := carrier.Get("Uber-Trace-Id")
 	if header == "" {
 		return SpanContext{}
 	}

@@ -99,7 +99,7 @@ func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Add user info to request headers
-		r.Header.Set("X-User-ID", claims.UserID)
+		r.Header.Set("X-User-Id", claims.UserID)
 		r.Header.Set("X-Username", claims.Username)
 		r.Header.Set("X-User-Role", string(claims.Role))
 
@@ -118,7 +118,7 @@ type UserProfileResponse struct {
 }
 
 func (h *Handler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("X-User-ID")
+	userID := r.Header.Get("X-User-Id")
 	username := r.Header.Get("X-Username")
 	role := metadata.UserRole(r.Header.Get("X-User-Role"))
 
@@ -140,7 +140,7 @@ type UpdatePasswordRequest struct {
 
 func (h *Handler) UpdateMyPassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := r.Header.Get("X-User-ID")
+	userID := r.Header.Get("X-User-Id")
 
 	var req UpdatePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -182,7 +182,7 @@ type AccessKeyResponse struct {
 
 func (h *Handler) ListMyAccessKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := r.Header.Get("X-User-ID")
+	userID := r.Header.Get("X-User-Id")
 
 	// Fetch access keys from store
 	keys, err := h.store.ListAccessKeys(ctx, userID)
@@ -210,7 +210,7 @@ type CreateAccessKeyRequest struct {
 }
 
 func (h *Handler) CreateMyAccessKey(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("X-User-ID")
+	userID := r.Header.Get("X-User-Id")
 
 	var req CreateAccessKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -237,7 +237,7 @@ func (h *Handler) CreateMyAccessKey(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeleteMyAccessKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := r.Header.Get("X-User-ID")
+	userID := r.Header.Get("X-User-Id")
 	accessKeyID := chi.URLParam(r, "accessKeyId")
 
 	// Verify the key exists and belongs to the current user
@@ -281,7 +281,7 @@ func (h *Handler) ListMyBuckets(w http.ResponseWriter, r *http.Request) {
 	// For regular users, show only buckets they have access to
 	var owner string
 	if role != metadata.RoleSuperAdmin && role != metadata.RoleAdmin {
-		owner = r.Header.Get("X-User-ID")
+		owner = r.Header.Get("X-User-Id")
 	}
 
 	buckets, err := h.bucket.ListBuckets(ctx, owner)
@@ -419,7 +419,7 @@ func (h *Handler) GetObjectInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate presigned URL if user has access keys
-	userID := r.Header.Get("X-User-ID")
+	userID := r.Header.Get("X-User-Id")
 	keys, err := h.store.ListAccessKeys(ctx, userID)
 	if err == nil && len(keys) > 0 {
 		// Find first enabled key
@@ -578,7 +578,7 @@ func (h *Handler) UploadObject(w http.ResponseWriter, r *http.Request) {
 		key = strings.TrimSuffix(pathPrefix, "/") + "/" + key
 	}
 
-	owner := r.Header.Get("X-User-ID")
+	owner := r.Header.Get("X-User-Id")
 	contentType := header.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -632,7 +632,7 @@ func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 	key := chi.URLParam(r, "key")
-	userID := r.Header.Get("X-User-ID")
+	userID := r.Header.Get("X-User-Id")
 
 	// Verify object exists
 	if _, err := h.object.HeadObject(ctx, bucketName, key); err != nil {
@@ -721,7 +721,7 @@ type ConsolePresignResponse struct {
 // GeneratePresignedURL generates a presigned URL for user's own buckets
 func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := r.Header.Get("X-User-ID")
+	userID := r.Header.Get("X-User-Id")
 	role := metadata.UserRole(r.Header.Get("X-User-Role"))
 
 	var req ConsolePresignRequest

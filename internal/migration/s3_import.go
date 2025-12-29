@@ -40,43 +40,43 @@ const (
 type MigrationStatus string
 
 const (
-	MigrationStatusPending    MigrationStatus = "pending"
-	MigrationStatusRunning    MigrationStatus = "running"
-	MigrationStatusPaused     MigrationStatus = "paused"
-	MigrationStatusCompleted  MigrationStatus = "completed"
-	MigrationStatusFailed     MigrationStatus = "failed"
-	MigrationStatusCancelled  MigrationStatus = "cancelled"
+	MigrationStatusPending   MigrationStatus = "pending"
+	MigrationStatusRunning   MigrationStatus = "running"
+	MigrationStatusPaused    MigrationStatus = "paused"
+	MigrationStatusCompleted MigrationStatus = "completed"
+	MigrationStatusFailed    MigrationStatus = "failed"
+	MigrationStatusCancelled MigrationStatus = "cancelled"
 )
 
 // MigrationConfig contains configuration for a migration job.
 type MigrationConfig struct {
 	// Source configuration
-	SourceType     SourceType
-	SourceEndpoint string
+	SourceType      SourceType
+	SourceEndpoint  string
 	SourceAccessKey string
 	SourceSecretKey string
-	SourceRegion   string
-	SourceSecure   bool
+	SourceRegion    string
+	SourceSecure    bool
 
 	// Source selection
-	SourceBuckets  []string
-	SourcePrefix   string
-	SourceExclude  []string
+	SourceBuckets []string
+	SourcePrefix  string
+	SourceExclude []string
 
 	// Destination configuration
-	DestBuckets    []string
-	DestPrefix     string
+	DestBuckets []string
+	DestPrefix  string
 
 	// Migration options
-	Concurrency    int
-	SkipExisting   bool
-	Overwrite      bool
+	Concurrency      int
+	SkipExisting     bool
+	Overwrite        bool
 	PreserveMetadata bool
-	PreserveTags   bool
-	DryRun         bool
+	PreserveTags     bool
+	DryRun           bool
 
 	// Bandwidth limiting
-	MaxBandwidth   int64 // bytes per second, 0 = unlimited
+	MaxBandwidth int64 // bytes per second, 0 = unlimited
 
 	// Filtering
 	MinSize        int64
@@ -91,38 +91,38 @@ type MigrationConfig struct {
 
 // MigrationJob represents a migration job.
 type MigrationJob struct {
-	ID              string          `json:"id"`
-	Config          *MigrationConfig `json:"config"`
-	Status          MigrationStatus `json:"status"`
-	StartTime       time.Time       `json:"startTime"`
-	EndTime         time.Time       `json:"endTime,omitempty"`
-	Progress        *MigrationProgress `json:"progress"`
-	Error           string          `json:"error,omitempty"`
-	Resume          *ResumeState    `json:"resume,omitempty"`
+	ID        string             `json:"id"`
+	Config    *MigrationConfig   `json:"config"`
+	Status    MigrationStatus    `json:"status"`
+	StartTime time.Time          `json:"startTime"`
+	EndTime   time.Time          `json:"endTime,omitempty"`
+	Progress  *MigrationProgress `json:"progress"`
+	Error     string             `json:"error,omitempty"`
+	Resume    *ResumeState       `json:"resume,omitempty"`
 }
 
 // MigrationProgress tracks migration progress.
 type MigrationProgress struct {
-	TotalObjects     int64 `json:"totalObjects"`
-	MigratedObjects  int64 `json:"migratedObjects"`
-	FailedObjects    int64 `json:"failedObjects"`
-	SkippedObjects   int64 `json:"skippedObjects"`
-	TotalBytes       int64 `json:"totalBytes"`
-	MigratedBytes    int64 `json:"migratedBytes"`
-	CurrentBucket    string `json:"currentBucket"`
-	CurrentKey       string `json:"currentKey"`
-	StartTime        time.Time `json:"startTime"`
-	LastUpdateTime   time.Time `json:"lastUpdateTime"`
-	BytesPerSecond   float64 `json:"bytesPerSecond"`
+	TotalObjects           int64         `json:"totalObjects"`
+	MigratedObjects        int64         `json:"migratedObjects"`
+	FailedObjects          int64         `json:"failedObjects"`
+	SkippedObjects         int64         `json:"skippedObjects"`
+	TotalBytes             int64         `json:"totalBytes"`
+	MigratedBytes          int64         `json:"migratedBytes"`
+	CurrentBucket          string        `json:"currentBucket"`
+	CurrentKey             string        `json:"currentKey"`
+	StartTime              time.Time     `json:"startTime"`
+	LastUpdateTime         time.Time     `json:"lastUpdateTime"`
+	BytesPerSecond         float64       `json:"bytesPerSecond"`
 	EstimatedTimeRemaining time.Duration `json:"estimatedTimeRemaining"`
 }
 
 // ResumeState contains state for resuming a migration.
 type ResumeState struct {
-	LastBucket      string `json:"lastBucket"`
-	LastKey         string `json:"lastKey"`
-	LastVersionID   string `json:"lastVersionId,omitempty"`
-	ProcessedKeys   map[string]bool `json:"processedKeys"`
+	LastBucket    string          `json:"lastBucket"`
+	LastKey       string          `json:"lastKey"`
+	LastVersionID string          `json:"lastVersionId,omitempty"`
+	ProcessedKeys map[string]bool `json:"processedKeys"`
 }
 
 // FailedObject represents a failed migration.
@@ -136,12 +136,12 @@ type FailedObject struct {
 
 // MigrationManager manages migration jobs.
 type MigrationManager struct {
-	mu           sync.RWMutex
-	jobs         map[string]*MigrationJob
-	activeJob    *activeMigrationJob
-	destStorage  DestinationStorage
-	stateDir     string
-	failedLog    *os.File
+	mu          sync.RWMutex
+	jobs        map[string]*MigrationJob
+	activeJob   *activeMigrationJob
+	destStorage DestinationStorage
+	stateDir    string
+	failedLog   *os.File
 }
 
 // activeMigrationJob represents an active migration.
@@ -194,14 +194,14 @@ type S3Client struct {
 
 // ListBucketResult represents the result of ListObjects.
 type ListBucketResult struct {
-	XMLName        xml.Name        `xml:"ListBucketResult"`
-	Name           string          `xml:"Name"`
-	Prefix         string          `xml:"Prefix"`
-	Marker         string          `xml:"Marker"`
-	NextMarker     string          `xml:"NextMarker"`
-	MaxKeys        int             `xml:"MaxKeys"`
-	IsTruncated    bool            `xml:"IsTruncated"`
-	Contents       []S3Object      `xml:"Contents"`
+	XMLName     xml.Name   `xml:"ListBucketResult"`
+	Name        string     `xml:"Name"`
+	Prefix      string     `xml:"Prefix"`
+	Marker      string     `xml:"Marker"`
+	NextMarker  string     `xml:"NextMarker"`
+	MaxKeys     int        `xml:"MaxKeys"`
+	IsTruncated bool       `xml:"IsTruncated"`
+	Contents    []S3Object `xml:"Contents"`
 }
 
 // S3Object represents an object in an S3 bucket.
@@ -490,9 +490,9 @@ func (c *S3Client) signRequest(req *http.Request) {
 	amzDate := now.Format("20060102T150405Z")
 	dateStamp := now.Format("20060102")
 
-	req.Header.Set("x-amz-date", amzDate)
+	req.Header.Set("X-Amz-Date", amzDate)
 	req.Header.Set("Host", c.endpoint)
-	req.Header.Set("x-amz-content-sha256", "UNSIGNED-PAYLOAD")
+	req.Header.Set("X-Amz-Content-Sha256", "UNSIGNED-PAYLOAD")
 
 	// Create canonical request
 	canonicalHeaders := c.getCanonicalHeaders(req)

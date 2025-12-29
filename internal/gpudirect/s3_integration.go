@@ -28,25 +28,25 @@ func NewS3Integration(service *Service) *S3Integration {
 // GPUDirectHeaders are HTTP headers for GPUDirect operations.
 const (
 	// HeaderGPUDeviceID specifies which GPU to use for the transfer
-	HeaderGPUDeviceID = "X-GPU-Device-ID"
+	HeaderGPUDeviceID = "X-Gpu-Device-Id"
 
 	// HeaderGPUDirectEnabled indicates if GPUDirect should be used
-	HeaderGPUDirectEnabled = "X-GPU-Direct-Enabled"
+	HeaderGPUDirectEnabled = "X-Gpu-Direct-Enabled"
 
 	// HeaderGPUBufferSize specifies the GPU buffer size to use
-	HeaderGPUBufferSize = "X-GPU-Buffer-Size"
+	HeaderGPUBufferSize = "X-Gpu-Buffer-Size"
 
 	// HeaderGPUAsync indicates if async transfer is requested
-	HeaderGPUAsync = "X-GPU-Async"
+	HeaderGPUAsync = "X-Gpu-Async"
 
 	// ResponseHeaderGPUDirectUsed indicates if GPUDirect was used
-	ResponseHeaderGPUDirectUsed = "X-GPU-Direct-Used"
+	ResponseHeaderGPUDirectUsed = "X-Gpu-Direct-Used"
 
 	// ResponseHeaderGPUDeviceID indicates which GPU was used
-	ResponseHeaderGPUDeviceID = "X-GPU-Device-ID"
+	ResponseHeaderGPUDeviceID = "X-Gpu-Device-Id"
 
 	// ResponseHeaderGPUTransferTime indicates the GPU transfer time in ms
-	ResponseHeaderGPUTransferTime = "X-GPU-Transfer-Time-Ms"
+	ResponseHeaderGPUTransferTime = "X-Gpu-Transfer-Time-Ms"
 )
 
 // ParseGPUDirectRequest extracts GPUDirect parameters from HTTP request.
