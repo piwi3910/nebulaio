@@ -764,7 +764,7 @@ func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uplo
 	return nil
 }
 
-// GetParts implements metadata.Store interface.
+// GetParts returns parts for a multipart upload (for lifecycle tests).
 func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID string) ([]*metadata.UploadPart, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
