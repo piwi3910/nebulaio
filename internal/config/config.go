@@ -1030,7 +1030,7 @@ func setDefaults(v *viper.Viper) {
 
 	// Placement groups defaults
 	v.SetDefault("storage.placement_groups.local_group_id", "default")
-	v.SetDefault("storage.placement_groups.min_nodes_for_erasure", 3)
+	v.SetDefault("storage.placement_groups.min_nodes_for_erasure", 14)
 
 	// Cache defaults (DRAM Cache)
 	v.SetDefault("cache.enabled", false)
