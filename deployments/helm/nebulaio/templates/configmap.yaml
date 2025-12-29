@@ -67,6 +67,12 @@ data:
   NEBULAIO_FIREWALL_RATE_LIMIT_BURST: {{ .Values.firewall.rateLimiting.burstSize | quote }}
   NEBULAIO_FIREWALL_RATE_LIMIT_PER_USER: {{ .Values.firewall.rateLimiting.perUser | quote }}
   NEBULAIO_FIREWALL_RATE_LIMIT_PER_IP: {{ .Values.firewall.rateLimiting.perIP | quote }}
+  {{- if .Values.firewall.rateLimiting.objectCreationLimit }}
+  NEBULAIO_FIREWALL_OBJECT_CREATION_LIMIT: {{ .Values.firewall.rateLimiting.objectCreationLimit | quote }}
+  {{- end }}
+  {{- if .Values.firewall.rateLimiting.objectCreationBurstSize }}
+  NEBULAIO_FIREWALL_OBJECT_CREATION_BURST: {{ .Values.firewall.rateLimiting.objectCreationBurstSize | quote }}
+  {{- end }}
   {{- end }}
   {{- if .Values.firewall.bandwidth.enabled }}
   NEBULAIO_FIREWALL_BANDWIDTH_ENABLED: "true"

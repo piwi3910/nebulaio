@@ -54,8 +54,10 @@ firewall:
 | `NEBULAIO_FIREWALL_RATE_LIMIT_PER_USER` | `true` | Per-user rate limiting |
 | `NEBULAIO_FIREWALL_RATE_LIMIT_PER_IP` | `true` | Per-IP rate limiting |
 | `NEBULAIO_FIREWALL_RATE_LIMIT_PER_BUCKET` | `false` | Per-bucket rate limiting |
-| `NEBULAIO_FIREWALL_OBJECT_CREATION_LIMIT` | `1000` | Object creation RPS (hash DoS protection) |
-| `NEBULAIO_FIREWALL_OBJECT_CREATION_BURST` | `2000` | Object creation burst size |
+| `NEBULAIO_FIREWALL_OBJECT_CREATION_LIMIT` | `1000` | Object creation RPS (hash DoS protection). Set to `0` to use global rate limit. |
+| `NEBULAIO_FIREWALL_OBJECT_CREATION_BURST` | `2000` | Object creation burst size. Set to `0` to use global burst size. |
+
+> **Note:** When `object_creation_limit` or `object_creation_burst_size` is set to `0`, the system falls back to using the global `requests_per_second` and `burst_size` values respectively. This allows you to disable specialized object creation rate limiting while keeping general rate limiting active.
 
 ## Hash DoS Mitigation
 
@@ -197,19 +199,22 @@ Content-Type: application/xml
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `nebulaio_firewall_requests_total` | Counter | Total requests processed |
-| `nebulaio_firewall_rate_limited_total` | Counter | Requests rejected by rate limiting |
+| `nebulaio_requests_total` | Counter | Total requests by operation and status |
 | `nebulaio_object_creation_rate_limited_total` | Counter | Object creation requests rate limited |
-| `nebulaio_firewall_current_connections` | Gauge | Current active connections |
+| `nebulaio_active_connections` | Gauge | Current active connections |
+| `nebulaio_cache_peer_write_failures_total` | Counter | Distributed cache peer write failures |
 
 ### Example Grafana Query
 
 ```promql
-# Rate limited requests per second
-rate(nebulaio_firewall_rate_limited_total[5m])
+# Total requests per second by status
+rate(nebulaio_requests_total[5m])
 
 # Object creation rate limiting events
 rate(nebulaio_object_creation_rate_limited_total[5m])
+
+# Monitor cache peer health
+rate(nebulaio_cache_peer_write_failures_total[5m])
 ```
 
 ## Best Practices

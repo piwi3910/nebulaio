@@ -148,6 +148,12 @@ NebulaIO provides transparent object compression to reduce storage costs. Three 
 | `storage.compression.min_size` | int | `1024` | Minimum object size to compress (bytes) |
 | `storage.compression.auto_detect` | bool | `true` | Skip already-compressed content types |
 
+**Auto-detected compressed content types (skipped when `auto_detect: true`):**
+- Images: `image/jpeg`, `image/png`, `image/gif`, `image/webp`
+- Video: `video/mp4`, `video/webm`, `video/mpeg`
+- Audio: `audio/mpeg`, `audio/mp4`, `audio/ogg`
+- Archives: `application/zip`, `application/gzip`, `application/x-gzip`, `application/x-bzip2`
+
 **Environment Variables:**
 
 | Config Key | Environment Variable |
