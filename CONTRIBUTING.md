@@ -50,13 +50,27 @@ We use pre-commit hooks to catch issues **before** they're committed, saving you
 
 The pre-commit hooks automatically run:
 
+**Backend (Go):**
+
 - **golangci-lint**: Go code linting (same as CI)
-- **markdownlint**: Documentation formatting
 - **gofmt**: Go code formatting
+- **go mod tidy**: Ensure go.mod/go.sum is clean (runs on any .go file change)
+
+**Frontend (Web Console):**
+
+- **ESLint**: JavaScript/TypeScript linting
+- **TypeScript**: Type checking (only when .ts/.tsx files changed)
+
+**Documentation:**
+
+- **markdownlint**: Markdown formatting and style
+
+**General:**
+
 - **trailing whitespace**: Remove trailing spaces
 - **YAML/JSON validation**: Check syntax
 - **merge conflicts**: Detect conflict markers
-- **go mod tidy**: Ensure go.mod is clean
+- **large files**: Prevent files >1MB from being committed
 
 ### How it works
 
@@ -111,11 +125,18 @@ git commit --no-verify
 - Ensure you ran `make install-hooks`
 - Check `.git/hooks/pre-commit` exists and is executable
 
+**Web hooks failing with "command not found"?**
+
+- You need Node.js dependencies installed: `cd web && npm install`
+- Web hooks (ESLint, TypeScript) only run when you modify web files
+- If you don't work on the frontend, these hooks won't affect you
+
 **Hooks too slow?**
 
 - They only check staged files, not the entire codebase
 - First run downloads tools (cached for future runs)
 - Typical run time: 5-30 seconds
+- Web hooks add ~5-10 seconds when modifying frontend files
 
 **Need to bypass hooks temporarily?**
 
@@ -124,6 +145,12 @@ git commit --no-verify -m "your message"
 ```
 
 *Use sparingly - you'll still need to fix issues for CI to pass!*
+
+**Large file size limit:**
+
+- Files >1MB are blocked by default
+- This prevents accidental commits of binaries, videos, or large datasets
+- If you need to commit a legitimate large file, use `--no-verify` or adjust `.pre-commit-config.yaml`
 
 ## Code Quality Standards
 

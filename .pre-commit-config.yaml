@@ -22,7 +22,8 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(.*\.md|.*\.golden)$
+        # Only exclude test fixtures (.golden), markdownlint handles .md files
+        exclude: ^(.*\.golden)$
       - id: end-of-file-fixer
         exclude: ^(.*\.golden)$
       - id: check-yaml
@@ -45,7 +46,23 @@ repos:
 
       - id: go-mod-tidy
         name: go mod tidy
+        # Run on any .go file change to ensure dependencies are up-to-date
         entry: bash -c 'go mod tidy && git diff --exit-code go.mod go.sum'
         language: system
-        files: ^go\.(mod|sum)$
+        files: \.go$
+        pass_filenames: false
+
+      # Web/Frontend checks (requires Node.js and npm dependencies)
+      - id: eslint
+        name: ESLint (web)
+        entry: bash -c 'cd web && npm run lint'
+        language: system
+        files: ^web/.*\.(js|jsx|ts|tsx)$
+        pass_filenames: false
+
+      - id: typescript-check
+        name: TypeScript type check (web)
+        entry: bash -c 'cd web && npm run type-check'
+        language: system
+        files: ^web/.*\.(ts|tsx)$
         pass_filenames: false
