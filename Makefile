@@ -126,6 +126,25 @@ docker-compose-down: ## Stop docker-compose
 init-data: ## Initialize data directory
 	@mkdir -p ./data
 
+# Pre-commit hooks
+install-hooks: ## Install pre-commit hooks
+	@echo "Installing pre-commit hooks..."
+	@command -v pre-commit >/dev/null 2>&1 || \
+		{ echo "Error: pre-commit is not installed. Install with: pip install pre-commit"; exit 1; }
+	pre-commit install
+	@echo "✓ Pre-commit hooks installed successfully"
+
+uninstall-hooks: ## Uninstall pre-commit hooks
+	@echo "Uninstalling pre-commit hooks..."
+	@command -v pre-commit >/dev/null 2>&1 && pre-commit uninstall || true
+	@echo "✓ Pre-commit hooks uninstalled"
+
+run-hooks: ## Run pre-commit hooks on all files
+	@echo "Running pre-commit hooks on all files..."
+	@command -v pre-commit >/dev/null 2>&1 || \
+		{ echo "Error: pre-commit is not installed. Install with: pip install pre-commit"; exit 1; }
+	pre-commit run --all-files
+
 # Release targets
 release: clean build-all ## Create release binaries
 	@echo "Creating release..."
