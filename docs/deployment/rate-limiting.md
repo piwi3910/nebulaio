@@ -63,7 +63,7 @@ firewall:
 
 ### What is Hash DoS?
 
-Hash DoS (Hash-based Denial of Service) attacks exploit hash table implementations by creating many objects with keys that hash to the same bucket, degrading lookup performance from O(1) to O(n).
+Hash DoS (Hash-based Denial of Service) attacks exploit hash table implementations by creating many objects with keys that hash to the same internal hash table bucket (not to be confused with S3 buckets), degrading lookup performance from O(1) to O(n).
 
 ### Protection Strategy
 
@@ -123,6 +123,12 @@ nebulaio_object_creation_rate_limited_total{reason="hash_dos_protection"}
 ```
 
 ## Deployment Examples
+
+> **Naming Conventions:** Different deployment methods use appropriate naming conventions for their platform:
+>
+> - **Environment variables**: `SCREAMING_SNAKE_CASE` (e.g., `NEBULAIO_FIREWALL_OBJECT_CREATION_LIMIT`)
+> - **YAML config files**: `snake_case` (e.g., `object_creation_limit`)
+> - **Helm values**: `camelCase` (e.g., `objectCreationLimit`) - automatically converted to snake_case in generated ConfigMaps
 
 ### Docker Compose
 

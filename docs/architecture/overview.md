@@ -258,6 +258,8 @@ The following are representative benchmarks. Actual performance depends on hardw
 | Erasure coding | ~1.5x object size during encode |
 | Cross-region replication | Full object size per target |
 
+> **Performance Note:** Erasure coding provides excellent durability but has a 30-40% write throughput reduction compared to simple replication due to parity calculation overhead. Read performance remains comparable. For write-intensive workloads, consider using the Volume backend for hot tier with erasure coding for cold/archive tiers.
+
 ---
 
 ## Data Flow

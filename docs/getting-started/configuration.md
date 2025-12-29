@@ -277,6 +277,8 @@ NebulaIO supports automatic data movement between storage tiers (Hot/Warm/Cold/A
 | `tiering.tiers.cold.backend` | string | `fs` | Storage backend for cold tier |
 | `tiering.tiers.cold.data_dir` | string | - | Data directory for cold tier |
 
+> **Note:** Each tier's backend must be separately enabled and configured in the storage section. For example, if using `erasure` for the hot tier, ensure `storage.erasure.enabled: true` and related erasure settings are configured.
+
 #### Tiering Policies
 
 Policies define when and how objects transition between tiers.
