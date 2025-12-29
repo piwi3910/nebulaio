@@ -161,9 +161,10 @@ Deploy:
 ```bash
 # Create namespace and credentials
 kubectl create namespace nebulaio
+# Password must be: min 12 chars, uppercase, lowercase, number
 kubectl create secret generic nebulaio-credentials \
   --namespace nebulaio \
-  --from-literal=password=changeme
+  --from-literal=password=YourSecurePass123
 
 # Apply the CR
 kubectl apply -f nebulaio-dev.yaml

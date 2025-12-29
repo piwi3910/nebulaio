@@ -94,10 +94,10 @@ storage:
   path: /var/lib/nebulaio/objects
   default_storage_class: STANDARD
 
-# Authentication
+# Authentication (password: min 12 chars, uppercase, lowercase, number)
 auth:
   root_user: admin
-  root_password: changeme  # CHANGE THIS!
+  root_password: YourSecurePass123  # CHANGE THIS!
   jwt_secret: ""  # Auto-generated if empty
 
 # Logging

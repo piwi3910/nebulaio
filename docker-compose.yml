@@ -18,8 +18,9 @@ services:
       - NEBULAIO_DATA_DIR=/data
       - NEBULAIO_LOG_LEVEL=info
       - NEBULAIO_AUTH_ROOT_USER=admin
-      # IMPORTANT: Set a secure password (min 12 chars) before running in production
-      - NEBULAIO_AUTH_ROOT_PASSWORD=${NEBULAIO_AUTH_ROOT_PASSWORD:-changeme}
+      # REQUIRED: Set a secure password (min 12 chars, with uppercase, lowercase, and number)
+      # Example: export NEBULAIO_AUTH_ROOT_PASSWORD="YourSecurePass123"
+      - NEBULAIO_AUTH_ROOT_PASSWORD=${NEBULAIO_AUTH_ROOT_PASSWORD:?Error: NEBULAIO_AUTH_ROOT_PASSWORD must be set (min 12 chars)}
 
       # TLS is enabled by default with auto-generated certificates
       # The certificates are stored in /data/certs

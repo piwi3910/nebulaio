@@ -23,9 +23,10 @@ fullnameOverride: ""
 auth:
   # -- Root admin username
   rootUser: admin
-  # -- Root admin password (use existingSecret in production)
-  rootPassword: changeme
-  # -- Use existing secret for credentials
+  # -- Root admin password (REQUIRED: min 12 chars, uppercase, lowercase, number)
+  # -- Use existingSecret in production instead of this value
+  rootPassword: "CHANGE_ME_Min12Chars1"
+  # -- Use existing secret for credentials (recommended for production)
   existingSecret: ""
   # -- Key in existing secret for root user
   existingSecretUserKey: root-user
