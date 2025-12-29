@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestFileOutputRotation_CompressionFailure tests that cleanup does NOT run when compression fails
-func TestFileOutputRotation_CompressionFailure(t *testing.T) {
+// TestFileOutputRotation_NormalFlow tests the normal rotation flow with successful compression
+func TestFileOutputRotation_NormalFlow(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()
 	logPath := filepath.Join(tmpDir, "audit.log")
@@ -278,4 +278,95 @@ func TestCompressFile_ReadOnlyDestination(t *testing.T) {
 	err = output.compressFile(testFile)
 	assert.Error(t, err, "Should return error when cannot create compressed file")
 	assert.Contains(t, err.Error(), "failed to create compressed log file", "Error should indicate file creation failure")
+}
+
+// TestFileOutputRotation_CompressionFailurePreventsCleanup tests that cleanup does NOT run when compression fails
+func TestFileOutputRotation_CompressionFailurePreventsCleanup(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("Skipping test when running as root (permissions don't apply)")
+	}
+
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	// Create FileOutput with compression and cleanup enabled
+	output := &FileOutput{
+		path: logPath,
+		rotation: RotationConfig{
+			Enabled:    true,
+			MaxSizeMB:  1,
+			Compress:   true,
+			MaxBackups: 1, // Only keep 1 backup - this should trigger cleanup if it runs
+		},
+	}
+
+	// Create and rotate first file
+	f, err := os.Create(logPath)
+	require.NoError(t, err)
+	output.file = f
+	testData1 := strings.Repeat("first rotation\n", 1000)
+	_, err = f.WriteString(testData1)
+	require.NoError(t, err)
+	output.size = int64(len(testData1))
+
+	err = output.rotate()
+	require.NoError(t, err)
+	time.Sleep(600 * time.Millisecond) // Wait for compression to complete
+
+	// Create and rotate second file - this will trigger cleanup if compression succeeds
+	f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+	output.file = f
+	testData2 := strings.Repeat("second rotation\n", 1000)
+	_, err = f.WriteString(testData2)
+	require.NoError(t, err)
+	output.size = int64(len(testData2))
+
+	// Make the directory read-only BEFORE rotation to cause compression to fail
+	// This simulates a disk space issue or permission problem during compression
+	err = os.Chmod(tmpDir, 0555)
+	require.NoError(t, err)
+	defer func() { _ = os.Chmod(tmpDir, 0755) }()
+
+	// Trigger rotation - compression will fail due to read-only directory
+	err = output.rotate()
+	// Rotation itself succeeds (moves the file), but compression will fail
+	require.NoError(t, err)
+
+	// Wait for background compression attempt to complete
+	time.Sleep(600 * time.Millisecond)
+
+	// Restore permissions so we can read the directory
+	err = os.Chmod(tmpDir, 0755)
+	require.NoError(t, err)
+
+	// Count rotated files - should have 2 uncompressed files
+	// because compression failed and cleanup was skipped
+	entries, err := os.ReadDir(tmpDir)
+	require.NoError(t, err)
+
+	rotatedCount := 0
+	compressedCount := 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == "audit.log" {
+			continue
+		}
+		if strings.HasSuffix(name, ".gz") {
+			compressedCount++
+		} else if strings.HasPrefix(name, "audit.log.") {
+			rotatedCount++
+		}
+	}
+
+	// Should have 2 uncompressed rotated files (first successful, second failed compression)
+	// and 1 compressed file from the first rotation
+	// Cleanup should NOT have run because the second compression failed
+	assert.GreaterOrEqual(t, rotatedCount, 1, "Should have at least 1 uncompressed file from failed compression")
+	assert.GreaterOrEqual(t, compressedCount, 1, "Should have at least 1 compressed file from successful first rotation")
+
+	// The key assertion: if cleanup had run despite compression failure,
+	// we would have only 1 total file (the most recent). Instead we should have more.
+	totalFiles := rotatedCount + compressedCount
+	assert.GreaterOrEqual(t, totalFiles, 2, "Should have 2+ files proving cleanup was skipped after compression failure")
 }
