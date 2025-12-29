@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -913,4 +914,51 @@ func compressWithZstd(data []byte) []byte {
 	_, _ = writer.Write(data)
 	_ = writer.Close()
 	return buf.Bytes()
+}
+
+// TestSetMaxTransformSizeConcurrency verifies thread safety of SetMaxTransformSize/GetMaxTransformSize
+// Run with: go test -race -run TestSetMaxTransformSizeConcurrency
+func TestSetMaxTransformSizeConcurrency(t *testing.T) {
+	// Save original max size
+	originalMaxSize := GetMaxTransformSize()
+	defer SetMaxTransformSize(originalMaxSize)
+
+	var wg sync.WaitGroup
+	const goroutines = 100
+	const iterations = 100
+
+	// Concurrent writes
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				size := int64((id*iterations + j + 1) * 1024) // Varying sizes
+				SetMaxTransformSize(size)
+			}
+		}(i)
+	}
+
+	// Concurrent reads
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				size := GetMaxTransformSize()
+				// Verify the size is always positive (valid)
+				if size <= 0 {
+					t.Errorf("GetMaxTransformSize returned invalid value: %d", size)
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Final value should be positive
+	finalSize := GetMaxTransformSize()
+	if finalSize <= 0 {
+		t.Errorf("Final max transform size should be positive, got %d", finalSize)
+	}
 }

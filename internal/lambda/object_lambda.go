@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/klauspost/compress/zstd"
+	"github.com/rs/zerolog/log"
 )
 
 // TransformationType defines the type of transformation
@@ -797,6 +798,11 @@ func init() {
 func SetMaxTransformSize(size int64) {
 	if size > 0 {
 		maxTransformSize.Store(size)
+	} else {
+		log.Warn().
+			Int64("size", size).
+			Int64("current", maxTransformSize.Load()).
+			Msg("SetMaxTransformSize called with invalid size (<= 0), ignoring")
 	}
 }
 

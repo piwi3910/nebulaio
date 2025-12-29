@@ -205,6 +205,8 @@ func (m *mockBackend) Init(_ context.Context) error { return nil }
 func (m *mockBackend) Close() error                 { return nil }
 
 func (m *mockBackend) PutObject(_ context.Context, bucket, key string, reader io.Reader, _ int64) (*backend.PutResult, error) {
+	// Read data before acquiring lock to minimize lock hold time.
+	// This is safe because reader is not shared across goroutines.
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
