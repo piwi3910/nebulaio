@@ -36,33 +36,36 @@ type MockMetadataStore struct {
 	clusterInfo   *metadata.ClusterInfo
 
 	// Error injection
-	createBucketErr          error
-	updateBucketErr          error
-	deleteBucketErr          error
-	getBucketErr             error
-	listBucketsErr           error
-	putObjectMetaErr         error
-	getObjectMetaErr         error
-	deleteObjectMetaErr      error
-	listObjectsErr           error
-	getClusterInfoErr        error
-	createMultipartUploadErr error
-	getMultipartUploadErr    error
-	listMultipartUploadsErr  error
-	createUserErr            error
-	getUserErr               error
-	createAccessKeyErr       error
-	getAccessKeyErr          error
-	createPolicyErr          error
-	getPolicyErr             error
-	updateUserErr            error
-	deleteUserErr            error
-	deleteAccessKeyErr       error
-	updatePolicyErr          error
-	deletePolicyErr          error
-	addUploadPartErr         error
-	completeMultipartErr     error
-	abortMultipartUploadErr  error
+	createBucketErr           error
+	updateBucketErr           error
+	deleteBucketErr           error
+	getBucketErr              error
+	listBucketsErr            error
+	putObjectMetaErr          error
+	getObjectMetaErr          error
+	deleteObjectMetaErr       error
+	listObjectsErr            error
+	getClusterInfoErr         error
+	createMultipartUploadErr  error
+	getMultipartUploadErr     error
+	listMultipartUploadsErr   error
+	createUserErr             error
+	getUserErr                error
+	createAccessKeyErr        error
+	getAccessKeyErr           error
+	createPolicyErr           error
+	getPolicyErr              error
+	updateUserErr             error
+	deleteUserErr             error
+	deleteAccessKeyErr        error
+	updatePolicyErr           error
+	deletePolicyErr           error
+	addUploadPartErr          error
+	completeMultipartErr      error
+	abortMultipartUploadErr   error
+	deleteObjectVersionErr    error
+	putObjectMetaVersionedErr error
+	getPartsErr               error
 }
 
 // NewMockMetadataStore creates a new MockMetadataStore with initialized maps.
@@ -270,6 +273,27 @@ func (m *MockMetadataStore) SetAbortMultipartUploadError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.abortMultipartUploadErr = err
+}
+
+// SetDeleteObjectVersionError sets the error to return on DeleteObjectVersion calls.
+func (m *MockMetadataStore) SetDeleteObjectVersionError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deleteObjectVersionErr = err
+}
+
+// SetPutObjectMetaVersionedError sets the error to return on PutObjectMetaVersioned calls.
+func (m *MockMetadataStore) SetPutObjectMetaVersionedError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.putObjectMetaVersionedErr = err
+}
+
+// SetGetPartsError sets the error to return on GetParts calls.
+func (m *MockMetadataStore) SetGetPartsError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.getPartsErr = err
 }
 
 // SetIsLeader sets whether this mock is the leader.
@@ -543,11 +567,46 @@ func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, pref
 
 // DeleteObjectVersion implements metadata.Store interface.
 func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.deleteObjectVersionErr != nil {
+		return m.deleteObjectVersionErr
+	}
+	// Remove the specific version from storage
+	if versions, ok := m.versions[bucket]; ok {
+		if objVersions, ok := versions[key]; ok {
+			for i, v := range objVersions {
+				if v.VersionID == versionID {
+					versions[key] = append(objVersions[:i], objVersions[i+1:]...)
+					break
+				}
+			}
+		}
+	}
 	return nil
 }
 
 // PutObjectMetaVersioned implements metadata.Store interface.
 func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *metadata.ObjectMeta, preserveOldVersions bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.putObjectMetaVersionedErr != nil {
+		return m.putObjectMetaVersionedErr
+	}
+	// Store the versioned object
+	if m.versions[meta.Bucket] == nil {
+		m.versions[meta.Bucket] = make(map[string][]*metadata.ObjectMeta)
+	}
+	if preserveOldVersions {
+		m.versions[meta.Bucket][meta.Key] = append(m.versions[meta.Bucket][meta.Key], meta)
+	} else {
+		m.versions[meta.Bucket][meta.Key] = []*metadata.ObjectMeta{meta}
+	}
+	// Also update the current object
+	if m.objects[meta.Bucket] == nil {
+		m.objects[meta.Bucket] = make(map[string]*metadata.ObjectMeta)
+	}
+	m.objects[meta.Bucket][meta.Key] = meta
 	return nil
 }
 
@@ -618,6 +677,9 @@ func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uplo
 func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID string) ([]*metadata.UploadPart, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	if m.getPartsErr != nil {
+		return nil, m.getPartsErr
+	}
 	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	if parts, ok := m.uploadParts[mpKey]; ok {
 		return parts, nil
