@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
+	"github.com/piwi3910/nebulaio/internal/testutil"
 	"github.com/piwi3910/nebulaio/pkg/s3errors"
 )
 
@@ -352,7 +353,7 @@ func (m *MockStorageBackend) CreateMultipartUpload(ctx context.Context, bucket, 
 	if m.createMultipartUploadErr != nil {
 		return m.createMultipartUploadErr
 	}
-	uploadKey := bucket + "/" + key + "/" + uploadID
+	uploadKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	m.parts[uploadKey] = make(map[int][]byte)
 	return nil
 }
@@ -368,7 +369,7 @@ func (m *MockStorageBackend) PutPart(ctx context.Context, bucket, key, uploadID 
 	if err != nil {
 		return nil, err
 	}
-	uploadKey := bucket + "/" + key + "/" + uploadID
+	uploadKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	if m.parts[uploadKey] == nil {
 		m.parts[uploadKey] = make(map[int][]byte)
 	}
@@ -386,7 +387,7 @@ func (m *MockStorageBackend) GetPart(ctx context.Context, bucket, key, uploadID 
 	if m.getPartErr != nil {
 		return nil, m.getPartErr
 	}
-	uploadKey := bucket + "/" + key + "/" + uploadID
+	uploadKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	if parts, ok := m.parts[uploadKey]; ok {
 		if content, ok := parts[partNumber]; ok {
 			return io.NopCloser(bytes.NewReader(content)), nil
@@ -402,7 +403,7 @@ func (m *MockStorageBackend) CompleteParts(ctx context.Context, bucket, key, upl
 	if m.completePartsErr != nil {
 		return nil, m.completePartsErr
 	}
-	uploadKey := bucket + "/" + key + "/" + uploadID
+	uploadKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	if parts, ok := m.parts[uploadKey]; ok {
 		var combined []byte
 		for _, partNum := range partNumbers {
@@ -430,7 +431,7 @@ func (m *MockStorageBackend) AbortMultipartUpload(ctx context.Context, bucket, k
 	if m.abortMultipartUploadErr != nil {
 		return m.abortMultipartUploadErr
 	}
-	uploadKey := bucket + "/" + key + "/" + uploadID
+	uploadKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	delete(m.parts, uploadKey)
 	return nil
 }
