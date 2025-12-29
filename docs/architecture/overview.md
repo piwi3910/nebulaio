@@ -241,6 +241,44 @@ The following are representative benchmarks. Actual performance depends on hardw
 - Results vary significantly based on object size, concurrency, and compression settings
 - IOPS decrease ~50% with erasure coding enabled, ~20% with compression enabled
 
+**Test Environment Details:**
+
+| Component | Specification |
+|-----------|---------------|
+| CPU | Intel Xeon 8375C @ 2.9 GHz |
+| Memory | 64 GB DDR4-3200 ECC |
+| Storage | Samsung PM9A3 NVMe (3.84 TB) |
+| Network | Mellanox ConnectX-6 (100 GbE, tested at 10 Gbps) |
+| OS | Ubuntu 22.04 LTS, kernel 5.15 |
+| Filesystem | XFS with default mount options |
+
+**Benchmark Tools:**
+
+- `warp` - S3 benchmark tool for throughput and latency testing
+- `fio` - Storage backend I/O performance validation
+- Custom load generator with configurable object sizes and concurrency
+
+**Reproducing Benchmarks:**
+
+```bash
+# Install warp benchmark tool
+go install github.com/minio/warp@latest
+
+# Run PUT benchmark (1 MB objects, 100 concurrent)
+warp put --host=localhost:9000 --access-key=admin --secret-key=password \
+  --obj.size=1MiB --concurrent=100 --duration=60s
+
+# Run GET benchmark
+warp get --host=localhost:9000 --access-key=admin --secret-key=password \
+  --objects=10000 --obj.size=1MiB --concurrent=100 --duration=60s
+
+# Run mixed workload (70% GET, 30% PUT)
+warp mixed --host=localhost:9000 --access-key=admin --secret-key=password \
+  --obj.size=1MiB --concurrent=100 --get-distrib=70 --duration=60s
+```
+
+> **Note:** Your results will vary based on hardware configuration, network topology, and workload patterns. Always benchmark with your specific use case before production deployment.
+
 ### Capacity Planning
 
 **Storage Overhead:**

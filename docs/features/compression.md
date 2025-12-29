@@ -42,11 +42,25 @@ compression:
 
 ### Compression Levels
 
+NebulaIO uses an abstract level scale (1-9) that maps to algorithm-specific ranges:
+
 | Level | Name | Description | Use Case |
 | ------- | ------ | ------------- | ---------- |
 | 1 | Fastest | Minimal compression, maximum speed | Real-time streaming |
 | 3 | Default | Balanced speed and compression | General workloads |
 | 9 | Best | Maximum compression, slower speed | Archival storage |
+
+**Algorithm-Specific Level Mapping:**
+
+| Abstract Level | Zstd (1-19) | LZ4 (1-16) | Gzip (1-9) |
+|----------------|-------------|------------|------------|
+| 1 | 1 | 1 | 1 |
+| 3 | 3 | 4 | 3 |
+| 5 | 6 | 8 | 5 |
+| 7 | 10 | 12 | 7 |
+| 9 | 15 | 16 | 9 |
+
+> **Note:** The abstract level provides a consistent interface across algorithms. NebulaIO automatically translates to the optimal algorithm-specific level. For advanced use cases, you can specify native levels directly using `level_native` in the configuration.
 
 ## Per-Bucket Compression Settings
 
