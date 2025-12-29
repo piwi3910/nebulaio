@@ -16,6 +16,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// NOTE: For new tests, prefer using the centralized mocks from:
+//   github.com/piwi3910/nebulaio/internal/testutil/mocks
+//
+// The centralized mocks provide:
+// - mocks.NewMockMetadataStore() - Full metadata.Store implementation
+// - mocks.NewMockStorageBackend() - Full backend.Backend implementation
+// - Setter methods for error injection (e.g., SetCreateBucketError)
+// - Helper methods for test setup (e.g., AddBucket, AddObject)
+//
+// These local mocks are retained for backward compatibility with existing tests
+// that directly access internal fields like m.objects[bucket][key].
+
 // MockMetadataStore implements metadata.Store interface for testing
 type MockMetadataStore struct {
 	mu        sync.RWMutex
