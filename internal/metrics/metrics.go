@@ -1,3 +1,23 @@
+// Package metrics provides Prometheus metrics collection for NebulaIO.
+//
+// The package exposes metrics at /metrics (default port 9001) for monitoring:
+//
+// Request Metrics:
+//   - nebulaio_requests_total: Total requests by operation and status
+//   - nebulaio_request_duration_seconds: Request latency histogram
+//   - nebulaio_request_size_bytes: Request body size histogram
+//
+// Storage Metrics:
+//   - nebulaio_objects_total: Total objects by bucket
+//   - nebulaio_bytes_stored: Total bytes stored by bucket
+//   - nebulaio_storage_operations_total: Storage backend operations
+//
+// Cluster Metrics:
+//   - nebulaio_raft_leader: Current Raft leader status
+//   - nebulaio_raft_term: Current Raft term
+//   - nebulaio_cluster_nodes: Number of cluster nodes
+//
+// Use with Prometheus and Grafana for comprehensive monitoring dashboards.
 package metrics
 
 import (

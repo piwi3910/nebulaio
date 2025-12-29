@@ -1,3 +1,20 @@
+// Package versioning provides object versioning support for NebulaIO.
+//
+// When versioning is enabled on a bucket:
+//   - Every object modification creates a new version
+//   - Deleted objects become delete markers (recoverable)
+//   - Previous versions can be retrieved by version ID
+//   - Object Lock (WORM) can be applied to specific versions
+//
+// Version IDs are generated as unique, sortable identifiers that encode
+// the creation timestamp, ensuring consistent ordering.
+//
+// Versioning states:
+//   - Disabled: No versions kept (default)
+//   - Enabled: All versions retained
+//   - Suspended: New versions not created, existing preserved
+//
+// Use lifecycle rules to manage version retention and control storage costs.
 package versioning
 
 import (

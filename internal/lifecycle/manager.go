@@ -1,3 +1,31 @@
+// Package lifecycle implements S3 lifecycle management for NebulaIO.
+//
+// The lifecycle manager automatically executes actions on objects based on
+// configurable rules:
+//
+//   - Expiration: Delete objects after a specified age
+//   - Transition: Move objects to different storage classes
+//   - NoncurrentVersionExpiration: Delete old versions
+//   - AbortIncompleteMultipartUpload: Clean up incomplete uploads
+//
+// Rules can be filtered by:
+//   - Object key prefix
+//   - Object tags
+//   - Object size range
+//
+// The manager runs periodic scans (default: hourly) to evaluate objects
+// against configured rules and execute matching actions.
+//
+// Example rule: Delete logs older than 90 days:
+//
+//	{
+//	  "Rules": [{
+//	    "ID": "delete-old-logs",
+//	    "Filter": {"Prefix": "logs/"},
+//	    "Status": "Enabled",
+//	    "Expiration": {"Days": 90}
+//	  }]
+//	}
 package lifecycle
 
 import (

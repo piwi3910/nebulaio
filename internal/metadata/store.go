@@ -1,3 +1,18 @@
+// Package metadata provides the distributed metadata store for NebulaIO.
+//
+// The metadata store is the source of truth for all bucket and object metadata,
+// user accounts, policies, and cluster configuration. It uses Dragonboat (Raft)
+// for distributed consensus, ensuring strong consistency across cluster nodes.
+//
+// Key features:
+//   - Strongly consistent via Raft consensus
+//   - Linearizable reads and writes
+//   - Automatic leader election and failover
+//   - Incremental snapshots for fast recovery
+//   - Backed by BadgerDB for persistent storage
+//
+// The Store interface abstracts the underlying implementation, allowing for
+// testing with mock stores and future backend flexibility.
 package metadata
 
 import (

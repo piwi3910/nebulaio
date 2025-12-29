@@ -1,3 +1,18 @@
+// Package cluster provides cluster management and node discovery for NebulaIO.
+//
+// The package handles:
+//   - Node discovery via gossip protocol (memberlist)
+//   - Cluster membership tracking
+//   - Leader election coordination with Dragonboat
+//   - Node health monitoring
+//   - Placement group management
+//
+// Cluster communication uses two protocols:
+//   - Raft (port 9003): Consensus for metadata operations
+//   - Gossip (port 9004): Node discovery and health checks
+//
+// The Discovery service maintains a consistent view of the cluster across
+// all nodes, enabling proper request routing and failover.
 package cluster
 
 import (

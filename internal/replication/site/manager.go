@@ -1,3 +1,21 @@
+// Package site provides multi-site replication for NebulaIO.
+//
+// The site replication manager handles cross-datacenter data synchronization
+// for disaster recovery and geographic distribution:
+//
+//   - Active-active replication between sites
+//   - Asynchronous replication for WAN links
+//   - Conflict resolution (last-writer-wins by default)
+//   - Bucket-level replication rules
+//   - Bandwidth throttling
+//
+// Each site maintains a complete copy of replicated data, enabling:
+//   - Disaster recovery with minimal RPO
+//   - Low-latency access from multiple regions
+//   - Data sovereignty compliance
+//
+// Replication uses the S3 protocol, making it compatible with other
+// S3-compatible storage systems for hybrid deployments.
 package site
 
 import (

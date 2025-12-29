@@ -1,3 +1,24 @@
+// Package compression provides transparent object compression for NebulaIO.
+//
+// The package implements a storage backend wrapper that compresses objects
+// before storage and decompresses on retrieval. Supported algorithms:
+//
+//   - Zstandard (zstd): Best compression ratio with fast decompression (recommended)
+//   - LZ4: Fastest compression/decompression, moderate ratio
+//   - Gzip: Wide compatibility, moderate performance
+//
+// Features:
+//   - Automatic content-type detection to skip pre-compressed files
+//   - Configurable compression levels
+//   - Streaming compression for large objects
+//   - Per-object compression statistics
+//
+// Example usage:
+//
+//	backend := compression.NewBackend(fsBackend, compression.Config{
+//	    Algorithm: compression.Zstd,
+//	    Level:     3,
+//	})
 package compression
 
 import (

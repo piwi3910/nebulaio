@@ -136,6 +136,51 @@ The volume backend stores objects in pre-allocated volume files with block-based
 
 **Common configurations:** 4+2 (50% overhead, 2 failures), 8+4 (50% overhead, 4 failures), 10+4 (40% overhead, 4 failures).
 
+### Compression
+
+NebulaIO provides transparent object compression to reduce storage costs. Three algorithms are supported with automatic content-type detection.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `storage.compression.enabled` | bool | `false` | Enable compression |
+| `storage.compression.algorithm` | string | `zstd` | Algorithm: `zstd`, `lz4`, `gzip` |
+| `storage.compression.level` | int | `3` | Compression level (1-19 for zstd, 1-12 for lz4/gzip) |
+| `storage.compression.min_size` | int | `1024` | Minimum object size to compress (bytes) |
+| `storage.compression.auto_detect` | bool | `true` | Skip already-compressed content types |
+
+**Environment Variables:**
+
+| Config Key | Environment Variable |
+|------------|---------------------|
+| `storage.compression.enabled` | `NEBULAIO_STORAGE_COMPRESSION_ENABLED` |
+| `storage.compression.algorithm` | `NEBULAIO_STORAGE_COMPRESSION_ALGORITHM` |
+| `storage.compression.level` | `NEBULAIO_STORAGE_COMPRESSION_LEVEL` |
+| `storage.compression.auto_detect` | `NEBULAIO_STORAGE_COMPRESSION_AUTO_DETECT` |
+
+**Example Configuration:**
+
+```yaml
+storage:
+  compression:
+    enabled: true
+    algorithm: zstd         # Best balance of speed and ratio
+    level: 3                # 1=fastest, 9=best ratio
+    min_size: 1024          # Don't compress objects < 1KB
+    auto_detect: true       # Skip JPEG, PNG, MP4, ZIP, etc.
+    exclude_types:          # Additional types to skip
+      - application/octet-stream
+```
+
+**Algorithm Comparison:**
+
+| Algorithm | Compression Ratio | Speed | Best For |
+|-----------|-------------------|-------|----------|
+| Zstandard | Excellent (3-5x) | Fast | General purpose (recommended) |
+| LZ4 | Good (2-3x) | Very Fast | Real-time, high-throughput |
+| Gzip | Good (3-4x) | Moderate | Legacy compatibility |
+
+See [Compression Feature Guide](../features/compression.md) for detailed usage and benchmarks.
+
 ### Placement Groups
 
 Placement groups define data locality boundaries for erasure coding and tiering operations.
@@ -203,6 +248,131 @@ storage:
 - `min_nodes` must be >= `data_shards + parity_shards`
 - `local_group_id` must reference an existing group
 - All nodes in a group should have the same configuration
+
+### Storage Tiering
+
+NebulaIO supports automatic data movement between storage tiers (Hot/Warm/Cold/Archive) based on configurable policies.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `tiering.enabled` | bool | `false` | Enable storage tiering |
+| `tiering.scanner_interval` | duration | `1h` | How often to scan for objects to transition |
+| `tiering.max_transitions_per_scan` | int | `10000` | Maximum transitions per scan cycle |
+
+#### Tier Definitions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `tiering.tiers.hot.backend` | string | `erasure` | Storage backend for hot tier |
+| `tiering.tiers.hot.data_dir` | string | - | Data directory for hot tier |
+| `tiering.tiers.warm.backend` | string | `volume` | Storage backend for warm tier |
+| `tiering.tiers.warm.data_dir` | string | - | Data directory for warm tier |
+| `tiering.tiers.cold.backend` | string | `fs` | Storage backend for cold tier |
+| `tiering.tiers.cold.data_dir` | string | - | Data directory for cold tier |
+
+#### Tiering Policies
+
+Policies define when and how objects transition between tiers.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `name` | string | Unique policy name |
+| `enabled` | bool | Whether policy is active |
+| `priority` | int | Execution order (lower = higher priority) |
+| `source_tier` | string | Source tier (hot, warm, cold) |
+| `destination_tier` | string | Destination tier |
+| `condition.type` | string | Trigger type: `age`, `access`, `size` |
+| `condition.age_days` | int | Days since last access (for age-based) |
+| `condition.access_count` | int | Access threshold (for access-based) |
+| `filter.prefix` | string | Object key prefix filter |
+| `filter.tags` | map | Object tag filters |
+
+**Example Configuration:**
+
+```yaml
+tiering:
+  enabled: true
+  scanner_interval: 1h
+  max_transitions_per_scan: 10000
+
+  # Define tier backends
+  tiers:
+    hot:
+      backend: erasure
+      data_dir: /data/hot
+      erasure_config:
+        data_shards: 10
+        parity_shards: 4
+    warm:
+      backend: volume
+      data_dir: /data/warm
+    cold:
+      backend: fs
+      data_dir: /data/cold
+
+  # Define transition policies
+  policies:
+    - name: hot-to-warm-age
+      enabled: true
+      priority: 1
+      source_tier: hot
+      destination_tier: warm
+      condition:
+        type: age
+        age_days: 7              # Move to warm after 7 days without access
+      filter:
+        prefix: ""               # All objects (empty = no filter)
+
+    - name: warm-to-cold-age
+      enabled: true
+      priority: 2
+      source_tier: warm
+      destination_tier: cold
+      condition:
+        type: age
+        age_days: 30             # Move to cold after 30 days without access
+
+    - name: archive-logs
+      enabled: true
+      priority: 10
+      source_tier: warm
+      destination_tier: cold
+      condition:
+        type: age
+        age_days: 14
+      filter:
+        prefix: "logs/"          # Only apply to logs/ prefix
+        tags:
+          environment: production
+```
+
+**Transition Mechanisms:**
+
+| Type | Trigger | Best For |
+|------|---------|----------|
+| `age` | Days since last access | General lifecycle management |
+| `access` | Access count threshold | Promoting/demoting by popularity |
+| `size` | Object size threshold | Moving large objects to cold storage |
+| `capacity` | Tier capacity threshold | Automatic capacity management |
+
+**Performance Considerations:**
+
+| Tier | Typical Media | Latency | Cost | Use Case |
+|------|---------------|---------|------|----------|
+| Hot | NVMe/SSD | < 1ms | $$$$ | Active data, ML training |
+| Warm | SSD/HDD | 5-20ms | $$$ | Recent data, moderate access |
+| Cold | HDD/NAS | 50-200ms | $$ | Backups, infrequent access |
+| Archive | Tape/Glacier | Hours | $ | Compliance, long-term retention |
+
+**Backend Support Matrix:**
+
+| Backend | Hot | Warm | Cold | Archive |
+|---------|-----|------|------|---------|
+| `erasure` | ✓ (recommended) | ✓ | ✓ | - |
+| `volume` | ✓ | ✓ (recommended) | ✓ | - |
+| `fs` | ✓ | ✓ | ✓ (recommended) | ✓ |
+
+See [Storage Tiering Guide](../features/tiering.md) for advanced policies, ML-based tiering, and scheduling options.
 
 ---
 
@@ -341,6 +511,10 @@ The data firewall provides rate limiting, bandwidth throttling, and connection m
 | `firewall.rate_limiting.per_user` | bool | `true` | Apply per-user rate limits |
 | `firewall.rate_limiting.per_ip` | bool | `true` | Apply per-IP rate limits |
 | `firewall.rate_limiting.per_bucket` | bool | `false` | Apply per-bucket rate limits |
+| `firewall.rate_limiting.object_creation_limit` | int | `1000` | RPS limit for object creation (hash DoS protection) |
+| `firewall.rate_limiting.object_creation_burst_size` | int | `2000` | Burst size for object creation operations |
+
+**Note:** Object creation rate limiting protects against hash DoS attacks by limiting PutObject, CopyObject, CompleteMultipartUpload, and UploadPart operations. See [Rate Limiting Guide](../deployment/rate-limiting.md) for details.
 
 ### Bandwidth Throttling
 

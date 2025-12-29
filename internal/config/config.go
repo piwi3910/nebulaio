@@ -1,3 +1,23 @@
+// Package config provides configuration management for NebulaIO.
+//
+// Configuration is loaded from multiple sources with the following precedence:
+//  1. Command-line flags (highest priority)
+//  2. Environment variables (NEBULAIO_* prefix)
+//  3. Configuration file (config.yaml)
+//  4. Default values (lowest priority)
+//
+// The package uses Viper for configuration binding, supporting:
+//   - YAML configuration files
+//   - Environment variable overrides
+//   - Type-safe configuration structs
+//   - Validation and defaults
+//
+// Example usage:
+//
+//	cfg, err := config.Load("/etc/nebulaio/config.yaml")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
 package config
 
 import (

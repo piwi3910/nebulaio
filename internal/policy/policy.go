@@ -1,3 +1,29 @@
+// Package policy provides IAM policy evaluation for NebulaIO.
+//
+// The package implements AWS IAM-compatible policy parsing and evaluation,
+// supporting:
+//
+//   - Bucket policies: Control access to specific buckets
+//   - User policies: Attached to IAM users
+//   - Group policies: Attached to IAM groups
+//
+// Policy documents use the standard IAM policy language with support for:
+//   - Actions: s3:GetObject, s3:PutObject, s3:DeleteObject, etc.
+//   - Resources: arn:aws:s3:::bucket/key patterns with wildcards
+//   - Conditions: IP address, time, request headers, etc.
+//   - Principal: User, group, or anonymous access control
+//
+// Example policy:
+//
+//	{
+//	  "Version": "2012-10-17",
+//	  "Statement": [{
+//	    "Effect": "Allow",
+//	    "Principal": "*",
+//	    "Action": "s3:GetObject",
+//	    "Resource": "arn:aws:s3:::public-bucket/*"
+//	  }]
+//	}
 package policy
 
 import (

@@ -41,6 +41,11 @@ services:
       - NEBULAIO_FIREWALL_RATE_LIMIT_PER_USER=true
       - NEBULAIO_FIREWALL_RATE_LIMIT_PER_IP=true
 
+      # Object Creation Rate Limiting (Hash DoS Protection)
+      # Protects against attacks that target object key distribution
+      - NEBULAIO_FIREWALL_OBJECT_CREATION_LIMIT=1000
+      - NEBULAIO_FIREWALL_OBJECT_CREATION_BURST=2000
+
       # Data Firewall - Bandwidth
       - NEBULAIO_FIREWALL_BANDWIDTH_ENABLED=true
       - NEBULAIO_FIREWALL_BANDWIDTH_MAX_BPS=1073741824

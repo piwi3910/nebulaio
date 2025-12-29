@@ -1,3 +1,21 @@
+// Package object provides object storage operations for NebulaIO.
+//
+// The object service handles all object-level operations including:
+//   - Object upload and download with streaming support
+//   - Multipart upload for large objects
+//   - Object copying and deletion
+//   - Object metadata and tagging
+//   - Version management (when versioning is enabled)
+//   - Storage class transitions
+//
+// Objects are stored using pluggable storage backends (filesystem, volume,
+// erasure coding) while metadata is managed through the metadata store.
+//
+// Example usage:
+//
+//	svc := object.NewService(store, backend, config)
+//	err := svc.PutObject(ctx, "bucket", "key", reader, size, metadata)
+//	obj, err := svc.GetObject(ctx, "bucket", "key")
 package object
 
 import (

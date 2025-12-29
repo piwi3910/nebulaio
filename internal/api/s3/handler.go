@@ -1,3 +1,19 @@
+// Package s3 implements an Amazon S3-compatible API for NebulaIO.
+//
+// The package provides HTTP handlers for S3 operations including:
+//   - Bucket operations: CreateBucket, DeleteBucket, ListBuckets, HeadBucket
+//   - Object operations: PutObject, GetObject, DeleteObject, CopyObject, HeadObject
+//   - Multipart uploads: CreateMultipartUpload, UploadPart, CompleteMultipartUpload
+//   - Object listing: ListObjects, ListObjectsV2
+//   - Access control: PutBucketPolicy, GetBucketPolicy, PutObjectAcl
+//
+// Authentication is handled via AWS Signature V4, supporting both header-based
+// and query-string (presigned URL) authentication methods.
+//
+// Example usage:
+//
+//	handler := s3.NewHandler(authSvc, bucketSvc, objectSvc)
+//	router.Mount("/", handler.Routes())
 package s3
 
 import (

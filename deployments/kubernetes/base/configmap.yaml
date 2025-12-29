@@ -209,6 +209,11 @@ data:
     #     per_user: true
     #     per_ip: true
     #     per_bucket: false
+    #     # Object creation rate limiting (Hash DoS protection)
+    #     # Protects against attacks that target object key distribution
+    #     # Applies to: PutObject, CopyObject, CompleteMultipartUpload, UploadPart
+    #     object_creation_limit: 1000      # RPS for object creation operations
+    #     object_creation_burst_size: 2000 # Burst size for object creation
     #   bandwidth:
     #     enabled: true
     #     max_bytes_per_second: 1073741824      # 1GB/s global

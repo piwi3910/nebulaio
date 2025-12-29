@@ -1,3 +1,24 @@
+// Package auth provides authentication and authorization services for NebulaIO.
+//
+// The package supports multiple authentication methods:
+//   - AWS Signature V4 for S3 API access
+//   - JWT tokens for Admin API and Console access
+//   - LDAP integration via the ldap subpackage
+//   - OIDC/SSO via the oidc subpackage
+//
+// Authorization is handled through IAM-compatible policies that control access
+// to buckets, objects, and administrative operations.
+//
+// Example usage:
+//
+//	config := auth.Config{
+//	    JWTSecret:    "your-secret",
+//	    TokenExpiry:  24 * time.Hour,
+//	    RootUser:     "admin",
+//	    RootPassword: "secure-password",
+//	}
+//	svc := auth.NewService(config, store, policyEvaluator)
+//	user, err := svc.Authenticate(ctx, username, password)
 package auth
 
 import (

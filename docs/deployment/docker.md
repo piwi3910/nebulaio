@@ -643,6 +643,15 @@ docker service logs -f nebulaio_nebulaio
 | `NEBULAIO_STORAGE_VOLUME_TIER_DIRECTORIES_WARM` | Warm tier directory | - |
 | `NEBULAIO_STORAGE_VOLUME_TIER_DIRECTORIES_COLD` | Cold tier directory | - |
 
+### Compression
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEBULAIO_STORAGE_COMPRESSION_ENABLED` | Enable compression | `false` |
+| `NEBULAIO_STORAGE_COMPRESSION_ALGORITHM` | Algorithm: zstd, lz4, gzip | `zstd` |
+| `NEBULAIO_STORAGE_COMPRESSION_LEVEL` | Compression level (1-19) | `3` |
+| `NEBULAIO_STORAGE_COMPRESSION_AUTO_DETECT` | Skip pre-compressed types | `true` |
+
 ### DRAM Cache
 
 | Variable | Description | Default |

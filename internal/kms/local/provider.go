@@ -1,3 +1,23 @@
+// Package local implements a file-based KMS provider for development and testing.
+//
+// The local KMS provider stores encryption keys in a file on the local
+// filesystem. It is suitable for:
+//
+//   - Development and testing environments
+//   - Single-node deployments without external KMS
+//   - Evaluation before deploying production KMS
+//
+// WARNING: The local provider stores keys unencrypted on disk. For production
+// environments, use a proper KMS like HashiCorp Vault, AWS KMS, or Azure Key Vault.
+//
+// Keys are stored in JSON format at the configured path:
+//
+//	{
+//	  "master_key": "base64-encoded-key",
+//	  "data_keys": {
+//	    "key-id": "encrypted-dek"
+//	  }
+//	}
 package local
 
 import (
