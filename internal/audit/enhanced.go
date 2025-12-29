@@ -951,6 +951,16 @@ func (o *FileOutput) rotate() error {
 
 	// Compress and cleanup in a single goroutine to ensure proper sequencing
 	// This prevents the race condition where cleanup could run before compression finishes
+	//
+	// INTENTIONAL DESIGN: This goroutine does NOT respect context cancellation.
+	// Compression and cleanup are critical audit log maintenance operations that should
+	// complete even if the original write request is cancelled. This is a "fire-and-forget"
+	// background task that ensures audit log integrity and disk space management.
+	//
+	// The goroutine will always terminate because:
+	//   - compressFile() performs bounded file I/O operations
+	//   - cleanupOldFiles() performs bounded directory operations
+	//   - No long-running loops or blocking operations
 	go func() {
 		var compressionSucceeded = true
 

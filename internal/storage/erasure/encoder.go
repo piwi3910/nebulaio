@@ -2,6 +2,7 @@ package erasure
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -110,7 +111,14 @@ func (e *Encoder) Encode(reader io.Reader) (*EncodedData, error) {
 }
 
 // EncodeStream encodes data in chunks for streaming large files
-func (e *Encoder) EncodeStream(reader io.Reader, chunkSize int) (chan *EncodedData, chan error) {
+// The goroutine will terminate when:
+//   - All data has been read and encoded
+//   - An error occurs during reading or encoding
+//   - The provided context is cancelled
+//
+// Callers should always cancel the context or read all data from the channels
+// to prevent goroutine leaks.
+func (e *Encoder) EncodeStream(ctx context.Context, reader io.Reader, chunkSize int) (chan *EncodedData, chan error) {
 	dataChan := make(chan *EncodedData)
 	errChan := make(chan error, 1)
 
@@ -120,6 +128,14 @@ func (e *Encoder) EncodeStream(reader io.Reader, chunkSize int) (chan *EncodedDa
 
 		buf := make([]byte, chunkSize)
 		for {
+			// Check context cancellation before reading
+			select {
+			case <-ctx.Done():
+				errChan <- ctx.Err()
+				return
+			default:
+			}
+
 			n, err := io.ReadFull(reader, buf)
 			if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 				errChan <- fmt.Errorf("failed to read chunk: %w", err)
@@ -137,7 +153,15 @@ func (e *Encoder) EncodeStream(reader io.Reader, chunkSize int) (chan *EncodedDa
 				return
 			}
 
-			dataChan <- encoded
+			// Send encoded data with context cancellation check
+			// to prevent blocking if receiver stops reading
+			select {
+			case dataChan <- encoded:
+				// Successfully sent
+			case <-ctx.Done():
+				errChan <- ctx.Err()
+				return
+			}
 
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				return
