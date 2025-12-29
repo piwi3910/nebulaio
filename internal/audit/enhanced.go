@@ -204,13 +204,13 @@ type EnhancedAuditEvent struct {
 
 // GeoLocation contains geographic information
 type GeoLocation struct {
-	Country     string  `json:"country,omitempty"`
-	Region      string  `json:"region,omitempty"`
-	City        string  `json:"city,omitempty"`
-	Latitude    float64 `json:"latitude,omitempty"`
-	Longitude   float64 `json:"longitude,omitempty"`
-	ASN         string  `json:"asn,omitempty"`
-	ASNOrg      string  `json:"asnOrg,omitempty"`
+	Country   string  `json:"country,omitempty"`
+	Region    string  `json:"region,omitempty"`
+	City      string  `json:"city,omitempty"`
+	Latitude  float64 `json:"latitude,omitempty"`
+	Longitude float64 `json:"longitude,omitempty"`
+	ASN       string  `json:"asn,omitempty"`
+	ASNOrg    string  `json:"asnOrg,omitempty"`
 }
 
 // ComplianceInfo contains compliance-specific information
@@ -251,29 +251,29 @@ type IntegrityInfo struct {
 
 // EnhancedAuditLogger provides enhanced audit logging capabilities
 type EnhancedAuditLogger struct {
-	config     EnhancedConfig
-	outputs    []AuditOutput
-	buffer     chan *EnhancedAuditEvent
-	wg         sync.WaitGroup
-	ctx        context.Context
-	cancel     context.CancelFunc
-	mu         sync.RWMutex
-	sequence   int64
-	lastHash   string
-	stats      AuditStats
-	geoLookup  GeoLookup
-	store      AuditStore
+	config    EnhancedConfig
+	outputs   []AuditOutput
+	buffer    chan *EnhancedAuditEvent
+	wg        sync.WaitGroup
+	ctx       context.Context
+	cancel    context.CancelFunc
+	mu        sync.RWMutex
+	sequence  int64
+	lastHash  string
+	stats     AuditStats
+	geoLookup GeoLookup
+	store     AuditStore
 }
 
 // AuditStats tracks audit logging statistics
 type AuditStats struct {
-	EventsProcessed  int64 `json:"eventsProcessed"`
-	EventsDropped    int64 `json:"eventsDropped"`
-	EventsFailed     int64 `json:"eventsFailed"`
-	BytesWritten     int64 `json:"bytesWritten"`
-	OutputErrors     int64 `json:"outputErrors"`
+	EventsProcessed   int64 `json:"eventsProcessed"`
+	EventsDropped     int64 `json:"eventsDropped"`
+	EventsFailed      int64 `json:"eventsFailed"`
+	BytesWritten      int64 `json:"bytesWritten"`
+	OutputErrors      int64 `json:"outputErrors"`
 	IntegrityVerified int64 `json:"integrityVerified"`
-	IntegrityFailed  int64 `json:"integrityFailed"`
+	IntegrityFailed   int64 `json:"integrityFailed"`
 }
 
 // AuditOutput is the interface for audit outputs
@@ -292,13 +292,13 @@ type GeoLookup interface {
 // DefaultEnhancedConfig returns sensible defaults
 func DefaultEnhancedConfig() EnhancedConfig {
 	return EnhancedConfig{
-		Enabled:            true,
-		ComplianceMode:     ComplianceNone,
-		RetentionDays:      90,
-		BufferSize:         10000,
-		IntegrityEnabled:   true,
-		MaskSensitiveData:  true,
-		SensitiveFields:    []string{"password", "secret", "token", "credential", "key"},
+		Enabled:           true,
+		ComplianceMode:    ComplianceNone,
+		RetentionDays:     90,
+		BufferSize:        10000,
+		IntegrityEnabled:  true,
+		MaskSensitiveData: true,
+		SensitiveFields:   []string{"password", "secret", "token", "credential", "key"},
 		Rotation: RotationConfig{
 			Enabled:    true,
 			MaxSizeMB:  100,
@@ -952,13 +952,24 @@ func (o *FileOutput) rotate() error {
 	// Compress and cleanup in a single goroutine to ensure proper sequencing
 	// This prevents the race condition where cleanup could run before compression finishes
 	go func() {
+		var compressionSucceeded = true
+
 		// First, compress the rotated file if configured
 		if o.rotation.Compress {
-			o.compressFile(rotatedPath)
+			if err := o.compressFile(rotatedPath); err != nil {
+				log.Error().
+					Err(err).
+					Str("file", rotatedPath).
+					Msg("Audit log compression failed, skipping cleanup to preserve uncompressed file")
+				compressionSucceeded = false
+			}
 		}
-		// Only after compression (if enabled) is complete, run cleanup
-		// This ensures we don't delete uncompressed files before they're compressed
-		if o.rotation.MaxBackups > 0 || o.rotation.MaxAgeDays > 0 {
+
+		// Only run cleanup if:
+		// 1. Compression is disabled (no compression to fail), OR
+		// 2. Compression is enabled AND succeeded
+		// This ensures we don't delete uncompressed files if compression failed
+		if compressionSucceeded && (o.rotation.MaxBackups > 0 || o.rotation.MaxAgeDays > 0) {
 			o.cleanupOldFiles()
 		}
 	}()
@@ -968,12 +979,12 @@ func (o *FileOutput) rotate() error {
 
 // compressFile compresses a rotated log file using gzip with streaming
 // to avoid loading the entire file into memory (important for large audit logs)
-func (o *FileOutput) compressFile(filePath string) {
+// Returns an error if compression fails, allowing the caller to handle the failure appropriately
+func (o *FileOutput) compressFile(filePath string) error {
 	// Open the original file for streaming read
 	inFile, err := os.Open(filePath)
 	if err != nil {
-		log.Warn().Err(err).Str("file", filePath).Msg("Failed to open log file for compression")
-		return
+		return fmt.Errorf("failed to open log file for compression: %w", err)
 	}
 	defer func() {
 		if err := inFile.Close(); err != nil {
@@ -985,8 +996,7 @@ func (o *FileOutput) compressFile(filePath string) {
 	compressedPath := filePath + ".gz"
 	outFile, err := os.Create(compressedPath)
 	if err != nil {
-		log.Warn().Err(err).Str("file", compressedPath).Msg("Failed to create compressed log file")
-		return
+		return fmt.Errorf("failed to create compressed log file: %w", err)
 	}
 
 	// Create gzip writer for streaming compression
@@ -999,29 +1009,35 @@ func (o *FileOutput) compressFile(filePath string) {
 		_ = gzWriter.Close()
 		_ = outFile.Close()
 		_ = os.Remove(compressedPath)
-		log.Warn().Err(err).Str("file", filePath).Msg("Failed to stream compress data")
-		return
+		return fmt.Errorf("failed to stream compress data: %w", err)
 	}
 
 	// Close gzip writer to flush all data
 	if err := gzWriter.Close(); err != nil {
 		_ = outFile.Close()
 		_ = os.Remove(compressedPath)
-		log.Warn().Err(err).Str("file", filePath).Msg("Failed to finalize gzip compression")
-		return
+		return fmt.Errorf("failed to finalize gzip compression: %w", err)
 	}
 
 	// Close the output file
 	if err := outFile.Close(); err != nil {
 		_ = os.Remove(compressedPath)
-		log.Warn().Err(err).Str("file", compressedPath).Msg("Failed to close compressed log file")
-		return
+		return fmt.Errorf("failed to close compressed log file: %w", err)
 	}
 
 	// Remove the original uncompressed file
 	if err := os.Remove(filePath); err != nil {
+		// Don't fail the entire compression if we can't remove the original
+		// Log the warning but return success since compression itself succeeded
 		log.Warn().Err(err).Str("file", filePath).Msg("Failed to remove original log file after compression")
 	}
+
+	log.Info().
+		Str("original", filePath).
+		Str("compressed", compressedPath).
+		Msg("Audit log file compressed successfully")
+
+	return nil
 }
 
 // cleanupOldFiles removes old log files based on MaxBackups and MaxAgeDays

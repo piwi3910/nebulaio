@@ -31,8 +31,8 @@ type GPUInfo struct {
 	Index        int    `json:"index"`
 	Name         string `json:"name"`
 	UUID         string `json:"uuid"`
-	MemoryTotal  uint64 `json:"memory_total"`   // bytes
-	MemoryFree   uint64 `json:"memory_free"`    // bytes
+	MemoryTotal  uint64 `json:"memory_total"` // bytes
+	MemoryFree   uint64 `json:"memory_free"`  // bytes
 	Driver       string `json:"driver_version"`
 	CUDAVersion  string `json:"cuda_version"`
 	ComputeCap   string `json:"compute_capability"`
@@ -42,15 +42,15 @@ type GPUInfo struct {
 
 // DPUInfo contains information about a detected DPU/SmartNIC.
 type DPUInfo struct {
-	Index          int      `json:"index"`
-	Name           string   `json:"name"`
-	Vendor         string   `json:"vendor"`
-	DevicePath     string   `json:"device_path"`
-	FirmwareVer    string   `json:"firmware_version"`
-	CryptoSupport  bool     `json:"crypto_support"`
-	CompressSupport bool    `json:"compress_support"`
-	RDMASupport    bool     `json:"rdma_support"`
-	Capabilities   []string `json:"capabilities"`
+	Index           int      `json:"index"`
+	Name            string   `json:"name"`
+	Vendor          string   `json:"vendor"`
+	DevicePath      string   `json:"device_path"`
+	FirmwareVer     string   `json:"firmware_version"`
+	CryptoSupport   bool     `json:"crypto_support"`
+	CompressSupport bool     `json:"compress_support"`
+	RDMASupport     bool     `json:"rdma_support"`
+	Capabilities    []string `json:"capabilities"`
 }
 
 // RDMAInfo contains information about a detected RDMA device.
@@ -70,13 +70,13 @@ type RDMAInfo struct {
 
 // HardwareCapabilities represents detected hardware capabilities.
 type HardwareCapabilities struct {
-	GPUs         []GPUInfo  `json:"gpus"`
-	DPUs         []DPUInfo  `json:"dpus"`
-	RDMADevices  []RDMAInfo `json:"rdma_devices"`
-	GPUAvailable bool       `json:"gpu_available"`
-	DPUAvailable bool       `json:"dpu_available"`
-	RDMAAvailable bool      `json:"rdma_available"`
-	LastUpdated  time.Time  `json:"last_updated"`
+	GPUs          []GPUInfo  `json:"gpus"`
+	DPUs          []DPUInfo  `json:"dpus"`
+	RDMADevices   []RDMAInfo `json:"rdma_devices"`
+	GPUAvailable  bool       `json:"gpu_available"`
+	DPUAvailable  bool       `json:"dpu_available"`
+	RDMAAvailable bool       `json:"rdma_available"`
+	LastUpdated   time.Time  `json:"last_updated"`
 }
 
 // Detector handles hardware detection operations.
@@ -185,6 +185,7 @@ func (d *Detector) detectGPUs() []GPUInfo {
 	}
 
 	// Query GPU information
+	// All arguments are hardcoded to prevent command injection
 	cmd := exec.Command("nvidia-smi",
 		"--query-gpu=index,name,uuid,memory.total,memory.free,driver_version,cuda_version,compute_cap",
 		"--format=csv,noheader,nounits")
@@ -273,7 +274,14 @@ func (d *Detector) checkGDSSupport(gpu GPUInfo) bool {
 
 // checkP2PSupport checks if P2P transfers are supported between GPUs.
 func (d *Detector) checkP2PSupport(gpuIndex int) bool {
+	// Verify nvidia-smi is available before executing
+	if _, err := exec.LookPath("nvidia-smi"); err != nil {
+		log.Debug().Msg("nvidia-smi not found, cannot check P2P support")
+		return false
+	}
+
 	// Use nvidia-smi to check P2P support
+	// All arguments are hardcoded to prevent command injection
 	cmd := exec.Command("nvidia-smi", "topo", "-p2p", "r")
 	output, err := cmd.Output()
 	if err != nil {
@@ -307,9 +315,11 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 	}
 
 	// Start MST
+	// All arguments are hardcoded to prevent command injection
 	_ = exec.Command("mst", "start").Run()
 
 	// Query devices
+	// All arguments are hardcoded to prevent command injection
 	cmd := exec.Command("mst", "status", "-v")
 	output, err := cmd.Output()
 	if err != nil {
@@ -348,6 +358,14 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 
 // getBlueFieldFirmware gets BlueField firmware version.
 func (d *Detector) getBlueFieldFirmware(index int) string {
+	// Verify mlxfwmanager is available before executing
+	if _, err := exec.LookPath("mlxfwmanager"); err != nil {
+		log.Debug().Msg("mlxfwmanager not found, cannot query firmware version")
+		return "unknown"
+	}
+
+	// Query firmware version
+	// All arguments are hardcoded to prevent command injection
 	cmd := exec.Command("mlxfwmanager", "--query")
 	output, err := cmd.Output()
 	if err != nil {
@@ -382,10 +400,10 @@ func (d *Detector) detectSysfsDPUs() []DPUInfo {
 			// Check if this is a DPU (BlueField has specific board IDs)
 			if strings.Contains(boardID, "MT4") || strings.Contains(boardID, "BF") {
 				dpu := DPUInfo{
-					Index:         len(dpus),
-					Name:          entry.Name(),
-					DevicePath:    filepath.Join(dpuPath, entry.Name()),
-					RDMASupport:   true,
+					Index:       len(dpus),
+					Name:        entry.Name(),
+					DevicePath:  filepath.Join(dpuPath, entry.Name()),
+					RDMASupport: true,
 				}
 				dpus = append(dpus, dpu)
 			}
