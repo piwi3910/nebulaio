@@ -975,7 +975,11 @@ func (o *FileOutput) compressFile(filePath string) {
 		log.Warn().Err(err).Str("file", filePath).Msg("Failed to open log file for compression")
 		return
 	}
-	defer inFile.Close()
+	defer func() {
+		if err := inFile.Close(); err != nil {
+			log.Warn().Err(err).Str("file", filePath).Msg("Failed to close log file after compression")
+		}
+	}()
 
 	// Create the compressed file
 	compressedPath := filePath + ".gz"

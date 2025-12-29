@@ -323,25 +323,6 @@ func TestVersionVariable(t *testing.T) {
 	assert.Equal(t, "dev", Version)
 }
 
-// Helper function for benchmarks
-func resetAllMetrics() {
-	RequestsTotal.Reset()
-	RequestDuration.Reset()
-	ObjectsTotal.Reset()
-	BucketsTotal.Set(0)
-	StorageBytesUsed.Set(0)
-	StorageBytesTotal.Set(0)
-	ActiveConnections.Set(0)
-	RaftState.Reset()
-	RaftIsLeader.Reset()
-	RaftProposalLatency.Reset()
-	RaftProposalsTotal.Reset()
-	MultipartUploadsActive.Set(0)
-	ErrorsTotal.Reset()
-	S3OperationsTotal.Reset()
-	ClusterNodesTotal.Set(0)
-}
-
 func BenchmarkRecordRequest(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		RecordRequest("GET", "GetObject", 200, 10*time.Millisecond)
