@@ -620,11 +620,11 @@ func (rm *ReplicationManager) putObjectRemote(ctx context.Context, endpoint *Reg
 	}
 
 	if opts.StorageClass != "" {
-		req.Header.Set("x-amz-storage-class", opts.StorageClass)
+		req.Header.Set("X-Amz-Storage-Class", opts.StorageClass)
 	}
 
 	// Add replication status header
-	req.Header.Set("x-amz-replication-status", string(S3ReplicationStatusReplica))
+	req.Header.Set("X-Amz-Replication-Status", string(S3ReplicationStatusReplica))
 
 	// Sign request
 	rm.signRequest(req, endpoint)
@@ -651,14 +651,14 @@ func (rm *ReplicationManager) signRequest(req *http.Request, endpoint *RegionEnd
 	amzDate := now.Format("20060102T150405Z")
 	dateStamp := now.Format("20060102")
 
-	req.Header.Set("x-amz-date", amzDate)
+	req.Header.Set("X-Amz-Date", amzDate)
 	req.Header.Set("Host", endpoint.Endpoint)
 
 	// Create canonical request
 	canonicalHeaders := rm.getCanonicalHeaders(req)
 	signedHeaders := rm.getSignedHeaders(req)
 	payloadHash := "UNSIGNED-PAYLOAD"
-	req.Header.Set("x-amz-content-sha256", payloadHash)
+	req.Header.Set("X-Amz-Content-Sha256", payloadHash)
 
 	canonicalRequest := strings.Join([]string{
 		req.Method,
