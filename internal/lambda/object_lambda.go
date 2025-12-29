@@ -784,12 +784,20 @@ type CompressTransformer struct{}
 // DefaultMaxTransformSize is the default maximum size of data that can be transformed in memory (100MB)
 const DefaultMaxTransformSize = 100 * 1024 * 1024
 
+// DefaultStreamingThreshold is the default size threshold above which streaming mode is used (10MB)
+const DefaultStreamingThreshold = 10 * 1024 * 1024
+
 // maxTransformSize is the configurable maximum transform size (defaults to DefaultMaxTransformSize)
 // Uses atomic operations for thread-safe access
 var maxTransformSize atomic.Int64
 
+// streamingThreshold is the configurable size threshold for using streaming mode
+// Uses atomic operations for thread-safe access
+var streamingThreshold atomic.Int64
+
 func init() {
 	maxTransformSize.Store(DefaultMaxTransformSize)
+	streamingThreshold.Store(DefaultStreamingThreshold)
 }
 
 // SetMaxTransformSize sets the maximum size of data that can be transformed in memory
@@ -810,6 +818,26 @@ func SetMaxTransformSize(size int64) {
 // This function is thread-safe
 func GetMaxTransformSize() int64 {
 	return maxTransformSize.Load()
+}
+
+// SetStreamingThreshold sets the size threshold above which streaming mode is used
+// for compression/decompression operations instead of buffering in memory
+// This function is thread-safe and can be called at any time
+func SetStreamingThreshold(size int64) {
+	if size > 0 {
+		streamingThreshold.Store(size)
+	} else {
+		log.Warn().
+			Int64("size", size).
+			Int64("current", streamingThreshold.Load()).
+			Msg("SetStreamingThreshold called with invalid size (<= 0), ignoring")
+	}
+}
+
+// GetStreamingThreshold returns the current streaming threshold
+// This function is thread-safe
+func GetStreamingThreshold() int64 {
+	return streamingThreshold.Load()
 }
 
 func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {

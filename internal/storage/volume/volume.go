@@ -34,10 +34,25 @@ type Volume struct {
 	writeBytes uint64
 	readBytes  uint64
 
+	// Compaction statistics
+	compactionStats CompactionStats
+
 	// State
 	closed   bool
 	dirty    bool
 	dioConfig DirectIOConfig
+}
+
+// CompactionStats tracks statistics for volume compaction
+type CompactionStats struct {
+	// DeletedObjectsCount is the number of objects marked as deleted but not yet reclaimed
+	DeletedObjectsCount uint64
+	// ReclaimableBytes is the total bytes that can be reclaimed via compaction
+	ReclaimableBytes uint64
+	// ReplacedObjectsCount is the number of objects replaced (which creates garbage)
+	ReplacedObjectsCount uint64
+	// LastCompactionTime is when the last compaction ran (Unix timestamp in nanoseconds)
+	LastCompactionTime int64
 }
 
 // VolumeConfig holds configuration for creating a new volume
@@ -473,6 +488,7 @@ func (v *Volume) Stats() VolumeStats {
 		ObjectCount: v.super.ObjectCount,
 		Created:     time.Unix(0, v.super.Created),
 		Modified:    time.Unix(0, v.super.Modified),
+		Compaction:  v.compactionStats,
 	}
 
 	// Add direct I/O stats if available
@@ -481,6 +497,13 @@ func (v *Volume) Stats() VolumeStats {
 	}
 
 	return stats
+}
+
+// CompactionStats returns the current compaction statistics
+func (v *Volume) CompactionStats() CompactionStats {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.compactionStats
 }
 
 // VolumeStats contains volume statistics
@@ -495,6 +518,7 @@ type VolumeStats struct {
 	Created     time.Time
 	Modified    time.Time
 	DirectIO    DirectIOStats
+	Compaction  CompactionStats
 }
 
 // HasSpace checks if the volume has space for an object of given size

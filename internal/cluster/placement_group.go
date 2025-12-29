@@ -15,6 +15,12 @@ import (
 // callbackTimeout is the maximum time allowed for a callback to complete
 const callbackTimeout = 5 * time.Second
 
+// callbackPoolSize is the default size of the callback worker pool
+const callbackPoolSize = 10
+
+// callbackQueueSize is the default capacity of the callback queue
+const callbackQueueSize = 100
+
 // PlacementGroupAuditLogger is an interface for audit logging to avoid circular imports
 type PlacementGroupAuditLogger interface {
 	LogNodeJoined(groupID, nodeID, datacenter, region string)
@@ -80,6 +86,11 @@ type PlacementGroupManager struct {
 	cachedLocalNodesHash uint64 // Hash of nodes to detect changes
 	cacheGeneration      uint64 // Incremented on any mutation
 
+	// Worker pool for bounded callback execution
+	// This prevents unbounded goroutine creation during high-churn scenarios
+	callbackPool chan func()
+	workerWg     sync.WaitGroup
+
 	// Callbacks for group events
 	onNodeJoinedGroup   func(groupID PlacementGroupID, nodeID string)
 	onNodeLeftGroup     func(groupID PlacementGroupID, nodeID string)
@@ -94,11 +105,18 @@ func NewPlacementGroupManager(config PlacementGroupConfig) (*PlacementGroupManag
 	ctx, cancel := context.WithCancel(context.Background())
 
 	mgr := &PlacementGroupManager{
-		config:      config,
-		groups:      make(map[PlacementGroupID]*PlacementGroup),
-		nodeToGroup: make(map[string]PlacementGroupID),
-		ctx:         ctx,
-		cancel:      cancel,
+		config:       config,
+		groups:       make(map[PlacementGroupID]*PlacementGroup),
+		nodeToGroup:  make(map[string]PlacementGroupID),
+		ctx:          ctx,
+		cancel:       cancel,
+		callbackPool: make(chan func(), callbackQueueSize),
+	}
+
+	// Start worker pool for callback execution
+	for i := 0; i < callbackPoolSize; i++ {
+		mgr.workerWg.Add(1)
+		go mgr.callbackWorker()
 	}
 
 	// Initialize groups from config
@@ -350,11 +368,11 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 		if auditLogger != nil {
 			auditLogger.LogStatusChanged(string(groupID), string(oldStatus), string(newStatus))
 		}
-		go m.safeCallback(func() { statusCallback(groupID, newStatus) })
+		m.scheduleCallback(func() { statusCallback(groupID, newStatus) })
 	}
 
 	if callback != nil {
-		go m.safeCallback(func() { callback(groupID, nodeID) })
+		m.scheduleCallback(func() { callback(groupID, nodeID) })
 	}
 
 	return nil
@@ -432,11 +450,11 @@ func (m *PlacementGroupManager) RemoveNodeFromGroup(groupID PlacementGroupID, no
 		if auditLogger != nil {
 			auditLogger.LogStatusChanged(string(groupID), string(oldStatus), string(newStatus))
 		}
-		go m.safeCallback(func() { statusCallback(groupID, newStatus) })
+		m.scheduleCallback(func() { statusCallback(groupID, newStatus) })
 	}
 
 	if nodeLeftCallback != nil {
-		go m.safeCallback(func() { nodeLeftCallback(groupID, nodeID) })
+		m.scheduleCallback(func() { nodeLeftCallback(groupID, nodeID) })
 	}
 
 	return nil
@@ -480,7 +498,7 @@ func (m *PlacementGroupManager) UpdateGroupStatus(groupID PlacementGroupID, stat
 		}
 
 		if callback != nil {
-			go m.safeCallback(func() { callback(groupID, status) })
+			m.scheduleCallback(func() { callback(groupID, status) })
 		}
 	}
 
@@ -751,6 +769,47 @@ func (m *PlacementGroupManager) safeCallback(fn func()) {
 
 // Close gracefully shuts down the placement group manager, cancelling any pending callbacks
 func (m *PlacementGroupManager) Close() error {
+	// Cancel context to stop accepting new callbacks
 	m.cancel()
+
+	// Close the callback pool to signal workers to exit
+	close(m.callbackPool)
+
+	// Wait for all workers to complete
+	m.workerWg.Wait()
+
 	return nil
+}
+
+// callbackWorker processes callbacks from the pool
+func (m *PlacementGroupManager) callbackWorker() {
+	defer m.workerWg.Done()
+
+	for callback := range m.callbackPool {
+		// Check if context is cancelled
+		select {
+		case <-m.ctx.Done():
+			log.Debug().Msg("Callback worker exiting - context cancelled")
+			return
+		default:
+		}
+
+		m.safeCallbackWithTimeout(callback)
+	}
+}
+
+// scheduleCallback queues a callback for execution by the worker pool.
+// If the pool is full, the callback is dropped and a warning is logged.
+// This provides backpressure during high-churn scenarios.
+func (m *PlacementGroupManager) scheduleCallback(fn func()) {
+	select {
+	case <-m.ctx.Done():
+		log.Debug().Msg("Skipping callback - context cancelled")
+		return
+	case m.callbackPool <- fn:
+		// Callback queued successfully
+	default:
+		// Pool is full - apply backpressure by dropping the callback
+		log.Warn().Msg("Callback pool full - dropping callback (high churn scenario)")
+	}
 }

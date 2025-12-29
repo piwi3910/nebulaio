@@ -46,6 +46,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/storage/fs"
 	"github.com/piwi3910/nebulaio/internal/storage/volume"
 	"github.com/piwi3910/nebulaio/internal/tiering"
+	"github.com/piwi3910/nebulaio/internal/lambda"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -109,6 +110,22 @@ func New(cfg *config.Config) (*Server, error) {
 	// Initialize metrics
 	metrics.Init(cfg.NodeID)
 	log.Info().Str("node_id", cfg.NodeID).Msg("Metrics initialized")
+
+	// Initialize Lambda configuration
+	if cfg.Lambda.ObjectLambda.MaxTransformSize > 0 {
+		lambda.SetMaxTransformSize(cfg.Lambda.ObjectLambda.MaxTransformSize)
+		metrics.SetLambdaMaxTransformSize(cfg.Lambda.ObjectLambda.MaxTransformSize)
+		log.Info().
+			Int64("max_transform_size_bytes", cfg.Lambda.ObjectLambda.MaxTransformSize).
+			Msg("Lambda max transform size configured")
+	}
+	if cfg.Lambda.ObjectLambda.StreamingThreshold > 0 {
+		lambda.SetStreamingThreshold(cfg.Lambda.ObjectLambda.StreamingThreshold)
+		metrics.SetLambdaStreamingThreshold(cfg.Lambda.ObjectLambda.StreamingThreshold)
+		log.Info().
+			Int64("streaming_threshold_bytes", cfg.Lambda.ObjectLambda.StreamingThreshold).
+			Msg("Lambda streaming threshold configured")
+	}
 
 	// Initialize metadata store (Dragonboat-backed)
 	// Use advertise address for raft binding if specified, otherwise use localhost for single-node

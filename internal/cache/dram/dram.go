@@ -65,25 +65,31 @@ type Config struct {
 
 	// MetricsEnabled enables detailed cache metrics
 	MetricsEnabled bool `json:"metricsEnabled" yaml:"metrics_enabled"`
+
+	// PeerCacheLogResetInterval is the interval after which the peer cache
+	// failure log rate limiter resets, allowing a new burst of logs.
+	// This ensures logging resumes after periods of stability. (default: 5 minutes)
+	PeerCacheLogResetInterval time.Duration `json:"peerCacheLogResetInterval" yaml:"peer_cache_log_reset_interval"`
 }
 
 // DefaultConfig returns sensible defaults for production workloads
 func DefaultConfig() Config {
 	return Config{
-		MaxSize:            8 * 1024 * 1024 * 1024, // 8GB
-		ShardCount:         256,
-		EntryMaxSize:       256 * 1024 * 1024, // 256MB
-		TTL:                time.Hour,
-		EvictionPolicy:     "arc",
-		PrefetchEnabled:    true,
-		PrefetchThreshold:  2,
-		PrefetchAhead:      4,
-		ZeroCopyEnabled:    true,
-		CompressionEnabled: false,
-		DistributedMode:    false,
-		ReplicationFactor:  2,
-		WarmupEnabled:      false,
-		MetricsEnabled:     true,
+		MaxSize:                   8 * 1024 * 1024 * 1024, // 8GB
+		ShardCount:                256,
+		EntryMaxSize:              256 * 1024 * 1024, // 256MB
+		TTL:                       time.Hour,
+		EvictionPolicy:            "arc",
+		PrefetchEnabled:           true,
+		PrefetchThreshold:         2,
+		PrefetchAhead:             4,
+		ZeroCopyEnabled:           true,
+		CompressionEnabled:        false,
+		DistributedMode:           false,
+		ReplicationFactor:         2,
+		WarmupEnabled:             false,
+		MetricsEnabled:            true,
+		PeerCacheLogResetInterval: 5 * time.Minute, // Reset log rate limiter every 5 minutes
 	}
 }
 
@@ -271,6 +277,21 @@ func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 
 					// Rate-limited logging to prevent log flooding during persistent failures
 					// Allow first 5 logs (burst), then 1 per 100 failures
+					// Resets after configurable interval (default 5 minutes) of no logs
+					now := time.Now().UnixNano()
+					lastLogTime := atomic.LoadInt64(&c.peerCacheLastLogTime)
+					resetInterval := c.config.PeerCacheLogResetInterval
+					if resetInterval <= 0 {
+						resetInterval = 5 * time.Minute
+					}
+
+					// Check if we should reset the rate limiter due to time elapsed
+					if lastLogTime > 0 && now-lastLogTime > resetInterval.Nanoseconds() {
+						// Reset the burst allowance and count after quiet period
+						atomic.StoreInt64(&c.peerCacheLogBurstLeft, 5)
+						atomic.StoreInt64(&c.peerCacheLogCount, 0)
+					}
+
 					count := atomic.AddInt64(&c.peerCacheLogCount, 1)
 					burstLeft := atomic.LoadInt64(&c.peerCacheLogBurstLeft)
 
@@ -286,6 +307,7 @@ func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 					}
 
 					if shouldLog {
+						atomic.StoreInt64(&c.peerCacheLastLogTime, now)
 						log.Warn().
 							Err(putErr).
 							Str("key", key).

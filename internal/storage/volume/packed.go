@@ -209,8 +209,11 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 		// Mark old entry as deleted
 		v.index.Delete(bucket, key)
 		v.super.ObjectCount-- // Decrement since we're replacing
-		// Note: We don't reclaim space immediately, compaction will handle it
-		_ = existing // TODO: track for compaction stats
+
+		// Track for compaction stats - the old space becomes reclaimable
+		v.compactionStats.ReplacedObjectsCount++
+		v.compactionStats.ReclaimableBytes += existing.Size
+		v.compactionStats.DeletedObjectsCount++
 	}
 
 	var blockNum uint32
@@ -441,6 +444,10 @@ func (v *Volume) Delete(bucket, key string) error {
 
 	// For large/spanning blocks, we just mark in index
 	// Actual space reclamation happens during compaction
+
+	// Track for compaction stats - the deleted space becomes reclaimable
+	v.compactionStats.DeletedObjectsCount++
+	v.compactionStats.ReclaimableBytes += entry.Size
 
 	v.index.Delete(bucket, key)
 	v.super.ObjectCount--

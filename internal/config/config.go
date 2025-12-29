@@ -86,6 +86,9 @@ type Config struct {
 	// NIM configuration (NVIDIA Inference Microservices)
 	NIM NIMConfig `mapstructure:"nim"`
 
+	// Lambda configuration (S3 Object Lambda)
+	Lambda LambdaConfig `mapstructure:"lambda"`
+
 	// TLS configuration
 	TLS TLSConfig `mapstructure:"tls"`
 
@@ -921,6 +924,25 @@ type NIMConfig struct {
 	ProcessContentTypes []string `mapstructure:"process_content_types"`
 }
 
+// LambdaConfig holds S3 Object Lambda configuration
+type LambdaConfig struct {
+	// ObjectLambda holds Object Lambda specific settings
+	ObjectLambda ObjectLambdaConfig `mapstructure:"object_lambda"`
+}
+
+// ObjectLambdaConfig holds Object Lambda transformation settings
+type ObjectLambdaConfig struct {
+	// MaxTransformSize is the maximum size of data that can be transformed in memory
+	// Default: 100MB (100 * 1024 * 1024 bytes)
+	// Warning: Setting this too high may cause memory exhaustion during transformation operations
+	MaxTransformSize int64 `mapstructure:"max_transform_size"`
+
+	// StreamingThreshold is the size threshold above which streaming mode is used
+	// for compression/decompression operations instead of buffering in memory
+	// Default: 10MB (10 * 1024 * 1024 bytes)
+	StreamingThreshold int64 `mapstructure:"streaming_threshold"`
+}
+
 // Options are command line overrides
 type Options struct {
 	DataDir     string
@@ -1204,6 +1226,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("tls.auto_generate", true)
 	v.SetDefault("tls.organization", "NebulaIO")
 	v.SetDefault("tls.validity_days", 365)
+
+	// Lambda defaults (S3 Object Lambda)
+	v.SetDefault("lambda.object_lambda.max_transform_size", 100*1024*1024) // 100MB
+	v.SetDefault("lambda.object_lambda.streaming_threshold", 10*1024*1024) // 10MB
 
 	// Logging
 	v.SetDefault("log_level", "info")

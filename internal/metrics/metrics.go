@@ -454,6 +454,77 @@ var (
 		},
 		[]string{"bucket", "reason"},
 	)
+
+	// LambdaMaxTransformSize tracks the configured maximum transform size for Lambda operations
+	LambdaMaxTransformSize = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_lambda_max_transform_size_bytes",
+			Help: "Configured maximum transform size for Lambda operations in bytes",
+		},
+	)
+
+	// LambdaStreamingThreshold tracks the configured streaming threshold for Lambda operations
+	LambdaStreamingThreshold = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_lambda_streaming_threshold_bytes",
+			Help: "Configured streaming threshold for Lambda operations in bytes",
+		},
+	)
+
+	// LambdaBytesProcessed tracks total bytes processed by Lambda compression/decompression
+	LambdaBytesProcessed = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_lambda_compression_bytes_processed_total",
+			Help: "Total bytes processed by Lambda compression/decompression operations",
+		},
+		[]string{"algorithm", "direction"},
+	)
+
+	// VolumeCompactionReclaimableBytes tracks bytes that can be reclaimed via compaction
+	VolumeCompactionReclaimableBytes = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_volume_compaction_reclaimable_bytes",
+			Help: "Bytes that can be reclaimed via volume compaction",
+		},
+		[]string{"volume_id"},
+	)
+
+	// VolumeCompactionDeletedObjects tracks objects marked as deleted but not yet reclaimed
+	VolumeCompactionDeletedObjects = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_volume_compaction_deleted_objects",
+			Help: "Number of objects marked as deleted but not yet reclaimed",
+		},
+		[]string{"volume_id"},
+	)
+
+	// VolumeCompactionReplacedObjects tracks objects that were replaced (creating garbage)
+	VolumeCompactionReplacedObjects = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_volume_compaction_replaced_objects_total",
+			Help: "Total number of objects replaced, creating garbage for compaction",
+		},
+		[]string{"volume_id"},
+	)
+
+	// VolumeCompactionLastRun tracks the timestamp of the last compaction run
+	VolumeCompactionLastRun = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_volume_compaction_last_run_timestamp_seconds",
+			Help: "Unix timestamp of the last compaction run",
+		},
+		[]string{"volume_id"},
+	)
+
+	// VolumeCompactionDuration tracks the duration of compaction operations
+	VolumeCompactionDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "nebulaio_volume_compaction_duration_seconds",
+			Help:    "Duration of volume compaction operations",
+			Buckets: prometheus.ExponentialBuckets(0.1, 2, 10), // 0.1s to ~102s
+		},
+		[]string{"volume_id"},
+	)
 )
 
 // Version is set at build time
@@ -764,4 +835,44 @@ func DecrementLambdaOperationsInFlight(algorithm string) {
 // RecordObjectCreationRateLimited records a rate-limited object creation attempt
 func RecordObjectCreationRateLimited(bucket, reason string) {
 	ObjectCreationRateLimited.WithLabelValues(bucket, reason).Inc()
+}
+
+// SetLambdaMaxTransformSize sets the configured max transform size metric
+func SetLambdaMaxTransformSize(size int64) {
+	LambdaMaxTransformSize.Set(float64(size))
+}
+
+// SetLambdaStreamingThreshold sets the configured streaming threshold metric
+func SetLambdaStreamingThreshold(size int64) {
+	LambdaStreamingThreshold.Set(float64(size))
+}
+
+// RecordLambdaBytesProcessed records bytes processed by Lambda operations
+func RecordLambdaBytesProcessed(algorithm, direction string, bytes int64) {
+	LambdaBytesProcessed.WithLabelValues(algorithm, direction).Add(float64(bytes))
+}
+
+// SetVolumeCompactionReclaimableBytes sets the reclaimable bytes for a volume
+func SetVolumeCompactionReclaimableBytes(volumeID string, bytes uint64) {
+	VolumeCompactionReclaimableBytes.WithLabelValues(volumeID).Set(float64(bytes))
+}
+
+// SetVolumeCompactionDeletedObjects sets the count of deleted objects pending compaction
+func SetVolumeCompactionDeletedObjects(volumeID string, count uint64) {
+	VolumeCompactionDeletedObjects.WithLabelValues(volumeID).Set(float64(count))
+}
+
+// IncrementVolumeCompactionReplacedObjects increments the replaced objects counter
+func IncrementVolumeCompactionReplacedObjects(volumeID string) {
+	VolumeCompactionReplacedObjects.WithLabelValues(volumeID).Inc()
+}
+
+// SetVolumeCompactionLastRun sets the timestamp of the last compaction run
+func SetVolumeCompactionLastRun(volumeID string, timestamp float64) {
+	VolumeCompactionLastRun.WithLabelValues(volumeID).Set(timestamp)
+}
+
+// ObserveVolumeCompactionDuration records the duration of a compaction operation
+func ObserveVolumeCompactionDuration(volumeID string, duration float64) {
+	VolumeCompactionDuration.WithLabelValues(volumeID).Observe(duration)
 }
