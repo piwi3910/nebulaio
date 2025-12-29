@@ -2,14 +2,60 @@ package config
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/spf13/viper"
 )
+
+// Password validation errors
+var (
+	ErrPasswordEmpty    = errors.New("password is required and cannot be empty")
+	ErrPasswordTooShort = errors.New("password must be at least 12 characters long")
+	ErrPasswordNoUpper  = errors.New("password must contain at least one uppercase letter")
+	ErrPasswordNoLower  = errors.New("password must contain at least one lowercase letter")
+	ErrPasswordNoNumber = errors.New("password must contain at least one number")
+)
+
+// validateRootPassword validates the root password meets security requirements.
+// This is called during config loading to fail fast if password is missing or weak.
+func validateRootPassword(password string) error {
+	if password == "" {
+		return ErrPasswordEmpty
+	}
+	if len(password) < 12 {
+		return ErrPasswordTooShort
+	}
+
+	var hasUpper, hasLower, hasNumber bool
+	for _, char := range password {
+		switch {
+		case unicode.IsUpper(char):
+			hasUpper = true
+		case unicode.IsLower(char):
+			hasLower = true
+		case unicode.IsNumber(char):
+			hasNumber = true
+		}
+	}
+
+	if !hasUpper {
+		return ErrPasswordNoUpper
+	}
+	if !hasLower {
+		return ErrPasswordNoLower
+	}
+	if !hasNumber {
+		return ErrPasswordNoNumber
+	}
+
+	return nil
+}
 
 // Config holds all configuration for NebulaIO
 type Config struct {
@@ -1217,6 +1263,12 @@ func (c *Config) validate() error {
 				return fmt.Errorf("failed to write JWT secret: %w", err)
 			}
 		}
+	}
+
+	// Validate root password - fail fast if missing or weak
+	// Password must be: min 12 chars, with uppercase, lowercase, and number
+	if err := validateRootPassword(c.Auth.RootPassword); err != nil {
+		return fmt.Errorf("invalid root password: %w. Set via NEBULAIO_AUTH_ROOT_PASSWORD environment variable", err)
 	}
 
 	// Generate or load replica ID if not set
