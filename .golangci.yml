@@ -143,8 +143,8 @@ linters:
       - vendor
       - node_modules
       - web
-      - "**/*.pb.go"
-      - "**/*generated*.go"
+      - ".*\\.pb\\.go$"
+      - ".*generated.*\\.go$"
 
     rules:
       # Exclude test files from certain checks
