@@ -562,3 +562,71 @@ func TestMockEventTarget_Tracking(t *testing.T) {
 	target.SetHealthy(false)
 	assert.False(t, target.IsHealthy())
 }
+
+// TestMockObjectService_Reset verifies Reset clears all state.
+func TestMockObjectService_Reset(t *testing.T) {
+	ctx := context.Background()
+	svc := NewMockObjectService()
+
+	// Add some data and set an error
+	_ = svc.DeleteObject(ctx, "bucket", "key")
+	svc.SetDeleteObjectError(errors.New("test error"))
+
+	// Verify data exists
+	deleted := svc.GetDeletedObjects()
+	require.Len(t, deleted, 1)
+
+	// Reset
+	svc.Reset()
+
+	// Verify data is cleared
+	deleted = svc.GetDeletedObjects()
+	assert.Len(t, deleted, 0)
+
+	// Verify errors are cleared
+	err := svc.DeleteObject(ctx, "bucket", "key2")
+	assert.NoError(t, err)
+}
+
+// TestMockMultipartService_Reset verifies Reset clears all state.
+func TestMockMultipartService_Reset(t *testing.T) {
+	ctx := context.Background()
+	svc := NewMockMultipartService()
+
+	// Add some data and set an error
+	svc.AddUpload(&metadata.MultipartUpload{Bucket: "bucket", Key: "key", UploadID: "upload-1"})
+	svc.SetListUploadsError(errors.New("test error"))
+
+	// Reset
+	svc.Reset()
+
+	// Verify data is cleared
+	uploads, err := svc.ListMultipartUploads(ctx, "bucket")
+	assert.NoError(t, err)
+	assert.Len(t, uploads, 0)
+}
+
+// TestMockEventTarget_Reset verifies Reset clears all state.
+func TestMockEventTarget_Reset(t *testing.T) {
+	target := NewMockEventTarget("test-target")
+
+	// Add some data and set an error
+	_ = target.Publish(map[string]string{"event": "1"})
+	target.SetHealthy(false)
+	target.SetPublishError(errors.New("test error"))
+
+	// Verify state
+	assert.Equal(t, 1, target.GetPublishedCount())
+	assert.False(t, target.IsHealthy())
+
+	// Reset
+	target.Reset()
+
+	// Verify state is reset
+	assert.Equal(t, 0, target.GetPublishedCount())
+	assert.True(t, target.IsHealthy())
+
+	// Verify errors are cleared
+	err := target.Publish(map[string]string{"event": "2"})
+	assert.NoError(t, err)
+}

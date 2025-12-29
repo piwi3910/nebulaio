@@ -143,6 +143,18 @@ func (m *MockObjectService) GetTransitions() []TransitionRecord {
 	return result
 }
 
+// Reset clears all mock state for reuse between tests.
+func (m *MockObjectService) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deletedObjects = make([]DeletedObjectRecord, 0)
+	m.deletedVersions = make([]DeletedVersionRecord, 0)
+	m.transitions = make([]TransitionRecord, 0)
+	m.deleteObjectErr = nil
+	m.deleteVersionErr = nil
+	m.transitionErr = nil
+}
+
 // MockMultipartService implements multipart service operations for testing.
 type MockMultipartService struct {
 	mu sync.RWMutex
@@ -222,6 +234,16 @@ func (m *MockMultipartService) GetAbortedUploadIDs() []string {
 	result := make([]string, len(m.abortedUploadIDs))
 	copy(result, m.abortedUploadIDs)
 	return result
+}
+
+// Reset clears all mock state for reuse between tests.
+func (m *MockMultipartService) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.uploads = make(map[string]*metadata.MultipartUpload)
+	m.abortedUploadIDs = make([]string, 0)
+	m.listUploadsErr = nil
+	m.abortErr = nil
 }
 
 // MockEventTarget implements event target for testing.
@@ -304,4 +326,14 @@ func (m *MockEventTarget) GetPublishedCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.published
+}
+
+// Reset clears all mock state for reuse between tests.
+func (m *MockEventTarget) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.published = 0
+	m.healthy = true
+	m.publishFn = nil
+	m.publishErr = nil
 }
