@@ -1,92 +1,93 @@
 version: "2"
 
-linters-settings:
-  cyclop:
-    max-complexity: 15
-    skip-tests: true
-
-  funlen:
-    lines: 100
-    statements: 50
-    ignore-comments: true
-
-  nestif:
-    min-complexity: 4
-
-  gocyclo:
-    min-complexity: 15
-
-  gocognit:
-    min-complexity: 20
-
-  errcheck:
-    check-type-assertions: true
-    check-blank: false
-    exclude-functions:
-      - io.Copy
-      - io.Copy(*bytes.Buffer)
-      - io.CopyBuffer
-      - fmt.Fprint
-      - fmt.Fprintf
-      - fmt.Fprintln
-      - (net/http.ResponseWriter).Write
-      - (*encoding/json.Encoder).Encode
-      - (*encoding/xml.Encoder).Encode
-      - (hash.Hash).Write
-      - crypto/rand.Read
-      - encoding/binary.Read
-      - encoding/binary.Write
-
-  govet:
-    enable-all: true
-    disable:
-      - shadow  # Too strict, common variable shadowing is often intentional
-
-  revive:
-    rules:
-      - name: exported
-        arguments:
-          - "checkPrivateReceivers"
-          - "sayRepetitiveInsteadOfStutters"
-      - name: var-naming
-      - name: package-comments
-      - name: error-return
-      - name: error-naming
-      - name: error-strings
-      - name: receiver-naming
-      - name: indent-error-flow
-      - name: if-return
-
-  staticcheck:
-    checks:
-      - all
-      - "-SA9003"  # Empty branch - often intentional for TODO stubs
-      - "-SA1012"  # nil context - sometimes intentional in tests
-      - "-SA1026"  # xml.Encode map - false positive when used for error responses
-      - "-ST1005"  # Error strings should not be capitalized - too strict for API errors
-      - "-ST1003"  # Initialisms (ACL vs Acl) - S3 API compatibility
-      - "-ST1000"  # Package comments - not required for internal packages
-      - "-ST1020"  # Comment format on methods - style preference
-      - "-ST1021"  # Comment format on types - style preference
-      - "-ST1022"  # Comment format on consts - style preference
-      - "-S1008"   # Simplify return - readability preference
-      - "-QF1002"  # Tagged switch - style preference
-      - "-QF1003"  # Tagged switch - style preference
-
-  gosec:
-    excludes:
-      - G101  # Look for hard coded credentials - false positives with test constants
-      - G104  # Audit errors not checked - covered by errcheck
-      - G204  # Subprocess launched with variable - required for CLI commands
-    config:
-      G306: "0644"  # File permissions
-
-  errorlint:
-    errorf: true
-    asserts: true
-    comparison: true
-
 linters:
+  default: all
+
+  settings:
+    cyclop:
+      max-complexity: 15
+
+    funlen:
+      lines: 100
+      statements: 50
+      ignore-comments: true
+
+    nestif:
+      min-complexity: 4
+
+    gocyclo:
+      min-complexity: 15
+
+    gocognit:
+      min-complexity: 20
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - io.Copy
+        - io.Copy(*bytes.Buffer)
+        - io.CopyBuffer
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (net/http.ResponseWriter).Write
+        - (*encoding/json.Encoder).Encode
+        - (*encoding/xml.Encoder).Encode
+        - (hash.Hash).Write
+        - crypto/rand.Read
+        - encoding/binary.Read
+        - encoding/binary.Write
+
+    govet:
+      enable-all: true
+      disable:
+        - shadow  # Too strict, common variable shadowing is often intentional
+
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - "checkPrivateReceivers"
+            - "sayRepetitiveInsteadOfStutters"
+        - name: var-naming
+        - name: package-comments
+        - name: error-return
+        - name: error-naming
+        - name: error-strings
+        - name: receiver-naming
+        - name: indent-error-flow
+        - name: if-return
+
+    staticcheck:
+      checks:
+        - all
+        - "-SA9003"  # Empty branch - often intentional for TODO stubs
+        - "-SA1012"  # nil context - sometimes intentional in tests
+        - "-SA1026"  # xml.Encode map - false positive when used for error responses
+        - "-ST1005"  # Error strings should not be capitalized - too strict for API errors
+        - "-ST1003"  # Initialisms (ACL vs Acl) - S3 API compatibility
+        - "-ST1000"  # Package comments - not required for internal packages
+        - "-ST1020"  # Comment format on methods - style preference
+        - "-ST1021"  # Comment format on types - style preference
+        - "-ST1022"  # Comment format on consts - style preference
+        - "-S1008"   # Simplify return - readability preference
+        - "-QF1002"  # Tagged switch - style preference
+        - "-QF1003"  # Tagged switch - style preference
+
+    gosec:
+      excludes:
+        - G101  # Look for hard coded credentials - false positives with test constants
+        - G104  # Audit errors not checked - covered by errcheck
+        - G204  # Subprocess launched with variable - required for CLI commands
+      config:
+        G306: "0644"  # File permissions
+
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+
   enable:
     # Security & Bug Detection (High Priority)
     - gosec          # Security issues
@@ -137,113 +138,114 @@ linters:
     - testpackage       # Test package naming - internal tests needed
     - godox             # TODO comments - tracked separately in issues
 
+  exclusions:
+    paths:
+      - vendor
+      - node_modules
+      - web
+      - ".*\\.pb\\.go$"
+      - ".*generated.*\\.go$"
+
+    rules:
+      # Exclude test files from certain checks
+      - path: _test\.go
+        linters:
+          - funlen      # Test functions can be long
+          - gocyclo     # Test complexity is acceptable
+          - gocognit    # Test complexity is acceptable
+          - errcheck    # Tests often intentionally ignore errors
+          - gosec       # Tests may use insecure operations
+
+      # Exclude benchmark files
+      - path: _bench_test\.go
+        linters:
+          - funlen
+          - gocyclo
+          - gocognit
+          - errcheck
+
+      # Exclude integration test files
+      - path: internal/integration/
+        linters:
+          - funlen
+          - gocyclo
+          - gosec
+
+      # Exclude generated or stub code
+      - path: internal/transport/rdma/
+        linters:
+          - unused      # RDMA transport has placeholder fields
+          - gocritic    # Stub implementations
+
+      - path: internal/dpu/
+        linters:
+          - unused      # DPU code has placeholder fields
+          - gocritic
+
+      - path: internal/backup/pitr\.go
+        linters:
+          - unused      # Progress tracking fields for future use
+
+      # Exclude specific paths from unused checks (reserved for future)
+      - path: internal/cache/dram/
+        linters:
+          - unused
+
+      - path: internal/catalog/
+        linters:
+          - unused
+
+      - path: internal/cluster/membership\.go
+        linters:
+          - unused
+
+      - path: internal/mcp/
+        linters:
+          - unused
+
+      - path: internal/metadata/raft\.go
+        linters:
+          - unused
+
+      - path: internal/nim/
+        linters:
+          - unused
+
+      - path: internal/object/service\.go
+        linters:
+          - unused
+
+      # Allow certain patterns in specific files
+      - path: internal/server/server\.go
+        text: "cyclomatic complexity"
+        linters:
+          - gocyclo
+          - gocognit
+
+      - path: internal/api/s3/
+        text: "cyclomatic complexity"
+        linters:
+          - gocyclo      # S3 API handlers have complex routing
+
+      # Allow InsecureSkipVerify in test helpers
+      - path: internal/.*test.*\.go
+        text: "G402.*InsecureSkipVerify"
+        linters:
+          - gosec
+
+      # Allow weak random in non-cryptographic contexts
+      - path: internal/.*
+        text: "G404.*weak random"
+        linters:
+          - gosec
+
 run:
+  go: '1.24'
   timeout: 5m
   tests: true
   build-tags:
     - integration
-  skip-dirs:
-    - vendor
-    - node_modules
-    - web
-  skip-files:
-    - ".*\\.pb\\.go$"
-    - ".*generated.*\\.go$"
+  relative-path-mode: 'gomod'
 
 issues:
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  exclude-use-default: false
-
-  exclude-rules:
-    # Exclude test files from certain checks
-    - path: _test\.go
-      linters:
-        - funlen      # Test functions can be long
-        - gocyclo     # Test complexity is acceptable
-        - gocognit    # Test complexity is acceptable
-        - errcheck    # Tests often intentionally ignore errors
-        - gosec       # Tests may use insecure operations
-
-    # Exclude benchmark files
-    - path: _bench_test\.go
-      linters:
-        - funlen
-        - gocyclo
-        - gocognit
-        - errcheck
-
-    # Exclude integration test files
-    - path: internal/integration/
-      linters:
-        - funlen
-        - gocyclo
-        - gosec
-
-    # Exclude generated or stub code
-    - path: internal/transport/rdma/
-      linters:
-        - unused      # RDMA transport has placeholder fields
-        - gocritic    # Stub implementations
-
-    - path: internal/dpu/
-      linters:
-        - unused      # DPU code has placeholder fields
-        - gocritic
-
-    - path: internal/backup/pitr\.go
-      linters:
-        - unused      # Progress tracking fields for future use
-
-    # Exclude specific paths from unused checks (reserved for future)
-    - path: internal/cache/dram/
-      linters:
-        - unused
-
-    - path: internal/catalog/
-      linters:
-        - unused
-
-    - path: internal/cluster/membership\.go
-      linters:
-        - unused
-
-    - path: internal/mcp/
-      linters:
-        - unused
-
-    - path: internal/metadata/raft\.go
-      linters:
-        - unused
-
-    - path: internal/nim/
-      linters:
-        - unused
-
-    - path: internal/object/service\.go
-      linters:
-        - unused
-
-    # Allow certain patterns in specific files
-    - path: internal/server/server\.go
-      text: "cyclomatic complexity"
-      linters:
-        - gocyclo
-        - gocognit
-
-    - path: internal/api/s3/
-      text: "cyclomatic complexity"
-      linters:
-        - gocyclo      # S3 API handlers have complex routing
-
-    # Allow InsecureSkipVerify in test helpers
-    - path: internal/.*test.*\.go
-      text: "G402.*InsecureSkipVerify"
-      linters:
-        - gosec
-
-    # Allow weak random in non-cryptographic contexts
-    - path: internal/.*
-      text: "G404.*weak random"
-      linters:
-        - gosec
+  uniq-by-line: false
