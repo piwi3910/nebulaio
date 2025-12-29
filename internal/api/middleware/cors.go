@@ -147,9 +147,9 @@ func (m *S3CORSMiddleware) handleActualRequest(w http.ResponseWriter, r *http.Re
 	// S3 specific headers that should be exposed
 	s3ExposeHeaders := []string{
 		"ETag",
-		"x-amz-version-id",
-		"x-amz-delete-marker",
-		"x-amz-request-id",
+		"X-Amz-Version-Id",
+		"X-Amz-Delete-Marker",
+		"X-Amz-Request-Id",
 	}
 
 	// Merge S3-specific headers with user-defined expose headers
@@ -208,7 +208,7 @@ func (m *S3CORSMiddleware) setDefaultCORSHeaders(w http.ResponseWriter, origin, 
 	w.Header().Set("Access-Control-Allow-Origin", origin)
 	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Amz-Date, X-Amz-Content-SHA256")
-	w.Header().Set("Access-Control-Expose-Headers", "ETag, x-amz-request-id")
+	w.Header().Set("Access-Control-Expose-Headers", "ETag, X-Amz-Request-Id")
 	w.Header().Set("Access-Control-Max-Age", "3600")
 	w.Header().Add("Vary", "Origin")
 }
@@ -261,10 +261,10 @@ func DefaultSimpleS3CORSHeaders() *SimpleS3CORSHeaders {
 			"ETag",
 			"Content-Length",
 			"Content-Type",
-			"x-amz-version-id",
-			"x-amz-delete-marker",
-			"x-amz-request-id",
-			"x-amz-id-2",
+			"X-Amz-Version-Id",
+			"X-Amz-Delete-Marker",
+			"X-Amz-Request-Id",
+			"X-Amz-Id-2",
 		},
 		AllowCredentials: false,
 		MaxAge:           86400,

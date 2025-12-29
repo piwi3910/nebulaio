@@ -907,7 +907,7 @@ func TestPutObjectWithMetadata(t *testing.T) {
 	content := "Hello, World!"
 	req := httptest.NewRequest("PUT", "/test-bucket/test-key", strings.NewReader(content))
 	req.Header.Set("Content-Type", "text/plain")
-	req.Header.Set("x-amz-meta-custom", "value")
+	req.Header.Set("X-Amz-Meta-Custom", "value")
 	req.ContentLength = int64(len(content))
 	w := httptest.NewRecorder()
 
@@ -934,7 +934,7 @@ func TestPutObjectWithTags(t *testing.T) {
 	content := "Hello, World!"
 	req := httptest.NewRequest("PUT", "/test-bucket/test-key", strings.NewReader(content))
 	req.Header.Set("Content-Type", "text/plain")
-	req.Header.Set("x-amz-tagging", "key1=value1&key2=value2")
+	req.Header.Set("X-Amz-Tagging", "key1=value1&key2=value2")
 	req.ContentLength = int64(len(content))
 	w := httptest.NewRecorder()
 
@@ -1056,7 +1056,7 @@ func TestCopyObject(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "source-key", strings.NewReader(content), int64(len(content)), "text/plain", "test-owner", nil)
 
 	req := httptest.NewRequest("PUT", "/test-bucket/dest-key", nil)
-	req.Header.Set("x-amz-copy-source", "/test-bucket/source-key")
+	req.Header.Set("X-Amz-Copy-Source", "/test-bucket/source-key")
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)

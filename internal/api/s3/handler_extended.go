@@ -25,7 +25,7 @@ func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
 	versionID := r.URL.Query().Get("versionId")
 
 	// Parse x-amz-object-attributes header (comma-separated list)
-	requestedAttrs := parseObjectAttributesHeader(r.Header.Get("x-amz-object-attributes"))
+	requestedAttrs := parseObjectAttributesHeader(r.Header.Get("X-Amz-Object-Attributes"))
 	if len(requestedAttrs) == 0 {
 		writeS3Error(w, "InvalidArgument", "x-amz-object-attributes header is required", http.StatusBadRequest)
 		return
@@ -179,7 +179,7 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 
 	// Write response as event stream
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("x-amz-request-id", middleware.GetRequestID(ctx))
+	w.Header().Set("X-Amz-Request-Id", middleware.GetRequestID(ctx))
 	w.WriteHeader(http.StatusOK)
 
 	// Write records message
@@ -341,7 +341,7 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 		if restoreStatus, ok := meta.Metadata["x-amz-restore-status"]; ok {
 			if restoreStatus == "ongoing" {
 				// Restore already in progress
-				w.Header().Set("x-amz-restore", `ongoing-request="true"`)
+				w.Header().Set("X-Amz-Restore", `ongoing-request="true"`)
 				w.WriteHeader(http.StatusConflict)
 				return
 			}
@@ -349,7 +349,7 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 				if expiryStr, ok := meta.Metadata["x-amz-restore-expiry"]; ok {
 					if expiryTime, err := time.Parse(time.RFC3339, expiryStr); err == nil && expiryTime.After(time.Now()) {
 						// Object already restored
-						w.Header().Set("x-amz-restore", fmt.Sprintf(`ongoing-request="false", expiry-date="%s"`,
+						w.Header().Set("X-Amz-Restore", fmt.Sprintf(`ongoing-request="false", expiry-date="%s"`,
 							expiryTime.Format(time.RFC1123)))
 						w.WriteHeader(http.StatusOK)
 						return
@@ -373,9 +373,9 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 	// 2. Update the object metadata with restore status
 	// 3. The job would update the status when complete
 
-	w.Header().Set("x-amz-restore", `ongoing-request="true"`)
-	w.Header().Set("x-amz-restore-expiry-date", expiryDate.Format(time.RFC1123))
-	w.Header().Set("x-amz-restore-tier", tier)
+	w.Header().Set("X-Amz-Restore", `ongoing-request="true"`)
+	w.Header().Set("X-Amz-Restore-Expiry-Date", expiryDate.Format(time.RFC1123))
+	w.Header().Set("X-Amz-Restore-Tier", tier)
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -394,7 +394,7 @@ func (h *Handler) WriteGetObjectResponse(w http.ResponseWriter, r *http.Request)
 
 	// Parse response headers from request
 	statusCode := http.StatusOK
-	if sc := r.Header.Get("x-amz-fwd-status"); sc != "" {
+	if sc := r.Header.Get("X-Amz-Fwd-Status"); sc != "" {
 		if parsed, err := strconv.Atoi(sc); err == nil {
 			statusCode = parsed
 		}
@@ -408,16 +408,16 @@ func (h *Handler) WriteGetObjectResponse(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Forward headers
-	if contentType := r.Header.Get("x-amz-fwd-header-Content-Type"); contentType != "" {
+	if contentType := r.Header.Get("X-Amz-Fwd-Header-Content-Type"); contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
-	if contentLength := r.Header.Get("x-amz-fwd-header-Content-Length"); contentLength != "" {
+	if contentLength := r.Header.Get("X-Amz-Fwd-Header-Content-Length"); contentLength != "" {
 		w.Header().Set("Content-Length", contentLength)
 	}
-	if etag := r.Header.Get("x-amz-fwd-header-ETag"); etag != "" {
+	if etag := r.Header.Get("X-Amz-Fwd-Header-Etag"); etag != "" {
 		w.Header().Set("ETag", etag)
 	}
-	if lastModified := r.Header.Get("x-amz-fwd-header-Last-Modified"); lastModified != "" {
+	if lastModified := r.Header.Get("X-Amz-Fwd-Header-Last-Modified"); lastModified != "" {
 		w.Header().Set("Last-Modified", lastModified)
 	}
 

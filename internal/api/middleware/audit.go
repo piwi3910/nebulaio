@@ -251,7 +251,7 @@ func LogAuditEvent(logger *audit.AuditLogger, r *http.Request, eventType audit.E
 	event.DurationMS = duration.Milliseconds()
 
 	// Get user identity from headers (set by auth middleware)
-	if userID := r.Header.Get("X-User-ID"); userID != "" {
+	if userID := r.Header.Get("X-User-Id"); userID != "" {
 		event.UserIdentity.UserID = userID
 		event.UserIdentity.Type = audit.IdentityIAMUser
 	}

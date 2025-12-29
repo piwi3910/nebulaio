@@ -600,7 +600,7 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("ETag", meta.ETag)
 	if meta.VersionID != "" {
-		w.Header().Set("x-amz-version-id", meta.VersionID)
+		w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -634,7 +634,7 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", meta.ETag)
 	w.Header().Set("Last-Modified", meta.ModifiedAt.Format(http.TimeFormat))
 	if meta.VersionID != "" {
-		w.Header().Set("x-amz-version-id", meta.VersionID)
+		w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 	}
 
 	// Set user metadata
@@ -731,9 +731,9 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request) {
 
 	// Handle delete markers
 	if meta.DeleteMarker {
-		w.Header().Set("x-amz-delete-marker", "true")
+		w.Header().Set("X-Amz-Delete-Marker", "true")
 		if meta.VersionID != "" {
-			w.Header().Set("x-amz-version-id", meta.VersionID)
+			w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 		}
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -744,7 +744,7 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", meta.ETag)
 	w.Header().Set("Last-Modified", meta.ModifiedAt.Format(http.TimeFormat))
 	if meta.VersionID != "" {
-		w.Header().Set("x-amz-version-id", meta.VersionID)
+		w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 	}
 
 	for k, v := range meta.Metadata {
@@ -779,12 +779,12 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	// Set version-related response headers
 	if result != nil {
 		if result.VersionID != "" {
-			w.Header().Set("x-amz-version-id", result.VersionID)
+			w.Header().Set("X-Amz-Version-Id", result.VersionID)
 		}
 		if result.DeleteMarker {
-			w.Header().Set("x-amz-delete-marker", "true")
+			w.Header().Set("X-Amz-Delete-Marker", "true")
 			if result.DeleteMarkerVersionID != "" {
-				w.Header().Set("x-amz-version-id", result.DeleteMarkerVersionID)
+				w.Header().Set("X-Amz-Version-Id", result.DeleteMarkerVersionID)
 			}
 		}
 	}
@@ -1224,9 +1224,9 @@ func (h *Handler) GetObjectVersion(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Check if it's a delete marker
 		if strings.Contains(err.Error(), "delete marker") {
-			w.Header().Set("x-amz-delete-marker", "true")
+			w.Header().Set("X-Amz-Delete-Marker", "true")
 			if meta != nil && meta.VersionID != "" {
-				w.Header().Set("x-amz-version-id", meta.VersionID)
+				w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 			}
 			writeS3Error(w, "MethodNotAllowed", "The specified method is not allowed against this resource", http.StatusMethodNotAllowed)
 			return
@@ -1246,7 +1246,7 @@ func (h *Handler) GetObjectVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", meta.ETag)
 	w.Header().Set("Last-Modified", meta.ModifiedAt.Format(http.TimeFormat))
 	if meta.VersionID != "" {
-		w.Header().Set("x-amz-version-id", meta.VersionID)
+		w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 	}
 
 	// Set user metadata
@@ -1877,7 +1877,7 @@ func (h *Handler) PutBucketAcl(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 
 	// Check for canned ACL header
-	cannedACL := r.Header.Get("x-amz-acl")
+	cannedACL := r.Header.Get("X-Amz-Acl")
 	if cannedACL != "" {
 		// Handle canned ACL
 		owner := middleware.GetOwnerID(ctx)
@@ -2643,7 +2643,7 @@ func (h *Handler) PutObjectAcl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for canned ACL header
-	cannedACL := r.Header.Get("x-amz-acl")
+	cannedACL := r.Header.Get("X-Amz-Acl")
 	if cannedACL != "" {
 		acl := &metadata.ObjectACL{
 			OwnerID:          meta.Owner,

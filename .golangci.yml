@@ -137,6 +137,7 @@ linters:
     - tparallel         # Test parallelization - not always desired
     - testpackage       # Test package naming - internal tests needed
     - godox             # TODO comments - tracked separately in issues
+    - depguard          # Dependency restrictions - not configured for this project
 
   exclusions:
     paths:
