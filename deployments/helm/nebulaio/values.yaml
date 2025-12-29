@@ -633,6 +633,14 @@ firewall:
     bucketLimits: {}
     #   hot-bucket: 5000
 
+    # Object creation rate limiting (Hash DoS protection)
+    # Protects against attacks that target object key distribution
+    # Applies to: PutObject, CopyObject, CompleteMultipartUpload, UploadPart
+    # -- Object creation RPS limit (0 = use default rate limit)
+    objectCreationLimit: 1000
+    # -- Object creation burst size (0 = use default burst size)
+    objectCreationBurstSize: 2000
+
   # Bandwidth throttling
   bandwidth:
     # -- Enable bandwidth throttling

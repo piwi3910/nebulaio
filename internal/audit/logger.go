@@ -1,3 +1,26 @@
+// Package audit provides compliance-ready audit logging for NebulaIO.
+//
+// The package implements detailed audit trails for security-sensitive operations,
+// supporting compliance requirements for SOC2, PCI DSS, HIPAA, GDPR, and FedRAMP.
+//
+// Features:
+//   - Structured JSON audit logs
+//   - Cryptographic integrity chain (HMAC-based)
+//   - Sensitive data masking
+//   - Log rotation and retention policies
+//   - Webhook delivery for SIEM integration
+//
+// Logged events include:
+//   - Authentication attempts (success/failure)
+//   - Authorization decisions
+//   - Object access and modifications
+//   - Administrative operations
+//   - Configuration changes
+//
+// Example log entry:
+//
+//	{"timestamp": "2025-01-15T10:30:00Z", "event": "ObjectAccess",
+//	 "user": "alice", "bucket": "data", "key": "report.pdf", "action": "GetObject"}
 package audit
 
 import (

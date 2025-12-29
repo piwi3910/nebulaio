@@ -1,3 +1,20 @@
+// Package backend defines the storage backend interface for NebulaIO.
+//
+// The Backend interface abstracts object storage operations, allowing for
+// pluggable storage implementations. NebulaIO includes several backends:
+//
+//   - fs: Filesystem-based storage (default)
+//   - volume: High-performance block storage with pre-allocated volumes
+//   - erasure: Reed-Solomon erasure coding for distributed durability
+//
+// Each backend implements the same interface, enabling transparent switching
+// based on workload requirements, performance needs, and durability goals.
+//
+// Example usage:
+//
+//	var backend backend.Backend = fs.NewBackend(config)
+//	err := backend.Put(ctx, "bucket", "key", reader, size)
+//	reader, err := backend.Get(ctx, "bucket", "key")
 package backend
 
 import (

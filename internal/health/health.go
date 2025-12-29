@@ -1,3 +1,24 @@
+// Package health provides health check endpoints for NebulaIO.
+//
+// The package implements Kubernetes-compatible health checks:
+//
+//   - /health/live: Liveness probe (is the process running?)
+//   - /health/ready: Readiness probe (is the server ready for traffic?)
+//   - /health/startup: Startup probe (has initialization completed?)
+//
+// Each check returns JSON status with component health details:
+//
+//	{
+//	  "status": "healthy",
+//	  "checks": {
+//	    "metadata": "healthy",
+//	    "storage": "healthy",
+//	    "raft": "healthy"
+//	  }
+//	}
+//
+// Use these endpoints with container orchestrators for automatic restart
+// and traffic routing based on service health.
 package health
 
 import (

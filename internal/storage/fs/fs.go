@@ -1,3 +1,21 @@
+// Package fs implements a filesystem-based storage backend for NebulaIO.
+//
+// The filesystem backend stores objects as files on a local or network-attached
+// filesystem. It is the simplest backend and suitable for:
+//
+//   - Development and testing environments
+//   - Single-node deployments
+//   - NAS/SAN storage with shared filesystem
+//
+// Object path layout:
+//
+//	{data_dir}/{bucket}/{key-hash-prefix}/{key-hash}
+//
+// Features:
+//   - Atomic writes using temporary files
+//   - Content-addressable storage for deduplication
+//   - Sparse file support for efficient storage
+//   - Compatible with any POSIX filesystem
 package fs
 
 import (

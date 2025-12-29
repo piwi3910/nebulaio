@@ -1,3 +1,23 @@
+// Package kms provides key management services for encryption at rest.
+//
+// The package defines a Provider interface that abstracts key management
+// operations, with implementations for:
+//   - Local KMS: File-based key storage for development
+//   - HashiCorp Vault: Enterprise secret management
+//   - AWS KMS: Amazon's managed key service
+//   - Azure Key Vault: Azure's key management
+//   - GCP Cloud KMS: Google's key management
+//
+// Features include:
+//   - Data key generation and encryption
+//   - Automatic key rotation
+//   - Key caching for performance
+//   - Audit logging of key operations
+//
+// Example usage:
+//
+//	provider, err := kms.NewVaultProvider(config)
+//	plaintext, encrypted, err := provider.GenerateDataKey(ctx, keyID)
 package kms
 
 import (

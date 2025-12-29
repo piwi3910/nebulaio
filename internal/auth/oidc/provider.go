@@ -1,3 +1,27 @@
+// Package oidc provides OpenID Connect (OIDC) authentication for NebulaIO.
+//
+// The package supports integration with OIDC identity providers such as:
+//   - Keycloak
+//   - Okta
+//   - Auth0
+//   - Azure AD
+//   - Google Workspace
+//
+// Features include:
+//   - Authorization code flow with PKCE
+//   - Token validation and refresh
+//   - Group claim mapping to IAM policies
+//   - Session management
+//
+// Example usage:
+//
+//	config := oidc.Config{
+//	    IssuerURL:    "https://auth.example.com",
+//	    ClientID:     "nebulaio",
+//	    ClientSecret: "secret",
+//	    RedirectURL:  "https://storage.example.com/callback",
+//	}
+//	provider, err := oidc.NewProvider(ctx, config)
 package oidc
 
 import (

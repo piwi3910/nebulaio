@@ -1,3 +1,26 @@
+// Package vault implements HashiCorp Vault integration for NebulaIO KMS.
+//
+// The Vault provider uses Vault's Transit secrets engine for cryptographic
+// operations, providing enterprise-grade key management:
+//
+//   - Hardware Security Module (HSM) backing
+//   - Automatic key rotation
+//   - Detailed audit logging
+//   - Access policy enforcement
+//
+// Required Vault configuration:
+//   - Transit secrets engine enabled
+//   - A named encryption key
+//   - Service token with encrypt/decrypt permissions
+//
+// Example Vault policy:
+//
+//	path "transit/encrypt/nebulaio" {
+//	  capabilities = ["create", "update"]
+//	}
+//	path "transit/decrypt/nebulaio" {
+//	  capabilities = ["create", "update"]
+//	}
 package vault
 
 import (

@@ -1,3 +1,19 @@
+// Package admin implements the NebulaIO Admin REST API.
+//
+// The Admin API provides management endpoints for:
+//   - User management: Create, update, delete users and access keys
+//   - Bucket management: List buckets, get bucket info, configure policies
+//   - Cluster management: Node status, cluster health, membership
+//   - Configuration: View and update server configuration
+//   - Monitoring: Health checks, metrics, diagnostics
+//   - Storage tiering: Configure and manage tiering policies
+//
+// All endpoints require JWT authentication. Access is controlled via IAM policies.
+//
+// Example usage:
+//
+//	handler := admin.NewHandler(authSvc, bucketSvc, objectSvc, store, discovery, config)
+//	router.Mount("/admin", handler.Routes())
 package admin
 
 import (

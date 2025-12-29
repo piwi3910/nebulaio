@@ -1,3 +1,21 @@
+// Package bucket provides bucket management operations for NebulaIO.
+//
+// The bucket service handles all bucket-level operations including:
+//
+//   - Bucket creation with naming validation (S3 naming rules)
+//   - Bucket deletion (with optional force empty)
+//   - Bucket listing and metadata retrieval
+//   - Bucket policy management
+//   - Versioning configuration
+//   - Lifecycle rule configuration
+//   - Cross-region replication setup
+//   - Object Lock (WORM) configuration
+//
+// Bucket names must follow S3 naming conventions:
+//   - 3-63 characters long
+//   - Lowercase letters, numbers, and hyphens
+//   - Must start and end with a letter or number
+//   - Cannot be formatted as an IP address
 package bucket
 
 import (

@@ -41,6 +41,11 @@ services:
       # - NEBULAIO_FIREWALL_RATE_LIMIT_RPS=1000
       # - NEBULAIO_FIREWALL_BANDWIDTH_MAX_BPS=1073741824
 
+      # Rate Limiting - Object Creation (Hash DoS Protection)
+      # Protects against attacks that target object key distribution
+      # - NEBULAIO_FIREWALL_OBJECT_CREATION_LIMIT=1000   # RPS for PutObject, CopyObject, etc.
+      # - NEBULAIO_FIREWALL_OBJECT_CREATION_BURST=2000   # Burst size for object creation
+
       # S3 Select (enabled by default)
       - NEBULAIO_S3SELECT_ENABLED=true
 

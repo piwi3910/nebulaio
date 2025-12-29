@@ -1,3 +1,22 @@
+// Package tiering provides intelligent data lifecycle management for NebulaIO.
+//
+// The tiering service automatically moves objects between storage tiers based
+// on configurable policies:
+//
+//   - Hot tier: NVMe/SSD for active, frequently accessed data
+//   - Warm tier: SSD/HDD for moderately accessed data
+//   - Cold tier: HDD/NAS for infrequently accessed data
+//   - Archive tier: Tape/Glacier for long-term retention
+//
+// Features:
+//   - Age-based transitions (move after N days without access)
+//   - Access-pattern transitions (move based on read frequency)
+//   - Capacity-based transitions (move when tier reaches capacity)
+//   - ML-based predictive tiering (optional)
+//   - S3 Intelligent-Tiering compatibility
+//
+// The service runs periodic scans to identify objects matching transition
+// policies and performs background data movement with minimal I/O impact.
 package tiering
 
 import (

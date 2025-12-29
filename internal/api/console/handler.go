@@ -1,3 +1,13 @@
+// Package console implements the NebulaIO web console API.
+//
+// The console API provides endpoints for the React-based web UI, including:
+//   - Session management: Login, logout, token refresh
+//   - Bucket browsing: List buckets, view objects, upload/download
+//   - User profile: View and update user settings
+//   - Dashboard: System status, metrics, and activity
+//
+// This API is designed for browser-based access and uses JWT session tokens.
+// For programmatic access, use the Admin API or S3 API instead.
 package console
 
 import (

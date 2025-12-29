@@ -1,3 +1,21 @@
+// Package erasure implements Reed-Solomon erasure coding storage for NebulaIO.
+//
+// Erasure coding provides data durability by distributing encoded data shards
+// across multiple storage nodes. If some shards are lost, the original data
+// can be reconstructed from the remaining shards.
+//
+// Configuration options:
+//   - Data shards: Number of data fragments (e.g., 10)
+//   - Parity shards: Number of parity fragments (e.g., 4)
+//   - With 10+4, any 4 shards can fail without data loss
+//
+// Typical configurations:
+//   - 4+2: 50% overhead, tolerates 2 failures (minimum viable)
+//   - 8+4: 50% overhead, tolerates 4 failures (balanced)
+//   - 10+4: 40% overhead, tolerates 4 failures (recommended production)
+//
+// The backend coordinates with placement groups to distribute shards across
+// nodes and racks for optimal failure isolation.
 package erasure
 
 import (

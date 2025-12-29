@@ -1,3 +1,18 @@
+// Package server provides the main NebulaIO server initialization and lifecycle.
+//
+// The server package is the entry point for NebulaIO, responsible for:
+//   - Loading and validating configuration
+//   - Initializing all subsystems (storage, metadata, auth, etc.)
+//   - Starting HTTP servers for S3 API, Admin API, and Console
+//   - Managing graceful shutdown and cleanup
+//   - Coordinating cluster membership and consensus
+//
+// The server exposes three HTTP endpoints by default:
+//   - Port 9000: S3-compatible API (HTTPS)
+//   - Port 9001: Admin REST API + Prometheus metrics (HTTPS)
+//   - Port 9002: Web Console static files (HTTPS)
+//
+// TLS is enabled by default with auto-generated certificates.
 package server
 
 import (

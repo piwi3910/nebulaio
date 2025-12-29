@@ -1,3 +1,22 @@
+// Package events provides S3 event notification support for NebulaIO.
+//
+// The package implements event emission for S3 operations, allowing users to
+// receive notifications when objects are created, deleted, or modified.
+// Events can be delivered to:
+//
+//   - Kafka topics
+//   - Webhook endpoints
+//   - Amazon SNS (via HTTP)
+//   - Redis pub/sub
+//
+// Events follow the S3 event notification format, making them compatible
+// with existing S3 event consumers and Lambda functions.
+//
+// Example event types:
+//   - s3:ObjectCreated:Put
+//   - s3:ObjectCreated:Copy
+//   - s3:ObjectRemoved:Delete
+//   - s3:ObjectRestore:Completed
 package events
 
 import (

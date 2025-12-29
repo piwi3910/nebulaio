@@ -1,3 +1,22 @@
+// Package ldap provides LDAP/Active Directory authentication for NebulaIO.
+//
+// The package supports:
+//   - User authentication against LDAP servers
+//   - Group membership lookup for IAM policy mapping
+//   - TLS/StartTLS connections
+//   - Connection pooling and automatic reconnection
+//   - User and group synchronization
+//
+// Example usage:
+//
+//	config := ldap.Config{
+//	    ServerURL:  "ldaps://ldap.example.com:636",
+//	    BindDN:     "cn=service,dc=example,dc=com",
+//	    BindPassword: "password",
+//	    UserSearchBase: "ou=users,dc=example,dc=com",
+//	}
+//	client, err := ldap.NewClient(config)
+//	user, err := client.Authenticate(ctx, "username", "password")
 package ldap
 
 import (
