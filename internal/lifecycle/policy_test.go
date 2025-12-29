@@ -1,7 +1,6 @@
 package lifecycle
 
 import (
-	"encoding/xml"
 	"testing"
 	"time"
 
