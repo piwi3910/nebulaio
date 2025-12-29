@@ -193,6 +193,437 @@ func TestBucketCreation(t *testing.T) {
 
 **Related:** See Issue #101 for test standardization migration plan
 
+## Error Handling Patterns
+
+### Custom Error Types
+
+Use error types from `internal/s3errors/` for S3-compatible responses:
+
+```go
+import "github.com/yourusername/nebulaio/internal/s3errors"
+
+// Return S3-compatible errors
+if bucket == "" {
+    return s3errors.ErrInvalidBucketName
+}
+
+// Add context to errors
+if err := store.CreateBucket(ctx, bucket); err != nil {
+    return s3errors.ErrInternalError.WithMessage("failed to create bucket metadata")
+}
+```
+
+### Error Wrapping
+
+Wrap errors with context as they bubble up:
+
+```go
+if err := validateInput(data); err != nil {
+    return fmt.Errorf("validation failed: %w", err)
+}
+```
+
+### Logging Errors
+
+- Log errors at the handler/boundary level (HTTP handlers, gRPC endpoints)
+- Don't log the same error multiple times as it bubbles up
+- Use structured logging with `zerolog`:
+
+```go
+log.Error().
+    Err(err).
+    Str("bucket", bucketName).
+    Str("operation", "CreateBucket").
+    Msg("Failed to create bucket")
+```
+
+**Don't:**
+
+- Return AND log errors in the same function (double logging)
+- Lose error context by returning `errors.New("error")` instead of wrapping
+- Log errors in library/service code - return them to the caller
+
+## Configuration Management
+
+### Configuration Sources (Priority Order)
+
+1. **CLI flags** (highest priority)
+2. **Environment variables** (`NEBULAIO_*` prefix)
+3. **YAML config file** (`config.yaml`)
+4. **Defaults** (lowest priority)
+
+### Adding New Configuration
+
+```go
+// internal/config/config.go
+func loadConfig() *Config {
+    // Set default
+    v.SetDefault("feature.new_setting", "default_value")
+
+    // Bind to env var (auto converts to NEBULAIO_FEATURE_NEW_SETTING)
+    v.BindEnv("feature.new_setting")
+
+    // Read from config
+    cfg.Feature.NewSetting = v.GetString("feature.new_setting")
+}
+```
+
+### Configuration Validation
+
+Always validate configuration on startup:
+
+```go
+func (c *Config) Validate() error {
+    if c.Feature.NewSetting == "" {
+        return errors.New("feature.new_setting is required")
+    }
+    if c.Feature.MaxConnections < 1 {
+        return errors.New("feature.max_connections must be >= 1")
+    }
+    return nil
+}
+```
+
+**Documentation:** Update `docs/getting-started/configuration.md` for all new options
+
+## Metrics and Observability
+
+### Prometheus Metrics
+
+Every feature must expose metrics following these patterns:
+
+**Naming Convention:** `nebulaio_<component>_<metric>_<unit>`
+
+```go
+import "github.com/prometheus/client_golang/prometheus"
+
+var (
+    // Counter - for counting events
+    requestsTotal = prometheus.NewCounterVec(
+        prometheus.CounterOpts{
+            Name: "nebulaio_api_requests_total",
+            Help: "Total number of API requests",
+        },
+        []string{"method", "endpoint", "status"},
+    )
+
+    // Histogram - for latencies/sizes
+    requestDuration = prometheus.NewHistogramVec(
+        prometheus.HistogramOpts{
+            Name:    "nebulaio_api_request_duration_seconds",
+            Help:    "API request duration in seconds",
+            Buckets: prometheus.DefBuckets,
+        },
+        []string{"method", "endpoint"},
+    )
+
+    // Gauge - for current values
+    activeConnections = prometheus.NewGauge(
+        prometheus.GaugeOpts{
+            Name: "nebulaio_api_active_connections",
+            Help: "Current number of active connections",
+        },
+    )
+)
+
+func init() {
+    // Register metrics
+    prometheus.MustRegister(requestsTotal)
+    prometheus.MustRegister(requestDuration)
+    prometheus.MustRegister(activeConnections)
+}
+```
+
+### Structured Logging
+
+Use `zerolog` for all logging:
+
+```go
+import "github.com/rs/zerolog/log"
+
+// Info logging
+log.Info().
+    Str("bucket", bucketName).
+    Int("objects", count).
+    Msg("Bucket created successfully")
+
+// Error logging
+log.Error().
+    Err(err).
+    Str("operation", "DeleteObject").
+    Str("key", objectKey).
+    Msg("Failed to delete object")
+
+// Debug logging (only in debug mode)
+log.Debug().
+    Interface("config", cfg).
+    Msg("Configuration loaded")
+```
+
+**Don't:**
+
+- Use `fmt.Println()` or `log.Printf()` - always use `zerolog`
+- Log sensitive data (passwords, tokens, keys, user data)
+- Log at high volume in hot paths - use sampling or debug level
+
+### Health Checks
+
+Add health checks for critical components in `internal/health/`:
+
+```go
+func (h *HealthChecker) CheckFeature(ctx context.Context) error {
+    if err := h.feature.Ping(ctx); err != nil {
+        return fmt.Errorf("feature unhealthy: %w", err)
+    }
+    return nil
+}
+```
+
+### Audit Logging
+
+Log security-relevant operations using `internal/audit/`:
+
+```go
+audit.Log(ctx, audit.Event{
+    Action:   "bucket.create",
+    Resource: bucketName,
+    Principal: user.ID,
+    Result:   "success",
+    Metadata: map[string]interface{}{
+        "region": region,
+    },
+})
+```
+
+## Performance Guidelines
+
+### Context Usage
+
+Always pass and respect context for cancellation and timeouts:
+
+```go
+func ProcessRequest(ctx context.Context, data []byte) error {
+    // Check context before expensive operations
+    select {
+    case <-ctx.Done():
+        return ctx.Err()
+    default:
+    }
+
+    // Pass context to downstream calls
+    result, err := service.Process(ctx, data)
+    if err != nil {
+        return err
+    }
+
+    return nil
+}
+```
+
+### Concurrency Patterns
+
+**Use buffered channels for async work:**
+
+```go
+// Worker pool pattern
+jobs := make(chan Job, 100)
+results := make(chan Result, 100)
+
+for i := 0; i < numWorkers; i++ {
+    go worker(jobs, results)
+}
+```
+
+**Avoid global state and heavy mutex contention:**
+
+```go
+// Bad - global mutex
+var mu sync.Mutex
+var cache map[string]string
+
+// Good - encapsulated with sync.Map or sharded locks
+type Cache struct {
+    data sync.Map
+}
+```
+
+### Profiling
+
+NebulaIO exposes pprof endpoints on the admin port (9001):
+
+```bash
+# CPU profile
+go tool pprof http://localhost:9001/debug/pprof/profile?seconds=30
+
+# Memory profile
+go tool pprof http://localhost:9001/debug/pprof/heap
+
+# Goroutine profile
+go tool pprof http://localhost:9001/debug/pprof/goroutine
+```
+
+**Profile before optimizing** - don't guess where bottlenecks are.
+
+## Code Organization
+
+### Package Structure
+
+Follow the existing structure:
+
+```text
+internal/
+├── api/           # HTTP/gRPC handlers (thin, delegate to services)
+├── service/       # Business logic
+├── storage/       # Storage backend implementations
+├── metadata/      # Metadata store (Raft)
+├── auth/          # Authentication/authorization
+├── config/        # Configuration management
+├── metrics/       # Prometheus metrics
+└── testutil/      # Shared test utilities and mocks
+```
+
+### Separation of Concerns
+
+- **Handlers** (API layer): Parse requests, call services, format responses
+- **Services**: Business logic, orchestration, validation
+- **Storage**: Data persistence, low-level operations
+- **Interfaces**: Define in consuming packages, implement in providing packages
+
+**Example:**
+
+```go
+// internal/bucket/service.go
+type StorageBackend interface {  // Interface in consumer
+    CreateBucket(ctx context.Context, name string) error
+}
+
+type BucketService struct {
+    storage StorageBackend  // Depend on interface
+}
+
+func (s *BucketService) CreateBucket(ctx context.Context, name string) error {
+    // Business logic here
+}
+
+// internal/storage/fs/backend.go implements StorageBackend
+```
+
+### Circular Dependencies
+
+**Don't:**
+
+```go
+// package A imports package B
+// package B imports package A
+```
+
+**Do:**
+
+- Extract shared interfaces to a third package
+- Use dependency injection
+- Consider if the dependency indicates wrong abstraction
+
+## Git Workflow
+
+### Branch Naming
+
+- `feature/description` - New features
+- `fix/description` - Bug fixes
+- `docs/description` - Documentation updates
+- `refactor/description` - Code refactoring
+- `test/description` - Test improvements
+
+### Commit Messages
+
+Use conventional commit format:
+
+```text
+[Type] Short description (50 chars max)
+
+Longer explanation of what and why (not how).
+Can be multiple paragraphs.
+
+Resolves #123
+```
+
+**Types:**
+
+- `[Feature]` - New features
+- `[Fix]` - Bug fixes
+- `[Docs]` - Documentation
+- `[Refactor]` - Code refactoring
+- `[Test]` - Test additions/changes
+- `[DevEx]` - Developer experience (tooling, CI/CD)
+- `[Perf]` - Performance improvements
+- `[Security]` - Security fixes/improvements
+
+### Pull Request Process
+
+1. Create feature branch from `main`
+2. Make changes with frequent, logical commits
+3. Pre-commit hooks run automatically (use `--no-verify` sparingly)
+4. Push branch and create PR
+5. Address review feedback
+6. Squash merge to `main` (keeps history clean)
+
+**PR Title:** Same format as commit messages
+
+**PR Description:**
+
+```markdown
+## Summary
+What this PR does and why
+
+## Changes
+- Bullet list of changes
+
+## Testing
+How to verify the changes work
+
+Resolves #IssueNumber
+```
+
+## Dependency Management
+
+### Principles
+
+1. **Minimize dependencies**: Prefer standard library
+2. **Vet dependencies**: Check maintenance, security, license
+3. **Pin versions**: Use exact versions in `go.mod`
+4. **Keep updated**: Regular security updates via `go get -u`
+
+### Adding Dependencies
+
+**Before adding a new dependency, ask:**
+
+- Can this be done with the standard library?
+- Is this dependency actively maintained?
+- What's the license? (Prefer MIT, Apache 2.0, BSD)
+- What's the security track record?
+- How many transitive dependencies does it add?
+
+### Keeping go.mod Clean
+
+```bash
+# After adding imports
+go mod tidy
+
+# Verify no changes (in CI or pre-commit)
+git diff --exit-code go.mod go.sum
+```
+
+**Pre-commit hook enforces this** - `go mod tidy` runs on any .go file change
+
+### Major Dependencies
+
+Document why each major dependency exists:
+
+- **Dragonboat**: Raft consensus for distributed metadata
+- **Viper**: Configuration management (YAML, env, flags)
+- **Zerolog**: Fast structured logging
+- **Prometheus**: Metrics and monitoring
+- **Testify**: Testing framework with mocks and assertions
+
 ## Feature Flags (Environment Variables)
 
 Advanced features are disabled by default and enabled via config:
