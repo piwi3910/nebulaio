@@ -5,13 +5,13 @@ import (
 	"time"
 )
 
-// S3Event represents an S3 event notification
+// S3Event represents an S3 event notification.
 type S3Event struct {
 	// Records contains the event records
 	Records []S3EventRecord `json:"Records"`
 }
 
-// S3EventRecord represents a single S3 event record
+// S3EventRecord represents a single S3 event record.
 type S3EventRecord struct {
 	// EventVersion is the event version
 	EventVersion string `json:"eventVersion"`
@@ -41,13 +41,13 @@ type S3EventRecord struct {
 	S3 S3Entity `json:"s3"`
 }
 
-// UserIdentity contains user identity information
+// UserIdentity contains user identity information.
 type UserIdentity struct {
 	// PrincipalID is the principal ID
 	PrincipalID string `json:"principalId"`
 }
 
-// S3Entity contains S3-specific event data
+// S3Entity contains S3-specific event data.
 type S3Entity struct {
 	// SchemaVersion is the schema version
 	SchemaVersion string `json:"s3SchemaVersion"`
@@ -62,7 +62,7 @@ type S3Entity struct {
 	Object S3Object `json:"object"`
 }
 
-// S3Bucket contains bucket information
+// S3Bucket contains bucket information.
 type S3Bucket struct {
 	// Name is the bucket name
 	Name string `json:"name"`
@@ -74,67 +74,58 @@ type S3Bucket struct {
 	ARN string `json:"arn"`
 }
 
-// S3Object contains object information
+// S3Object contains object information.
 type S3Object struct {
-	// Key is the object key
-	Key string `json:"key"`
-
-	// Size is the object size in bytes
-	Size int64 `json:"size"`
-
-	// ETag is the object ETag
-	ETag string `json:"eTag,omitempty"`
-
-	// VersionID is the object version ID
+	Key       string `json:"key"`
+	ETag      string `json:"eTag,omitempty"`
 	VersionID string `json:"versionId,omitempty"`
-
-	// Sequencer ensures events are processed in order
 	Sequencer string `json:"sequencer,omitempty"`
+	Size      int64  `json:"size"`
 }
 
-// EventType represents the type of S3 event
+// EventType represents the type of S3 event.
 type EventType string
 
-// S3 event types
+// S3 event types.
 const (
-	// Object created events
-	EventObjectCreated            EventType = "s3:ObjectCreated:*"
-	EventObjectCreatedPut         EventType = "s3:ObjectCreated:Put"
-	EventObjectCreatedPost        EventType = "s3:ObjectCreated:Post"
-	EventObjectCreatedCopy        EventType = "s3:ObjectCreated:Copy"
+	// Object created events.
+	EventObjectCreated                        EventType = "s3:ObjectCreated:*"
+	EventObjectCreatedPut                     EventType = "s3:ObjectCreated:Put"
+	EventObjectCreatedPost                    EventType = "s3:ObjectCreated:Post"
+	EventObjectCreatedCopy                    EventType = "s3:ObjectCreated:Copy"
 	EventObjectCreatedCompleteMultipartUpload EventType = "s3:ObjectCreated:CompleteMultipartUpload"
 
-	// Object removed events
-	EventObjectRemoved            EventType = "s3:ObjectRemoved:*"
-	EventObjectRemovedDelete      EventType = "s3:ObjectRemoved:Delete"
+	// Object removed events.
+	EventObjectRemoved                    EventType = "s3:ObjectRemoved:*"
+	EventObjectRemovedDelete              EventType = "s3:ObjectRemoved:Delete"
 	EventObjectRemovedDeleteMarkerCreated EventType = "s3:ObjectRemoved:DeleteMarkerCreated"
 
-	// Object restore events
-	EventObjectRestorePost        EventType = "s3:ObjectRestore:Post"
-	EventObjectRestoreCompleted   EventType = "s3:ObjectRestore:Completed"
+	// Object restore events.
+	EventObjectRestorePost      EventType = "s3:ObjectRestore:Post"
+	EventObjectRestoreCompleted EventType = "s3:ObjectRestore:Completed"
 
-	// Replication events
-	EventReplicationOperationFailed EventType = "s3:Replication:OperationFailedReplication"
+	// Replication events.
+	EventReplicationOperationFailed    EventType = "s3:Replication:OperationFailedReplication"
 	EventReplicationOperationCompleted EventType = "s3:Replication:OperationReplicatedAfterThreshold"
 
-	// Lifecycle events
-	EventLifecycleExpiration      EventType = "s3:LifecycleExpiration:*"
-	EventLifecycleExpirationDelete EventType = "s3:LifecycleExpiration:Delete"
+	// Lifecycle events.
+	EventLifecycleExpiration                    EventType = "s3:LifecycleExpiration:*"
+	EventLifecycleExpirationDelete              EventType = "s3:LifecycleExpiration:Delete"
 	EventLifecycleExpirationDeleteMarkerCreated EventType = "s3:LifecycleExpiration:DeleteMarkerCreated"
 
-	// Object tagging events
-	EventObjectTagging            EventType = "s3:ObjectTagging:*"
-	EventObjectTaggingPut         EventType = "s3:ObjectTagging:Put"
-	EventObjectTaggingDelete      EventType = "s3:ObjectTagging:Delete"
+	// Object tagging events.
+	EventObjectTagging       EventType = "s3:ObjectTagging:*"
+	EventObjectTaggingPut    EventType = "s3:ObjectTagging:Put"
+	EventObjectTaggingDelete EventType = "s3:ObjectTagging:Delete"
 
-	// Object ACL events
-	EventObjectAclPut             EventType = "s3:ObjectAcl:Put"
+	// Object ACL events.
+	EventObjectAclPut EventType = "s3:ObjectAcl:Put"
 
-	// Test event
-	EventTestEvent                EventType = "s3:TestEvent"
+	// Test event.
+	EventTestEvent EventType = "s3:TestEvent"
 )
 
-// NotificationConfiguration represents bucket notification configuration
+// NotificationConfiguration represents bucket notification configuration.
 type NotificationConfiguration struct {
 	// TopicConfigurations is for SNS topics
 	TopicConfigurations []TopicConfiguration `json:"TopicConfigurations,omitempty" xml:"TopicConfiguration,omitempty"`
@@ -146,64 +137,43 @@ type NotificationConfiguration struct {
 	LambdaFunctionConfigurations []LambdaFunctionConfiguration `json:"CloudFunctionConfigurations,omitempty" xml:"CloudFunctionConfiguration,omitempty"`
 }
 
-// TopicConfiguration configures SNS topic notifications
+// TopicConfiguration configures SNS topic notifications.
 type TopicConfiguration struct {
-	// ID is an optional unique identifier
-	ID string `json:"Id,omitempty" xml:"Id,omitempty"`
-
-	// TopicARN is the SNS topic ARN
-	TopicARN string `json:"Topic" xml:"Topic"`
-
-	// Events is the list of events to notify
-	Events []EventType `json:"Events" xml:"Event"`
-
-	// Filter is the optional filter rules
-	Filter *NotificationFilter `json:"Filter,omitempty" xml:"Filter,omitempty"`
+	Filter   *NotificationFilter `json:"Filter,omitempty" xml:"Filter,omitempty"`
+	ID       string              `json:"Id,omitempty" xml:"Id,omitempty"`
+	TopicARN string              `json:"Topic" xml:"Topic"`
+	Events   []EventType         `json:"Events" xml:"Event"`
 }
 
-// QueueConfiguration configures SQS queue notifications
+// QueueConfiguration configures SQS queue notifications.
 type QueueConfiguration struct {
-	// ID is an optional unique identifier
-	ID string `json:"Id,omitempty" xml:"Id,omitempty"`
-
-	// QueueARN is the SQS queue ARN
-	QueueARN string `json:"Queue" xml:"Queue"`
-
-	// Events is the list of events to notify
-	Events []EventType `json:"Events" xml:"Event"`
-
-	// Filter is the optional filter rules
-	Filter *NotificationFilter `json:"Filter,omitempty" xml:"Filter,omitempty"`
+	Filter   *NotificationFilter `json:"Filter,omitempty" xml:"Filter,omitempty"`
+	ID       string              `json:"Id,omitempty" xml:"Id,omitempty"`
+	QueueARN string              `json:"Queue" xml:"Queue"`
+	Events   []EventType         `json:"Events" xml:"Event"`
 }
 
-// LambdaFunctionConfiguration configures Lambda/webhook notifications
+// LambdaFunctionConfiguration configures Lambda/webhook notifications.
 type LambdaFunctionConfiguration struct {
-	// ID is an optional unique identifier
-	ID string `json:"Id,omitempty" xml:"Id,omitempty"`
-
-	// LambdaFunctionARN is the Lambda function ARN or webhook URL
-	LambdaFunctionARN string `json:"CloudFunction" xml:"CloudFunction"`
-
-	// Events is the list of events to notify
-	Events []EventType `json:"Events" xml:"Event"`
-
-	// Filter is the optional filter rules
-	Filter *NotificationFilter `json:"Filter,omitempty" xml:"Filter,omitempty"`
+	Filter            *NotificationFilter `json:"Filter,omitempty" xml:"Filter,omitempty"`
+	ID                string              `json:"Id,omitempty" xml:"Id,omitempty"`
+	LambdaFunctionARN string              `json:"CloudFunction" xml:"CloudFunction"`
+	Events            []EventType         `json:"Events" xml:"Event"`
 }
 
-// NotificationFilter contains filter rules
+// NotificationFilter contains filter rules.
 type NotificationFilter struct {
 	// Key contains the key filter rules
 	Key *KeyFilter `json:"S3Key,omitempty" xml:"S3Key,omitempty"`
 }
 
-// KeyFilter contains key filter rules
+// KeyFilter contains key filter rules.
 type KeyFilter struct {
 	// FilterRules is the list of filter rules
 	FilterRules []FilterRule `json:"FilterRules" xml:"FilterRule"`
 }
 
-// FilterRule represents a single filter rule
+// FilterRule represents a single filter rule.
 type FilterRule struct {
 	// Name is the filter name (prefix or suffix)
 	Name string `json:"Name" xml:"Name"`
@@ -212,9 +182,10 @@ type FilterRule struct {
 	Value string `json:"Value" xml:"Value"`
 }
 
-// NewS3Event creates a new S3 event
+// NewS3Event creates a new S3 event.
 func NewS3Event(eventType EventType, bucket, key string, size int64, etag, versionID, accessKey string) *S3Event {
 	now := time.Now()
+
 	return &S3Event{
 		Records: []S3EventRecord{
 			{
@@ -255,32 +226,34 @@ func NewS3Event(eventType EventType, bucket, key string, size int64, etag, versi
 	}
 }
 
-// ToJSON serializes the event to JSON
+// ToJSON serializes the event to JSON.
 func (e *S3Event) ToJSON() ([]byte, error) {
 	return json.Marshal(e)
 }
 
-// generateRequestID generates a unique request ID
+// generateRequestID generates a unique request ID.
 func generateRequestID() string {
 	return time.Now().Format("20060102150405") + "-" + randomHex(8)
 }
 
-// generateExtendedRequestID generates an extended request ID
+// generateExtendedRequestID generates an extended request ID.
 func generateExtendedRequestID() string {
 	return randomHex(32)
 }
 
-// generateSequencer generates a sequencer value
+// generateSequencer generates a sequencer value.
 func generateSequencer() string {
 	return time.Now().Format("20060102150405.000000000")
 }
 
-// randomHex generates a random hex string
+// randomHex generates a random hex string.
 func randomHex(n int) string {
 	const hexChars = "0123456789ABCDEF"
+
 	b := make([]byte, n)
 	for i := range b {
 		b[i] = hexChars[time.Now().UnixNano()%16]
 	}
+
 	return string(b)
 }

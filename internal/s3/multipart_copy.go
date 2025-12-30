@@ -3,10 +3,11 @@ package s3
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // G501: MD5 required for S3 ETag compatibility
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,58 +36,39 @@ type CopyObjectResult struct {
 
 // MultipartCopyOptions holds options for multipart copy operations.
 type MultipartCopyOptions struct {
-	// Source bucket and key
-	SourceBucket    string
-	SourceKey       string
-	SourceVersionID string
-
-	// Destination bucket and key
-	DestBucket string
-	DestKey    string
-
-	// Part configuration
-	PartSize int64 // Size of each part (default: 64MB)
-
-	// Concurrency settings
-	MaxConcurrency int // Maximum concurrent part copies (default: 10)
-
-	// Copy conditions
-	CopySourceIfMatch           string
-	CopySourceIfNoneMatch       string
-	CopySourceIfModifiedSince   *time.Time
-	CopySourceIfUnmodifiedSince *time.Time
-
-	// Destination metadata
-	Metadata          map[string]string
-	MetadataDirective string // COPY or REPLACE
-	ContentType       string
-	StorageClass      string
-
-	// Server-side encryption
+	CopySourceIfModifiedSince      *time.Time
+	ObjectLockRetainUntil          *time.Time
+	Metadata                       map[string]string
+	CopySourceIfUnmodifiedSince    *time.Time
+	CopySourceSSECustomerAlgorithm string
 	SSECustomerAlgorithm           string
+	ObjectLockLegalHoldStatus      string
+	CopySourceIfMatch              string
+	CopySourceIfNoneMatch          string
+	DestKey                        string
+	DestBucket                     string
+	SourceVersionID                string
+	MetadataDirective              string
+	ContentType                    string
+	StorageClass                   string
+	SourceKey                      string
 	SSECustomerKey                 string
 	SSECustomerKeyMD5              string
-	CopySourceSSECustomerAlgorithm string
+	SourceBucket                   string
 	CopySourceSSECustomerKey       string
 	CopySourceSSECustomerKeyMD5    string
-
-	// Tagging
-	Tagging          string
-	TaggingDirective string // COPY or REPLACE
-
-	// Object lock
-	ObjectLockMode            string
-	ObjectLockRetainUntil     *time.Time
-	ObjectLockLegalHoldStatus string
+	Tagging                        string
+	TaggingDirective               string
+	ObjectLockMode                 string
+	PartSize                       int64
+	MaxConcurrency                 int
 }
 
 // MultipartCopyManager handles multipart copy operations.
 type MultipartCopyManager struct {
-	storage ObjectStorage
-	mu      sync.RWMutex
-
-	// Active copies for cancellation
+	storage      ObjectStorage
 	activeCopies map[string]context.CancelFunc
+	mu           sync.RWMutex
 }
 
 // ObjectStorage interface for storage operations.
@@ -107,22 +89,22 @@ type ObjectStorage interface {
 
 // Object represents a stored object.
 type Object struct {
-	Key          string
-	Size         int64
-	ETag         string
 	LastModified time.Time
-	ContentType  string
-	Metadata     map[string]string
 	Body         io.ReadCloser
+	Metadata     map[string]string
+	Key          string
+	ETag         string
+	ContentType  string
+	Size         int64
 }
 
 // GetObjectOptions holds options for GetObject.
 type GetObjectOptions struct {
 	VersionID   string
 	Range       string
-	PartNumber  int
 	IfMatch     string
 	IfNoneMatch string
+	PartNumber  int
 }
 
 // PutObjectOptions holds options for PutObject.
@@ -149,18 +131,18 @@ type PutObjectResult struct {
 
 // ObjectMetadata contains object metadata.
 type ObjectMetadata struct {
-	Key                       string
-	Size                      int64
-	ETag                      string
 	LastModified              time.Time
+	Metadata                  map[string]string
+	ObjectLockRetainUntilDate *time.Time
+	Key                       string
+	ETag                      string
 	ContentType               string
 	StorageClass              string
 	VersionID                 string
-	Metadata                  map[string]string
-	PartsCount                int
 	ObjectLockMode            string
-	ObjectLockRetainUntilDate *time.Time
 	ObjectLockLegalHoldStatus string
+	Size                      int64
+	PartsCount                int
 }
 
 // MultipartUploadOptions holds options for creating multipart uploads.
@@ -178,23 +160,23 @@ type MultipartUploadOptions struct {
 
 // MultipartUpload represents an active multipart upload.
 type MultipartUpload struct {
+	Initiated time.Time
 	UploadID  string
 	Bucket    string
 	Key       string
-	Initiated time.Time
 }
 
 // PartInfo contains information about an uploaded part.
 type PartInfo struct {
-	PartNumber int
 	ETag       string
+	PartNumber int
 	Size       int64
 }
 
 // CompletedPart represents a completed part for CompleteMultipartUpload.
 type CompletedPart struct {
-	PartNumber int    `xml:"PartNumber"`
 	ETag       string `xml:"ETag"`
+	PartNumber int    `xml:"PartNumber"`
 }
 
 // CompleteMultipartUploadResult contains the result of completing a multipart upload.
@@ -208,22 +190,22 @@ type CompleteMultipartUploadResult struct {
 
 // UploadPartCopyParams holds parameters for UploadPartCopy.
 type UploadPartCopyParams struct {
-	DestBucket                     string
-	DestKey                        string
-	UploadID                       string
-	PartNumber                     int
+	CopySourceIfModifiedSince      *time.Time
+	CopySourceIfUnmodifiedSince    *time.Time
+	CopySourceIfMatch              string
+	CopySourceIfNoneMatch          string
 	SourceBucket                   string
 	SourceKey                      string
 	SourceVersionID                string
 	CopySourceRange                string
-	CopySourceIfMatch              string
-	CopySourceIfNoneMatch          string
-	CopySourceIfModifiedSince      *time.Time
-	CopySourceIfUnmodifiedSince    *time.Time
+	DestBucket                     string
+	CopySourceSSECustomerKey       string
+	UploadID                       string
+	DestKey                        string
 	SSECustomerAlgorithm           string
 	SSECustomerKey                 string
 	CopySourceSSECustomerAlgorithm string
-	CopySourceSSECustomerKey       string
+	PartNumber                     int
 }
 
 // DefaultPartSize is the default part size for multipart copies (64MB).
@@ -253,6 +235,7 @@ func NewMultipartCopyManager(storage ObjectStorage) *MultipartCopyManager {
 func (m *MultipartCopyManager) CopyObject(ctx context.Context, opts *MultipartCopyOptions) (*CopyObjectResult, error) {
 	// Get source object metadata
 	_ = opts.SourceBucket + "/" + opts.SourceKey // sourcePath for logging if needed
+
 	metadata, err := m.storage.HeadObject(ctx, opts.SourceBucket, opts.SourceKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get source object: %w", err)
@@ -327,15 +310,18 @@ func (m *MultipartCopyManager) simpleCopy(ctx context.Context, opts *MultipartCo
 	getOpts := &GetObjectOptions{
 		VersionID: opts.SourceVersionID,
 	}
+
 	obj, err := m.storage.GetObject(ctx, opts.SourceBucket, opts.SourceKey, getOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get source object: %w", err)
 	}
+
 	defer func() { _ = obj.Body.Close() }()
 
 	// Determine metadata
 	metadata := sourceMetadata.Metadata
 	contentType := sourceMetadata.ContentType
+
 	if opts.MetadataDirective == "REPLACE" {
 		metadata = opts.Metadata
 		if opts.ContentType != "" {
@@ -395,9 +381,11 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 	if partSize == 0 {
 		partSize = DefaultPartSize
 	}
+
 	if partSize < MinPartSize {
 		partSize = MinPartSize
 	}
+
 	if partSize > MaxPartSize {
 		partSize = MaxPartSize
 	}
@@ -413,6 +401,7 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 	// Determine metadata
 	metadata := sourceMetadata.Metadata
 	contentType := sourceMetadata.ContentType
+
 	if opts.MetadataDirective == "REPLACE" {
 		metadata = opts.Metadata
 		if opts.ContentType != "" {
@@ -438,10 +427,11 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 
 	// Channel for part results
 	type partResult struct {
-		partNumber int
-		result     *CopyPartResult
 		err        error
+		result     *CopyPartResult
+		partNumber int
 	}
+
 	results := make(chan partResult, numParts)
 
 	// Semaphore for concurrency control
@@ -449,12 +439,14 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 	if maxConcurrency <= 0 {
 		maxConcurrency = 10
 	}
+
 	sem := make(chan struct{}, maxConcurrency)
 
 	// Copy parts concurrently
 	var wg sync.WaitGroup
-	for i := int64(0); i < numParts; i++ {
+	for i := range numParts {
 		wg.Add(1)
+
 		go func(partNum int64) {
 			defer wg.Done()
 
@@ -465,10 +457,12 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 				results <- partResult{partNumber: int(partNum + 1), err: ctx.Err()}
 				return
 			}
+
 			defer func() { <-sem }()
 
 			// Calculate byte range
 			start := partNum * partSize
+
 			end := start + partSize - 1
 			if end >= sourceMetadata.Size {
 				end = sourceMetadata.Size - 1
@@ -511,16 +505,20 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 
 	// Collect results
 	completedParts := make([]CompletedPart, 0, numParts)
+
 	var copyErr error
 
 	for result := range results {
 		if result.err != nil {
 			if copyErr == nil {
 				copyErr = result.err
+
 				cancel() // Cancel remaining parts
 			}
+
 			continue
 		}
+
 		completedParts = append(completedParts, CompletedPart{
 			PartNumber: result.partNumber,
 			ETag:       result.result.ETag,
@@ -556,11 +554,13 @@ func sortParts(parts []CompletedPart) {
 	// Simple insertion sort for small arrays
 	for i := 1; i < len(parts); i++ {
 		key := parts[i]
+
 		j := i - 1
 		for j >= 0 && parts[j].PartNumber > key.PartNumber {
 			parts[j+1] = parts[j]
 			j--
 		}
+
 		parts[j+1] = key
 	}
 }
@@ -573,6 +573,7 @@ func (m *MultipartCopyManager) CancelCopy(copyID string) error {
 	if cancel, exists := m.activeCopies[copyID]; exists {
 		cancel()
 		delete(m.activeCopies, copyID)
+
 		return nil
 	}
 
@@ -612,7 +613,7 @@ func ParseCopySource(copySource string) (bucket, key, versionID string, err erro
 	// Split bucket and key
 	pathParts := strings.SplitN(parts[0], "/", 2)
 	if len(pathParts) != 2 {
-		return "", "", "", fmt.Errorf("invalid copy source format")
+		return "", "", "", errors.New("invalid copy source format")
 	}
 
 	return pathParts[0], pathParts[1], versionID, nil
@@ -626,13 +627,14 @@ func ParseCopySourceRange(rangeHeader string) (start, end int64, err error) {
 
 	// Format: bytes=start-end
 	if !strings.HasPrefix(rangeHeader, "bytes=") {
-		return 0, 0, fmt.Errorf("invalid range format")
+		return 0, 0, errors.New("invalid range format")
 	}
 
 	rangeSpec := strings.TrimPrefix(rangeHeader, "bytes=")
+
 	parts := strings.Split(rangeSpec, "-")
 	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("invalid range format")
+		return 0, 0, errors.New("invalid range format")
 	}
 
 	start, err = strconv.ParseInt(parts[0], 10, 64)
@@ -646,7 +648,7 @@ func ParseCopySourceRange(rangeHeader string) (start, end int64, err error) {
 	}
 
 	if start > end {
-		return 0, 0, fmt.Errorf("range start must be less than or equal to end")
+		return 0, 0, errors.New("range start must be less than or equal to end")
 	}
 
 	return start, end, nil
@@ -662,28 +664,31 @@ func CalculateMultipartETag(partETags []string) string {
 
 	// Concatenate MD5 hashes
 	var hashData []byte
+
 	for _, etag := range cleanETags {
 		decoded, err := hex.DecodeString(etag)
 		if err != nil {
 			continue
 		}
+
 		hashData = append(hashData, decoded...)
 	}
 
 	// Calculate MD5 of concatenated hashes
-	finalHash := md5.Sum(hashData)
+	finalHash := md5.Sum(hashData) //nolint:gosec // G401: MD5 required for S3 ETag compatibility
+
 	return fmt.Sprintf("\"%s-%d\"", hex.EncodeToString(finalHash[:]), len(partETags))
 }
 
 // CalculateMD5 calculates the MD5 hash of data.
 func CalculateMD5(data []byte) string {
-	hash := md5.Sum(data)
+	hash := md5.Sum(data) //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	return hex.EncodeToString(hash[:])
 }
 
 // CalculateMD5Base64 calculates the base64-encoded MD5 hash of data.
 func CalculateMD5Base64(data []byte) string {
-	hash := md5.Sum(data)
+	hash := md5.Sum(data) //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	return base64.StdEncoding.EncodeToString(hash[:])
 }
 
@@ -714,6 +719,7 @@ func (h *MultipartCopyHandler) HandleUploadPartCopy(w http.ResponseWriter, r *ht
 			Message:    "Part number must be an integer between 1 and 10000",
 			StatusCode: http.StatusBadRequest,
 		})
+
 		return
 	}
 
@@ -725,6 +731,7 @@ func (h *MultipartCopyHandler) HandleUploadPartCopy(w http.ResponseWriter, r *ht
 			Message:    "Copy Source must be specified",
 			StatusCode: http.StatusBadRequest,
 		})
+
 		return
 	}
 
@@ -735,6 +742,7 @@ func (h *MultipartCopyHandler) HandleUploadPartCopy(w http.ResponseWriter, r *ht
 			Message:    err.Error(),
 			StatusCode: http.StatusBadRequest,
 		})
+
 		return
 	}
 
@@ -757,14 +765,17 @@ func (h *MultipartCopyHandler) HandleUploadPartCopy(w http.ResponseWriter, r *ht
 	if h := r.Header.Get("X-Amz-Copy-Source-If-Match"); h != "" {
 		params.CopySourceIfMatch = h
 	}
+
 	if h := r.Header.Get("X-Amz-Copy-Source-If-None-Match"); h != "" {
 		params.CopySourceIfNoneMatch = h
 	}
+
 	if h := r.Header.Get("X-Amz-Copy-Source-If-Modified-Since"); h != "" {
 		if t, err := time.Parse(time.RFC1123, h); err == nil {
 			params.CopySourceIfModifiedSince = &t
 		}
 	}
+
 	if h := r.Header.Get("X-Amz-Copy-Source-If-Unmodified-Since"); h != "" {
 		if t, err := time.Parse(time.RFC1123, h); err == nil {
 			params.CopySourceIfUnmodifiedSince = &t
@@ -789,6 +800,7 @@ func (h *MultipartCopyHandler) HandleUploadPartCopy(w http.ResponseWriter, r *ht
 				StatusCode: http.StatusInternalServerError,
 			})
 		}
+
 		return
 	}
 
@@ -814,6 +826,7 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 			Message:    "Copy Source must be specified",
 			StatusCode: http.StatusBadRequest,
 		})
+
 		return
 	}
 
@@ -824,6 +837,7 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 			Message:    err.Error(),
 			StatusCode: http.StatusBadRequest,
 		})
+
 		return
 	}
 
@@ -843,6 +857,7 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 
 	// Parse metadata
 	opts.Metadata = make(map[string]string)
+
 	for key, values := range r.Header {
 		if strings.HasPrefix(strings.ToLower(key), "x-amz-meta-") {
 			metaKey := strings.TrimPrefix(strings.ToLower(key), "x-amz-meta-")
@@ -854,14 +869,17 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 	if h := r.Header.Get("X-Amz-Copy-Source-If-Match"); h != "" {
 		opts.CopySourceIfMatch = h
 	}
+
 	if h := r.Header.Get("X-Amz-Copy-Source-If-None-Match"); h != "" {
 		opts.CopySourceIfNoneMatch = h
 	}
+
 	if h := r.Header.Get("X-Amz-Copy-Source-If-Modified-Since"); h != "" {
 		if t, err := time.Parse(time.RFC1123, h); err == nil {
 			opts.CopySourceIfModifiedSince = &t
 		}
 	}
+
 	if h := r.Header.Get("X-Amz-Copy-Source-If-Unmodified-Since"); h != "" {
 		if t, err := time.Parse(time.RFC1123, h); err == nil {
 			opts.CopySourceIfUnmodifiedSince = &t
@@ -875,6 +893,7 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 			opts.ObjectLockRetainUntil = &t
 		}
 	}
+
 	opts.ObjectLockLegalHoldStatus = r.Header.Get("X-Amz-Object-Lock-Legal-Hold")
 
 	// Parse SSE headers
@@ -897,6 +916,7 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 				StatusCode: http.StatusInternalServerError,
 			})
 		}
+
 		return
 	}
 

@@ -13,21 +13,21 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Service manages bucket replication
+// Service manages bucket replication.
 type Service struct {
-	mu          sync.RWMutex
-	configs     map[string]*Config // bucket -> config
-	queue       *Queue
-	workerPool  *WorkerPool
-	backend     ObjectBackend
-	metaStore   MetadataStore
-	lister      ObjectLister
-	started     bool
-	metrics     *ReplicationMetrics
-	metricsMu   sync.RWMutex
+	backend    ObjectBackend
+	metaStore  MetadataStore
+	lister     ObjectLister
+	configs    map[string]*Config
+	queue      *Queue
+	workerPool *WorkerPool
+	metrics    *ReplicationMetrics
+	mu         sync.RWMutex
+	metricsMu  sync.RWMutex
+	started    bool
 }
 
-// ObjectBackend is the interface for object storage operations
+// ObjectBackend is the interface for object storage operations.
 type ObjectBackend interface {
 	// GetObject retrieves an object
 	GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error)
@@ -35,7 +35,7 @@ type ObjectBackend interface {
 	GetObjectInfo(ctx context.Context, bucket, key string) (*ObjectInfo, error)
 }
 
-// MetadataStore is the interface for storing replication metadata
+// MetadataStore is the interface for storing replication metadata.
 type MetadataStore interface {
 	// GetReplicationConfig retrieves replication config for a bucket
 	GetReplicationConfig(ctx context.Context, bucket string) (*Config, error)
@@ -49,13 +49,13 @@ type MetadataStore interface {
 	SetReplicationStatus(ctx context.Context, bucket, key, versionID string, status *ReplicationStatus) error
 }
 
-// ServiceConfig holds service configuration
+// ServiceConfig holds service configuration.
 type ServiceConfig struct {
 	QueueConfig  QueueConfig
 	WorkerConfig WorkerConfig
 }
 
-// DefaultServiceConfig returns sensible defaults
+// DefaultServiceConfig returns sensible defaults.
 func DefaultServiceConfig() ServiceConfig {
 	return ServiceConfig{
 		QueueConfig:  DefaultQueueConfig(),
@@ -63,7 +63,7 @@ func DefaultServiceConfig() ServiceConfig {
 	}
 }
 
-// NewService creates a new replication service
+// NewService creates a new replication service.
 func NewService(backend ObjectBackend, metaStore MetadataStore, cfg ServiceConfig) *Service {
 	queue := NewQueue(cfg.QueueConfig)
 
@@ -80,14 +80,15 @@ func NewService(backend ObjectBackend, metaStore MetadataStore, cfg ServiceConfi
 	return svc
 }
 
-// SetLister sets the object lister for bucket resync operations
+// SetLister sets the object lister for bucket resync operations.
 func (s *Service) SetLister(lister ObjectLister) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.lister = lister
 }
 
-// Start starts the replication service
+// Start starts the replication service.
 func (s *Service) Start(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -102,7 +103,7 @@ func (s *Service) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the replication service
+// Stop stops the replication service.
 func (s *Service) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -112,19 +113,23 @@ func (s *Service) Stop() error {
 	}
 
 	s.workerPool.Stop()
-	if closeErr := s.queue.Close(); closeErr != nil {
+	closeErr := s.queue.Close()
+
+	if closeErr != nil {
 		log.Error().
 			Err(closeErr).
 			Msg("failed to close replication queue during service stop - some items may be lost")
 	}
+
 	s.started = false
 
 	return nil
 }
 
-// SetConfig sets the replication configuration for a bucket
+// SetConfig sets the replication configuration for a bucket.
 func (s *Service) SetConfig(ctx context.Context, bucket string, config *Config) error {
-	if err := config.Validate(); err != nil {
+	err := config.Validate()
+	if err != nil {
 		return fmt.Errorf("invalid replication config: %w", err)
 	}
 
@@ -139,7 +144,8 @@ func (s *Service) SetConfig(ctx context.Context, bucket string, config *Config) 
 
 	// Persist to metadata store
 	if s.metaStore != nil {
-		if err := s.metaStore.SetReplicationConfig(ctx, bucket, config); err != nil {
+		err := s.metaStore.SetReplicationConfig(ctx, bucket, config)
+		if err != nil {
 			return fmt.Errorf("failed to persist replication config: %w", err)
 		}
 	}
@@ -147,7 +153,7 @@ func (s *Service) SetConfig(ctx context.Context, bucket string, config *Config) 
 	return nil
 }
 
-// GetConfig gets the replication configuration for a bucket
+// GetConfig gets the replication configuration for a bucket.
 func (s *Service) GetConfig(ctx context.Context, bucket string) (*Config, error) {
 	s.mu.RLock()
 	config, ok := s.configs[bucket]
@@ -174,7 +180,7 @@ func (s *Service) GetConfig(ctx context.Context, bucket string) (*Config, error)
 	return nil, fmt.Errorf("replication not configured for bucket: %s", bucket)
 }
 
-// DeleteConfig removes the replication configuration for a bucket
+// DeleteConfig removes the replication configuration for a bucket.
 func (s *Service) DeleteConfig(ctx context.Context, bucket string) error {
 	s.mu.Lock()
 	delete(s.configs, bucket)
@@ -187,7 +193,7 @@ func (s *Service) DeleteConfig(ctx context.Context, bucket string) error {
 	return nil
 }
 
-// OnObjectCreated is called when an object is created
+// OnObjectCreated is called when an object is created.
 func (s *Service) OnObjectCreated(ctx context.Context, bucket, key, versionID string, tags map[string]string) error {
 	config, err := s.GetConfig(ctx, bucket)
 	if err != nil {
@@ -211,7 +217,8 @@ func (s *Service) OnObjectCreated(ctx context.Context, bucket, key, versionID st
 		}
 
 		// Set initial replication status
-		if err := s.updateReplicationStatus(ctx, bucket, key, versionID, rule.Destination.Bucket, ReplicationStatusPending); err != nil {
+		err := s.updateReplicationStatus(ctx, bucket, key, versionID, rule.Destination.Bucket, ReplicationStatusPending)
+		if err != nil {
 			// Log but don't fail
 			fmt.Printf("warning: failed to set initial replication status: %v\n", err)
 		}
@@ -220,7 +227,7 @@ func (s *Service) OnObjectCreated(ctx context.Context, bucket, key, versionID st
 	return nil
 }
 
-// OnObjectDeleted is called when an object is deleted
+// OnObjectDeleted is called when an object is deleted.
 func (s *Service) OnObjectDeleted(ctx context.Context, bucket, key, versionID string, tags map[string]string) error {
 	config, err := s.GetConfig(ctx, bucket)
 	if err != nil {
@@ -251,31 +258,34 @@ func (s *Service) OnObjectDeleted(ctx context.Context, bucket, key, versionID st
 	return nil
 }
 
-// GetReplicationStatus gets the replication status for an object
+// GetReplicationStatus gets the replication status for an object.
 func (s *Service) GetReplicationStatus(ctx context.Context, bucket, key, versionID string) (*ReplicationStatus, error) {
 	if s.metaStore != nil {
 		return s.metaStore.GetReplicationStatus(ctx, bucket, key, versionID)
 	}
+
 	return nil, errors.New("metadata store not configured")
 }
 
-// getSourceObject retrieves an object from the source backend
+// getSourceObject retrieves an object from the source backend.
 func (s *Service) getSourceObject(ctx context.Context, bucket, key, versionID string) (io.ReadCloser, error) {
 	if s.backend == nil {
 		return nil, errors.New("backend not configured")
 	}
+
 	return s.backend.GetObject(ctx, bucket, key)
 }
 
-// getSourceObjectInfo retrieves object info from the source backend
+// getSourceObjectInfo retrieves object info from the source backend.
 func (s *Service) getSourceObjectInfo(ctx context.Context, bucket, key, versionID string) (*ObjectInfo, error) {
 	if s.backend == nil {
 		return nil, errors.New("backend not configured")
 	}
+
 	return s.backend.GetObjectInfo(ctx, bucket, key)
 }
 
-// updateReplicationStatus updates the replication status for an object
+// updateReplicationStatus updates the replication status for an object.
 func (s *Service) updateReplicationStatus(ctx context.Context, bucket, key, versionID, destBucket, status string) error {
 	if s.metaStore == nil {
 		return nil
@@ -293,6 +303,7 @@ func (s *Service) updateReplicationStatus(ctx context.Context, bucket, key, vers
 
 	// Update destination status
 	now := time.Now()
+
 	destStatus := DestinationStatus{Status: status}
 	switch status {
 	case ReplicationStatusComplete:
@@ -304,6 +315,7 @@ func (s *Service) updateReplicationStatus(ctx context.Context, bucket, key, vers
 			destStatus.FailedAttempts = 1
 		}
 	}
+
 	currentStatus.Destinations[destBucket] = destStatus
 
 	// Update overall status
@@ -312,7 +324,7 @@ func (s *Service) updateReplicationStatus(ctx context.Context, bucket, key, vers
 	return s.metaStore.SetReplicationStatus(ctx, bucket, key, versionID, currentStatus)
 }
 
-// calculateOverallStatus calculates the overall replication status from destination statuses
+// calculateOverallStatus calculates the overall replication status from destination statuses.
 func (s *Service) calculateOverallStatus(destinations map[string]DestinationStatus) string {
 	if len(destinations) == 0 {
 		return ReplicationStatusNoReplication
@@ -340,9 +352,11 @@ func (s *Service) calculateOverallStatus(destinations map[string]DestinationStat
 	if allComplete {
 		return ReplicationStatusComplete
 	}
+
 	if hasFailed {
 		return ReplicationStatusFailed
 	}
+
 	if hasPending {
 		return ReplicationStatusPending
 	}
@@ -350,19 +364,20 @@ func (s *Service) calculateOverallStatus(destinations map[string]DestinationStat
 	return ReplicationStatusPending
 }
 
-// GetQueueStats returns queue statistics
+// GetQueueStats returns queue statistics.
 func (s *Service) GetQueueStats() QueueStats {
 	return s.queue.Stats()
 }
 
-// GetMetrics returns replication metrics
+// GetMetrics returns replication metrics.
 func (s *Service) GetMetrics() ReplicationMetrics {
 	s.metricsMu.RLock()
 	defer s.metricsMu.RUnlock()
+
 	return *s.metrics
 }
 
-// ListConfigs returns all replication configurations
+// ListConfigs returns all replication configurations.
 func (s *Service) ListConfigs() map[string]*Config {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -371,10 +386,11 @@ func (s *Service) ListConfigs() map[string]*Config {
 	for k, v := range s.configs {
 		configs[k] = v
 	}
+
 	return configs
 }
 
-// ResyncBucket triggers resync of all objects in a bucket
+// ResyncBucket triggers resync of all objects in a bucket.
 func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 	log.Info().Str("bucket", bucket).Msg("Starting bucket resync")
 
@@ -386,6 +402,7 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 
 	// Check if any rule has existing object replication enabled
 	var applicableRules []Rule
+
 	for _, rule := range config.Rules {
 		if rule.ShouldReplicateExistingObjects() {
 			applicableRules = append(applicableRules, rule)
@@ -410,9 +427,11 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 	objectsCh, errCh := lister.ListObjects(ctx, bucket, "", true)
 
 	// Track statistics
-	var enqueuedCount int64
-	var errorCount int64
-	var listErr error
+	var (
+		enqueuedCount int64
+		errorCount    int64
+		listErr       error
+	)
 
 	// Process objects - drain both channels to avoid goroutine leaks
 	objectsDone := false
@@ -440,9 +459,12 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 						Str("key", obj.Key).
 						Str("rule_id", rule.ID).
 						Msg("Failed to enqueue object for replication")
+
 					errorCount++
+
 					continue
 				}
+
 				enqueuedCount++
 			}
 
@@ -479,6 +501,7 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 			Int64("enqueued", enqueuedCount).
 			Int64("errors", errorCount).
 			Msg("Bucket resync completed with enqueue errors")
+
 		return fmt.Errorf("resync completed with %d enqueue errors, %d objects enqueued", errorCount, enqueuedCount)
 	}
 
@@ -486,10 +509,11 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 		Str("bucket", bucket).
 		Int64("enqueued", enqueuedCount).
 		Msg("Bucket resync completed successfully")
+
 	return nil
 }
 
-// MarshalJSON implements json.Marshaler for Config
+// MarshalJSON implements json.Marshaler for Config.
 func (c *Config) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Role  string `json:"role"`
@@ -500,16 +524,19 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON implements json.Unmarshaler for Config
+// UnmarshalJSON implements json.Unmarshaler for Config.
 func (c *Config) UnmarshalJSON(data []byte) error {
 	var raw struct {
 		Role  string `json:"role"`
 		Rules []Rule `json:"rules"`
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
+	err := json.Unmarshal(data, &raw)
+	if err != nil {
 		return err
 	}
+
 	c.Role = raw.Role
 	c.Rules = raw.Rules
+
 	return nil
 }

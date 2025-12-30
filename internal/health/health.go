@@ -32,44 +32,42 @@ import (
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 )
 
-// Status represents the overall health status
+// Status represents the overall health status.
 type Status string
 
 const (
-	// StatusHealthy indicates all checks passed
+	// StatusHealthy indicates all checks passed.
 	StatusHealthy Status = "healthy"
-	// StatusDegraded indicates some checks failed but core functionality works
+	// StatusDegraded indicates some checks failed but core functionality works.
 	StatusDegraded Status = "degraded"
-	// StatusUnhealthy indicates critical failures
+	// StatusUnhealthy indicates critical failures.
 	StatusUnhealthy Status = "unhealthy"
 )
 
-// Check represents a single health check result
+// Check represents a single health check result.
 type Check struct {
 	Status  Status `json:"status"`
 	Message string `json:"message,omitempty"`
 }
 
-// HealthStatus represents the complete health status of the system
+// HealthStatus represents the complete health status of the system.
 type HealthStatus struct {
-	Status    Status           `json:"status"`
-	Checks    map[string]Check `json:"checks"`
 	Timestamp time.Time        `json:"timestamp"`
+	Checks    map[string]Check `json:"checks"`
+	Status    Status           `json:"status"`
 }
 
-// Checker performs health checks on the system
+// Checker performs health checks on the system.
 type Checker struct {
-	store   metadata.Store
-	storage backend.Backend
-	mu      sync.RWMutex
-
-	// Cached health status
-	cachedStatus *HealthStatus
 	cacheExpiry  time.Time
+	store        metadata.Store
+	storage      backend.Backend
+	cachedStatus *HealthStatus
 	cacheTTL     time.Duration
+	mu           sync.RWMutex
 }
 
-// NewChecker creates a new health checker
+// NewChecker creates a new health checker.
 func NewChecker(store metadata.Store, storage backend.Backend) *Checker {
 	return &Checker{
 		store:    store,
@@ -78,46 +76,64 @@ func NewChecker(store metadata.Store, storage backend.Backend) *Checker {
 	}
 }
 
-// Check performs all health checks and returns the overall status
+// Check performs all health checks and returns the overall status.
 func (c *Checker) Check(ctx context.Context) *HealthStatus {
 	// Check cache first
 	c.mu.RLock()
+
 	if c.cachedStatus != nil && time.Now().Before(c.cacheExpiry) {
 		status := c.cachedStatus
 		c.mu.RUnlock()
+
 		return status
 	}
+
 	c.mu.RUnlock()
 
 	// Perform checks
 	checks := make(map[string]Check)
 
 	// Run checks in parallel
-	var wg sync.WaitGroup
-	var checksMu sync.Mutex
+	var (
+		wg       sync.WaitGroup
+		checksMu sync.Mutex
+	)
 
 	wg.Add(3)
+
 	go func() {
 		defer wg.Done()
+
 		check := c.CheckRaft(ctx)
+
 		checksMu.Lock()
+
 		checks["raft"] = check
+
 		checksMu.Unlock()
 	}()
 
 	go func() {
 		defer wg.Done()
+
 		check := c.CheckStorage(ctx)
+
 		checksMu.Lock()
+
 		checks["storage"] = check
+
 		checksMu.Unlock()
 	}()
 
 	go func() {
 		defer wg.Done()
+
 		check := c.CheckMetadata(ctx)
+
 		checksMu.Lock()
+
 		checks["metadata"] = check
+
 		checksMu.Unlock()
 	}()
 
@@ -141,7 +157,7 @@ func (c *Checker) Check(ctx context.Context) *HealthStatus {
 	return healthStatus
 }
 
-// CheckRaft checks the Raft consensus state
+// CheckRaft checks the Raft consensus state.
 func (c *Checker) CheckRaft(ctx context.Context) Check {
 	if c.store == nil {
 		return Check{
@@ -181,7 +197,7 @@ func (c *Checker) CheckRaft(ctx context.Context) Check {
 	}
 }
 
-// CheckStorage checks the storage backend health
+// CheckStorage checks the storage backend health.
 func (c *Checker) CheckStorage(ctx context.Context) Check {
 	if c.storage == nil {
 		return Check{
@@ -208,6 +224,7 @@ func (c *Checker) CheckStorage(ctx context.Context) Check {
 				Message: "storage critically full (>95%)",
 			}
 		}
+
 		if usagePercent > 90 {
 			return Check{
 				Status:  StatusDegraded,
@@ -222,7 +239,7 @@ func (c *Checker) CheckStorage(ctx context.Context) Check {
 	}
 }
 
-// CheckMetadata checks the metadata store health
+// CheckMetadata checks the metadata store health.
 func (c *Checker) CheckMetadata(ctx context.Context) Check {
 	if c.store == nil {
 		return Check{
@@ -246,7 +263,7 @@ func (c *Checker) CheckMetadata(ctx context.Context) Check {
 	}
 }
 
-// IsReady checks if the service is ready to accept requests
+// IsReady checks if the service is ready to accept requests.
 func (c *Checker) IsReady(ctx context.Context) bool {
 	if c.store == nil {
 		return false
@@ -254,16 +271,17 @@ func (c *Checker) IsReady(ctx context.Context) bool {
 
 	// Check if we're the leader or have a leader
 	leaderAddr, _ := c.store.LeaderAddress()
+
 	return c.store.IsLeader() || leaderAddr != ""
 }
 
-// IsLive checks if the service is alive
+// IsLive checks if the service is alive.
 func (c *Checker) IsLive(ctx context.Context) bool {
 	// Basic liveness check - if we can execute this, we're alive
 	return true
 }
 
-// determineOverallStatus determines the overall health status based on individual checks
+// determineOverallStatus determines the overall health status based on individual checks.
 func (c *Checker) determineOverallStatus(checks map[string]Check) Status {
 	hasUnhealthy := false
 	hasDegraded := false
@@ -280,23 +298,25 @@ func (c *Checker) determineOverallStatus(checks map[string]Check) Status {
 	if hasUnhealthy {
 		return StatusUnhealthy
 	}
+
 	if hasDegraded {
 		return StatusDegraded
 	}
+
 	return StatusHealthy
 }
 
-// Handler creates HTTP handlers for health endpoints
+// Handler creates HTTP handlers for health endpoints.
 type Handler struct {
 	checker *Checker
 }
 
-// NewHandler creates a new health handler
+// NewHandler creates a new health handler.
 func NewHandler(checker *Checker) *Handler {
 	return &Handler{checker: checker}
 }
 
-// HealthHandler handles basic health check requests (for load balancers)
+// HealthHandler handles basic health check requests (for load balancers).
 func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	status := h.checker.Check(ctx)
@@ -314,7 +334,7 @@ func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// LivenessHandler handles Kubernetes liveness probe requests
+// LivenessHandler handles Kubernetes liveness probe requests.
 func (h *Handler) LivenessHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -327,7 +347,7 @@ func (h *Handler) LivenessHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ReadinessHandler handles Kubernetes readiness probe requests
+// ReadinessHandler handles Kubernetes readiness probe requests.
 func (h *Handler) ReadinessHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -340,7 +360,7 @@ func (h *Handler) ReadinessHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DetailedHandler handles detailed health check requests
+// DetailedHandler handles detailed health check requests.
 func (h *Handler) DetailedHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	status := h.checker.Check(ctx)

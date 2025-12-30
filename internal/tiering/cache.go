@@ -11,34 +11,19 @@ import (
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 )
 
-// CacheConfig configures the hot cache layer
+// CacheConfig configures the hot cache layer.
 type CacheConfig struct {
-	// MaxSize is the maximum cache size in bytes
-	MaxSize int64 `json:"maxSize" yaml:"maxSize"`
-
-	// MaxObjects is the maximum number of objects in cache
-	MaxObjects int `json:"maxObjects,omitempty" yaml:"maxObjects,omitempty"`
-
-	// TTL is the default time-to-live for cached objects
-	TTL time.Duration `json:"ttl,omitempty" yaml:"ttl,omitempty"`
-
-	// EvictionPolicy determines how objects are evicted (lru, lfu, fifo)
-	EvictionPolicy string `json:"evictionPolicy,omitempty" yaml:"evictionPolicy,omitempty"`
-
-	// WriteThrough writes to both cache and backend simultaneously
-	WriteThrough bool `json:"writeThrough,omitempty" yaml:"writeThrough,omitempty"`
-
-	// WriteBack writes to cache first, then asynchronously to backend
-	WriteBack bool `json:"writeBack,omitempty" yaml:"writeBack,omitempty"`
-
-	// ReadAhead prefetches objects predicted to be accessed
-	ReadAhead bool `json:"readAhead,omitempty" yaml:"readAhead,omitempty"`
-
-	// ReadAheadThreshold is the access count after which to prefetch
-	ReadAheadThreshold int `json:"readAheadThreshold,omitempty" yaml:"readAheadThreshold,omitempty"`
+	EvictionPolicy     string        `json:"evictionPolicy,omitempty" yaml:"evictionPolicy,omitempty"`
+	MaxSize            int64         `json:"maxSize" yaml:"maxSize"`
+	MaxObjects         int           `json:"maxObjects,omitempty" yaml:"maxObjects,omitempty"`
+	TTL                time.Duration `json:"ttl,omitempty" yaml:"ttl,omitempty"`
+	ReadAheadThreshold int           `json:"readAheadThreshold,omitempty" yaml:"readAheadThreshold,omitempty"`
+	WriteThrough       bool          `json:"writeThrough,omitempty" yaml:"writeThrough,omitempty"`
+	WriteBack          bool          `json:"writeBack,omitempty" yaml:"writeBack,omitempty"`
+	ReadAhead          bool          `json:"readAhead,omitempty" yaml:"readAhead,omitempty"`
 }
 
-// DefaultCacheConfig returns sensible cache defaults
+// DefaultCacheConfig returns sensible cache defaults.
 func DefaultCacheConfig() CacheConfig {
 	return CacheConfig{
 		MaxSize:            10 * 1024 * 1024 * 1024, // 10GB
@@ -52,41 +37,33 @@ func DefaultCacheConfig() CacheConfig {
 	}
 }
 
-// CacheEntry represents a cached object
+// CacheEntry represents a cached object.
 type CacheEntry struct {
-	Key          string
-	Size         int64
-	Data         []byte
-	ContentType  string
-	ETag         string
 	CreatedAt    time.Time
 	LastAccessed time.Time
-	AccessCount  int
 	ExpiresAt    time.Time
+	Key          string
+	ContentType  string
+	ETag         string
+	Data         []byte
+	Size         int64
+	AccessCount  int
 }
 
-// Cache provides an LRU cache for hot objects
+// Cache provides an LRU cache for hot objects.
 type Cache struct {
-	config CacheConfig
-	mu     sync.RWMutex
-
-	// Storage for cached data
-	entries map[string]*CacheEntry
-	lruList *list.List
-	lruMap  map[string]*list.Element
-
-	// Statistics
-	currentSize int64
-	hits        int64
-	misses      int64
-	evictions   int64
-
-	// Background cache backend (optional)
-	backend backend.Backend
-
-	// Write-back queue
+	backend        backend.Backend
+	lruList        *list.List
+	entries        map[string]*CacheEntry
+	lruMap         map[string]*list.Element
 	writeBackQueue chan writeBackItem
+	config         CacheConfig
 	writeBackWg    sync.WaitGroup
+	currentSize    int64
+	hits           int64
+	misses         int64
+	evictions      int64
+	mu             sync.RWMutex
 	closed         bool
 }
 
@@ -96,7 +73,7 @@ type writeBackItem struct {
 	data   []byte
 }
 
-// NewCache creates a new cache
+// NewCache creates a new cache.
 func NewCache(config CacheConfig, cacheBackend backend.Backend) *Cache {
 	c := &Cache{
 		config:         config,
@@ -110,13 +87,14 @@ func NewCache(config CacheConfig, cacheBackend backend.Backend) *Cache {
 	// Start write-back worker if enabled
 	if config.WriteBack && cacheBackend != nil {
 		c.writeBackWg.Add(1)
+
 		go c.writeBackWorker()
 	}
 
 	return c
 }
 
-// Get retrieves an object from cache
+// Get retrieves an object from cache.
 func (c *Cache) Get(ctx context.Context, key string) (*CacheEntry, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -131,6 +109,7 @@ func (c *Cache) Get(ctx context.Context, key string) (*CacheEntry, bool) {
 	if !entry.ExpiresAt.IsZero() && time.Now().After(entry.ExpiresAt) {
 		c.removeEntry(key)
 		c.misses++
+
 		return nil, false
 	}
 
@@ -144,10 +123,11 @@ func (c *Cache) Get(ctx context.Context, key string) (*CacheEntry, bool) {
 	}
 
 	c.hits++
+
 	return entry, true
 }
 
-// Put adds an object to the cache
+// Put adds an object to the cache.
 func (c *Cache) Put(ctx context.Context, key string, data []byte, contentType, etag string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -159,6 +139,7 @@ func (c *Cache) Put(ctx context.Context, key string, data []byte, contentType, e
 		if c.lruList.Len() == 0 {
 			break
 		}
+
 		c.evictLRU()
 	}
 
@@ -206,16 +187,17 @@ func (c *Cache) Put(ctx context.Context, key string, data []byte, contentType, e
 	return nil
 }
 
-// Delete removes an object from cache
+// Delete removes an object from cache.
 func (c *Cache) Delete(ctx context.Context, key string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.removeEntry(key)
+
 	return nil
 }
 
-// Has checks if an object is in cache
+// Has checks if an object is in cache.
 func (c *Cache) Has(ctx context.Context, key string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -233,26 +215,29 @@ func (c *Cache) Has(ctx context.Context, key string) bool {
 	return true
 }
 
-// Size returns the current cache size in bytes
+// Size returns the current cache size in bytes.
 func (c *Cache) Size() int64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return c.currentSize
 }
 
-// Count returns the number of objects in cache
+// Count returns the number of objects in cache.
 func (c *Cache) Count() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return len(c.entries)
 }
 
-// Stats returns cache statistics
+// Stats returns cache statistics.
 func (c *Cache) Stats() CacheStats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	hitRate := float64(0)
+
 	total := c.hits + c.misses
 	if total > 0 {
 		hitRate = float64(c.hits) / float64(total)
@@ -270,7 +255,7 @@ func (c *Cache) Stats() CacheStats {
 	}
 }
 
-// CacheStats contains cache statistics
+// CacheStats contains cache statistics.
 type CacheStats struct {
 	Size       int64   `json:"size"`
 	MaxSize    int64   `json:"maxSize"`
@@ -282,7 +267,7 @@ type CacheStats struct {
 	Evictions  int64   `json:"evictions"`
 }
 
-// Clear removes all objects from cache
+// Clear removes all objects from cache.
 func (c *Cache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -293,7 +278,7 @@ func (c *Cache) Clear() {
 	c.currentSize = 0
 }
 
-// Close closes the cache and releases resources
+// Close closes the cache and releases resources.
 func (c *Cache) Close() error {
 	c.mu.Lock()
 	c.closed = true
@@ -306,7 +291,7 @@ func (c *Cache) Close() error {
 	return nil
 }
 
-// removeEntry removes an entry without locking
+// removeEntry removes an entry without locking.
 func (c *Cache) removeEntry(key string) {
 	entry, ok := c.entries[key]
 	if !ok {
@@ -322,7 +307,7 @@ func (c *Cache) removeEntry(key string) {
 	}
 }
 
-// evictLRU removes the least recently used entry
+// evictLRU removes the least recently used entry.
 func (c *Cache) evictLRU() {
 	elem := c.lruList.Back()
 	if elem == nil {
@@ -334,7 +319,7 @@ func (c *Cache) evictLRU() {
 	c.evictions++
 }
 
-// writeBackWorker persists cached data to the backend
+// writeBackWorker persists cached data to the backend.
 func (c *Cache) writeBackWorker() {
 	defer c.writeBackWg.Done()
 
@@ -345,11 +330,12 @@ func (c *Cache) writeBackWorker() {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_, _ = c.backend.PutObject(ctx, item.bucket, item.key, bytes.NewReader(item.data), int64(len(item.data)))
+
 		cancel()
 	}
 }
 
-// bytesReader wraps a byte slice as an io.Reader
+// bytesReader wraps a byte slice as an io.Reader.
 type bytesReader struct {
 	data []byte
 	pos  int
@@ -359,12 +345,14 @@ func (r *bytesReader) Read(p []byte) (n int, err error) {
 	if r.pos >= len(r.data) {
 		return 0, io.EOF
 	}
+
 	n = copy(p, r.data[r.pos:])
 	r.pos += n
+
 	return n, nil
 }
 
-// Prefetch loads an object into cache from the backend
+// Prefetch loads an object into cache from the backend.
 func (c *Cache) Prefetch(ctx context.Context, bucket, key string, source backend.Backend) error {
 	cacheKey := bucket + "/" + key
 
@@ -378,6 +366,7 @@ func (c *Cache) Prefetch(ctx context.Context, bucket, key string, source backend
 	if err != nil {
 		return err
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Read data
@@ -390,7 +379,7 @@ func (c *Cache) Prefetch(ctx context.Context, bucket, key string, source backend
 	return c.Put(ctx, cacheKey, data, "", "")
 }
 
-// WarmCache pre-populates the cache with frequently accessed objects
+// WarmCache pre-populates the cache with frequently accessed objects.
 func (c *Cache) WarmCache(ctx context.Context, keys []string, source backend.Backend) error {
 	for _, key := range keys {
 		select {
@@ -405,25 +394,30 @@ func (c *Cache) WarmCache(ctx context.Context, keys []string, source backend.Bac
 			continue
 		}
 
-		if err := c.Prefetch(ctx, parts[0], parts[1], source); err != nil {
+		err := c.Prefetch(ctx, parts[0], parts[1], source)
+		if err != nil {
 			// Log error but continue
 			continue
 		}
 	}
+
 	return nil
 }
 
-// splitFirst splits a string on the first occurrence of sep
+// splitFirst splits a string on the first occurrence of sep.
 func splitFirst(s, sep string) []string {
 	idx := -1
-	for i := 0; i < len(s); i++ {
+
+	for i := range len(s) {
 		if s[i] == sep[0] {
 			idx = i
 			break
 		}
 	}
+
 	if idx == -1 {
 		return []string{s}
 	}
+
 	return []string{s[:idx], s[idx+1:]}
 }

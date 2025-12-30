@@ -16,63 +16,28 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Config configures the DRAM cache
+// Config configures the DRAM cache.
 type Config struct {
-	// MaxSize is the maximum cache size in bytes (default: 8GB)
-	MaxSize int64 `json:"maxSize" yaml:"max_size"`
-
-	// ShardCount is the number of cache shards for lock reduction (default: 256)
-	ShardCount int `json:"shardCount" yaml:"shard_count"`
-
-	// EntryMaxSize is the maximum size for a single cache entry (default: 256MB)
-	EntryMaxSize int64 `json:"entryMaxSize" yaml:"entry_max_size"`
-
-	// TTL is the default time-to-live for cached entries (default: 1 hour)
-	TTL time.Duration `json:"ttl" yaml:"ttl"`
-
-	// EvictionPolicy is the cache eviction policy: lru, lfu, arc (default: arc)
-	EvictionPolicy string `json:"evictionPolicy" yaml:"eviction_policy"`
-
-	// PrefetchEnabled enables predictive prefetching for AI/ML workloads
-	PrefetchEnabled bool `json:"prefetchEnabled" yaml:"prefetch_enabled"`
-
-	// PrefetchThreshold is the access count before enabling prefetch
-	PrefetchThreshold int `json:"prefetchThreshold" yaml:"prefetch_threshold"`
-
-	// PrefetchAhead is the number of chunks to prefetch ahead
-	PrefetchAhead int `json:"prefetchAhead" yaml:"prefetch_ahead"`
-
-	// ZeroCopyEnabled enables zero-copy reads where supported
-	ZeroCopyEnabled bool `json:"zeroCopyEnabled" yaml:"zero_copy_enabled"`
-
-	// CompressionEnabled enables in-cache compression
-	CompressionEnabled bool `json:"compressionEnabled" yaml:"compression_enabled"`
-
-	// DistributedMode enables distributed cache across cluster nodes
-	DistributedMode bool `json:"distributedMode" yaml:"distributed_mode"`
-
-	// ClusterNodes is the list of cluster node addresses for distributed mode
-	ClusterNodes []string `json:"clusterNodes" yaml:"cluster_nodes"`
-
-	// ReplicationFactor for distributed cache (default: 2)
-	ReplicationFactor int `json:"replicationFactor" yaml:"replication_factor"`
-
-	// WarmupEnabled enables cache warmup on startup
-	WarmupEnabled bool `json:"warmupEnabled" yaml:"warmup_enabled"`
-
-	// WarmupKeys are the keys to pre-warm on startup
-	WarmupKeys []string `json:"warmupKeys" yaml:"warmup_keys"`
-
-	// MetricsEnabled enables detailed cache metrics
-	MetricsEnabled bool `json:"metricsEnabled" yaml:"metrics_enabled"`
-
-	// PeerCacheLogResetInterval is the interval after which the peer cache
-	// failure log rate limiter resets, allowing a new burst of logs.
-	// This ensures logging resumes after periods of stability. (default: 5 minutes)
+	EvictionPolicy            string        `json:"evictionPolicy" yaml:"eviction_policy"`
+	WarmupKeys                []string      `json:"warmupKeys" yaml:"warmup_keys"`
+	ClusterNodes              []string      `json:"clusterNodes" yaml:"cluster_nodes"`
+	ReplicationFactor         int           `json:"replicationFactor" yaml:"replication_factor"`
+	EntryMaxSize              int64         `json:"entryMaxSize" yaml:"entry_max_size"`
 	PeerCacheLogResetInterval time.Duration `json:"peerCacheLogResetInterval" yaml:"peer_cache_log_reset_interval"`
+	PrefetchThreshold         int           `json:"prefetchThreshold" yaml:"prefetch_threshold"`
+	PrefetchAhead             int           `json:"prefetchAhead" yaml:"prefetch_ahead"`
+	ShardCount                int           `json:"shardCount" yaml:"shard_count"`
+	MaxSize                   int64         `json:"maxSize" yaml:"max_size"`
+	TTL                       time.Duration `json:"ttl" yaml:"ttl"`
+	DistributedMode           bool          `json:"distributedMode" yaml:"distributed_mode"`
+	CompressionEnabled        bool          `json:"compressionEnabled" yaml:"compression_enabled"`
+	WarmupEnabled             bool          `json:"warmupEnabled" yaml:"warmup_enabled"`
+	ZeroCopyEnabled           bool          `json:"zeroCopyEnabled" yaml:"zero_copy_enabled"`
+	MetricsEnabled            bool          `json:"metricsEnabled" yaml:"metrics_enabled"`
+	PrefetchEnabled           bool          `json:"prefetchEnabled" yaml:"prefetch_enabled"`
 }
 
-// DefaultConfig returns sensible defaults for production workloads
+// DefaultConfig returns sensible defaults for production workloads.
 func DefaultConfig() Config {
 	return Config{
 		MaxSize:                   8 * 1024 * 1024 * 1024, // 8GB
@@ -93,22 +58,22 @@ func DefaultConfig() Config {
 	}
 }
 
-// Entry represents a cached object
+// Entry represents a cached object.
 type Entry struct {
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
 	Key          string
-	Data         []byte
-	Size         int64
 	ContentType  string
 	ETag         string
-	CreatedAt    time.Time
-	LastAccessed int64 // Unix nano, atomic
-	AccessCount  int64 // atomic
-	ExpiresAt    time.Time
-	Compressed   bool
+	Data         []byte
+	Size         int64
+	LastAccessed int64
+	AccessCount  int64
 	Checksum     uint64
+	Compressed   bool
 }
 
-// Metrics contains cache statistics
+// Metrics contains cache statistics.
 type Metrics struct {
 	Size                   int64   `json:"size"`
 	MaxSize                int64   `json:"maxSize"`
@@ -124,54 +89,43 @@ type Metrics struct {
 	PeerCacheWriteFailures int64   `json:"peerCacheWriteFailures"`
 }
 
-// shard is a partition of the cache with its own lock
+// shard is a partition of the cache with its own lock.
 type shard struct {
-	mu        sync.RWMutex
 	entries   map[string]*Entry
 	lru       *list.List
 	lruMap    map[string]*list.Element
 	size      int64
 	maxSize   int64
 	evictions int64
+	mu        sync.RWMutex
 }
 
-// Cache is a high-performance distributed DRAM cache
+// Cache is a high-performance distributed DRAM cache.
 type Cache struct {
-	config Config
-	shards []*shard
-
-	// Statistics (atomic)
-	hits                   int64
-	misses                 int64
-	bytesServed            int64
+	ctx                    context.Context
+	accessPatterns         map[string]*accessPattern
+	cancel                 context.CancelFunc
+	peerClients            map[string]*peerClient
+	_nodeID                string
+	shards                 []*shard
+	config                 Config
+	wg                     sync.WaitGroup
 	prefetchHits           int64
-	prefetchMisses         int64
-	totalLatency           int64 // nanoseconds
+	peerCacheWriteFailures int64
+	peerCacheLogCount      int64
+	peerCacheLastLogTime   int64
+	peerCacheLogBurstLeft  int64
 	opCount                int64
-	peerCacheWriteFailures int64 // failed attempts to cache entries from peers
-
-	// Rate limiting for peer cache failure logs
-	// Logs first 5 failures, then 1 per 100 thereafter to prevent log flooding
-	peerCacheLogCount     int64 // total failures since last summary
-	peerCacheLastLogTime  int64 // unix nano of last log emission
-	peerCacheLogBurstLeft int64 // remaining burst allowance
-
-	// Prefetch tracking
-	accessPatterns map[string]*accessPattern
-	patternMu      sync.RWMutex
-
-	// Distributed cache
-	_nodeID      string
-	peerClients  map[string]*peerClient
-	peerClientMu sync.RWMutex
-
-	// Lifecycle
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	totalLatency           int64
+	prefetchMisses         int64
+	bytesServed            int64
+	misses                 int64
+	hits                   int64
+	patternMu              sync.RWMutex
+	peerClientMu           sync.RWMutex
 }
 
-// accessPattern tracks access patterns for prefetching
+// accessPattern tracks access patterns for prefetching.
 type accessPattern struct {
 	bucket      string
 	prefix      string
@@ -180,27 +134,31 @@ type accessPattern struct {
 	accessCount int64
 }
 
-// peerClient handles communication with peer cache nodes
+// peerClient handles communication with peer cache nodes.
 type peerClient struct {
+	lastSeen  time.Time
 	address   string
 	connected bool
-	lastSeen  time.Time
 }
 
-// New creates a new DRAM cache
+// New creates a new DRAM cache.
 func New(config Config) *Cache {
 	if config.ShardCount <= 0 {
 		config.ShardCount = 256
 	}
+
 	if config.MaxSize <= 0 {
 		config.MaxSize = 8 * 1024 * 1024 * 1024
 	}
+
 	if config.EntryMaxSize <= 0 {
 		config.EntryMaxSize = 256 * 1024 * 1024
 	}
+
 	if config.TTL <= 0 {
 		config.TTL = time.Hour
 	}
+
 	if config.EvictionPolicy == "" {
 		config.EvictionPolicy = "arc"
 	}
@@ -220,7 +178,7 @@ func New(config Config) *Cache {
 	}
 
 	// Initialize shards
-	for i := 0; i < config.ShardCount; i++ {
+	for i := range config.ShardCount {
 		c.shards[i] = &shard{
 			entries: make(map[string]*Entry),
 			lru:     list.New(),
@@ -232,27 +190,77 @@ func New(config Config) *Cache {
 	// Start background workers
 	if config.PrefetchEnabled {
 		c.wg.Add(1)
+
 		go c.prefetchWorker()
 	}
 
 	if config.DistributedMode {
 		c.wg.Add(1)
+
 		go c.peerDiscoveryWorker()
 	}
 
 	return c
 }
 
-// getShard returns the shard for a given key
+// getShard returns the shard for a given key.
 func (c *Cache) getShard(key string) *shard {
 	h := fnv.New64a()
 	h.Write([]byte(key))
+
 	return c.shards[h.Sum64()%uint64(len(c.shards))]
 }
 
-// Get retrieves an entry from the cache
+// logPeerCacheFailure handles rate-limited logging for peer cache write failures.
+// Returns true if a log was emitted.
+func (c *Cache) logPeerCacheFailure(key string, err error) {
+	// Rate-limited logging to prevent log flooding during persistent failures
+	// Allow first 5 logs (burst), then 1 per 100 failures
+	// Resets after configurable interval (default 5 minutes) of no logs
+	now := time.Now().UnixNano()
+	lastLogTime := atomic.LoadInt64(&c.peerCacheLastLogTime)
+
+	resetInterval := c.config.PeerCacheLogResetInterval
+	if resetInterval <= 0 {
+		resetInterval = 5 * time.Minute
+	}
+
+	// Check if we should reset the rate limiter due to time elapsed
+	if lastLogTime > 0 && now-lastLogTime > resetInterval.Nanoseconds() {
+		// Reset the burst allowance and count after quiet period
+		atomic.StoreInt64(&c.peerCacheLogBurstLeft, 5)
+		atomic.StoreInt64(&c.peerCacheLogCount, 0)
+	}
+
+	count := atomic.AddInt64(&c.peerCacheLogCount, 1)
+	burstLeft := atomic.LoadInt64(&c.peerCacheLogBurstLeft)
+
+	shouldLog := false
+
+	if burstLeft > 0 {
+		// Use burst allowance
+		if atomic.CompareAndSwapInt64(&c.peerCacheLogBurstLeft, burstLeft, burstLeft-1) {
+			shouldLog = true
+		}
+	} else if count%100 == 0 {
+		// Log every 100th failure after burst exhausted
+		shouldLog = true
+	}
+
+	if shouldLog {
+		atomic.StoreInt64(&c.peerCacheLastLogTime, now)
+		log.Warn().
+			Err(err).
+			Str("key", key).
+			Int64("total_failures", count).
+			Msg("failed to cache entry retrieved from peer - this may impact cache hit rate and performance")
+	}
+}
+
+// Get retrieves an entry from the cache.
 func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 	start := time.Now()
+
 	defer func() {
 		atomic.AddInt64(&c.totalLatency, time.Since(start).Nanoseconds())
 		atomic.AddInt64(&c.opCount, 1)
@@ -271,51 +279,15 @@ func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 		if c.config.DistributedMode {
 			if entry, ok := c.getFromPeer(ctx, key); ok {
 				// Cache locally for future access - log if caching fails but don't fail the get
-				if putErr := c.Put(ctx, key, entry.Data, entry.ContentType, entry.ETag); putErr != nil {
+				putErr := c.Put(ctx, key, entry.Data, entry.ContentType, entry.ETag)
+				if putErr != nil {
 					atomic.AddInt64(&c.peerCacheWriteFailures, 1)
 					metrics.RecordCachePeerWriteFailure()
-
-					// Rate-limited logging to prevent log flooding during persistent failures
-					// Allow first 5 logs (burst), then 1 per 100 failures
-					// Resets after configurable interval (default 5 minutes) of no logs
-					now := time.Now().UnixNano()
-					lastLogTime := atomic.LoadInt64(&c.peerCacheLastLogTime)
-					resetInterval := c.config.PeerCacheLogResetInterval
-					if resetInterval <= 0 {
-						resetInterval = 5 * time.Minute
-					}
-
-					// Check if we should reset the rate limiter due to time elapsed
-					if lastLogTime > 0 && now-lastLogTime > resetInterval.Nanoseconds() {
-						// Reset the burst allowance and count after quiet period
-						atomic.StoreInt64(&c.peerCacheLogBurstLeft, 5)
-						atomic.StoreInt64(&c.peerCacheLogCount, 0)
-					}
-
-					count := atomic.AddInt64(&c.peerCacheLogCount, 1)
-					burstLeft := atomic.LoadInt64(&c.peerCacheLogBurstLeft)
-
-					shouldLog := false
-					if burstLeft > 0 {
-						// Use burst allowance
-						if atomic.CompareAndSwapInt64(&c.peerCacheLogBurstLeft, burstLeft, burstLeft-1) {
-							shouldLog = true
-						}
-					} else if count%100 == 0 {
-						// Log every 100th failure after burst exhausted
-						shouldLog = true
-					}
-
-					if shouldLog {
-						atomic.StoreInt64(&c.peerCacheLastLogTime, now)
-						log.Warn().
-							Err(putErr).
-							Str("key", key).
-							Int64("total_failures", count).
-							Msg("failed to cache entry retrieved from peer - this may impact cache hit rate and performance")
-					}
+					c.logPeerCacheFailure(key, putErr)
 				}
+
 				atomic.AddInt64(&c.bytesServed, entry.Size)
+
 				return entry, true
 			}
 		}
@@ -329,6 +301,7 @@ func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 		c.removeEntryLocked(s, key)
 		s.mu.Unlock()
 		atomic.AddInt64(&c.misses, 1)
+
 		return nil, false
 	}
 
@@ -338,9 +311,11 @@ func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 
 	// Update LRU position (requires write lock)
 	s.mu.Lock()
+
 	if elem, ok := s.lruMap[key]; ok {
 		s.lru.MoveToFront(elem)
 	}
+
 	s.mu.Unlock()
 
 	atomic.AddInt64(&c.hits, 1)
@@ -354,7 +329,7 @@ func (c *Cache) Get(ctx context.Context, key string) (*Entry, bool) {
 	return entry, true
 }
 
-// Put adds an entry to the cache
+// Put adds an entry to the cache.
 func (c *Cache) Put(ctx context.Context, key string, data []byte, contentType, etag string) error {
 	size := int64(len(data))
 
@@ -411,7 +386,7 @@ func (c *Cache) Put(ctx context.Context, key string, data []byte, contentType, e
 	return nil
 }
 
-// Delete removes an entry from the cache
+// Delete removes an entry from the cache.
 func (c *Cache) Delete(ctx context.Context, key string) error {
 	s := c.getShard(key)
 
@@ -427,7 +402,7 @@ func (c *Cache) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-// Has checks if an entry exists in the cache
+// Has checks if an entry exists in the cache.
 func (c *Cache) Has(ctx context.Context, key string) bool {
 	s := c.getShard(key)
 
@@ -447,11 +422,13 @@ func (c *Cache) Has(ctx context.Context, key string) bool {
 	return true
 }
 
-// Metrics returns cache statistics
+// Metrics returns cache statistics.
 func (c *Cache) Metrics() Metrics {
-	var totalSize int64
-	var totalObjects int64
-	var totalEvictions int64
+	var (
+		totalSize      int64
+		totalObjects   int64
+		totalEvictions int64
+	)
 
 	for _, s := range c.shards {
 		s.mu.RLock()
@@ -471,6 +448,7 @@ func (c *Cache) Metrics() Metrics {
 	}
 
 	avgLatency := int64(0)
+
 	opCount := atomic.LoadInt64(&c.opCount)
 	if opCount > 0 {
 		avgLatency = atomic.LoadInt64(&c.totalLatency) / opCount / 1000 // microseconds
@@ -492,7 +470,7 @@ func (c *Cache) Metrics() Metrics {
 	}
 }
 
-// Clear removes all entries from the cache
+// Clear removes all entries from the cache.
 func (c *Cache) Clear() {
 	for _, s := range c.shards {
 		s.mu.Lock()
@@ -504,15 +482,16 @@ func (c *Cache) Clear() {
 	}
 }
 
-// Close shuts down the cache
+// Close shuts down the cache.
 func (c *Cache) Close() error {
 	c.cancel()
 	c.wg.Wait()
 	c.Clear()
+
 	return nil
 }
 
-// WarmCache pre-populates the cache from a data source
+// WarmCache pre-populates the cache from a data source.
 func (c *Cache) WarmCache(ctx context.Context, keys []string, source func(ctx context.Context, key string) ([]byte, string, string, error)) error {
 	for _, key := range keys {
 		select {
@@ -530,10 +509,11 @@ func (c *Cache) WarmCache(ctx context.Context, keys []string, source func(ctx co
 			continue
 		}
 	}
+
 	return nil
 }
 
-// GetReader returns a reader for cached data (for streaming)
+// GetReader returns a reader for cached data (for streaming).
 func (c *Cache) GetReader(ctx context.Context, key string) (io.Reader, *Entry, bool) {
 	entry, ok := c.Get(ctx, key)
 	if !ok {
@@ -543,7 +523,7 @@ func (c *Cache) GetReader(ctx context.Context, key string) (io.Reader, *Entry, b
 	return &entryReader{data: entry.Data}, entry, true
 }
 
-// entryReader wraps cached data as an io.Reader
+// entryReader wraps cached data as an io.Reader.
 type entryReader struct {
 	data []byte
 	pos  int
@@ -553,8 +533,10 @@ func (r *entryReader) Read(p []byte) (n int, err error) {
 	if r.pos >= len(r.data) {
 		return 0, io.EOF
 	}
+
 	n = copy(p, r.data[r.pos:])
 	r.pos += n
+
 	return n, nil
 }
 
@@ -589,6 +571,7 @@ func (c *Cache) evictLRULocked(s *shard) {
 func (c *Cache) checksum(data []byte) uint64 {
 	h := fnv.New64a()
 	h.Write(data)
+
 	return h.Sum64()
 }
 
@@ -614,6 +597,7 @@ func (c *Cache) trackAccess(key string) {
 	if len(pattern.lastKeys) > 10 {
 		pattern.lastKeys = pattern.lastKeys[1:]
 	}
+
 	pattern.accessCount++
 
 	// Detect sequential access pattern
@@ -632,11 +616,13 @@ func (c *Cache) isSequentialAccess(keys []string) bool {
 	for i := 1; i < len(keys); i++ {
 		// Simple numeric suffix check
 		prevNum := extractNumericSuffix(keys[i-1])
+
 		currNum := extractNumericSuffix(keys[i])
 		if currNum <= prevNum || currNum-prevNum > 2 {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -740,23 +726,26 @@ func (c *Cache) invalidateOnPeers(key string) {
 
 func extractBucketPrefix(key string) (bucket, prefix string) {
 	// Key format: bucket/key
-	for i := 0; i < len(key); i++ {
+	for i := range len(key) {
 		if key[i] == '/' {
 			bucket = key[:i]
 			if i+1 < len(key) {
 				// Get prefix (first path segment after bucket)
 				rest := key[i+1:]
-				for j := 0; j < len(rest); j++ {
+				for j := range len(rest) {
 					if rest[j] == '/' {
 						prefix = rest[:j]
 						return
 					}
 				}
+
 				prefix = rest
 			}
+
 			return
 		}
 	}
+
 	return key, ""
 }
 
@@ -781,6 +770,7 @@ func extractNumericSuffix(s string) int64 {
 	for i := start; i < end; i++ {
 		num = num*10 + int64(s[i]-'0')
 	}
+
 	return num
 }
 
@@ -794,6 +784,7 @@ func (e *Entry) Marshal() []byte {
 	offset := 0
 
 	// Key length and key
+	//nolint:gosec // G115: key length bounded by S3 key limits
 	binary.BigEndian.PutUint32(buf[offset:], uint32(len(keyBytes)))
 	offset += 4
 	copy(buf[offset:], keyBytes)
@@ -807,6 +798,7 @@ func (e *Entry) Marshal() []byte {
 
 	// Content type (length-prefixed)
 	ctBytes := []byte(e.ContentType)
+	//nolint:gosec // G115: content type length bounded by HTTP spec
 	binary.BigEndian.PutUint16(buf[offset:], uint16(len(ctBytes)))
 	offset += 2
 	copy(buf[offset:], ctBytes)
@@ -814,6 +806,7 @@ func (e *Entry) Marshal() []byte {
 
 	// ETag (length-prefixed)
 	etagBytes := []byte(e.ETag)
+	//nolint:gosec // G115: ETag length bounded by S3 spec
 	binary.BigEndian.PutUint16(buf[offset:], uint16(len(etagBytes)))
 	offset += 2
 	copy(buf[offset:], etagBytes)
@@ -835,32 +828,40 @@ func UnmarshalEntry(data []byte) (*Entry, error) {
 
 	// Key
 	keyLen := binary.BigEndian.Uint32(data[offset:])
+
 	offset += 4
 	if offset+int(keyLen) > len(data) {
 		return nil, io.ErrUnexpectedEOF
 	}
+
 	key := string(data[offset : offset+int(keyLen)])
 	offset += int(keyLen)
 
 	// Data
 	dataLen := binary.BigEndian.Uint64(data[offset:])
+
 	offset += 8
+	//nolint:gosec // G115: dataLen is validated to not exceed buffer length
 	if offset+int(dataLen) > len(data) {
 		return nil, io.ErrUnexpectedEOF
 	}
+
 	entryData := make([]byte, dataLen)
+	//nolint:gosec // G115: dataLen validated above to fit in int
 	copy(entryData, data[offset:offset+int(dataLen)])
+	//nolint:gosec // G115: dataLen validated above to fit in int
 	offset += int(dataLen)
 
 	entry := &Entry{
 		Key:  key,
 		Data: entryData,
-		Size: int64(dataLen),
+		Size: int64(dataLen), //nolint:gosec // G115: dataLen is uint32, conversion safe
 	}
 
 	// Content type
 	if offset+2 <= len(data) {
 		ctLen := binary.BigEndian.Uint16(data[offset:])
+
 		offset += 2
 		if offset+int(ctLen) <= len(data) {
 			entry.ContentType = string(data[offset : offset+int(ctLen)])
@@ -871,6 +872,7 @@ func UnmarshalEntry(data []byte) (*Entry, error) {
 	// ETag
 	if offset+2 <= len(data) {
 		etagLen := binary.BigEndian.Uint16(data[offset:])
+
 		offset += 2
 		if offset+int(etagLen) <= len(data) {
 			entry.ETag = string(data[offset : offset+int(etagLen)])

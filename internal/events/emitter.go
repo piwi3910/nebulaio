@@ -27,15 +27,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Emitter handles event emission and routing
+// Emitter handles event emission and routing.
 type Emitter struct {
-	queue         *EventQueue
-	configs       map[string]*NotificationConfiguration // bucket -> config
-	mu            sync.RWMutex
-	enabled       bool
+	queue   *EventQueue
+	configs map[string]*NotificationConfiguration // bucket -> config
+	mu      sync.RWMutex
+	enabled bool
 }
 
-// EmitterConfig configures the emitter
+// EmitterConfig configures the emitter.
 type EmitterConfig struct {
 	// Enabled indicates if event emission is enabled
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -44,7 +44,7 @@ type EmitterConfig struct {
 	QueueConfig EventQueueConfig `json:"queue" yaml:"queue"`
 }
 
-// DefaultEmitterConfig returns a default emitter configuration
+// DefaultEmitterConfig returns a default emitter configuration.
 func DefaultEmitterConfig() EmitterConfig {
 	return EmitterConfig{
 		Enabled:     true,
@@ -52,7 +52,7 @@ func DefaultEmitterConfig() EmitterConfig {
 	}
 }
 
-// NewEmitter creates a new event emitter
+// NewEmitter creates a new event emitter.
 func NewEmitter(config EmitterConfig) *Emitter {
 	e := &Emitter{
 		queue:   NewEventQueue(config.QueueConfig),
@@ -63,7 +63,7 @@ func NewEmitter(config EmitterConfig) *Emitter {
 	return e
 }
 
-// Start starts the emitter
+// Start starts the emitter.
 func (e *Emitter) Start() {
 	if !e.enabled {
 		log.Info().Msg("Event emitter disabled")
@@ -74,25 +74,25 @@ func (e *Emitter) Start() {
 	log.Info().Msg("Event emitter started")
 }
 
-// Stop stops the emitter
+// Stop stops the emitter.
 func (e *Emitter) Stop() {
 	e.queue.Stop()
 	log.Info().Msg("Event emitter stopped")
 }
 
-// AddTarget adds a target to the emitter
+// AddTarget adds a target to the emitter.
 func (e *Emitter) AddTarget(target Target) {
 	e.queue.AddTarget(target)
 	log.Info().Str("target", target.Name()).Str("type", target.Type()).Msg("Target added")
 }
 
-// RemoveTarget removes a target from the emitter
+// RemoveTarget removes a target from the emitter.
 func (e *Emitter) RemoveTarget(name string) {
 	e.queue.RemoveTarget(name)
 	log.Info().Str("target", name).Msg("Target removed")
 }
 
-// SetBucketConfig sets the notification configuration for a bucket
+// SetBucketConfig sets the notification configuration for a bucket.
 func (e *Emitter) SetBucketConfig(bucket string, config *NotificationConfiguration) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -104,14 +104,15 @@ func (e *Emitter) SetBucketConfig(bucket string, config *NotificationConfigurati
 	}
 }
 
-// GetBucketConfig gets the notification configuration for a bucket
+// GetBucketConfig gets the notification configuration for a bucket.
 func (e *Emitter) GetBucketConfig(bucket string) *NotificationConfiguration {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+
 	return e.configs[bucket]
 }
 
-// Emit emits an S3 event
+// Emit emits an S3 event.
 func (e *Emitter) Emit(ctx context.Context, event *S3Event) error {
 	if !e.enabled || len(event.Records) == 0 {
 		return nil
@@ -147,7 +148,8 @@ func (e *Emitter) Emit(ctx context.Context, event *S3Event) error {
 
 	// Enqueue for each target
 	for _, targetName := range targets {
-		if err := e.queue.Enqueue(event, targetName); err != nil {
+		err := e.queue.Enqueue(event, targetName)
+		if err != nil {
 			log.Warn().
 				Str("target", targetName).
 				Err(err).
@@ -158,19 +160,19 @@ func (e *Emitter) Emit(ctx context.Context, event *S3Event) error {
 	return nil
 }
 
-// EmitObjectCreated emits an object created event
+// EmitObjectCreated emits an object created event.
 func (e *Emitter) EmitObjectCreated(ctx context.Context, eventType EventType, bucket, key string, size int64, etag, versionID, accessKey string) error {
 	event := NewS3Event(eventType, bucket, key, size, etag, versionID, accessKey)
 	return e.Emit(ctx, event)
 }
 
-// EmitObjectRemoved emits an object removed event
+// EmitObjectRemoved emits an object removed event.
 func (e *Emitter) EmitObjectRemoved(ctx context.Context, eventType EventType, bucket, key string, versionID, accessKey string) error {
 	event := NewS3Event(eventType, bucket, key, 0, "", versionID, accessKey)
 	return e.Emit(ctx, event)
 }
 
-// findMatchingTargets finds targets that match the event
+// findMatchingTargets finds targets that match the event.
 func (e *Emitter) findMatchingTargets(config *NotificationConfiguration, eventName, key string) []string {
 	var targets []string
 
@@ -198,10 +200,11 @@ func (e *Emitter) findMatchingTargets(config *NotificationConfiguration, eventNa
 	return targets
 }
 
-// matchesConfiguration checks if an event matches a notification configuration
+// matchesConfiguration checks if an event matches a notification configuration.
 func (e *Emitter) matchesConfiguration(events []EventType, filter *NotificationFilter, eventName, key string) bool {
 	// Check event type match
 	eventMatches := false
+
 	for _, et := range events {
 		if e.matchesEventType(string(et), eventName) {
 			eventMatches = true
@@ -221,7 +224,7 @@ func (e *Emitter) matchesConfiguration(events []EventType, filter *NotificationF
 	return true
 }
 
-// matchesEventType checks if an event matches an event type pattern
+// matchesEventType checks if an event matches an event type pattern.
 func (e *Emitter) matchesEventType(pattern, eventName string) bool {
 	if pattern == eventName {
 		return true
@@ -236,7 +239,7 @@ func (e *Emitter) matchesEventType(pattern, eventName string) bool {
 	return false
 }
 
-// matchesKeyFilter checks if a key matches a key filter
+// matchesKeyFilter checks if a key matches a key filter.
 func (e *Emitter) matchesKeyFilter(filter *KeyFilter, key string) bool {
 	for _, rule := range filter.FilterRules {
 		switch strings.ToLower(rule.Name) {
@@ -250,10 +253,11 @@ func (e *Emitter) matchesKeyFilter(filter *KeyFilter, key string) bool {
 			}
 		}
 	}
+
 	return true
 }
 
-// Stats returns emitter statistics
+// Stats returns emitter statistics.
 func (e *Emitter) Stats() EmitterStats {
 	e.mu.RLock()
 	bucketCount := len(e.configs)
@@ -268,7 +272,7 @@ func (e *Emitter) Stats() EmitterStats {
 	}
 }
 
-// EmitterStats contains emitter statistics
+// EmitterStats contains emitter statistics.
 type EmitterStats struct {
 	Enabled           bool       `json:"enabled"`
 	BucketConfigCount int        `json:"bucketConfigCount"`

@@ -25,7 +25,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err != nil {
+		err := cfg.Validate()
+		if err != nil {
 			t.Errorf("valid config should not error: %v", err)
 		}
 	})
@@ -43,7 +44,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing server URL")
 		}
 	})
@@ -61,7 +63,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing bind DN")
 		}
 	})
@@ -79,7 +82,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing bind password")
 		}
 	})
@@ -97,7 +101,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing user search base DN")
 		}
 	})
@@ -115,7 +120,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing user search filter")
 		}
 	})
@@ -132,7 +138,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing username attribute")
 		}
 	})
@@ -152,7 +159,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for invalid scope")
 		}
 	})
@@ -176,7 +184,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing group search filter")
 		}
 	})
@@ -190,7 +199,7 @@ func TestSearchScope(t *testing.T) {
 		{"base", 0},
 		{"one", 1},
 		{"sub", 2},
-		{"", 2},      // Default
+		{"", 2},        // Default
 		{"invalid", 2}, // Default for invalid
 	}
 
@@ -276,10 +285,12 @@ func TestAuthErrors(t *testing.T) {
 		}
 
 		cause := &auth.ErrAuthenticationFailed{Message: "test"}
+
 		errWithCause := &auth.ErrProviderUnavailable{Provider: "ldap", Cause: cause}
 		if errWithCause.Error() != "provider unavailable: ldap: test" {
 			t.Error("error with cause message mismatch")
 		}
+
 		if errWithCause.Unwrap() != cause {
 			t.Error("unwrap should return cause")
 		}
@@ -312,10 +323,10 @@ func TestSyncConfig(t *testing.T) {
 	}
 }
 
-// mockUserStore is a mock implementation of UserStore for testing
+// mockUserStore is a mock implementation of UserStore for testing.
 type mockUserStore struct {
-	mu    sync.RWMutex
 	users map[string]*auth.User
+	mu    sync.RWMutex
 }
 
 func newMockUserStore() *mockUserStore {
@@ -327,14 +338,18 @@ func newMockUserStore() *mockUserStore {
 func (m *mockUserStore) UpsertUser(_ context.Context, user *auth.User) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.users[user.Username] = user
+
 	return nil
 }
 
 func (m *mockUserStore) DeleteUser(_ context.Context, username string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	delete(m.users, username)
+
 	return nil
 }
 
@@ -348,6 +363,7 @@ func (m *mockUserStore) ListUsers(_ context.Context, provider string) ([]*auth.U
 			users = append(users, u)
 		}
 	}
+
 	return users, nil
 }
 
@@ -358,6 +374,7 @@ func (m *mockUserStore) GetUser(_ context.Context, username string) (*auth.User,
 	if user, ok := m.users[username]; ok {
 		return user, nil
 	}
+
 	return nil, &auth.ErrUserNotFound{Username: username}
 }
 
@@ -401,6 +418,7 @@ func TestUserSyncServiceStatus(t *testing.T) {
 		if !status.LastSync.IsZero() {
 			t.Error("initial last sync should be zero")
 		}
+
 		if len(status.Errors) != 0 {
 			t.Error("initial errors should be empty")
 		}
@@ -422,7 +440,8 @@ func TestUserSyncServiceStatus(t *testing.T) {
 
 	// Test validation that would fail without a server
 	t.Run("ConfigValidation", func(t *testing.T) {
-		if err := cfg.Validate(); err != nil {
+		err := cfg.Validate()
+		if err != nil {
 			t.Errorf("config validation failed: %v", err)
 		}
 	})
@@ -492,6 +511,7 @@ func TestUserStore(t *testing.T) {
 func TestTLSConfig(t *testing.T) {
 	t.Run("DefaultTLS", func(t *testing.T) {
 		tlsCfg := TLSConfig{}
+
 		config, err := buildTLSConfig(tlsCfg)
 		if err != nil {
 			t.Fatalf("failed to build TLS config: %v", err)
@@ -506,6 +526,7 @@ func TestTLSConfig(t *testing.T) {
 		tlsCfg := TLSConfig{
 			InsecureSkipVerify: true,
 		}
+
 		config, err := buildTLSConfig(tlsCfg)
 		if err != nil {
 			t.Fatalf("failed to build TLS config: %v", err)
@@ -520,6 +541,7 @@ func TestTLSConfig(t *testing.T) {
 		tlsCfg := TLSConfig{
 			CACertFile: "/nonexistent/ca.crt",
 		}
+
 		_, err := buildTLSConfig(tlsCfg)
 		if err == nil {
 			t.Error("expected error for nonexistent CA cert")
@@ -531,6 +553,7 @@ func TestTLSConfig(t *testing.T) {
 			ClientCertFile: "/nonexistent/client.crt",
 			ClientKeyFile:  "/nonexistent/client.key",
 		}
+
 		_, err := buildTLSConfig(tlsCfg)
 		if err == nil {
 			t.Error("expected error for nonexistent client cert")

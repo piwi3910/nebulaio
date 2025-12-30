@@ -12,18 +12,18 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// Worker processes replication queue items
+// Worker processes replication queue items.
 type Worker struct {
-	id        int
 	queue     *Queue
 	service   *Service
 	clients   map[string]*minio.Client
-	clientsMu sync.RWMutex
 	stopCh    chan struct{}
 	wg        sync.WaitGroup
+	id        int
+	clientsMu sync.RWMutex
 }
 
-// WorkerConfig holds worker configuration
+// WorkerConfig holds worker configuration.
 type WorkerConfig struct {
 	// NumWorkers is the number of concurrent workers
 	NumWorkers int
@@ -31,7 +31,7 @@ type WorkerConfig struct {
 	ProcessInterval time.Duration
 }
 
-// DefaultWorkerConfig returns sensible defaults
+// DefaultWorkerConfig returns sensible defaults.
 func DefaultWorkerConfig() WorkerConfig {
 	return WorkerConfig{
 		NumWorkers:      4,
@@ -39,7 +39,7 @@ func DefaultWorkerConfig() WorkerConfig {
 	}
 }
 
-// newWorker creates a new replication worker
+// newWorker creates a new replication worker.
 func newWorker(id int, queue *Queue, service *Service) *Worker {
 	return &Worker{
 		id:      id,
@@ -50,19 +50,20 @@ func newWorker(id int, queue *Queue, service *Service) *Worker {
 	}
 }
 
-// Start starts the worker
+// Start starts the worker.
 func (w *Worker) Start(ctx context.Context) {
 	w.wg.Add(1)
+
 	go w.run(ctx)
 }
 
-// Stop stops the worker
+// Stop stops the worker.
 func (w *Worker) Stop() {
 	close(w.stopCh)
 	w.wg.Wait()
 }
 
-// run is the main worker loop
+// run is the main worker loop.
 func (w *Worker) run(ctx context.Context) {
 	defer w.wg.Done()
 
@@ -78,6 +79,7 @@ func (w *Worker) run(ctx context.Context) {
 				if ctx.Err() != nil {
 					return
 				}
+
 				continue
 			}
 
@@ -90,7 +92,7 @@ func (w *Worker) run(ctx context.Context) {
 	}
 }
 
-// processItem processes a single queue item
+// processItem processes a single queue item.
 func (w *Worker) processItem(ctx context.Context, item *QueueItem) error {
 	// Get the replication config for this bucket
 	config, err := w.service.GetConfig(ctx, item.Bucket)
@@ -100,6 +102,7 @@ func (w *Worker) processItem(ctx context.Context, item *QueueItem) error {
 
 	// Find the rule that applies to this item
 	var rule *Rule
+
 	for i := range config.Rules {
 		if config.Rules[i].ID == item.RuleID {
 			rule = &config.Rules[i]
@@ -131,13 +134,14 @@ func (w *Worker) processItem(ctx context.Context, item *QueueItem) error {
 	}
 }
 
-// replicateObject replicates an object to the destination
+// replicateObject replicates an object to the destination.
 func (w *Worker) replicateObject(ctx context.Context, client *minio.Client, item *QueueItem, rule *Rule) error {
 	// Get the source object from our backend
 	reader, err := w.service.getSourceObject(ctx, item.Bucket, item.Key, item.VersionID)
 	if err != nil {
 		return fmt.Errorf("failed to get source object: %w", err)
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Get source object info
@@ -179,7 +183,7 @@ func (w *Worker) replicateObject(ctx context.Context, client *minio.Client, item
 	return nil
 }
 
-// replicateDelete replicates a delete operation to the destination
+// replicateDelete replicates a delete operation to the destination.
 func (w *Worker) replicateDelete(ctx context.Context, client *minio.Client, item *QueueItem, rule *Rule) error {
 	// Check if we should replicate delete markers
 	if !rule.ShouldReplicateDeleteMarkers() {
@@ -200,7 +204,7 @@ func (w *Worker) replicateDelete(ctx context.Context, client *minio.Client, item
 	return nil
 }
 
-// getClient gets or creates a minio client for the destination
+// getClient gets or creates a minio client for the destination.
 func (w *Worker) getClient(dest Destination) (*minio.Client, error) {
 	key := fmt.Sprintf("%s:%s", dest.Endpoint, dest.Bucket)
 
@@ -221,6 +225,7 @@ func (w *Worker) getClient(dest Destination) (*minio.Client, error) {
 	}
 
 	// Create new client
+	//nolint:gosec // G402: InsecureSkipVerify only true for non-SSL connections (no TLS used)
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: !dest.UseSSL, // Only skip for non-SSL
@@ -243,28 +248,29 @@ func (w *Worker) getClient(dest Destination) (*minio.Client, error) {
 	}
 
 	w.clients[key] = client
+
 	return client, nil
 }
 
-// ObjectInfo holds object information for replication
+// ObjectInfo holds object information for replication.
 type ObjectInfo struct {
+	UserMetadata map[string]string
 	Key          string
-	Size         int64
 	ContentType  string
 	ETag         string
-	UserMetadata map[string]string
 	VersionID    string
+	Size         int64
 }
 
-// WorkerPool manages a pool of replication workers
+// WorkerPool manages a pool of replication workers.
 type WorkerPool struct {
-	workers []*Worker
 	queue   *Queue
 	service *Service
+	workers []*Worker
 	config  WorkerConfig
 }
 
-// NewWorkerPool creates a new worker pool
+// NewWorkerPool creates a new worker pool.
 func NewWorkerPool(queue *Queue, service *Service, cfg WorkerConfig) *WorkerPool {
 	if cfg.NumWorkers <= 0 {
 		cfg.NumWorkers = 4
@@ -277,37 +283,32 @@ func NewWorkerPool(queue *Queue, service *Service, cfg WorkerConfig) *WorkerPool
 		config:  cfg,
 	}
 
-	for i := 0; i < cfg.NumWorkers; i++ {
+	for i := range cfg.NumWorkers {
 		pool.workers[i] = newWorker(i, queue, service)
 	}
 
 	return pool
 }
 
-// Start starts all workers in the pool
+// Start starts all workers in the pool.
 func (p *WorkerPool) Start(ctx context.Context) {
 	for _, w := range p.workers {
 		w.Start(ctx)
 	}
 }
 
-// Stop stops all workers in the pool
+// Stop stops all workers in the pool.
 func (p *WorkerPool) Stop() {
 	for _, w := range p.workers {
 		w.Stop()
 	}
 }
 
-// ReplicationMetrics holds replication metrics
+// ReplicationMetrics holds replication metrics.
 type ReplicationMetrics struct {
-	// TotalReplicated is the total number of objects replicated
-	TotalReplicated int64
-	// TotalFailed is the total number of failed replications
-	TotalFailed int64
-	// BytesReplicated is the total bytes replicated
-	BytesReplicated int64
-	// AverageLatency is the average replication latency
-	AverageLatency time.Duration
-	// LastReplicationTime is when the last replication completed
 	LastReplicationTime time.Time
+	TotalReplicated     int64
+	TotalFailed         int64
+	BytesReplicated     int64
+	AverageLatency      time.Duration
 }

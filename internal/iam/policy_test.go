@@ -36,6 +36,7 @@ func TestStringOrSliceUnmarshalJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var s StringOrSlice
+
 			err := json.Unmarshal([]byte(tt.input), &s)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, s)
@@ -46,8 +47,8 @@ func TestStringOrSliceUnmarshalJSON(t *testing.T) {
 func TestStringOrSliceMarshalJSON(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    StringOrSlice
 		expected string
+		input    StringOrSlice
 	}{
 		{
 			name:     "single value",
@@ -314,7 +315,7 @@ func TestUserPolicyAttachment(t *testing.T) {
 		require.NoError(t, err)
 
 		policies := pm.GetUserPolicies(ctx, "user1")
-		assert.Len(t, policies, 0)
+		assert.Empty(t, policies)
 	})
 
 	t.Run("detach non-attached policy", func(t *testing.T) {
@@ -368,10 +369,10 @@ func TestValidatePolicy(t *testing.T) {
 	pm := NewPolicyManager(nil)
 
 	tests := []struct {
-		name        string
 		policy      *Policy
-		expectError bool
+		name        string
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name:        "nil policy",
@@ -524,6 +525,7 @@ func TestValidatePolicy(t *testing.T) {
 			err := pm.validatePolicy(tt.policy)
 			if tt.expectError {
 				assert.Error(t, err)
+
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
@@ -727,9 +729,9 @@ func TestConditionMatches(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name      string
 		condition map[string]interface{}
 		evalCtx   *EvaluationContext
+		name      string
 		expected  bool
 	}{
 		{
@@ -938,7 +940,7 @@ func TestConditionKeys(t *testing.T) {
 	}
 }
 
-// TestIPMatchesIPv6 tests IPv6 CIDR matching functionality
+// TestIPMatchesIPv6 tests IPv6 CIDR matching functionality.
 func TestIPMatchesIPv6(t *testing.T) {
 	pm := NewPolicyManager(nil)
 	pe := NewPolicyEvaluator(pm)
@@ -997,7 +999,7 @@ func TestIPMatchesIPv6(t *testing.T) {
 	}
 }
 
-// TestIPMatchesIPv6SpecialAddresses tests special IPv6 address handling
+// TestIPMatchesIPv6SpecialAddresses tests special IPv6 address handling.
 func TestIPMatchesIPv6SpecialAddresses(t *testing.T) {
 	pm := NewPolicyManager(nil)
 	pe := NewPolicyEvaluator(pm)
@@ -1039,7 +1041,7 @@ func TestIPMatchesIPv6SpecialAddresses(t *testing.T) {
 	}
 }
 
-// TestIPMatchesIPv6Normalization tests that different representations of the same address match
+// TestIPMatchesIPv6Normalization tests that different representations of the same address match.
 func TestIPMatchesIPv6Normalization(t *testing.T) {
 	pm := NewPolicyManager(nil)
 	pe := NewPolicyEvaluator(pm)

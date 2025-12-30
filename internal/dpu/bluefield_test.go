@@ -33,6 +33,7 @@ func TestNewService(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	require.NotNil(t, service)
 	defer service.Close()
 
@@ -44,6 +45,7 @@ func TestNewServiceWithNilConfig(t *testing.T) {
 
 	service, err := NewService(nil, backend)
 	require.NoError(t, err)
+
 	require.NotNil(t, service)
 	defer service.Close()
 
@@ -56,6 +58,7 @@ func TestNewServiceWithNilBackend(t *testing.T) {
 
 	service, err := NewService(config, nil)
 	require.NoError(t, err)
+
 	require.NotNil(t, service)
 	defer service.Close()
 
@@ -81,6 +84,7 @@ func TestServiceGetDPUInfo(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	dpu := service.GetDPUInfo()
@@ -103,6 +107,7 @@ func TestServiceSelectSpecificDPU(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	dpu := service.GetDPUInfo()
@@ -119,22 +124,26 @@ func TestServiceGetServices(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	services := service.GetServices()
-	assert.Greater(t, len(services), 0)
+	assert.NotEmpty(t, services)
 
 	// Check that offload services are running
 	hasStorage := false
 	hasCrypto := false
+
 	for _, svc := range services {
 		if svc.Type == OffloadStorage {
 			hasStorage = true
 		}
+
 		if svc.Type == OffloadCrypto {
 			hasCrypto = true
 		}
 	}
+
 	assert.True(t, hasStorage)
 	assert.True(t, hasCrypto)
 }
@@ -146,6 +155,7 @@ func TestServiceIsOffloadAvailable(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	assert.True(t, service.IsOffloadAvailable(OffloadCrypto))
@@ -156,11 +166,13 @@ func TestServiceIsOffloadAvailable(t *testing.T) {
 func TestServiceEncryptDecrypt(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000) // 1μs for faster tests
+
 	config := DefaultConfig()
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -181,11 +193,13 @@ func TestServiceEncryptDecrypt(t *testing.T) {
 func TestServiceCompressDecompress(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000)
+
 	config := DefaultConfig()
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -207,6 +221,7 @@ func TestServiceCompressDecompress(t *testing.T) {
 func TestServiceFallbackOnCryptoDisabled(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000)
+
 	config := DefaultConfig()
 	config.HealthCheckInterval = 0
 	config.CryptoOffload.Enable = false
@@ -214,6 +229,7 @@ func TestServiceFallbackOnCryptoDisabled(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -226,18 +242,20 @@ func TestServiceFallbackOnCryptoDisabled(t *testing.T) {
 	assert.NotNil(t, result)
 
 	metrics := service.GetMetrics()
-	assert.Greater(t, metrics.Fallbacks, int64(0))
+	assert.Positive(t, metrics.Fallbacks)
 }
 
 func TestServiceCompressMinSize(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000)
+
 	config := DefaultConfig()
 	config.HealthCheckInterval = 0
 	config.CompressOffload.MinSize = 1000 // Require 1KB minimum
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -248,17 +266,19 @@ func TestServiceCompressMinSize(t *testing.T) {
 	require.NoError(t, err)
 
 	metrics := service.GetMetrics()
-	assert.Greater(t, metrics.Fallbacks, int64(0))
+	assert.Positive(t, metrics.Fallbacks)
 }
 
 func TestServiceMetrics(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000)
+
 	config := DefaultConfig()
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -273,8 +293,8 @@ func TestServiceMetrics(t *testing.T) {
 	metrics := service.GetMetrics()
 	assert.Equal(t, int64(2), metrics.CryptoOps)
 	assert.Equal(t, int64(1), metrics.CompressOps)
-	assert.Greater(t, metrics.CryptoBytes, int64(0))
-	assert.Greater(t, metrics.CompressBytes, int64(0))
+	assert.Positive(t, metrics.CryptoBytes)
+	assert.Positive(t, metrics.CompressBytes)
 }
 
 func TestServiceGetStatus(t *testing.T) {
@@ -284,6 +304,7 @@ func TestServiceGetStatus(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	status := service.GetStatus()
@@ -353,6 +374,7 @@ func TestSimulatedBackendInit(t *testing.T) {
 
 func TestSimulatedBackendDetectDPUs(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -381,6 +403,7 @@ func TestSimulatedBackendNotInitialized(t *testing.T) {
 
 func TestSimulatedBackendSelectDPU(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -395,6 +418,7 @@ func TestSimulatedBackendSelectDPU(t *testing.T) {
 
 func TestSimulatedBackendStartStopService(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -425,6 +449,7 @@ func TestSimulatedBackendStartStopService(t *testing.T) {
 
 func TestSimulatedBackendUnsupportedOffload(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -445,6 +470,7 @@ func TestSimulatedBackendUnsupportedOffload(t *testing.T) {
 func TestSimulatedBackendEncryptDecrypt(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.Init()
+
 	backend.SetSimulatedLatency(1000)
 	defer backend.Close()
 
@@ -469,6 +495,7 @@ func TestSimulatedBackendEncryptDecrypt(t *testing.T) {
 func TestSimulatedBackendCompressDecompress(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.Init()
+
 	backend.SetSimulatedLatency(1000)
 	defer backend.Close()
 
@@ -491,6 +518,7 @@ func TestSimulatedBackendCompressDecompress(t *testing.T) {
 
 func TestSimulatedBackendHealthCheck(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -507,6 +535,7 @@ func TestSimulatedBackendHealthCheck(t *testing.T) {
 func TestSimulatedBackendGetMetrics(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.Init()
+
 	backend.SetSimulatedLatency(5000)
 	defer backend.Close()
 
@@ -540,6 +569,7 @@ func TestServiceWithCustomDPUs(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	dpu := service.GetDPUInfo()

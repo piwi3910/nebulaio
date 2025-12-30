@@ -2,8 +2,8 @@ package admin
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -11,7 +11,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metadata"
 )
 
-// ClusterStore defines the interface for cluster operations
+// ClusterStore defines the interface for cluster operations.
 type ClusterStore interface {
 	IsLeader() bool
 	LeaderAddress() (string, error)
@@ -27,13 +27,13 @@ type ClusterStore interface {
 	AppliedIndex() (uint64, error)
 }
 
-// ClusterHandler handles cluster-related admin API requests
+// ClusterHandler handles cluster-related admin API requests.
 type ClusterHandler struct {
 	discovery *cluster.Discovery
 	store     ClusterStore
 }
 
-// NewClusterHandler creates a new cluster handler
+// NewClusterHandler creates a new cluster handler.
 func NewClusterHandler(discovery *cluster.Discovery, store ClusterStore) *ClusterHandler {
 	return &ClusterHandler{
 		discovery: discovery,
@@ -55,8 +55,10 @@ func (h *ClusterHandler) RegisterClusterRoutes(r chi.Router) {
 	r.Get("/cluster/health", h.GetClusterHealth)
 }
 
-// NodeResponse represents a node in API responses
+// NodeResponse represents a node in API responses.
 type NodeResponse struct {
+	JoinedAt   time.Time `json:"joined_at,omitempty"`
+	LastSeen   time.Time `json:"last_seen,omitempty"`
 	NodeID     string    `json:"node_id"`
 	RaftAddr   string    `json:"raft_addr"`
 	S3Addr     string    `json:"s3_addr"`
@@ -67,22 +69,22 @@ type NodeResponse struct {
 	Status     string    `json:"status"`
 	IsLeader   bool      `json:"is_leader"`
 	IsVoter    bool      `json:"is_voter"`
-	JoinedAt   time.Time `json:"joined_at,omitempty"`
-	LastSeen   time.Time `json:"last_seen,omitempty"`
 }
 
-// ListNodesResponse represents the response for listing nodes
+// ListNodesResponse represents the response for listing nodes.
 type ListNodesResponse struct {
+	LeaderID     string          `json:"leader_id"`
 	Nodes        []*NodeResponse `json:"nodes"`
 	TotalNodes   int             `json:"total_nodes"`
 	HealthyNodes int             `json:"healthy_nodes"`
-	LeaderID     string          `json:"leader_id"`
 }
 
-// ListNodes returns all cluster nodes
+// ListNodes returns all cluster nodes.
 func (h *ClusterHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
-	var nodes []*NodeResponse
-	var healthyCount int
+	var (
+		nodes        []*NodeResponse
+		healthyCount int
+	)
 
 	// Get leader ID
 	leaderID := ""
@@ -92,10 +94,11 @@ func (h *ClusterHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
 
 	// Get cluster configuration to determine voters
 	voterMap := make(map[string]bool)
+
 	if h.store != nil {
 		if config, err := h.store.GetClusterConfiguration(); err == nil {
 			for _, server := range config.Servers {
-				voterMap[fmt.Sprintf("%d", server.ID)] = server.IsVoter
+				voterMap[strconv.FormatUint(server.ID, 10)] = server.IsVoter
 			}
 		}
 	}
@@ -138,14 +141,14 @@ func (h *ClusterHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// AddNodeRequest represents a request to add a node
+// AddNodeRequest represents a request to add a node.
 type AddNodeRequest struct {
 	NodeID   string `json:"node_id"`
 	RaftAddr string `json:"raft_addr"`
 	AsVoter  bool   `json:"as_voter"` // true for voter, false for non-voter
 }
 
-// AddNode adds a new node to the cluster
+// AddNode adds a new node to the cluster.
 func (h *ClusterHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {
 		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
@@ -159,6 +162,7 @@ func (h *ClusterHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 			"leader":  leaderAddr,
 			"message": "Request must be sent to the leader",
 		})
+
 		return
 	}
 
@@ -191,7 +195,7 @@ func (h *ClusterHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// RemoveNode removes a node from the cluster
+// RemoveNode removes a node from the cluster.
 func (h *ClusterHandler) RemoveNode(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {
 		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
@@ -205,6 +209,7 @@ func (h *ClusterHandler) RemoveNode(w http.ResponseWriter, r *http.Request) {
 			"leader":  leaderAddr,
 			"message": "Request must be sent to the leader",
 		})
+
 		return
 	}
 
@@ -214,7 +219,8 @@ func (h *ClusterHandler) RemoveNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.RemoveServer(nodeID); err != nil {
+	err := h.store.RemoveServer(nodeID)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -225,14 +231,14 @@ func (h *ClusterHandler) RemoveNode(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// LeaderResponse represents the leader information
+// LeaderResponse represents the leader information.
 type LeaderResponse struct {
 	LeaderID   string `json:"leader_id"`
 	LeaderAddr string `json:"leader_addr"`
 	IsLocal    bool   `json:"is_local"`
 }
 
-// GetLeader returns the current cluster leader
+// GetLeader returns the current cluster leader.
 func (h *ClusterHandler) GetLeader(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {
 		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
@@ -256,12 +262,12 @@ func (h *ClusterHandler) GetLeader(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// TransferLeadershipRequest represents a request to transfer leadership
+// TransferLeadershipRequest represents a request to transfer leadership.
 type TransferLeadershipRequest struct {
 	TargetID string `json:"target_id"`
 }
 
-// TransferLeadership transfers leadership to another node
+// TransferLeadership transfers leadership to another node.
 func (h *ClusterHandler) TransferLeadership(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {
 		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
@@ -292,8 +298,9 @@ func (h *ClusterHandler) TransferLeadership(w http.ResponseWriter, r *http.Reque
 	}
 
 	var targetAddr string
+
 	for _, server := range config.Servers {
-		if fmt.Sprintf("%d", server.ID) == req.TargetID {
+		if strconv.FormatUint(server.ID, 10) == req.TargetID {
 			targetAddr = server.Address
 			break
 		}
@@ -315,19 +322,19 @@ func (h *ClusterHandler) TransferLeadership(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// RaftServerInfo represents a Raft server in the configuration
+// RaftServerInfo represents a Raft server in the configuration.
 type RaftServerInfo struct {
 	ID       string `json:"id"`
 	Address  string `json:"address"`
 	Suffrage string `json:"suffrage"` // Voter, Nonvoter, Staging
 }
 
-// RaftConfigResponse represents the Raft configuration
+// RaftConfigResponse represents the Raft configuration.
 type RaftConfigResponse struct {
 	Servers []RaftServerInfo `json:"servers"`
 }
 
-// GetRaftConfiguration returns the current Raft configuration
+// GetRaftConfiguration returns the current Raft configuration.
 func (h *ClusterHandler) GetRaftConfiguration(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {
 		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
@@ -346,8 +353,9 @@ func (h *ClusterHandler) GetRaftConfiguration(w http.ResponseWriter, r *http.Req
 		if server.IsVoter {
 			suffrage = "Voter"
 		}
+
 		servers = append(servers, RaftServerInfo{
-			ID:       fmt.Sprintf("%d", server.ID),
+			ID:       strconv.FormatUint(server.ID, 10),
 			Address:  server.Address,
 			Suffrage: suffrage,
 		})
@@ -360,7 +368,7 @@ func (h *ClusterHandler) GetRaftConfiguration(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, response)
 }
 
-// GetRaftStats returns Raft statistics
+// GetRaftStats returns Raft statistics.
 func (h *ClusterHandler) GetRaftStats(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {
 		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
@@ -371,14 +379,15 @@ func (h *ClusterHandler) GetRaftStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
-// TriggerSnapshot triggers a manual Raft snapshot
+// TriggerSnapshot triggers a manual Raft snapshot.
 func (h *ClusterHandler) TriggerSnapshot(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {
 		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
 		return
 	}
 
-	if err := h.store.Snapshot(); err != nil {
+	err := h.store.Snapshot()
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -388,20 +397,20 @@ func (h *ClusterHandler) TriggerSnapshot(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// ClusterHealthResponse represents the cluster health status
+// ClusterHealthResponse represents the cluster health status.
 type ClusterHealthResponse struct {
-	Healthy      bool   `json:"healthy"`
 	State        string `json:"state"`
-	IsLeader     bool   `json:"is_leader"`
 	LeaderID     string `json:"leader_id"`
 	TotalNodes   int    `json:"total_nodes"`
 	HealthyNodes int    `json:"healthy_nodes"`
 	LastIndex    uint64 `json:"last_index"`
 	AppliedIndex uint64 `json:"applied_index"`
 	CommitIndex  uint64 `json:"commit_index"`
+	Healthy      bool   `json:"healthy"`
+	IsLeader     bool   `json:"is_leader"`
 }
 
-// GetClusterHealth returns the cluster health status
+// GetClusterHealth returns the cluster health status.
 func (h *ClusterHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {
 		writeError(w, "Store not initialized", http.StatusServiceUnavailable)
@@ -413,17 +422,21 @@ func (h *ClusterHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request
 	isLeader := h.store.IsLeader()
 
 	// Count healthy nodes
-	var totalNodes, healthyNodes int
-	var leaderID string
+	var (
+		totalNodes, healthyNodes int
+		leaderID                 string
+	)
 
 	if h.discovery != nil {
 		members := h.discovery.Members()
+
 		totalNodes = len(members)
 		for _, m := range members {
 			if m.Status == "alive" {
 				healthyNodes++
 			}
 		}
+
 		leaderID = h.discovery.LeaderID()
 	}
 
@@ -453,8 +466,11 @@ func (h *ClusterHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request
 	writeJSON(w, statusCode, response)
 }
 
-// NodeMetricsResponse represents metrics for a specific node
+// NodeMetricsResponse represents metrics for a specific node.
 type NodeMetricsResponse struct {
+	JoinedAt      time.Time              `json:"joined_at"`
+	LastHeartbeat time.Time              `json:"last_heartbeat"`
+	Storage       map[string]interface{} `json:"storage,omitempty"`
 	NodeID        string                 `json:"node_id"`
 	Name          string                 `json:"name,omitempty"`
 	Address       string                 `json:"address"`
@@ -462,12 +478,9 @@ type NodeMetricsResponse struct {
 	Status        string                 `json:"status"`
 	IsLeader      bool                   `json:"is_leader"`
 	IsVoter       bool                   `json:"is_voter"`
-	JoinedAt      time.Time              `json:"joined_at"`
-	LastHeartbeat time.Time              `json:"last_heartbeat"`
-	Storage       map[string]interface{} `json:"storage,omitempty"`
 }
 
-// GetNodeMetrics returns metrics for a specific node
+// GetNodeMetrics returns metrics for a specific node.
 func (h *ClusterHandler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) {
 	nodeID := chi.URLParam(r, "nodeId")
 
@@ -481,16 +494,18 @@ func (h *ClusterHandler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) 
 
 	// Get cluster configuration to determine voters
 	voterMap := make(map[string]bool)
+
 	if h.store != nil {
 		if config, err := h.store.GetClusterConfiguration(); err == nil {
 			for _, server := range config.Servers {
-				voterMap[fmt.Sprintf("%d", server.ID)] = server.IsVoter
+				voterMap[strconv.FormatUint(server.ID, 10)] = server.IsVoter
 			}
 		}
 	}
 
 	// Find the specific node
 	var targetMember *cluster.NodeInfo
+
 	for _, member := range h.discovery.Members() {
 		if member.NodeID == nodeID {
 			targetMember = member

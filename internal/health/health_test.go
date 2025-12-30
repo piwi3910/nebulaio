@@ -34,6 +34,7 @@ func TestCheckHealthy(t *testing.T) {
 		RaftState:     "Leader",
 		LeaderAddress: "localhost:9003",
 	})
+
 	storage := mocks.NewMockStorageBackend()
 	storage.SetStorageInfo(&backend.StorageInfo{
 		TotalBytes: 1000000000,
@@ -63,6 +64,7 @@ func TestCheckDegraded(t *testing.T) {
 		RaftState:     "Candidate",
 		LeaderAddress: "",
 	})
+
 	storage := mocks.NewMockStorageBackend()
 	storage.SetStorageInfo(&backend.StorageInfo{
 		TotalBytes: 1000000000,
@@ -310,6 +312,7 @@ func TestCaching(t *testing.T) {
 		RaftState:     "Leader",
 		LeaderAddress: "localhost:9003",
 	})
+
 	storage := mocks.NewMockStorageBackend()
 
 	checker := NewChecker(store, storage)
@@ -350,6 +353,7 @@ func TestHealthHandler(t *testing.T) {
 			RaftState:     "Leader",
 			LeaderAddress: "localhost:9003",
 		})
+
 		storage := mocks.NewMockStorageBackend()
 		storage.SetStorageInfo(&backend.StorageInfo{
 			TotalBytes: 1000000000,
@@ -367,6 +371,7 @@ func TestHealthHandler(t *testing.T) {
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 		var response map[string]string
+
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		require.NoError(t, err)
 		assert.Contains(t, response, "status")
@@ -385,6 +390,7 @@ func TestHealthHandler(t *testing.T) {
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 		var response map[string]string
+
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		require.NoError(t, err)
 		assert.Contains(t, response, "status")
@@ -410,6 +416,7 @@ func TestReadinessHandler(t *testing.T) {
 	t.Run("ready", func(t *testing.T) {
 		store := mocks.NewMockMetadataStore()
 		store.SetIsLeader(true)
+
 		storage := mocks.NewMockStorageBackend()
 		checker := NewChecker(store, storage)
 		handler := NewHandler(checker)
@@ -426,6 +433,7 @@ func TestReadinessHandler(t *testing.T) {
 		store := mocks.NewMockMetadataStore()
 		store.SetIsLeader(false)
 		store.SetLeaderAddress("")
+
 		storage := mocks.NewMockStorageBackend()
 		checker := NewChecker(store, storage)
 		handler := NewHandler(checker)
@@ -447,6 +455,7 @@ func TestDetailedHandler(t *testing.T) {
 		RaftState:     "Leader",
 		LeaderAddress: "localhost:9003",
 	})
+
 	storage := mocks.NewMockStorageBackend()
 	storage.SetStorageInfo(&backend.StorageInfo{
 		TotalBytes: 1000000000,
@@ -465,6 +474,7 @@ func TestDetailedHandler(t *testing.T) {
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 	var status HealthStatus
+
 	err := json.Unmarshal(w.Body.Bytes(), &status)
 	require.NoError(t, err)
 	assert.Equal(t, StatusHealthy, status.Status)

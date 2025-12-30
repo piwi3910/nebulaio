@@ -24,80 +24,80 @@ import (
 	"github.com/google/uuid"
 )
 
-// contextKey is a custom type for context keys to avoid collisions
+// contextKey is a custom type for context keys to avoid collisions.
 type contextKey string
 
-// ClientCertContextKey is the context key for client certificates
+// ClientCertContextKey is the context key for client certificates.
 const ClientCertContextKey contextKey = "client_cert"
 
-// CertificateType represents the type of certificate
+// CertificateType represents the type of certificate.
 type CertificateType string
 
 const (
-	CertTypeCA       CertificateType = "CA"
-	CertTypeServer   CertificateType = "SERVER"
-	CertTypeClient   CertificateType = "CLIENT"
-	CertTypePeer     CertificateType = "PEER" // Both server and client
+	CertTypeCA     CertificateType = "CA"
+	CertTypeServer CertificateType = "SERVER"
+	CertTypeClient CertificateType = "CLIENT"
+	CertTypePeer   CertificateType = "PEER" // Both server and client
 )
 
-// CertificateInfo contains information about a certificate
+// CertificateInfo contains information about a certificate.
 type CertificateInfo struct {
-	ID            string          `json:"id"`
-	Type          CertificateType `json:"type"`
-	CommonName    string          `json:"common_name"`
-	Organization  []string        `json:"organization"`
-	DNSNames      []string        `json:"dns_names"`
-	IPAddresses   []net.IP        `json:"ip_addresses"`
-	SerialNumber  string          `json:"serial_number"`
-	NotBefore     time.Time       `json:"not_before"`
-	NotAfter      time.Time       `json:"not_after"`
-	IssuedBy      string          `json:"issued_by"`
-	Fingerprint   string          `json:"fingerprint"`
-	KeyUsage      x509.KeyUsage   `json:"key_usage"`
+	NotBefore     time.Time          `json:"not_before"`
+	NotAfter      time.Time          `json:"not_after"`
+	RevokedAt     *time.Time         `json:"revoked_at,omitempty"`
+	Fingerprint   string             `json:"fingerprint"`
+	Type          CertificateType    `json:"type"`
+	CommonName    string             `json:"common_name"`
+	RevokedReason string             `json:"revoked_reason,omitempty"`
+	ID            string             `json:"id"`
+	SerialNumber  string             `json:"serial_number"`
+	IssuedBy      string             `json:"issued_by"`
+	DNSNames      []string           `json:"dns_names"`
 	ExtKeyUsage   []x509.ExtKeyUsage `json:"ext_key_usage"`
-	IsRevoked     bool            `json:"is_revoked"`
-	RevokedAt     *time.Time      `json:"revoked_at,omitempty"`
-	RevokedReason string          `json:"revoked_reason,omitempty"`
+	IPAddresses   []net.IP           `json:"ip_addresses"`
+	Organization  []string           `json:"organization"`
+	KeyUsage      x509.KeyUsage      `json:"key_usage"`
+	IsRevoked     bool               `json:"is_revoked"`
 }
 
-// CertificateBundle contains a certificate and its private key
+// CertificateBundle contains a certificate and its private key.
 type CertificateBundle struct {
-	Certificate    *x509.Certificate
 	PrivateKey     crypto.PrivateKey
+	Certificate    *x509.Certificate
+	Info           *CertificateInfo
 	CertificatePEM []byte
 	PrivateKeyPEM  []byte
-	Info           *CertificateInfo
 }
 
-// MTLSConfig contains configuration for mTLS
+// MTLSConfig contains configuration for mTLS.
 type MTLSConfig struct {
 	CertDir              string        `json:"cert_dir"`
+	KeyAlgorithm         string        `json:"key_algorithm"`
+	Organization         []string      `json:"organization"`
 	CAValidityDuration   time.Duration `json:"ca_validity_duration"`
 	CertValidityDuration time.Duration `json:"cert_validity_duration"`
-	KeyAlgorithm         string        `json:"key_algorithm"` // ECDSA-P256, ECDSA-P384, RSA-2048, RSA-4096
-	Organization         []string      `json:"organization"`
 	AutoRenewBefore      time.Duration `json:"auto_renew_before"`
+	MinTLSVersion        uint16        `json:"min_tls_version"`
 	EnableOCSP           bool          `json:"enable_ocsp"`
 	EnableCRL            bool          `json:"enable_crl"`
 	RequireClientCert    bool          `json:"require_client_cert"`
-	MinTLSVersion        uint16        `json:"min_tls_version"`
 }
 
-// MTLSManager manages mTLS certificates and connections
+// MTLSManager manages mTLS certificates and connections.
 type MTLSManager struct {
-	mu              sync.RWMutex
+	storage         CertificateStorage
 	config          *MTLSConfig
 	caCert          *CertificateBundle
 	certificates    map[string]*CertificateBundle
 	revokedCerts    map[string]*CertificateInfo
 	certPool        *x509.CertPool
-	storage         CertificateStorage
 	renewalCallback func(bundle *CertificateBundle)
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
+	mu              sync.RWMutex
 }
 
-// CertificateStorage defines the interface for certificate persistence
+// CertificateStorage defines the interface for certificate persistence.
 type CertificateStorage interface {
 	StoreCA(ctx context.Context, bundle *CertificateBundle) error
 	LoadCA(ctx context.Context) (*CertificateBundle, error)
@@ -108,7 +108,7 @@ type CertificateStorage interface {
 	GetRevocations(ctx context.Context) ([]*CertificateInfo, error)
 }
 
-// NewMTLSManager creates a new mTLS manager
+// NewMTLSManager creates a new mTLS manager.
 func NewMTLSManager(config *MTLSConfig, storage CertificateStorage) (*MTLSManager, error) {
 	if config == nil {
 		config = &MTLSConfig{
@@ -127,7 +127,8 @@ func NewMTLSManager(config *MTLSConfig, storage CertificateStorage) (*MTLSManage
 
 	// Create cert directory if needed
 	if config.CertDir != "" {
-		if err := os.MkdirAll(config.CertDir, 0700); err != nil {
+		err := os.MkdirAll(config.CertDir, 0700)
+		if err != nil {
 			return nil, fmt.Errorf("failed to create cert directory: %w", err)
 		}
 	}
@@ -152,12 +153,13 @@ func NewMTLSManager(config *MTLSConfig, storage CertificateStorage) (*MTLSManage
 
 	// Start renewal checker
 	m.wg.Add(1)
+
 	go m.renewalChecker()
 
 	return m, nil
 }
 
-// InitializeCA initializes or loads the Certificate Authority
+// InitializeCA initializes or loads the Certificate Authority.
 func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*CertificateBundle, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -173,6 +175,7 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 		if err == nil && ca != nil {
 			m.caCert = ca
 			m.certPool.AddCert(ca.Certificate)
+
 			return ca, nil
 		}
 	}
@@ -186,6 +189,7 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 		if err == nil {
 			m.caCert = ca
 			m.certPool.AddCert(ca.Certificate)
+
 			return ca, nil
 		}
 	}
@@ -197,6 +201,7 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 	}
 
 	now := time.Now()
+
 	serialNumber, err := generateSerialNumber()
 	if err != nil {
 		return nil, err
@@ -227,6 +232,7 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+
 	keyPEM, err := encodePrivateKey(privateKey)
 	if err != nil {
 		return nil, err
@@ -257,13 +263,15 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 	if err := os.WriteFile(caCertPath, certPEM, 0644); err != nil {
 		return nil, err
 	}
+
 	if err := os.WriteFile(caKeyPath, keyPEM, 0600); err != nil {
 		return nil, err
 	}
 
 	// Save to storage
 	if m.storage != nil {
-		if err := m.storage.StoreCA(ctx, bundle); err != nil {
+		err := m.storage.StoreCA(ctx, bundle)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -271,7 +279,7 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 	return bundle, nil
 }
 
-// IssueCertificate issues a new certificate signed by the CA
+// IssueCertificate issues a new certificate signed by the CA.
 func (m *MTLSManager) IssueCertificate(ctx context.Context, certType CertificateType, commonName string, dnsNames []string, ipAddresses []net.IP) (*CertificateBundle, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -286,6 +294,7 @@ func (m *MTLSManager) IssueCertificate(ctx context.Context, certType Certificate
 	}
 
 	now := time.Now()
+
 	serialNumber, err := generateSerialNumber()
 	if err != nil {
 		return nil, err
@@ -329,6 +338,7 @@ func (m *MTLSManager) IssueCertificate(ctx context.Context, certType Certificate
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+
 	keyPEM, err := encodePrivateKey(privateKey)
 	if err != nil {
 		return nil, err
@@ -359,18 +369,21 @@ func (m *MTLSManager) IssueCertificate(ctx context.Context, certType Certificate
 	m.certificates[bundle.Info.ID] = bundle
 
 	// Save to disk
-	certPath := filepath.Join(m.config.CertDir, fmt.Sprintf("%s.crt", bundle.Info.ID))
-	keyPath := filepath.Join(m.config.CertDir, fmt.Sprintf("%s.key", bundle.Info.ID))
+	certPath := filepath.Join(m.config.CertDir, bundle.Info.ID+".crt")
+	keyPath := filepath.Join(m.config.CertDir, bundle.Info.ID+".key")
+
 	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
 		return nil, err
 	}
+
 	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
 		return nil, err
 	}
 
 	// Store in storage
 	if m.storage != nil {
-		if err := m.storage.StoreCertificate(ctx, bundle); err != nil {
+		err := m.storage.StoreCertificate(ctx, bundle)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -378,7 +391,7 @@ func (m *MTLSManager) IssueCertificate(ctx context.Context, certType Certificate
 	return bundle, nil
 }
 
-// RevokeCertificate revokes a certificate
+// RevokeCertificate revokes a certificate.
 func (m *MTLSManager) RevokeCertificate(ctx context.Context, certID string, reason string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -396,7 +409,8 @@ func (m *MTLSManager) RevokeCertificate(ctx context.Context, certID string, reas
 	m.revokedCerts[bundle.Info.SerialNumber] = bundle.Info
 
 	if m.storage != nil {
-		if err := m.storage.StoreRevocation(ctx, bundle.Info); err != nil {
+		err := m.storage.StoreRevocation(ctx, bundle.Info)
+		if err != nil {
 			return err
 		}
 	}
@@ -404,16 +418,17 @@ func (m *MTLSManager) RevokeCertificate(ctx context.Context, certID string, reas
 	return nil
 }
 
-// IsRevoked checks if a certificate is revoked
+// IsRevoked checks if a certificate is revoked.
 func (m *MTLSManager) IsRevoked(serialNumber string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	_, revoked := m.revokedCerts[serialNumber]
+
 	return revoked
 }
 
-// GetServerTLSConfig returns a TLS config for servers
+// GetServerTLSConfig returns a TLS config for servers.
 func (m *MTLSManager) GetServerTLSConfig(bundle *CertificateBundle) (*tls.Config, error) {
 	if m.caCert == nil {
 		return nil, errors.New("CA not initialized")
@@ -429,6 +444,7 @@ func (m *MTLSManager) GetServerTLSConfig(bundle *CertificateBundle) (*tls.Config
 		clientAuth = tls.VerifyClientCertIfGiven
 	}
 
+	//nolint:gosec // G402: MinTLSVersion is user-configurable, defaults to TLS 1.2
 	config := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		ClientCAs:    m.certPool,
@@ -449,7 +465,7 @@ func (m *MTLSManager) GetServerTLSConfig(bundle *CertificateBundle) (*tls.Config
 	return config, nil
 }
 
-// GetClientTLSConfig returns a TLS config for clients
+// GetClientTLSConfig returns a TLS config for clients.
 func (m *MTLSManager) GetClientTLSConfig(bundle *CertificateBundle) (*tls.Config, error) {
 	if m.caCert == nil {
 		return nil, errors.New("CA not initialized")
@@ -460,6 +476,7 @@ func (m *MTLSManager) GetClientTLSConfig(bundle *CertificateBundle) (*tls.Config
 		return nil, err
 	}
 
+	//nolint:gosec // G402: MinTLSVersion is user-configurable, defaults to TLS 1.2
 	config := &tls.Config{
 		Certificates:          []tls.Certificate{cert},
 		RootCAs:               m.certPool,
@@ -470,7 +487,7 @@ func (m *MTLSManager) GetClientTLSConfig(bundle *CertificateBundle) (*tls.Config
 	return config, nil
 }
 
-// verifyPeerCertificate performs additional certificate verification
+// verifyPeerCertificate performs additional certificate verification.
 func (m *MTLSManager) verifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	if len(rawCerts) == 0 {
 		return errors.New("no certificates presented")
@@ -489,7 +506,7 @@ func (m *MTLSManager) verifyPeerCertificate(rawCerts [][]byte, verifiedChains []
 	return nil
 }
 
-// GetHTTPClient returns an HTTP client configured with mTLS
+// GetHTTPClient returns an HTTP client configured with mTLS.
 func (m *MTLSManager) GetHTTPClient(bundle *CertificateBundle) (*http.Client, error) {
 	tlsConfig, err := m.GetClientTLSConfig(bundle)
 	if err != nil {
@@ -508,7 +525,7 @@ func (m *MTLSManager) GetHTTPClient(bundle *CertificateBundle) (*http.Client, er
 	}, nil
 }
 
-// CreateHTTPServer creates an HTTP server with mTLS
+// CreateHTTPServer creates an HTTP server with mTLS.
 func (m *MTLSManager) CreateHTTPServer(bundle *CertificateBundle, addr string, handler http.Handler) (*http.Server, error) {
 	tlsConfig, err := m.GetServerTLSConfig(bundle)
 	if err != nil {
@@ -516,13 +533,14 @@ func (m *MTLSManager) CreateHTTPServer(bundle *CertificateBundle, addr string, h
 	}
 
 	return &http.Server{
-		Addr:      addr,
-		Handler:   handler,
-		TLSConfig: tlsConfig,
+		Addr:              addr,
+		Handler:           handler,
+		TLSConfig:         tlsConfig,
+		ReadHeaderTimeout: 10 * time.Second, // Prevent Slowloris attacks
 	}, nil
 }
 
-// renewalChecker periodically checks for certificates that need renewal
+// renewalChecker periodically checks for certificates that need renewal.
 func (m *MTLSManager) renewalChecker() {
 	defer m.wg.Done()
 
@@ -539,13 +557,15 @@ func (m *MTLSManager) renewalChecker() {
 	}
 }
 
-// checkAndRenewCertificates checks all certificates and renews those expiring soon
+// checkAndRenewCertificates checks all certificates and renews those expiring soon.
 func (m *MTLSManager) checkAndRenewCertificates(ctx context.Context) {
 	m.mu.RLock()
+
 	certs := make([]*CertificateBundle, 0, len(m.certificates))
 	for _, cert := range m.certificates {
 		certs = append(certs, cert)
 	}
+
 	m.mu.RUnlock()
 
 	now := time.Now()
@@ -576,12 +596,12 @@ func (m *MTLSManager) checkAndRenewCertificates(ctx context.Context) {
 	}
 }
 
-// SetRenewalCallback sets a callback for when certificates are renewed
+// SetRenewalCallback sets a callback for when certificates are renewed.
 func (m *MTLSManager) SetRenewalCallback(callback func(bundle *CertificateBundle)) {
 	m.renewalCallback = callback
 }
 
-// GetCertificate retrieves a certificate by ID
+// GetCertificate retrieves a certificate by ID.
 func (m *MTLSManager) GetCertificate(certID string) (*CertificateBundle, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -594,7 +614,7 @@ func (m *MTLSManager) GetCertificate(certID string) (*CertificateBundle, error) 
 	return bundle, nil
 }
 
-// ListCertificates returns all certificates
+// ListCertificates returns all certificates.
 func (m *MTLSManager) ListCertificates() []*CertificateInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -607,25 +627,27 @@ func (m *MTLSManager) ListCertificates() []*CertificateInfo {
 	return infos
 }
 
-// GetCA returns the CA certificate bundle
+// GetCA returns the CA certificate bundle.
 func (m *MTLSManager) GetCA() *CertificateBundle {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.caCert
 }
 
-// GetCertPool returns the certificate pool containing the CA
+// GetCertPool returns the certificate pool containing the CA.
 func (m *MTLSManager) GetCertPool() *x509.CertPool {
 	return m.certPool
 }
 
-// GenerateCRL generates a Certificate Revocation List
+// GenerateCRL generates a Certificate Revocation List.
 func (m *MTLSManager) GenerateCRL(ctx context.Context) ([]byte, error) {
 	if m.caCert == nil {
 		return nil, errors.New("CA not initialized")
 	}
 
 	m.mu.RLock()
+
 	revokedCerts := make([]pkix.RevokedCertificate, 0, len(m.revokedCerts))
 	for _, info := range m.revokedCerts {
 		serialNumber := new(big.Int)
@@ -635,6 +657,7 @@ func (m *MTLSManager) GenerateCRL(ctx context.Context) ([]byte, error) {
 			RevocationTime: *info.RevokedAt,
 		})
 	}
+
 	m.mu.RUnlock()
 
 	now := time.Now()
@@ -653,7 +676,7 @@ func (m *MTLSManager) GenerateCRL(ctx context.Context) ([]byte, error) {
 	return pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlDER}), nil
 }
 
-// ExportCertificate exports a certificate and key as PEM files
+// ExportCertificate exports a certificate and key as PEM files.
 func (m *MTLSManager) ExportCertificate(certID string, certPath, keyPath string) error {
 	bundle, err := m.GetCertificate(certID)
 	if err != nil {
@@ -671,13 +694,15 @@ func (m *MTLSManager) ExportCertificate(certID string, certPath, keyPath string)
 	return nil
 }
 
-// loadCertificateFromDisk loads a certificate from disk
+// loadCertificateFromDisk loads a certificate from disk.
 func (m *MTLSManager) loadCertificateFromDisk(certPath, keyPath string) (*CertificateBundle, error) {
+	//nolint:gosec // G304: certPath comes from trusted configuration
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
 		return nil, err
 	}
 
+	//nolint:gosec // G304: keyPath comes from trusted configuration
 	keyPEM, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, err
@@ -705,6 +730,7 @@ func (m *MTLSManager) loadCertificateFromDisk(certPath, keyPath string) (*Certif
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse private key: %w", err)
 		}
+
 		privateKey = key.(*ecdsa.PrivateKey)
 	}
 
@@ -714,14 +740,17 @@ func (m *MTLSManager) loadCertificateFromDisk(certPath, keyPath string) (*Certif
 	} else if len(cert.ExtKeyUsage) > 0 {
 		hasServer := false
 		hasClient := false
+
 		for _, usage := range cert.ExtKeyUsage {
 			if usage == x509.ExtKeyUsageServerAuth {
 				hasServer = true
 			}
+
 			if usage == x509.ExtKeyUsageClientAuth {
 				hasClient = true
 			}
 		}
+
 		if hasServer && hasClient {
 			certType = CertTypePeer
 		} else if hasServer {
@@ -753,7 +782,7 @@ func (m *MTLSManager) loadCertificateFromDisk(certPath, keyPath string) (*Certif
 	}, nil
 }
 
-// generatePrivateKey generates a private key based on configuration
+// generatePrivateKey generates a private key based on configuration.
 func (m *MTLSManager) generatePrivateKey() (crypto.PrivateKey, error) {
 	switch m.config.KeyAlgorithm {
 	case "ECDSA-P256":
@@ -765,13 +794,13 @@ func (m *MTLSManager) generatePrivateKey() (crypto.PrivateKey, error) {
 	}
 }
 
-// generateSerialNumber generates a random serial number for certificates
+// generateSerialNumber generates a random serial number for certificates.
 func generateSerialNumber() (*big.Int, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	return rand.Int(rand.Reader, serialNumberLimit)
 }
 
-// publicKey extracts the public key from a private key
+// publicKey extracts the public key from a private key.
 func publicKey(priv crypto.PrivateKey) crypto.PublicKey {
 	switch k := priv.(type) {
 	case *ecdsa.PrivateKey:
@@ -781,7 +810,7 @@ func publicKey(priv crypto.PrivateKey) crypto.PublicKey {
 	}
 }
 
-// encodePrivateKey encodes a private key to PEM format
+// encodePrivateKey encodes a private key to PEM format.
 func encodePrivateKey(priv crypto.PrivateKey) ([]byte, error) {
 	switch k := priv.(type) {
 	case *ecdsa.PrivateKey:
@@ -789,24 +818,25 @@ func encodePrivateKey(priv crypto.PrivateKey) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes}), nil
 	default:
 		return nil, errors.New("unsupported key type")
 	}
 }
 
-// fingerprintCert generates a fingerprint for a certificate
+// fingerprintCert generates a fingerprint for a certificate.
 func fingerprintCert(cert *x509.Certificate) string {
 	return fmt.Sprintf("%X", cert.Raw[:20])
 }
 
-// Stop stops the mTLS manager
+// Stop stops the mTLS manager.
 func (m *MTLSManager) Stop() {
 	close(m.stopChan)
 	m.wg.Wait()
 }
 
-// ValidateCertificateChain validates a certificate chain
+// ValidateCertificateChain validates a certificate chain.
 func (m *MTLSManager) ValidateCertificateChain(certPEM []byte) error {
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
@@ -824,10 +854,11 @@ func (m *MTLSManager) ValidateCertificateChain(certPEM []byte) error {
 	}
 
 	_, err = cert.Verify(opts)
+
 	return err
 }
 
-// MTLSMiddleware returns an HTTP middleware that verifies client certificates
+// MTLSMiddleware returns an HTTP middleware that verifies client certificates.
 func (m *MTLSManager) MTLSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
@@ -853,24 +884,25 @@ func (m *MTLSManager) MTLSMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// PeerCertificateInfo represents information about a peer's certificate
+// PeerCertificateInfo represents information about a peer's certificate.
 type PeerCertificateInfo struct {
-	CommonName   string    `json:"common_name"`
-	Organization []string  `json:"organization"`
-	SerialNumber string    `json:"serial_number"`
 	NotBefore    time.Time `json:"not_before"`
 	NotAfter     time.Time `json:"not_after"`
-	DNSNames     []string  `json:"dns_names"`
+	CommonName   string    `json:"common_name"`
+	SerialNumber string    `json:"serial_number"`
 	Fingerprint  string    `json:"fingerprint"`
+	Organization []string  `json:"organization"`
+	DNSNames     []string  `json:"dns_names"`
 }
 
-// GetPeerCertificateInfo extracts certificate info from an HTTP request
+// GetPeerCertificateInfo extracts certificate info from an HTTP request.
 func GetPeerCertificateInfo(r *http.Request) *PeerCertificateInfo {
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 		return nil
 	}
 
 	cert := r.TLS.PeerCertificates[0]
+
 	return &PeerCertificateInfo{
 		CommonName:   cert.Subject.CommonName,
 		Organization: cert.Subject.Organization,

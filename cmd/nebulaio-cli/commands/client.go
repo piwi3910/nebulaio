@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ClientConfig holds the CLI configuration
+// ClientConfig holds the CLI configuration.
 type ClientConfig struct {
 	Endpoint   string `yaml:"endpoint"`
 	AccessKey  string `yaml:"access_key"`
@@ -23,7 +24,7 @@ type ClientConfig struct {
 	SkipVerify bool   `yaml:"skip_verify"`
 }
 
-// DefaultConfig returns the default configuration
+// DefaultConfig returns the default configuration.
 func DefaultConfig() *ClientConfig {
 	return &ClientConfig{
 		Endpoint: "http://localhost:9000",
@@ -32,20 +33,21 @@ func DefaultConfig() *ClientConfig {
 	}
 }
 
-// configPath returns the path to the config file
+// configPath returns the path to the config file.
 func configPath() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".nebulaio", "config.yaml")
 }
 
-// LoadConfig loads the configuration from file or environment
+// LoadConfig loads the configuration from file or environment.
 func LoadConfig() (*ClientConfig, error) {
 	cfg := DefaultConfig()
 
 	// Try to load from file
 	data, err := os.ReadFile(configPath())
 	if err == nil {
-		if err := yaml.Unmarshal(data, cfg); err != nil {
+		err := yaml.Unmarshal(data, cfg)
+		if err != nil {
 			return nil, fmt.Errorf("invalid config file: %w", err)
 		}
 	}
@@ -54,16 +56,19 @@ func LoadConfig() (*ClientConfig, error) {
 	if endpoint := os.Getenv("NEBULAIO_ENDPOINT"); endpoint != "" {
 		cfg.Endpoint = endpoint
 	}
+
 	if accessKey := os.Getenv("NEBULAIO_ACCESS_KEY"); accessKey != "" {
 		cfg.AccessKey = accessKey
 	} else if accessKey := os.Getenv("AWS_ACCESS_KEY_ID"); accessKey != "" {
 		cfg.AccessKey = accessKey
 	}
+
 	if secretKey := os.Getenv("NEBULAIO_SECRET_KEY"); secretKey != "" {
 		cfg.SecretKey = secretKey
 	} else if secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY"); secretKey != "" {
 		cfg.SecretKey = secretKey
 	}
+
 	if region := os.Getenv("NEBULAIO_REGION"); region != "" {
 		cfg.Region = region
 	} else if region := os.Getenv("AWS_REGION"); region != "" {
@@ -73,7 +78,7 @@ func LoadConfig() (*ClientConfig, error) {
 	return cfg, nil
 }
 
-// SaveConfig saves the configuration to file
+// SaveConfig saves the configuration to file.
 func SaveConfig(cfg *ClientConfig) error {
 	path := configPath()
 
@@ -94,7 +99,7 @@ func SaveConfig(cfg *ClientConfig) error {
 	return nil
 }
 
-// NewS3Client creates an S3 client from the configuration
+// NewS3Client creates an S3 client from the configuration.
 func NewS3Client(ctx context.Context) (*s3.Client, error) {
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -102,7 +107,7 @@ func NewS3Client(ctx context.Context) (*s3.Client, error) {
 	}
 
 	if cfg.AccessKey == "" || cfg.SecretKey == "" {
-		return nil, fmt.Errorf("credentials not configured. Use 'nebulaio-cli config set access-key <key>' or set environment variables")
+		return nil, errors.New("credentials not configured. Use 'nebulaio-cli config set access-key <key>' or set environment variables")
 	}
 
 	// Load AWS config
@@ -127,7 +132,7 @@ func NewS3Client(ctx context.Context) (*s3.Client, error) {
 	return client, nil
 }
 
-// ParseS3URI parses an S3 URI (s3://bucket/key) into bucket and key
+// ParseS3URI parses an S3 URI (s3://bucket/key) into bucket and key.
 func ParseS3URI(uri string) (bucket, key string, isS3 bool) {
 	if len(uri) < 5 || uri[:5] != "s3://" {
 		return "", "", false
@@ -139,7 +144,7 @@ func ParseS3URI(uri string) (bucket, key string, isS3 bool) {
 	}
 
 	// Find first slash after bucket name
-	for i := 0; i < len(path); i++ {
+	for i := range len(path) {
 		if path[i] == '/' {
 			return path[:i], path[i+1:], true
 		}
@@ -149,7 +154,7 @@ func ParseS3URI(uri string) (bucket, key string, isS3 bool) {
 	return path, "", true
 }
 
-// FormatSize formats a byte size to human-readable format
+// FormatSize formats a byte size to human-readable format.
 func FormatSize(size int64) string {
 	const (
 		KB = 1024

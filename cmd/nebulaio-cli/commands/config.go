@@ -2,12 +2,13 @@ package commands
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-// NewConfigCmd creates the config command
+// NewConfigCmd creates the config command.
 func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
@@ -63,6 +64,7 @@ func newConfigSetCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Set %s = %s\n", key, maskSecret(key, value))
+
 			return nil
 		},
 	}
@@ -82,6 +84,7 @@ func newConfigGetCmd() *cobra.Command {
 			}
 
 			var value string
+
 			switch key {
 			case "endpoint":
 				value = cfg.Endpoint
@@ -92,14 +95,15 @@ func newConfigGetCmd() *cobra.Command {
 			case "region":
 				value = cfg.Region
 			case "use-ssl", "usessl":
-				value = fmt.Sprintf("%t", cfg.UseSSL)
+				value = strconv.FormatBool(cfg.UseSSL)
 			case "skip-verify", "skipverify":
-				value = fmt.Sprintf("%t", cfg.SkipVerify)
+				value = strconv.FormatBool(cfg.SkipVerify)
 			default:
 				return fmt.Errorf("unknown configuration key: %s", key)
 			}
 
 			fmt.Println(value)
+
 			return nil
 		},
 	}
@@ -121,18 +125,21 @@ func newConfigShowCmd() *cobra.Command {
 			fmt.Printf("region:      %s\n", cfg.Region)
 			fmt.Printf("use-ssl:     %t\n", cfg.UseSSL)
 			fmt.Printf("skip-verify: %t\n", cfg.SkipVerify)
+
 			return nil
 		},
 	}
 }
 
-// maskSecret masks a secret value, showing only first and last 4 chars
+// maskSecret masks a secret value, showing only first and last 4 chars.
 func maskSecret(key, value string) string {
 	if !strings.Contains(key, "secret") && !strings.Contains(key, "key") {
 		return value
 	}
+
 	if len(value) <= 8 {
 		return "****"
 	}
+
 	return value[:4] + "****" + value[len(value)-4:]
 }

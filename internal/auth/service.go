@@ -27,6 +27,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -37,22 +38,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Config holds auth service configuration
+// Config holds auth service configuration.
 type Config struct {
 	JWTSecret          string
-	TokenExpiry        time.Duration
-	RefreshTokenExpiry time.Duration
 	RootUser           string
 	RootPassword       string
+	TokenExpiry        time.Duration
+	RefreshTokenExpiry time.Duration
 }
 
-// Service handles authentication and authorization
+// Service handles authentication and authorization.
 type Service struct {
-	config Config
 	store  metadata.Store
+	config Config
 }
 
-// NewService creates a new auth service
+// NewService creates a new auth service.
 func NewService(config Config, store metadata.Store) *Service {
 	return &Service{
 		config: config,
@@ -60,7 +61,7 @@ func NewService(config Config, store metadata.Store) *Service {
 	}
 }
 
-// TokenClaims represents JWT claims
+// TokenClaims represents JWT claims.
 type TokenClaims struct {
 	UserID   string            `json:"user_id"`
 	Username string            `json:"username"`
@@ -68,7 +69,7 @@ type TokenClaims struct {
 	jwt.RegisteredClaims
 }
 
-// TokenPair represents access and refresh tokens
+// TokenPair represents access and refresh tokens.
 type TokenPair struct {
 	AccessToken  string    `json:"access_token"`
 	RefreshToken string    `json:"refresh_token"`
@@ -111,7 +112,7 @@ func (s *Service) EnsureRootUser(ctx context.Context) (bool, error) {
 	maxRetries := 10
 	retryDelay := 500 * time.Millisecond
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for range maxRetries {
 		err := s.store.CreateUser(ctx, rootUser)
 		if err == nil {
 			return true, nil // Successfully created
@@ -128,6 +129,7 @@ func (s *Service) EnsureRootUser(ctx context.Context) (bool, error) {
 				if retryDelay > 5*time.Second {
 					retryDelay = 5 * time.Second
 				}
+
 				continue
 			}
 		}
@@ -143,25 +145,25 @@ func (s *Service) EnsureRootUser(ctx context.Context) (bool, error) {
 	return false, fmt.Errorf("failed to create root user after %d attempts: not leader", maxRetries)
 }
 
-// Login authenticates a user and returns a token pair
+// Login authenticates a user and returns a token pair.
 func (s *Service) Login(ctx context.Context, username, password string) (*TokenPair, error) {
 	user, err := s.store.GetUserByUsername(ctx, username)
 	if err != nil {
-		return nil, fmt.Errorf("invalid credentials")
+		return nil, errors.New("invalid credentials")
 	}
 
 	if !user.Enabled {
-		return nil, fmt.Errorf("user is disabled")
+		return nil, errors.New("user is disabled")
 	}
 
 	if err := VerifyPassword(user.PasswordHash, password); err != nil {
-		return nil, fmt.Errorf("invalid credentials")
+		return nil, errors.New("invalid credentials")
 	}
 
 	return s.generateTokenPair(user)
 }
 
-// RefreshToken generates a new token pair using a refresh token
+// RefreshToken generates a new token pair using a refresh token.
 func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*TokenPair, error) {
 	claims, err := s.ValidateToken(refreshToken)
 	if err != nil {
@@ -170,25 +172,25 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Token
 
 	user, err := s.store.GetUser(ctx, claims.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("user not found")
+		return nil, errors.New("user not found")
 	}
 
 	if !user.Enabled {
-		return nil, fmt.Errorf("user is disabled")
+		return nil, errors.New("user is disabled")
 	}
 
 	return s.generateTokenPair(user)
 }
 
-// ValidateToken validates a JWT token and returns the claims
+// ValidateToken validates a JWT token and returns the claims.
 func (s *Service) ValidateToken(tokenString string) (*TokenClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
+
 		return []byte(s.config.JWTSecret), nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -197,10 +199,10 @@ func (s *Service) ValidateToken(tokenString string) (*TokenClaims, error) {
 		return claims, nil
 	}
 
-	return nil, fmt.Errorf("invalid token")
+	return nil, errors.New("invalid token")
 }
 
-// generateTokenPair generates an access and refresh token pair
+// generateTokenPair generates an access and refresh token pair.
 func (s *Service) generateTokenPair(user *metadata.User) (*TokenPair, error) {
 	now := time.Now()
 	accessExpiry := now.Add(s.config.TokenExpiry)
@@ -219,6 +221,7 @@ func (s *Service) generateTokenPair(user *metadata.User) (*TokenPair, error) {
 	}
 
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
+
 	accessTokenString, err := accessToken.SignedString([]byte(s.config.JWTSecret))
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign access token: %w", err)
@@ -237,6 +240,7 @@ func (s *Service) generateTokenPair(user *metadata.User) (*TokenPair, error) {
 	}
 
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
+
 	refreshTokenString, err := refreshToken.SignedString([]byte(s.config.JWTSecret))
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign refresh token: %w", err)
@@ -250,7 +254,7 @@ func (s *Service) generateTokenPair(user *metadata.User) (*TokenPair, error) {
 	}, nil
 }
 
-// CreateUser creates a new user with full validation
+// CreateUser creates a new user with full validation.
 func (s *Service) CreateUser(ctx context.Context, username, password, email string, role metadata.UserRole) (*metadata.User, error) {
 	// Validate username format
 	if err := ValidateUsername(username); err != nil {
@@ -274,7 +278,7 @@ func (s *Service) CreateUser(ctx context.Context, username, password, email stri
 
 	// Check if username already exists
 	if _, err := s.store.GetUserByUsername(ctx, username); err == nil {
-		return nil, fmt.Errorf("username already exists")
+		return nil, errors.New("username already exists")
 	}
 
 	// Hash the password
@@ -301,7 +305,7 @@ func (s *Service) CreateUser(ctx context.Context, username, password, email stri
 	return user, nil
 }
 
-// isValidRole checks if the given role is a valid user role
+// isValidRole checks if the given role is a valid user role.
 func isValidRole(role metadata.UserRole) bool {
 	switch role {
 	case metadata.RoleSuperAdmin, metadata.RoleAdmin, metadata.RoleUser, metadata.RoleReadOnly, metadata.RoleService:
@@ -311,7 +315,7 @@ func isValidRole(role metadata.UserRole) bool {
 	}
 }
 
-// UpdatePassword updates a user's password with validation
+// UpdatePassword updates a user's password with validation.
 func (s *Service) UpdatePassword(ctx context.Context, userID, newPassword string) error {
 	// Validate password strength
 	if err := ValidatePasswordStrength(newPassword); err != nil {
@@ -334,7 +338,7 @@ func (s *Service) UpdatePassword(ctx context.Context, userID, newPassword string
 	return s.store.UpdateUser(ctx, user)
 }
 
-// CreateAccessKey creates a new S3-compatible access key for a user
+// CreateAccessKey creates a new S3-compatible access key for a user.
 func (s *Service) CreateAccessKey(ctx context.Context, userID, description string) (*metadata.AccessKey, string, error) {
 	// Verify user exists
 	if _, err := s.store.GetUser(ctx, userID); err != nil {
@@ -353,7 +357,8 @@ func (s *Service) CreateAccessKey(ctx context.Context, userID, description strin
 		CreatedAt:       time.Now(),
 	}
 
-	if err := s.store.CreateAccessKey(ctx, key); err != nil {
+	err := s.store.CreateAccessKey(ctx, key)
+	if err != nil {
 		return nil, "", fmt.Errorf("failed to create access key: %w", err)
 	}
 
@@ -361,38 +366,38 @@ func (s *Service) CreateAccessKey(ctx context.Context, userID, description strin
 	return key, secretAccessKey, nil
 }
 
-// ValidateAccessKey validates an S3 access key and returns the associated user
+// ValidateAccessKey validates an S3 access key and returns the associated user.
 func (s *Service) ValidateAccessKey(ctx context.Context, accessKeyID string) (*metadata.AccessKey, *metadata.User, error) {
 	key, err := s.store.GetAccessKey(ctx, accessKeyID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("access key not found")
+		return nil, nil, errors.New("access key not found")
 	}
 
 	if !key.Enabled {
-		return nil, nil, fmt.Errorf("access key is disabled")
+		return nil, nil, errors.New("access key is disabled")
 	}
 
 	user, err := s.store.GetUser(ctx, key.UserID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("user not found")
+		return nil, nil, errors.New("user not found")
 	}
 
 	if !user.Enabled {
-		return nil, nil, fmt.Errorf("user is disabled")
+		return nil, nil, errors.New("user is disabled")
 	}
 
 	return key, user, nil
 }
 
-// ValidateSignature validates an AWS Signature V4 signature
+// ValidateSignature validates an AWS Signature V4 signature.
 func (s *Service) ValidateSignature(ctx context.Context, accessKeyID, stringToSign, signature string) error {
 	key, err := s.store.GetAccessKey(ctx, accessKeyID)
 	if err != nil {
-		return fmt.Errorf("access key not found")
+		return errors.New("access key not found")
 	}
 
 	if !key.Enabled {
-		return fmt.Errorf("access key is disabled")
+		return errors.New("access key is disabled")
 	}
 
 	// Calculate expected signature
@@ -401,31 +406,33 @@ func (s *Service) ValidateSignature(ctx context.Context, accessKeyID, stringToSi
 	expectedSig := hex.EncodeToString(h.Sum(nil))
 
 	if !hmac.Equal([]byte(signature), []byte(expectedSig)) {
-		return fmt.Errorf("signature mismatch")
+		return errors.New("signature mismatch")
 	}
 
 	return nil
 }
 
-// GetUserByID retrieves a user by their ID
+// GetUserByID retrieves a user by their ID.
 func (s *Service) GetUserByID(ctx context.Context, id string) (*metadata.User, error) {
 	user, err := s.store.GetUser(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
+
 	return user, nil
 }
 
-// ListUsers returns all users in the system
+// ListUsers returns all users in the system.
 func (s *Service) ListUsers(ctx context.Context) ([]*metadata.User, error) {
 	users, err := s.store.ListUsers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
+
 	return users, nil
 }
 
-// DeleteUser deletes a user by ID
+// DeleteUser deletes a user by ID.
 func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	// Get user first to verify it exists and check if it's the root user
 	user, err := s.store.GetUser(ctx, id)
@@ -435,7 +442,7 @@ func (s *Service) DeleteUser(ctx context.Context, id string) error {
 
 	// Prevent deletion of the root user
 	if user.Username == s.config.RootUser {
-		return fmt.Errorf("cannot delete the root admin user")
+		return errors.New("cannot delete the root admin user")
 	}
 
 	// Delete all access keys for this user first
@@ -445,7 +452,8 @@ func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	}
 
 	for _, key := range keys {
-		if err := s.store.DeleteAccessKey(ctx, key.AccessKeyID); err != nil {
+		err := s.store.DeleteAccessKey(ctx, key.AccessKeyID)
+		if err != nil {
 			return fmt.Errorf("failed to delete access key %s: %w", key.AccessKeyID, err)
 		}
 	}
@@ -457,7 +465,7 @@ func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	return nil
 }
 
-// EnableUser enables a user account
+// EnableUser enables a user account.
 func (s *Service) EnableUser(ctx context.Context, id string) error {
 	user, err := s.store.GetUser(ctx, id)
 	if err != nil {
@@ -478,7 +486,7 @@ func (s *Service) EnableUser(ctx context.Context, id string) error {
 	return nil
 }
 
-// DisableUser disables a user account
+// DisableUser disables a user account.
 func (s *Service) DisableUser(ctx context.Context, id string) error {
 	user, err := s.store.GetUser(ctx, id)
 	if err != nil {
@@ -487,7 +495,7 @@ func (s *Service) DisableUser(ctx context.Context, id string) error {
 
 	// Prevent disabling the root user
 	if user.Username == s.config.RootUser {
-		return fmt.Errorf("cannot disable the root admin user")
+		return errors.New("cannot disable the root admin user")
 	}
 
 	if !user.Enabled {
@@ -509,7 +517,7 @@ func (s *Service) DisableUser(ctx context.Context, id string) error {
 // 1. Role-based checks (super admin, admin have full access)
 // 2. Read-only role restrictions
 // 3. IAM policy evaluation for users with attached policies
-// 4. Default allow for regular users (fallback)
+// 4. Default allow for regular users (fallback).
 func (s *Service) CheckPermission(ctx context.Context, user *metadata.User, action, resource string) error {
 	// Layer 1: Super admins and admins have full access (highest privilege)
 	if user.Role == metadata.RoleSuperAdmin || user.Role == metadata.RoleAdmin {
@@ -521,6 +529,7 @@ func (s *Service) CheckPermission(ctx context.Context, user *metadata.User, acti
 		if !strings.HasPrefix(action, "s3:Get") && !strings.HasPrefix(action, "s3:List") {
 			return fmt.Errorf("permission denied: read-only user cannot perform %s", action)
 		}
+
 		return nil
 	}
 
@@ -538,7 +547,7 @@ func (s *Service) CheckPermission(ctx context.Context, user *metadata.User, acti
 // Following AWS IAM evaluation logic:
 // 1. By default, all requests are denied (implicit deny)
 // 2. An explicit allow overrides the implicit deny
-// 3. An explicit deny overrides any allows
+// 3. An explicit deny overrides any allows.
 func (s *Service) evaluateUserPolicies(ctx context.Context, user *metadata.User, action, resource string) error {
 	hasExplicitAllow := false
 
@@ -607,13 +616,14 @@ func (s *Service) evaluateUserPolicies(ctx context.Context, user *metadata.User,
 // Supports formats:
 // - arn:aws:s3:::bucket
 // - arn:aws:s3:::bucket/key
-// - arn:aws:s3:::bucket/prefix/key
+// - arn:aws:s3:::bucket/prefix/key.
 func parseResourceARN(resourceARN string) (bucket, key string) {
 	// Remove the ARN prefix if present
 	resourceARN = strings.TrimPrefix(resourceARN, "arn:aws:s3:::")
 
 	// Split bucket and key
 	parts := strings.SplitN(resourceARN, "/", 2)
+
 	bucket = parts[0]
 	if len(parts) > 1 {
 		key = parts[1]
@@ -631,6 +641,7 @@ func generateID(prefix string) string {
 		log.Error().Err(err).Str("prefix", prefix).Msg("crypto/rand.Read failed while generating ID - this indicates a serious system entropy problem; check that /dev/urandom is available and the system has sufficient entropy")
 		panic(fmt.Sprintf("crypto/rand.Read failed for prefix %s: %v - ensure /dev/urandom is accessible", prefix, err))
 	}
+
 	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(b))
 }
 
@@ -641,6 +652,7 @@ func generateAccessKeyID() string {
 		log.Error().Err(err).Msg("crypto/rand.Read failed while generating access key ID - this indicates a serious system entropy problem; check that /dev/urandom is available")
 		panic(fmt.Sprintf("crypto/rand.Read failed for access key ID generation: %v - ensure /dev/urandom is accessible", err))
 	}
+
 	return "AKIA" + strings.ToUpper(hex.EncodeToString(b))[:16]
 }
 
@@ -651,5 +663,6 @@ func generateSecretAccessKey() string {
 		log.Error().Err(err).Msg("crypto/rand.Read failed while generating secret access key - this indicates a serious system entropy problem; check that /dev/urandom is available")
 		panic(fmt.Sprintf("crypto/rand.Read failed for secret access key generation: %v - ensure /dev/urandom is accessible", err))
 	}
+
 	return hex.EncodeToString(b)[:40]
 }

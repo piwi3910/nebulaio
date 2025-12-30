@@ -18,7 +18,6 @@ package admin
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,7 +33,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/object"
 )
 
-// Handler handles Admin API requests
+// Handler handles Admin API requests.
 type Handler struct {
 	auth           *auth.Service
 	bucket         *bucket.Service
@@ -45,7 +44,7 @@ type Handler struct {
 	config         *config.Config
 }
 
-// NewHandler creates a new Admin API handler
+// NewHandler creates a new Admin API handler.
 func NewHandler(authService *auth.Service, bucketService *bucket.Service, objectService *object.Service, store metadata.Store, discovery *cluster.Discovery) *Handler {
 	return &Handler{
 		auth:      authService,
@@ -56,17 +55,17 @@ func NewHandler(authService *auth.Service, bucketService *bucket.Service, object
 	}
 }
 
-// SetTieringHandler sets the tiering handler for tiering policy management
+// SetTieringHandler sets the tiering handler for tiering policy management.
 func (h *Handler) SetTieringHandler(tieringHandler *TieringHandler) {
 	h.tieringHandler = tieringHandler
 }
 
-// SetConfig sets the configuration for feature status reporting
+// SetConfig sets the configuration for feature status reporting.
 func (h *Handler) SetConfig(cfg *config.Config) {
 	h.config = cfg
 }
 
-// RegisterRoutes registers Admin API routes
+// RegisterRoutes registers Admin API routes.
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Auth endpoints (public)
 	r.Post("/auth/login", h.Login)
@@ -149,7 +148,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	})
 }
 
-// Auth middleware
+// Auth middleware.
 func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -236,14 +235,14 @@ type CreateUserRequest struct {
 }
 
 type UserResponse struct {
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
 	ID          string            `json:"id"`
 	Username    string            `json:"username"`
 	Email       string            `json:"email"`
 	DisplayName string            `json:"display_name,omitempty"`
 	Role        metadata.UserRole `json:"role"`
 	Enabled     bool              `json:"enabled"`
-	CreatedAt   time.Time         `json:"created_at"`
-	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
 func userToResponse(user *metadata.User) *UserResponse {
@@ -291,7 +290,9 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, err.Error(), http.StatusConflict)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -311,10 +312,10 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateUserRequest struct {
+	Enabled     *bool             `json:"enabled,omitempty"`
 	Email       string            `json:"email,omitempty"`
 	DisplayName string            `json:"display_name,omitempty"`
 	Role        metadata.UserRole `json:"role,omitempty"`
-	Enabled     *bool             `json:"enabled,omitempty"`
 }
 
 func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -335,15 +336,19 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if req.Email != "" {
 		user.Email = req.Email
 	}
+
 	if req.DisplayName != "" {
 		user.DisplayName = req.DisplayName
 	}
+
 	if req.Role != "" {
 		user.Role = req.Role
 	}
+
 	if req.Enabled != nil {
 		user.Enabled = *req.Enabled
 	}
+
 	user.UpdatedAt = time.Now()
 
 	if err := h.store.UpdateUser(r.Context(), user); err != nil {
@@ -357,7 +362,8 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if err := h.store.DeleteUser(r.Context(), id); err != nil {
+	err := h.store.DeleteUser(r.Context(), id)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -373,12 +379,14 @@ func (h *Handler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req UpdatePasswordRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.auth.UpdatePassword(r.Context(), id, req.Password); err != nil {
+	err = h.auth.UpdatePassword(r.Context(), id, req.Password)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -393,12 +401,12 @@ type CreateAccessKeyRequest struct {
 }
 
 type AccessKeyResponse struct {
+	CreatedAt       time.Time `json:"created_at"`
 	AccessKeyID     string    `json:"access_key_id"`
-	SecretAccessKey string    `json:"secret_access_key,omitempty"` // Only returned on creation
+	SecretAccessKey string    `json:"secret_access_key,omitempty"`
 	UserID          string    `json:"user_id"`
 	Description     string    `json:"description"`
 	Enabled         bool      `json:"enabled"`
-	CreatedAt       time.Time `json:"created_at"`
 }
 
 func (h *Handler) ListAccessKeys(w http.ResponseWriter, r *http.Request) {
@@ -454,7 +462,8 @@ func (h *Handler) CreateAccessKey(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteAccessKey(w http.ResponseWriter, r *http.Request) {
 	accessKeyID := chi.URLParam(r, "accessKeyId")
 
-	if err := h.store.DeleteAccessKey(r.Context(), accessKeyID); err != nil {
+	err := h.store.DeleteAccessKey(r.Context(), accessKeyID)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -482,7 +491,8 @@ func (h *Handler) ListPolicies(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 	var req CreatePolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -495,7 +505,8 @@ func (h *Handler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:   time.Now(),
 	}
 
-	if err := h.store.CreatePolicy(r.Context(), policy); err != nil {
+	err = h.store.CreatePolicy(r.Context(), policy)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -545,7 +556,8 @@ func (h *Handler) UpdatePolicy(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeletePolicy(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 
-	if err := h.store.DeletePolicy(r.Context(), name); err != nil {
+	err := h.store.DeletePolicy(r.Context(), name)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -589,7 +601,9 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
 			writeError(w, err.Error(), http.StatusConflict)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusBadRequest)
+
 		return
 	}
 
@@ -611,12 +625,15 @@ func (h *Handler) GetBucket(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 
-	if err := h.bucket.DeleteBucket(r.Context(), name); err != nil {
+	err := h.bucket.DeleteBucket(r.Context(), name)
+	if err != nil {
 		if strings.Contains(err.Error(), "not empty") {
 			writeError(w, err.Error(), http.StatusConflict)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -641,18 +658,21 @@ func (h *Handler) ListNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var nodes []*NodeResponse
-	var healthyCount int
+	var (
+		nodes        []*NodeResponse
+		healthyCount int
+	)
 
 	// Get leader ID
 	leaderID := h.discovery.LeaderID()
 
 	// Get cluster configuration to determine voters
 	voterMap := make(map[string]bool)
+
 	if dbStore, ok := h.store.(*metadata.DragonboatStore); ok {
 		if config, err := dbStore.GetClusterConfiguration(); err == nil {
 			for _, server := range config.Servers {
-				voterMap[fmt.Sprintf("%d", server.ID)] = server.IsVoter
+				voterMap[strconv.FormatUint(server.ID, 10)] = server.IsVoter
 			}
 		}
 	}
@@ -693,7 +713,7 @@ func (h *Handler) ListNodes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// RaftStateProvider is an interface for accessing Raft state
+// RaftStateProvider is an interface for accessing Raft state.
 type RaftStateProvider interface {
 	Stats() map[string]string
 }
@@ -718,15 +738,19 @@ func (h *Handler) GetRaftState(w http.ResponseWriter, r *http.Request) {
 		if term, ok := stats["term"]; ok {
 			response["term"] = term
 		}
+
 		if commitIndex, ok := stats["commit_index"]; ok {
 			response["commit_index"] = commitIndex
 		}
+
 		if appliedIndex, ok := stats["applied_index"]; ok {
 			response["applied_index"] = appliedIndex
 		}
+
 		if lastLogIndex, ok := stats["last_log_index"]; ok {
 			response["last_log_index"] = lastLogIndex
 		}
+
 		if numPeers, ok := stats["num_peers"]; ok {
 			response["voters"] = numPeers
 		}
@@ -753,25 +777,25 @@ func (h *Handler) GetStorageInfo(w http.ResponseWriter, r *http.Request) {
 
 // Presigned URL handlers
 
-// PresignRequest is the request body for generating a presigned URL
+// PresignRequest is the request body for generating a presigned URL.
 type PresignRequest struct {
-	Method     string            `json:"method"`     // HTTP method: GET, PUT, DELETE, HEAD
-	Bucket     string            `json:"bucket"`     // Bucket name
-	Key        string            `json:"key"`        // Object key
-	Expiration int               `json:"expiration"` // Expiration in seconds (max 604800 = 7 days)
-	Headers    map[string]string `json:"headers"`    // Optional headers to sign
+	Headers    map[string]string `json:"headers"`
+	Method     string            `json:"method"`
+	Bucket     string            `json:"bucket"`
+	Key        string            `json:"key"`
+	Expiration int               `json:"expiration"`
 }
 
-// PresignResponse is the response containing the presigned URL
+// PresignResponse is the response containing the presigned URL.
 type PresignResponse struct {
+	ExpiresAt time.Time `json:"expires_at"`
 	URL       string    `json:"url"`
 	Method    string    `json:"method"`
 	Bucket    string    `json:"bucket"`
 	Key       string    `json:"key"`
-	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// GeneratePresignedURL generates a presigned URL for S3 operations
+// GeneratePresignedURL generates a presigned URL for S3 operations.
 func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := r.Header.Get("X-User-Id")
@@ -787,6 +811,7 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Bucket is required", http.StatusBadRequest)
 		return
 	}
+
 	if req.Method == "" {
 		req.Method = "GET"
 	}
@@ -797,6 +822,7 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid method. Allowed: GET, PUT, DELETE, HEAD", http.StatusBadRequest)
 		return
 	}
+
 	req.Method = strings.ToUpper(req.Method)
 
 	// Validate bucket exists
@@ -823,12 +849,14 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 
 	// Use the first enabled access key
 	var accessKey *metadata.AccessKey
+
 	for _, k := range keys {
 		if k.Enabled {
 			accessKey = k
 			break
 		}
 	}
+
 	if accessKey == nil {
 		writeError(w, "No enabled access keys found", http.StatusBadRequest)
 		return
@@ -836,6 +864,7 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 
 	// Generate the presigned URL
 	generator := auth.NewPresignedURLGenerator("us-east-1", "")
+
 	presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
 		Method:      req.Method,
 		Bucket:      req.Bucket,
@@ -876,7 +905,7 @@ func writeError(w http.ResponseWriter, message string, status int) {
 
 // Audit log handlers
 
-// ListAuditLogs lists audit events with filtering
+// ListAuditLogs lists audit events with filtering.
 func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -915,6 +944,7 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 			filter.MaxResults = limit
 		}
 	}
+
 	if filter.MaxResults <= 0 {
 		filter.MaxResults = 100
 	}
@@ -936,30 +966,34 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 // Bucket Settings Handlers
 // ====================
 
-// GetBucketVersioning returns versioning configuration for a bucket
+// GetBucketVersioning returns versioning configuration for a bucket.
 func (h *Handler) GetBucketVersioning(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	status, err := h.bucket.GetVersioning(r.Context(), bucketName)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"enabled": status == metadata.VersioningEnabled,
 		"status":  string(status),
 	})
 }
 
-// SetBucketVersioningRequest represents the request body
+// SetBucketVersioningRequest represents the request body.
 type SetBucketVersioningRequest struct {
 	Enabled bool `json:"enabled"`
 }
 
-// SetBucketVersioning updates versioning configuration for a bucket
+// SetBucketVersioning updates versioning configuration for a bucket.
 func (h *Handler) SetBucketVersioning(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	var req SetBucketVersioningRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -971,209 +1005,247 @@ func (h *Handler) SetBucketVersioning(w http.ResponseWriter, r *http.Request) {
 		status = metadata.VersioningSuspended
 	}
 
-	if err := h.bucket.SetVersioning(r.Context(), bucketName, status); err != nil {
+	err = h.bucket.SetVersioning(r.Context(), bucketName, status)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"enabled": req.Enabled,
 		"status":  string(status),
 	})
 }
 
-// GetBucketLifecycle returns lifecycle configuration for a bucket
+// GetBucketLifecycle returns lifecycle configuration for a bucket.
 func (h *Handler) GetBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	rules, err := h.bucket.GetLifecycle(r.Context(), bucketName)
 	if err != nil {
 		// Return empty rules if not configured
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"rules": []metadata.LifecycleRule{},
 		})
+
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"rules": rules,
 	})
 }
 
-// SetBucketLifecycleRequest represents the request body
+// SetBucketLifecycleRequest represents the request body.
 type SetBucketLifecycleRequest struct {
 	Rules []metadata.LifecycleRule `json:"rules"`
 }
 
-// SetBucketLifecycle updates lifecycle configuration for a bucket
+// SetBucketLifecycle updates lifecycle configuration for a bucket.
 func (h *Handler) SetBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	var req SetBucketLifecycleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.bucket.SetLifecycle(r.Context(), bucketName, req.Rules); err != nil {
+	err = h.bucket.SetLifecycle(r.Context(), bucketName, req.Rules)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"rules": req.Rules,
 	})
 }
 
-// DeleteBucketLifecycle deletes lifecycle configuration for a bucket
+// DeleteBucketLifecycle deletes lifecycle configuration for a bucket.
 func (h *Handler) DeleteBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
-	if err := h.bucket.SetLifecycle(r.Context(), bucketName, nil); err != nil {
+	err := h.bucket.SetLifecycle(r.Context(), bucketName, nil)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetBucketCORS returns CORS configuration for a bucket
+// GetBucketCORS returns CORS configuration for a bucket.
 func (h *Handler) GetBucketCORS(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	rules, err := h.bucket.GetCORS(r.Context(), bucketName)
 	if err != nil {
 		// Return empty rules if not configured
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"rules": []metadata.CORSRule{},
 		})
+
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"rules": rules,
 	})
 }
 
-// SetBucketCORSRequest represents the request body
+// SetBucketCORSRequest represents the request body.
 type SetBucketCORSRequest struct {
 	Rules []metadata.CORSRule `json:"rules"`
 }
 
-// SetBucketCORS updates CORS configuration for a bucket
+// SetBucketCORS updates CORS configuration for a bucket.
 func (h *Handler) SetBucketCORS(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	var req SetBucketCORSRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.bucket.SetCORS(r.Context(), bucketName, req.Rules); err != nil {
+	err = h.bucket.SetCORS(r.Context(), bucketName, req.Rules)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"rules": req.Rules,
 	})
 }
 
-// DeleteBucketCORS deletes CORS configuration for a bucket
+// DeleteBucketCORS deletes CORS configuration for a bucket.
 func (h *Handler) DeleteBucketCORS(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
-	if err := h.bucket.SetCORS(r.Context(), bucketName, nil); err != nil {
+	err := h.bucket.SetCORS(r.Context(), bucketName, nil)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetBucketPolicy returns bucket policy
+// GetBucketPolicy returns bucket policy.
 func (h *Handler) GetBucketPolicy(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	policy, err := h.bucket.GetBucketPolicy(r.Context(), bucketName)
 	if err != nil {
 		// Return empty policy if not configured
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"policy": "",
 		})
+
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"policy": policy,
 	})
 }
 
-// SetBucketPolicyRequest represents the request body
+// SetBucketPolicyRequest represents the request body.
 type SetBucketPolicyRequest struct {
 	Policy string `json:"policy"`
 }
 
-// SetBucketPolicy updates bucket policy
+// SetBucketPolicy updates bucket policy.
 func (h *Handler) SetBucketPolicy(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	var req SetBucketPolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.bucket.SetBucketPolicy(r.Context(), bucketName, req.Policy); err != nil {
+	err = h.bucket.SetBucketPolicy(r.Context(), bucketName, req.Policy)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"policy": req.Policy,
 	})
 }
 
-// DeleteBucketPolicy deletes bucket policy
+// DeleteBucketPolicy deletes bucket policy.
 func (h *Handler) DeleteBucketPolicy(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
-	if err := h.bucket.SetBucketPolicy(r.Context(), bucketName, ""); err != nil {
+	err := h.bucket.SetBucketPolicy(r.Context(), bucketName, "")
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetBucketTags returns bucket tags
+// GetBucketTags returns bucket tags.
 func (h *Handler) GetBucketTags(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	tags, err := h.bucket.GetBucketTags(r.Context(), bucketName)
 	if err != nil {
 		// Return empty tags if not configured
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"tags": map[string]string{},
 		})
+
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"tags": tags,
 	})
 }
 
-// SetBucketTagsRequest represents the request body
+// SetBucketTagsRequest represents the request body.
 type SetBucketTagsRequest struct {
 	Tags map[string]string `json:"tags"`
 }
 
-// SetBucketTags updates bucket tags
+// SetBucketTags updates bucket tags.
 func (h *Handler) SetBucketTags(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	var req SetBucketTagsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.bucket.SetBucketTags(r.Context(), bucketName, req.Tags); err != nil {
+	err = h.bucket.SetBucketTags(r.Context(), bucketName, req.Tags)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"tags": req.Tags,
 	})
 }
 
-// DeleteBucketTags deletes bucket tags
+// DeleteBucketTags deletes bucket tags.
 func (h *Handler) DeleteBucketTags(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
-	if err := h.bucket.SetBucketTags(r.Context(), bucketName, nil); err != nil {
+	err := h.bucket.SetBucketTags(r.Context(), bucketName, nil)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1181,12 +1253,12 @@ func (h *Handler) DeleteBucketTags(w http.ResponseWriter, r *http.Request) {
 // Policy Attachment Handlers
 // ====================
 
-// AttachPolicyRequest represents the request body for attaching a policy
+// AttachPolicyRequest represents the request body for attaching a policy.
 type AttachPolicyRequest struct {
 	UserID string `json:"user_id"`
 }
 
-// AttachPolicyToUser attaches a policy to a user
+// AttachPolicyToUser attaches a policy to a user.
 func (h *Handler) AttachPolicyToUser(w http.ResponseWriter, r *http.Request) {
 	policyName := chi.URLParam(r, "name")
 
@@ -1220,6 +1292,7 @@ func (h *Handler) AttachPolicyToUser(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]string{
 				"message": "Policy already attached to user",
 			})
+
 			return
 		}
 	}
@@ -1238,7 +1311,7 @@ func (h *Handler) AttachPolicyToUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DetachPolicyFromUser detaches a policy from a user
+// DetachPolicyFromUser detaches a policy from a user.
 func (h *Handler) DetachPolicyFromUser(w http.ResponseWriter, r *http.Request) {
 	policyName := chi.URLParam(r, "name")
 
@@ -1262,12 +1335,14 @@ func (h *Handler) DetachPolicyFromUser(w http.ResponseWriter, r *http.Request) {
 
 	// Find and remove policy
 	found := false
+
 	newPolicies := make([]string, 0, len(user.Policies))
 	for _, p := range user.Policies {
 		if p == policyName {
 			found = true
 			continue
 		}
+
 		newPolicies = append(newPolicies, p)
 	}
 
@@ -1275,6 +1350,7 @@ func (h *Handler) DetachPolicyFromUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{
 			"message": "Policy not attached to user",
 		})
+
 		return
 	}
 
@@ -1295,7 +1371,7 @@ func (h *Handler) DetachPolicyFromUser(w http.ResponseWriter, r *http.Request) {
 // Node Metrics Handlers
 // ====================
 
-// GetNodeMetrics returns metrics for a specific node
+// GetNodeMetrics returns metrics for a specific node.
 func (h *Handler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) {
 	nodeID := chi.URLParam(r, "nodeId")
 
@@ -1306,6 +1382,7 @@ func (h *Handler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) {
 
 	// Find the specific node
 	var targetMember *cluster.NodeInfo
+
 	for _, member := range h.discovery.Members() {
 		if member.NodeID == nodeID {
 			targetMember = member
@@ -1335,7 +1412,7 @@ func (h *Handler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) {
 // Storage Metrics Handlers
 // ====================
 
-// GetStorageMetrics returns aggregate storage metrics across all nodes
+// GetStorageMetrics returns aggregate storage metrics across all nodes.
 func (h *Handler) GetStorageMetrics(w http.ResponseWriter, r *http.Request) {
 	nodes, err := h.store.ListNodes(r.Context())
 	if err != nil {
@@ -1344,8 +1421,10 @@ func (h *Handler) GetStorageMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Calculate aggregate storage metrics
-	var totalBytes, usedBytes, availableBytes, objectCount int64
-	var storageNodeCount int
+	var (
+		totalBytes, usedBytes, availableBytes, objectCount int64
+		storageNodeCount                                   int
+	)
 
 	for _, node := range nodes {
 		if node.StorageInfo != nil {
@@ -1359,6 +1438,7 @@ func (h *Handler) GetStorageMetrics(w http.ResponseWriter, r *http.Request) {
 
 	// Get bucket count
 	buckets, err := h.bucket.ListBuckets(r.Context(), "")
+
 	bucketCount := 0
 	if err == nil {
 		bucketCount = len(buckets)

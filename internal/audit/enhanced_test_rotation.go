@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestFileOutputRotation_NormalFlow tests the normal rotation flow with successful compression
+// TestFileOutputRotation_NormalFlow tests the normal rotation flow with successful compression.
 func TestFileOutputRotation_NormalFlow(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()
@@ -32,8 +32,10 @@ func TestFileOutputRotation_NormalFlow(t *testing.T) {
 	}
 
 	// Create initial log file
+	//nolint:gosec // G304: logPath is from test temp dir
 	f, err := os.Create(logPath)
 	require.NoError(t, err)
+
 	output.file = f
 	output.size = 0
 
@@ -41,6 +43,7 @@ func TestFileOutputRotation_NormalFlow(t *testing.T) {
 	testData := strings.Repeat("test log entry\n", 1000)
 	n, err := f.WriteString(testData)
 	require.NoError(t, err)
+
 	output.size = int64(n)
 
 	// Trigger rotation
@@ -55,6 +58,7 @@ func TestFileOutputRotation_NormalFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	var rotatedFile string
+
 	for _, entry := range entries {
 		if entry.Name() != "audit.log" && strings.HasPrefix(entry.Name(), "audit.log.") {
 			rotatedFile = filepath.Join(tmpDir, entry.Name())
@@ -77,7 +81,7 @@ func TestFileOutputRotation_NormalFlow(t *testing.T) {
 	}
 }
 
-// TestFileOutputRotation_CompressionSuccess tests that cleanup DOES run when compression succeeds
+// TestFileOutputRotation_CompressionSuccess tests that cleanup DOES run when compression succeeds.
 func TestFileOutputRotation_CompressionSuccess(t *testing.T) {
 	tmpDir := t.TempDir()
 	logPath := filepath.Join(tmpDir, "audit.log")
@@ -94,16 +98,19 @@ func TestFileOutputRotation_CompressionSuccess(t *testing.T) {
 	}
 
 	// Create initial log file
+	//nolint:gosec // G304: logPath is from test temp dir
 	f, err := os.Create(logPath)
 	require.NoError(t, err)
+
 	output.file = f
 
 	// Create several rotations to test cleanup
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		// Write data
 		testData := strings.Repeat(fmt.Sprintf("rotation %d\n", i), 1000)
 		_, err := f.WriteString(testData)
 		require.NoError(t, err)
+
 		output.size = int64(len(testData))
 
 		// Trigger rotation
@@ -115,8 +122,10 @@ func TestFileOutputRotation_CompressionSuccess(t *testing.T) {
 
 		// Reopen for next iteration
 		if i < 3 {
-			f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
+			//nolint:gosec // G304: logPath is from test temp dir
+			f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0600)
 			require.NoError(t, err)
+
 			output.file = f
 		}
 	}
@@ -129,6 +138,7 @@ func TestFileOutputRotation_CompressionSuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	gzCount := 0
+
 	for _, entry := range entries {
 		if strings.HasSuffix(entry.Name(), ".gz") {
 			gzCount++
@@ -139,7 +149,7 @@ func TestFileOutputRotation_CompressionSuccess(t *testing.T) {
 	assert.LessOrEqual(t, gzCount, 2, "Should have MaxBackups or fewer compressed files after cleanup")
 }
 
-// TestFileOutputRotation_NoCompressionCleanupRuns tests that cleanup runs when compression is disabled
+// TestFileOutputRotation_NoCompressionCleanupRuns tests that cleanup runs when compression is disabled.
 func TestFileOutputRotation_NoCompressionCleanupRuns(t *testing.T) {
 	tmpDir := t.TempDir()
 	logPath := filepath.Join(tmpDir, "audit.log")
@@ -158,13 +168,15 @@ func TestFileOutputRotation_NoCompressionCleanupRuns(t *testing.T) {
 	// Create initial log file
 	f, err := os.Create(logPath)
 	require.NoError(t, err)
+
 	output.file = f
 
 	// Create several rotations
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		testData := strings.Repeat(fmt.Sprintf("rotation %d\n", i), 1000)
 		_, err := f.WriteString(testData)
 		require.NoError(t, err)
+
 		output.size = int64(len(testData))
 
 		err = output.rotate()
@@ -173,8 +185,9 @@ func TestFileOutputRotation_NoCompressionCleanupRuns(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 
 		if i < 3 {
-			f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
+			f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0600)
 			require.NoError(t, err)
+
 			output.file = f
 		}
 	}
@@ -186,6 +199,7 @@ func TestFileOutputRotation_NoCompressionCleanupRuns(t *testing.T) {
 	require.NoError(t, err)
 
 	rotatedCount := 0
+
 	for _, entry := range entries {
 		// Count files that are rotated (not the current audit.log and not .gz)
 		if entry.Name() != "audit.log" && strings.HasPrefix(entry.Name(), "audit.log.") && !strings.HasSuffix(entry.Name(), ".gz") {
@@ -197,7 +211,7 @@ func TestFileOutputRotation_NoCompressionCleanupRuns(t *testing.T) {
 	assert.LessOrEqual(t, rotatedCount, 2, "Should have MaxBackups or fewer rotated files when compression is disabled")
 }
 
-// TestCompressFile_Success tests successful compression
+// TestCompressFile_Success tests successful compression.
 func TestCompressFile_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.log")
@@ -227,10 +241,12 @@ func TestCompressFile_Success(t *testing.T) {
 	// Verify compressed data is valid and matches original
 	gzFile, err := os.Open(compressedFile)
 	require.NoError(t, err)
+
 	defer func() { _ = gzFile.Close() }()
 
 	gzReader, err := gzip.NewReader(gzFile)
 	require.NoError(t, err)
+
 	defer func() { _ = gzReader.Close() }()
 
 	decompressed, err := io.ReadAll(gzReader)
@@ -239,7 +255,7 @@ func TestCompressFile_Success(t *testing.T) {
 	assert.Equal(t, testData, string(decompressed), "Decompressed data should match original")
 }
 
-// TestCompressFile_NonExistentFile tests error handling when file doesn't exist
+// TestCompressFile_NonExistentFile tests error handling when file doesn't exist.
 func TestCompressFile_NonExistentFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	nonExistentFile := filepath.Join(tmpDir, "nonexistent.log")
@@ -253,7 +269,7 @@ func TestCompressFile_NonExistentFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to open log file for compression", "Error should indicate file open failure")
 }
 
-// TestCompressFile_ReadOnlyDestination tests error handling when destination is read-only
+// TestCompressFile_ReadOnlyDestination tests error handling when destination is read-only.
 func TestCompressFile_ReadOnlyDestination(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("Skipping test when running as root (permissions don't apply)")
@@ -263,13 +279,14 @@ func TestCompressFile_ReadOnlyDestination(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "test.log")
 
 	// Create test file
-	err := os.WriteFile(testFile, []byte("test data"), 0644)
+	err := os.WriteFile(testFile, []byte("test data"), 0600)
 	require.NoError(t, err)
 
 	// Make directory read-only to prevent creating .gz file
-	err = os.Chmod(tmpDir, 0555)
+	err = os.Chmod(tmpDir, 0500)
 	require.NoError(t, err)
-	defer func() { _ = os.Chmod(tmpDir, 0755) }() // Restore permissions for cleanup
+
+	defer func() { _ = os.Chmod(tmpDir, 0750) }() // Restore permissions for cleanup
 
 	output := &FileOutput{
 		path: filepath.Join(tmpDir, "audit.log"),
@@ -280,7 +297,7 @@ func TestCompressFile_ReadOnlyDestination(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to create compressed log file", "Error should indicate file creation failure")
 }
 
-// TestFileOutputRotation_CompressionFailurePreventsCleanup tests that cleanup does NOT run when compression fails
+// TestFileOutputRotation_CompressionFailurePreventsCleanup tests that cleanup does NOT run when compression fails.
 func TestFileOutputRotation_CompressionFailurePreventsCleanup(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("Skipping test when running as root (permissions don't apply)")
@@ -303,10 +320,12 @@ func TestFileOutputRotation_CompressionFailurePreventsCleanup(t *testing.T) {
 	// Create and rotate first file
 	f, err := os.Create(logPath)
 	require.NoError(t, err)
+
 	output.file = f
 	testData1 := strings.Repeat("first rotation\n", 1000)
 	_, err = f.WriteString(testData1)
 	require.NoError(t, err)
+
 	output.size = int64(len(testData1))
 
 	err = output.rotate()
@@ -314,19 +333,22 @@ func TestFileOutputRotation_CompressionFailurePreventsCleanup(t *testing.T) {
 	time.Sleep(600 * time.Millisecond) // Wait for compression to complete
 
 	// Create and rotate second file - this will trigger cleanup if compression succeeds
-	f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
+	f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0600)
 	require.NoError(t, err)
+
 	output.file = f
 	testData2 := strings.Repeat("second rotation\n", 1000)
 	_, err = f.WriteString(testData2)
 	require.NoError(t, err)
+
 	output.size = int64(len(testData2))
 
 	// Make the directory read-only BEFORE rotation to cause compression to fail
 	// This simulates a disk space issue or permission problem during compression
-	err = os.Chmod(tmpDir, 0555)
+	err = os.Chmod(tmpDir, 0500)
 	require.NoError(t, err)
-	defer func() { _ = os.Chmod(tmpDir, 0755) }()
+
+	defer func() { _ = os.Chmod(tmpDir, 0700) }()
 
 	// Trigger rotation - compression will fail due to read-only directory
 	err = output.rotate()
@@ -347,11 +369,13 @@ func TestFileOutputRotation_CompressionFailurePreventsCleanup(t *testing.T) {
 
 	rotatedCount := 0
 	compressedCount := 0
+
 	for _, entry := range entries {
 		name := entry.Name()
 		if name == "audit.log" {
 			continue
 		}
+
 		if strings.HasSuffix(name, ".gz") {
 			compressedCount++
 		} else if strings.HasPrefix(name, "audit.log.") {

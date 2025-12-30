@@ -48,21 +48,24 @@ func GetRequestID(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
+
 	if requestID, ok := ctx.Value(requestIDKey).(string); ok {
 		return requestID
 	}
+
 	return ""
 }
 
 // generateRequestID generates a unique request ID.
 // The format is designed to be similar to AWS S3's request ID format:
 // - 16 characters of base64-encoded random bytes
-// - Includes timestamp component for sortability
+// - Includes timestamp component for sortability.
 func generateRequestID() string {
 	// Get current counter value and increment
 	counter := atomic.AddUint64(&requestCounter, 1)
 
 	// Get timestamp in milliseconds
+	//nolint:gosec // G115: timestamp is always positive for current time
 	timestamp := uint64(time.Now().UnixNano() / int64(time.Millisecond))
 
 	// Create a buffer with timestamp, counter, and random bytes
@@ -94,6 +97,7 @@ func generateRequestID() string {
 func generateExtendedRequestID() string {
 	buf := make([]byte, 48)
 	rand.Read(buf)
+
 	return base64.StdEncoding.EncodeToString(buf)
 }
 

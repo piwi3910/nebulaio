@@ -7,15 +7,15 @@ import (
 	"time"
 )
 
-// PackedBlock represents a block containing multiple small objects
+// PackedBlock represents a block containing multiple small objects.
 type PackedBlock struct {
-	header   BlockHeader
 	data     []byte
+	header   BlockHeader
 	blockNum uint32
 	dirty    bool
 }
 
-// NewPackedBlock creates a new empty packed block
+// NewPackedBlock creates a new empty packed block.
 func NewPackedBlock(blockType uint8, blockNum uint32) *PackedBlock {
 	return &PackedBlock{
 		header: BlockHeader{
@@ -30,7 +30,7 @@ func NewPackedBlock(blockType uint8, blockNum uint32) *PackedBlock {
 	}
 }
 
-// LoadPackedBlock reads a packed block from disk
+// LoadPackedBlock reads a packed block from disk.
 func (v *Volume) LoadPackedBlock(blockNum uint32) (*PackedBlock, error) {
 	data, err := v.readBlock(blockNum)
 	if err != nil {
@@ -50,7 +50,7 @@ func (v *Volume) LoadPackedBlock(blockNum uint32) (*PackedBlock, error) {
 	}, nil
 }
 
-// Save writes the packed block to disk
+// Save writes the packed block to disk.
 func (pb *PackedBlock) Save(v *Volume) error {
 	// Update header in data
 	copy(pb.data[:BlockHeaderSize], pb.header.Marshal())
@@ -59,37 +59,41 @@ func (pb *PackedBlock) Save(v *Volume) error {
 	pb.header.Checksum = crc32.ChecksumIEEE(pb.data[BlockHeaderSize:pb.header.FreeOffset])
 	copy(pb.data[:BlockHeaderSize], pb.header.Marshal())
 
-	if err := v.writeBlock(pb.blockNum, pb.data); err != nil {
+	err := v.writeBlock(pb.blockNum, pb.data)
+	if err != nil {
 		return err
 	}
 
 	pb.dirty = false
+
 	return nil
 }
 
-// CanFit checks if an object of given size can fit in this block
+// CanFit checks if an object of given size can fit in this block.
 func (pb *PackedBlock) CanFit(keyLen int, dataSize int) bool {
 	needed := ObjectEntryTotalSize(keyLen, dataSize)
+	//nolint:gosec // G115: needed is bounded by block size
 	return uint32(needed) <= pb.header.FreeSize
 }
 
-// FreeSpace returns the amount of free space in the block
+// FreeSpace returns the amount of free space in the block.
 func (pb *PackedBlock) FreeSpace() uint32 {
 	return pb.header.FreeSize
 }
 
-// ObjectCount returns the number of objects in the block
+// ObjectCount returns the number of objects in the block.
 func (pb *PackedBlock) ObjectCount() uint32 {
 	return pb.header.ObjectCount
 }
 
 // Append adds an object to the packed block
-// Returns the offset within the block where the object was stored
+// Returns the offset within the block where the object was stored.
 func (pb *PackedBlock) Append(keyHash [16]byte, key string, data []byte) (uint32, error) {
 	keyLen := len(key)
 	dataSize := len(data)
 	totalSize := ObjectEntryTotalSize(keyLen, dataSize)
 
+	//nolint:gosec // G115: totalSize is bounded by block size
 	if uint32(totalSize) > pb.header.FreeSize {
 		return 0, ErrBlockFull
 	}
@@ -99,8 +103,8 @@ func (pb *PackedBlock) Append(keyHash [16]byte, key string, data []byte) (uint32
 	// Create object entry
 	entry := ObjectEntry{
 		KeyHash:  keyHash,
-		DataSize: uint32(dataSize),
-		KeyLen:   uint16(keyLen),
+		DataSize: uint32(dataSize), //nolint:gosec // G115: dataSize validated at caller
+		KeyLen:   uint16(keyLen),   //nolint:gosec // G115: keyLen bounded by S3 limits
 		Flags:    0,
 		Checksum: crc32.ChecksumIEEE(data),
 	}
@@ -113,25 +117,31 @@ func (pb *PackedBlock) Append(keyHash [16]byte, key string, data []byte) (uint32
 	copy(pb.data[offset+ObjectEntrySize:], key)
 
 	// Write data
+	//nolint:gosec // G115: keyLen bounded by S3 limits
 	copy(pb.data[offset+ObjectEntrySize+uint32(keyLen):], data)
 
 	// Update header
 	pb.header.ObjectCount++
+	//nolint:gosec // G115: totalSize is bounded by block size
 	pb.header.FreeOffset = offset + uint32(totalSize)
+	//nolint:gosec // G115: totalSize is bounded by block size
 	pb.header.FreeSize -= uint32(totalSize)
 
 	// Update key range
 	if pb.header.ObjectCount == 1 {
 		pb.header.FirstKey = keyHash
 	}
+
 	pb.header.LastKey = keyHash
 
 	pb.dirty = true
+
 	return offset, nil
 }
 
-// ReadObject reads an object from the packed block
+// ReadObject reads an object from the packed block.
 func (pb *PackedBlock) ReadObject(offset uint32) (key string, data []byte, flags uint16, err error) {
+	//nolint:gosec // G115: len(pb.data) bounded by block size
 	if offset+ObjectEntrySize > uint32(len(pb.data)) {
 		return "", nil, 0, ErrInvalidObjectEntry
 	}
@@ -144,18 +154,22 @@ func (pb *PackedBlock) ReadObject(offset uint32) (key string, data []byte, flags
 
 	// Read key
 	keyStart := offset + ObjectEntrySize
+
 	keyEnd := keyStart + uint32(entry.KeyLen)
 	if keyEnd > uint32(len(pb.data)) {
 		return "", nil, 0, ErrInvalidObjectEntry
 	}
+
 	key = string(pb.data[keyStart:keyEnd])
 
 	// Read data
 	dataStart := keyEnd
+
 	dataEnd := dataStart + entry.DataSize
 	if dataEnd > uint32(len(pb.data)) {
 		return "", nil, 0, ErrInvalidObjectEntry
 	}
+
 	data = make([]byte, entry.DataSize)
 	copy(data, pb.data[dataStart:dataEnd])
 
@@ -167,7 +181,7 @@ func (pb *PackedBlock) ReadObject(offset uint32) (key string, data []byte, flags
 	return key, data, entry.Flags, nil
 }
 
-// MarkDeleted marks an object as deleted in the packed block
+// MarkDeleted marks an object as deleted in the packed block.
 func (pb *PackedBlock) MarkDeleted(offset uint32) error {
 	if offset+ObjectEntrySize > uint32(len(pb.data)) {
 		return ErrInvalidObjectEntry
@@ -183,10 +197,11 @@ func (pb *PackedBlock) MarkDeleted(offset uint32) error {
 	pb.data[flagsOffset+1] = byte(flags >> 8)
 
 	pb.dirty = true
+
 	return nil
 }
 
-// Put stores an object in the volume
+// Put stores an object in the volume.
 func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -216,9 +231,11 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 		v.compactionStats.DeletedObjectsCount++
 	}
 
-	var blockNum uint32
-	var offsetInBlock uint32
-	var blockCount uint16 = 1
+	var (
+		blockNum      uint32
+		offsetInBlock uint32
+		blockCount    uint16 = 1
+	)
 
 	sizeClass := SizeClassForObject(size)
 
@@ -233,43 +250,55 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 	case BlockTypeLarge:
 		// Single block for medium-large objects
 		var err error
+
 		blockNum, err = v.allocateBlock()
 		if err != nil {
 			return err
 		}
+
 		v.blockTypes[blockNum] = BlockTypeLarge
 		if err := v.writeBlock(blockNum, data); err != nil {
 			return err
 		}
+
 		offsetInBlock = 0
 
 	case BlockTypeSpanning:
 		// Multiple blocks for very large objects
 		blocksNeeded := BlocksNeeded(size)
+
 		var err error
+
 		blockNum, err = v.allocateBlocks(blocksNeeded)
 		if err != nil {
 			return err
 		}
+
+		//nolint:gosec // G115: blocksNeeded bounded by max object size
 		blockCount = uint16(blocksNeeded)
 
 		// Mark blocks as spanning
-		for i := 0; i < blocksNeeded; i++ {
+		for i := range blocksNeeded {
 			v.blockTypes[blockNum+uint32(i)] = BlockTypeSpanning
 		}
 
 		// Write data across blocks
 		remaining := data
-		for i := 0; i < blocksNeeded; i++ {
+
+		for i := range blocksNeeded {
 			writeSize := BlockSize
 			if len(remaining) < BlockSize {
 				writeSize = len(remaining)
 			}
-			if err := v.writeBlock(blockNum+uint32(i), remaining[:writeSize]); err != nil {
+
+			err := v.writeBlock(blockNum+uint32(i), remaining[:writeSize])
+			if err != nil {
 				return err
 			}
+
 			remaining = remaining[writeSize:]
 		}
+
 		offsetInBlock = 0
 	}
 
@@ -280,7 +309,7 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 			BlockNum:      blockNum,
 			BlockCount:    blockCount,
 			OffsetInBlock: offsetInBlock,
-			Size:          uint64(size),
+			Size:          uint64(size), //nolint:gosec // G115: size is validated positive
 			Created:       time.Now().UnixNano(),
 			Flags:         0,
 			KeyLen:        uint16(len(fullKey)),
@@ -294,10 +323,11 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 	return nil
 }
 
-// putPacked stores an object in a packed block
+// putPacked stores an object in a packed block.
 func (v *Volume) putPacked(blockType uint8, keyHash [16]byte, key string, data []byte) (uint32, uint32) {
 	// Get or create active block for this size class
 	var activeBlock *uint32
+
 	switch blockType {
 	case BlockTypePackedTiny:
 		activeBlock = &v.activeTiny
@@ -313,7 +343,8 @@ func (v *Volume) putPacked(blockType uint8, keyHash [16]byte, key string, data [
 		if err == nil && pb.CanFit(len(key), len(data)) {
 			offset, err := pb.Append(keyHash, key, data)
 			if err == nil {
-				if err := pb.Save(v); err == nil {
+				err := pb.Save(v)
+				if err == nil {
 					return *activeBlock, offset
 				}
 			}
@@ -330,6 +361,7 @@ func (v *Volume) putPacked(blockType uint8, keyHash [16]byte, key string, data [
 	*activeBlock = blockNum
 
 	pb := NewPackedBlock(blockType, blockNum)
+
 	offset, err := pb.Append(keyHash, key, data)
 	if err != nil {
 		return 0xFFFFFFFF, 0
@@ -342,7 +374,7 @@ func (v *Volume) putPacked(blockType uint8, keyHash [16]byte, key string, data [
 	return blockNum, offset
 }
 
-// Get retrieves an object from the volume
+// Get retrieves an object from the volume.
 func (v *Volume) Get(bucket, key string) ([]byte, error) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -365,13 +397,16 @@ func (v *Volume) Get(bucket, key string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		_, data, flags, err := pb.ReadObject(entry.OffsetInBlock)
 		if err != nil {
 			return nil, err
 		}
+
 		if flags&FlagDeleted != 0 {
 			return nil, ErrObjectNotFound
 		}
+
 		return data, nil
 
 	case BlockTypeLarge:
@@ -380,40 +415,46 @@ func (v *Volume) Get(bucket, key string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return data[:entry.Size], nil
 
 	case BlockTypeSpanning:
 		// Read multiple blocks
 		data := make([]byte, entry.Size)
 		remaining := data
-		for i := uint16(0); i < entry.BlockCount; i++ {
+
+		for i := range uint16(entry.BlockCount) {
 			block, err := v.readBlock(entry.BlockNum + uint32(i))
 			if err != nil {
 				return nil, err
 			}
+
 			copySize := BlockSize
 			if len(remaining) < BlockSize {
 				copySize = len(remaining)
 			}
+
 			copy(remaining[:copySize], block[:copySize])
 			remaining = remaining[copySize:]
 		}
+
 		return data, nil
 	}
 
 	return nil, ErrInvalidBlockType
 }
 
-// GetReader returns a reader for the object data
+// GetReader returns a reader for the object data.
 func (v *Volume) GetReader(bucket, key string) (io.ReadCloser, int64, error) {
 	data, err := v.Get(bucket, key)
 	if err != nil {
 		return nil, 0, err
 	}
+
 	return io.NopCloser(bytes.NewReader(data)), int64(len(data)), nil
 }
 
-// Delete marks an object as deleted
+// Delete marks an object as deleted.
 func (v *Volume) Delete(bucket, key string) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -434,9 +475,11 @@ func (v *Volume) Delete(bucket, key string) error {
 		if err != nil {
 			return err
 		}
+
 		if err := pb.MarkDeleted(entry.OffsetInBlock); err != nil {
 			return err
 		}
+
 		if err := pb.Save(v); err != nil {
 			return err
 		}
@@ -456,7 +499,7 @@ func (v *Volume) Delete(bucket, key string) error {
 	return nil
 }
 
-// Exists checks if an object exists in the volume
+// Exists checks if an object exists in the volume.
 func (v *Volume) Exists(bucket, key string) bool {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -466,10 +509,11 @@ func (v *Volume) Exists(bucket, key string) bool {
 	}
 
 	_, exists := v.index.Get(bucket, key)
+
 	return exists
 }
 
-// List returns objects matching a prefix
+// List returns objects matching a prefix.
 func (v *Volume) List(bucket, prefix string, maxKeys int) ([]ObjectInfo, error) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -482,6 +526,7 @@ func (v *Volume) List(bucket, prefix string, maxKeys int) ([]ObjectInfo, error) 
 	result := make([]ObjectInfo, len(entries))
 
 	bucketPrefix := bucket + "/"
+
 	for i, entry := range entries {
 		// Extract just the key part (remove bucket prefix)
 		objKey := entry.Key
@@ -492,7 +537,7 @@ func (v *Volume) List(bucket, prefix string, maxKeys int) ([]ObjectInfo, error) 
 		result[i] = ObjectInfo{
 			Bucket:  bucket,
 			Key:     objKey,
-			Size:    int64(entry.Size),
+			Size:    int64(entry.Size), //nolint:gosec // G115: entry.Size is uint64 from storage
 			Created: time.Unix(0, entry.Created),
 			KeyHash: entry.KeyHash,
 		}
@@ -501,11 +546,11 @@ func (v *Volume) List(bucket, prefix string, maxKeys int) ([]ObjectInfo, error) 
 	return result, nil
 }
 
-// ObjectInfo contains information about an object
+// ObjectInfo contains information about an object.
 type ObjectInfo struct {
+	Created time.Time
 	Bucket  string
 	Key     string
 	Size    int64
-	Created time.Time
 	KeyHash [16]byte
 }

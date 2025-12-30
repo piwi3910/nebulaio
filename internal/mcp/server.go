@@ -18,33 +18,33 @@ import (
 	"github.com/google/uuid"
 )
 
-// MCP Protocol Version
+// MCP Protocol Version.
 const MCPVersion = "2024-11-05"
 
-// MCP Errors
+// MCP Errors.
 var (
-	ErrInvalidRequest     = errors.New("invalid request")
-	ErrMethodNotFound     = errors.New("method not found")
-	ErrResourceNotFound   = errors.New("resource not found")
-	ErrToolNotFound       = errors.New("tool not found")
-	ErrUnauthorized       = errors.New("unauthorized")
-	ErrRateLimited        = errors.New("rate limited")
-	ErrInternalError      = errors.New("internal server error")
+	ErrInvalidRequest   = errors.New("invalid request")
+	ErrMethodNotFound   = errors.New("method not found")
+	ErrResourceNotFound = errors.New("resource not found")
+	ErrToolNotFound     = errors.New("tool not found")
+	ErrUnauthorized     = errors.New("unauthorized")
+	ErrRateLimited      = errors.New("rate limited")
+	ErrInternalError    = errors.New("internal server error")
 )
 
-// Server implements the MCP server for AI agent interactions
+// Server implements the MCP server for AI agent interactions.
 type Server struct {
-	config    *ServerConfig
 	store     ObjectStore
+	config    *ServerConfig
 	tools     map[string]*Tool
 	resources map[string]*Resource
 	prompts   map[string]*Prompt
-	sessions  sync.Map // map[string]*Session
 	metrics   *ServerMetrics
+	sessions  sync.Map
 	mu        sync.RWMutex
 }
 
-// ServerConfig configures the MCP server
+// ServerConfig configures the MCP server.
 type ServerConfig struct {
 	// ServerName is the name of this MCP server
 	ServerName string
@@ -68,7 +68,7 @@ type ServerConfig struct {
 	EnableMetrics bool
 }
 
-// DefaultServerConfig returns sensible defaults
+// DefaultServerConfig returns sensible defaults.
 func DefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
 		ServerName:         "nebulaio-mcp",
@@ -81,7 +81,7 @@ func DefaultServerConfig() *ServerConfig {
 	}
 }
 
-// ObjectStore interface for storage operations
+// ObjectStore interface for storage operations.
 type ObjectStore interface {
 	GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, map[string]string, error)
 	PutObject(ctx context.Context, bucket, key string, data io.Reader, size int64, metadata map[string]string) (string, error)
@@ -91,48 +91,48 @@ type ObjectStore interface {
 	HeadObject(ctx context.Context, bucket, key string) (*ObjectMetadata, error)
 }
 
-// ObjectInfo contains object metadata
+// ObjectInfo contains object metadata.
 type ObjectInfo struct {
-	Key          string
-	Size         int64
-	ETag         string
 	LastModified time.Time
-	ContentType  string
-}
-
-// BucketInfo contains bucket metadata
-type BucketInfo struct {
-	Name         string
-	CreationDate time.Time
-}
-
-// ObjectMetadata contains detailed object metadata
-type ObjectMetadata struct {
-	Size         int64
+	Key          string
 	ETag         string
 	ContentType  string
+	Size         int64
+}
+
+// BucketInfo contains bucket metadata.
+type BucketInfo struct {
+	CreationDate time.Time
+	Name         string
+}
+
+// ObjectMetadata contains detailed object metadata.
+type ObjectMetadata struct {
 	LastModified time.Time
 	Metadata     map[string]string
+	ETag         string
+	ContentType  string
+	Size         int64
 }
 
-// Tool represents an MCP tool that agents can invoke
+// Tool represents an MCP tool that agents can invoke.
 type Tool struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
 	InputSchema map[string]interface{} `json:"inputSchema"`
 	Handler     ToolHandler            `json:"-"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
 }
 
-// ToolHandler is a function that handles tool invocations
+// ToolHandler is a function that handles tool invocations.
 type ToolHandler func(ctx context.Context, args map[string]interface{}) (*ToolResult, error)
 
-// ToolResult is the result of a tool invocation
+// ToolResult is the result of a tool invocation.
 type ToolResult struct {
 	Content []ContentBlock `json:"content"`
 	IsError bool           `json:"isError,omitempty"`
 }
 
-// ContentBlock represents content in MCP messages
+// ContentBlock represents content in MCP messages.
 type ContentBlock struct {
 	Type     string `json:"type"` // "text", "image", "resource"
 	Text     string `json:"text,omitempty"`
@@ -141,7 +141,7 @@ type ContentBlock struct {
 	URI      string `json:"uri,omitempty"`
 }
 
-// Resource represents an MCP resource
+// Resource represents an MCP resource.
 type Resource struct {
 	URI         string `json:"uri"`
 	Name        string `json:"name"`
@@ -149,43 +149,43 @@ type Resource struct {
 	MimeType    string `json:"mimeType,omitempty"`
 }
 
-// Prompt represents an MCP prompt template
+// Prompt represents an MCP prompt template.
 type Prompt struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description,omitempty"`
 	Arguments   []PromptArgument `json:"arguments,omitempty"`
 }
 
-// PromptArgument is an argument for a prompt
+// PromptArgument is an argument for a prompt.
 type PromptArgument struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Required    bool   `json:"required,omitempty"`
 }
 
-// Session represents an MCP session
+// Session represents an MCP session.
 type Session struct {
-	ID            string
-	CreatedAt     time.Time
-	LastActivity  time.Time
-	RequestCount  int64
-	Capabilities  *ClientCapabilities
-	mu            sync.RWMutex
+	CreatedAt    time.Time
+	LastActivity time.Time
+	Capabilities *ClientCapabilities
+	ID           string
+	RequestCount int64
+	mu           sync.RWMutex
 }
 
-// ClientCapabilities describes client capabilities
+// ClientCapabilities describes client capabilities.
 type ClientCapabilities struct {
 	Experimental map[string]interface{} `json:"experimental,omitempty"`
 	Roots        *RootsCapability       `json:"roots,omitempty"`
 	Sampling     map[string]interface{} `json:"sampling,omitempty"`
 }
 
-// RootsCapability for roots support
+// RootsCapability for roots support.
 type RootsCapability struct {
 	ListChanged bool `json:"listChanged,omitempty"`
 }
 
-// ServerMetrics tracks MCP server metrics
+// ServerMetrics tracks MCP server metrics.
 type ServerMetrics struct {
 	mu               sync.RWMutex
 	RequestsTotal    int64
@@ -199,7 +199,7 @@ type ServerMetrics struct {
 	LatencyCount     int64
 }
 
-// NewServer creates a new MCP server
+// NewServer creates a new MCP server.
 func NewServer(store ObjectStore, config *ServerConfig) *Server {
 	if config == nil {
 		config = DefaultServerConfig()
@@ -223,7 +223,7 @@ func NewServer(store ObjectStore, config *ServerConfig) *Server {
 	return s
 }
 
-// registerBuiltInTools registers the built-in S3 tools
+// registerBuiltInTools registers the built-in S3 tools.
 func (s *Server) registerBuiltInTools() {
 	// List buckets tool
 	s.RegisterTool(&Tool{
@@ -404,7 +404,7 @@ func (s *Server) registerBuiltInTools() {
 	})
 }
 
-// registerBuiltInPrompts registers built-in prompt templates
+// registerBuiltInPrompts registers built-in prompt templates.
 func (s *Server) registerBuiltInPrompts() {
 	s.RegisterPrompt(&Prompt{
 		Name:        "analyze_data",
@@ -427,24 +427,27 @@ func (s *Server) registerBuiltInPrompts() {
 	})
 }
 
-// RegisterTool registers a new tool
+// RegisterTool registers a new tool.
 func (s *Server) RegisterTool(tool *Tool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.tools[tool.Name] = tool
 }
 
-// RegisterResource registers a new resource
+// RegisterResource registers a new resource.
 func (s *Server) RegisterResource(resource *Resource) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.resources[resource.URI] = resource
 }
 
-// RegisterPrompt registers a new prompt
+// RegisterPrompt registers a new prompt.
 func (s *Server) RegisterPrompt(prompt *Prompt) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.prompts[prompt.Name] = prompt
 }
 
@@ -461,6 +464,7 @@ func (s *Server) handleListBuckets(ctx context.Context, args map[string]interfac
 
 	var sb strings.Builder
 	sb.WriteString("Available buckets:\n")
+
 	for _, b := range buckets {
 		sb.WriteString(fmt.Sprintf("- %s (created: %s)\n", b.Name, b.CreationDate.Format(time.RFC3339)))
 	}
@@ -498,10 +502,12 @@ func (s *Server) handleListObjects(ctx context.Context, args map[string]interfac
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Objects in %s", bucket))
+	sb.WriteString("Objects in " + bucket)
+
 	if prefix != "" {
 		sb.WriteString(fmt.Sprintf(" (prefix: %s)", prefix))
 	}
+
 	sb.WriteString(":\n")
 
 	for _, obj := range objects {
@@ -542,6 +548,7 @@ func (s *Server) handleGetObject(ctx context.Context, args map[string]interface{
 			IsError: true,
 		}, nil
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Read content
@@ -613,6 +620,7 @@ func (s *Server) handlePutObject(ctx context.Context, args map[string]interface{
 	}
 
 	data := []byte(content)
+
 	etag, err := s.store.PutObject(ctx, bucket, key, bytes.NewReader(data), int64(len(data)), metadata)
 	if err != nil {
 		return &ToolResult{
@@ -696,6 +704,7 @@ func (s *Server) handleHeadObject(ctx context.Context, args map[string]interface
 
 	if len(meta.Metadata) > 0 {
 		sb.WriteString("Metadata:\n")
+
 		for k, v := range meta.Metadata {
 			sb.WriteString(fmt.Sprintf("  %s: %s\n", k, v))
 		}
@@ -739,6 +748,7 @@ func (s *Server) handleSearchObjects(ctx context.Context, args map[string]interf
 
 	// Filter by pattern
 	var matches []ObjectInfo
+
 	for _, obj := range objects {
 		if matchPattern(obj.Key, pattern) {
 			matches = append(matches, obj)
@@ -804,6 +814,7 @@ func (s *Server) handleCopyObject(ctx context.Context, args map[string]interface
 			IsError: true,
 		}, nil
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	data, err := io.ReadAll(reader)
@@ -834,7 +845,7 @@ func (s *Server) handleCopyObject(ctx context.Context, args map[string]interface
 
 // MCP Protocol Messages
 
-// JSONRPCRequest represents a JSON-RPC 2.0 request
+// JSONRPCRequest represents a JSON-RPC 2.0 request.
 type JSONRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      interface{}     `json:"id"`
@@ -842,42 +853,42 @@ type JSONRPCRequest struct {
 	Params  json.RawMessage `json:"params,omitempty"`
 }
 
-// JSONRPCResponse represents a JSON-RPC 2.0 response
+// JSONRPCResponse represents a JSON-RPC 2.0 response.
 type JSONRPCResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      interface{}     `json:"id"`
-	Result  interface{}     `json:"result,omitempty"`
-	Error   *JSONRPCError   `json:"error,omitempty"`
+	ID      interface{}   `json:"id"`
+	Result  interface{}   `json:"result,omitempty"`
+	Error   *JSONRPCError `json:"error,omitempty"`
+	JSONRPC string        `json:"jsonrpc"`
 }
 
-// JSONRPCError represents a JSON-RPC 2.0 error
+// JSONRPCError represents a JSON-RPC 2.0 error.
 type JSONRPCError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
+	Message string      `json:"message"`
+	Code    int         `json:"code"`
 }
 
-// InitializeParams for initialize request
+// InitializeParams for initialize request.
 type InitializeParams struct {
-	ProtocolVersion string              `json:"protocolVersion"`
 	Capabilities    *ClientCapabilities `json:"capabilities"`
 	ClientInfo      *ClientInfo         `json:"clientInfo"`
+	ProtocolVersion string              `json:"protocolVersion"`
 }
 
-// ClientInfo describes the client
+// ClientInfo describes the client.
 type ClientInfo struct {
 	Name    string `json:"name"`
 	Version string `json:"version,omitempty"`
 }
 
-// InitializeResult for initialize response
+// InitializeResult for initialize response.
 type InitializeResult struct {
-	ProtocolVersion string              `json:"protocolVersion"`
 	Capabilities    *ServerCapabilities `json:"capabilities"`
 	ServerInfo      *ServerInfo         `json:"serverInfo"`
+	ProtocolVersion string              `json:"protocolVersion"`
 }
 
-// ServerCapabilities describes server capabilities
+// ServerCapabilities describes server capabilities.
 type ServerCapabilities struct {
 	Experimental map[string]interface{} `json:"experimental,omitempty"`
 	Logging      map[string]interface{} `json:"logging,omitempty"`
@@ -886,29 +897,29 @@ type ServerCapabilities struct {
 	Tools        *ToolsCapability       `json:"tools,omitempty"`
 }
 
-// PromptsCapability for prompts support
+// PromptsCapability for prompts support.
 type PromptsCapability struct {
 	ListChanged bool `json:"listChanged,omitempty"`
 }
 
-// ResourcesCapability for resources support
+// ResourcesCapability for resources support.
 type ResourcesCapability struct {
 	Subscribe   bool `json:"subscribe,omitempty"`
 	ListChanged bool `json:"listChanged,omitempty"`
 }
 
-// ToolsCapability for tools support
+// ToolsCapability for tools support.
 type ToolsCapability struct {
 	ListChanged bool `json:"listChanged,omitempty"`
 }
 
-// ServerInfo describes the server
+// ServerInfo describes the server.
 type ServerInfo struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
 }
 
-// HandleHTTP handles HTTP requests for the MCP server
+// HandleHTTP handles HTTP requests for the MCP server.
 func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -916,6 +927,7 @@ func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	start := time.Now()
+
 	atomic.AddInt64(&s.metrics.RequestsTotal, 1)
 
 	// Read request body
@@ -923,6 +935,7 @@ func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.sendError(w, nil, -32700, "Parse error")
 		atomic.AddInt64(&s.metrics.RequestsFailed, 1)
+
 		return
 	}
 
@@ -930,12 +943,14 @@ func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(body, &req); err != nil {
 		s.sendError(w, nil, -32700, "Parse error")
 		atomic.AddInt64(&s.metrics.RequestsFailed, 1)
+
 		return
 	}
 
 	if req.JSONRPC != "2.0" {
 		s.sendError(w, req.ID, -32600, "Invalid Request")
 		atomic.AddInt64(&s.metrics.RequestsFailed, 1)
+
 		return
 	}
 
@@ -944,6 +959,7 @@ func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.sendError(w, req.ID, -32603, err.Error())
 		atomic.AddInt64(&s.metrics.RequestsFailed, 1)
+
 		return
 	}
 
@@ -955,6 +971,7 @@ func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		// Response already started, log error but can't do much
 		_ = err
@@ -995,7 +1012,8 @@ func (s *Server) handleRequest(ctx context.Context, req *JSONRPCRequest) (interf
 
 func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (*InitializeResult, error) {
 	var initParams InitializeParams
-	if err := json.Unmarshal(params, &initParams); err != nil {
+	err := json.Unmarshal(params, &initParams)
+	if err != nil {
 		return nil, err
 	}
 
@@ -1051,11 +1069,12 @@ func (s *Server) handleListTools(ctx context.Context) (map[string]interface{}, e
 
 func (s *Server) handleCallTool(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
 	var callParams struct {
-		Name      string                 `json:"name"`
 		Arguments map[string]interface{} `json:"arguments"`
+		Name      string                 `json:"name"`
 	}
 
-	if err := json.Unmarshal(params, &callParams); err != nil {
+	err := json.Unmarshal(params, &callParams)
+	if err != nil {
 		return nil, err
 	}
 
@@ -1086,9 +1105,9 @@ func (s *Server) handleListResources(ctx context.Context) (map[string]interface{
 	if err == nil {
 		for _, b := range buckets {
 			resources = append(resources, Resource{
-				URI:         fmt.Sprintf("s3://%s", b.Name),
+				URI:         "s3://" + b.Name,
 				Name:        b.Name,
-				Description: fmt.Sprintf("S3 bucket: %s", b.Name),
+				Description: "S3 bucket: " + b.Name,
 				MimeType:    "application/x-directory",
 			})
 		}
@@ -1114,12 +1133,14 @@ func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage)
 	}
 
 	path := strings.TrimPrefix(readParams.URI, "s3://")
+
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) < 1 {
 		return nil, ErrResourceNotFound
 	}
 
 	bucket := parts[0]
+
 	key := ""
 	if len(parts) > 1 {
 		key = parts[1]
@@ -1153,6 +1174,7 @@ func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	data, err := io.ReadAll(reader)
@@ -1195,11 +1217,12 @@ func (s *Server) handleListPrompts(ctx context.Context) (map[string]interface{},
 
 func (s *Server) handleGetPrompt(ctx context.Context, params json.RawMessage) (map[string]interface{}, error) {
 	var getParams struct {
-		Name      string                 `json:"name"`
 		Arguments map[string]interface{} `json:"arguments"`
+		Name      string                 `json:"name"`
 	}
 
-	if err := json.Unmarshal(params, &getParams); err != nil {
+	err := json.Unmarshal(params, &getParams)
+	if err != nil {
 		return nil, err
 	}
 
@@ -1218,6 +1241,7 @@ func (s *Server) handleGetPrompt(ctx context.Context, params json.RawMessage) (m
 	case "analyze_data":
 		bucket := getParams.Arguments["bucket"].(string)
 		key := getParams.Arguments["key"].(string)
+
 		analysisType := "summary"
 		if at, ok := getParams.Arguments["analysis_type"].(string); ok {
 			analysisType = at
@@ -1235,10 +1259,12 @@ func (s *Server) handleGetPrompt(ctx context.Context, params json.RawMessage) (m
 
 	case "generate_report":
 		bucket := getParams.Arguments["bucket"].(string)
+
 		prefix := ""
 		if p, ok := getParams.Arguments["prefix"].(string); ok {
 			prefix = p
 		}
+
 		format := "markdown"
 		if f, ok := getParams.Arguments["format"].(string); ok {
 			format = f
@@ -1273,13 +1299,15 @@ func (s *Server) sendError(w http.ResponseWriter, id interface{}, code int, mess
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK) // JSON-RPC always returns 200
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
+	err := json.NewEncoder(w).Encode(resp)
+
+	if err != nil {
 		// Response already started, log error but can't do much
 		_ = err
 	}
 }
 
-// GetMetrics returns server metrics
+// GetMetrics returns server metrics.
 func (s *Server) GetMetrics() *ServerMetrics {
 	s.metrics.mu.RLock()
 	defer s.metrics.mu.RUnlock()
@@ -1297,17 +1325,19 @@ func (s *Server) GetMetrics() *ServerMetrics {
 	}
 }
 
-// AverageLatency returns average request latency
+// AverageLatency returns average request latency.
 func (m *ServerMetrics) AverageLatency() time.Duration {
 	if m.LatencyCount == 0 {
 		return 0
 	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.LatencySum / time.Duration(m.LatencyCount)
 }
 
-// matchPattern matches a key against a pattern with * wildcards
+// matchPattern matches a key against a pattern with * wildcards.
 func matchPattern(key, pattern string) bool {
 	if pattern == "*" {
 		return true
@@ -1330,6 +1360,7 @@ func matchPattern(key, pattern string) bool {
 
 	// Check middle parts
 	remaining := key
+
 	for i, part := range parts {
 		if part == "" {
 			continue

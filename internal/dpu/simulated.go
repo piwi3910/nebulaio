@@ -8,6 +8,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -16,13 +17,13 @@ import (
 
 // SimulatedBackend provides a simulated BlueField DPU backend for testing.
 type SimulatedBackend struct {
+	selectedDPU  *DPUInfo
+	services     map[OffloadType]bool
+	dpus         []*DPUInfo
+	latencyNs    int64
+	_failureRate float64
 	mu           sync.RWMutex
 	initialized  bool
-	selectedDPU  *DPUInfo
-	dpus         []*DPUInfo
-	services     map[OffloadType]bool
-	latencyNs    int64
-	_failureRate float64 // 0.0 - 1.0, for testing failures (reserved for future use)
 }
 
 // NewSimulatedBackend creates a new simulated DPU backend.
@@ -91,6 +92,7 @@ func (b *SimulatedBackend) Init() error {
 	}
 
 	b.initialized = true
+
 	return nil
 }
 
@@ -102,6 +104,7 @@ func (b *SimulatedBackend) Close() error {
 	b.services = make(map[OffloadType]bool)
 	b.selectedDPU = nil
 	b.initialized = false
+
 	return nil
 }
 
@@ -116,6 +119,7 @@ func (b *SimulatedBackend) DetectDPUs() ([]*DPUInfo, error) {
 
 	result := make([]*DPUInfo, len(b.dpus))
 	copy(result, b.dpus)
+
 	return result, nil
 }
 
@@ -133,6 +137,7 @@ func (b *SimulatedBackend) SelectDPU(index int) (*DPUInfo, error) {
 	}
 
 	b.selectedDPU = b.dpus[index]
+
 	return b.selectedDPU, nil
 }
 
@@ -151,6 +156,7 @@ func (b *SimulatedBackend) StartService(offloadType OffloadType, config interfac
 
 	// Check if DPU supports this offload
 	supported := false
+
 	for _, cap := range b.selectedDPU.Capabilities {
 		if cap == offloadType {
 			supported = true
@@ -167,6 +173,7 @@ func (b *SimulatedBackend) StartService(offloadType OffloadType, config interfac
 	}
 
 	b.services[offloadType] = true
+
 	return nil
 }
 
@@ -184,6 +191,7 @@ func (b *SimulatedBackend) StopService(offloadType OffloadType) error {
 	}
 
 	delete(b.services, offloadType)
+
 	return nil
 }
 
@@ -212,14 +220,17 @@ func (b *SimulatedBackend) GetServiceStatus(offloadType OffloadType) (*OffloadSe
 // Encrypt performs simulated hardware-accelerated encryption.
 func (b *SimulatedBackend) Encrypt(ctx context.Context, algorithm string, key, plaintext []byte) ([]byte, error) {
 	b.mu.RLock()
+
 	if !b.initialized {
 		b.mu.RUnlock()
 		return nil, ErrDPUNotInitialized
 	}
+
 	if !b.services[OffloadCrypto] {
 		b.mu.RUnlock()
 		return nil, ErrOffloadNotSupported
 	}
+
 	latency := b.latencyNs
 	b.mu.RUnlock()
 
@@ -233,14 +244,17 @@ func (b *SimulatedBackend) Encrypt(ctx context.Context, algorithm string, key, p
 // Decrypt performs simulated hardware-accelerated decryption.
 func (b *SimulatedBackend) Decrypt(ctx context.Context, algorithm string, key, ciphertext []byte) ([]byte, error) {
 	b.mu.RLock()
+
 	if !b.initialized {
 		b.mu.RUnlock()
 		return nil, ErrDPUNotInitialized
 	}
+
 	if !b.services[OffloadCrypto] {
 		b.mu.RUnlock()
 		return nil, ErrOffloadNotSupported
 	}
+
 	latency := b.latencyNs
 	b.mu.RUnlock()
 
@@ -287,6 +301,7 @@ func (b *SimulatedBackend) aesGCMEncrypt(key, plaintext []byte) ([]byte, error) 
 	}
 
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+
 	return ciphertext, nil
 }
 
@@ -321,7 +336,7 @@ func (b *SimulatedBackend) aesGCMDecrypt(key, ciphertext []byte) ([]byte, error)
 	}
 
 	if len(ciphertext) < gcm.NonceSize() {
-		return nil, fmt.Errorf("ciphertext too short")
+		return nil, errors.New("ciphertext too short")
 	}
 
 	nonce := ciphertext[:gcm.NonceSize()]
@@ -338,14 +353,17 @@ func (b *SimulatedBackend) aesGCMDecrypt(key, ciphertext []byte) ([]byte, error)
 // Compress performs simulated hardware-accelerated compression.
 func (b *SimulatedBackend) Compress(ctx context.Context, algorithm string, data []byte) ([]byte, error) {
 	b.mu.RLock()
+
 	if !b.initialized {
 		b.mu.RUnlock()
 		return nil, ErrDPUNotInitialized
 	}
+
 	if !b.services[OffloadCompress] {
 		b.mu.RUnlock()
 		return nil, ErrOffloadNotSupported
 	}
+
 	latency := b.latencyNs
 	b.mu.RUnlock()
 
@@ -354,13 +372,16 @@ func (b *SimulatedBackend) Compress(ctx context.Context, algorithm string, data 
 
 	// Perform actual compression using deflate
 	var buf bytes.Buffer
+
 	w, err := flate.NewWriter(&buf, flate.BestSpeed)
 	if err != nil {
 		return nil, err
 	}
+
 	if _, err := w.Write(data); err != nil {
 		return nil, err
 	}
+
 	if err := w.Close(); err != nil {
 		return nil, err
 	}
@@ -371,14 +392,17 @@ func (b *SimulatedBackend) Compress(ctx context.Context, algorithm string, data 
 // Decompress performs simulated hardware-accelerated decompression.
 func (b *SimulatedBackend) Decompress(ctx context.Context, algorithm string, data []byte) ([]byte, error) {
 	b.mu.RLock()
+
 	if !b.initialized {
 		b.mu.RUnlock()
 		return nil, ErrDPUNotInitialized
 	}
+
 	if !b.services[OffloadCompress] {
 		b.mu.RUnlock()
 		return nil, ErrOffloadNotSupported
 	}
+
 	latency := b.latencyNs
 	b.mu.RUnlock()
 
@@ -387,10 +411,14 @@ func (b *SimulatedBackend) Decompress(ctx context.Context, algorithm string, dat
 
 	// Perform actual decompression
 	r := flate.NewReader(bytes.NewReader(data))
+
 	defer func() { _ = r.Close() }()
 
+	// Limit decompression size to prevent decompression bombs (100MB max)
+	const maxDecompressSize = 100 * 1024 * 1024
 	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
+
+	if _, err := io.Copy(&buf, io.LimitReader(r, maxDecompressSize)); err != nil {
 		return nil, err
 	}
 
@@ -436,6 +464,7 @@ func (b *SimulatedBackend) HealthCheck() error {
 func (b *SimulatedBackend) SetSimulatedLatency(latencyNs int64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	b.latencyNs = latencyNs
 }
 
@@ -443,5 +472,6 @@ func (b *SimulatedBackend) SetSimulatedLatency(latencyNs int64) {
 func (b *SimulatedBackend) SetDPUs(dpus []*DPUInfo) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	b.dpus = dpus
 }

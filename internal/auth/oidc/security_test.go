@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// TestNewProvider_InsecureSkipVerify tests that InsecureSkipVerify is properly handled
+// TestNewProvider_InsecureSkipVerify tests that InsecureSkipVerify is properly handled.
 func TestNewProvider_InsecureSkipVerify(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -56,7 +56,7 @@ func TestNewProvider_InsecureSkipVerify(t *testing.T) {
 	}
 }
 
-// TestConfig_InsecureSkipVerifyDefault tests that InsecureSkipVerify defaults to false
+// TestConfig_InsecureSkipVerifyDefault tests that InsecureSkipVerify defaults to false.
 func TestConfig_InsecureSkipVerifyDefault(t *testing.T) {
 	cfg := DefaultConfig()
 
@@ -65,11 +65,11 @@ func TestConfig_InsecureSkipVerifyDefault(t *testing.T) {
 	}
 }
 
-// TestConfig_InsecureSkipVerifySecureByDefault tests secure-by-default principle
+// TestConfig_InsecureSkipVerifySecureByDefault tests secure-by-default principle.
 func TestConfig_InsecureSkipVerifySecureByDefault(t *testing.T) {
 	tests := []struct {
-		name     string
 		cfgFunc  func() Config
+		name     string
 		expected bool
 	}{
 		{
@@ -114,7 +114,7 @@ func TestConfig_InsecureSkipVerifySecureByDefault(t *testing.T) {
 	}
 }
 
-// TestConfig_InsecureSkipVerifyExplicitEnable tests that insecure mode requires explicit opt-in
+// TestConfig_InsecureSkipVerifyExplicitEnable tests that insecure mode requires explicit opt-in.
 func TestConfig_InsecureSkipVerifyExplicitEnable(t *testing.T) {
 	// Start with default config
 	cfg := DefaultConfig()
@@ -132,7 +132,8 @@ func TestConfig_InsecureSkipVerifyExplicitEnable(t *testing.T) {
 	cfg.RedirectURL = "https://app.example.com/callback"
 
 	// Should still validate (insecure mode is allowed, just warned)
-	if err := cfg.Validate(); err != nil {
+	err := cfg.Validate()
+	if err != nil {
 		t.Errorf("Config should validate even with InsecureSkipVerify enabled: %v", err)
 	}
 

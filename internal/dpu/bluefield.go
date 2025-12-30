@@ -27,7 +27,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Common errors
+// Common errors.
 var (
 	ErrDPUNotAvailable     = errors.New("dpu not available")
 	ErrDPUNotInitialized   = errors.New("dpu not initialized")
@@ -43,53 +43,36 @@ var (
 type OffloadType string
 
 const (
-	// OffloadStorage offloads storage target operations
+	// OffloadStorage offloads storage target operations.
 	OffloadStorage OffloadType = "storage"
 
-	// OffloadNetwork offloads network packet processing
+	// OffloadNetwork offloads network packet processing.
 	OffloadNetwork OffloadType = "network"
 
-	// OffloadCrypto offloads encryption/decryption
+	// OffloadCrypto offloads encryption/decryption.
 	OffloadCrypto OffloadType = "crypto"
 
-	// OffloadCompress offloads compression/decompression
+	// OffloadCompress offloads compression/decompression.
 	OffloadCompress OffloadType = "compress"
 
-	// OffloadRDMA offloads RDMA operations
+	// OffloadRDMA offloads RDMA operations.
 	OffloadRDMA OffloadType = "rdma"
 
-	// OffloadRegex offloads regex pattern matching
+	// OffloadRegex offloads regex pattern matching.
 	OffloadRegex OffloadType = "regex"
 )
 
 // Config holds BlueField DPU configuration.
 type Config struct {
-	// Enable enables DPU offload if available
-	Enable bool `json:"enable" yaml:"enable"`
-
-	// DeviceIndex specifies which DPU to use (-1 = auto-select)
-	DeviceIndex int `json:"device_index" yaml:"device_index"`
-
-	// Offloads specifies which operations to offload
-	Offloads []OffloadType `json:"offloads" yaml:"offloads"`
-
-	// StorageOffload configures storage target offload
-	StorageOffload *StorageOffloadConfig `json:"storage_offload,omitempty" yaml:"storage_offload,omitempty"`
-
-	// CryptoOffload configures crypto offload
-	CryptoOffload *CryptoOffloadConfig `json:"crypto_offload,omitempty" yaml:"crypto_offload,omitempty"`
-
-	// CompressOffload configures compression offload
-	CompressOffload *CompressOffloadConfig `json:"compress_offload,omitempty" yaml:"compress_offload,omitempty"`
-
-	// NetworkOffload configures network offload
-	NetworkOffload *NetworkOffloadConfig `json:"network_offload,omitempty" yaml:"network_offload,omitempty"`
-
-	// HealthCheckInterval is the interval for DPU health checks
-	HealthCheckInterval time.Duration `json:"health_check_interval" yaml:"health_check_interval"`
-
-	// FallbackOnFailure enables fallback to CPU when DPU fails
-	FallbackOnFailure bool `json:"fallback_on_failure" yaml:"fallback_on_failure"`
+	StorageOffload      *StorageOffloadConfig  `json:"storage_offload,omitempty" yaml:"storage_offload,omitempty"`
+	CryptoOffload       *CryptoOffloadConfig   `json:"crypto_offload,omitempty" yaml:"crypto_offload,omitempty"`
+	CompressOffload     *CompressOffloadConfig `json:"compress_offload,omitempty" yaml:"compress_offload,omitempty"`
+	NetworkOffload      *NetworkOffloadConfig  `json:"network_offload,omitempty" yaml:"network_offload,omitempty"`
+	Offloads            []OffloadType          `json:"offloads" yaml:"offloads"`
+	DeviceIndex         int                    `json:"device_index" yaml:"device_index"`
+	HealthCheckInterval time.Duration          `json:"health_check_interval" yaml:"health_check_interval"`
+	Enable              bool                   `json:"enable" yaml:"enable"`
+	FallbackOnFailure   bool                   `json:"fallback_on_failure" yaml:"fallback_on_failure"`
 }
 
 // StorageOffloadConfig configures storage target offload.
@@ -115,26 +98,16 @@ type StorageOffloadConfig struct {
 
 // CryptoOffloadConfig configures crypto offload.
 type CryptoOffloadConfig struct {
-	// Enable enables crypto offload
-	Enable bool `json:"enable" yaml:"enable"`
-
-	// Algorithms specifies which algorithms to offload
-	Algorithms []string `json:"algorithms" yaml:"algorithms"`
-
-	// MaxSessions is the maximum concurrent crypto sessions
-	MaxSessions int `json:"max_sessions" yaml:"max_sessions"`
+	Algorithms  []string `json:"algorithms" yaml:"algorithms"`
+	MaxSessions int      `json:"max_sessions" yaml:"max_sessions"`
+	Enable      bool     `json:"enable" yaml:"enable"`
 }
 
 // CompressOffloadConfig configures compression offload.
 type CompressOffloadConfig struct {
-	// Enable enables compression offload
-	Enable bool `json:"enable" yaml:"enable"`
-
-	// Algorithms specifies compression algorithms (deflate, lz4, etc.)
 	Algorithms []string `json:"algorithms" yaml:"algorithms"`
-
-	// MinSize is the minimum data size for offload
-	MinSize int64 `json:"min_size" yaml:"min_size"`
+	MinSize    int64    `json:"min_size" yaml:"min_size"`
+	Enable     bool     `json:"enable" yaml:"enable"`
 }
 
 // NetworkOffloadConfig configures network offload.
@@ -167,12 +140,12 @@ func DefaultConfig() *Config {
 			OffloadNetwork,
 		},
 		StorageOffload: &StorageOffloadConfig{
-			Enable:     true,
+			Enable:      true,
 			NVMeTargets: true,
-			VirtIOBlk:  true,
-			SPDK:       false,
-			MaxQueues:  32,
-			QueueDepth: 128,
+			VirtIOBlk:   true,
+			SPDK:        false,
+			MaxQueues:   32,
+			QueueDepth:  128,
 		},
 		CryptoOffload: &CryptoOffloadConfig{
 			Enable:      true,
@@ -198,47 +171,20 @@ func DefaultConfig() *Config {
 
 // DPUInfo contains information about a detected DPU.
 type DPUInfo struct {
-	// Index is the device index
-	Index int `json:"index"`
-
-	// Model is the DPU model (e.g., "BlueField-3")
-	Model string `json:"model"`
-
-	// SerialNumber is the device serial number
-	SerialNumber string `json:"serial_number"`
-
-	// FirmwareVersion is the DPU firmware version
-	FirmwareVersion string `json:"firmware_version"`
-
-	// DOCAVersion is the DOCA SDK version
-	DOCAVersion string `json:"doca_version"`
-
-	// ARMCores is the number of ARM cores
-	ARMCores int `json:"arm_cores"`
-
-	// ARMFrequencyMHz is the ARM core frequency
-	ARMFrequencyMHz int `json:"arm_frequency_mhz"`
-
-	// MemoryGB is the DPU memory in GB
-	MemoryGB int `json:"memory_gb"`
-
-	// NetworkPorts is the number of network ports
-	NetworkPorts int `json:"network_ports"`
-
-	// PortSpeedGbps is the port speed in Gbps
-	PortSpeedGbps int `json:"port_speed_gbps"`
-
-	// Capabilities lists supported offload types
-	Capabilities []OffloadType `json:"capabilities"`
-
-	// Status is the current DPU status
-	Status string `json:"status"`
-
-	// Temperature is the DPU temperature in Celsius
-	Temperature float64 `json:"temperature"`
-
-	// PowerWatts is the power consumption in watts
-	PowerWatts float64 `json:"power_watts"`
+	Model           string        `json:"model"`
+	SerialNumber    string        `json:"serial_number"`
+	FirmwareVersion string        `json:"firmware_version"`
+	DOCAVersion     string        `json:"doca_version"`
+	Status          string        `json:"status"`
+	Capabilities    []OffloadType `json:"capabilities"`
+	ARMFrequencyMHz int           `json:"arm_frequency_mhz"`
+	MemoryGB        int           `json:"memory_gb"`
+	NetworkPorts    int           `json:"network_ports"`
+	PortSpeedGbps   int           `json:"port_speed_gbps"`
+	Index           int           `json:"index"`
+	ARMCores        int           `json:"arm_cores"`
+	Temperature     float64       `json:"temperature"`
+	PowerWatts      float64       `json:"power_watts"`
 }
 
 // Metrics holds DPU performance metrics.
@@ -273,36 +219,25 @@ type Metrics struct {
 
 // OffloadService represents an offload service running on the DPU.
 type OffloadService struct {
-	// Type is the offload type
-	Type OffloadType `json:"type"`
-
-	// Name is the service name
-	Name string `json:"name"`
-
-	// Status is the service status
-	Status string `json:"status"`
-
-	// StartTime is when the service started
-	StartTime time.Time `json:"start_time"`
-
-	// Config is the service-specific configuration
-	Config interface{} `json:"config"`
+	StartTime time.Time   `json:"start_time"`
+	Config    interface{} `json:"config"`
+	Type      OffloadType `json:"type"`
+	Name      string      `json:"name"`
+	Status    string      `json:"status"`
 }
 
 // Service provides BlueField DPU functionality.
 type Service struct {
-	config   *Config
-	mu       sync.RWMutex
-	closed   atomic.Bool
-	dpu      *DPUInfo
-	services map[OffloadType]*OffloadService
-	metrics  *Metrics
-	backend  DPUBackend
-
-	// Health monitoring
+	backend      DPUBackend
 	healthCtx    context.Context
+	config       *Config
+	dpu          *DPUInfo
+	services     map[OffloadType]*OffloadService
+	metrics      *Metrics
 	healthCancel context.CancelFunc
 	healthWg     sync.WaitGroup
+	mu           sync.RWMutex
+	closed       atomic.Bool
 }
 
 // DPUBackend defines the interface for DPU operations.
@@ -353,6 +288,7 @@ func NewService(config *Config, backend DPUBackend) (*Service, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
+
 	if backend == nil {
 		backend = NewSimulatedBackend()
 	}
@@ -384,6 +320,7 @@ func NewService(config *Config, backend DPUBackend) (*Service, error) {
 	if index < 0 {
 		index = 0 // Auto-select first available
 	}
+
 	if index >= len(dpus) {
 		return nil, fmt.Errorf("DPU index %d out of range (available: %d)", index, len(dpus))
 	}
@@ -392,11 +329,13 @@ func NewService(config *Config, backend DPUBackend) (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to select DPU: %w", err)
 	}
+
 	s.dpu = dpu
 
 	// Start configured offload services
 	for _, offload := range config.Offloads {
-		if err := s.startOffloadService(offload); err != nil {
+		err := s.startOffloadService(offload)
+		if err != nil {
 			// Log warning but continue with other offloads
 			continue
 		}
@@ -419,27 +358,32 @@ func (s *Service) startOffloadService(offloadType OffloadType) error {
 		if s.config.StorageOffload == nil || !s.config.StorageOffload.Enable {
 			return nil
 		}
+
 		serviceConfig = s.config.StorageOffload
 	case OffloadCrypto:
 		if s.config.CryptoOffload == nil || !s.config.CryptoOffload.Enable {
 			return nil
 		}
+
 		serviceConfig = s.config.CryptoOffload
 	case OffloadCompress:
 		if s.config.CompressOffload == nil || !s.config.CompressOffload.Enable {
 			return nil
 		}
+
 		serviceConfig = s.config.CompressOffload
 	case OffloadNetwork:
 		if s.config.NetworkOffload == nil || !s.config.NetworkOffload.Enable {
 			return nil
 		}
+
 		serviceConfig = s.config.NetworkOffload
 	default:
 		return ErrOffloadNotSupported
 	}
 
-	if err := s.backend.StartService(offloadType, serviceConfig); err != nil {
+	err := s.backend.StartService(offloadType, serviceConfig)
+	if err != nil {
 		return err
 	}
 
@@ -463,6 +407,7 @@ func (s *Service) startHealthMonitor() {
 
 	go func() {
 		defer s.healthWg.Done()
+
 		ticker := time.NewTicker(s.config.HealthCheckInterval)
 		defer ticker.Stop()
 
@@ -471,7 +416,8 @@ func (s *Service) startHealthMonitor() {
 			case <-s.healthCtx.Done():
 				return
 			case <-ticker.C:
-				if err := s.backend.HealthCheck(); err != nil {
+				err := s.backend.HealthCheck()
+				if err != nil {
 					atomic.AddInt64(&s.metrics.HealthFails, 1)
 				}
 			}
@@ -483,6 +429,7 @@ func (s *Service) startHealthMonitor() {
 func (s *Service) GetDPUInfo() *DPUInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.dpu
 }
 
@@ -495,6 +442,7 @@ func (s *Service) GetServices() []*OffloadService {
 	for _, svc := range s.services {
 		result = append(result, svc)
 	}
+
 	return result
 }
 
@@ -513,71 +461,65 @@ func (s *Service) IsOffloadAvailable(offloadType OffloadType) bool {
 			return ok
 		}
 	}
+
 	return false
+}
+
+// cryptoOperation is a function type for encryption/decryption operations.
+type cryptoOperation func(ctx context.Context, algorithm string, key, data []byte) ([]byte, error)
+
+// performCryptoOp is a generic helper for encryption/decryption operations.
+func (s *Service) performCryptoOp(
+	ctx context.Context,
+	algorithm string,
+	key, data []byte,
+	backendOp cryptoOperation,
+	fallbackOp func(algorithm string, key, data []byte) ([]byte, error),
+) ([]byte, error) {
+	if s.closed.Load() {
+		return nil, ErrAlreadyClosed
+	}
+
+	if !s.IsOffloadAvailable(OffloadCrypto) {
+		if s.config.FallbackOnFailure {
+			atomic.AddInt64(&s.metrics.Fallbacks, 1)
+
+			return fallbackOp(algorithm, key, data)
+		}
+
+		return nil, ErrOffloadNotSupported
+	}
+
+	start := time.Now()
+
+	result, err := backendOp(ctx, algorithm, key, data)
+	if err != nil {
+		atomic.AddInt64(&s.metrics.Errors, 1)
+
+		if s.config.FallbackOnFailure {
+			atomic.AddInt64(&s.metrics.Fallbacks, 1)
+
+			return fallbackOp(algorithm, key, data)
+		}
+
+		return nil, err
+	}
+
+	atomic.AddInt64(&s.metrics.CryptoOps, 1)
+	atomic.AddInt64(&s.metrics.CryptoBytes, int64(len(data)))
+	atomic.StoreInt64(&s.metrics.AvgCryptoLatency, time.Since(start).Nanoseconds())
+
+	return result, nil
 }
 
 // Encrypt performs hardware-accelerated encryption.
 func (s *Service) Encrypt(ctx context.Context, algorithm string, key, plaintext []byte) ([]byte, error) {
-	if s.closed.Load() {
-		return nil, ErrAlreadyClosed
-	}
-
-	if !s.IsOffloadAvailable(OffloadCrypto) {
-		if s.config.FallbackOnFailure {
-			atomic.AddInt64(&s.metrics.Fallbacks, 1)
-			return s.softwareEncrypt(algorithm, key, plaintext)
-		}
-		return nil, ErrOffloadNotSupported
-	}
-
-	start := time.Now()
-	result, err := s.backend.Encrypt(ctx, algorithm, key, plaintext)
-	if err != nil {
-		atomic.AddInt64(&s.metrics.Errors, 1)
-		if s.config.FallbackOnFailure {
-			atomic.AddInt64(&s.metrics.Fallbacks, 1)
-			return s.softwareEncrypt(algorithm, key, plaintext)
-		}
-		return nil, err
-	}
-
-	atomic.AddInt64(&s.metrics.CryptoOps, 1)
-	atomic.AddInt64(&s.metrics.CryptoBytes, int64(len(plaintext)))
-	atomic.StoreInt64(&s.metrics.AvgCryptoLatency, time.Since(start).Nanoseconds())
-
-	return result, nil
+	return s.performCryptoOp(ctx, algorithm, key, plaintext, s.backend.Encrypt, s.softwareEncrypt)
 }
 
 // Decrypt performs hardware-accelerated decryption.
 func (s *Service) Decrypt(ctx context.Context, algorithm string, key, ciphertext []byte) ([]byte, error) {
-	if s.closed.Load() {
-		return nil, ErrAlreadyClosed
-	}
-
-	if !s.IsOffloadAvailable(OffloadCrypto) {
-		if s.config.FallbackOnFailure {
-			atomic.AddInt64(&s.metrics.Fallbacks, 1)
-			return s.softwareDecrypt(algorithm, key, ciphertext)
-		}
-		return nil, ErrOffloadNotSupported
-	}
-
-	start := time.Now()
-	result, err := s.backend.Decrypt(ctx, algorithm, key, ciphertext)
-	if err != nil {
-		atomic.AddInt64(&s.metrics.Errors, 1)
-		if s.config.FallbackOnFailure {
-			atomic.AddInt64(&s.metrics.Fallbacks, 1)
-			return s.softwareDecrypt(algorithm, key, ciphertext)
-		}
-		return nil, err
-	}
-
-	atomic.AddInt64(&s.metrics.CryptoOps, 1)
-	atomic.AddInt64(&s.metrics.CryptoBytes, int64(len(ciphertext)))
-	atomic.StoreInt64(&s.metrics.AvgCryptoLatency, time.Since(start).Nanoseconds())
-
-	return result, nil
+	return s.performCryptoOp(ctx, algorithm, key, ciphertext, s.backend.Decrypt, s.softwareDecrypt)
 }
 
 // Compress performs hardware-accelerated compression.
@@ -597,17 +539,21 @@ func (s *Service) Compress(ctx context.Context, algorithm string, data []byte) (
 			atomic.AddInt64(&s.metrics.Fallbacks, 1)
 			return s.softwareCompress(algorithm, data)
 		}
+
 		return nil, ErrOffloadNotSupported
 	}
 
 	start := time.Now()
+
 	result, err := s.backend.Compress(ctx, algorithm, data)
 	if err != nil {
 		atomic.AddInt64(&s.metrics.Errors, 1)
+
 		if s.config.FallbackOnFailure {
 			atomic.AddInt64(&s.metrics.Fallbacks, 1)
 			return s.softwareCompress(algorithm, data)
 		}
+
 		return nil, err
 	}
 
@@ -629,17 +575,21 @@ func (s *Service) Decompress(ctx context.Context, algorithm string, data []byte)
 			atomic.AddInt64(&s.metrics.Fallbacks, 1)
 			return s.softwareDecompress(algorithm, data)
 		}
+
 		return nil, ErrOffloadNotSupported
 	}
 
 	start := time.Now()
+
 	result, err := s.backend.Decompress(ctx, algorithm, data)
 	if err != nil {
 		atomic.AddInt64(&s.metrics.Errors, 1)
+
 		if s.config.FallbackOnFailure {
 			atomic.AddInt64(&s.metrics.Fallbacks, 1)
 			return s.softwareDecompress(algorithm, data)
 		}
+
 		return nil, err
 	}
 
@@ -650,12 +600,13 @@ func (s *Service) Decompress(ctx context.Context, algorithm string, data []byte)
 	return result, nil
 }
 
-// Software fallback implementations
+// Software fallback implementations.
 func (s *Service) softwareEncrypt(algorithm string, key, plaintext []byte) ([]byte, error) {
 	// Placeholder for software encryption fallback
 	// In real implementation, use crypto/aes, crypto/cipher
 	result := make([]byte, len(plaintext))
 	copy(result, plaintext)
+
 	return result, nil
 }
 
@@ -663,6 +614,7 @@ func (s *Service) softwareDecrypt(algorithm string, key, ciphertext []byte) ([]b
 	// Placeholder for software decryption fallback
 	result := make([]byte, len(ciphertext))
 	copy(result, ciphertext)
+
 	return result, nil
 }
 
@@ -671,6 +623,7 @@ func (s *Service) softwareCompress(algorithm string, data []byte) ([]byte, error
 	// In real implementation, use compress/flate, lz4, etc.
 	result := make([]byte, len(data))
 	copy(result, data)
+
 	return result, nil
 }
 
@@ -678,6 +631,7 @@ func (s *Service) softwareDecompress(algorithm string, data []byte) ([]byte, err
 	// Placeholder for software decompression fallback
 	result := make([]byte, len(data))
 	copy(result, data)
+
 	return result, nil
 }
 
@@ -744,6 +698,7 @@ func (s *Service) GetStatus() map[string]interface{} {
 func (s *Service) IsAvailable() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.dpu != nil
 }
 
@@ -761,14 +716,17 @@ func (s *Service) Close() error {
 
 	// Stop all services
 	s.mu.Lock()
+
 	for offloadType := range s.services {
-		if stopErr := s.backend.StopService(offloadType); stopErr != nil {
+		stopErr := s.backend.StopService(offloadType)
+		if stopErr != nil {
 			log.Error().
 				Err(stopErr).
 				Str("offload_type", string(offloadType)).
 				Msg("failed to stop DPU offload service - resources may not be properly released")
 		}
 	}
+
 	s.services = nil
 	s.mu.Unlock()
 

@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,7 +22,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// ComplianceMode represents the compliance standard to follow
+// ComplianceMode represents the compliance standard to follow.
 type ComplianceMode string
 
 const (
@@ -33,7 +34,7 @@ const (
 	ComplianceFedRAMP ComplianceMode = "fedramp"
 )
 
-// OutputType represents the type of audit output
+// OutputType represents the type of audit output.
 type OutputType string
 
 const (
@@ -44,100 +45,47 @@ const (
 	OutputS3      OutputType = "s3"
 )
 
-// EnhancedConfig holds enhanced audit configuration
+// EnhancedConfig holds enhanced audit configuration.
 type EnhancedConfig struct {
-	// Enabled enables audit logging
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// ComplianceMode sets the compliance standard
-	ComplianceMode ComplianceMode `json:"complianceMode" yaml:"compliance_mode"`
-
-	// Outputs configures where audit logs are sent
-	Outputs []OutputConfig `json:"outputs" yaml:"outputs"`
-
-	// RetentionDays is how long to keep audit logs
-	RetentionDays int `json:"retentionDays" yaml:"retention_days"`
-
-	// BufferSize is the async buffer size
-	BufferSize int `json:"bufferSize" yaml:"buffer_size"`
-
-	// IntegrityEnabled enables cryptographic integrity verification
-	IntegrityEnabled bool `json:"integrityEnabled" yaml:"integrity_enabled"`
-
-	// IntegritySecret is the HMAC secret for integrity
-	IntegritySecret string `json:"integritySecret" yaml:"integrity_secret"`
-
-	// IncludeRequestBody includes request body in logs (for compliance)
-	IncludeRequestBody bool `json:"includeRequestBody" yaml:"include_request_body"`
-
-	// IncludeResponseBody includes response body in logs
-	IncludeResponseBody bool `json:"includeResponseBody" yaml:"include_response_body"`
-
-	// MaskSensitiveData masks sensitive data like passwords
-	MaskSensitiveData bool `json:"maskSensitiveData" yaml:"mask_sensitive_data"`
-
-	// SensitiveFields are fields to mask
-	SensitiveFields []string `json:"sensitiveFields" yaml:"sensitive_fields"`
-
-	// RotationConfig for file rotation
-	Rotation RotationConfig `json:"rotation" yaml:"rotation"`
-
-	// FilterRules for filtering audit events
-	FilterRules []FilterRule `json:"filterRules" yaml:"filter_rules"`
+	IntegritySecret     string         `json:"integritySecret" yaml:"integrity_secret"`
+	ComplianceMode      ComplianceMode `json:"complianceMode" yaml:"compliance_mode"`
+	Outputs             []OutputConfig `json:"outputs" yaml:"outputs"`
+	FilterRules         []FilterRule   `json:"filterRules" yaml:"filter_rules"`
+	SensitiveFields     []string       `json:"sensitiveFields" yaml:"sensitive_fields"`
+	Rotation            RotationConfig `json:"rotation" yaml:"rotation"`
+	RetentionDays       int            `json:"retentionDays" yaml:"retention_days"`
+	BufferSize          int            `json:"bufferSize" yaml:"buffer_size"`
+	IncludeRequestBody  bool           `json:"includeRequestBody" yaml:"include_request_body"`
+	IncludeResponseBody bool           `json:"includeResponseBody" yaml:"include_response_body"`
+	MaskSensitiveData   bool           `json:"maskSensitiveData" yaml:"mask_sensitive_data"`
+	IntegrityEnabled    bool           `json:"integrityEnabled" yaml:"integrity_enabled"`
+	Enabled             bool           `json:"enabled" yaml:"enabled"`
 }
 
-// OutputConfig configures an audit output
+// OutputConfig configures an audit output.
 type OutputConfig struct {
-	// Type is the output type
-	Type OutputType `json:"type" yaml:"type"`
-
-	// Enabled enables this output
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// Name is a friendly name for this output
-	Name string `json:"name" yaml:"name"`
-
-	// Path is the file path (for file output)
-	Path string `json:"path,omitempty" yaml:"path,omitempty"`
-
-	// URL is the endpoint URL (for webhook, syslog, kafka, s3)
-	URL string `json:"url,omitempty" yaml:"url,omitempty"`
-
-	// AuthToken for authenticated webhooks
-	AuthToken string `json:"authToken,omitempty" yaml:"auth_token,omitempty"`
-
-	// TLS enables TLS for the connection
-	TLS bool `json:"tls,omitempty" yaml:"tls,omitempty"`
-
-	// BatchSize for batched outputs
-	BatchSize int `json:"batchSize,omitempty" yaml:"batch_size,omitempty"`
-
-	// FlushInterval for batched outputs
+	Type          OutputType    `json:"type" yaml:"type"`
+	Name          string        `json:"name" yaml:"name"`
+	Path          string        `json:"path,omitempty" yaml:"path,omitempty"`
+	URL           string        `json:"url,omitempty" yaml:"url,omitempty"`
+	AuthToken     string        `json:"authToken,omitempty" yaml:"auth_token,omitempty"`
+	Format        string        `json:"format,omitempty" yaml:"format,omitempty"`
+	BatchSize     int           `json:"batchSize,omitempty" yaml:"batch_size,omitempty"`
 	FlushInterval time.Duration `json:"flushInterval,omitempty" yaml:"flush_interval,omitempty"`
-
-	// Format is the output format (json, csv, cef)
-	Format string `json:"format,omitempty" yaml:"format,omitempty"`
+	Enabled       bool          `json:"enabled" yaml:"enabled"`
+	TLS           bool          `json:"tls,omitempty" yaml:"tls,omitempty"`
 }
 
-// RotationConfig configures log rotation
+// RotationConfig configures log rotation.
 type RotationConfig struct {
-	// Enabled enables log rotation
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// MaxSizeMB is the max file size before rotation
-	MaxSizeMB int `json:"maxSizeMB" yaml:"max_size_mb"`
-
-	// MaxBackups is the max number of old files to keep
-	MaxBackups int `json:"maxBackups" yaml:"max_backups"`
-
-	// MaxAgeDays is the max age of old files
-	MaxAgeDays int `json:"maxAgeDays" yaml:"max_age_days"`
-
-	// Compress compresses rotated files
-	Compress bool `json:"compress" yaml:"compress"`
+	MaxSizeMB  int  `json:"maxSizeMB" yaml:"max_size_mb"`
+	MaxBackups int  `json:"maxBackups" yaml:"max_backups"`
+	MaxAgeDays int  `json:"maxAgeDays" yaml:"max_age_days"`
+	Enabled    bool `json:"enabled" yaml:"enabled"`
+	Compress   bool `json:"compress" yaml:"compress"`
 }
 
-// FilterRule defines a filter for audit events
+// FilterRule defines a filter for audit events.
 type FilterRule struct {
 	// Name is the rule name
 	Name string `json:"name" yaml:"name"`
@@ -161,111 +109,69 @@ type FilterRule struct {
 	Results []Result `json:"results,omitempty" yaml:"results,omitempty"`
 }
 
-// EnhancedAuditEvent extends AuditEvent with additional fields
+// EnhancedAuditEvent extends AuditEvent with additional fields.
 type EnhancedAuditEvent struct {
 	AuditEvent
-
-	// SequenceNumber is the event sequence number
-	SequenceNumber int64 `json:"sequenceNumber"`
-
-	// SessionID is the user session ID
-	SessionID string `json:"sessionId,omitempty"`
-
-	// RequestPath is the full request path
-	RequestPath string `json:"requestPath,omitempty"`
-
-	// RequestMethod is the HTTP method
-	RequestMethod string `json:"requestMethod,omitempty"`
-
-	// RequestHeaders are the request headers (sanitized)
-	RequestHeaders map[string]string `json:"requestHeaders,omitempty"`
-
-	// ResponseStatus is the HTTP status code
-	ResponseStatus int `json:"responseStatus,omitempty"`
-
-	// ResponseHeaders are the response headers
 	ResponseHeaders map[string]string `json:"responseHeaders,omitempty"`
-
-	// GeoLocation is the geographic location
-	GeoLocation *GeoLocation `json:"geoLocation,omitempty"`
-
-	// Compliance contains compliance-specific info
-	Compliance *ComplianceInfo `json:"compliance,omitempty"`
-
-	// Integrity contains integrity verification data
-	Integrity *IntegrityInfo `json:"integrity,omitempty"`
-
-	// PreviousHash is the hash of the previous event
-	PreviousHash string `json:"previousHash,omitempty"`
-
-	// EventHash is the hash of this event
-	EventHash string `json:"eventHash,omitempty"`
+	Integrity       *IntegrityInfo    `json:"integrity,omitempty"`
+	Compliance      *ComplianceInfo   `json:"compliance,omitempty"`
+	GeoLocation     *GeoLocation      `json:"geoLocation,omitempty"`
+	RequestHeaders  map[string]string `json:"requestHeaders,omitempty"`
+	RequestPath     string            `json:"requestPath,omitempty"`
+	RequestMethod   string            `json:"requestMethod,omitempty"`
+	SessionID       string            `json:"sessionId,omitempty"`
+	PreviousHash    string            `json:"previousHash,omitempty"`
+	EventHash       string            `json:"eventHash,omitempty"`
+	ResponseStatus  int               `json:"responseStatus,omitempty"`
+	SequenceNumber  int64             `json:"sequenceNumber"`
 }
 
-// GeoLocation contains geographic information
+// GeoLocation contains geographic information.
 type GeoLocation struct {
 	Country   string  `json:"country,omitempty"`
 	Region    string  `json:"region,omitempty"`
 	City      string  `json:"city,omitempty"`
-	Latitude  float64 `json:"latitude,omitempty"`
-	Longitude float64 `json:"longitude,omitempty"`
 	ASN       string  `json:"asn,omitempty"`
 	ASNOrg    string  `json:"asnOrg,omitempty"`
+	Latitude  float64 `json:"latitude,omitempty"`
+	Longitude float64 `json:"longitude,omitempty"`
 }
 
-// ComplianceInfo contains compliance-specific information
+// ComplianceInfo contains compliance-specific information.
 type ComplianceInfo struct {
-	// Framework is the compliance framework
-	Framework ComplianceMode `json:"framework"`
-
-	// ControlIDs are the relevant control IDs
-	ControlIDs []string `json:"controlIds,omitempty"`
-
-	// DataClassification is the data classification level
-	DataClassification string `json:"dataClassification,omitempty"`
-
-	// IsPrivileged indicates if this was a privileged operation
-	IsPrivileged bool `json:"isPrivileged,omitempty"`
-
-	// RequiresApproval indicates if this action required approval
-	RequiresApproval bool `json:"requiresApproval,omitempty"`
-
-	// ApprovalID is the approval ID if applicable
-	ApprovalID string `json:"approvalId,omitempty"`
+	Framework          ComplianceMode `json:"framework"`
+	DataClassification string         `json:"dataClassification,omitempty"`
+	ApprovalID         string         `json:"approvalId,omitempty"`
+	ControlIDs         []string       `json:"controlIds,omitempty"`
+	IsPrivileged       bool           `json:"isPrivileged,omitempty"`
+	RequiresApproval   bool           `json:"requiresApproval,omitempty"`
 }
 
-// IntegrityInfo contains integrity verification data
+// IntegrityInfo contains integrity verification data.
 type IntegrityInfo struct {
-	// Algorithm is the hash algorithm
-	Algorithm string `json:"algorithm"`
-
-	// Signature is the HMAC signature
-	Signature string `json:"signature"`
-
-	// ChainValid indicates if the chain is valid
-	ChainValid bool `json:"chainValid"`
-
-	// Timestamp is the server timestamp
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp  time.Time `json:"timestamp"`
+	Algorithm  string    `json:"algorithm"`
+	Signature  string    `json:"signature"`
+	ChainValid bool      `json:"chainValid"`
 }
 
-// EnhancedAuditLogger provides enhanced audit logging capabilities
+// EnhancedAuditLogger provides enhanced audit logging capabilities.
 type EnhancedAuditLogger struct {
-	config    EnhancedConfig
-	outputs   []AuditOutput
-	buffer    chan *EnhancedAuditEvent
-	wg        sync.WaitGroup
 	ctx       context.Context
-	cancel    context.CancelFunc
-	mu        sync.RWMutex
-	sequence  int64
-	lastHash  string
-	stats     AuditStats
 	geoLookup GeoLookup
 	store     AuditStore
+	buffer    chan *EnhancedAuditEvent
+	cancel    context.CancelFunc
+	lastHash  string
+	config    EnhancedConfig
+	outputs   []AuditOutput
+	stats     AuditStats
+	wg        sync.WaitGroup
+	sequence  int64
+	mu        sync.RWMutex
 }
 
-// AuditStats tracks audit logging statistics
+// AuditStats tracks audit logging statistics.
 type AuditStats struct {
 	EventsProcessed   int64 `json:"eventsProcessed"`
 	EventsDropped     int64 `json:"eventsDropped"`
@@ -276,7 +182,7 @@ type AuditStats struct {
 	IntegrityFailed   int64 `json:"integrityFailed"`
 }
 
-// AuditOutput is the interface for audit outputs
+// AuditOutput is the interface for audit outputs.
 type AuditOutput interface {
 	Write(ctx context.Context, event *EnhancedAuditEvent) error
 	Flush(ctx context.Context) error
@@ -284,12 +190,12 @@ type AuditOutput interface {
 	Name() string
 }
 
-// GeoLookup provides geographic lookups
+// GeoLookup provides geographic lookups.
 type GeoLookup interface {
 	Lookup(ip string) (*GeoLocation, error)
 }
 
-// DefaultEnhancedConfig returns sensible defaults
+// DefaultEnhancedConfig returns sensible defaults.
 func DefaultEnhancedConfig() EnhancedConfig {
 	return EnhancedConfig{
 		Enabled:           true,
@@ -309,7 +215,7 @@ func DefaultEnhancedConfig() EnhancedConfig {
 	}
 }
 
-// NewEnhancedAuditLogger creates a new enhanced audit logger
+// NewEnhancedAuditLogger creates a new enhanced audit logger.
 func NewEnhancedAuditLogger(config EnhancedConfig, store AuditStore, geoLookup GeoLookup) (*EnhancedAuditLogger, error) {
 	if config.BufferSize <= 0 {
 		config.BufferSize = 10000
@@ -337,30 +243,36 @@ func NewEnhancedAuditLogger(config EnhancedConfig, store AuditStore, geoLookup G
 			cancel()
 			return nil, fmt.Errorf("failed to create output %s: %w", outputCfg.Name, err)
 		}
+
 		logger.outputs = append(logger.outputs, output)
 	}
 
 	return logger, nil
 }
 
-// Start begins processing audit events
+// Start begins processing audit events.
 func (l *EnhancedAuditLogger) Start() {
 	l.wg.Add(1)
+
 	go l.processEvents()
 }
 
-// Stop gracefully shuts down the logger
+// Stop gracefully shuts down the logger.
 func (l *EnhancedAuditLogger) Stop() error {
 	l.cancel()
 	close(l.buffer)
 	l.wg.Wait()
 
 	var errs []error
+
 	for _, output := range l.outputs {
-		if err := output.Flush(context.Background()); err != nil {
+		err := output.Flush(context.Background())
+		if err != nil {
 			errs = append(errs, err)
 		}
-		if err := output.Close(); err != nil {
+		err = output.Close()
+
+		if err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -368,10 +280,11 @@ func (l *EnhancedAuditLogger) Stop() error {
 	if len(errs) > 0 {
 		return fmt.Errorf("errors closing outputs: %v", errs)
 	}
+
 	return nil
 }
 
-// Log queues an enhanced audit event
+// Log queues an enhanced audit event.
 func (l *EnhancedAuditLogger) Log(event *EnhancedAuditEvent) {
 	if !l.config.Enabled {
 		return
@@ -393,7 +306,7 @@ func (l *EnhancedAuditLogger) Log(event *EnhancedAuditEvent) {
 	}
 }
 
-// LogSync logs an event synchronously
+// LogSync logs an event synchronously.
 func (l *EnhancedAuditLogger) LogSync(ctx context.Context, event *EnhancedAuditEvent) error {
 	if !l.config.Enabled {
 		return nil
@@ -404,10 +317,11 @@ func (l *EnhancedAuditLogger) LogSync(ctx context.Context, event *EnhancedAuditE
 	}
 
 	l.enrichEvent(event)
+
 	return l.processEvent(ctx, event)
 }
 
-// Stats returns audit statistics
+// Stats returns audit statistics.
 func (l *EnhancedAuditLogger) Stats() AuditStats {
 	return AuditStats{
 		EventsProcessed:   atomic.LoadInt64(&l.stats.EventsProcessed),
@@ -420,15 +334,16 @@ func (l *EnhancedAuditLogger) Stats() AuditStats {
 	}
 }
 
-// Query queries audit events
+// Query queries audit events.
 func (l *EnhancedAuditLogger) Query(ctx context.Context, filter AuditFilter) (*AuditListResult, error) {
 	if l.store == nil {
-		return nil, fmt.Errorf("no audit store configured")
+		return nil, errors.New("no audit store configured")
 	}
+
 	return l.store.ListAuditEvents(ctx, filter)
 }
 
-// VerifyIntegrity verifies the integrity of the audit chain
+// VerifyIntegrity verifies the integrity of the audit chain.
 func (l *EnhancedAuditLogger) VerifyIntegrity(ctx context.Context, events []*EnhancedAuditEvent) (bool, error) {
 	if !l.config.IntegrityEnabled {
 		return true, nil
@@ -463,13 +378,14 @@ func (l *EnhancedAuditLogger) VerifyIntegrity(ctx context.Context, events []*Enh
 		}
 
 		prevHash = event.EventHash
+
 		atomic.AddInt64(&l.stats.IntegrityVerified, 1)
 	}
 
 	return true, nil
 }
 
-// Export exports audit events to a file
+// Export exports audit events to a file.
 func (l *EnhancedAuditLogger) Export(ctx context.Context, filter AuditFilter, format string, writer io.Writer) error {
 	result, err := l.Query(ctx, filter)
 	if err != nil {
@@ -480,6 +396,7 @@ func (l *EnhancedAuditLogger) Export(ctx context.Context, filter AuditFilter, fo
 	case "json":
 		enc := json.NewEncoder(writer)
 		enc.SetIndent("", "  ")
+
 		return enc.Encode(result.Events)
 	case "csv":
 		return l.exportCSV(result.Events, writer)
@@ -503,9 +420,12 @@ func (l *EnhancedAuditLogger) processEvents() {
 				for event := range l.buffer {
 					_ = l.processEvent(l.ctx, event)
 				}
+
 				return
 			}
-			if err := l.processEvent(l.ctx, event); err != nil {
+			err := l.processEvent(l.ctx, event)
+
+			if err != nil {
 				atomic.AddInt64(&l.stats.EventsFailed, 1)
 			}
 		case <-l.ctx.Done():
@@ -522,16 +442,20 @@ func (l *EnhancedAuditLogger) processEvent(ctx context.Context, event *EnhancedA
 
 	// Write to all outputs
 	var errs []error
+
 	for _, output := range l.outputs {
-		if err := output.Write(ctx, event); err != nil {
+		err := output.Write(ctx, event)
+		if err != nil {
 			errs = append(errs, err)
+
 			atomic.AddInt64(&l.stats.OutputErrors, 1)
 		}
 	}
 
 	// Store in database
 	if l.store != nil {
-		if err := l.store.StoreAuditEvent(ctx, &event.AuditEvent); err != nil {
+		err := l.store.StoreAuditEvent(ctx, &event.AuditEvent)
+		if err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -541,6 +465,7 @@ func (l *EnhancedAuditLogger) processEvent(ctx context.Context, event *EnhancedA
 	if len(errs) > 0 {
 		return fmt.Errorf("output errors: %v", errs)
 	}
+
 	return nil
 }
 
@@ -582,6 +507,7 @@ func (l *EnhancedAuditLogger) shouldLog(event *EnhancedAuditEvent) bool {
 			return rule.Action != "exclude"
 		}
 	}
+
 	return true // Default to include
 }
 
@@ -589,12 +515,14 @@ func (l *EnhancedAuditLogger) matchesFilterRule(rule *FilterRule, event *Enhance
 	// Check event types
 	if len(rule.EventTypes) > 0 {
 		found := false
+
 		for _, et := range rule.EventTypes {
 			if et == event.EventType {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			return false
 		}
@@ -603,12 +531,14 @@ func (l *EnhancedAuditLogger) matchesFilterRule(rule *FilterRule, event *Enhance
 	// Check users
 	if len(rule.Users) > 0 {
 		found := false
+
 		for _, u := range rule.Users {
 			if u == event.UserIdentity.Username {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			return false
 		}
@@ -617,12 +547,14 @@ func (l *EnhancedAuditLogger) matchesFilterRule(rule *FilterRule, event *Enhance
 	// Check buckets
 	if len(rule.Buckets) > 0 {
 		found := false
+
 		for _, b := range rule.Buckets {
 			if b == event.Resource.Bucket {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			return false
 		}
@@ -631,12 +563,14 @@ func (l *EnhancedAuditLogger) matchesFilterRule(rule *FilterRule, event *Enhance
 	// Check IPs
 	if len(rule.IPs) > 0 {
 		found := false
+
 		for _, ip := range rule.IPs {
 			if ip == event.SourceIP {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			return false
 		}
@@ -645,12 +579,14 @@ func (l *EnhancedAuditLogger) matchesFilterRule(rule *FilterRule, event *Enhance
 	// Check results
 	if len(rule.Results) > 0 {
 		found := false
+
 		for _, r := range rule.Results {
 			if r == event.Result {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			return false
 		}
@@ -690,12 +626,14 @@ func (l *EnhancedAuditLogger) computeEventHash(event *EnhancedAuditEvent, prevHa
 		event.Resource.Bucket,
 		event.Resource.Key,
 		event.Result)
+
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
 func (l *EnhancedAuditLogger) signEvent(event *EnhancedAuditEvent) string {
 	mac := hmac.New(sha256.New, []byte(l.config.IntegritySecret))
 	mac.Write([]byte(event.EventHash))
+
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
 
@@ -737,6 +675,7 @@ func (l *EnhancedAuditLogger) mapSOC2Controls(event *EnhancedAuditEvent) []strin
 	case strings.HasPrefix(string(event.EventType), "s3:"):
 		controls = append(controls, "CC6.7", "CC7.2") // Data access
 	}
+
 	return controls
 }
 
@@ -750,6 +689,7 @@ func (l *EnhancedAuditLogger) mapPCIControls(event *EnhancedAuditEvent) []string
 	case strings.HasPrefix(string(event.EventType), "s3:"):
 		controls = append(controls, "10.2", "10.3") // Audit trails
 	}
+
 	return controls
 }
 
@@ -761,6 +701,7 @@ func (l *EnhancedAuditLogger) mapHIPAAControls(event *EnhancedAuditEvent) []stri
 	case strings.HasPrefix(string(event.EventType), "s3:"):
 		controls = append(controls, "164.312(b)", "164.312(c)")
 	}
+
 	return controls
 }
 
@@ -772,6 +713,7 @@ func (l *EnhancedAuditLogger) mapGDPRControls(event *EnhancedAuditEvent) []strin
 	case strings.HasPrefix(string(event.EventType), "iam:"):
 		controls = append(controls, "Art. 25", "Art. 32")
 	}
+
 	return controls
 }
 
@@ -789,6 +731,7 @@ func (l *EnhancedAuditLogger) isPrivilegedOperation(event *EnhancedAuditEvent) b
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -799,6 +742,7 @@ func (l *EnhancedAuditLogger) maskSensitiveData(event *EnhancedAuditEvent) {
 				event.Extra[field] = "***MASKED***"
 			}
 		}
+
 		if event.RequestHeaders != nil {
 			for k := range event.RequestHeaders {
 				if strings.EqualFold(k, field) || strings.Contains(strings.ToLower(k), field) {
@@ -833,6 +777,7 @@ func (l *EnhancedAuditLogger) exportCSV(events []AuditEvent, writer io.Writer) e
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -859,38 +804,40 @@ func (l *EnhancedAuditLogger) exportCEF(events []AuditEvent, writer io.Writer) e
 			return err
 		}
 	}
+
 	return nil
 }
 
 // Output implementations
 
-// FileOutput writes audit events to a file
+// FileOutput writes audit events to a file.
 type FileOutput struct {
+	file     *os.File
 	name     string
 	path     string
-	file     *os.File
-	mu       sync.Mutex
 	rotation RotationConfig
 	size     int64
+	mu       sync.Mutex
 }
 
 func newFileOutput(cfg OutputConfig, rotation RotationConfig) (*FileOutput, error) {
 	if cfg.Path == "" {
-		return nil, fmt.Errorf("file path is required")
+		return nil, errors.New("file path is required")
 	}
 
-	// Ensure directory exists
+	// Ensure directory exists with secure permissions
 	dir := filepath.Dir(cfg.Path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return nil, err
 	}
 
-	f, err := os.OpenFile(cfg.Path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(cfg.Path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, err
 	}
 
 	info, _ := f.Stat()
+
 	size := int64(0)
 	if info != nil {
 		size = info.Size()
@@ -911,7 +858,8 @@ func (o *FileOutput) Write(ctx context.Context, event *EnhancedAuditEvent) error
 
 	// Check rotation
 	if o.rotation.Enabled && o.size > int64(o.rotation.MaxSizeMB)*1024*1024 {
-		if err := o.rotate(); err != nil {
+		err := o.rotate()
+		if err != nil {
 			return err
 		}
 	}
@@ -920,12 +868,14 @@ func (o *FileOutput) Write(ctx context.Context, event *EnhancedAuditEvent) error
 	if err != nil {
 		return err
 	}
+
 	data = append(data, '\n')
 
 	n, err := o.file.Write(data)
 	if err != nil {
 		return err
 	}
+
 	o.size += int64(n)
 
 	return nil
@@ -936,16 +886,18 @@ func (o *FileOutput) rotate() error {
 
 	// Rename current file
 	timestamp := time.Now().Format("20060102-150405")
+
 	rotatedPath := fmt.Sprintf("%s.%s", o.path, timestamp)
 	if err := os.Rename(o.path, rotatedPath); err != nil {
 		return err
 	}
 
-	// Open new file
-	f, err := os.OpenFile(o.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	// Open new file with secure permissions
+	f, err := os.OpenFile(o.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
+
 	o.file = f
 	o.size = 0
 
@@ -966,11 +918,13 @@ func (o *FileOutput) rotate() error {
 
 		// First, compress the rotated file if configured
 		if o.rotation.Compress {
-			if err := o.compressFile(rotatedPath); err != nil {
+			err := o.compressFile(rotatedPath)
+			if err != nil {
 				log.Error().
 					Err(err).
 					Str("file", rotatedPath).
 					Msg("Audit log compression failed, skipping cleanup to preserve uncompressed file")
+
 				compressionSucceeded = false
 			}
 		}
@@ -989,21 +943,26 @@ func (o *FileOutput) rotate() error {
 
 // compressFile compresses a rotated log file using gzip with streaming
 // to avoid loading the entire file into memory (important for large audit logs)
-// Returns an error if compression fails, allowing the caller to handle the failure appropriately
+// Returns an error if compression fails, allowing the caller to handle the failure appropriately.
 func (o *FileOutput) compressFile(filePath string) error {
 	// Open the original file for streaming read
+	//nolint:gosec // G304: filePath is from trusted log rotation config
 	inFile, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to open log file for compression: %w", err)
 	}
+
 	defer func() {
-		if err := inFile.Close(); err != nil {
+		err := inFile.Close()
+		if err != nil {
 			log.Warn().Err(err).Str("file", filePath).Msg("Failed to close log file after compression")
 		}
 	}()
 
 	// Create the compressed file
 	compressedPath := filePath + ".gz"
+
+	//nolint:gosec // G304: compressedPath is from trusted log rotation config
 	outFile, err := os.Create(compressedPath)
 	if err != nil {
 		return fmt.Errorf("failed to create compressed log file: %w", err)
@@ -1019,6 +978,7 @@ func (o *FileOutput) compressFile(filePath string) error {
 		_ = gzWriter.Close()
 		_ = outFile.Close()
 		_ = os.Remove(compressedPath)
+
 		return fmt.Errorf("failed to stream compress data: %w", err)
 	}
 
@@ -1026,6 +986,7 @@ func (o *FileOutput) compressFile(filePath string) error {
 	if err := gzWriter.Close(); err != nil {
 		_ = outFile.Close()
 		_ = os.Remove(compressedPath)
+
 		return fmt.Errorf("failed to finalize gzip compression: %w", err)
 	}
 
@@ -1050,7 +1011,7 @@ func (o *FileOutput) compressFile(filePath string) error {
 	return nil
 }
 
-// cleanupOldFiles removes old log files based on MaxBackups and MaxAgeDays
+// cleanupOldFiles removes old log files based on MaxBackups and MaxAgeDays.
 func (o *FileOutput) cleanupOldFiles() {
 	// Get the directory and base name of the log file
 	dir := filepath.Dir(o.path)
@@ -1064,15 +1025,17 @@ func (o *FileOutput) cleanupOldFiles() {
 	}
 
 	type rotatedFile struct {
-		path    string
 		modTime time.Time
+		path    string
 	}
 
 	var rotatedFiles []rotatedFile
+
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
+
 		name := entry.Name()
 		// Skip the current log file
 		if name == baseName {
@@ -1084,6 +1047,7 @@ func (o *FileOutput) cleanupOldFiles() {
 			if err != nil {
 				continue
 			}
+
 			rotatedFiles = append(rotatedFiles, rotatedFile{
 				path:    filepath.Join(dir, name),
 				modTime: info.ModTime(),
@@ -1097,6 +1061,7 @@ func (o *FileOutput) cleanupOldFiles() {
 	})
 
 	now := time.Now()
+
 	for i, rf := range rotatedFiles {
 		shouldDelete := false
 
@@ -1114,7 +1079,8 @@ func (o *FileOutput) cleanupOldFiles() {
 		}
 
 		if shouldDelete {
-			if err := os.Remove(rf.path); err != nil {
+			err := os.Remove(rf.path)
+			if err != nil {
 				log.Warn().Err(err).Str("file", rf.path).Msg("Failed to remove old log file during cleanup")
 			}
 		}
@@ -1124,12 +1090,14 @@ func (o *FileOutput) cleanupOldFiles() {
 func (o *FileOutput) Flush(ctx context.Context) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+
 	return o.file.Sync()
 }
 
 func (o *FileOutput) Close() error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+
 	return o.file.Close()
 }
 
@@ -1137,7 +1105,7 @@ func (o *FileOutput) Name() string {
 	return o.name
 }
 
-// WebhookOutput sends audit events to a webhook
+// WebhookOutput sends audit events to a webhook.
 type WebhookOutput struct {
 	name      string
 	url       string
@@ -1150,7 +1118,7 @@ type WebhookOutput struct {
 
 func newWebhookOutput(cfg OutputConfig) (*WebhookOutput, error) {
 	if cfg.URL == "" {
-		return nil, fmt.Errorf("webhook URL is required")
+		return nil, errors.New("webhook URL is required")
 	}
 
 	batchSize := cfg.BatchSize
@@ -1177,15 +1145,18 @@ func (o *WebhookOutput) Write(ctx context.Context, event *EnhancedAuditEvent) er
 	if shouldFlush {
 		return o.Flush(ctx)
 	}
+
 	return nil
 }
 
 func (o *WebhookOutput) Flush(ctx context.Context) error {
 	o.mu.Lock()
+
 	if len(o.batch) == 0 {
 		o.mu.Unlock()
 		return nil
 	}
+
 	batch := o.batch
 	o.batch = make([]*EnhancedAuditEvent, 0, o.batchSize)
 	o.mu.Unlock()
@@ -1195,12 +1166,13 @@ func (o *WebhookOutput) Flush(ctx context.Context) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", o.url, strings.NewReader(string(data)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.url, strings.NewReader(string(data)))
 	if err != nil {
 		return err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
 	if o.authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+o.authToken)
 	}
@@ -1209,6 +1181,7 @@ func (o *WebhookOutput) Flush(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
@@ -1226,7 +1199,7 @@ func (o *WebhookOutput) Name() string {
 	return o.name
 }
 
-// createOutput creates an output based on configuration
+// createOutput creates an output based on configuration.
 func createOutput(cfg OutputConfig) (AuditOutput, error) {
 	switch cfg.Type {
 	case OutputFile:

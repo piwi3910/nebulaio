@@ -134,12 +134,12 @@ func TestCompressorReaders(t *testing.T) {
 	data := []byte("Stream data for reader tests")
 
 	compressors := []struct {
-		name    string
 		newFunc func() (Compressor, error)
+		name    string
 	}{
-		{"Zstd", func() (Compressor, error) { return NewZstdCompressor(LevelDefault) }},
-		{"LZ4", func() (Compressor, error) { return NewLZ4Compressor(LevelDefault) }},
-		{"Gzip", func() (Compressor, error) { return NewGzipCompressor(LevelDefault) }},
+		{func() (Compressor, error) { return NewZstdCompressor(LevelDefault) }, "Zstd"},
+		{func() (Compressor, error) { return NewLZ4Compressor(LevelDefault) }, "LZ4"},
+		{func() (Compressor, error) { return NewGzipCompressor(LevelDefault) }, "Gzip"},
 	}
 
 	for _, cc := range compressors {
@@ -150,6 +150,7 @@ func TestCompressorReaders(t *testing.T) {
 			if err != nil {
 				t.Fatalf("CompressReader failed: %v", err)
 			}
+
 			defer func() { _ = reader.Close() }()
 
 			compressed, err := io.ReadAll(reader)
@@ -173,9 +174,11 @@ func TestCompressorReaders(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecompressReader failed: %v", err)
 			}
+
 			defer func() { _ = reader.Close() }()
 
 			var buf bytes.Buffer
+
 			_, err = buf.ReadFrom(reader)
 			if err != nil {
 				t.Fatalf("failed to read decompressed data: %v", err)
@@ -189,10 +192,10 @@ func TestCompressorReaders(t *testing.T) {
 }
 
 // mockBackend is a simple in-memory backend for testing
-// Thread-safe with RWMutex protection for concurrent access
+// Thread-safe with RWMutex protection for concurrent access.
 type mockBackend struct {
+	objects map[string]map[string][]byte
 	mu      sync.RWMutex
-	objects map[string]map[string][]byte // bucket -> key -> data
 }
 
 func newMockBackend() *mockBackend {
@@ -211,67 +214,85 @@ func (m *mockBackend) PutObject(_ context.Context, bucket, key string, reader io
 	if err != nil {
 		return nil, err
 	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.objects[bucket] == nil {
 		m.objects[bucket] = make(map[string][]byte)
 	}
+
 	m.objects[bucket][key] = data
+
 	return &backend.PutResult{ETag: "mock-etag", Size: int64(len(data))}, nil
 }
 
 func (m *mockBackend) GetObject(_ context.Context, bucket, key string) (io.ReadCloser, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.objects[bucket] == nil {
 		return nil, io.EOF
 	}
+
 	data, ok := m.objects[bucket][key]
 	if !ok {
 		return nil, io.EOF
 	}
+
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
 func (m *mockBackend) DeleteObject(_ context.Context, bucket, key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.objects[bucket] != nil {
 		delete(m.objects[bucket], key)
 	}
+
 	return nil
 }
 
 func (m *mockBackend) ObjectExists(_ context.Context, bucket, key string) (bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.objects[bucket] == nil {
 		return false, nil
 	}
+
 	_, ok := m.objects[bucket][key]
+
 	return ok, nil
 }
 
 func (m *mockBackend) CreateBucket(_ context.Context, bucket string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.objects[bucket] == nil {
 		m.objects[bucket] = make(map[string][]byte)
 	}
+
 	return nil
 }
 
 func (m *mockBackend) DeleteBucket(_ context.Context, bucket string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	delete(m.objects, bucket)
+
 	return nil
 }
 
 func (m *mockBackend) BucketExists(_ context.Context, bucket string) (bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	_, ok := m.objects[bucket]
+
 	return ok, nil
 }
 
@@ -318,6 +339,7 @@ func TestCompressionBackend(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetObject failed: %v", err)
 		}
+
 		defer func() { _ = reader.Close() }()
 
 		retrieved, err := io.ReadAll(reader)
@@ -348,9 +370,11 @@ func TestCompressionBackend(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetObject failed: %v", err)
 		}
+
 		defer func() { _ = reader.Close() }()
 
 		var buf bytes.Buffer
+
 		_, err = buf.ReadFrom(reader)
 		if err != nil {
 			t.Fatalf("failed to read object: %v", err)
@@ -373,9 +397,11 @@ func TestCompressionBackend(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetObject failed: %v", err)
 		}
+
 		defer func() { _ = reader.Close() }()
 
 		var buf bytes.Buffer
+
 		_, err = buf.ReadFrom(reader)
 		if err != nil {
 			t.Fatalf("failed to read object: %v", err)
@@ -391,6 +417,7 @@ func TestCompressionBackend(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ObjectExists failed: %v", err)
 		}
+
 		if !exists {
 			t.Error("object should exist")
 		}
@@ -399,6 +426,7 @@ func TestCompressionBackend(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ObjectExists failed: %v", err)
 		}
+
 		if exists {
 			t.Error("object should not exist")
 		}
@@ -424,6 +452,7 @@ func TestNoCompression(t *testing.T) {
 	_ = mockBE.Init(ctx)
 
 	cfg := Config{Algorithm: AlgorithmNone}
+
 	compBackend, err := New(mockBE, cfg)
 	if err != nil {
 		t.Fatalf("failed to create compression backend: %v", err)
@@ -434,6 +463,7 @@ func TestNoCompression(t *testing.T) {
 	}
 
 	data := bytes.Repeat([]byte("test"), 100)
+
 	_, err = compBackend.PutObject(ctx, "test", "key", bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		t.Fatalf("PutObject failed: %v", err)
@@ -443,9 +473,11 @@ func TestNoCompression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetObject failed: %v", err)
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	var buf bytes.Buffer
+
 	_, _ = buf.ReadFrom(reader)
 
 	if !bytes.Equal(data, buf.Bytes()) {
@@ -531,32 +563,40 @@ func BenchmarkCompression(b *testing.B) {
 
 	b.Run("Zstd-Fastest", func(b *testing.B) {
 		comp, _ := NewZstdCompressor(LevelFastest)
+
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			_, _ = comp.Compress(data)
 		}
 	})
 
 	b.Run("Zstd-Default", func(b *testing.B) {
 		comp, _ := NewZstdCompressor(LevelDefault)
+
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			_, _ = comp.Compress(data)
 		}
 	})
 
 	b.Run("LZ4-Default", func(b *testing.B) {
 		comp, _ := NewLZ4Compressor(LevelDefault)
+
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			_, _ = comp.Compress(data)
 		}
 	})
 
 	b.Run("Gzip-Default", func(b *testing.B) {
 		comp, _ := NewGzipCompressor(LevelDefault)
+
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			_, _ = comp.Compress(data)
 		}
 	})
@@ -571,8 +611,10 @@ func BenchmarkDecompression(b *testing.B) {
 	b.Run("Zstd", func(b *testing.B) {
 		comp, _ := NewZstdCompressor(LevelDefault)
 		compressed, _ := comp.Compress(data)
+
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			_, _ = comp.Decompress(compressed)
 		}
 	})
@@ -580,8 +622,10 @@ func BenchmarkDecompression(b *testing.B) {
 	b.Run("LZ4", func(b *testing.B) {
 		comp, _ := NewLZ4Compressor(LevelDefault)
 		compressed, _ := comp.Compress(data)
+
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			_, _ = comp.Decompress(compressed)
 		}
 	})
@@ -589,8 +633,10 @@ func BenchmarkDecompression(b *testing.B) {
 	b.Run("Gzip", func(b *testing.B) {
 		comp, _ := NewGzipCompressor(LevelDefault)
 		compressed, _ := comp.Compress(data)
+
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+
+		for range b.N {
 			_, _ = comp.Decompress(compressed)
 		}
 	})

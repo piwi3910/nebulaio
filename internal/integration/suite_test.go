@@ -23,7 +23,7 @@ import (
 )
 
 // Test constants - these are only used in mock server tests
-// For integration tests against real servers, use NEBULAIO_TEST_USER and NEBULAIO_TEST_PASSWORD env vars
+// For integration tests against real servers, use NEBULAIO_TEST_USER and NEBULAIO_TEST_PASSWORD env vars.
 const (
 	mockTestUser     = "admin"
 	mockTestPassword = "TestPassword123"
@@ -46,8 +46,9 @@ func (s *IntegrationTestSuite) SetupSuite() {
 
 	// Create temporary data directory
 	var err error
+
 	s.dataDir, err = os.MkdirTemp("", "nebulaio-integration-*")
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 
 	// Note: In a full implementation, we would start the server here
 	// For now, these tests are structured for running against a live server
@@ -58,6 +59,7 @@ func (s *IntegrationTestSuite) SetupSuite() {
 // TearDownSuite runs after all tests in the suite.
 func (s *IntegrationTestSuite) TearDownSuite() {
 	s.cancel()
+
 	if s.dataDir != "" {
 		os.RemoveAll(s.dataDir)
 	}
@@ -108,6 +110,7 @@ func (s *IntegrationTestSuite) makeAuthenticatedRequest(method, url string, body
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
 	if s.authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+s.authToken)
 	}
@@ -119,6 +122,7 @@ func getEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
+
 	return defaultValue
 }
 
@@ -127,6 +131,7 @@ func TestIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration tests in short mode")
 	}
+
 	suite.Run(t, new(IntegrationTestSuite))
 }
 
@@ -210,6 +215,7 @@ func TestAuthSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration tests in short mode")
 	}
+
 	suite.Run(t, new(AuthTestSuite))
 }
 
@@ -234,6 +240,7 @@ func (s *BucketTestSuite) TestBucketLifecycle() {
 		s.T().Skipf("Server not available: %v", err)
 		return
 	}
+
 	resp.Body.Close()
 	s.Equal(http.StatusCreated, resp.StatusCode)
 
@@ -244,6 +251,7 @@ func (s *BucketTestSuite) TestBucketLifecycle() {
 		return
 	}
 	defer resp.Body.Close()
+
 	s.Equal(http.StatusOK, resp.StatusCode)
 
 	var listResult struct {
@@ -254,12 +262,14 @@ func (s *BucketTestSuite) TestBucketLifecycle() {
 	json.NewDecoder(resp.Body).Decode(&listResult)
 
 	found := false
+
 	for _, b := range listResult.Buckets {
 		if b.Name == bucketName {
 			found = true
 			break
 		}
 	}
+
 	s.True(found, "Created bucket should appear in list")
 
 	// Delete bucket
@@ -272,6 +282,7 @@ func (s *BucketTestSuite) TestBucketLifecycle() {
 		s.T().Skipf("Server not available: %v", err)
 		return
 	}
+
 	resp.Body.Close()
 	s.Equal(http.StatusNoContent, resp.StatusCode)
 }
@@ -280,6 +291,7 @@ func TestBucketSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration tests in short mode")
 	}
+
 	suite.Run(t, new(BucketTestSuite))
 }
 
@@ -326,6 +338,7 @@ func TestClusterSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration tests in short mode")
 	}
+
 	suite.Run(t, new(ClusterTestSuite))
 }
 
@@ -357,6 +370,7 @@ func (s *AIMLTestSuite) TestGetAIMLStatus() {
 
 	// Verify expected features exist
 	expectedFeatures := []string{"s3_express", "iceberg", "mcp", "gpudirect", "dpu", "rdma", "nim"}
+
 	featureNames := make(map[string]bool)
 	for _, f := range result.Features {
 		featureNames[f.Name] = true
@@ -441,6 +455,7 @@ func TestAIMLSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration tests in short mode")
 	}
+
 	suite.Run(t, new(AIMLTestSuite))
 }
 
@@ -476,10 +491,11 @@ func TestHealthSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration tests in short mode")
 	}
+
 	suite.Run(t, new(HealthTestSuite))
 }
 
-// Used for testing without a running server
+// Used for testing without a running server.
 type MockServerTestSuite struct {
 	suite.Suite
 	server *httptest.Server
@@ -518,6 +534,7 @@ func (s *MockServerTestSuite) TearDownSuite() {
 func (s *MockServerTestSuite) TestMockHealth() {
 	resp, err := http.Get(s.server.URL + "/health")
 	s.NoError(err)
+
 	defer resp.Body.Close()
 
 	s.Equal(http.StatusOK, resp.StatusCode)
@@ -536,6 +553,7 @@ func (s *MockServerTestSuite) TestMockLogin() {
 		bytes.NewReader(jsonBody),
 	)
 	s.NoError(err)
+
 	defer resp.Body.Close()
 
 	s.Equal(http.StatusOK, resp.StatusCode)
@@ -550,8 +568,10 @@ func TestMockServerSuite(t *testing.T) {
 //nolint:unused // Reserved for future test implementation.
 func _createTestFile(t *testing.T, dir, name, content string) string {
 	t.Helper()
+
 	path := filepath.Join(dir, name)
 	err := os.WriteFile(path, []byte(content), 0644)
 	require.NoError(t, err)
+
 	return path
 }

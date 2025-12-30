@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewAdminCmd creates the admin command group
+// NewAdminCmd creates the admin command group.
 func NewAdminCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "admin",
@@ -50,12 +50,14 @@ func newVersioningEnableCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			bucket := args[0]
+
 			_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 				Bucket: &bucket,
 				VersioningConfiguration: &types.VersioningConfiguration{
@@ -67,6 +69,7 @@ func newVersioningEnableCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Versioning enabled for bucket '%s'\n", bucket)
+
 			return nil
 		},
 	}
@@ -79,12 +82,14 @@ func newVersioningDisableCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			bucket := args[0]
+
 			_, err = client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 				Bucket: &bucket,
 				VersioningConfiguration: &types.VersioningConfiguration{
@@ -96,6 +101,7 @@ func newVersioningDisableCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Versioning suspended for bucket '%s'\n", bucket)
+
 			return nil
 		},
 	}
@@ -108,12 +114,14 @@ func newVersioningStatusCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			bucket := args[0]
+
 			result, err := client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
 				Bucket: &bucket,
 			})
@@ -125,7 +133,9 @@ func newVersioningStatusCmd() *cobra.Command {
 			if result.Status != "" {
 				status = string(result.Status)
 			}
+
 			fmt.Printf("Versioning status for '%s': %s\n", bucket, status)
+
 			return nil
 		},
 	}
@@ -153,6 +163,7 @@ func newPolicySetCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -167,6 +178,7 @@ func newPolicySetCmd() *cobra.Command {
 			}
 
 			policy := string(policyData)
+
 			_, err = client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
 				Bucket: &bucket,
 				Policy: &policy,
@@ -176,6 +188,7 @@ func newPolicySetCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Policy set for bucket '%s'\n", bucket)
+
 			return nil
 		},
 	}
@@ -188,12 +201,14 @@ func newPolicyGetCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			bucket := args[0]
+
 			result, err := client.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{
 				Bucket: &bucket,
 			})
@@ -204,13 +219,15 @@ func newPolicyGetCmd() *cobra.Command {
 			if result.Policy != nil {
 				// Pretty print JSON
 				var prettyJSON map[string]interface{}
-				if err := json.Unmarshal([]byte(*result.Policy), &prettyJSON); err == nil {
+				err := json.Unmarshal([]byte(*result.Policy), &prettyJSON)
+				if err == nil {
 					pretty, _ := json.MarshalIndent(prettyJSON, "", "  ")
 					fmt.Println(string(pretty))
 				} else {
 					fmt.Println(*result.Policy)
 				}
 			}
+
 			return nil
 		},
 	}
@@ -223,12 +240,14 @@ func newPolicyDeleteCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			bucket := args[0]
+
 			_, err = client.DeleteBucketPolicy(ctx, &s3.DeleteBucketPolicyInput{
 				Bucket: &bucket,
 			})
@@ -237,6 +256,49 @@ func newPolicyDeleteCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Policy deleted for bucket '%s'\n", bucket)
+
+			return nil
+		},
+	}
+}
+
+// readConfigFile reads and returns the contents of a configuration file.
+func readConfigFile(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+	return data, nil
+}
+
+// bucketConfigSetterFunc is a function type for setting bucket configurations.
+type bucketConfigSetterFunc func(ctx context.Context, client *s3.Client, bucket string, configData []byte) error
+
+// newBucketConfigSetCmd creates a generic bucket config set command.
+func newBucketConfigSetCmd(use, short, configType string, setter bucketConfigSetterFunc) *cobra.Command {
+	return &cobra.Command{
+		Use:   use,
+		Short: short,
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			bucket, configFile := args[0], args[1]
+			ctx := context.Background()
+
+			configData, err := readConfigFile(configFile)
+			if err != nil {
+				return err
+			}
+
+			client, err := NewS3Client(ctx)
+			if err != nil {
+				return err
+			}
+
+			if err := setter(ctx, client, bucket, configData); err != nil {
+				return err
+			}
+
+			fmt.Printf("%s configuration set for bucket '%s'\n", configType, bucket)
 			return nil
 		},
 	}
@@ -258,42 +320,25 @@ func newAdminReplicationCmd() *cobra.Command {
 }
 
 func newReplicationSetCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "set <bucket-name> <config-file>",
-		Short: "Set replication configuration from file",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-			client, err := NewS3Client(ctx)
-			if err != nil {
-				return err
-			}
-
-			bucket := args[0]
-			configFile := args[1]
-
-			configData, err := os.ReadFile(configFile)
-			if err != nil {
-				return fmt.Errorf("failed to read config file: %w", err)
-			}
-
+	return newBucketConfigSetCmd(
+		"set <bucket-name> <config-file>",
+		"Set replication configuration from file",
+		"Replication",
+		func(ctx context.Context, client *s3.Client, bucket string, configData []byte) error {
 			var config types.ReplicationConfiguration
 			if err := json.Unmarshal(configData, &config); err != nil {
 				return fmt.Errorf("failed to parse replication config: %w", err)
 			}
-
-			_, err = client.PutBucketReplication(ctx, &s3.PutBucketReplicationInput{
+			_, err := client.PutBucketReplication(ctx, &s3.PutBucketReplicationInput{
 				Bucket:                   &bucket,
 				ReplicationConfiguration: &config,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to set replication: %w", err)
 			}
-
-			fmt.Printf("Replication configuration set for bucket '%s'\n", bucket)
 			return nil
 		},
-	}
+	)
 }
 
 func newReplicationGetCmd() *cobra.Command {
@@ -303,12 +348,14 @@ func newReplicationGetCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			bucket := args[0]
+
 			result, err := client.GetBucketReplication(ctx, &s3.GetBucketReplicationInput{
 				Bucket: &bucket,
 			})
@@ -320,6 +367,7 @@ func newReplicationGetCmd() *cobra.Command {
 				pretty, _ := json.MarshalIndent(result.ReplicationConfiguration, "", "  ")
 				fmt.Println(string(pretty))
 			}
+
 			return nil
 		},
 	}
@@ -332,12 +380,14 @@ func newReplicationDeleteCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			bucket := args[0]
+
 			_, err = client.DeleteBucketReplication(ctx, &s3.DeleteBucketReplicationInput{
 				Bucket: &bucket,
 			})
@@ -346,6 +396,7 @@ func newReplicationDeleteCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Replication configuration deleted for bucket '%s'\n", bucket)
+
 			return nil
 		},
 	}
@@ -368,42 +419,25 @@ func newAdminLifecycleCmd() *cobra.Command {
 }
 
 func newLifecycleSetCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "set <bucket-name> <config-file>",
-		Short: "Set lifecycle configuration from file",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-			client, err := NewS3Client(ctx)
-			if err != nil {
-				return err
-			}
-
-			bucket := args[0]
-			configFile := args[1]
-
-			configData, err := os.ReadFile(configFile)
-			if err != nil {
-				return fmt.Errorf("failed to read config file: %w", err)
-			}
-
-			var config types.BucketLifecycleConfiguration
-			if err := json.Unmarshal(configData, &config); err != nil {
+	return newBucketConfigSetCmd(
+		"set <bucket-name> <config-file>",
+		"Set lifecycle configuration from file",
+		"Lifecycle",
+		func(ctx context.Context, client *s3.Client, bucket string, configData []byte) error {
+			var lifecycleConfig types.BucketLifecycleConfiguration
+			if err := json.Unmarshal(configData, &lifecycleConfig); err != nil {
 				return fmt.Errorf("failed to parse lifecycle config: %w", err)
 			}
-
-			_, err = client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
+			_, err := client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 				Bucket:                 &bucket,
-				LifecycleConfiguration: &config,
+				LifecycleConfiguration: &lifecycleConfig,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to set lifecycle config: %w", err)
 			}
-
-			fmt.Printf("Lifecycle configuration set for bucket '%s'\n", bucket)
 			return nil
 		},
-	}
+	)
 }
 
 func newLifecycleGetCmd() *cobra.Command {
@@ -413,12 +447,14 @@ func newLifecycleGetCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			bucket := args[0]
+
 			result, err := client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
 				Bucket: &bucket,
 			})
@@ -432,6 +468,7 @@ func newLifecycleGetCmd() *cobra.Command {
 			} else {
 				fmt.Println("No lifecycle rules configured")
 			}
+
 			return nil
 		},
 	}
@@ -444,12 +481,14 @@ func newLifecycleDeleteCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			bucket := args[0]
+
 			_, err = client.DeleteBucketLifecycle(ctx, &s3.DeleteBucketLifecycleInput{
 				Bucket: &bucket,
 			})
@@ -458,6 +497,7 @@ func newLifecycleDeleteCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Lifecycle configuration deleted for bucket '%s'\n", bucket)
+
 			return nil
 		},
 	}
@@ -470,12 +510,14 @@ func newLifecycleListCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			bucket := args[0]
+
 			result, err := client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
 				Bucket: &bucket,
 			})
@@ -496,12 +538,16 @@ func newLifecycleListCmd() *cobra.Command {
 				if rule.ID != nil {
 					id = *rule.ID
 				}
+
 				status := string(rule.Status)
+
 				prefix := ""
 				if rule.Filter != nil && rule.Filter.Prefix != nil {
 					prefix = *rule.Filter.Prefix
 				}
+
 				expiration := ""
+
 				if rule.Expiration != nil {
 					if rule.Expiration.Days != nil {
 						expiration = fmt.Sprintf("%d days", *rule.Expiration.Days)

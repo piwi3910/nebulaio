@@ -5,22 +5,23 @@ package s3select
 import (
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
-// Query represents a parsed S3 Select SQL query
+// Query represents a parsed S3 Select SQL query.
 type Query struct {
-	Columns    []Column
-	FromAlias  string
-	Where      *Condition
-	Limit      int
-	SelectAll  bool
+	Where     *Condition
+	FromAlias string
+	Columns   []Column
+	Limit     int
+	SelectAll bool
 }
 
-// Column represents a selected column
+// Column represents a selected column.
 type Column struct {
 	Name     string
 	Alias    string
@@ -29,16 +30,16 @@ type Column struct {
 	Index    int
 }
 
-// Condition represents a WHERE condition
+// Condition represents a WHERE condition.
 type Condition struct {
-	Left     string
-	Operator string
 	Right    interface{}
 	And      *Condition
 	Or       *Condition
+	Left     string
+	Operator string
 }
 
-// InputFormat specifies the input format configuration
+// InputFormat specifies the input format configuration.
 type InputFormat struct {
 	Type            string // CSV, JSON, Parquet
 	CSVConfig       *CSVConfig
@@ -47,35 +48,35 @@ type InputFormat struct {
 	CompressionType string // NONE, GZIP, BZIP2, ZSTD
 }
 
-// CSVConfig configures CSV parsing
+// CSVConfig configures CSV parsing.
 type CSVConfig struct {
-	FileHeaderInfo       string // USE, IGNORE, NONE
-	Comments             string
-	QuoteEscapeCharacter string
-	RecordDelimiter      string
-	FieldDelimiter       string
-	QuoteCharacter       string
+	FileHeaderInfo             string // USE, IGNORE, NONE
+	Comments                   string
+	QuoteEscapeCharacter       string
+	RecordDelimiter            string
+	FieldDelimiter             string
+	QuoteCharacter             string
 	AllowQuotedRecordDelimiter bool
 }
 
-// JSONConfig configures JSON parsing
+// JSONConfig configures JSON parsing.
 type JSONConfig struct {
 	Type string // DOCUMENT, LINES
 }
 
-// ParquetConfig configures Parquet parsing
+// ParquetConfig configures Parquet parsing.
 type ParquetConfig struct {
 	// No additional config needed
 }
 
-// OutputFormat specifies the output format configuration
+// OutputFormat specifies the output format configuration.
 type OutputFormat struct {
-	Type      string // CSV, JSON
-	CSVConfig *CSVOutputConfig
+	CSVConfig  *CSVOutputConfig
 	JSONConfig *JSONOutputConfig
+	Type       string
 }
 
-// CSVOutputConfig configures CSV output
+// CSVOutputConfig configures CSV output.
 type CSVOutputConfig struct {
 	QuoteFields     string // ALWAYS, ASNEEDED
 	QuoteEscapeChar string
@@ -84,12 +85,12 @@ type CSVOutputConfig struct {
 	QuoteCharacter  string
 }
 
-// JSONOutputConfig configures JSON output
+// JSONOutputConfig configures JSON output.
 type JSONOutputConfig struct {
 	RecordDelimiter string
 }
 
-// Result contains the query execution result
+// Result contains the query execution result.
 type Result struct {
 	Records        []byte
 	BytesScanned   int64
@@ -97,13 +98,13 @@ type Result struct {
 	BytesReturned  int64
 }
 
-// Engine executes S3 Select queries
+// Engine executes S3 Select queries.
 type Engine struct {
-	inputFormat  InputFormat
 	outputFormat OutputFormat
+	inputFormat  InputFormat
 }
 
-// NewEngine creates a new S3 Select engine
+// NewEngine creates a new S3 Select engine.
 func NewEngine(input InputFormat, output OutputFormat) *Engine {
 	// Set defaults
 	if input.CSVConfig == nil && input.Type == "CSV" {
@@ -114,6 +115,7 @@ func NewEngine(input InputFormat, output OutputFormat) *Engine {
 			QuoteCharacter:  "\"",
 		}
 	}
+
 	if input.JSONConfig == nil && input.Type == "JSON" {
 		input.JSONConfig = &JSONConfig{
 			Type: "LINES",
@@ -128,6 +130,7 @@ func NewEngine(input InputFormat, output OutputFormat) *Engine {
 			QuoteCharacter:  "\"",
 		}
 	}
+
 	if output.JSONConfig == nil && output.Type == "JSON" {
 		output.JSONConfig = &JSONOutputConfig{
 			RecordDelimiter: "\n",
@@ -140,7 +143,7 @@ func NewEngine(input InputFormat, output OutputFormat) *Engine {
 	}
 }
 
-// Execute runs the SQL query on the data
+// Execute runs the SQL query on the data.
 func (e *Engine) Execute(data []byte, sql string) (*Result, error) {
 	// Parse the SQL query
 	query, err := ParseSQL(sql)
@@ -152,6 +155,7 @@ func (e *Engine) Execute(data []byte, sql string) (*Result, error) {
 
 	// Parse records based on input format
 	var records []Record
+
 	switch e.inputFormat.Type {
 	case "CSV":
 		records, err = e.parseCSV(data)
@@ -189,13 +193,13 @@ func (e *Engine) Execute(data []byte, sql string) (*Result, error) {
 	}, nil
 }
 
-// Record represents a data record
+// Record represents a data record.
 type Record struct {
 	Fields  map[string]interface{}
 	Columns []string // Ordered column names
 }
 
-// parseCSV parses CSV data into records
+// parseCSV parses CSV data into records.
 func (e *Engine) parseCSV(data []byte) ([]Record, error) {
 	config := e.inputFormat.CSVConfig
 
@@ -205,9 +209,11 @@ func (e *Engine) parseCSV(data []byte) ([]Record, error) {
 	if len(config.FieldDelimiter) > 0 {
 		reader.Comma = rune(config.FieldDelimiter[0])
 	}
+
 	if len(config.Comments) > 0 {
 		reader.Comment = rune(config.Comments[0])
 	}
+
 	reader.LazyQuotes = true
 	reader.FieldsPerRecord = -1 // Variable number of fields
 
@@ -221,6 +227,7 @@ func (e *Engine) parseCSV(data []byte) ([]Record, error) {
 	}
 
 	var headers []string
+
 	startRow := 0
 
 	switch config.FileHeaderInfo {
@@ -232,6 +239,7 @@ func (e *Engine) parseCSV(data []byte) ([]Record, error) {
 		for i := range rows[0] {
 			headers = append(headers, fmt.Sprintf("_%d", i+1))
 		}
+
 		startRow = 1
 	case "NONE":
 		// Use positional names
@@ -245,22 +253,25 @@ func (e *Engine) parseCSV(data []byte) ([]Record, error) {
 	}
 
 	var records []Record
+
 	for i := startRow; i < len(rows); i++ {
 		row := rows[i]
 		fields := make(map[string]interface{})
+
 		for j, val := range row {
 			if j < len(headers) {
 				fields[headers[j]] = parseValue(val)
 				fields[fmt.Sprintf("_%d", j+1)] = parseValue(val) // Also index access
 			}
 		}
+
 		records = append(records, Record{Fields: fields, Columns: headers})
 	}
 
 	return records, nil
 }
 
-// parseJSON parses JSON data into records
+// parseJSON parses JSON data into records.
 func (e *Engine) parseJSON(data []byte) ([]Record, error) {
 	config := e.inputFormat.JSONConfig
 
@@ -276,25 +287,31 @@ func (e *Engine) parseJSON(data []byte) ([]Record, error) {
 			}
 
 			var obj map[string]interface{}
-			if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			err := json.Unmarshal([]byte(line), &obj)
+			if err != nil {
 				// Try as array
 				var arr []interface{}
-				if err := json.Unmarshal([]byte(line), &arr); err != nil {
+				err := json.Unmarshal([]byte(line), &arr)
+				if err != nil {
 					continue
 				}
+
 				for _, item := range arr {
 					if rec, ok := item.(map[string]interface{}); ok {
 						records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
 					}
 				}
+
 				continue
 			}
+
 			records = append(records, Record{Fields: obj, Columns: getKeys(obj)})
 		}
 	} else {
 		// DOCUMENT format - single JSON object or array
 		var obj interface{}
-		if err := json.Unmarshal(data, &obj); err != nil {
+		err := json.Unmarshal(data, &obj)
+		if err != nil {
 			return nil, err
 		}
 
@@ -313,14 +330,14 @@ func (e *Engine) parseJSON(data []byte) ([]Record, error) {
 	return records, nil
 }
 
-// parseParquet parses Parquet data into records
+// parseParquet parses Parquet data into records.
 func (e *Engine) parseParquet(data []byte) ([]Record, error) {
 	// Parquet requires a more complex implementation using a library
 	// For now, return an error indicating limited support
-	return nil, fmt.Errorf("parquet format requires the parquet-go library; basic support only")
+	return nil, errors.New("parquet format requires the parquet-go library; basic support only")
 }
 
-// executeQuery executes the parsed query on records
+// executeQuery executes the parsed query on records.
 func (e *Engine) executeQuery(query *Query, records []Record) ([]Record, error) {
 	var results []Record
 
@@ -348,17 +365,20 @@ func (e *Engine) executeQuery(query *Query, records []Record) ([]Record, error) 
 	return results, nil
 }
 
-// executeAggregates handles aggregate functions
+// executeAggregates handles aggregate functions.
 func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, error) {
 	result := Record{Fields: make(map[string]interface{})}
+
 	var columns []string
 
 	for _, col := range query.Columns {
 		var value interface{}
+
 		alias := col.Alias
 		if alias == "" {
 			alias = fmt.Sprintf("%s(%s)", col.Function, col.Name)
 		}
+
 		columns = append(columns, alias)
 
 		switch strings.ToUpper(col.Function) {
@@ -367,30 +387,38 @@ func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, er
 				value = len(records)
 			} else {
 				count := 0
+
 				for _, r := range records {
 					if _, ok := r.Fields[col.Name]; ok {
 						count++
 					}
 				}
+
 				value = count
 			}
 		case "SUM":
 			var sum float64
+
 			for _, r := range records {
 				if v, ok := r.Fields[col.Name]; ok {
 					sum += toFloat64(v)
 				}
 			}
+
 			value = sum
 		case "AVG":
-			var sum float64
-			var count int
+			var (
+				sum   float64
+				count int
+			)
+
 			for _, r := range records {
 				if v, ok := r.Fields[col.Name]; ok {
 					sum += toFloat64(v)
 					count++
 				}
 			}
+
 			if count > 0 {
 				value = sum / float64(count)
 			} else {
@@ -398,6 +426,7 @@ func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, er
 			}
 		case "MIN":
 			var min *float64
+
 			for _, r := range records {
 				if v, ok := r.Fields[col.Name]; ok {
 					f := toFloat64(v)
@@ -406,11 +435,13 @@ func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, er
 					}
 				}
 			}
+
 			if min != nil {
 				value = *min
 			}
 		case "MAX":
 			var max *float64
+
 			for _, r := range records {
 				if v, ok := r.Fields[col.Name]; ok {
 					f := toFloat64(v)
@@ -419,6 +450,7 @@ func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, er
 					}
 				}
 			}
+
 			if max != nil {
 				value = *max
 			}
@@ -428,17 +460,20 @@ func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, er
 	}
 
 	result.Columns = columns
+
 	return []Record{result}, nil
 }
 
-// formatOutput formats records to output format
+// formatOutput formats records to output format.
 func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 	var output strings.Builder
 
 	for _, record := range records {
 		// Select columns
-		var values []interface{}
-		var keys []string
+		var (
+			values []interface{}
+			keys   []string
+		)
 
 		if query.SelectAll {
 			for _, col := range record.Columns {
@@ -448,6 +483,7 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 		} else {
 			for _, col := range query.Columns {
 				var name string
+
 				if col.Function != "" {
 					// For aggregate functions, use the function expression as key
 					if col.Alias != "" {
@@ -460,6 +496,7 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 				} else {
 					name = col.Name
 				}
+
 				keys = append(keys, name)
 
 				if col.Function != "" {
@@ -478,15 +515,18 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 		switch e.outputFormat.Type {
 		case "JSON":
 			obj := make(map[string]interface{})
+
 			for i, key := range keys {
 				if i < len(values) {
 					obj[key] = values[i]
 				}
 			}
+
 			jsonBytes, err := json.Marshal(obj)
 			if err != nil {
 				return nil, err
 			}
+
 			output.Write(jsonBytes)
 			output.WriteString(e.outputFormat.JSONConfig.RecordDelimiter)
 
@@ -495,8 +535,10 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 				if i > 0 {
 					output.WriteString(e.outputFormat.CSVConfig.FieldDelimiter)
 				}
+
 				output.WriteString(formatCSVValue(val, e.outputFormat.CSVConfig))
 			}
+
 			output.WriteString(e.outputFormat.CSVConfig.RecordDelimiter)
 
 		default:
@@ -505,6 +547,7 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			output.Write(jsonBytes)
 			output.WriteString("\n")
 		}
@@ -513,7 +556,7 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 	return []byte(output.String()), nil
 }
 
-// ParseSQL parses an S3 Select SQL query
+// ParseSQL parses an S3 Select SQL query.
 func ParseSQL(sql string) (*Query, error) {
 	sql = strings.TrimSpace(sql)
 
@@ -521,7 +564,7 @@ func ParseSQL(sql string) (*Query, error) {
 	lowerSQL := strings.ToLower(sql)
 
 	if !strings.HasPrefix(lowerSQL, "select") {
-		return nil, fmt.Errorf("only SELECT queries are supported")
+		return nil, errors.New("only SELECT queries are supported")
 	}
 
 	query := &Query{}
@@ -540,6 +583,7 @@ func ParseSQL(sql string) (*Query, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		query.Where = where
 		sql = whereRegex.ReplaceAllString(sql, "")
 	}
@@ -558,6 +602,7 @@ func ParseSQL(sql string) (*Query, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		query.Columns = columns
 		if len(columns) == 1 && columns[0].Name == "*" && columns[0].Function == "" {
 			query.SelectAll = true
@@ -567,7 +612,7 @@ func ParseSQL(sql string) (*Query, error) {
 	return query, nil
 }
 
-// parseColumns parses the column list
+// parseColumns parses the column list.
 func parseColumns(columnsStr string) ([]Column, error) {
 	var columns []Column
 
@@ -597,6 +642,7 @@ func parseColumns(columnsStr string) ([]Column, error) {
 			col.Function = strings.ToUpper(matches[1])
 			col.Name = matches[2]
 			columns = append(columns, col)
+
 			continue
 		}
 
@@ -607,6 +653,7 @@ func parseColumns(columnsStr string) ([]Column, error) {
 			col.Index, _ = strconv.Atoi(matches[1])
 			col.Name = part
 			columns = append(columns, col)
+
 			continue
 		}
 
@@ -614,6 +661,7 @@ func parseColumns(columnsStr string) ([]Column, error) {
 		if strings.HasSuffix(part, ".*") {
 			col.Name = "*"
 			columns = append(columns, col)
+
 			continue
 		}
 
@@ -635,7 +683,7 @@ func parseColumns(columnsStr string) ([]Column, error) {
 	return columns, nil
 }
 
-// parseWhereClause parses a WHERE condition
+// parseWhereClause parses a WHERE condition.
 func parseWhereClause(where string) (*Condition, error) {
 	where = strings.TrimSpace(where)
 
@@ -648,11 +696,14 @@ func parseWhereClause(where string) (*Condition, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		right, err := parseWhereClause(andParts[1])
 		if err != nil {
 			return nil, err
 		}
+
 		left.And = right
+
 		return left, nil
 	}
 
@@ -661,11 +712,14 @@ func parseWhereClause(where string) (*Condition, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		right, err := parseWhereClause(orParts[1])
 		if err != nil {
 			return nil, err
 		}
+
 		left.Or = right
+
 		return left, nil
 	}
 
@@ -688,6 +742,7 @@ func parseWhereClause(where string) (*Condition, error) {
 
 				// Parse right value
 				var rightVal interface{}
+
 				rightLower := strings.ToLower(right)
 				if strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(op), "null") {
 					rightVal = nil
@@ -715,13 +770,14 @@ func parseWhereClause(where string) (*Condition, error) {
 	return nil, fmt.Errorf("failed to parse WHERE clause: %s", where)
 }
 
-// evaluateCondition evaluates a condition against a record
+// evaluateCondition evaluates a condition against a record.
 func evaluateCondition(cond *Condition, record Record) bool {
 	result := evaluateSingleCondition(cond, record)
 
 	if cond.And != nil {
 		result = result && evaluateCondition(cond.And, record)
 	}
+
 	if cond.Or != nil {
 		result = result || evaluateCondition(cond.Or, record)
 	}
@@ -765,6 +821,7 @@ func getKeys(m map[string]interface{}) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
+
 	return keys
 }
 
@@ -773,15 +830,19 @@ func parseValue(s string) interface{} {
 	if s == "" {
 		return nil
 	}
+
 	if f, err := strconv.ParseFloat(s, 64); err == nil {
 		if strings.Contains(s, ".") {
 			return f
 		}
+
 		return int64(f)
 	}
+
 	if b, err := strconv.ParseBool(s); err == nil {
 		return b
 	}
+
 	return s
 }
 
@@ -802,6 +863,7 @@ func toFloat64(v interface{}) float64 {
 			return f
 		}
 	}
+
 	return 0
 }
 
@@ -809,6 +871,7 @@ func toString(v interface{}) string {
 	if v == nil {
 		return ""
 	}
+
 	return fmt.Sprintf("%v", v)
 }
 
@@ -823,12 +886,14 @@ func compareValues(a, b interface{}) int {
 		} else if aFloat > bFloat {
 			return 1
 		}
+
 		return 0
 	}
 
 	// String comparison
 	aStr := toString(a)
 	bStr := toString(b)
+
 	return strings.Compare(aStr, bStr)
 }
 
@@ -840,6 +905,7 @@ func matchLike(value, pattern string) bool {
 	pattern = "^" + pattern + "$"
 
 	matched, _ := regexp.MatchString("(?i)"+pattern, value)
+
 	return matched
 }
 
@@ -854,21 +920,27 @@ func formatCSVValue(v interface{}, config *CSVOutputConfig) string {
 		escaped := strings.ReplaceAll(s, config.QuoteCharacter, config.QuoteCharacter+config.QuoteCharacter)
 		return config.QuoteCharacter + escaped + config.QuoteCharacter
 	}
+
 	return s
 }
 
 func splitByComma(s string) []string {
-	var parts []string
-	var current strings.Builder
+	var (
+		parts   []string
+		current strings.Builder
+	)
+
 	depth := 0
 
 	for _, c := range s {
 		switch c {
 		case '(':
 			depth++
+
 			current.WriteRune(c)
 		case ')':
 			depth--
+
 			current.WriteRune(c)
 		case ',':
 			if depth == 0 {
@@ -889,7 +961,7 @@ func splitByComma(s string) []string {
 	return parts
 }
 
-// ExecuteCSV is a convenience function for executing queries on CSV data
+// ExecuteCSV is a convenience function for executing queries on CSV data.
 func ExecuteCSV(data []byte, sql string, hasHeader bool) (*Result, error) {
 	headerInfo := "USE"
 	if !hasHeader {
@@ -917,7 +989,7 @@ func ExecuteCSV(data []byte, sql string, hasHeader bool) (*Result, error) {
 	return engine.Execute(data, sql)
 }
 
-// ExecuteJSON is a convenience function for executing queries on JSON data
+// ExecuteJSON is a convenience function for executing queries on JSON data.
 func ExecuteJSON(data []byte, sql string, isDocument bool) (*Result, error) {
 	jsonType := "LINES"
 	if isDocument {

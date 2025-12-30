@@ -3,6 +3,7 @@ package metadata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -17,7 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// hashNodeID converts a string node ID to a uint64 replica ID
+// hashNodeID converts a string node ID to a uint64 replica ID.
 func hashNodeID(nodeID string) uint64 {
 	// Try parsing as uint64 first
 	if id, err := strconv.ParseUint(nodeID, 10, 64); err == nil {
@@ -26,49 +27,53 @@ func hashNodeID(nodeID string) uint64 {
 	// Fall back to hash
 	h := fnv.New64a()
 	h.Write([]byte(nodeID))
+
 	return h.Sum64()
 }
 
-// DragonboatConfig holds configuration for the Dragonboat store
+// DragonboatConfig holds configuration for the Dragonboat store.
 type DragonboatConfig struct {
-	NodeID         uint64
-	ShardID        uint64
+	InitialMembers map[uint64]string
 	DataDir        string
 	RaftAddress    string
+	NodeID         uint64
+	ShardID        uint64
 	Bootstrap      bool
-	InitialMembers map[uint64]string // nodeID -> raftAddress
 }
 
 // DragonboatStore implements the Store interface using Dragonboat for consensus
-// and BadgerDB for the underlying key-value storage
+// and BadgerDB for the underlying key-value storage.
 type DragonboatStore struct {
 	config   DragonboatConfig
 	nodeHost *dragonboat.NodeHost
+	badger   *badger.DB
 	shardID  uint64
 	nodeID   uint64
-	badger   *badger.DB
 }
 
-// NewDragonboatStore creates a new Dragonboat-backed metadata store
+// NewDragonboatStore creates a new Dragonboat-backed metadata store.
 func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	// Create directories
 	badgerDir := filepath.Join(cfg.DataDir, "badger")
 	nodeHostDir := filepath.Join(cfg.DataDir, "nodehost")
 	walDir := filepath.Join(cfg.DataDir, "wal")
 
-	if err := os.MkdirAll(badgerDir, 0755); err != nil {
+	if err := os.MkdirAll(badgerDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create badger directory: %w", err)
 	}
-	if err := os.MkdirAll(nodeHostDir, 0755); err != nil {
+
+	if err := os.MkdirAll(nodeHostDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create nodehost directory: %w", err)
 	}
-	if err := os.MkdirAll(walDir, 0755); err != nil {
+
+	if err := os.MkdirAll(walDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create wal directory: %w", err)
 	}
 
 	// Open BadgerDB
 	opts := badger.DefaultOptions(badgerDir)
 	opts.Logger = nil // Disable badger logging
+
 	db, err := badger.Open(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open badger: %w", err)
@@ -85,9 +90,11 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	// Create NodeHost
 	nh, err := dragonboat.NewNodeHost(nhConfig)
 	if err != nil {
-		if closeErr := db.Close(); closeErr != nil {
+		closeErr := db.Close()
+		if closeErr != nil {
 			log.Error().Err(closeErr).Msg("failed to close BadgerDB during cleanup after NodeHost creation failed")
 		}
+
 		return nil, fmt.Errorf("failed to create nodehost: %w", err)
 	}
 
@@ -118,26 +125,36 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	// Start or join the replica
 	if cfg.Bootstrap {
 		// Bootstrap a new cluster
-		if err := nh.StartReplica(cfg.InitialMembers, false, smFactory, rc); err != nil {
+		err := nh.StartReplica(cfg.InitialMembers, false, smFactory, rc)
+		if err != nil {
 			nh.Close()
-			if closeErr := db.Close(); closeErr != nil {
+			closeErr := db.Close()
+
+			if closeErr != nil {
 				log.Error().Err(closeErr).Msg("failed to close BadgerDB during cleanup after replica start failed")
 			}
+
 			return nil, fmt.Errorf("failed to start replica: %w", err)
 		}
+
 		log.Info().
 			Uint64("shard_id", cfg.ShardID).
 			Uint64("node_id", cfg.NodeID).
 			Msg("Bootstrapped new Dragonboat cluster")
 	} else {
 		// Join existing cluster
-		if err := nh.StartReplica(nil, true, smFactory, rc); err != nil {
+		err := nh.StartReplica(nil, true, smFactory, rc)
+		if err != nil {
 			nh.Close()
-			if closeErr := db.Close(); closeErr != nil {
+			closeErr := db.Close()
+
+			if closeErr != nil {
 				log.Error().Err(closeErr).Msg("failed to close BadgerDB during cleanup after replica join failed")
 			}
+
 			return nil, fmt.Errorf("failed to start replica: %w", err)
 		}
+
 		log.Info().
 			Uint64("shard_id", cfg.ShardID).
 			Uint64("node_id", cfg.NodeID).
@@ -146,6 +163,7 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 
 	// Wait for leader election
 	log.Info().Msg("Waiting for Dragonboat leader election...")
+
 	if err := store.WaitForLeader(30 * time.Second); err != nil {
 		log.Warn().Err(err).Msg("Timeout waiting for leader election, continuing anyway")
 	} else {
@@ -159,29 +177,31 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	return store, nil
 }
 
-// Close shuts down the Dragonboat store
+// Close shuts down the Dragonboat store.
 func (s *DragonboatStore) Close() error {
 	s.nodeHost.Close()
 	return s.badger.Close()
 }
 
-// IsLeader returns true if this node is the Raft leader
+// IsLeader returns true if this node is the Raft leader.
 func (s *DragonboatStore) IsLeader() bool {
 	leaderID, _, valid, err := s.nodeHost.GetLeaderID(s.shardID)
 	if err != nil || !valid {
 		return false
 	}
+
 	return leaderID == s.nodeID
 }
 
-// LeaderAddress returns the address of the current leader
+// LeaderAddress returns the address of the current leader.
 func (s *DragonboatStore) LeaderAddress() (string, error) {
 	leaderID, _, valid, err := s.nodeHost.GetLeaderID(s.shardID)
 	if err != nil {
 		return "", err
 	}
+
 	if !valid {
-		return "", fmt.Errorf("no valid leader")
+		return "", errors.New("no valid leader")
 	}
 
 	// Get membership info to map leader ID to address
@@ -196,39 +216,40 @@ func (s *DragonboatStore) LeaderAddress() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("leader address not found")
+	return "", errors.New("leader address not found")
 }
 
-// GetNodeHost returns the underlying NodeHost instance
+// GetNodeHost returns the underlying NodeHost instance.
 func (s *DragonboatStore) GetNodeHost() *dragonboat.NodeHost {
 	return s.nodeHost
 }
 
-// State returns the current node state
+// State returns the current node state.
 func (s *DragonboatStore) State() string {
 	if s.IsLeader() {
 		return "Leader"
 	}
+
 	return "Follower"
 }
 
-// Stats returns node statistics
+// Stats returns node statistics.
 func (s *DragonboatStore) Stats() map[string]string {
 	stats := make(map[string]string)
-	stats["shard_id"] = fmt.Sprintf("%d", s.shardID)
-	stats["node_id"] = fmt.Sprintf("%d", s.nodeID)
+	stats["shard_id"] = strconv.FormatUint(s.shardID, 10)
+	stats["node_id"] = strconv.FormatUint(s.nodeID, 10)
 	stats["state"] = s.State()
 
 	leaderID, _, valid, _ := s.nodeHost.GetLeaderID(s.shardID)
 	if valid {
-		stats["leader_id"] = fmt.Sprintf("%d", leaderID)
+		stats["leader_id"] = strconv.FormatUint(leaderID, 10)
 	}
 
 	return stats
 }
 
 // JoinCluster adds this node to an existing cluster
-// This is called by a non-bootstrap node to join the cluster
+// This is called by a non-bootstrap node to join the cluster.
 func (s *DragonboatStore) JoinCluster(leaderNodeID uint64, nodeID uint64, raftAddr string) error {
 	log.Info().
 		Uint64("leader_node_id", leaderNodeID).
@@ -241,7 +262,7 @@ func (s *DragonboatStore) JoinCluster(leaderNodeID uint64, nodeID uint64, raftAd
 }
 
 // AddVoter adds a new voting member to the cluster
-// This must be called on the leader
+// This must be called on the leader.
 func (s *DragonboatStore) AddVoter(nodeID string, raftAddr string) error {
 	if !s.IsLeader() {
 		leaderAddr, _ := s.LeaderAddress()
@@ -271,7 +292,7 @@ func (s *DragonboatStore) AddVoter(nodeID string, raftAddr string) error {
 }
 
 // AddNonvoter adds a new non-voting member to the cluster
-// Non-voters receive log replication but don't vote in elections
+// Non-voters receive log replication but don't vote in elections.
 func (s *DragonboatStore) AddNonvoter(nodeID string, raftAddr string) error {
 	if !s.IsLeader() {
 		leaderAddr, _ := s.LeaderAddress()
@@ -296,7 +317,7 @@ func (s *DragonboatStore) AddNonvoter(nodeID string, raftAddr string) error {
 	return nil
 }
 
-// RemoveServer removes a server from the cluster
+// RemoveServer removes a server from the cluster.
 func (s *DragonboatStore) RemoveServer(nodeID string) error {
 	if !s.IsLeader() {
 		leaderAddr, _ := s.LeaderAddress()
@@ -324,7 +345,7 @@ func (s *DragonboatStore) RemoveServer(nodeID string) error {
 	return nil
 }
 
-// GetConfiguration returns the current cluster configuration
+// GetConfiguration returns the current cluster configuration.
 func (s *DragonboatStore) GetConfiguration() (*dragonboat.Membership, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -337,30 +358,31 @@ func (s *DragonboatStore) GetConfiguration() (*dragonboat.Membership, error) {
 	return membership, nil
 }
 
-// GetServers returns the list of servers in the cluster
+// GetServers returns the list of servers in the cluster.
 func (s *DragonboatStore) GetServers() (map[uint64]string, error) {
 	membership, err := s.GetConfiguration()
 	if err != nil {
 		return nil, err
 	}
+
 	return membership.Nodes, nil
 }
 
 // ClusterServerInfo represents a server in the cluster configuration
-// Used by the admin API for a common interface between Raft implementations
+// Used by the admin API for a common interface between Raft implementations.
 type ClusterServerInfo struct {
-	ID      uint64
 	Address string
+	ID      uint64
 	IsVoter bool
 }
 
 // ClusterConfiguration represents the cluster membership
-// Used by the admin API for a common interface between Raft implementations
+// Used by the admin API for a common interface between Raft implementations.
 type ClusterConfiguration struct {
 	Servers []ClusterServerInfo
 }
 
-// GetClusterConfiguration returns the cluster configuration in a common format
+// GetClusterConfiguration returns the cluster configuration in a common format.
 func (s *DragonboatStore) GetClusterConfiguration() (*ClusterConfiguration, error) {
 	membership, err := s.GetConfiguration()
 	if err != nil {
@@ -394,7 +416,7 @@ func (s *DragonboatStore) GetClusterConfiguration() (*ClusterConfiguration, erro
 
 // TransferLeadership transfers leadership to another node
 // Dragonboat handles leader transfer automatically during configuration changes
-// This method initiates a transfer by requesting the target node to be the leader
+// This method initiates a transfer by requesting the target node to be the leader.
 func (s *DragonboatStore) TransferLeadership(targetID string, targetAddr string) error {
 	if !s.IsLeader() {
 		leaderAddr, _ := s.LeaderAddress()
@@ -424,20 +446,21 @@ func (s *DragonboatStore) TransferLeadership(targetID string, targetAddr string)
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for leadership transfer")
+			return errors.New("timeout waiting for leadership transfer")
 		case <-ticker.C:
 			leaderID, _, valid, err := s.nodeHost.GetLeaderID(s.shardID)
 			if err == nil && valid && leaderID == replicaID {
 				log.Info().
 					Str("target_id", targetID).
 					Msg("Leadership transfer completed")
+
 				return nil
 			}
 		}
 	}
 }
 
-// WaitForLeader waits for a leader to be elected
+// WaitForLeader waits for a leader to be elected.
 func (s *DragonboatStore) WaitForLeader(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -448,7 +471,7 @@ func (s *DragonboatStore) WaitForLeader(timeout time.Duration) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for leader")
+			return errors.New("timeout waiting for leader")
 		case <-ticker.C:
 			leaderID, _, valid, err := s.nodeHost.GetLeaderID(s.shardID)
 			if err == nil && valid && leaderID != 0 {
@@ -458,33 +481,34 @@ func (s *DragonboatStore) WaitForLeader(timeout time.Duration) error {
 	}
 }
 
-// Snapshot triggers a manual snapshot
+// Snapshot triggers a manual snapshot.
 func (s *DragonboatStore) Snapshot() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	_, err := s.nodeHost.SyncRequestSnapshot(ctx, s.shardID, dragonboat.SnapshotOption{})
+
 	return err
 }
 
-// LastIndex returns the last index in the log
+// LastIndex returns the last index in the log.
 func (s *DragonboatStore) LastIndex() (uint64, error) {
 	// Dragonboat doesn't expose this directly, we'd need to track it
 	// For now, return 0
 	return 0, nil
 }
 
-// AppliedIndex returns the last applied index
+// AppliedIndex returns the last applied index.
 func (s *DragonboatStore) AppliedIndex() (uint64, error) {
 	// Dragonboat doesn't expose this directly, we'd need to track it
 	// For now, return 0
 	return 0, nil
 }
 
-// apply sends a command through Dragonboat
+// apply sends a command through Dragonboat.
 func (s *DragonboatStore) apply(cmd *command) error {
 	if !s.IsLeader() {
-		return fmt.Errorf("not leader")
+		return errors.New("not leader")
 	}
 
 	data, err := json.Marshal(cmd)
@@ -509,38 +533,48 @@ func (s *DragonboatStore) apply(cmd *command) error {
 	return nil
 }
 
-// get retrieves a value from BadgerDB
+// get retrieves a value from BadgerDB.
 func (s *DragonboatStore) get(key []byte) ([]byte, error) {
 	var val []byte
+
 	err := s.badger.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 		if err != nil {
 			return err
 		}
+
 		val, err = item.ValueCopy(nil)
+
 		return err
 	})
+
 	return val, err
 }
 
-// scan performs a prefix scan on BadgerDB
+// scan performs a prefix scan on BadgerDB.
 func (s *DragonboatStore) scan(prefix []byte) ([][]byte, error) {
 	var results [][]byte
+
 	err := s.badger.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.Prefix = prefix
+
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
+
 			val, err := item.ValueCopy(nil)
 			if err != nil {
 				return err
 			}
+
 			results = append(results, val)
 		}
+
 		return nil
 	})
+
 	return results, err
 }

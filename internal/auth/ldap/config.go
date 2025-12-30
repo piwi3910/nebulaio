@@ -7,7 +7,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
-// Config holds LDAP provider configuration
+// Config holds LDAP provider configuration.
 type Config struct {
 	// Base configuration
 	auth.ProviderConfig `yaml:",inline"`
@@ -34,47 +34,26 @@ type Config struct {
 	Pool PoolConfig `json:"pool,omitempty" yaml:"pool,omitempty"`
 }
 
-// TLSConfig holds TLS settings for LDAP
+// TLSConfig holds TLS settings for LDAP.
 type TLSConfig struct {
-	// InsecureSkipVerify disables certificate verification
-	InsecureSkipVerify bool `json:"insecureSkipVerify" yaml:"insecureSkipVerify"`
-
-	// CACertFile is the path to the CA certificate file
-	CACertFile string `json:"caCertFile,omitempty" yaml:"caCertFile,omitempty"`
-
-	// ClientCertFile is the path to the client certificate
-	ClientCertFile string `json:"clientCertFile,omitempty" yaml:"clientCertFile,omitempty"`
-
-	// ClientKeyFile is the path to the client key
-	ClientKeyFile string `json:"clientKeyFile,omitempty" yaml:"clientKeyFile,omitempty"`
-
-	// StartTLS enables STARTTLS upgrade
-	StartTLS bool `json:"startTls" yaml:"startTls"`
+	CACertFile         string `json:"caCertFile,omitempty" yaml:"caCertFile,omitempty"`
+	ClientCertFile     string `json:"clientCertFile,omitempty" yaml:"clientCertFile,omitempty"`
+	ClientKeyFile      string `json:"clientKeyFile,omitempty" yaml:"clientKeyFile,omitempty"`
+	InsecureSkipVerify bool   `json:"insecureSkipVerify" yaml:"insecureSkipVerify"`
+	StartTLS           bool   `json:"startTls" yaml:"startTls"`
 }
 
-// UserSearchConfig holds user search settings
+// UserSearchConfig holds user search settings.
 type UserSearchConfig struct {
-	// BaseDN is the base DN for user searches
-	BaseDN string `json:"baseDn" yaml:"baseDn"`
-
-	// Filter is the LDAP filter for finding users
-	// Use {username} as placeholder for the username
-	Filter string `json:"filter" yaml:"filter"`
-
-	// Scope is the search scope (base, one, sub)
-	Scope string `json:"scope" yaml:"scope"`
-
-	// Attributes to retrieve
 	Attributes AttributeMapping `json:"attributes" yaml:"attributes"`
-
-	// SizeLimit limits the number of results
-	SizeLimit int `json:"sizeLimit,omitempty" yaml:"sizeLimit,omitempty"`
-
-	// TimeLimit limits the search time
-	TimeLimit time.Duration `json:"timeLimit,omitempty" yaml:"timeLimit,omitempty"`
+	BaseDN     string           `json:"baseDn" yaml:"baseDn"`
+	Filter     string           `json:"filter" yaml:"filter"`
+	Scope      string           `json:"scope" yaml:"scope"`
+	SizeLimit  int              `json:"sizeLimit,omitempty" yaml:"sizeLimit,omitempty"`
+	TimeLimit  time.Duration    `json:"timeLimit,omitempty" yaml:"timeLimit,omitempty"`
 }
 
-// GroupSearchConfig holds group search settings
+// GroupSearchConfig holds group search settings.
 type GroupSearchConfig struct {
 	// BaseDN is the base DN for group searches
 	BaseDN string `json:"baseDn" yaml:"baseDn"`
@@ -96,28 +75,17 @@ type GroupSearchConfig struct {
 	TimeLimit time.Duration `json:"timeLimit,omitempty" yaml:"timeLimit,omitempty"`
 }
 
-// AttributeMapping maps LDAP attributes to user fields
+// AttributeMapping maps LDAP attributes to user fields.
 type AttributeMapping struct {
-	// Username is the attribute for the username
-	Username string `json:"username" yaml:"username"`
-
-	// DisplayName is the attribute for the display name
-	DisplayName string `json:"displayName,omitempty" yaml:"displayName,omitempty"`
-
-	// Email is the attribute for the email
-	Email string `json:"email,omitempty" yaml:"email,omitempty"`
-
-	// MemberOf is the attribute for group membership
-	MemberOf string `json:"memberOf,omitempty" yaml:"memberOf,omitempty"`
-
-	// UniqueID is the attribute for unique identifier
-	UniqueID string `json:"uniqueId,omitempty" yaml:"uniqueId,omitempty"`
-
-	// Additional holds custom attribute mappings
-	Additional map[string]string `json:"additional,omitempty" yaml:"additional,omitempty"`
+	Additional  map[string]string `json:"additional,omitempty" yaml:"additional,omitempty"`
+	Username    string            `json:"username" yaml:"username"`
+	DisplayName string            `json:"displayName,omitempty" yaml:"displayName,omitempty"`
+	Email       string            `json:"email,omitempty" yaml:"email,omitempty"`
+	MemberOf    string            `json:"memberOf,omitempty" yaml:"memberOf,omitempty"`
+	UniqueID    string            `json:"uniqueId,omitempty" yaml:"uniqueId,omitempty"`
 }
 
-// PoolConfig holds connection pool settings
+// PoolConfig holds connection pool settings.
 type PoolConfig struct {
 	// MaxConnections is the maximum number of connections
 	MaxConnections int `json:"maxConnections" yaml:"maxConnections"`
@@ -135,7 +103,7 @@ type PoolConfig struct {
 	IdleTimeout time.Duration `json:"idleTimeout" yaml:"idleTimeout"`
 }
 
-// DefaultConfig returns sensible defaults
+// DefaultConfig returns sensible defaults.
 func DefaultConfig() Config {
 	return Config{
 		ProviderConfig: auth.ProviderConfig{
@@ -176,7 +144,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// ActiveDirectoryConfig returns defaults for Active Directory
+// ActiveDirectoryConfig returns defaults for Active Directory.
 func ActiveDirectoryConfig() Config {
 	cfg := DefaultConfig()
 	cfg.UserSearch.Filter = "(&(objectClass=user)(sAMAccountName={username}))"
@@ -189,10 +157,11 @@ func ActiveDirectoryConfig() Config {
 	}
 	cfg.GroupSearch.Filter = "(&(objectClass=group)(member={dn}))"
 	cfg.GroupSearch.NameAttribute = "cn"
+
 	return cfg
 }
 
-// Validate validates the configuration
+// Validate validates the configuration.
 func (c *Config) Validate() error {
 	if c.ServerURL == "" {
 		return errors.New("server URL is required")
@@ -228,9 +197,11 @@ func (c *Config) Validate() error {
 		if c.GroupSearch.Filter == "" {
 			return errors.New("group search filter is required when group base DN is set")
 		}
+
 		if c.GroupSearch.NameAttribute == "" {
 			return errors.New("group name attribute is required when group search is configured")
 		}
+
 		if c.GroupSearch.Scope != "" && !validScopes[c.GroupSearch.Scope] {
 			return errors.New("invalid group search scope: must be base, one, or sub")
 		}
@@ -239,7 +210,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// SearchScope converts scope string to LDAP constant
+// SearchScope converts scope string to LDAP constant.
 func SearchScope(scope string) int {
 	switch scope {
 	case "base":

@@ -12,36 +12,29 @@ import (
 	"time"
 )
 
-// Server provides an RDMA-enabled S3 server
+// Server provides an RDMA-enabled S3 server.
 type Server struct {
+	handler   RequestHandler
 	config    *ServerConfig
 	transport *Transport
 	listener  *Listener
-	handler   RequestHandler
-	running   atomic.Bool
-	wg        sync.WaitGroup
 	metrics   *ServerMetrics
+	wg        sync.WaitGroup
+	running   atomic.Bool
 }
 
-// ServerConfig configures the RDMA server
+// ServerConfig configures the RDMA server.
 type ServerConfig struct {
-	// Listen address for RDMA connections
-	ListenAddr string
-	Port       int
-
-	// RDMA transport configuration
-	RDMAConfig *Config
-
-	// Worker pool settings
-	WorkerCount int
-
-	// Request handling
+	RDMAConfig      *Config
+	ListenAddr      string
+	Port            int
+	WorkerCount     int
 	MaxRequestSize  int64
 	MaxResponseSize int64
 	RequestTimeout  time.Duration
 }
 
-// DefaultServerConfig returns default server configuration
+// DefaultServerConfig returns default server configuration.
 func DefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
 		Port:            9100,
@@ -53,38 +46,38 @@ func DefaultServerConfig() *ServerConfig {
 	}
 }
 
-// RequestHandler handles S3 requests over RDMA
+// RequestHandler handles S3 requests over RDMA.
 type RequestHandler interface {
 	// HandleRequest processes an S3 request and returns the response
 	HandleRequest(ctx context.Context, req *ServerRequest) (*ServerResponse, error)
 }
 
-// ServerRequest represents an incoming S3 request
+// ServerRequest represents an incoming S3 request.
 type ServerRequest struct {
-	OpCode      uint8
-	Bucket      string
-	Key         string
-	VersionID   string
-	Headers     map[string]string
-	Body        io.Reader
-	BodySize    int64
-	RemoteAddr  string
-	Connection  *Connection
+	Body       io.Reader
+	Headers    map[string]string
+	Connection *Connection
+	Bucket     string
+	Key        string
+	VersionID  string
+	RemoteAddr string
+	BodySize   int64
+	OpCode     uint8
 }
 
-// ServerResponse represents the response to send
+// ServerResponse represents the response to send.
 type ServerResponse struct {
-	StatusCode  int
-	ContentType string
-	Headers     map[string]string
 	Body        io.Reader
-	BodySize    int64
+	Headers     map[string]string
+	ContentType string
 	ETag        string
+	StatusCode  int
+	BodySize    int64
 }
 
-// ServerMetrics tracks server performance metrics
+// ServerMetrics tracks server performance metrics.
 type ServerMetrics struct {
-	mu                sync.RWMutex
+	RequestsByOp      map[uint8]int64
 	RequestsTotal     int64
 	RequestsSuccess   int64
 	RequestsFailed    int64
@@ -93,10 +86,10 @@ type ServerMetrics struct {
 	ActiveConnections int64
 	LatencySum        time.Duration
 	LatencyCount      int64
-	RequestsByOp      map[uint8]int64
+	mu                sync.RWMutex
 }
 
-// NewServer creates a new RDMA server
+// NewServer creates a new RDMA server.
 func NewServer(config *ServerConfig, handler RequestHandler) (*Server, error) {
 	if config == nil {
 		config = DefaultServerConfig()
@@ -121,7 +114,7 @@ func NewServer(config *ServerConfig, handler RequestHandler) (*Server, error) {
 	}, nil
 }
 
-// Start starts the RDMA server
+// Start starts the RDMA server.
 func (s *Server) Start() error {
 	if !s.transport.IsAvailable() {
 		return ErrRDMANotAvailable
@@ -131,24 +124,27 @@ func (s *Server) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to start listener: %w", err)
 	}
+
 	s.listener = listener
 
 	s.running.Store(true)
 
 	// Start accept loop
 	s.wg.Add(1)
+
 	go s.acceptLoop()
 
 	return nil
 }
 
-// acceptLoop accepts incoming connections
+// acceptLoop accepts incoming connections.
 func (s *Server) acceptLoop() {
 	defer s.wg.Done()
 
 	for s.running.Load() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		conn, err := s.listener.Accept(ctx)
+
 		cancel()
 
 		if err != nil {
@@ -156,6 +152,7 @@ func (s *Server) acceptLoop() {
 				// Log error but continue accepting
 				continue
 			}
+
 			return
 		}
 
@@ -163,11 +160,12 @@ func (s *Server) acceptLoop() {
 
 		// Handle connection in goroutine
 		s.wg.Add(1)
+
 		go s.handleConnection(conn)
 	}
 }
 
-// handleConnection handles a single RDMA connection
+// handleConnection handles a single RDMA connection.
 func (s *Server) handleConnection(conn *Connection) {
 	defer s.wg.Done()
 	defer func() {
@@ -176,7 +174,8 @@ func (s *Server) handleConnection(conn *Connection) {
 	}()
 
 	for s.running.Load() && conn.Connected {
-		if err := s.handleRequest(conn); err != nil {
+		err := s.handleRequest(conn)
+		if err != nil {
 			if err == io.EOF || !conn.Connected {
 				return
 			}
@@ -185,7 +184,7 @@ func (s *Server) handleConnection(conn *Connection) {
 	}
 }
 
-// handleRequest handles a single request on a connection
+// handleRequest handles a single request on a connection.
 func (s *Server) handleRequest(conn *Connection) error {
 	ctx, cancel := context.WithTimeout(context.Background(), s.config.RequestTimeout)
 	defer cancel()
@@ -247,6 +246,7 @@ func (s *Server) handleRequest(conn *Connection) error {
 
 	// Update latency metrics
 	latency := time.Since(start)
+
 	s.metrics.mu.Lock()
 	s.metrics.LatencySum += latency
 	s.metrics.LatencyCount++
@@ -255,7 +255,7 @@ func (s *Server) handleRequest(conn *Connection) error {
 	return nil
 }
 
-// parseRequest parses an incoming request from buffer
+// parseRequest parses an incoming request from buffer.
 func (s *Server) parseRequest(data []byte, conn *Connection) (*ServerRequest, error) {
 	if len(data) < 5 { // OpCode + BucketLen + KeyLen minimum
 		return nil, errors.New("request too short")
@@ -282,6 +282,7 @@ func (s *Server) parseRequest(data []byte, conn *Connection) (*ServerRequest, er
 	if offset+2 > len(data) {
 		return nil, errors.New("key length missing")
 	}
+
 	keyLen := int(data[offset])<<8 | int(data[offset+1])
 	offset += 2
 
@@ -294,10 +295,12 @@ func (s *Server) parseRequest(data []byte, conn *Connection) (*ServerRequest, er
 
 	// Body length (8 bytes)
 	var bodyLen int64
+
 	if offset+8 <= len(data) {
-		for i := 0; i < 8; i++ {
+		for i := range 8 {
 			bodyLen = bodyLen<<8 | int64(data[offset+i])
 		}
+
 		offset += 8
 	}
 
@@ -318,7 +321,7 @@ func (s *Server) parseRequest(data []byte, conn *Connection) (*ServerRequest, er
 	}, nil
 }
 
-// sendResponse sends a response to the client
+// sendResponse sends a response to the client.
 func (s *Server) sendResponse(conn *Connection, resp *ServerResponse) error {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
@@ -332,8 +335,10 @@ func (s *Server) sendResponse(conn *Connection, resp *ServerResponse) error {
 
 	// Body length (8 bytes big endian)
 	var bodyData []byte
+
 	if resp.Body != nil && resp.BodySize > 0 {
 		var err error
+
 		bodyData, err = io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -354,16 +359,19 @@ func (s *Server) sendResponse(conn *Connection, resp *ServerResponse) error {
 	if respData.Len() > len(conn.SendMR.Buffer) {
 		return ErrBufferTooSmall
 	}
+
 	copy(conn.SendMR.Buffer, respData.Bytes())
 
 	// Post send
 	ctx := context.Background()
-	if err := conn.postSend(ctx, respData.Len()); err != nil {
+	err := conn.postSend(ctx, respData.Len())
+	if err != nil {
 		return err
 	}
 
 	// Wait for completion
-	if err := conn.waitCompletion(ctx, conn.QueuePair.SendCQ); err != nil {
+	err = conn.waitCompletion(ctx, conn.QueuePair.SendCQ)
+	if err != nil {
 		return err
 	}
 
@@ -372,7 +380,7 @@ func (s *Server) sendResponse(conn *Connection, resp *ServerResponse) error {
 	return nil
 }
 
-// sendErrorResponse sends an error response
+// sendErrorResponse sends an error response.
 func (s *Server) sendErrorResponse(conn *Connection, statusCode int, message string) error {
 	return s.sendResponse(conn, &ServerResponse{
 		StatusCode:  statusCode,
@@ -382,7 +390,7 @@ func (s *Server) sendErrorResponse(conn *Connection, statusCode int, message str
 	})
 }
 
-// Stop stops the RDMA server
+// Stop stops the RDMA server.
 func (s *Server) Stop() error {
 	if !s.running.CompareAndSwap(true, false) {
 		return nil
@@ -394,6 +402,7 @@ func (s *Server) Stop() error {
 
 	// Wait for all goroutines to finish
 	done := make(chan struct{})
+
 	go func() {
 		s.wg.Wait()
 		close(done)
@@ -412,7 +421,7 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-// GetMetrics returns server metrics
+// GetMetrics returns server metrics.
 func (s *Server) GetMetrics() *ServerMetrics {
 	s.metrics.mu.RLock()
 	defer s.metrics.mu.RUnlock()
@@ -436,7 +445,7 @@ func (s *Server) GetMetrics() *ServerMetrics {
 	return m
 }
 
-// AverageLatency returns the average request latency
+// AverageLatency returns the average request latency.
 func (m *ServerMetrics) AverageLatency() time.Duration {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -444,16 +453,17 @@ func (m *ServerMetrics) AverageLatency() time.Duration {
 	if m.LatencyCount == 0 {
 		return 0
 	}
+
 	return m.LatencySum / time.Duration(m.LatencyCount)
 }
 
-// S3Handler provides a default S3 request handler
+// S3Handler provides a default S3 request handler.
 type S3Handler struct {
 	// Backend storage interface
 	Storage StorageBackend
 }
 
-// StorageBackend interface for object storage operations
+// StorageBackend interface for object storage operations.
 type StorageBackend interface {
 	GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, map[string]string, error)
 	PutObject(ctx context.Context, bucket, key string, data io.Reader, size int64, metadata map[string]string) (string, error)
@@ -462,12 +472,12 @@ type StorageBackend interface {
 	ListObjects(ctx context.Context, bucket, prefix string, maxKeys int) ([]ObjectInfo, error)
 }
 
-// NewS3Handler creates a new S3 request handler
+// NewS3Handler creates a new S3 request handler.
 func NewS3Handler(storage StorageBackend) *S3Handler {
 	return &S3Handler{Storage: storage}
 }
 
-// HandleRequest processes an S3 request
+// HandleRequest processes an S3 request.
 func (h *S3Handler) HandleRequest(ctx context.Context, req *ServerRequest) (*ServerResponse, error) {
 	switch req.OpCode {
 	case OpGetObject:
@@ -490,6 +500,7 @@ func (h *S3Handler) handleGetObject(ctx context.Context, req *ServerRequest) (*S
 	if err != nil {
 		return &ServerResponse{StatusCode: 404}, nil
 	}
+
 	defer func() { _ = body.Close() }()
 
 	data, err := io.ReadAll(body)
@@ -548,6 +559,7 @@ func (h *S3Handler) handleHeadObject(ctx context.Context, req *ServerRequest) (*
 func (h *S3Handler) handleListObjects(ctx context.Context, req *ServerRequest) (*ServerResponse, error) {
 	maxKeys := 1000
 	prefix := ""
+
 	if req.Headers != nil {
 		if v, ok := req.Headers["prefix"]; ok {
 			prefix = v
@@ -563,6 +575,7 @@ func (h *S3Handler) handleListObjects(ctx context.Context, req *ServerRequest) (
 	var buf bytes.Buffer
 
 	// Count (4 bytes)
+	//nolint:gosec // G115: len(objects) bounded by maxKeys
 	binary.Write(&buf, binary.BigEndian, uint32(len(objects)))
 
 	// IsTruncated (1 byte)
@@ -570,6 +583,7 @@ func (h *S3Handler) handleListObjects(ctx context.Context, req *ServerRequest) (
 	if len(objects) >= maxKeys {
 		isTruncated = 1
 	}
+
 	buf.WriteByte(isTruncated)
 
 	// NextToken (2 bytes len + data) - empty for simplicity
@@ -578,12 +592,14 @@ func (h *S3Handler) handleListObjects(ctx context.Context, req *ServerRequest) (
 	// Objects
 	for _, obj := range objects {
 		keyBytes := []byte(obj.Key)
+		//nolint:gosec // G115: key length bounded by S3 key limits
 		binary.Write(&buf, binary.BigEndian, uint16(len(keyBytes)))
 		buf.Write(keyBytes)
 
 		binary.Write(&buf, binary.BigEndian, obj.Size)
 
 		etagBytes := []byte(obj.ETag)
+		//nolint:gosec // G115: ETag length bounded by S3 spec
 		binary.Write(&buf, binary.BigEndian, uint16(len(etagBytes)))
 		buf.Write(etagBytes)
 

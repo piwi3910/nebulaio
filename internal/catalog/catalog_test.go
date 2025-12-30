@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// mockObjectLister implements ObjectLister for testing
+// mockObjectLister implements ObjectLister for testing.
 type mockObjectLister struct {
 	objects []ObjectInfo
 }
@@ -25,6 +25,7 @@ func (m *mockObjectLister) ListObjects(ctx context.Context, bucket, prefix strin
 			if bucket != "" && obj.Bucket != bucket {
 				continue
 			}
+
 			select {
 			case <-ctx.Done():
 				return
@@ -36,10 +37,10 @@ func (m *mockObjectLister) ListObjects(ctx context.Context, bucket, prefix strin
 	return objects, errs
 }
 
-// mockObjectWriter implements ObjectWriter for testing
+// mockObjectWriter implements ObjectWriter for testing.
 type mockObjectWriter struct {
-	mu      sync.Mutex
 	objects map[string][]byte
+	mu      sync.Mutex
 }
 
 func newMockObjectWriter() *mockObjectWriter {
@@ -103,7 +104,7 @@ func TestListInventoryConfigs(t *testing.T) {
 	svc := NewCatalogService(lister, writer, CatalogConfig{})
 
 	// Create multiple configs
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		cfg := &InventoryConfig{
 			SourceBucket:      "bucket-" + string(rune('a'+i)),
 			DestinationBucket: "inventory-bucket",
@@ -182,6 +183,7 @@ func TestStartInventoryJob(t *testing.T) {
 	svc.CreateInventoryConfig(cfg)
 
 	ctx := context.Background()
+
 	job, err := svc.StartInventoryJob(ctx, cfg.ID)
 	if err != nil {
 		t.Fatalf("StartInventoryJob failed: %v", err)
@@ -268,7 +270,7 @@ func TestInventoryFilter(t *testing.T) {
 func TestCancelInventoryJob(t *testing.T) {
 	// Create many objects to ensure job takes time
 	var objects []ObjectInfo
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		objects = append(objects, ObjectInfo{
 			Bucket:       "test-bucket",
 			Key:          "file" + string(rune(i)) + ".txt",
@@ -294,6 +296,7 @@ func TestCancelInventoryJob(t *testing.T) {
 
 	// Cancel immediately
 	time.Sleep(10 * time.Millisecond)
+
 	err := svc.CancelInventoryJob(job.ID)
 	if err != nil {
 		t.Fatalf("CancelInventoryJob failed: %v", err)
@@ -324,6 +327,7 @@ func TestListInventoryJobs(t *testing.T) {
 		SourceBucket:      "bucket-b",
 		DestinationBucket: "inventory",
 	}
+
 	svc.CreateInventoryConfig(cfg1)
 	svc.CreateInventoryConfig(cfg2)
 
@@ -383,6 +387,7 @@ func TestS3InventoryAPIs(t *testing.T) {
 		SourceBucket:      "source-bucket",
 		DestinationBucket: "dest-bucket",
 	}
+
 	err := svc.PutBucketInventoryConfiguration(cfg)
 	if err != nil {
 		t.Fatalf("PutBucketInventoryConfiguration failed: %v", err)
@@ -393,6 +398,7 @@ func TestS3InventoryAPIs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetBucketInventoryConfiguration failed: %v", err)
 	}
+
 	if retrieved.ID != "my-inventory" {
 		t.Errorf("Expected ID 'my-inventory', got '%s'", retrieved.ID)
 	}
@@ -419,9 +425,9 @@ func TestMatchesFilter(t *testing.T) {
 	svc := &CatalogService{}
 
 	tests := []struct {
-		name   string
 		obj    ObjectInfo
 		filter *InventoryFilter
+		name   string
 		want   bool
 	}{
 		{

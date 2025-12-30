@@ -9,17 +9,17 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// MembershipConfig holds configuration for the membership service
+// MembershipConfig holds configuration for the membership service.
 type MembershipConfig struct {
 	NodeID        string
 	BindAddr      string
-	BindPort      int
 	AdvertiseAddr string
-	AdvertisePort int
 	NodeMeta      []byte
+	BindPort      int
+	AdvertisePort int
 }
 
-// NodeEventType represents the type of node event
+// NodeEventType represents the type of node event.
 type NodeEventType int
 
 const (
@@ -28,77 +28,78 @@ const (
 	NodeUpdate
 )
 
-// NodeEvent represents an event for a node
+// NodeEvent represents an event for a node.
 type NodeEvent struct {
-	Type   NodeEventType
 	NodeID string
 	Meta   []byte
+	Type   NodeEventType
 }
 
-// Membership manages cluster membership using hashicorp/memberlist
+// Membership manages cluster membership using hashicorp/memberlist.
 type Membership struct {
-	config   MembershipConfig
 	list     *memberlist.Memberlist
 	events   chan NodeEvent
 	delegate *memberDelegate
-
 	onJoin   func(nodeID string, meta []byte)
 	onLeave  func(nodeID string)
 	onUpdate func(nodeID string, meta []byte)
-
-	mu sync.RWMutex
+	config   MembershipConfig
+	mu       sync.RWMutex
 }
 
-// memberDelegate implements memberlist.Delegate
+// memberDelegate implements memberlist.Delegate.
 type memberDelegate struct {
-	meta       []byte
 	broadcasts *memberlist.TransmitLimitedQueue
+	meta       []byte
 	mu         sync.RWMutex
 }
 
-// NodeMeta returns the local node's metadata
+// NodeMeta returns the local node's metadata.
 func (d *memberDelegate) NodeMeta(limit int) []byte {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.meta
 }
 
-// NotifyMsg is called when a user-data message is received
+// NotifyMsg is called when a user-data message is received.
 func (d *memberDelegate) NotifyMsg(b []byte) {
 	// We're not using direct messages for now
 }
 
-// GetBroadcasts returns a slice of messages to broadcast
+// GetBroadcasts returns a slice of messages to broadcast.
 func (d *memberDelegate) GetBroadcasts(overhead, limit int) [][]byte {
 	if d.broadcasts == nil {
 		return nil
 	}
+
 	return d.broadcasts.GetBroadcasts(overhead, limit)
 }
 
-// LocalState returns the local state for state exchange
+// LocalState returns the local state for state exchange.
 func (d *memberDelegate) LocalState(join bool) []byte {
 	return nil
 }
 
-// MergeRemoteState merges remote state during state exchange
+// MergeRemoteState merges remote state during state exchange.
 func (d *memberDelegate) MergeRemoteState(buf []byte, join bool) {
 	// No state merging needed for now
 }
 
-// UpdateMeta updates the node metadata
+// UpdateMeta updates the node metadata.
 func (d *memberDelegate) UpdateMeta(meta []byte) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	d.meta = meta
 }
 
-// eventDelegate implements memberlist.EventDelegate
+// eventDelegate implements memberlist.EventDelegate.
 type eventDelegate struct {
 	membership *Membership
 }
 
-// NotifyJoin is called when a node joins
+// NotifyJoin is called when a node joins.
 func (e *eventDelegate) NotifyJoin(node *memberlist.Node) {
 	if node.Name == e.membership.config.NodeID {
 		return
@@ -114,7 +115,7 @@ func (e *eventDelegate) NotifyJoin(node *memberlist.Node) {
 	}
 }
 
-// NotifyLeave is called when a node leaves
+// NotifyLeave is called when a node leaves.
 func (e *eventDelegate) NotifyLeave(node *memberlist.Node) {
 	if node.Name == e.membership.config.NodeID {
 		return
@@ -129,7 +130,7 @@ func (e *eventDelegate) NotifyLeave(node *memberlist.Node) {
 	}
 }
 
-// NotifyUpdate is called when a node's metadata is updated
+// NotifyUpdate is called when a node's metadata is updated.
 func (e *eventDelegate) NotifyUpdate(node *memberlist.Node) {
 	if node.Name == e.membership.config.NodeID {
 		return
@@ -144,7 +145,7 @@ func (e *eventDelegate) NotifyUpdate(node *memberlist.Node) {
 	}
 }
 
-// NewMembership creates a new Membership instance
+// NewMembership creates a new Membership instance.
 func NewMembership(
 	config MembershipConfig,
 	onJoin func(nodeID string, meta []byte),
@@ -191,6 +192,7 @@ func NewMembership(
 			if m.list == nil {
 				return 1
 			}
+
 			return m.list.NumMembers()
 		},
 		RetransmitMult: 3,
@@ -201,6 +203,7 @@ func NewMembership(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create memberlist: %w", err)
 	}
+
 	m.list = list
 
 	log.Info().
@@ -212,7 +215,7 @@ func NewMembership(
 	return m, nil
 }
 
-// Join joins an existing cluster
+// Join joins an existing cluster.
 func (m *Membership) Join(existing []string) error {
 	if len(existing) == 0 {
 		return nil
@@ -226,57 +229,60 @@ func (m *Membership) Join(existing []string) error {
 	}
 
 	log.Info().Int("contacted_nodes", n).Msg("Joined cluster")
+
 	return nil
 }
 
-// Leave gracefully leaves the cluster
+// Leave gracefully leaves the cluster.
 func (m *Membership) Leave(timeout time.Duration) error {
 	log.Info().Msg("Leaving cluster")
 
-	if err := m.list.Leave(timeout); err != nil {
+	err := m.list.Leave(timeout)
+	if err != nil {
 		return fmt.Errorf("failed to leave cluster: %w", err)
 	}
 
-	if err := m.list.Shutdown(); err != nil {
+	err = m.list.Shutdown()
+	if err != nil {
 		return fmt.Errorf("failed to shutdown memberlist: %w", err)
 	}
 
 	return nil
 }
 
-// Members returns all cluster members
+// Members returns all cluster members.
 func (m *Membership) Members() []*memberlist.Node {
 	return m.list.Members()
 }
 
-// NumMembers returns the number of cluster members
+// NumMembers returns the number of cluster members.
 func (m *Membership) NumMembers() int {
 	return m.list.NumMembers()
 }
 
-// LocalNode returns the local node
+// LocalNode returns the local node.
 func (m *Membership) LocalNode() *memberlist.Node {
 	return m.list.LocalNode()
 }
 
-// UpdateMeta updates the local node's metadata
+// UpdateMeta updates the local node's metadata.
 func (m *Membership) UpdateMeta(meta []byte) error {
 	m.delegate.UpdateMeta(meta)
 	return m.list.UpdateNode(10 * time.Second)
 }
 
 // HealthScore returns the health score of the local node
-// Lower is better (0 = healthy)
+// Lower is better (0 = healthy).
 func (m *Membership) HealthScore() int {
 	return m.list.GetHealthScore()
 }
 
-// SendReliable sends a message to a specific node reliably
+// SendReliable sends a message to a specific node reliably.
 func (m *Membership) SendReliable(node *memberlist.Node, msg []byte) error {
 	return m.list.SendReliable(node, msg)
 }
 
-// memberlistLogAdapter adapts memberlist logging to zerolog
+// memberlistLogAdapter adapts memberlist logging to zerolog.
 type memberlistLogAdapter struct{}
 
 func (l *memberlistLogAdapter) Write(p []byte) (n int, err error) {
@@ -285,30 +291,30 @@ func (l *memberlistLogAdapter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-// Broadcast represents a message to broadcast to the cluster
+// Broadcast represents a message to broadcast to the cluster.
 type Broadcast struct {
-	msg    []byte
 	notify chan<- struct{}
+	msg    []byte
 }
 
-// Invalidates checks if this broadcast invalidates another
+// Invalidates checks if this broadcast invalidates another.
 func (b *Broadcast) Invalidates(other memberlist.Broadcast) bool {
 	return false
 }
 
-// Message returns the message to broadcast
+// Message returns the message to broadcast.
 func (b *Broadcast) Message() []byte {
 	return b.msg
 }
 
-// Finished is called when the broadcast is complete
+// Finished is called when the broadcast is complete.
 func (b *Broadcast) Finished() {
 	if b.notify != nil {
 		close(b.notify)
 	}
 }
 
-// QueueBroadcast queues a message for broadcast to all nodes
+// QueueBroadcast queues a message for broadcast to all nodes.
 func (m *Membership) QueueBroadcast(msg []byte) {
 	b := &Broadcast{
 		msg:    msg,
@@ -317,7 +323,7 @@ func (m *Membership) QueueBroadcast(msg []byte) {
 	m.delegate.broadcasts.QueueBroadcast(b)
 }
 
-// QueueBroadcastNotify queues a message and notifies when complete
+// QueueBroadcastNotify queues a message and notifies when complete.
 func (m *Membership) QueueBroadcastNotify(msg []byte) <-chan struct{} {
 	notify := make(chan struct{})
 	b := &Broadcast{
@@ -325,5 +331,6 @@ func (m *Membership) QueueBroadcastNotify(msg []byte) <-chan struct{} {
 		notify: notify,
 	}
 	m.delegate.broadcasts.QueueBroadcast(b)
+
 	return notify
 }

@@ -10,14 +10,14 @@ import (
 // SimulatedBackend provides a simulated GPUDirect Storage backend for testing.
 // It simulates the behavior of cuFile API without requiring actual NVIDIA hardware.
 type SimulatedBackend struct {
-	mu           sync.RWMutex
-	initialized  bool
-	nextHandle   uintptr
-	nextBufferID uintptr
-	files        map[uintptr]string // handle -> path
-	gpus         []*GPUInfo
+	files        map[uintptr]string
 	buffers      map[uintptr]*GPUBuffer
 	metrics      *simulatedMetrics
+	gpus         []*GPUInfo
+	nextHandle   uintptr
+	nextBufferID uintptr
+	mu           sync.RWMutex
+	initialized  bool
 }
 
 type simulatedMetrics struct {
@@ -31,8 +31,8 @@ func NewSimulatedBackend() *SimulatedBackend {
 		files:   make(map[uintptr]string),
 		buffers: make(map[uintptr]*GPUBuffer),
 		metrics: &simulatedMetrics{
-			ReadLatencyNs:  100000,  // 100μs simulated read latency
-			WriteLatencyNs: 150000,  // 150μs simulated write latency
+			ReadLatencyNs:  100000, // 100μs simulated read latency
+			WriteLatencyNs: 150000, // 150μs simulated write latency
 		},
 	}
 }
@@ -73,6 +73,7 @@ func (b *SimulatedBackend) Init() error {
 	}
 
 	b.initialized = true
+
 	return nil
 }
 
@@ -84,6 +85,7 @@ func (b *SimulatedBackend) Close() error {
 	b.files = make(map[uintptr]string)
 	b.buffers = make(map[uintptr]*GPUBuffer)
 	b.initialized = false
+
 	return nil
 }
 
@@ -98,6 +100,7 @@ func (b *SimulatedBackend) DetectGPUs() ([]*GPUInfo, error) {
 
 	result := make([]*GPUInfo, len(b.gpus))
 	copy(result, b.gpus)
+
 	return result, nil
 }
 
@@ -158,6 +161,7 @@ func (b *SimulatedBackend) FreeBuffer(buf *GPUBuffer) error {
 	}
 
 	delete(b.buffers, buf.Pointer)
+
 	return nil
 }
 
@@ -187,12 +191,14 @@ func (b *SimulatedBackend) UnregisterFile(handle uintptr) error {
 	}
 
 	delete(b.files, handle)
+
 	return nil
 }
 
 // Read simulates a GDS read operation.
 func (b *SimulatedBackend) Read(handle uintptr, buf *GPUBuffer, offset, length int64) (*TransferResult, error) {
 	b.mu.RLock()
+
 	if !b.initialized {
 		b.mu.RUnlock()
 		return nil, ErrNotInitialized
@@ -224,6 +230,7 @@ func (b *SimulatedBackend) Read(handle uintptr, buf *GPUBuffer, offset, length i
 // Write simulates a GDS write operation.
 func (b *SimulatedBackend) Write(handle uintptr, buf *GPUBuffer, offset, length int64) (*TransferResult, error) {
 	b.mu.RLock()
+
 	if !b.initialized {
 		b.mu.RUnlock()
 		return nil, ErrNotInitialized
@@ -296,6 +303,7 @@ func (b *SimulatedBackend) Sync(stream uintptr) error {
 
 	// Simulate stream sync latency
 	time.Sleep(time.Microsecond * 10)
+
 	return nil
 }
 
@@ -305,12 +313,12 @@ func (b *SimulatedBackend) GetMetrics() map[string]interface{} {
 	defer b.mu.RUnlock()
 
 	return map[string]interface{}{
-		"simulated":        true,
-		"gpu_count":        len(b.gpus),
-		"registered_files": len(b.files),
+		"simulated":         true,
+		"gpu_count":         len(b.gpus),
+		"registered_files":  len(b.files),
 		"allocated_buffers": len(b.buffers),
-		"read_latency_ns":  atomic.LoadInt64(&b.metrics.ReadLatencyNs),
-		"write_latency_ns": atomic.LoadInt64(&b.metrics.WriteLatencyNs),
+		"read_latency_ns":   atomic.LoadInt64(&b.metrics.ReadLatencyNs),
+		"write_latency_ns":  atomic.LoadInt64(&b.metrics.WriteLatencyNs),
 	}
 }
 
@@ -324,5 +332,6 @@ func (b *SimulatedBackend) SetSimulatedLatency(readNs, writeNs int64) {
 func (b *SimulatedBackend) SetGPUs(gpus []*GPUInfo) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	b.gpus = gpus
 }

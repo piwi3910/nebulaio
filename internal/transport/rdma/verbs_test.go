@@ -14,6 +14,7 @@ func TestNewSimulatedVerbsBackend(t *testing.T) {
 
 	err := backend.Init()
 	require.NoError(t, err)
+
 	defer backend.Close()
 }
 
@@ -33,6 +34,7 @@ func TestSimulatedVerbsBackendDoubleInit(t *testing.T) {
 
 func TestSimulatedVerbsBackendGetDeviceList(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -57,6 +59,7 @@ func TestSimulatedVerbsBackendNotInitialized(t *testing.T) {
 
 func TestSimulatedVerbsBackendOpenDevice(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -70,6 +73,7 @@ func TestSimulatedVerbsBackendOpenDevice(t *testing.T) {
 
 func TestSimulatedVerbsBackendOpenDeviceNotFound(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -79,6 +83,7 @@ func TestSimulatedVerbsBackendOpenDeviceNotFound(t *testing.T) {
 
 func TestSimulatedVerbsBackendAllocPD(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -95,6 +100,7 @@ func TestSimulatedVerbsBackendAllocPD(t *testing.T) {
 
 func TestSimulatedVerbsBackendCreateCQ(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -111,6 +117,7 @@ func TestSimulatedVerbsBackendCreateCQ(t *testing.T) {
 
 func TestSimulatedVerbsBackendCreateQP(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -136,6 +143,7 @@ func TestSimulatedVerbsBackendCreateQP(t *testing.T) {
 
 func TestSimulatedVerbsBackendModifyQP(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -172,6 +180,7 @@ func TestSimulatedVerbsBackendModifyQP(t *testing.T) {
 
 func TestSimulatedVerbsBackendRegMR(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -191,6 +200,7 @@ func TestSimulatedVerbsBackendRegMR(t *testing.T) {
 
 func TestSimulatedVerbsBackendPostSend(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -226,9 +236,16 @@ func TestSimulatedVerbsBackendPostSend(t *testing.T) {
 	assert.Equal(t, WCSuccess, completions[0].Status)
 }
 
-func TestSimulatedVerbsBackendRDMARead(t *testing.T) {
+// rdmaPostFunc is a function type for RDMA read/write post operations.
+type rdmaPostFunc func(qp VerbsQP, localAddr, remoteAddr uintptr, length int, lkey, rkey uint32) error
+
+// testRDMAOperation is a helper for testing RDMA read/write operations.
+func testRDMAOperation(t *testing.T, postFn func(*SimulatedVerbsBackend) rdmaPostFunc, expectedOpcode WCOpcode) {
+	t.Helper()
+
 	backend := NewSimulatedVerbsBackend()
 	backend.Init()
+
 	defer backend.Close()
 
 	ctx, _ := backend.OpenDevice("mlx5_0")
@@ -246,46 +263,31 @@ func TestSimulatedVerbsBackendRDMARead(t *testing.T) {
 	qp, _ := backend.CreateQP(pd, sendCQ, recvCQ, QPTypeRC, 128, 128, 4)
 	defer backend.DestroyQP(qp)
 
-	err := backend.PostRDMARead(qp, 0x1000, 0x2000, 4096, 1, 2)
+	op := postFn(backend)
+	err := op(qp, 0x1000, 0x2000, 4096, 1, 2)
 	require.NoError(t, err)
 
 	completions, err := backend.PollCQ(sendCQ, 10)
 	require.NoError(t, err)
 	require.Len(t, completions, 1)
-	assert.Equal(t, WCOpRDMARead, completions[0].Opcode)
+	assert.Equal(t, expectedOpcode, completions[0].Opcode)
+}
+
+func TestSimulatedVerbsBackendRDMARead(t *testing.T) {
+	testRDMAOperation(t, func(b *SimulatedVerbsBackend) rdmaPostFunc {
+		return b.PostRDMARead
+	}, WCOpRDMARead)
 }
 
 func TestSimulatedVerbsBackendRDMAWrite(t *testing.T) {
-	backend := NewSimulatedVerbsBackend()
-	backend.Init()
-	defer backend.Close()
-
-	ctx, _ := backend.OpenDevice("mlx5_0")
-	defer backend.CloseDevice(ctx)
-
-	pd, _ := backend.AllocPD(ctx)
-	defer backend.DeallocPD(pd)
-
-	sendCQ, _ := backend.CreateCQ(ctx, 256)
-	defer backend.DestroyCQ(sendCQ)
-
-	recvCQ, _ := backend.CreateCQ(ctx, 256)
-	defer backend.DestroyCQ(recvCQ)
-
-	qp, _ := backend.CreateQP(pd, sendCQ, recvCQ, QPTypeRC, 128, 128, 4)
-	defer backend.DestroyQP(qp)
-
-	err := backend.PostRDMAWrite(qp, 0x1000, 0x2000, 4096, 1, 2)
-	require.NoError(t, err)
-
-	completions, err := backend.PollCQ(sendCQ, 10)
-	require.NoError(t, err)
-	require.Len(t, completions, 1)
-	assert.Equal(t, WCOpRDMAWrite, completions[0].Opcode)
+	testRDMAOperation(t, func(b *SimulatedVerbsBackend) rdmaPostFunc {
+		return b.PostRDMAWrite
+	}, WCOpRDMAWrite)
 }
 
 func TestSimulatedVerbsBackendGetMetrics(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -320,6 +322,7 @@ func TestSimulatedVerbsBackendGetMetrics(t *testing.T) {
 func TestNewVerbsTransport(t *testing.T) {
 	transport, err := NewVerbsTransport(nil, nil)
 	require.NoError(t, err)
+
 	require.NotNil(t, transport)
 	defer transport.Close()
 }
@@ -330,6 +333,7 @@ func TestVerbsTransportWithBackend(t *testing.T) {
 
 	transport, err := NewVerbsTransport(backend, config)
 	require.NoError(t, err)
+
 	require.NotNil(t, transport)
 	defer transport.Close()
 }
@@ -340,6 +344,7 @@ func TestVerbsTransportConnect(t *testing.T) {
 
 	transport, err := NewVerbsTransport(backend, config)
 	require.NoError(t, err)
+
 	defer transport.Close()
 
 	ctx := context.Background()
@@ -357,6 +362,7 @@ func TestVerbsTransportRDMAOperations(t *testing.T) {
 
 	transport, err := NewVerbsTransport(backend, config)
 	require.NoError(t, err)
+
 	defer transport.Close()
 
 	ctx := context.Background()
@@ -392,6 +398,7 @@ func TestVerbsTransportGetMetrics(t *testing.T) {
 
 	transport, err := NewVerbsTransport(backend, config)
 	require.NoError(t, err)
+
 	defer transport.Close()
 
 	ctx := context.Background()
@@ -439,12 +446,12 @@ func TestMRAccessFlags(t *testing.T) {
 }
 
 func TestWCStatus(t *testing.T) {
-	assert.Equal(t, WCStatus(0), WCSuccess)
-	assert.Equal(t, WCStatus(1), WCLocalLenErr)
+	assert.Equal(t, WCSuccess, WCStatus(0))
+	assert.Equal(t, WCLocalLenErr, WCStatus(1))
 }
 
 func TestWCOpcode(t *testing.T) {
-	assert.Equal(t, WCOpcode(0), WCOpSend)
-	assert.Equal(t, WCOpcode(1), WCOpRDMAWrite)
-	assert.Equal(t, WCOpcode(2), WCOpRDMARead)
+	assert.Equal(t, WCOpSend, WCOpcode(0))
+	assert.Equal(t, WCOpRDMAWrite, WCOpcode(1))
+	assert.Equal(t, WCOpRDMARead, WCOpcode(2))
 }

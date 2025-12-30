@@ -21,7 +21,7 @@
 package metrics
 
 import (
-	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	// RequestsTotal counts total number of requests
+	// RequestsTotal counts total number of requests.
 	RequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_requests_total",
@@ -38,7 +38,7 @@ var (
 		[]string{"method", "operation", "status"},
 	)
 
-	// RequestDuration tracks request duration in seconds
+	// RequestDuration tracks request duration in seconds.
 	RequestDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_request_duration_seconds",
@@ -48,7 +48,7 @@ var (
 		[]string{"method", "operation"},
 	)
 
-	// ObjectsTotal tracks total number of objects per bucket
+	// ObjectsTotal tracks total number of objects per bucket.
 	ObjectsTotal = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_objects_total",
@@ -57,7 +57,7 @@ var (
 		[]string{"bucket"},
 	)
 
-	// BucketsTotal tracks total number of buckets
+	// BucketsTotal tracks total number of buckets.
 	BucketsTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_buckets_total",
@@ -65,7 +65,7 @@ var (
 		},
 	)
 
-	// StorageBytesUsed tracks total storage bytes used
+	// StorageBytesUsed tracks total storage bytes used.
 	StorageBytesUsed = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_storage_bytes_used",
@@ -73,7 +73,7 @@ var (
 		},
 	)
 
-	// StorageBytesTotal tracks total storage bytes available
+	// StorageBytesTotal tracks total storage bytes available.
 	StorageBytesTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_storage_bytes_total",
@@ -81,7 +81,7 @@ var (
 		},
 	)
 
-	// ActiveConnections tracks number of active connections
+	// ActiveConnections tracks number of active connections.
 	ActiveConnections = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_active_connections",
@@ -89,7 +89,7 @@ var (
 		},
 	)
 
-	// RaftState tracks Raft state (1=leader, 0=follower/candidate)
+	// RaftState tracks Raft state (1=leader, 0=follower/candidate).
 	RaftState = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_raft_state",
@@ -98,7 +98,7 @@ var (
 		[]string{"shard_id"},
 	)
 
-	// RaftIsLeader indicates if this node is the Raft leader
+	// RaftIsLeader indicates if this node is the Raft leader.
 	RaftIsLeader = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_raft_is_leader",
@@ -107,7 +107,7 @@ var (
 		[]string{"shard_id"},
 	)
 
-	// RaftProposalLatency tracks latency of Raft proposals
+	// RaftProposalLatency tracks latency of Raft proposals.
 	RaftProposalLatency = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_raft_proposal_latency_seconds",
@@ -117,7 +117,7 @@ var (
 		[]string{"shard_id"},
 	)
 
-	// RaftProposalsTotal tracks total number of Raft proposals
+	// RaftProposalsTotal tracks total number of Raft proposals.
 	RaftProposalsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_raft_proposals_total",
@@ -126,7 +126,7 @@ var (
 		[]string{"shard_id", "status"},
 	)
 
-	// MultipartUploadsActive tracks number of active multipart uploads
+	// MultipartUploadsActive tracks number of active multipart uploads.
 	MultipartUploadsActive = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_multipart_uploads_active",
@@ -134,7 +134,7 @@ var (
 		},
 	)
 
-	// BytesReceived tracks total bytes received
+	// BytesReceived tracks total bytes received.
 	BytesReceived = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_bytes_received_total",
@@ -142,7 +142,7 @@ var (
 		},
 	)
 
-	// BytesSent tracks total bytes sent
+	// BytesSent tracks total bytes sent.
 	BytesSent = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_bytes_sent_total",
@@ -150,7 +150,7 @@ var (
 		},
 	)
 
-	// ErrorsTotal tracks total number of errors by type
+	// ErrorsTotal tracks total number of errors by type.
 	ErrorsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_errors_total",
@@ -159,7 +159,7 @@ var (
 		[]string{"operation", "error_type"},
 	)
 
-	// S3OperationsTotal tracks S3 operations by type
+	// S3OperationsTotal tracks S3 operations by type.
 	S3OperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_s3_operations_total",
@@ -168,7 +168,7 @@ var (
 		[]string{"operation", "bucket"},
 	)
 
-	// ClusterNodesTotal tracks total number of cluster nodes
+	// ClusterNodesTotal tracks total number of cluster nodes.
 	ClusterNodesTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_cluster_nodes_total",
@@ -176,7 +176,7 @@ var (
 		},
 	)
 
-	// NodeInfo provides information about this node
+	// NodeInfo provides information about this node.
 	NodeInfo = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_node_info",
@@ -185,7 +185,7 @@ var (
 		[]string{"node_id", "version"},
 	)
 
-	// PlacementGroupNodesTotal tracks number of nodes per placement group
+	// PlacementGroupNodesTotal tracks number of nodes per placement group.
 	PlacementGroupNodesTotal = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_placement_group_nodes_total",
@@ -194,7 +194,7 @@ var (
 		[]string{"group_id", "datacenter", "region"},
 	)
 
-	// PlacementGroupStatus tracks placement group status (1=healthy, 0=degraded/offline)
+	// PlacementGroupStatus tracks placement group status (1=healthy, 0=degraded/offline).
 	PlacementGroupStatus = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_placement_group_status",
@@ -203,7 +203,7 @@ var (
 		[]string{"group_id", "status"},
 	)
 
-	// PlacementGroupShardDistribution tracks shard distribution across nodes
+	// PlacementGroupShardDistribution tracks shard distribution across nodes.
 	PlacementGroupShardDistribution = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_placement_group_shard_distribution",
@@ -212,7 +212,7 @@ var (
 		[]string{"group_id", "node_id"},
 	)
 
-	// PlacementGroupInfo provides information about placement groups
+	// PlacementGroupInfo provides information about placement groups.
 	PlacementGroupInfo = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_placement_group_info",
@@ -221,7 +221,7 @@ var (
 		[]string{"group_id", "name", "datacenter", "region", "is_local"},
 	)
 
-	// ErasureEncodeOperationsTotal tracks total erasure encoding operations
+	// ErasureEncodeOperationsTotal tracks total erasure encoding operations.
 	ErasureEncodeOperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_erasure_encode_operations_total",
@@ -230,7 +230,7 @@ var (
 		[]string{"group_id", "status"},
 	)
 
-	// ErasureDecodeOperationsTotal tracks total erasure decoding operations
+	// ErasureDecodeOperationsTotal tracks total erasure decoding operations.
 	ErasureDecodeOperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_erasure_decode_operations_total",
@@ -239,7 +239,7 @@ var (
 		[]string{"group_id", "status"},
 	)
 
-	// ErasureReconstructOperationsTotal tracks total erasure reconstruction operations
+	// ErasureReconstructOperationsTotal tracks total erasure reconstruction operations.
 	ErasureReconstructOperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_erasure_reconstruct_operations_total",
@@ -248,7 +248,7 @@ var (
 		[]string{"group_id"},
 	)
 
-	// ErasureEncodeDurationSeconds tracks erasure encoding duration
+	// ErasureEncodeDurationSeconds tracks erasure encoding duration.
 	ErasureEncodeDurationSeconds = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_erasure_encode_duration_seconds",
@@ -258,7 +258,7 @@ var (
 		[]string{"group_id"},
 	)
 
-	// ErasureHealthyObjects tracks number of healthy (fully redundant) objects
+	// ErasureHealthyObjects tracks number of healthy (fully redundant) objects.
 	ErasureHealthyObjects = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_erasure_healthy_objects",
@@ -267,7 +267,7 @@ var (
 		[]string{"group_id"},
 	)
 
-	// ErasureDegradedObjects tracks number of degraded objects (missing some shards)
+	// ErasureDegradedObjects tracks number of degraded objects (missing some shards).
 	ErasureDegradedObjects = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_erasure_degraded_objects",
@@ -276,7 +276,7 @@ var (
 		[]string{"group_id"},
 	)
 
-	// ErasureObjectsAtRisk tracks objects at risk (close to losing recoverability)
+	// ErasureObjectsAtRisk tracks objects at risk (close to losing recoverability).
 	ErasureObjectsAtRisk = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_erasure_objects_at_risk",
@@ -285,7 +285,7 @@ var (
 		[]string{"group_id"},
 	)
 
-	// TieringTransitionsTotal tracks tiering transitions between tiers
+	// TieringTransitionsTotal tracks tiering transitions between tiers.
 	TieringTransitionsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_tiering_transitions_total",
@@ -294,7 +294,7 @@ var (
 		[]string{"source_tier", "destination_tier", "policy"},
 	)
 
-	// TieringObjectsPerTier tracks number of objects in each tier
+	// TieringObjectsPerTier tracks number of objects in each tier.
 	TieringObjectsPerTier = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_tiering_objects_total",
@@ -303,7 +303,7 @@ var (
 		[]string{"tier"},
 	)
 
-	// TieringBytesPerTier tracks bytes stored in each tier
+	// TieringBytesPerTier tracks bytes stored in each tier.
 	TieringBytesPerTier = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_tiering_bytes_total",
@@ -312,7 +312,7 @@ var (
 		[]string{"tier"},
 	)
 
-	// CachePeerWriteFailures tracks failed attempts to cache entries from peer nodes
+	// CachePeerWriteFailures tracks failed attempts to cache entries from peer nodes.
 	CachePeerWriteFailures = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_cache_peer_write_failures_total",
@@ -320,7 +320,7 @@ var (
 		},
 	)
 
-	// CacheHits tracks cache hit count
+	// CacheHits tracks cache hit count.
 	CacheHits = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_cache_hits_total",
@@ -328,7 +328,7 @@ var (
 		},
 	)
 
-	// CacheMisses tracks cache miss count
+	// CacheMisses tracks cache miss count.
 	CacheMisses = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_cache_misses_total",
@@ -336,7 +336,7 @@ var (
 		},
 	)
 
-	// BucketRollbackFailures tracks bucket rollback failures
+	// BucketRollbackFailures tracks bucket rollback failures.
 	BucketRollbackFailures = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_bucket_rollback_failures_total",
@@ -344,7 +344,7 @@ var (
 		},
 	)
 
-	// BucketCreationFailures tracks bucket creation failures
+	// BucketCreationFailures tracks bucket creation failures.
 	BucketCreationFailures = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_bucket_creation_failures_total",
@@ -352,7 +352,7 @@ var (
 		},
 	)
 
-	// MetadataAppliedIndexErrors tracks metadata applied index errors
+	// MetadataAppliedIndexErrors tracks metadata applied index errors.
 	MetadataAppliedIndexErrors = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_metadata_applied_index_errors_total",
@@ -360,7 +360,7 @@ var (
 		},
 	)
 
-	// MetadataCloseErrors tracks metadata close errors
+	// MetadataCloseErrors tracks metadata close errors.
 	MetadataCloseErrors = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_metadata_close_errors_total",
@@ -368,7 +368,7 @@ var (
 		},
 	)
 
-	// KeyRotationFailures tracks key rotation failures
+	// KeyRotationFailures tracks key rotation failures.
 	KeyRotationFailures = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_key_rotation_failures_total",
@@ -376,7 +376,7 @@ var (
 		},
 	)
 
-	// KeyExpiryNotificationFailures tracks key expiry notification failures
+	// KeyExpiryNotificationFailures tracks key expiry notification failures.
 	KeyExpiryNotificationFailures = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_key_expiry_notification_failures_total",
@@ -384,7 +384,7 @@ var (
 		},
 	)
 
-	// MigrationJobSaveFailures tracks migration job save failures
+	// MigrationJobSaveFailures tracks migration job save failures.
 	MigrationJobSaveFailures = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_migration_job_save_failures_total",
@@ -392,7 +392,7 @@ var (
 		},
 	)
 
-	// MigrationFailedObjectLogFailures tracks migration failed object log failures
+	// MigrationFailedObjectLogFailures tracks migration failed object log failures.
 	MigrationFailedObjectLogFailures = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_migration_failed_object_log_failures_total",
@@ -400,7 +400,7 @@ var (
 		},
 	)
 
-	// BackupWALSyncFailures tracks backup WAL sync failures
+	// BackupWALSyncFailures tracks backup WAL sync failures.
 	BackupWALSyncFailures = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_backup_wal_sync_failures_total",
@@ -408,7 +408,7 @@ var (
 		},
 	)
 
-	// LambdaCompressionOperations tracks Lambda compression/decompression operations
+	// LambdaCompressionOperations tracks Lambda compression/decompression operations.
 	LambdaCompressionOperations = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_lambda_compression_operations_total",
@@ -417,7 +417,7 @@ var (
 		[]string{"algorithm", "direction", "status"},
 	)
 
-	// LambdaCompressionDuration tracks Lambda compression operation duration
+	// LambdaCompressionDuration tracks Lambda compression operation duration.
 	LambdaCompressionDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_lambda_compression_duration_seconds",
@@ -427,7 +427,7 @@ var (
 		[]string{"algorithm", "direction"},
 	)
 
-	// LambdaCompressionRatio tracks compression effectiveness
+	// LambdaCompressionRatio tracks compression effectiveness.
 	LambdaCompressionRatio = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_lambda_compression_ratio",
@@ -437,7 +437,7 @@ var (
 		[]string{"algorithm"},
 	)
 
-	// LambdaOperationsInFlight tracks concurrent Lambda operations
+	// LambdaOperationsInFlight tracks concurrent Lambda operations.
 	LambdaOperationsInFlight = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_lambda_operations_in_flight",
@@ -446,7 +446,7 @@ var (
 		[]string{"algorithm"},
 	)
 
-	// ObjectCreationRateLimited tracks rate-limited object creation attempts
+	// ObjectCreationRateLimited tracks rate-limited object creation attempts.
 	ObjectCreationRateLimited = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_object_creation_rate_limited_total",
@@ -455,7 +455,7 @@ var (
 		[]string{"bucket", "reason"},
 	)
 
-	// LambdaMaxTransformSize tracks the configured maximum transform size for Lambda operations
+	// LambdaMaxTransformSize tracks the configured maximum transform size for Lambda operations.
 	LambdaMaxTransformSize = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_lambda_max_transform_size_bytes",
@@ -463,7 +463,7 @@ var (
 		},
 	)
 
-	// LambdaStreamingThreshold tracks the configured streaming threshold for Lambda operations
+	// LambdaStreamingThreshold tracks the configured streaming threshold for Lambda operations.
 	LambdaStreamingThreshold = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_lambda_streaming_threshold_bytes",
@@ -471,7 +471,7 @@ var (
 		},
 	)
 
-	// LambdaBytesProcessed tracks total bytes processed by Lambda compression/decompression
+	// LambdaBytesProcessed tracks total bytes processed by Lambda compression/decompression.
 	LambdaBytesProcessed = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_lambda_compression_bytes_processed_total",
@@ -480,7 +480,7 @@ var (
 		[]string{"algorithm", "direction"},
 	)
 
-	// VolumeCompactionReclaimableBytes tracks bytes that can be reclaimed via compaction
+	// VolumeCompactionReclaimableBytes tracks bytes that can be reclaimed via compaction.
 	VolumeCompactionReclaimableBytes = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_volume_compaction_reclaimable_bytes",
@@ -489,7 +489,7 @@ var (
 		[]string{"volume_id"},
 	)
 
-	// VolumeCompactionDeletedObjects tracks objects marked as deleted but not yet reclaimed
+	// VolumeCompactionDeletedObjects tracks objects marked as deleted but not yet reclaimed.
 	VolumeCompactionDeletedObjects = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_volume_compaction_deleted_objects",
@@ -498,7 +498,7 @@ var (
 		[]string{"volume_id"},
 	)
 
-	// VolumeCompactionReplacedObjects tracks objects that were replaced (creating garbage)
+	// VolumeCompactionReplacedObjects tracks objects that were replaced (creating garbage).
 	VolumeCompactionReplacedObjects = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_volume_compaction_replaced_objects_total",
@@ -507,7 +507,7 @@ var (
 		[]string{"volume_id"},
 	)
 
-	// VolumeCompactionLastRun tracks the timestamp of the last compaction run
+	// VolumeCompactionLastRun tracks the timestamp of the last compaction run.
 	VolumeCompactionLastRun = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_volume_compaction_last_run_timestamp_seconds",
@@ -516,7 +516,7 @@ var (
 		[]string{"volume_id"},
 	)
 
-	// VolumeCompactionDuration tracks the duration of compaction operations
+	// VolumeCompactionDuration tracks the duration of compaction operations.
 	VolumeCompactionDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_volume_compaction_duration_seconds",
@@ -527,33 +527,33 @@ var (
 	)
 )
 
-// Version is set at build time
+// Version is set at build time.
 var Version = "dev"
 
-// Init initializes the metrics system
+// Init initializes the metrics system.
 func Init(nodeID string) {
 	// Set node info
 	NodeInfo.WithLabelValues(nodeID, Version).Set(1)
 }
 
-// RecordRequest records a request with its method, operation, status, and duration
+// RecordRequest records a request with its method, operation, status, and duration.
 func RecordRequest(method, operation string, status int, duration time.Duration) {
 	statusStr := statusCodeToString(status)
 	RequestsTotal.WithLabelValues(method, operation, statusStr).Inc()
 	RequestDuration.WithLabelValues(method, operation).Observe(duration.Seconds())
 }
 
-// RecordS3Operation records an S3 operation
+// RecordS3Operation records an S3 operation.
 func RecordS3Operation(operation, bucket string) {
 	S3OperationsTotal.WithLabelValues(operation, bucket).Inc()
 }
 
-// RecordError records an error
+// RecordError records an error.
 func RecordError(operation, errorType string) {
 	ErrorsTotal.WithLabelValues(operation, errorType).Inc()
 }
 
-// SetRaftLeader sets whether this node is the Raft leader for a specific shard
+// SetRaftLeader sets whether this node is the Raft leader for a specific shard.
 func SetRaftLeader(shardID string, isLeader bool) {
 	if isLeader {
 		RaftIsLeader.WithLabelValues(shardID).Set(1)
@@ -564,68 +564,69 @@ func SetRaftLeader(shardID string, isLeader bool) {
 	}
 }
 
-// RecordRaftProposal records a Raft proposal with its duration and status
+// RecordRaftProposal records a Raft proposal with its duration and status.
 func RecordRaftProposal(shardID string, duration time.Duration, success bool) {
 	status := "success"
 	if !success {
 		status = "failure"
 	}
+
 	RaftProposalLatency.WithLabelValues(shardID).Observe(duration.Seconds())
 	RaftProposalsTotal.WithLabelValues(shardID, status).Inc()
 }
 
-// IncrementActiveConnections increments active connections counter
+// IncrementActiveConnections increments active connections counter.
 func IncrementActiveConnections() {
 	ActiveConnections.Inc()
 }
 
-// DecrementActiveConnections decrements active connections counter
+// DecrementActiveConnections decrements active connections counter.
 func DecrementActiveConnections() {
 	ActiveConnections.Dec()
 }
 
-// AddBytesReceived adds to bytes received counter
+// AddBytesReceived adds to bytes received counter.
 func AddBytesReceived(bytes int64) {
 	BytesReceived.Add(float64(bytes))
 }
 
-// AddBytesSent adds to bytes sent counter
+// AddBytesSent adds to bytes sent counter.
 func AddBytesSent(bytes int64) {
 	BytesSent.Add(float64(bytes))
 }
 
-// SetStorageStats sets storage statistics
+// SetStorageStats sets storage statistics.
 func SetStorageStats(used, total int64) {
 	StorageBytesUsed.Set(float64(used))
 	StorageBytesTotal.Set(float64(total))
 }
 
-// SetBucketsTotal sets total number of buckets
+// SetBucketsTotal sets total number of buckets.
 func SetBucketsTotal(count int) {
 	BucketsTotal.Set(float64(count))
 }
 
-// SetObjectsTotal sets total number of objects for a bucket
+// SetObjectsTotal sets total number of objects for a bucket.
 func SetObjectsTotal(bucket string, count int) {
 	ObjectsTotal.WithLabelValues(bucket).Set(float64(count))
 }
 
-// SetMultipartUploadsActive sets number of active multipart uploads
+// SetMultipartUploadsActive sets number of active multipart uploads.
 func SetMultipartUploadsActive(count int) {
 	MultipartUploadsActive.Set(float64(count))
 }
 
-// SetClusterNodesTotal sets total number of cluster nodes
+// SetClusterNodesTotal sets total number of cluster nodes.
 func SetClusterNodesTotal(count int) {
 	ClusterNodesTotal.Set(float64(count))
 }
 
-// SetPlacementGroupNodes sets the number of nodes in a placement group
+// SetPlacementGroupNodes sets the number of nodes in a placement group.
 func SetPlacementGroupNodes(groupID, datacenter, region string, count int) {
 	PlacementGroupNodesTotal.WithLabelValues(groupID, datacenter, region).Set(float64(count))
 }
 
-// SetPlacementGroupStatusMetric sets the status of a placement group
+// SetPlacementGroupStatusMetric sets the status of a placement group.
 func SetPlacementGroupStatusMetric(groupID, status string) {
 	// Reset all status values for this group first
 	PlacementGroupStatus.WithLabelValues(groupID, "healthy").Set(0)
@@ -636,65 +637,69 @@ func SetPlacementGroupStatusMetric(groupID, status string) {
 	PlacementGroupStatus.WithLabelValues(groupID, status).Set(1)
 }
 
-// SetPlacementGroupInfo sets placement group information
+// SetPlacementGroupInfo sets placement group information.
 func SetPlacementGroupInfo(groupID, name, datacenter, region string, isLocal bool) {
 	isLocalStr := "false"
 	if isLocal {
 		isLocalStr = "true"
 	}
+
 	PlacementGroupInfo.WithLabelValues(groupID, name, datacenter, region, isLocalStr).Set(1)
 }
 
-// SetPlacementGroupShardCount sets the shard count for a node in a placement group
+// SetPlacementGroupShardCount sets the shard count for a node in a placement group.
 func SetPlacementGroupShardCount(groupID, nodeID string, count int) {
 	PlacementGroupShardDistribution.WithLabelValues(groupID, nodeID).Set(float64(count))
 }
 
-// RecordErasureEncode records an erasure encoding operation
+// RecordErasureEncode records an erasure encoding operation.
 func RecordErasureEncode(groupID string, success bool, duration time.Duration) {
 	status := "success"
 	if !success {
 		status = "failure"
 	}
+
 	ErasureEncodeOperationsTotal.WithLabelValues(groupID, status).Inc()
+
 	if success {
 		ErasureEncodeDurationSeconds.WithLabelValues(groupID).Observe(duration.Seconds())
 	}
 }
 
-// RecordErasureDecode records an erasure decoding operation
+// RecordErasureDecode records an erasure decoding operation.
 func RecordErasureDecode(groupID string, success bool) {
 	status := "success"
 	if !success {
 		status = "failure"
 	}
+
 	ErasureDecodeOperationsTotal.WithLabelValues(groupID, status).Inc()
 }
 
-// RecordErasureReconstruct records an erasure reconstruction operation
+// RecordErasureReconstruct records an erasure reconstruction operation.
 func RecordErasureReconstruct(groupID string) {
 	ErasureReconstructOperationsTotal.WithLabelValues(groupID).Inc()
 }
 
-// SetErasureHealthMetrics sets erasure coding health metrics
+// SetErasureHealthMetrics sets erasure coding health metrics.
 func SetErasureHealthMetrics(groupID string, healthy, degraded, atRisk int) {
 	ErasureHealthyObjects.WithLabelValues(groupID).Set(float64(healthy))
 	ErasureDegradedObjects.WithLabelValues(groupID).Set(float64(degraded))
 	ErasureObjectsAtRisk.WithLabelValues(groupID).Set(float64(atRisk))
 }
 
-// RecordTieringTransition records a tiering transition
+// RecordTieringTransition records a tiering transition.
 func RecordTieringTransition(sourceTier, destTier, policy string) {
 	TieringTransitionsTotal.WithLabelValues(sourceTier, destTier, policy).Inc()
 }
 
-// SetTieringMetrics sets tiering metrics for a tier
+// SetTieringMetrics sets tiering metrics for a tier.
 func SetTieringMetrics(tier string, objects int64, bytes int64) {
 	TieringObjectsPerTier.WithLabelValues(tier).Set(float64(objects))
 	TieringBytesPerTier.WithLabelValues(tier).Set(float64(bytes))
 }
 
-// statusCodeToString converts HTTP status code to a string category
+// statusCodeToString converts HTTP status code to a string category.
 func statusCodeToString(status int) string {
 	switch {
 	case status >= 200 && status < 300:
@@ -711,27 +716,28 @@ func statusCodeToString(status int) string {
 }
 
 // DragonboatStore is an interface to avoid circular dependencies
-// This should match the relevant methods from internal/metadata.DragonboatStore
+// This should match the relevant methods from internal/metadata.DragonboatStore.
 type DragonboatStore interface {
 	GetNodeHost() interface{} // Returns *dragonboat.NodeHost
 	IsLeader() bool
 }
 
-// DragonboatNodeHost is an interface for the Dragonboat NodeHost methods we need
+// DragonboatNodeHost is an interface for the Dragonboat NodeHost methods we need.
 type DragonboatNodeHost interface {
 	GetLeaderID(shardID uint64) (uint64, uint64, error)
 }
 
 // CollectDragonboatMetrics collects and updates Raft metrics from a DragonboatStore
-// This function should be called periodically to update Raft metrics
+// This function should be called periodically to update Raft metrics.
 func CollectDragonboatMetrics(shardID uint64, nodeHost DragonboatNodeHost, replicaID uint64) {
-	shardLabel := fmt.Sprintf("%d", shardID)
+	shardLabel := strconv.FormatUint(shardID, 10)
 
 	leaderID, _, err := nodeHost.GetLeaderID(shardID)
 	if err != nil {
 		// If we can't get leader info, set metrics to 0
 		RaftState.WithLabelValues(shardLabel).Set(0)
 		RaftIsLeader.WithLabelValues(shardLabel).Set(0)
+
 		return
 	}
 
@@ -746,75 +752,78 @@ func CollectDragonboatMetrics(shardID uint64, nodeHost DragonboatNodeHost, repli
 	}
 }
 
-// RecordCachePeerWriteFailure increments the cache peer write failure counter
+// RecordCachePeerWriteFailure increments the cache peer write failure counter.
 func RecordCachePeerWriteFailure() {
 	CachePeerWriteFailures.Inc()
 }
 
-// RecordCacheHit increments the cache hit counter
+// RecordCacheHit increments the cache hit counter.
 func RecordCacheHit() {
 	CacheHits.Inc()
 }
 
-// RecordCacheMiss increments the cache miss counter
+// RecordCacheMiss increments the cache miss counter.
 func RecordCacheMiss() {
 	CacheMisses.Inc()
 }
 
-// RecordBucketRollbackFailure increments the bucket rollback failure counter
+// RecordBucketRollbackFailure increments the bucket rollback failure counter.
 func RecordBucketRollbackFailure() {
 	BucketRollbackFailures.Inc()
 }
 
-// RecordBucketCreationFailure increments the bucket creation failure counter
+// RecordBucketCreationFailure increments the bucket creation failure counter.
 func RecordBucketCreationFailure() {
 	BucketCreationFailures.Inc()
 }
 
-// RecordMetadataAppliedIndexError increments the metadata applied index error counter
+// RecordMetadataAppliedIndexError increments the metadata applied index error counter.
 func RecordMetadataAppliedIndexError() {
 	MetadataAppliedIndexErrors.Inc()
 }
 
-// RecordMetadataCloseError increments the metadata close error counter
+// RecordMetadataCloseError increments the metadata close error counter.
 func RecordMetadataCloseError() {
 	MetadataCloseErrors.Inc()
 }
 
-// RecordKeyRotationFailure increments the key rotation failure counter
+// RecordKeyRotationFailure increments the key rotation failure counter.
 func RecordKeyRotationFailure() {
 	KeyRotationFailures.Inc()
 }
 
-// RecordKeyExpiryNotificationFailure increments the key expiry notification failure counter
+// RecordKeyExpiryNotificationFailure increments the key expiry notification failure counter.
 func RecordKeyExpiryNotificationFailure() {
 	KeyExpiryNotificationFailures.Inc()
 }
 
-// RecordMigrationJobSaveFailure increments the migration job save failure counter
+// RecordMigrationJobSaveFailure increments the migration job save failure counter.
 func RecordMigrationJobSaveFailure() {
 	MigrationJobSaveFailures.Inc()
 }
 
-// RecordMigrationFailedObjectLogFailure increments the migration failed object log failure counter
+// RecordMigrationFailedObjectLogFailure increments the migration failed object log failure counter.
 func RecordMigrationFailedObjectLogFailure() {
 	MigrationFailedObjectLogFailures.Inc()
 }
 
-// RecordBackupWALSyncFailure increments the backup WAL sync failure counter
+// RecordBackupWALSyncFailure increments the backup WAL sync failure counter.
 func RecordBackupWALSyncFailure() {
 	BackupWALSyncFailures.Inc()
 }
 
-// RecordLambdaCompression records a Lambda compression/decompression operation
+// RecordLambdaCompression records a Lambda compression/decompression operation.
 func RecordLambdaCompression(algorithm, direction string, success bool, duration time.Duration, originalSize, compressedSize int64) {
 	status := "success"
 	if !success {
 		status = "error"
 	}
+
 	LambdaCompressionOperations.WithLabelValues(algorithm, direction, status).Inc()
+
 	if success {
 		LambdaCompressionDuration.WithLabelValues(algorithm, direction).Observe(duration.Seconds())
+
 		if direction == "compress" && compressedSize > 0 {
 			ratio := float64(originalSize) / float64(compressedSize)
 			LambdaCompressionRatio.WithLabelValues(algorithm).Observe(ratio)
@@ -822,57 +831,57 @@ func RecordLambdaCompression(algorithm, direction string, success bool, duration
 	}
 }
 
-// IncrementLambdaOperationsInFlight increments the in-flight Lambda operations gauge
+// IncrementLambdaOperationsInFlight increments the in-flight Lambda operations gauge.
 func IncrementLambdaOperationsInFlight(algorithm string) {
 	LambdaOperationsInFlight.WithLabelValues(algorithm).Inc()
 }
 
-// DecrementLambdaOperationsInFlight decrements the in-flight Lambda operations gauge
+// DecrementLambdaOperationsInFlight decrements the in-flight Lambda operations gauge.
 func DecrementLambdaOperationsInFlight(algorithm string) {
 	LambdaOperationsInFlight.WithLabelValues(algorithm).Dec()
 }
 
-// RecordObjectCreationRateLimited records a rate-limited object creation attempt
+// RecordObjectCreationRateLimited records a rate-limited object creation attempt.
 func RecordObjectCreationRateLimited(bucket, reason string) {
 	ObjectCreationRateLimited.WithLabelValues(bucket, reason).Inc()
 }
 
-// SetLambdaMaxTransformSize sets the configured max transform size metric
+// SetLambdaMaxTransformSize sets the configured max transform size metric.
 func SetLambdaMaxTransformSize(size int64) {
 	LambdaMaxTransformSize.Set(float64(size))
 }
 
-// SetLambdaStreamingThreshold sets the configured streaming threshold metric
+// SetLambdaStreamingThreshold sets the configured streaming threshold metric.
 func SetLambdaStreamingThreshold(size int64) {
 	LambdaStreamingThreshold.Set(float64(size))
 }
 
-// RecordLambdaBytesProcessed records bytes processed by Lambda operations
+// RecordLambdaBytesProcessed records bytes processed by Lambda operations.
 func RecordLambdaBytesProcessed(algorithm, direction string, bytes int64) {
 	LambdaBytesProcessed.WithLabelValues(algorithm, direction).Add(float64(bytes))
 }
 
-// SetVolumeCompactionReclaimableBytes sets the reclaimable bytes for a volume
+// SetVolumeCompactionReclaimableBytes sets the reclaimable bytes for a volume.
 func SetVolumeCompactionReclaimableBytes(volumeID string, bytes uint64) {
 	VolumeCompactionReclaimableBytes.WithLabelValues(volumeID).Set(float64(bytes))
 }
 
-// SetVolumeCompactionDeletedObjects sets the count of deleted objects pending compaction
+// SetVolumeCompactionDeletedObjects sets the count of deleted objects pending compaction.
 func SetVolumeCompactionDeletedObjects(volumeID string, count uint64) {
 	VolumeCompactionDeletedObjects.WithLabelValues(volumeID).Set(float64(count))
 }
 
-// IncrementVolumeCompactionReplacedObjects increments the replaced objects counter
+// IncrementVolumeCompactionReplacedObjects increments the replaced objects counter.
 func IncrementVolumeCompactionReplacedObjects(volumeID string) {
 	VolumeCompactionReplacedObjects.WithLabelValues(volumeID).Inc()
 }
 
-// SetVolumeCompactionLastRun sets the timestamp of the last compaction run
+// SetVolumeCompactionLastRun sets the timestamp of the last compaction run.
 func SetVolumeCompactionLastRun(volumeID string, timestamp float64) {
 	VolumeCompactionLastRun.WithLabelValues(volumeID).Set(timestamp)
 }
 
-// ObserveVolumeCompactionDuration records the duration of a compaction operation
+// ObserveVolumeCompactionDuration records the duration of a compaction operation.
 func ObserveVolumeCompactionDuration(volumeID string, duration float64) {
 	VolumeCompactionDuration.WithLabelValues(volumeID).Observe(duration)
 }

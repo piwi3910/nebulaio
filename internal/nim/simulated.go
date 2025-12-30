@@ -14,10 +14,10 @@ import (
 
 // SimulatedBackend provides a simulated NIM backend for testing.
 type SimulatedBackend struct {
-	mu          sync.RWMutex
 	models      map[string]*ModelInfo
 	latencyMs   int64
-	failureRate float64 // 0.0 - 1.0, for testing failures
+	failureRate float64
+	mu          sync.RWMutex
 	closed      bool
 }
 
@@ -28,10 +28,11 @@ func NewSimulatedBackend() *SimulatedBackend {
 		latencyMs: 50, // 50ms simulated latency
 	}
 	b.initModels()
+
 	return b
 }
 
-// initModels initializes the simulated model catalog
+// initModels initializes the simulated model catalog.
 func (b *SimulatedBackend) initModels() {
 	b.models = map[string]*ModelInfo{
 		// LLM Models
@@ -102,79 +103,79 @@ func (b *SimulatedBackend) initModels() {
 		},
 		// Vision Models
 		"nvidia/grounding-dino": {
-			ID:              "nvidia/grounding-dino",
-			Name:            "Grounding DINO",
-			Type:            ModelTypeVision,
-			Version:         "1.0",
-			Description:     "Open-set object detection with text prompts",
-			MaxBatchSize:    16,
+			ID:               "nvidia/grounding-dino",
+			Name:             "Grounding DINO",
+			Type:             ModelTypeVision,
+			Version:          "1.0",
+			Description:      "Open-set object detection with text prompts",
+			MaxBatchSize:     16,
 			SupportedFormats: []string{"image/jpeg", "image/png", "image/webp"},
-			Status:          "ready",
-			AvgLatencyMs:    100,
+			Status:           "ready",
+			AvgLatencyMs:     100,
 		},
 		"nvidia/deplot": {
-			ID:              "nvidia/deplot",
-			Name:            "DePlot",
-			Type:            ModelTypeVision,
-			Version:         "1.0",
-			Description:     "Chart and plot understanding model",
-			MaxBatchSize:    8,
+			ID:               "nvidia/deplot",
+			Name:             "DePlot",
+			Type:             ModelTypeVision,
+			Version:          "1.0",
+			Description:      "Chart and plot understanding model",
+			MaxBatchSize:     8,
 			SupportedFormats: []string{"image/jpeg", "image/png"},
-			Status:          "ready",
-			AvgLatencyMs:    150,
+			Status:           "ready",
+			AvgLatencyMs:     150,
 		},
 		// Multimodal Models
 		"nvidia/llama-3.2-neva-72b-preview": {
-			ID:              "nvidia/llama-3.2-neva-72b-preview",
-			Name:            "Llama 3.2 NeVA 72B",
-			Type:            ModelTypeMultimodal,
-			Version:         "3.2-preview",
-			Description:     "Vision-language model for image understanding",
-			MaxTokens:       4096,
-			MaxBatchSize:    8,
+			ID:               "nvidia/llama-3.2-neva-72b-preview",
+			Name:             "Llama 3.2 NeVA 72B",
+			Type:             ModelTypeMultimodal,
+			Version:          "3.2-preview",
+			Description:      "Vision-language model for image understanding",
+			MaxTokens:        4096,
+			MaxBatchSize:     8,
 			SupportedFormats: []string{"image/jpeg", "image/png", "image/webp"},
-			Status:          "ready",
-			AvgLatencyMs:    300,
+			Status:           "ready",
+			AvgLatencyMs:     300,
 		},
 		"nvidia/vila-1.5": {
-			ID:              "nvidia/vila-1.5",
-			Name:            "VILA 1.5",
-			Type:            ModelTypeMultimodal,
-			Version:         "1.5",
-			Description:     "Visual language model for complex reasoning",
-			MaxTokens:       2048,
-			MaxBatchSize:    4,
+			ID:               "nvidia/vila-1.5",
+			Name:             "VILA 1.5",
+			Type:             ModelTypeMultimodal,
+			Version:          "1.5",
+			Description:      "Visual language model for complex reasoning",
+			MaxTokens:        2048,
+			MaxBatchSize:     4,
 			SupportedFormats: []string{"image/jpeg", "image/png"},
-			Status:          "ready",
-			AvgLatencyMs:    250,
+			Status:           "ready",
+			AvgLatencyMs:     250,
 		},
 		// Audio Models
 		"nvidia/canary-1b-asr": {
-			ID:              "nvidia/canary-1b-asr",
-			Name:            "Canary 1B ASR",
-			Type:            ModelTypeAudio,
-			Version:         "1.0",
-			Description:     "Automatic speech recognition model",
-			MaxBatchSize:    16,
+			ID:               "nvidia/canary-1b-asr",
+			Name:             "Canary 1B ASR",
+			Type:             ModelTypeAudio,
+			Version:          "1.0",
+			Description:      "Automatic speech recognition model",
+			MaxBatchSize:     16,
 			SupportedFormats: []string{"audio/wav", "audio/mp3", "audio/flac"},
-			Status:          "ready",
-			AvgLatencyMs:    100,
+			Status:           "ready",
+			AvgLatencyMs:     100,
 		},
 		"nvidia/parakeet-tdt-1.1b": {
-			ID:              "nvidia/parakeet-tdt-1.1b",
-			Name:            "Parakeet TDT 1.1B",
-			Type:            ModelTypeAudio,
-			Version:         "1.1",
-			Description:     "Text-to-speech model with natural voices",
-			MaxBatchSize:    8,
+			ID:               "nvidia/parakeet-tdt-1.1b",
+			Name:             "Parakeet TDT 1.1B",
+			Type:             ModelTypeAudio,
+			Version:          "1.1",
+			Description:      "Text-to-speech model with natural voices",
+			MaxBatchSize:     8,
 			SupportedFormats: []string{"text/plain"},
-			Status:          "ready",
-			AvgLatencyMs:    80,
+			Status:           "ready",
+			AvgLatencyMs:     80,
 		},
 	}
 }
 
-// ListModels returns available models
+// ListModels returns available models.
 func (b *SimulatedBackend) ListModels(ctx context.Context) ([]*ModelInfo, error) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -187,10 +188,11 @@ func (b *SimulatedBackend) ListModels(ctx context.Context) ([]*ModelInfo, error)
 	for _, m := range b.models {
 		models = append(models, m)
 	}
+
 	return models, nil
 }
 
-// GetModel returns info about a specific model
+// GetModel returns info about a specific model.
 func (b *SimulatedBackend) GetModel(ctx context.Context, modelID string) (*ModelInfo, error) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -203,16 +205,19 @@ func (b *SimulatedBackend) GetModel(ctx context.Context, modelID string) (*Model
 	if !ok {
 		return nil, ErrModelNotFound
 	}
+
 	return model, nil
 }
 
-// Chat performs simulated chat completion
+// Chat performs simulated chat completion.
 func (b *SimulatedBackend) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
 	b.mu.RLock()
+
 	if b.closed {
 		b.mu.RUnlock()
 		return nil, ErrAlreadyClosed
 	}
+
 	latency := b.latencyMs
 	b.mu.RUnlock()
 
@@ -267,13 +272,15 @@ func (b *SimulatedBackend) Chat(ctx context.Context, req *ChatRequest) (*ChatRes
 	}, nil
 }
 
-// ChatStream performs simulated streaming chat completion
+// ChatStream performs simulated streaming chat completion.
 func (b *SimulatedBackend) ChatStream(ctx context.Context, req *ChatRequest) (<-chan *ChatResponse, error) {
 	b.mu.RLock()
+
 	if b.closed {
 		b.mu.RUnlock()
 		return nil, ErrAlreadyClosed
 	}
+
 	b.mu.RUnlock()
 
 	// Check if model exists
@@ -342,13 +349,15 @@ func (b *SimulatedBackend) ChatStream(ctx context.Context, req *ChatRequest) (<-
 	return ch, nil
 }
 
-// Embed generates simulated embeddings
+// Embed generates simulated embeddings.
 func (b *SimulatedBackend) Embed(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error) {
 	b.mu.RLock()
+
 	if b.closed {
 		b.mu.RUnlock()
 		return nil, ErrAlreadyClosed
 	}
+
 	latency := b.latencyMs
 	b.mu.RUnlock()
 
@@ -368,6 +377,7 @@ func (b *SimulatedBackend) Embed(ctx context.Context, req *EmbeddingRequest) (*E
 	}, len(req.Input))
 
 	totalTokens := 0
+
 	for i, input := range req.Input {
 		// Generate deterministic but varied embedding based on input
 		embedding := b.generateEmbedding(input)
@@ -397,13 +407,15 @@ func (b *SimulatedBackend) Embed(ctx context.Context, req *EmbeddingRequest) (*E
 	}, nil
 }
 
-// Vision performs simulated vision inference
+// Vision performs simulated vision inference.
 func (b *SimulatedBackend) Vision(ctx context.Context, req *VisionRequest) (*VisionResponse, error) {
 	b.mu.RLock()
+
 	if b.closed {
 		b.mu.RUnlock()
 		return nil, ErrAlreadyClosed
 	}
+
 	latency := b.latencyMs
 	b.mu.RUnlock()
 
@@ -415,6 +427,7 @@ func (b *SimulatedBackend) Vision(ctx context.Context, req *VisionRequest) (*Vis
 	if err != nil {
 		return nil, err
 	}
+
 	if model.Type != ModelTypeVision && model.Type != ModelTypeMultimodal {
 		return nil, ErrInvalidInput
 	}
@@ -429,13 +442,15 @@ func (b *SimulatedBackend) Vision(ctx context.Context, req *VisionRequest) (*Vis
 	}, nil
 }
 
-// Infer performs simulated generic inference
+// Infer performs simulated generic inference.
 func (b *SimulatedBackend) Infer(ctx context.Context, req *InferenceRequest) (*InferenceResponse, error) {
 	b.mu.RLock()
+
 	if b.closed {
 		b.mu.RUnlock()
 		return nil, ErrAlreadyClosed
 	}
+
 	latency := b.latencyMs
 	b.mu.RUnlock()
 
@@ -449,8 +464,10 @@ func (b *SimulatedBackend) Infer(ctx context.Context, req *InferenceRequest) (*I
 	}
 
 	// Generate response based on model type
-	var output interface{}
-	var tokensUsed int
+	var (
+		output     interface{}
+		tokensUsed int
+	)
 
 	switch model.Type {
 	case ModelTypeLLM:
@@ -485,13 +502,15 @@ func (b *SimulatedBackend) Infer(ctx context.Context, req *InferenceRequest) (*I
 	}, nil
 }
 
-// Batch performs simulated batch inference
+// Batch performs simulated batch inference.
 func (b *SimulatedBackend) Batch(ctx context.Context, req *BatchRequest) (*BatchResponse, error) {
 	b.mu.RLock()
+
 	if b.closed {
 		b.mu.RUnlock()
 		return nil, ErrAlreadyClosed
 	}
+
 	b.mu.RUnlock()
 
 	start := time.Now()
@@ -528,7 +547,7 @@ func (b *SimulatedBackend) Batch(ctx context.Context, req *BatchRequest) (*Batch
 	}, nil
 }
 
-// HealthCheck checks NIM service health
+// HealthCheck checks NIM service health.
 func (b *SimulatedBackend) HealthCheck(ctx context.Context) error {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -536,10 +555,11 @@ func (b *SimulatedBackend) HealthCheck(ctx context.Context) error {
 	if b.closed {
 		return ErrAlreadyClosed
 	}
+
 	return nil
 }
 
-// Close closes the backend
+// Close closes the backend.
 func (b *SimulatedBackend) Close() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -547,28 +567,33 @@ func (b *SimulatedBackend) Close() error {
 	if b.closed {
 		return ErrAlreadyClosed
 	}
+
 	b.closed = true
+
 	return nil
 }
 
-// SetSimulatedLatency sets the simulated processing latency
+// SetSimulatedLatency sets the simulated processing latency.
 func (b *SimulatedBackend) SetSimulatedLatency(latencyMs int64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	b.latencyMs = latencyMs
 }
 
-// SetFailureRate sets the simulated failure rate (0.0 to 1.0)
+// SetFailureRate sets the simulated failure rate (0.0 to 1.0).
 func (b *SimulatedBackend) SetFailureRate(rate float64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	b.failureRate = rate
 }
 
-// AddModel adds a custom model to the catalog
+// AddModel adds a custom model to the catalog.
 func (b *SimulatedBackend) AddModel(model *ModelInfo) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	b.models[model.ID] = model
 }
 
@@ -577,6 +602,7 @@ func (b *SimulatedBackend) AddModel(model *ModelInfo) {
 func generateID() string {
 	bytes := make([]byte, 16)
 	rand.Read(bytes)
+
 	return "chatcmpl-" + hex.EncodeToString(bytes)
 }
 
@@ -613,6 +639,7 @@ func (b *SimulatedBackend) estimateTokens(messages []ChatMessage) int {
 		total += len(msg.Content) / 4
 		total += 4 // Role and formatting overhead
 	}
+
 	return max(total, 1)
 }
 
@@ -638,6 +665,7 @@ func (b *SimulatedBackend) generateEmbedding(input string) []float64 {
 	for _, v := range embedding {
 		norm += v * v
 	}
+
 	norm = math.Sqrt(norm)
 	if norm > 0 {
 		for i := range embedding {
@@ -649,8 +677,8 @@ func (b *SimulatedBackend) generateEmbedding(input string) []float64 {
 }
 
 func (b *SimulatedBackend) generateVisionResults(task string) []struct {
-	Label      string  `json:"label,omitempty"`
-	Confidence float64 `json:"confidence,omitempty"`
+	Label       string  `json:"label,omitempty"`
+	Confidence  float64 `json:"confidence,omitempty"`
 	BoundingBox *struct {
 		X1 float64 `json:"x1"`
 		Y1 float64 `json:"y1"`
@@ -662,8 +690,8 @@ func (b *SimulatedBackend) generateVisionResults(task string) []struct {
 	switch task {
 	case "detection":
 		return []struct {
-			Label      string  `json:"label,omitempty"`
-			Confidence float64 `json:"confidence,omitempty"`
+			Label       string  `json:"label,omitempty"`
+			Confidence  float64 `json:"confidence,omitempty"`
 			BoundingBox *struct {
 				X1 float64 `json:"x1"`
 				Y1 float64 `json:"y1"`
@@ -699,8 +727,8 @@ func (b *SimulatedBackend) generateVisionResults(task string) []struct {
 		}
 	case "classification":
 		return []struct {
-			Label      string  `json:"label,omitempty"`
-			Confidence float64 `json:"confidence,omitempty"`
+			Label       string  `json:"label,omitempty"`
+			Confidence  float64 `json:"confidence,omitempty"`
 			BoundingBox *struct {
 				X1 float64 `json:"x1"`
 				Y1 float64 `json:"y1"`
@@ -716,8 +744,8 @@ func (b *SimulatedBackend) generateVisionResults(task string) []struct {
 	case "segmentation":
 		// Return a simple 3x3 mask for testing
 		return []struct {
-			Label      string  `json:"label,omitempty"`
-			Confidence float64 `json:"confidence,omitempty"`
+			Label       string  `json:"label,omitempty"`
+			Confidence  float64 `json:"confidence,omitempty"`
 			BoundingBox *struct {
 				X1 float64 `json:"x1"`
 				Y1 float64 `json:"y1"`
@@ -739,8 +767,8 @@ func (b *SimulatedBackend) generateVisionResults(task string) []struct {
 		}
 	default:
 		return []struct {
-			Label      string  `json:"label,omitempty"`
-			Confidence float64 `json:"confidence,omitempty"`
+			Label       string  `json:"label,omitempty"`
+			Confidence  float64 `json:"confidence,omitempty"`
 			BoundingBox *struct {
 				X1 float64 `json:"x1"`
 				Y1 float64 `json:"y1"`
@@ -758,6 +786,7 @@ func min(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }
 
@@ -765,5 +794,6 @@ func max(a, b int) int {
 	if a > b {
 		return a
 	}
+
 	return b
 }

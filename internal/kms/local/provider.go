@@ -40,25 +40,16 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-// Config holds local KMS provider configuration
+// Config holds local KMS provider configuration.
 type Config struct {
+	KeyStorePath       string `json:"keyStorePath" yaml:"keyStorePath"`
+	MasterKeyFile      string `json:"masterKeyFile,omitempty" yaml:"masterKeyFile,omitempty"`
+	MasterPassword     string `json:"-" yaml:"masterPassword,omitempty"`
+	KeyDerivationSalt  string `json:"keyDerivationSalt,omitempty" yaml:"keyDerivationSalt,omitempty"`
 	kms.ProviderConfig `yaml:",inline"`
-
-	// KeyStorePath is the directory where keys are stored
-	KeyStorePath string `json:"keyStorePath" yaml:"keyStorePath"`
-
-	// MasterKeyFile is the file containing the master key (optional)
-	// If not set, a new master key is generated and saved
-	MasterKeyFile string `json:"masterKeyFile,omitempty" yaml:"masterKeyFile,omitempty"`
-
-	// MasterPassword is used to derive the master key (alternative to MasterKeyFile)
-	MasterPassword string `json:"-" yaml:"masterPassword,omitempty"`
-
-	// KeyDerivationSalt is used with MasterPassword for PBKDF2
-	KeyDerivationSalt string `json:"keyDerivationSalt,omitempty" yaml:"keyDerivationSalt,omitempty"`
 }
 
-// DefaultConfig returns a default local KMS configuration
+// DefaultConfig returns a default local KMS configuration.
 func DefaultConfig() Config {
 	return Config{
 		ProviderConfig: kms.ProviderConfig{
@@ -71,30 +62,31 @@ func DefaultConfig() Config {
 }
 
 // Provider implements the KMS Provider interface using local file storage
-// This is primarily for development and testing - NOT for production use
+// This is primarily for development and testing - NOT for production use.
 type Provider struct {
+	keys      map[string]*storedKey
 	config    Config
 	masterKey []byte
-	keys      map[string]*storedKey
 	mu        sync.RWMutex
 	closed    bool
 }
 
-// storedKey represents a key stored on disk
+// storedKey represents a key stored on disk.
 type storedKey struct {
-	Info         kms.KeyInfo `json:"info"`
-	Material     []byte      `json:"material"` // Encrypted key material
-	PlainMaterial []byte     `json:"-"`        // Decrypted key material (cached)
+	Info          kms.KeyInfo `json:"info"`
+	Material      []byte      `json:"material"` // Encrypted key material
+	PlainMaterial []byte      `json:"-"`        // Decrypted key material (cached)
 }
 
-// NewProvider creates a new local KMS provider
+// NewProvider creates a new local KMS provider.
 func NewProvider(config Config) (*Provider, error) {
 	if config.KeyStorePath == "" {
 		return nil, errors.New("keyStorePath is required")
 	}
 
 	// Ensure key store directory exists
-	if err := os.MkdirAll(config.KeyStorePath, 0700); err != nil {
+	err := os.MkdirAll(config.KeyStorePath, 0700)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create key store directory: %w", err)
 	}
 
@@ -104,19 +96,21 @@ func NewProvider(config Config) (*Provider, error) {
 	}
 
 	// Initialize master key
-	if err := p.initMasterKey(); err != nil {
+	err = p.initMasterKey()
+	if err != nil {
 		return nil, fmt.Errorf("failed to initialize master key: %w", err)
 	}
 
 	// Load existing keys
-	if err := p.loadKeys(); err != nil {
+	err = p.loadKeys()
+	if err != nil {
 		return nil, fmt.Errorf("failed to load keys: %w", err)
 	}
 
 	return p, nil
 }
 
-// initMasterKey initializes the master key from file, password, or generates new
+// initMasterKey initializes the master key from file, password, or generates new.
 func (p *Provider) initMasterKey() error {
 	// Option 1: Load from file
 	if p.config.MasterKeyFile != "" {
@@ -124,7 +118,9 @@ func (p *Provider) initMasterKey() error {
 		if err != nil {
 			return fmt.Errorf("failed to read master key file: %w", err)
 		}
+
 		p.masterKey = data
+
 		return nil
 	}
 
@@ -134,7 +130,9 @@ func (p *Provider) initMasterKey() error {
 		if len(salt) == 0 {
 			salt = []byte("nebulaio-local-kms-default-salt")
 		}
+
 		p.masterKey = pbkdf2.Key([]byte(p.config.MasterPassword), salt, 100000, 32, sha256.New)
+
 		return nil
 	}
 
@@ -152,14 +150,15 @@ func (p *Provider) initMasterKey() error {
 	}
 
 	// Save master key
-	if err := os.WriteFile(masterKeyPath, p.masterKey, 0600); err != nil {
+	err := os.WriteFile(masterKeyPath, p.masterKey, 0600)
+	if err != nil {
 		return fmt.Errorf("failed to save master key: %w", err)
 	}
 
 	return nil
 }
 
-// loadKeys loads all existing keys from disk
+// loadKeys loads all existing keys from disk.
 func (p *Provider) loadKeys() error {
 	entries, err := os.ReadDir(p.config.KeyStorePath)
 	if err != nil {
@@ -172,6 +171,7 @@ func (p *Provider) loadKeys() error {
 		}
 
 		keyPath := filepath.Join(p.config.KeyStorePath, entry.Name())
+
 		data, err := os.ReadFile(keyPath)
 		if err != nil {
 			continue
@@ -194,14 +194,15 @@ func (p *Provider) loadKeys() error {
 	return nil
 }
 
-// Name returns the provider name
+// Name returns the provider name.
 func (p *Provider) Name() string {
 	return "local"
 }
 
-// GenerateDataKey generates a new data encryption key
+// GenerateDataKey generates a new data encryption key.
 func (p *Provider) GenerateDataKey(ctx context.Context, keyID string, keySpec kms.KeySpec) (*kms.DataKey, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
@@ -220,6 +221,7 @@ func (p *Provider) GenerateDataKey(ctx context.Context, keyID string, keySpec km
 
 	// Determine key size based on spec
 	keySize := 32 // Default AES-256
+
 	algorithm := kms.AlgorithmAES256GCM
 	switch keySpec.Algorithm {
 	case kms.AlgorithmAES128:
@@ -253,9 +255,10 @@ func (p *Provider) GenerateDataKey(ctx context.Context, keyID string, keySpec km
 	}, nil
 }
 
-// DecryptDataKey decrypts a previously encrypted data key
+// DecryptDataKey decrypts a previously encrypted data key.
 func (p *Provider) DecryptDataKey(ctx context.Context, keyID string, encryptedKey []byte) ([]byte, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
@@ -280,9 +283,10 @@ func (p *Provider) DecryptDataKey(ctx context.Context, keyID string, encryptedKe
 	return plaintext, nil
 }
 
-// Encrypt encrypts data using the specified key
+// Encrypt encrypts data using the specified key.
 func (p *Provider) Encrypt(ctx context.Context, keyID string, plaintext []byte) ([]byte, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
@@ -307,9 +311,10 @@ func (p *Provider) Encrypt(ctx context.Context, keyID string, plaintext []byte) 
 	return ciphertext, nil
 }
 
-// Decrypt decrypts data using the specified key
+// Decrypt decrypts data using the specified key.
 func (p *Provider) Decrypt(ctx context.Context, keyID string, ciphertext []byte) ([]byte, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
@@ -334,7 +339,7 @@ func (p *Provider) Decrypt(ctx context.Context, keyID string, ciphertext []byte)
 	return plaintext, nil
 }
 
-// ListKeys returns available encryption keys
+// ListKeys returns available encryption keys.
 func (p *Provider) ListKeys(ctx context.Context) ([]kms.KeyInfo, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -351,7 +356,7 @@ func (p *Provider) ListKeys(ctx context.Context) ([]kms.KeyInfo, error) {
 	return keys, nil
 }
 
-// GetKeyInfo returns information about a specific key
+// GetKeyInfo returns information about a specific key.
 func (p *Provider) GetKeyInfo(ctx context.Context, keyID string) (*kms.KeyInfo, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -366,10 +371,11 @@ func (p *Provider) GetKeyInfo(ctx context.Context, keyID string) (*kms.KeyInfo, 
 	}
 
 	info := key.Info
+
 	return &info, nil
 }
 
-// CreateKey creates a new encryption key
+// CreateKey creates a new encryption key.
 func (p *Provider) CreateKey(ctx context.Context, spec kms.KeySpec) (*kms.KeyInfo, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -383,10 +389,12 @@ func (p *Provider) CreateKey(ctx context.Context, spec kms.KeySpec) (*kms.KeyInf
 	if _, err := rand.Read(keyIDBytes); err != nil {
 		return nil, &kms.WrapError{Op: "CreateKey", Err: err}
 	}
+
 	keyID := hex.EncodeToString(keyIDBytes)
 
 	// Determine key size
 	keySize := 32
+
 	switch spec.Algorithm {
 	case kms.AlgorithmAES128:
 		keySize = 16
@@ -434,10 +442,11 @@ func (p *Provider) CreateKey(ctx context.Context, spec kms.KeySpec) (*kms.KeyInf
 	}
 
 	p.keys[keyID] = sk
+
 	return &info, nil
 }
 
-// RotateKey rotates an encryption key
+// RotateKey rotates an encryption key.
 func (p *Provider) RotateKey(ctx context.Context, keyID string) (*kms.KeyInfo, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -479,10 +488,11 @@ func (p *Provider) RotateKey(ctx context.Context, keyID string) (*kms.KeyInfo, e
 	}
 
 	info := key.Info
+
 	return &info, nil
 }
 
-// DeleteKey schedules a key for deletion
+// DeleteKey schedules a key for deletion.
 func (p *Provider) DeleteKey(ctx context.Context, keyID string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -503,14 +513,15 @@ func (p *Provider) DeleteKey(ctx context.Context, keyID string) error {
 	key.Info.DeletionDate = &deletionDate
 
 	// Save updated state
-	if err := p.saveKey(key); err != nil {
+	err := p.saveKey(key)
+	if err != nil {
 		return &kms.WrapError{Op: "DeleteKey", KeyID: keyID, Err: err}
 	}
 
 	return nil
 }
 
-// Close closes the provider
+// Close closes the provider.
 func (p *Provider) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -521,6 +532,7 @@ func (p *Provider) Close() error {
 	for i := range p.masterKey {
 		p.masterKey[i] = 0
 	}
+
 	for _, key := range p.keys {
 		for i := range key.PlainMaterial {
 			key.PlainMaterial[i] = 0
@@ -530,7 +542,7 @@ func (p *Provider) Close() error {
 	return nil
 }
 
-// saveKey saves a key to disk
+// saveKey saves a key to disk.
 func (p *Provider) saveKey(sk *storedKey) error {
 	data, err := json.MarshalIndent(sk, "", "  ")
 	if err != nil {
@@ -538,20 +550,21 @@ func (p *Provider) saveKey(sk *storedKey) error {
 	}
 
 	keyPath := filepath.Join(p.config.KeyStorePath, sk.Info.KeyID+".key")
+
 	return os.WriteFile(keyPath, data, 0600)
 }
 
-// encryptKeyMaterial encrypts key material with the master key
+// encryptKeyMaterial encrypts key material with the master key.
 func (p *Provider) encryptKeyMaterial(plaintext []byte) ([]byte, error) {
 	return p.encryptWithKey(p.masterKey, plaintext)
 }
 
-// decryptKeyMaterial decrypts key material with the master key
+// decryptKeyMaterial decrypts key material with the master key.
 func (p *Provider) decryptKeyMaterial(ciphertext []byte) ([]byte, error) {
 	return p.decryptWithKey(p.masterKey, ciphertext)
 }
 
-// encryptWithKey encrypts data with the given key using AES-GCM
+// encryptWithKey encrypts data with the given key using AES-GCM.
 func (p *Provider) encryptWithKey(key, plaintext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -571,7 +584,7 @@ func (p *Provider) encryptWithKey(key, plaintext []byte) ([]byte, error) {
 	return gcm.Seal(nonce, nonce, plaintext, nil), nil
 }
 
-// decryptWithKey decrypts data with the given key using AES-GCM
+// decryptWithKey decrypts data with the given key using AES-GCM.
 func (p *Provider) decryptWithKey(key, ciphertext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -593,5 +606,5 @@ func (p *Provider) decryptWithKey(key, ciphertext []byte) ([]byte, error) {
 	return gcm.Open(nil, nonce, ciphertext, nil)
 }
 
-// Ensure Provider implements kms.Provider
+// Ensure Provider implements kms.Provider.
 var _ kms.Provider = (*Provider)(nil)

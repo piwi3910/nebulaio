@@ -5,6 +5,7 @@ package iam
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"regexp"
@@ -29,27 +30,27 @@ const (
 
 // Policy represents an IAM policy document.
 type Policy struct {
-	ID          string            `json:"Id,omitempty"`
-	Version     string            `json:"Version"`
-	Statements  []Statement       `json:"Statement"`
-	Name        string            `json:"-"` // Internal name
-	Description string            `json:"-"` // Internal description
 	CreatedAt   time.Time         `json:"-"`
 	UpdatedAt   time.Time         `json:"-"`
 	Tags        map[string]string `json:"-"`
+	ID          string            `json:"Id,omitempty"`
+	Version     string            `json:"Version"`
+	Name        string            `json:"-"`
+	Description string            `json:"-"`
+	Statements  []Statement       `json:"Statement"`
 }
 
 // Statement represents a single policy statement.
 type Statement struct {
-	Sid          string                 `json:"Sid,omitempty"`
-	Effect       Effect                 `json:"Effect"`
 	Principal    *Principal             `json:"Principal,omitempty"`
 	NotPrincipal *Principal             `json:"NotPrincipal,omitempty"`
+	Condition    map[string]interface{} `json:"Condition,omitempty"`
+	Sid          string                 `json:"Sid,omitempty"`
+	Effect       Effect                 `json:"Effect"`
 	Action       StringOrSlice          `json:"Action,omitempty"`
 	NotAction    StringOrSlice          `json:"NotAction,omitempty"`
 	Resource     StringOrSlice          `json:"Resource,omitempty"`
 	NotResource  StringOrSlice          `json:"NotResource,omitempty"`
-	Condition    map[string]interface{} `json:"Condition,omitempty"`
 }
 
 // Principal represents who the statement applies to.
@@ -65,16 +66,20 @@ type StringOrSlice []string
 // UnmarshalJSON handles unmarshaling both string and []string.
 func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 	var single string
-	if err := json.Unmarshal(data, &single); err == nil {
+	err := json.Unmarshal(data, &single)
+	if err == nil {
 		*s = []string{single}
 		return nil
 	}
 
 	var multiple []string
-	if err := json.Unmarshal(data, &multiple); err != nil {
+	err = json.Unmarshal(data, &multiple)
+	if err != nil {
 		return err
 	}
+
 	*s = multiple
+
 	return nil
 }
 
@@ -83,6 +88,7 @@ func (s StringOrSlice) MarshalJSON() ([]byte, error) {
 	if len(s) == 1 {
 		return json.Marshal(s[0])
 	}
+
 	return json.Marshal([]string(s))
 }
 
@@ -93,100 +99,101 @@ func (s StringOrSlice) Contains(value string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 // S3Actions defines all supported S3 actions.
 var S3Actions = map[string]bool{
 	// Bucket operations
-	"s3:CreateBucket":                  true,
-	"s3:DeleteBucket":                  true,
-	"s3:ListBucket":                    true,
-	"s3:ListBucketVersions":            true,
-	"s3:ListBucketMultipartUploads":    true,
-	"s3:GetBucketLocation":             true,
-	"s3:GetBucketPolicy":               true,
-	"s3:PutBucketPolicy":               true,
-	"s3:DeleteBucketPolicy":            true,
-	"s3:GetBucketAcl":                  true,
-	"s3:PutBucketAcl":                  true,
-	"s3:GetBucketCORS":                 true,
-	"s3:PutBucketCORS":                 true,
-	"s3:DeleteBucketCORS":              true,
-	"s3:GetBucketVersioning":           true,
-	"s3:PutBucketVersioning":           true,
-	"s3:GetBucketTagging":              true,
-	"s3:PutBucketTagging":              true,
-	"s3:DeleteBucketTagging":           true,
-	"s3:GetBucketLifecycleConfiguration": true,
-	"s3:PutBucketLifecycleConfiguration": true,
-	"s3:GetBucketNotification":         true,
-	"s3:PutBucketNotification":         true,
-	"s3:GetBucketEncryption":           true,
-	"s3:PutBucketEncryption":           true,
+	"s3:CreateBucket":                     true,
+	"s3:DeleteBucket":                     true,
+	"s3:ListBucket":                       true,
+	"s3:ListBucketVersions":               true,
+	"s3:ListBucketMultipartUploads":       true,
+	"s3:GetBucketLocation":                true,
+	"s3:GetBucketPolicy":                  true,
+	"s3:PutBucketPolicy":                  true,
+	"s3:DeleteBucketPolicy":               true,
+	"s3:GetBucketAcl":                     true,
+	"s3:PutBucketAcl":                     true,
+	"s3:GetBucketCORS":                    true,
+	"s3:PutBucketCORS":                    true,
+	"s3:DeleteBucketCORS":                 true,
+	"s3:GetBucketVersioning":              true,
+	"s3:PutBucketVersioning":              true,
+	"s3:GetBucketTagging":                 true,
+	"s3:PutBucketTagging":                 true,
+	"s3:DeleteBucketTagging":              true,
+	"s3:GetBucketLifecycleConfiguration":  true,
+	"s3:PutBucketLifecycleConfiguration":  true,
+	"s3:GetBucketNotification":            true,
+	"s3:PutBucketNotification":            true,
+	"s3:GetBucketEncryption":              true,
+	"s3:PutBucketEncryption":              true,
 	"s3:GetBucketObjectLockConfiguration": true,
 	"s3:PutBucketObjectLockConfiguration": true,
-	"s3:GetBucketReplication":          true,
-	"s3:PutBucketReplication":          true,
-	"s3:DeleteBucketReplication":       true,
+	"s3:GetBucketReplication":             true,
+	"s3:PutBucketReplication":             true,
+	"s3:DeleteBucketReplication":          true,
 
 	// Object operations
-	"s3:GetObject":                true,
-	"s3:GetObjectVersion":         true,
-	"s3:GetObjectAcl":             true,
-	"s3:GetObjectVersionAcl":      true,
-	"s3:GetObjectTagging":         true,
-	"s3:GetObjectVersionTagging":  true,
-	"s3:GetObjectRetention":       true,
-	"s3:GetObjectLegalHold":       true,
-	"s3:PutObject":                true,
-	"s3:PutObjectAcl":             true,
-	"s3:PutObjectVersionAcl":      true,
-	"s3:PutObjectTagging":         true,
-	"s3:PutObjectVersionTagging":  true,
-	"s3:PutObjectRetention":       true,
-	"s3:PutObjectLegalHold":       true,
-	"s3:DeleteObject":             true,
-	"s3:DeleteObjectVersion":      true,
-	"s3:DeleteObjectTagging":      true,
+	"s3:GetObject":                  true,
+	"s3:GetObjectVersion":           true,
+	"s3:GetObjectAcl":               true,
+	"s3:GetObjectVersionAcl":        true,
+	"s3:GetObjectTagging":           true,
+	"s3:GetObjectVersionTagging":    true,
+	"s3:GetObjectRetention":         true,
+	"s3:GetObjectLegalHold":         true,
+	"s3:PutObject":                  true,
+	"s3:PutObjectAcl":               true,
+	"s3:PutObjectVersionAcl":        true,
+	"s3:PutObjectTagging":           true,
+	"s3:PutObjectVersionTagging":    true,
+	"s3:PutObjectRetention":         true,
+	"s3:PutObjectLegalHold":         true,
+	"s3:DeleteObject":               true,
+	"s3:DeleteObjectVersion":        true,
+	"s3:DeleteObjectTagging":        true,
 	"s3:DeleteObjectVersionTagging": true,
-	"s3:RestoreObject":            true,
-	"s3:AbortMultipartUpload":     true,
-	"s3:ListMultipartUploadParts": true,
+	"s3:RestoreObject":              true,
+	"s3:AbortMultipartUpload":       true,
+	"s3:ListMultipartUploadParts":   true,
 
 	// Special operations
-	"s3:*":                       true,
-	"s3:GetBucketPublicAccessBlock": true,
-	"s3:PutBucketPublicAccessBlock": true,
+	"s3:*":                           true,
+	"s3:GetBucketPublicAccessBlock":  true,
+	"s3:PutBucketPublicAccessBlock":  true,
 	"s3:GetAccountPublicAccessBlock": true,
 	"s3:PutAccountPublicAccessBlock": true,
 }
 
 // AdminActions defines all supported admin actions.
 var AdminActions = map[string]bool{
-	"admin:*":                    true,
-	"admin:CreateUser":           true,
-	"admin:DeleteUser":           true,
-	"admin:ListUsers":            true,
-	"admin:GetUser":              true,
-	"admin:UpdateUser":           true,
-	"admin:CreateAccessKey":      true,
-	"admin:DeleteAccessKey":      true,
-	"admin:ListAccessKeys":       true,
-	"admin:CreatePolicy":         true,
-	"admin:DeletePolicy":         true,
-	"admin:GetPolicy":            true,
-	"admin:ListPolicies":         true,
-	"admin:AttachUserPolicy":     true,
-	"admin:DetachUserPolicy":     true,
-	"admin:CreateGroup":          true,
-	"admin:DeleteGroup":          true,
-	"admin:AddUserToGroup":       true,
-	"admin:RemoveUserFromGroup":  true,
-	"admin:GetClusterInfo":       true,
-	"admin:ManageCluster":        true,
-	"admin:ViewAuditLogs":        true,
-	"admin:ManageConfig":         true,
+	"admin:*":                   true,
+	"admin:CreateUser":          true,
+	"admin:DeleteUser":          true,
+	"admin:ListUsers":           true,
+	"admin:GetUser":             true,
+	"admin:UpdateUser":          true,
+	"admin:CreateAccessKey":     true,
+	"admin:DeleteAccessKey":     true,
+	"admin:ListAccessKeys":      true,
+	"admin:CreatePolicy":        true,
+	"admin:DeletePolicy":        true,
+	"admin:GetPolicy":           true,
+	"admin:ListPolicies":        true,
+	"admin:AttachUserPolicy":    true,
+	"admin:DetachUserPolicy":    true,
+	"admin:CreateGroup":         true,
+	"admin:DeleteGroup":         true,
+	"admin:AddUserToGroup":      true,
+	"admin:RemoveUserFromGroup": true,
+	"admin:GetClusterInfo":      true,
+	"admin:ManageCluster":       true,
+	"admin:ViewAuditLogs":       true,
+	"admin:ManageConfig":        true,
 }
 
 // ConditionOperators defines supported condition operators.
@@ -235,64 +242,64 @@ var ConditionOperators = map[string]bool{
 	"Null": true,
 
 	// Set operators (with IfExists suffix)
-	"ForAllValues:StringEquals":    true,
-	"ForAnyValue:StringEquals":     true,
-	"ForAllValues:StringLike":      true,
-	"ForAnyValue:StringLike":       true,
+	"ForAllValues:StringEquals": true,
+	"ForAnyValue:StringEquals":  true,
+	"ForAllValues:StringLike":   true,
+	"ForAnyValue:StringLike":    true,
 }
 
 // ConditionKeys defines supported condition keys.
 var ConditionKeys = map[string]bool{
 	// AWS global keys
-	"aws:CurrentTime":          true,
-	"aws:EpochTime":            true,
-	"aws:SecureTransport":      true,
-	"aws:SourceIp":             true,
-	"aws:UserAgent":            true,
-	"aws:Referer":              true,
-	"aws:PrincipalArn":         true,
-	"aws:PrincipalTag/*":       true,
-	"aws:RequestedRegion":      true,
-	"aws:username":             true,
-	"aws:userid":               true,
-	"aws:MultiFactorAuthAge":   true,
+	"aws:CurrentTime":            true,
+	"aws:EpochTime":              true,
+	"aws:SecureTransport":        true,
+	"aws:SourceIp":               true,
+	"aws:UserAgent":              true,
+	"aws:Referer":                true,
+	"aws:PrincipalArn":           true,
+	"aws:PrincipalTag/*":         true,
+	"aws:RequestedRegion":        true,
+	"aws:username":               true,
+	"aws:userid":                 true,
+	"aws:MultiFactorAuthAge":     true,
 	"aws:MultiFactorAuthPresent": true,
 
 	// S3 specific keys
-	"s3:x-amz-acl":                     true,
-	"s3:x-amz-copy-source":             true,
-	"s3:x-amz-metadata-directive":      true,
-	"s3:x-amz-server-side-encryption":  true,
+	"s3:x-amz-acl":                                   true,
+	"s3:x-amz-copy-source":                           true,
+	"s3:x-amz-metadata-directive":                    true,
+	"s3:x-amz-server-side-encryption":                true,
 	"s3:x-amz-server-side-encryption-aws-kms-key-id": true,
-	"s3:x-amz-storage-class":           true,
-	"s3:x-amz-grant-read":              true,
-	"s3:x-amz-grant-write":             true,
-	"s3:x-amz-grant-read-acp":          true,
-	"s3:x-amz-grant-write-acp":         true,
-	"s3:x-amz-grant-full-control":      true,
-	"s3:x-amz-content-sha256":          true,
-	"s3:prefix":                        true,
-	"s3:delimiter":                     true,
-	"s3:max-keys":                      true,
-	"s3:ExistingObjectTag/*":           true,
-	"s3:RequestObjectTag/*":            true,
-	"s3:RequestObjectTagKeys":          true,
-	"s3:VersionId":                     true,
-	"s3:LocationConstraint":            true,
-	"s3:object-lock-mode":              true,
-	"s3:object-lock-retain-until-date": true,
-	"s3:object-lock-remaining-retention-days": true,
-	"s3:object-lock-legal-hold":        true,
+	"s3:x-amz-storage-class":                         true,
+	"s3:x-amz-grant-read":                            true,
+	"s3:x-amz-grant-write":                           true,
+	"s3:x-amz-grant-read-acp":                        true,
+	"s3:x-amz-grant-write-acp":                       true,
+	"s3:x-amz-grant-full-control":                    true,
+	"s3:x-amz-content-sha256":                        true,
+	"s3:prefix":                                      true,
+	"s3:delimiter":                                   true,
+	"s3:max-keys":                                    true,
+	"s3:ExistingObjectTag/*":                         true,
+	"s3:RequestObjectTag/*":                          true,
+	"s3:RequestObjectTagKeys":                        true,
+	"s3:VersionId":                                   true,
+	"s3:LocationConstraint":                          true,
+	"s3:object-lock-mode":                            true,
+	"s3:object-lock-retain-until-date":               true,
+	"s3:object-lock-remaining-retention-days":        true,
+	"s3:object-lock-legal-hold":                      true,
 }
 
 // PolicyManager manages IAM policies.
 type PolicyManager struct {
-	mu            sync.RWMutex
-	policies      map[string]*Policy
-	userPolicies  map[string][]string // user ID -> policy names
-	groupPolicies map[string][]string // group ID -> policy names
-	bucketPolicies map[string]*Policy // bucket name -> policy
-	storage       PolicyStorage
+	storage        PolicyStorage
+	policies       map[string]*Policy
+	userPolicies   map[string][]string
+	groupPolicies  map[string][]string
+	bucketPolicies map[string]*Policy
+	mu             sync.RWMutex
 }
 
 // PolicyStorage interface for persisting policies.
@@ -321,7 +328,8 @@ func NewPolicyManager(storage PolicyStorage) *PolicyManager {
 
 // CreatePolicy creates a new IAM policy.
 func (pm *PolicyManager) CreatePolicy(ctx context.Context, name, description string, document *Policy) error {
-	if err := pm.validatePolicy(document); err != nil {
+	err := pm.validatePolicy(document)
+	if err != nil {
 		return fmt.Errorf("invalid policy: %w", err)
 	}
 
@@ -339,12 +347,14 @@ func (pm *PolicyManager) CreatePolicy(ctx context.Context, name, description str
 	document.UpdatedAt = time.Now()
 
 	if pm.storage != nil {
-		if err := pm.storage.SavePolicy(ctx, document); err != nil {
+		err := pm.storage.SavePolicy(ctx, document)
+		if err != nil {
 			return fmt.Errorf("failed to save policy: %w", err)
 		}
 	}
 
 	pm.policies[name] = document
+
 	return nil
 }
 
@@ -357,6 +367,7 @@ func (pm *PolicyManager) GetPolicy(ctx context.Context, name string) (*Policy, e
 	if !exists {
 		return nil, fmt.Errorf("policy %s not found", name)
 	}
+
 	return policy, nil
 }
 
@@ -379,12 +390,14 @@ func (pm *PolicyManager) DeletePolicy(ctx context.Context, name string) error {
 	}
 
 	if pm.storage != nil {
-		if err := pm.storage.DeletePolicy(ctx, name); err != nil {
+		err := pm.storage.DeletePolicy(ctx, name)
+		if err != nil {
 			return fmt.Errorf("failed to delete policy: %w", err)
 		}
 	}
 
 	delete(pm.policies, name)
+
 	return nil
 }
 
@@ -397,6 +410,7 @@ func (pm *PolicyManager) ListPolicies(ctx context.Context) []*Policy {
 	for _, policy := range pm.policies {
 		policies = append(policies, policy)
 	}
+
 	return policies
 }
 
@@ -419,7 +433,8 @@ func (pm *PolicyManager) AttachUserPolicy(ctx context.Context, userID, policyNam
 	pm.userPolicies[userID] = append(pm.userPolicies[userID], policyName)
 
 	if pm.storage != nil {
-		if err := pm.storage.SaveUserPolicies(ctx, userID, pm.userPolicies[userID]); err != nil {
+		err := pm.storage.SaveUserPolicies(ctx, userID, pm.userPolicies[userID])
+		if err != nil {
 			return fmt.Errorf("failed to save user policies: %w", err)
 		}
 	}
@@ -441,6 +456,7 @@ func (pm *PolicyManager) DetachUserPolicy(ctx context.Context, userID, policyNam
 			found = true
 			continue
 		}
+
 		newPolicies = append(newPolicies, p)
 	}
 
@@ -451,7 +467,8 @@ func (pm *PolicyManager) DetachUserPolicy(ctx context.Context, userID, policyNam
 	pm.userPolicies[userID] = newPolicies
 
 	if pm.storage != nil {
-		if err := pm.storage.SaveUserPolicies(ctx, userID, newPolicies); err != nil {
+		err := pm.storage.SaveUserPolicies(ctx, userID, newPolicies)
+		if err != nil {
 			return fmt.Errorf("failed to save user policies: %w", err)
 		}
 	}
@@ -478,7 +495,8 @@ func (pm *PolicyManager) GetUserPolicies(ctx context.Context, userID string) []*
 
 // SetBucketPolicy sets a bucket policy.
 func (pm *PolicyManager) SetBucketPolicy(ctx context.Context, bucket string, policy *Policy) error {
-	if err := pm.validatePolicy(policy); err != nil {
+	err := pm.validatePolicy(policy)
+	if err != nil {
 		return fmt.Errorf("invalid bucket policy: %w", err)
 	}
 
@@ -486,12 +504,14 @@ func (pm *PolicyManager) SetBucketPolicy(ctx context.Context, bucket string, pol
 	defer pm.mu.Unlock()
 
 	if pm.storage != nil {
-		if err := pm.storage.SaveBucketPolicy(ctx, bucket, policy); err != nil {
+		err := pm.storage.SaveBucketPolicy(ctx, bucket, policy)
+		if err != nil {
 			return fmt.Errorf("failed to save bucket policy: %w", err)
 		}
 	}
 
 	pm.bucketPolicies[bucket] = policy
+
 	return nil
 }
 
@@ -504,6 +524,7 @@ func (pm *PolicyManager) GetBucketPolicy(ctx context.Context, bucket string) (*P
 	if !exists {
 		return nil, fmt.Errorf("no policy for bucket %s", bucket)
 	}
+
 	return policy, nil
 }
 
@@ -513,19 +534,21 @@ func (pm *PolicyManager) DeleteBucketPolicy(ctx context.Context, bucket string) 
 	defer pm.mu.Unlock()
 
 	if pm.storage != nil {
-		if err := pm.storage.DeleteBucketPolicy(ctx, bucket); err != nil {
+		err := pm.storage.DeleteBucketPolicy(ctx, bucket)
+		if err != nil {
 			return fmt.Errorf("failed to delete bucket policy: %w", err)
 		}
 	}
 
 	delete(pm.bucketPolicies, bucket)
+
 	return nil
 }
 
 // validatePolicy validates a policy document.
 func (pm *PolicyManager) validatePolicy(policy *Policy) error {
 	if policy == nil {
-		return fmt.Errorf("policy is nil")
+		return errors.New("policy is nil")
 	}
 
 	if policy.Version == "" {
@@ -533,11 +556,12 @@ func (pm *PolicyManager) validatePolicy(policy *Policy) error {
 	}
 
 	if len(policy.Statements) == 0 {
-		return fmt.Errorf("policy must have at least one statement")
+		return errors.New("policy must have at least one statement")
 	}
 
 	for i, stmt := range policy.Statements {
-		if err := pm.validateStatement(stmt); err != nil {
+		err := pm.validateStatement(stmt)
+		if err != nil {
 			return fmt.Errorf("statement %d: %w", i, err)
 		}
 	}
@@ -553,12 +577,12 @@ func (pm *PolicyManager) validateStatement(stmt Statement) error {
 
 	// Must have Action or NotAction
 	if len(stmt.Action) == 0 && len(stmt.NotAction) == 0 {
-		return fmt.Errorf("statement must have Action or NotAction")
+		return errors.New("statement must have Action or NotAction")
 	}
 
 	// Must have Resource or NotResource
 	if len(stmt.Resource) == 0 && len(stmt.NotResource) == 0 {
-		return fmt.Errorf("statement must have Resource or NotResource")
+		return errors.New("statement must have Resource or NotResource")
 	}
 
 	// Validate actions
@@ -566,6 +590,7 @@ func (pm *PolicyManager) validateStatement(stmt Statement) error {
 	if len(actions) == 0 {
 		actions = stmt.NotAction
 	}
+
 	for _, action := range actions {
 		if !pm.isValidAction(action) {
 			return fmt.Errorf("invalid action: %s", action)
@@ -577,6 +602,7 @@ func (pm *PolicyManager) validateStatement(stmt Statement) error {
 	if len(resources) == 0 {
 		resources = stmt.NotResource
 	}
+
 	for _, resource := range resources {
 		if !pm.isValidResource(resource) {
 			return fmt.Errorf("invalid resource: %s", resource)
@@ -585,7 +611,8 @@ func (pm *PolicyManager) validateStatement(stmt Statement) error {
 
 	// Validate conditions
 	if stmt.Condition != nil {
-		if err := pm.validateCondition(stmt.Condition); err != nil {
+		err := pm.validateCondition(stmt.Condition)
+		if err != nil {
 			return fmt.Errorf("invalid condition: %w", err)
 		}
 	}
@@ -605,17 +632,21 @@ func (pm *PolicyManager) isValidAction(action string) bool {
 		// Handle wildcards in action
 		if strings.Contains(action, "*") {
 			pattern := strings.ReplaceAll(action, "*", ".*")
+
 			re, err := regexp.Compile("^" + pattern + "$")
 			if err != nil {
 				return false
 			}
+
 			for a := range S3Actions {
 				if re.MatchString(a) {
 					return true
 				}
 			}
+
 			return false
 		}
+
 		return S3Actions[action]
 	}
 
@@ -623,17 +654,21 @@ func (pm *PolicyManager) isValidAction(action string) bool {
 	if strings.HasPrefix(action, "admin:") {
 		if strings.Contains(action, "*") {
 			pattern := strings.ReplaceAll(action, "*", ".*")
+
 			re, err := regexp.Compile("^" + pattern + "$")
 			if err != nil {
 				return false
 			}
+
 			for a := range AdminActions {
 				if re.MatchString(a) {
 					return true
 				}
 			}
+
 			return false
 		}
+
 		return AdminActions[action]
 	}
 
@@ -675,6 +710,7 @@ func (pm *PolicyManager) validateCondition(condition map[string]interface{}) err
 			return fmt.Errorf("unsupported condition operator: %s", operator)
 		}
 	}
+
 	return nil
 }
 
@@ -690,33 +726,33 @@ func NewPolicyEvaluator(pm *PolicyManager) *PolicyEvaluator {
 
 // EvaluationContext contains the context for policy evaluation.
 type EvaluationContext struct {
+	RequestTime time.Time
+	Conditions  map[string]interface{}
 	UserID      string
 	UserArn     string
 	Action      string
 	Resource    string
 	Bucket      string
 	Key         string
-	Conditions  map[string]interface{}
 	SourceIP    string
 	IsSecure    bool
-	RequestTime time.Time
 }
 
 // Decision represents an access control decision.
 type Decision string
 
 const (
-	DecisionAllow         Decision = "Allow"
-	DecisionDeny          Decision = "Deny"
-	DecisionImplicitDeny  Decision = "ImplicitDeny"
+	DecisionAllow        Decision = "Allow"
+	DecisionDeny         Decision = "Deny"
+	DecisionImplicitDeny Decision = "ImplicitDeny"
 )
 
 // EvaluationResult contains the result of policy evaluation.
 type EvaluationResult struct {
-	Decision        Decision
-	MatchedPolicy   string
+	Decision         Decision
+	MatchedPolicy    string
 	MatchedStatement string
-	Reason          string
+	Reason           string
 }
 
 // Evaluate evaluates access based on policies.
@@ -727,10 +763,10 @@ func (pe *PolicyEvaluator) Evaluate(ctx context.Context, evalCtx *EvaluationCont
 		for _, stmt := range policy.Statements {
 			if stmt.Effect == EffectDeny && pe.statementMatches(stmt, evalCtx) {
 				return &EvaluationResult{
-					Decision:        DecisionDeny,
-					MatchedPolicy:   policy.Name,
+					Decision:         DecisionDeny,
+					MatchedPolicy:    policy.Name,
 					MatchedStatement: stmt.Sid,
-					Reason:          "Explicit deny in user policy",
+					Reason:           "Explicit deny in user policy",
 				}
 			}
 		}
@@ -743,10 +779,10 @@ func (pe *PolicyEvaluator) Evaluate(ctx context.Context, evalCtx *EvaluationCont
 			for _, stmt := range bucketPolicy.Statements {
 				if stmt.Effect == EffectDeny && pe.statementMatches(stmt, evalCtx) {
 					return &EvaluationResult{
-						Decision:        DecisionDeny,
-						MatchedPolicy:   "bucket-policy",
+						Decision:         DecisionDeny,
+						MatchedPolicy:    "bucket-policy",
 						MatchedStatement: stmt.Sid,
-						Reason:          "Explicit deny in bucket policy",
+						Reason:           "Explicit deny in bucket policy",
 					}
 				}
 			}
@@ -758,10 +794,10 @@ func (pe *PolicyEvaluator) Evaluate(ctx context.Context, evalCtx *EvaluationCont
 		for _, stmt := range policy.Statements {
 			if stmt.Effect == EffectAllow && pe.statementMatches(stmt, evalCtx) {
 				return &EvaluationResult{
-					Decision:        DecisionAllow,
-					MatchedPolicy:   policy.Name,
+					Decision:         DecisionAllow,
+					MatchedPolicy:    policy.Name,
 					MatchedStatement: stmt.Sid,
-					Reason:          "Allowed by user policy",
+					Reason:           "Allowed by user policy",
 				}
 			}
 		}
@@ -774,10 +810,10 @@ func (pe *PolicyEvaluator) Evaluate(ctx context.Context, evalCtx *EvaluationCont
 			for _, stmt := range bucketPolicy.Statements {
 				if stmt.Effect == EffectAllow && pe.statementMatches(stmt, evalCtx) {
 					return &EvaluationResult{
-						Decision:        DecisionAllow,
-						MatchedPolicy:   "bucket-policy",
+						Decision:         DecisionAllow,
+						MatchedPolicy:    "bucket-policy",
 						MatchedStatement: stmt.Sid,
-						Reason:          "Allowed by bucket policy",
+						Reason:           "Allowed by bucket policy",
 					}
 				}
 			}
@@ -829,10 +865,12 @@ func (pe *PolicyEvaluator) principalMatches(stmt Statement, evalCtx *EvaluationC
 			if arn == "*" || arn == evalCtx.UserArn {
 				return true
 			}
+
 			if pe.arnPatternMatches(arn, evalCtx.UserArn) {
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -843,6 +881,7 @@ func (pe *PolicyEvaluator) principalMatches(stmt Statement, evalCtx *EvaluationC
 				return false
 			}
 		}
+
 		return true
 	}
 
@@ -856,10 +895,12 @@ func (pe *PolicyEvaluator) actionMatches(stmt Statement, action string) bool {
 			if a == "*" || a == action {
 				return true
 			}
+
 			if pe.wildcardMatches(a, action) {
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -869,6 +910,7 @@ func (pe *PolicyEvaluator) actionMatches(stmt Statement, action string) bool {
 				return false
 			}
 		}
+
 		return true
 	}
 
@@ -882,10 +924,12 @@ func (pe *PolicyEvaluator) resourceMatches(stmt Statement, resource string) bool
 			if r == "*" || r == resource {
 				return true
 			}
+
 			if pe.arnPatternMatches(r, resource) {
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -895,6 +939,7 @@ func (pe *PolicyEvaluator) resourceMatches(stmt Statement, resource string) bool
 				return false
 			}
 		}
+
 		return true
 	}
 
@@ -916,6 +961,7 @@ func (pe *PolicyEvaluator) conditionMatches(condition map[string]interface{}, ev
 			}
 		}
 	}
+
 	return true
 }
 
@@ -937,6 +983,7 @@ func (pe *PolicyEvaluator) getConditionValue(key string, evalCtx *EvaluationCont
 		if v, ok := evalCtx.Conditions[key]; ok {
 			return v
 		}
+
 		return nil
 	}
 }
@@ -949,6 +996,7 @@ func (pe *PolicyEvaluator) evaluateCondition(operator string, actual, expected i
 		if actual == nil {
 			return true
 		}
+
 		operator = strings.TrimSuffix(operator, "IfExists")
 	}
 
@@ -966,6 +1014,7 @@ func (pe *PolicyEvaluator) evaluateCondition(operator string, actual, expected i
 	case "Bool":
 		actualBool, _ := actual.(bool)
 		expectedStr := fmt.Sprint(expected)
+
 		return (actualBool && expectedStr == "true") || (!actualBool && expectedStr == "false")
 	case "IpAddress":
 		// Simplified IP matching
@@ -983,10 +1032,12 @@ func (pe *PolicyEvaluator) wildcardMatches(pattern, value string) bool {
 	pattern = regexp.QuoteMeta(pattern)
 	pattern = strings.ReplaceAll(pattern, `\*`, ".*")
 	pattern = strings.ReplaceAll(pattern, `\?`, ".")
+
 	re, err := regexp.Compile("^" + pattern + "$")
 	if err != nil {
 		return false
 	}
+
 	return re.MatchString(value)
 }
 
@@ -1003,6 +1054,7 @@ func (pe *PolicyEvaluator) ipMatches(ip, cidr string) bool {
 		log.Warn().
 			Str("ip", ip).
 			Msg("Invalid source IP in policy condition")
+
 		return false
 	}
 
@@ -1014,8 +1066,10 @@ func (pe *PolicyEvaluator) ipMatches(ip, cidr string) bool {
 			log.Warn().
 				Str("cidr", cidr).
 				Msg("Invalid target IP in policy condition")
+
 			return false
 		}
+
 		return sourceIP.Equal(targetIP)
 	}
 
@@ -1027,6 +1081,7 @@ func (pe *PolicyEvaluator) ipMatches(ip, cidr string) bool {
 			Str("cidr", cidr).
 			Err(err).
 			Msg("Invalid CIDR notation, falling back to prefix matching")
+
 		return strings.HasPrefix(ip, strings.TrimSuffix(cidr, "/*"))
 	}
 
@@ -1034,9 +1089,9 @@ func (pe *PolicyEvaluator) ipMatches(ip, cidr string) bool {
 	return network.Contains(sourceIP)
 }
 
-// Predefined policies
+// Predefined policies.
 var (
-	// ReadOnlyPolicy allows read-only access to all buckets
+	// ReadOnlyPolicy allows read-only access to all buckets.
 	ReadOnlyPolicy = &Policy{
 		Version: PolicyVersion,
 		Statements: []Statement{
@@ -1057,7 +1112,7 @@ var (
 		},
 	}
 
-	// ReadWritePolicy allows read and write access to all buckets
+	// ReadWritePolicy allows read and write access to all buckets.
 	ReadWritePolicy = &Policy{
 		Version: PolicyVersion,
 		Statements: []Statement{
@@ -1078,7 +1133,7 @@ var (
 		},
 	}
 
-	// AdminPolicy allows full admin access
+	// AdminPolicy allows full admin access.
 	AdminPolicy = &Policy{
 		Version: PolicyVersion,
 		Statements: []Statement{

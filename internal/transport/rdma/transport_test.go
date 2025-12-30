@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -89,11 +90,13 @@ func TestMemoryPool(t *testing.T) {
 
 	// Get all pre-allocated regions
 	regions := make([]*MemoryRegion, 5)
-	for i := 0; i < 5; i++ {
+
+	for i := range 5 {
 		mr, err := pool.GetRegion(ctx)
 		if err != nil {
 			t.Fatalf("GetRegion failed: %v", err)
 		}
+
 		regions[i] = mr
 
 		if len(mr.Buffer) != 1024 {
@@ -111,6 +114,7 @@ func TestMemoryPool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRegion after release failed: %v", err)
 	}
+
 	pool.ReleaseRegion(mr)
 }
 
@@ -144,10 +148,12 @@ func TestMemoryPoolTimeout(t *testing.T) {
 
 	// Release and verify we can get again
 	pool.ReleaseRegion(mr)
+
 	mr2, err := pool.GetRegion(context.Background())
 	if err != nil {
 		t.Fatalf("GetRegion after release failed: %v", err)
 	}
+
 	pool.ReleaseRegion(mr2)
 }
 
@@ -164,8 +170,8 @@ func TestDeviceSelection(t *testing.T) {
 	tests := []struct {
 		name      string
 		transport string
-		devices   []*Device
 		expected  string
+		devices   []*Device
 	}{
 		{
 			name:      "prefer InfiniBand",
@@ -200,10 +206,12 @@ func TestDeviceSelection(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			transport.config.Transport = tt.transport
+
 			selected := transport.selectDevice(tt.devices)
 			if selected == nil {
 				t.Fatal("No device selected")
 			}
+
 			if selected.Name != tt.expected {
 				t.Errorf("Expected device %s, got %s", tt.expected, selected.Name)
 			}
@@ -279,6 +287,7 @@ func TestReconnect(t *testing.T) {
 
 	// Disconnect and reconnect
 	transport.Disconnect(addr)
+
 	conn3, _ := transport.Connect(ctx, addr)
 	if conn3 == nil {
 		t.Fatal("Reconnection failed")
@@ -394,13 +403,14 @@ func TestDeserializeResponse(t *testing.T) {
 	// Create response: [StatusCode:2][BodyLen:8][Body]
 	bodyData := []byte("response body")
 	data := make([]byte, 2+8+len(bodyData))
-	data[0] = 0  // Status high byte
+	data[0] = 0   // Status high byte
 	data[1] = 200 // Status low byte = 200
 	// Body length (8 bytes big endian)
 	bodyLen := int64(len(bodyData))
 	for i := 7; i >= 0; i-- {
 		data[2+i] = byte(bodyLen >> (8 * (7 - i)))
 	}
+
 	copy(data[10:], bodyData)
 
 	resp, err := conn.deserializeResponse(data)
@@ -408,7 +418,7 @@ func TestDeserializeResponse(t *testing.T) {
 		t.Fatalf("deserializeResponse failed: %v", err)
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", resp.StatusCode)
 	}
 
@@ -510,13 +520,16 @@ func TestBytesReaderAt(t *testing.T) {
 	r := &bytesReaderAt{data: data}
 
 	buf := make([]byte, 5)
+
 	n, err := r.ReadAt(buf, 0)
 	if err != nil {
 		t.Fatalf("ReadAt failed: %v", err)
 	}
+
 	if n != 5 {
 		t.Errorf("Expected to read 5 bytes, got %d", n)
 	}
+
 	if string(buf) != "hello" {
 		t.Errorf("Expected 'hello', got '%s'", string(buf))
 	}
@@ -526,6 +539,7 @@ func TestBytesReaderAt(t *testing.T) {
 	if err != nil && err != io.EOF {
 		t.Fatalf("ReadAt with offset failed: %v", err)
 	}
+
 	if string(buf[:n]) != "world" {
 		t.Errorf("Expected 'world', got '%s'", string(buf[:n]))
 	}

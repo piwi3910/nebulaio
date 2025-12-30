@@ -20,29 +20,29 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
-// KeyType represents the type of encryption key
+// KeyType represents the type of encryption key.
 type KeyType string
 
 const (
-	KeyTypeMaster     KeyType = "MASTER"
-	KeyTypeData       KeyType = "DATA"
-	KeyTypeBucket     KeyType = "BUCKET"
-	KeyTypeObject     KeyType = "OBJECT"
-	KeyTypeCustomer   KeyType = "CUSTOMER" // Customer-managed key
+	KeyTypeMaster   KeyType = "MASTER"
+	KeyTypeData     KeyType = "DATA"
+	KeyTypeBucket   KeyType = "BUCKET"
+	KeyTypeObject   KeyType = "OBJECT"
+	KeyTypeCustomer KeyType = "CUSTOMER" // Customer-managed key
 )
 
-// KeyStatus represents the status of a key
+// KeyStatus represents the status of a key.
 type KeyStatus string
 
 const (
-	KeyStatusActive      KeyStatus = "ACTIVE"
-	KeyStatusRotating    KeyStatus = "ROTATING"
+	KeyStatusActive          KeyStatus = "ACTIVE"
+	KeyStatusRotating        KeyStatus = "ROTATING"
 	KeyStatusPendingDeletion KeyStatus = "PENDING_DELETION"
-	KeyStatusDisabled    KeyStatus = "DISABLED"
-	KeyStatusDeleted     KeyStatus = "DELETED"
+	KeyStatusDisabled        KeyStatus = "DISABLED"
+	KeyStatusDeleted         KeyStatus = "DELETED"
 )
 
-// KeyAlgorithm represents the encryption algorithm
+// KeyAlgorithm represents the encryption algorithm.
 type KeyAlgorithm string
 
 const (
@@ -51,37 +51,37 @@ const (
 	KeyAlgorithmChaCha20  KeyAlgorithm = "CHACHA20-POLY1305"
 )
 
-// EncryptionKey represents an encryption key
+// EncryptionKey represents an encryption key.
 type EncryptionKey struct {
-	ID            string            `json:"id"`
-	Alias         string            `json:"alias,omitempty"`
-	Type          KeyType           `json:"type"`
-	Algorithm     KeyAlgorithm      `json:"algorithm"`
-	Status        KeyStatus         `json:"status"`
-	Version       int               `json:"version"`
-	KeyMaterial   []byte            `json:"-"` // Never serialized
-	WrappedKey    []byte            `json:"wrapped_key,omitempty"`
-	CreatedAt     time.Time         `json:"created_at"`
-	RotatedAt     *time.Time        `json:"rotated_at,omitempty"`
-	ExpiresAt     *time.Time        `json:"expires_at,omitempty"`
-	DeleteAfter   *time.Time        `json:"delete_after,omitempty"`
-	ParentKeyID   string            `json:"parent_key_id,omitempty"`
-	Metadata      map[string]string `json:"metadata,omitempty"`
-	UsageCount    int64             `json:"usage_count"`
-	LastUsedAt    *time.Time        `json:"last_used_at,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
+	LastUsedAt  *time.Time        `json:"last_used_at,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
+	DeleteAfter *time.Time        `json:"delete_after,omitempty"`
+	ExpiresAt   *time.Time        `json:"expires_at,omitempty"`
+	RotatedAt   *time.Time        `json:"rotated_at,omitempty"`
+	Status      KeyStatus         `json:"status"`
+	ID          string            `json:"id"`
+	Algorithm   KeyAlgorithm      `json:"algorithm"`
+	ParentKeyID string            `json:"parent_key_id,omitempty"`
+	Type        KeyType           `json:"type"`
+	Alias       string            `json:"alias,omitempty"`
+	WrappedKey  []byte            `json:"wrapped_key,omitempty"`
+	KeyMaterial []byte            `json:"-"`
+	Version     int               `json:"version"`
+	UsageCount  int64             `json:"usage_count"`
 }
 
-// KeyVersion represents a version of a key
+// KeyVersion represents a version of a key.
 type KeyVersion struct {
-	Version       int       `json:"version"`
-	KeyMaterial   []byte    `json:"-"`
-	WrappedKey    []byte    `json:"wrapped_key"`
-	CreatedAt     time.Time `json:"created_at"`
-	Status        KeyStatus `json:"status"`
-	RotatedFrom   int       `json:"rotated_from,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	Status      KeyStatus `json:"status"`
+	KeyMaterial []byte    `json:"-"`
+	WrappedKey  []byte    `json:"wrapped_key"`
+	Version     int       `json:"version"`
+	RotatedFrom int       `json:"rotated_from,omitempty"`
 }
 
-// RotationPolicy defines when and how keys should be rotated
+// RotationPolicy defines when and how keys should be rotated.
 type RotationPolicy struct {
 	ID                  string        `json:"id"`
 	Name                string        `json:"name"`
@@ -89,46 +89,46 @@ type RotationPolicy struct {
 	RotationInterval    time.Duration `json:"rotation_interval"`
 	MaxKeyAge           time.Duration `json:"max_key_age"`
 	GracePeriod         time.Duration `json:"grace_period"`
-	AutoRotate          bool          `json:"auto_rotate"`
 	NotifyBeforeExpiry  time.Duration `json:"notify_before_expiry"`
 	RetainVersions      int           `json:"retain_versions"`
+	AutoRotate          bool          `json:"auto_rotate"`
 	RequireReencryption bool          `json:"require_reencryption"`
 	Enabled             bool          `json:"enabled"`
 }
 
-// RotationEvent represents a key rotation event
+// RotationEvent represents a key rotation event.
 type RotationEvent struct {
-	ID            string     `json:"id"`
-	KeyID         string     `json:"key_id"`
-	OldVersion    int        `json:"old_version"`
-	NewVersion    int        `json:"new_version"`
-	Timestamp     time.Time  `json:"timestamp"`
-	Trigger       string     `json:"trigger"` // manual, scheduled, policy, emergency
-	Status        string     `json:"status"`  // started, completed, failed, rolled_back
-	Error         string     `json:"error,omitempty"`
-	ObjectsReencrypted int64 `json:"objects_reencrypted"`
-	Duration      time.Duration `json:"duration"`
-	InitiatedBy   string     `json:"initiated_by"`
+	Timestamp          time.Time     `json:"timestamp"`
+	ID                 string        `json:"id"`
+	KeyID              string        `json:"key_id"`
+	Trigger            string        `json:"trigger"`
+	Status             string        `json:"status"`
+	Error              string        `json:"error,omitempty"`
+	InitiatedBy        string        `json:"initiated_by"`
+	OldVersion         int           `json:"old_version"`
+	NewVersion         int           `json:"new_version"`
+	ObjectsReencrypted int64         `json:"objects_reencrypted"`
+	Duration           time.Duration `json:"duration"`
 }
 
-// ReencryptionJob represents a job to re-encrypt objects with a new key
+// ReencryptionJob represents a job to re-encrypt objects with a new key.
 type ReencryptionJob struct {
-	ID              string    `json:"id"`
-	KeyID           string    `json:"key_id"`
-	OldVersion      int       `json:"old_version"`
-	NewVersion      int       `json:"new_version"`
-	Status          string    `json:"status"` // pending, running, paused, completed, failed
-	TotalObjects    int64     `json:"total_objects"`
-	ProcessedObjects int64    `json:"processed_objects"`
-	FailedObjects   int64     `json:"failed_objects"`
-	StartedAt       *time.Time `json:"started_at,omitempty"`
-	CompletedAt     *time.Time `json:"completed_at,omitempty"`
-	ErrorMessage    string    `json:"error_message,omitempty"`
-	Buckets         []string  `json:"buckets,omitempty"`
-	Concurrency     int       `json:"concurrency"`
+	StartedAt        *time.Time `json:"started_at,omitempty"`
+	CompletedAt      *time.Time `json:"completed_at,omitempty"`
+	KeyID            string     `json:"key_id"`
+	ID               string     `json:"id"`
+	Status           string     `json:"status"`
+	ErrorMessage     string     `json:"error_message,omitempty"`
+	Buckets          []string   `json:"buckets,omitempty"`
+	NewVersion       int        `json:"new_version"`
+	FailedObjects    int64      `json:"failed_objects"`
+	ProcessedObjects int64      `json:"processed_objects"`
+	TotalObjects     int64      `json:"total_objects"`
+	OldVersion       int        `json:"old_version"`
+	Concurrency      int        `json:"concurrency"`
 }
 
-// KeyRotationConfig contains configuration for the key rotation manager
+// KeyRotationConfig contains configuration for the key rotation manager.
 type KeyRotationConfig struct {
 	DefaultRotationInterval time.Duration `json:"default_rotation_interval"`
 	DefaultGracePeriod      time.Duration `json:"default_grace_period"`
@@ -138,23 +138,23 @@ type KeyRotationConfig struct {
 	EnableAutoRotation      bool          `json:"enable_auto_rotation"`
 }
 
-// KeyRotationManager manages encryption key rotation
+// KeyRotationManager manages encryption key rotation.
 type KeyRotationManager struct {
-	mu              sync.RWMutex
-	config          *KeyRotationConfig
-	keys            map[string]*EncryptionKey
-	keyVersions     map[string][]*KeyVersion
-	policies        map[string]*RotationPolicy
-	rotationEvents  []*RotationEvent
-	reencryptJobs   map[string]*ReencryptionJob
-	storage         KeyStorage
-	notifier        KeyRotationNotifier
-	masterKey       []byte
-	stopChan        chan struct{}
-	wg              sync.WaitGroup
+	storage        KeyStorage
+	notifier       KeyRotationNotifier
+	config         *KeyRotationConfig
+	keys           map[string]*EncryptionKey
+	keyVersions    map[string][]*KeyVersion
+	policies       map[string]*RotationPolicy
+	reencryptJobs  map[string]*ReencryptionJob
+	stopChan       chan struct{}
+	rotationEvents []*RotationEvent
+	masterKey      []byte
+	wg             sync.WaitGroup
+	mu             sync.RWMutex
 }
 
-// KeyStorage defines the interface for key persistence
+// KeyStorage defines the interface for key persistence.
 type KeyStorage interface {
 	StoreKey(ctx context.Context, key *EncryptionKey) error
 	GetKey(ctx context.Context, keyID string) (*EncryptionKey, error)
@@ -168,7 +168,7 @@ type KeyStorage interface {
 	GetReencryptionJob(ctx context.Context, jobID string) (*ReencryptionJob, error)
 }
 
-// KeyRotationNotifier defines the interface for rotation notifications
+// KeyRotationNotifier defines the interface for rotation notifications.
 type KeyRotationNotifier interface {
 	NotifyRotationStarted(ctx context.Context, event *RotationEvent) error
 	NotifyRotationCompleted(ctx context.Context, event *RotationEvent) error
@@ -176,13 +176,13 @@ type KeyRotationNotifier interface {
 	NotifyKeyExpiring(ctx context.Context, key *EncryptionKey, expiresIn time.Duration) error
 }
 
-// ObjectReencryptor defines the interface for re-encrypting objects
+// ObjectReencryptor defines the interface for re-encrypting objects.
 type ObjectReencryptor interface {
 	ListObjectsForKey(ctx context.Context, keyID string, version int) ([]string, error)
 	ReencryptObject(ctx context.Context, objectRef string, oldKey, newKey *EncryptionKey) error
 }
 
-// NewKeyRotationManager creates a new key rotation manager
+// NewKeyRotationManager creates a new key rotation manager.
 func NewKeyRotationManager(config *KeyRotationConfig, storage KeyStorage, notifier KeyRotationNotifier, masterKey []byte) *KeyRotationManager {
 	if config == nil {
 		config = &KeyRotationConfig{
@@ -214,53 +214,54 @@ func NewKeyRotationManager(config *KeyRotationConfig, storage KeyStorage, notifi
 	// Start background rotation checker
 	if config.EnableAutoRotation {
 		krm.wg.Add(1)
+
 		go krm.rotationChecker()
 	}
 
 	return krm
 }
 
-// initializeDefaultPolicies sets up default rotation policies
+// initializeDefaultPolicies sets up default rotation policies.
 func (krm *KeyRotationManager) initializeDefaultPolicies() {
 	defaultPolicies := []*RotationPolicy{
 		{
-			ID:                 "master-key-policy",
-			Name:               "Master Key Rotation Policy",
-			KeyType:            KeyTypeMaster,
-			RotationInterval:   365 * 24 * time.Hour, // 1 year
-			MaxKeyAge:          400 * 24 * time.Hour,
-			GracePeriod:        30 * 24 * time.Hour,
-			AutoRotate:         true,
-			NotifyBeforeExpiry: 30 * 24 * time.Hour,
-			RetainVersions:     3,
+			ID:                  "master-key-policy",
+			Name:                "Master Key Rotation Policy",
+			KeyType:             KeyTypeMaster,
+			RotationInterval:    365 * 24 * time.Hour, // 1 year
+			MaxKeyAge:           400 * 24 * time.Hour,
+			GracePeriod:         30 * 24 * time.Hour,
+			AutoRotate:          true,
+			NotifyBeforeExpiry:  30 * 24 * time.Hour,
+			RetainVersions:      3,
 			RequireReencryption: true,
-			Enabled:            true,
+			Enabled:             true,
 		},
 		{
-			ID:                 "data-key-policy",
-			Name:               "Data Key Rotation Policy",
-			KeyType:            KeyTypeData,
-			RotationInterval:   90 * 24 * time.Hour, // 90 days
-			MaxKeyAge:          120 * 24 * time.Hour,
-			GracePeriod:        7 * 24 * time.Hour,
-			AutoRotate:         true,
-			NotifyBeforeExpiry: 14 * 24 * time.Hour,
-			RetainVersions:     5,
+			ID:                  "data-key-policy",
+			Name:                "Data Key Rotation Policy",
+			KeyType:             KeyTypeData,
+			RotationInterval:    90 * 24 * time.Hour, // 90 days
+			MaxKeyAge:           120 * 24 * time.Hour,
+			GracePeriod:         7 * 24 * time.Hour,
+			AutoRotate:          true,
+			NotifyBeforeExpiry:  14 * 24 * time.Hour,
+			RetainVersions:      5,
 			RequireReencryption: true,
-			Enabled:            true,
+			Enabled:             true,
 		},
 		{
-			ID:                 "bucket-key-policy",
-			Name:               "Bucket Key Rotation Policy",
-			KeyType:            KeyTypeBucket,
-			RotationInterval:   180 * 24 * time.Hour, // 6 months
-			MaxKeyAge:          210 * 24 * time.Hour,
-			GracePeriod:        14 * 24 * time.Hour,
-			AutoRotate:         true,
-			NotifyBeforeExpiry: 21 * 24 * time.Hour,
-			RetainVersions:     3,
+			ID:                  "bucket-key-policy",
+			Name:                "Bucket Key Rotation Policy",
+			KeyType:             KeyTypeBucket,
+			RotationInterval:    180 * 24 * time.Hour, // 6 months
+			MaxKeyAge:           210 * 24 * time.Hour,
+			GracePeriod:         14 * 24 * time.Hour,
+			AutoRotate:          true,
+			NotifyBeforeExpiry:  21 * 24 * time.Hour,
+			RetainVersions:      3,
 			RequireReencryption: false,
-			Enabled:            true,
+			Enabled:             true,
 		},
 	}
 
@@ -269,7 +270,7 @@ func (krm *KeyRotationManager) initializeDefaultPolicies() {
 	}
 }
 
-// CreateKey creates a new encryption key
+// CreateKey creates a new encryption key.
 func (krm *KeyRotationManager) CreateKey(ctx context.Context, keyType KeyType, algorithm KeyAlgorithm, alias string, metadata map[string]string) (*EncryptionKey, error) {
 	keyMaterial, err := krm.generateKeyMaterial(algorithm)
 	if err != nil {
@@ -315,7 +316,8 @@ func (krm *KeyRotationManager) CreateKey(ctx context.Context, keyType KeyType, a
 	krm.mu.Unlock()
 
 	if krm.storage != nil {
-		if err := krm.storage.StoreKey(ctx, key); err != nil {
+		err := krm.storage.StoreKey(ctx, key)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -323,9 +325,10 @@ func (krm *KeyRotationManager) CreateKey(ctx context.Context, keyType KeyType, a
 	return key, nil
 }
 
-// generateKeyMaterial generates new key material based on algorithm
+// generateKeyMaterial generates new key material based on algorithm.
 func (krm *KeyRotationManager) generateKeyMaterial(algorithm KeyAlgorithm) ([]byte, error) {
 	var keySize int
+
 	switch algorithm {
 	case KeyAlgorithmAES256GCM, KeyAlgorithmAES256CBC:
 		keySize = 32 // 256 bits
@@ -343,7 +346,7 @@ func (krm *KeyRotationManager) generateKeyMaterial(algorithm KeyAlgorithm) ([]by
 	return key, nil
 }
 
-// wrapKey wraps a key with the master key
+// wrapKey wraps a key with the master key.
 func (krm *KeyRotationManager) wrapKey(keyMaterial []byte) ([]byte, error) {
 	if len(krm.masterKey) == 0 {
 		return nil, errors.New("master key not set")
@@ -367,7 +370,7 @@ func (krm *KeyRotationManager) wrapKey(keyMaterial []byte) ([]byte, error) {
 	return gcm.Seal(nonce, nonce, keyMaterial, nil), nil
 }
 
-// unwrapKey unwraps a key using the master key
+// unwrapKey unwraps a key using the master key.
 func (krm *KeyRotationManager) unwrapKey(wrappedKey []byte) ([]byte, error) {
 	if len(krm.masterKey) == 0 {
 		return nil, errors.New("master key not set")
@@ -389,12 +392,14 @@ func (krm *KeyRotationManager) unwrapKey(wrappedKey []byte) ([]byte, error) {
 	}
 
 	nonce, ciphertext := wrappedKey[:nonceSize], wrappedKey[nonceSize:]
+
 	return gcm.Open(nil, nonce, ciphertext, nil)
 }
 
-// RotateKey rotates an encryption key
+// RotateKey rotates an encryption key.
 func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trigger string, initiatedBy string) (*RotationEvent, error) {
 	krm.mu.Lock()
+
 	key, exists := krm.keys[keyID]
 	if !exists {
 		krm.mu.Unlock()
@@ -408,6 +413,7 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 
 	oldVersion := key.Version
 	key.Status = KeyStatusRotating
+
 	krm.mu.Unlock()
 
 	// Create rotation event
@@ -433,9 +439,11 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 		event.Status = "failed"
 		event.Error = err.Error()
 		krm.storeRotationEvent(ctx, event)
+
 		if krm.notifier != nil {
 			_ = krm.notifier.NotifyRotationFailed(ctx, event)
 		}
+
 		return event, err
 	}
 
@@ -444,14 +452,17 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 		event.Status = "failed"
 		event.Error = err.Error()
 		krm.storeRotationEvent(ctx, event)
+
 		if krm.notifier != nil {
 			_ = krm.notifier.NotifyRotationFailed(ctx, event)
 		}
+
 		return event, err
 	}
 
 	// Update key
 	krm.mu.Lock()
+
 	now := time.Now()
 	key.Version = oldVersion + 1
 	key.KeyMaterial = newKeyMaterial
@@ -482,18 +493,24 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 			v.Status = KeyStatusDisabled
 		}
 	}
+
 	krm.mu.Unlock()
 
 	// Store updated key
 	if krm.storage != nil {
-		if err := krm.storage.StoreKey(ctx, key); err != nil {
+		err := krm.storage.StoreKey(ctx, key)
+		if err != nil {
 			event.Status = "failed"
 			event.Error = err.Error()
+
 			return event, err
 		}
-		if err := krm.storage.StoreKeyVersion(ctx, keyID, newVersion); err != nil {
+		err = krm.storage.StoreKeyVersion(ctx, keyID, newVersion)
+
+		if err != nil {
 			event.Status = "failed"
 			event.Error = err.Error()
+
 			return event, err
 		}
 	}
@@ -511,7 +528,7 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 	return event, nil
 }
 
-// storeRotationEvent stores a rotation event
+// storeRotationEvent stores a rotation event.
 func (krm *KeyRotationManager) storeRotationEvent(ctx context.Context, event *RotationEvent) {
 	krm.mu.Lock()
 	krm.rotationEvents = append(krm.rotationEvents, event)
@@ -522,17 +539,18 @@ func (krm *KeyRotationManager) storeRotationEvent(ctx context.Context, event *Ro
 	}
 }
 
-// getPolicyForKeyType returns the rotation policy for a key type
+// getPolicyForKeyType returns the rotation policy for a key type.
 func (krm *KeyRotationManager) getPolicyForKeyType(keyType KeyType) *RotationPolicy {
 	for _, policy := range krm.policies {
 		if policy.KeyType == keyType && policy.Enabled {
 			return policy
 		}
 	}
+
 	return nil
 }
 
-// rotationChecker checks for keys that need rotation
+// rotationChecker checks for keys that need rotation.
 func (krm *KeyRotationManager) rotationChecker() {
 	defer krm.wg.Done()
 
@@ -549,16 +567,19 @@ func (krm *KeyRotationManager) rotationChecker() {
 	}
 }
 
-// checkAndRotateKeys checks all keys and rotates those that need it
+// checkAndRotateKeys checks all keys and rotates those that need it.
 func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 	krm.mu.RLock()
+
 	keys := make([]*EncryptionKey, 0, len(krm.keys))
 	for _, key := range krm.keys {
 		keys = append(keys, key)
 	}
+
 	krm.mu.RUnlock()
 
 	now := time.Now()
+
 	for _, key := range keys {
 		if key.Status != KeyStatusActive {
 			continue
@@ -584,6 +605,7 @@ func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 					Dur("key_age", keyAge).
 					Msg("failed to rotate key during scheduled rotation - key may exceed rotation policy")
 			}
+
 			continue
 		}
 
@@ -592,7 +614,8 @@ func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 			timeToExpiry := key.ExpiresAt.Sub(now)
 			if timeToExpiry <= policy.NotifyBeforeExpiry && timeToExpiry > 0 {
 				if krm.notifier != nil {
-					if notifyErr := krm.notifier.NotifyKeyExpiring(ctx, key, timeToExpiry); notifyErr != nil {
+					notifyErr := krm.notifier.NotifyKeyExpiring(ctx, key, timeToExpiry)
+					if notifyErr != nil {
 						log.Warn().
 							Err(notifyErr).
 							Str("key_id", key.ID).
@@ -605,7 +628,7 @@ func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 	}
 }
 
-// GetKey retrieves a key by ID
+// GetKey retrieves a key by ID.
 func (krm *KeyRotationManager) GetKey(ctx context.Context, keyID string) (*EncryptionKey, error) {
 	krm.mu.RLock()
 	key, exists := krm.keys[keyID]
@@ -620,6 +643,7 @@ func (krm *KeyRotationManager) GetKey(ctx context.Context, keyID string) (*Encry
 		if err != nil {
 			return nil, err
 		}
+
 		if key != nil {
 			// Unwrap key material
 			if len(key.WrappedKey) > 0 {
@@ -627,6 +651,7 @@ func (krm *KeyRotationManager) GetKey(ctx context.Context, keyID string) (*Encry
 				if err != nil {
 					return nil, err
 				}
+
 				key.KeyMaterial = keyMaterial
 			}
 
@@ -641,21 +666,23 @@ func (krm *KeyRotationManager) GetKey(ctx context.Context, keyID string) (*Encry
 	return nil, fmt.Errorf("key not found: %s", keyID)
 }
 
-// GetKeyByAlias retrieves a key by alias
+// GetKeyByAlias retrieves a key by alias.
 func (krm *KeyRotationManager) GetKeyByAlias(ctx context.Context, alias string) (*EncryptionKey, error) {
 	krm.mu.RLock()
+
 	for _, key := range krm.keys {
 		if key.Alias == alias && key.Status == KeyStatusActive {
 			krm.mu.RUnlock()
 			return key, nil
 		}
 	}
+
 	krm.mu.RUnlock()
 
 	return nil, fmt.Errorf("key not found with alias: %s", alias)
 }
 
-// ListKeys lists all keys of a given type
+// ListKeys lists all keys of a given type.
 func (krm *KeyRotationManager) ListKeys(ctx context.Context, keyType KeyType) ([]*EncryptionKey, error) {
 	if krm.storage != nil {
 		return krm.storage.ListKeys(ctx, keyType)
@@ -677,9 +704,10 @@ func (krm *KeyRotationManager) ListKeys(ctx context.Context, keyType KeyType) ([
 	return keys, nil
 }
 
-// DisableKey disables a key
+// DisableKey disables a key.
 func (krm *KeyRotationManager) DisableKey(ctx context.Context, keyID string) error {
 	krm.mu.Lock()
+
 	key, exists := krm.keys[keyID]
 	if !exists {
 		krm.mu.Unlock()
@@ -687,6 +715,7 @@ func (krm *KeyRotationManager) DisableKey(ctx context.Context, keyID string) err
 	}
 
 	key.Status = KeyStatusDisabled
+
 	krm.mu.Unlock()
 
 	if krm.storage != nil {
@@ -696,9 +725,10 @@ func (krm *KeyRotationManager) DisableKey(ctx context.Context, keyID string) err
 	return nil
 }
 
-// ScheduleKeyDeletion schedules a key for deletion
+// ScheduleKeyDeletion schedules a key for deletion.
 func (krm *KeyRotationManager) ScheduleKeyDeletion(ctx context.Context, keyID string, deleteAfter time.Duration) error {
 	krm.mu.Lock()
+
 	key, exists := krm.keys[keyID]
 	if !exists {
 		krm.mu.Unlock()
@@ -708,6 +738,7 @@ func (krm *KeyRotationManager) ScheduleKeyDeletion(ctx context.Context, keyID st
 	deleteTime := time.Now().Add(deleteAfter)
 	key.Status = KeyStatusPendingDeletion
 	key.DeleteAfter = &deleteTime
+
 	krm.mu.Unlock()
 
 	if krm.storage != nil {
@@ -717,9 +748,10 @@ func (krm *KeyRotationManager) ScheduleKeyDeletion(ctx context.Context, keyID st
 	return nil
 }
 
-// CancelKeyDeletion cancels a scheduled key deletion
+// CancelKeyDeletion cancels a scheduled key deletion.
 func (krm *KeyRotationManager) CancelKeyDeletion(ctx context.Context, keyID string) error {
 	krm.mu.Lock()
+
 	key, exists := krm.keys[keyID]
 	if !exists {
 		krm.mu.Unlock()
@@ -728,11 +760,12 @@ func (krm *KeyRotationManager) CancelKeyDeletion(ctx context.Context, keyID stri
 
 	if key.Status != KeyStatusPendingDeletion {
 		krm.mu.Unlock()
-		return fmt.Errorf("key is not pending deletion")
+		return errors.New("key is not pending deletion")
 	}
 
 	key.Status = KeyStatusDisabled
 	key.DeleteAfter = nil
+
 	krm.mu.Unlock()
 
 	if krm.storage != nil {
@@ -742,7 +775,7 @@ func (krm *KeyRotationManager) CancelKeyDeletion(ctx context.Context, keyID stri
 	return nil
 }
 
-// GetKeyVersion retrieves a specific version of a key
+// GetKeyVersion retrieves a specific version of a key.
 func (krm *KeyRotationManager) GetKeyVersion(ctx context.Context, keyID string, version int) (*KeyVersion, error) {
 	krm.mu.RLock()
 	versions, exists := krm.keyVersions[keyID]
@@ -761,6 +794,7 @@ func (krm *KeyRotationManager) GetKeyVersion(ctx context.Context, keyID string, 
 		if err != nil {
 			return nil, err
 		}
+
 		for _, v := range versions {
 			if v.Version == version {
 				// Unwrap key material
@@ -769,8 +803,10 @@ func (krm *KeyRotationManager) GetKeyVersion(ctx context.Context, keyID string, 
 					if err != nil {
 						return nil, err
 					}
+
 					v.KeyMaterial = keyMaterial
 				}
+
 				return v, nil
 			}
 		}
@@ -779,7 +815,7 @@ func (krm *KeyRotationManager) GetKeyVersion(ctx context.Context, keyID string, 
 	return nil, fmt.Errorf("key version not found: %s v%d", keyID, version)
 }
 
-// DeriveKey derives a new key from an existing key using HKDF
+// DeriveKey derives a new key from an existing key using HKDF.
 func (krm *KeyRotationManager) DeriveKey(ctx context.Context, parentKeyID string, info []byte, keySize int) ([]byte, error) {
 	key, err := krm.GetKey(ctx, parentKeyID)
 	if err != nil {
@@ -792,6 +828,7 @@ func (krm *KeyRotationManager) DeriveKey(ctx context.Context, parentKeyID string
 
 	// Use HKDF to derive a new key
 	hkdfReader := hkdf.New(sha256.New, key.KeyMaterial, nil, info)
+
 	derivedKey := make([]byte, keySize)
 	if _, err := io.ReadFull(hkdfReader, derivedKey); err != nil {
 		return nil, err
@@ -800,7 +837,7 @@ func (krm *KeyRotationManager) DeriveKey(ctx context.Context, parentKeyID string
 	return derivedKey, nil
 }
 
-// Encrypt encrypts data using the specified key
+// Encrypt encrypts data using the specified key.
 func (krm *KeyRotationManager) Encrypt(ctx context.Context, keyID string, plaintext []byte) ([]byte, error) {
 	key, err := krm.GetKey(ctx, keyID)
 	if err != nil {
@@ -828,9 +865,11 @@ func (krm *KeyRotationManager) Encrypt(ctx context.Context, keyID string, plaint
 
 	// Update usage statistics
 	krm.mu.Lock()
+
 	key.UsageCount++
 	now := time.Now()
 	key.LastUsedAt = &now
+
 	krm.mu.Unlock()
 
 	// Prepend version number for decryption routing
@@ -840,7 +879,7 @@ func (krm *KeyRotationManager) Encrypt(ctx context.Context, keyID string, plaint
 	return append(versionPrefix, ciphertext...), nil
 }
 
-// Decrypt decrypts data using the specified key
+// Decrypt decrypts data using the specified key.
 func (krm *KeyRotationManager) Decrypt(ctx context.Context, keyID string, ciphertext []byte) ([]byte, error) {
 	if len(ciphertext) < 2 {
 		return nil, errors.New("ciphertext too short")
@@ -858,6 +897,7 @@ func (krm *KeyRotationManager) Decrypt(ctx context.Context, keyID string, cipher
 		if err != nil {
 			return nil, err
 		}
+
 		keyVersion = &KeyVersion{
 			KeyMaterial: key.KeyMaterial,
 		}
@@ -879,10 +919,11 @@ func (krm *KeyRotationManager) Decrypt(ctx context.Context, keyID string, cipher
 	}
 
 	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+
 	return gcm.Open(nil, nonce, ciphertext, nil)
 }
 
-// StartReencryptionJob starts a job to re-encrypt objects with a new key version
+// StartReencryptionJob starts a job to re-encrypt objects with a new key version.
 func (krm *KeyRotationManager) StartReencryptionJob(ctx context.Context, keyID string, oldVersion, newVersion int, buckets []string, reencryptor ObjectReencryptor) (*ReencryptionJob, error) {
 	job := &ReencryptionJob{
 		ID:          uuid.New().String(),
@@ -904,7 +945,7 @@ func (krm *KeyRotationManager) StartReencryptionJob(ctx context.Context, keyID s
 	return job, nil
 }
 
-// runReencryptionJob runs the re-encryption job
+// runReencryptionJob runs the re-encryption job.
 func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *ReencryptionJob, reencryptor ObjectReencryptor) {
 	now := time.Now()
 	job.StartedAt = &now
@@ -915,6 +956,7 @@ func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *Reen
 	if err != nil {
 		job.Status = "failed"
 		job.ErrorMessage = err.Error()
+
 		return
 	}
 
@@ -922,6 +964,7 @@ func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *Reen
 	if err != nil {
 		job.Status = "failed"
 		job.ErrorMessage = err.Error()
+
 		return
 	}
 
@@ -937,6 +980,7 @@ func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *Reen
 	if err != nil {
 		job.Status = "failed"
 		job.ErrorMessage = err.Error()
+
 		return
 	}
 
@@ -944,32 +988,42 @@ func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *Reen
 
 	// Process objects with concurrency limit
 	semaphore := make(chan struct{}, job.Concurrency)
-	var wg sync.WaitGroup
-	var mu sync.Mutex
+
+	var (
+		wg sync.WaitGroup
+		mu sync.Mutex
+	)
 
 	for _, objectRef := range objects {
 		select {
 		case <-ctx.Done():
 			job.Status = "failed"
 			job.ErrorMessage = ctx.Err().Error()
+
 			return
 		default:
 		}
 
 		wg.Add(1)
+
 		semaphore <- struct{}{}
 
 		go func(ref string) {
 			defer wg.Done()
 			defer func() { <-semaphore }()
 
-			if err := reencryptor.ReencryptObject(ctx, ref, oldKeyStruct, newKeyData); err != nil {
+			err := reencryptor.ReencryptObject(ctx, ref, oldKeyStruct, newKeyData)
+			if err != nil {
 				mu.Lock()
+
 				job.FailedObjects++
+
 				mu.Unlock()
 			} else {
 				mu.Lock()
+
 				job.ProcessedObjects++
+
 				mu.Unlock()
 			}
 		}(objectRef)
@@ -991,7 +1045,7 @@ func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *Reen
 	}
 }
 
-// GetReencryptionJob retrieves a re-encryption job by ID
+// GetReencryptionJob retrieves a re-encryption job by ID.
 func (krm *KeyRotationManager) GetReencryptionJob(ctx context.Context, jobID string) (*ReencryptionJob, error) {
 	krm.mu.RLock()
 	job, exists := krm.reencryptJobs[jobID]
@@ -1008,7 +1062,7 @@ func (krm *KeyRotationManager) GetReencryptionJob(ctx context.Context, jobID str
 	return nil, fmt.Errorf("job not found: %s", jobID)
 }
 
-// AddPolicy adds a custom rotation policy
+// AddPolicy adds a custom rotation policy.
 func (krm *KeyRotationManager) AddPolicy(policy *RotationPolicy) error {
 	if policy.ID == "" {
 		policy.ID = uuid.New().String()
@@ -1021,7 +1075,7 @@ func (krm *KeyRotationManager) AddPolicy(policy *RotationPolicy) error {
 	return nil
 }
 
-// GetPolicies returns all rotation policies
+// GetPolicies returns all rotation policies.
 func (krm *KeyRotationManager) GetPolicies() []*RotationPolicy {
 	krm.mu.RLock()
 	defer krm.mu.RUnlock()
@@ -1030,10 +1084,11 @@ func (krm *KeyRotationManager) GetPolicies() []*RotationPolicy {
 	for _, policy := range krm.policies {
 		policies = append(policies, policy)
 	}
+
 	return policies
 }
 
-// GetRotationHistory returns rotation events for a key
+// GetRotationHistory returns rotation events for a key.
 func (krm *KeyRotationManager) GetRotationHistory(ctx context.Context, keyID string) ([]*RotationEvent, error) {
 	if krm.storage != nil {
 		return krm.storage.GetRotationEvents(ctx, keyID)
@@ -1043,15 +1098,17 @@ func (krm *KeyRotationManager) GetRotationHistory(ctx context.Context, keyID str
 	defer krm.mu.RUnlock()
 
 	var events []*RotationEvent
+
 	for _, event := range krm.rotationEvents {
 		if event.KeyID == keyID {
 			events = append(events, event)
 		}
 	}
+
 	return events, nil
 }
 
-// ExportKey exports a key in a safe format (wrapped)
+// ExportKey exports a key in a safe format (wrapped).
 func (krm *KeyRotationManager) ExportKey(ctx context.Context, keyID string) (string, error) {
 	krm.mu.RLock()
 	key, exists := krm.keys[keyID]
@@ -1081,7 +1138,7 @@ func (krm *KeyRotationManager) ExportKey(ctx context.Context, keyID string) (str
 	return string(data), nil
 }
 
-// ImportKey imports a previously exported key
+// ImportKey imports a previously exported key.
 func (krm *KeyRotationManager) ImportKey(ctx context.Context, exportedKey string) (*EncryptionKey, error) {
 	var importData map[string]interface{}
 	if err := json.Unmarshal([]byte(exportedKey), &importData); err != nil {
@@ -1129,7 +1186,8 @@ func (krm *KeyRotationManager) ImportKey(ctx context.Context, exportedKey string
 	krm.mu.Unlock()
 
 	if krm.storage != nil {
-		if err := krm.storage.StoreKey(ctx, key); err != nil {
+		err := krm.storage.StoreKey(ctx, key)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -1137,13 +1195,13 @@ func (krm *KeyRotationManager) ImportKey(ctx context.Context, exportedKey string
 	return key, nil
 }
 
-// Stop stops the key rotation manager
+// Stop stops the key rotation manager.
 func (krm *KeyRotationManager) Stop() {
 	close(krm.stopChan)
 	krm.wg.Wait()
 }
 
-// CleanupOldVersions removes old key versions based on retention policy
+// CleanupOldVersions removes old key versions based on retention policy.
 func (krm *KeyRotationManager) CleanupOldVersions(ctx context.Context) error {
 	krm.mu.Lock()
 	defer krm.mu.Unlock()
@@ -1164,7 +1222,8 @@ func (krm *KeyRotationManager) CleanupOldVersions(ctx context.Context) error {
 			// Sort by version descending
 			sortedVersions := make([]*KeyVersion, len(versions))
 			copy(sortedVersions, versions)
-			for i := 0; i < len(sortedVersions)-1; i++ {
+
+			for i := range len(sortedVersions) - 1 {
 				for j := i + 1; j < len(sortedVersions); j++ {
 					if sortedVersions[i].Version < sortedVersions[j].Version {
 						sortedVersions[i], sortedVersions[j] = sortedVersions[j], sortedVersions[i]

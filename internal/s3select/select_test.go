@@ -66,8 +66,10 @@ func TestParseSQL(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, got nil")
 				}
+
 				return
 			}
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -340,6 +342,7 @@ Charlie,35,Chicago`
 
 	var record map[string]interface{}
 	json.Unmarshal([]byte(lines[0]), &record)
+
 	if record["name"] != "Alice" {
 		t.Errorf("expected name Alice, got %v", record["name"])
 	}
@@ -376,6 +379,7 @@ Gizmo,15`
 
 	var record map[string]interface{}
 	json.Unmarshal(result.Records, &record)
+
 	if record["MIN(price)"] != float64(10) {
 		t.Errorf("expected min 10, got %v", record["MIN(price)"])
 	}
@@ -387,6 +391,7 @@ Gizmo,15`
 	}
 
 	json.Unmarshal(result.Records, &record)
+
 	if record["MAX(price)"] != float64(50) {
 		t.Errorf("expected max 50, got %v", record["MAX(price)"])
 	}
@@ -482,6 +487,7 @@ Bob,Simple text`
 
 	var record map[string]interface{}
 	json.Unmarshal([]byte(lines[0]), &record)
+
 	if record["name"] != "Alice, Jr." {
 		t.Errorf("expected name 'Alice, Jr.', got %v", record["name"])
 	}
@@ -506,13 +512,16 @@ func BenchmarkExecuteCSV(b *testing.B) {
 	// Generate test data
 	var builder strings.Builder
 	builder.WriteString("id,name,value\n")
-	for i := 0; i < 1000; i++ {
+
+	for i := range 1000 {
 		builder.WriteString(fmt.Sprintf("%d,Item%d,%d\n", i, i, i*10))
 	}
+
 	data := []byte(builder.String())
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = ExecuteCSV(data, "SELECT * FROM s3object WHERE value > 5000", true)
 	}
 }
@@ -520,14 +529,16 @@ func BenchmarkExecuteCSV(b *testing.B) {
 func BenchmarkExecuteJSON(b *testing.B) {
 	// Generate test data
 	var builder strings.Builder
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		builder.WriteString(fmt.Sprintf(`{"id":%d,"name":"Item%d","value":%d}`, i, i, i*10))
 		builder.WriteString("\n")
 	}
+
 	data := []byte(builder.String())
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = ExecuteJSON(data, "SELECT * FROM s3object WHERE value > 5000", false)
 	}
 }

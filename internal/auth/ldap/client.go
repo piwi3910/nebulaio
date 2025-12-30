@@ -23,6 +23,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -33,24 +34,24 @@ import (
 	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
-// Provider implements auth.Provider for LDAP/Active Directory
+// Provider implements auth.Provider for LDAP/Active Directory.
 type Provider struct {
-	config     Config
-	pool       *connPool
-	mu         sync.RWMutex
-	tlsConfig  *tls.Config
-	closed     bool
+	pool      *connPool
+	tlsConfig *tls.Config
+	config    Config
+	mu        sync.RWMutex
+	closed    bool
 }
 
-// connPool manages a pool of LDAP connections
+// connPool manages a pool of LDAP connections.
 type connPool struct {
 	connections chan *ldap.Conn
-	maxSize     int
-	config      Config
 	tlsConfig   *tls.Config
+	config      Config
+	maxSize     int
 }
 
-// NewProvider creates a new LDAP provider
+// NewProvider creates a new LDAP provider.
 func NewProvider(cfg Config) (*Provider, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
@@ -60,9 +61,11 @@ func NewProvider(cfg Config) (*Provider, error) {
 	if cfg.Pool.MaxConnections <= 0 {
 		cfg.Pool.MaxConnections = 10
 	}
+
 	if cfg.Pool.ConnectTimeout <= 0 {
 		cfg.Pool.ConnectTimeout = 10 * time.Second
 	}
+
 	if cfg.Pool.RequestTimeout <= 0 {
 		cfg.Pool.RequestTimeout = 30 * time.Second
 	}
@@ -91,26 +94,30 @@ func NewProvider(cfg Config) (*Provider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to LDAP server: %w", err)
 	}
+
 	provider.pool.put(conn)
 
 	return provider, nil
 }
 
-// Name returns the provider name
+// Name returns the provider name.
 func (p *Provider) Name() string {
 	if p.config.Name != "" {
 		return p.config.Name
 	}
+
 	return "ldap"
 }
 
-// Authenticate validates credentials against LDAP
+// Authenticate validates credentials against LDAP.
 func (p *Provider) Authenticate(ctx context.Context, username, password string) (*auth.User, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, &auth.ErrProviderUnavailable{Provider: p.Name()}
 	}
+
 	p.mu.RUnlock()
 
 	if username == "" || password == "" {
@@ -134,11 +141,13 @@ func (p *Provider) Authenticate(ctx context.Context, username, password string) 
 	err = conn.Bind(userDN, password)
 	if err != nil {
 		// Re-bind as service account
-		if bindErr := conn.Bind(p.config.BindDN, p.config.BindPassword); bindErr != nil {
+		bindErr := conn.Bind(p.config.BindDN, p.config.BindPassword)
+		if bindErr != nil {
 			// Connection is bad, don't return to pool
 			p.pool.discard(conn)
 			return nil, &auth.ErrProviderUnavailable{Provider: p.Name(), Cause: bindErr}
 		}
+
 		return nil, &auth.ErrAuthenticationFailed{Message: "invalid credentials"}
 	}
 
@@ -166,13 +175,15 @@ func (p *Provider) Authenticate(ctx context.Context, username, password string) 
 	return user, nil
 }
 
-// GetUser retrieves user information
+// GetUser retrieves user information.
 func (p *Provider) GetUser(ctx context.Context, username string) (*auth.User, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, &auth.ErrProviderUnavailable{Provider: p.Name()}
 	}
+
 	p.mu.RUnlock()
 
 	conn, err := p.pool.get(ctx)
@@ -195,16 +206,19 @@ func (p *Provider) GetUser(ctx context.Context, username string) (*auth.User, er
 	}
 
 	user.Provider = p.Name()
+
 	return user, nil
 }
 
-// GetGroups retrieves groups for a user
+// GetGroups retrieves groups for a user.
 func (p *Provider) GetGroups(ctx context.Context, username string) ([]string, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, &auth.ErrProviderUnavailable{Provider: p.Name()}
 	}
+
 	p.mu.RUnlock()
 
 	conn, err := p.pool.get(ctx)
@@ -222,17 +236,17 @@ func (p *Provider) GetGroups(ctx context.Context, username string) ([]string, er
 	return p.searchGroups(conn, userDN, username)
 }
 
-// ValidateToken is not supported for LDAP (use session-based auth)
+// ValidateToken is not supported for LDAP (use session-based auth).
 func (p *Provider) ValidateToken(_ context.Context, _ string) (*auth.User, error) {
 	return nil, &auth.ErrInvalidToken{Reason: "LDAP does not support token validation"}
 }
 
-// Refresh is not supported for LDAP
+// Refresh is not supported for LDAP.
 func (p *Provider) Refresh(_ context.Context, _ string) (*auth.ExternalTokenPair, error) {
 	return nil, &auth.ErrInvalidToken{Reason: "LDAP does not support token refresh"}
 }
 
-// Close closes all connections
+// Close closes all connections.
 func (p *Provider) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -243,32 +257,39 @@ func (p *Provider) Close() error {
 
 	p.closed = true
 	p.pool.close()
+
 	return nil
 }
 
-// searchUser searches for a user by username
+// searchUser searches for a user by username.
 func (p *Provider) searchUser(conn *ldap.Conn, username string) (string, *auth.User, error) {
 	// Build search filter
 	filter := strings.ReplaceAll(p.config.UserSearch.Filter, "{username}", ldap.EscapeFilter(username))
 
 	// Build attributes to retrieve
 	attrs := []string{"dn"}
+
 	mapping := p.config.UserSearch.Attributes
 	if mapping.Username != "" {
 		attrs = append(attrs, mapping.Username)
 	}
+
 	if mapping.DisplayName != "" {
 		attrs = append(attrs, mapping.DisplayName)
 	}
+
 	if mapping.Email != "" {
 		attrs = append(attrs, mapping.Email)
 	}
+
 	if mapping.MemberOf != "" {
 		attrs = append(attrs, mapping.MemberOf)
 	}
+
 	if mapping.UniqueID != "" {
 		attrs = append(attrs, mapping.UniqueID)
 	}
+
 	for _, attr := range mapping.Additional {
 		attrs = append(attrs, attr)
 	}
@@ -304,7 +325,7 @@ func (p *Provider) searchUser(conn *ldap.Conn, username string) (string, *auth.U
 	return entry.DN, user, nil
 }
 
-// searchGroups searches for groups a user belongs to
+// searchGroups searches for groups a user belongs to.
 func (p *Provider) searchGroups(conn *ldap.Conn, userDN, username string) ([]string, error) {
 	if p.config.GroupSearch.BaseDN == "" {
 		return nil, nil
@@ -343,7 +364,7 @@ func (p *Provider) searchGroups(conn *ldap.Conn, userDN, username string) ([]str
 	return groups, nil
 }
 
-// entryToUser converts an LDAP entry to an auth.User
+// entryToUser converts an LDAP entry to an auth.User.
 func (p *Provider) entryToUser(entry *ldap.Entry) *auth.User {
 	mapping := p.config.UserSearch.Attributes
 
@@ -356,12 +377,15 @@ func (p *Provider) entryToUser(entry *ldap.Entry) *auth.User {
 	if mapping.Username != "" {
 		user.Username = entry.GetAttributeValue(mapping.Username)
 	}
+
 	if mapping.DisplayName != "" {
 		user.DisplayName = entry.GetAttributeValue(mapping.DisplayName)
 	}
+
 	if mapping.Email != "" {
 		user.Email = entry.GetAttributeValue(mapping.Email)
 	}
+
 	if mapping.UniqueID != "" {
 		user.ProviderID = entry.GetAttributeValue(mapping.UniqueID)
 	}
@@ -389,7 +413,7 @@ func (p *Provider) entryToUser(entry *ldap.Entry) *auth.User {
 	return user
 }
 
-// extractCNFromDN extracts the CN from a DN string
+// extractCNFromDN extracts the CN from a DN string.
 func extractCNFromDN(dn string) string {
 	parts := strings.Split(dn, ",")
 	for _, part := range parts {
@@ -398,11 +422,13 @@ func extractCNFromDN(dn string) string {
 			return part[3:]
 		}
 	}
+
 	return ""
 }
 
-// buildTLSConfig builds the TLS configuration
+// buildTLSConfig builds the TLS configuration.
 func buildTLSConfig(cfg TLSConfig) (*tls.Config, error) {
+	//nolint:gosec // G402: InsecureSkipVerify is user-configurable for dev/test environments
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: cfg.InsecureSkipVerify,
 	}
@@ -416,8 +442,9 @@ func buildTLSConfig(cfg TLSConfig) (*tls.Config, error) {
 
 		caCertPool := x509.NewCertPool()
 		if !caCertPool.AppendCertsFromPEM(caCert) {
-			return nil, fmt.Errorf("failed to parse CA certificate")
+			return nil, errors.New("failed to parse CA certificate")
 		}
+
 		tlsConfig.RootCAs = caCertPool
 	}
 
@@ -427,6 +454,7 @@ func buildTLSConfig(cfg TLSConfig) (*tls.Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to load client certificate: %w", err)
 		}
+
 		tlsConfig.Certificates = []tls.Certificate{cert}
 	}
 
@@ -440,7 +468,8 @@ func (p *connPool) get(ctx context.Context) (*ldap.Conn, error) {
 	select {
 	case conn := <-p.connections:
 		// Test if connection is still valid
-		if err := conn.Bind(p.config.BindDN, p.config.BindPassword); err == nil {
+		err := conn.Bind(p.config.BindDN, p.config.BindPassword)
+		if err == nil {
 			return conn, nil
 		}
 		// Connection is bad, close it and create new one
@@ -454,8 +483,10 @@ func (p *connPool) get(ctx context.Context) (*ldap.Conn, error) {
 }
 
 func (p *connPool) create(ctx context.Context) (*ldap.Conn, error) {
-	var conn *ldap.Conn
-	var err error
+	var (
+		conn *ldap.Conn
+		err  error
+	)
 
 	// Determine if using LDAPS
 	isLDAPS := strings.HasPrefix(p.config.ServerURL, "ldaps://")
@@ -503,6 +534,7 @@ func (p *connPool) discard(conn *ldap.Conn) {
 
 func (p *connPool) close() {
 	close(p.connections)
+
 	for conn := range p.connections {
 		_ = conn.Close()
 	}

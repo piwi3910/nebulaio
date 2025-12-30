@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -23,46 +24,47 @@ type ParquetReader struct {
 
 // ParquetMetadata contains file-level metadata.
 type ParquetMetadata struct {
-	Version          int32
-	NumRows          int64
+	KeyValueMetadata map[string]string
 	CreatedBy        string
 	RowGroups        []RowGroupMetadata
 	Schema           []SchemaElement
-	KeyValueMetadata map[string]string
+	NumRows          int64
+	Version          int32
 }
 
 // RowGroupMetadata contains metadata for a row group.
 type RowGroupMetadata struct {
+	Columns       []ColumnChunkMetadata
 	NumRows       int64
 	TotalByteSize int64
-	Columns       []ColumnChunkMetadata
 	FileOffset    int64
 }
 
 // ColumnChunkMetadata contains metadata for a column chunk.
 type ColumnChunkMetadata struct {
+	Statistics            *ColumnStatistics
 	ColumnPath            []string
-	Type                  ParquetType
-	Codec                 CompressionCodec
 	NumValues             int64
 	TotalUncompressedSize int64
 	TotalCompressedSize   int64
 	DataPageOffset        int64
 	DictionaryPageOffset  int64
-	Statistics            *ColumnStatistics
+	Type                  ParquetType
+	Codec                 CompressionCodec
 }
 
 // ColumnStatistics contains min/max statistics for a column.
 type ColumnStatistics struct {
-	HasMinMax  bool
-	MinValue   []byte
-	MaxValue   []byte
-	NullCount  int64
+	MinValue      []byte
+	MaxValue      []byte
+	NullCount     int64
 	DistinctCount int64
+	HasMinMax     bool
 }
 
 // SchemaElement represents an element in the Parquet schema.
 type SchemaElement struct {
+	LogicalType    *LogicalType
 	Name           string
 	Type           ParquetType
 	TypeLength     int32
@@ -71,7 +73,6 @@ type SchemaElement struct {
 	ConvertedType  ConvertedType
 	Scale          int32
 	Precision      int32
-	LogicalType    *LogicalType
 }
 
 // ParquetType represents Parquet physical types.
@@ -101,37 +102,37 @@ const (
 type ConvertedType int32
 
 const (
-	ConvertedTypeNone          ConvertedType = -1
-	ConvertedTypeUTF8          ConvertedType = 0
-	ConvertedTypeMap           ConvertedType = 1
-	ConvertedTypeMapKeyValue   ConvertedType = 2
-	ConvertedTypeList          ConvertedType = 3
-	ConvertedTypeEnum          ConvertedType = 4
-	ConvertedTypeDecimal       ConvertedType = 5
-	ConvertedTypeDate          ConvertedType = 6
-	ConvertedTypeTimeMillis    ConvertedType = 7
-	ConvertedTypeTimeMicros    ConvertedType = 8
+	ConvertedTypeNone            ConvertedType = -1
+	ConvertedTypeUTF8            ConvertedType = 0
+	ConvertedTypeMap             ConvertedType = 1
+	ConvertedTypeMapKeyValue     ConvertedType = 2
+	ConvertedTypeList            ConvertedType = 3
+	ConvertedTypeEnum            ConvertedType = 4
+	ConvertedTypeDecimal         ConvertedType = 5
+	ConvertedTypeDate            ConvertedType = 6
+	ConvertedTypeTimeMillis      ConvertedType = 7
+	ConvertedTypeTimeMicros      ConvertedType = 8
 	ConvertedTypeTimestampMillis ConvertedType = 9
 	ConvertedTypeTimestampMicros ConvertedType = 10
-	ConvertedTypeUint8         ConvertedType = 11
-	ConvertedTypeUint16        ConvertedType = 12
-	ConvertedTypeUint32        ConvertedType = 13
-	ConvertedTypeUint64        ConvertedType = 14
-	ConvertedTypeInt8          ConvertedType = 15
-	ConvertedTypeInt16         ConvertedType = 16
-	ConvertedTypeInt32         ConvertedType = 17
-	ConvertedTypeInt64         ConvertedType = 18
-	ConvertedTypeJSON          ConvertedType = 19
-	ConvertedTypeBSON          ConvertedType = 20
-	ConvertedTypeInterval      ConvertedType = 21
+	ConvertedTypeUint8           ConvertedType = 11
+	ConvertedTypeUint16          ConvertedType = 12
+	ConvertedTypeUint32          ConvertedType = 13
+	ConvertedTypeUint64          ConvertedType = 14
+	ConvertedTypeInt8            ConvertedType = 15
+	ConvertedTypeInt16           ConvertedType = 16
+	ConvertedTypeInt32           ConvertedType = 17
+	ConvertedTypeInt64           ConvertedType = 18
+	ConvertedTypeJSON            ConvertedType = 19
+	ConvertedTypeBSON            ConvertedType = 20
+	ConvertedTypeInterval        ConvertedType = 21
 )
 
 // LogicalType represents the new logical type system.
 type LogicalType struct {
-	Type      string
-	Precision int32
-	Scale     int32
-	Unit      string
+	Type            string
+	Unit            string
+	Precision       int32
+	Scale           int32
 	IsAdjustedToUTC bool
 }
 
@@ -156,12 +157,12 @@ type ParquetSchema struct {
 
 // SchemaNode represents a node in the schema tree.
 type SchemaNode struct {
+	Logical    *LogicalType
 	Name       string
-	Type       ParquetType
 	Children   []*SchemaNode
+	Type       ParquetType
 	Repetition RepetitionType
 	Converted  ConvertedType
-	Logical    *LogicalType
 	Precision  int32
 	Scale      int32
 	TypeLength int32
@@ -169,21 +170,21 @@ type SchemaNode struct {
 
 // ColumnDescriptor describes a leaf column.
 type ColumnDescriptor struct {
-	Path          []string
-	Type          ParquetType
-	MaxDefLevel   int
-	MaxRepLevel   int
-	Converted     ConvertedType
-	Logical       *LogicalType
-	Precision     int32
-	Scale         int32
+	Logical     *LogicalType
+	Path        []string
+	MaxDefLevel int
+	MaxRepLevel int
+	Type        ParquetType
+	Converted   ConvertedType
+	Precision   int32
+	Scale       int32
 }
 
 // RowGroup represents a row group in the file.
 type RowGroup struct {
+	ColumnChunks  []*ColumnChunk
 	Index         int
 	NumRows       int64
-	ColumnChunks  []*ColumnChunk
 	TotalByteSize int64
 }
 
@@ -196,11 +197,11 @@ type ColumnChunk struct {
 
 // Page represents a data page.
 type Page struct {
-	Type            PageType
-	NumValues       int32
+	Data             []byte
+	Type             PageType
+	NumValues        int32
 	UncompressedSize int32
-	CompressedSize  int32
-	Data            []byte
+	CompressedSize   int32
 }
 
 // PageType represents the type of page.
@@ -213,7 +214,7 @@ const (
 	PageTypeDataPageV2     PageType = 3
 )
 
-// Parquet magic number
+// Parquet magic number.
 var parquetMagic = []byte("PAR1")
 
 // NewParquetReader creates a new Parquet reader.
@@ -222,7 +223,8 @@ func NewParquetReader(reader io.ReadSeeker) (*ParquetReader, error) {
 		reader: reader,
 	}
 
-	if err := pr.readMetadata(); err != nil {
+	err := pr.readMetadata()
+	if err != nil {
 		return nil, fmt.Errorf("failed to read metadata: %w", err)
 	}
 
@@ -238,7 +240,7 @@ func (pr *ParquetReader) readMetadata() error {
 	}
 
 	if size < 8 {
-		return fmt.Errorf("file too small to be valid Parquet")
+		return errors.New("file too small to be valid Parquet")
 	}
 
 	// Read footer magic and metadata length
@@ -253,7 +255,7 @@ func (pr *ParquetReader) readMetadata() error {
 
 	// Verify magic
 	if !bytes.Equal(footer[4:8], parquetMagic) {
-		return fmt.Errorf("invalid Parquet magic number")
+		return errors.New("invalid Parquet magic number")
 	}
 
 	metadataLen := binary.LittleEndian.Uint32(footer[0:4])
@@ -344,6 +346,7 @@ func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[
 	if offset < 0 {
 		offset = 0
 	}
+
 	if limit <= 0 || limit > rg.NumRows-offset {
 		limit = rg.NumRows - offset
 	}
@@ -352,24 +355,29 @@ func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[
 
 	// Read column data
 	columnData := make(map[string][]interface{})
+
 	for _, chunk := range rg.ColumnChunks {
 		colName := strings.Join(chunk.Descriptor.Path, ".")
+
 		values, err := pr.readColumnChunk(chunk)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read column %s: %w", colName, err)
 		}
+
 		columnData[colName] = values
 	}
 
 	// Build rows
-	for i := int64(0); i < limit; i++ {
+	for i := range limit {
 		row := make(map[string]interface{})
+
 		for colName, values := range columnData {
 			idx := offset + i
 			if idx < int64(len(values)) {
 				row[colName] = values[idx]
 			}
 		}
+
 		rows = append(rows, row)
 	}
 
@@ -385,6 +393,7 @@ func (pr *ParquetReader) readColumnChunk(chunk *ColumnChunk) ([]interface{}, err
 		if err != nil {
 			return nil, fmt.Errorf("failed to read page: %w", err)
 		}
+
 		values = append(values, pageValues...)
 	}
 
@@ -401,14 +410,16 @@ func (pr *ParquetReader) readPage(page *Page, desc *ColumnDescriptor) ([]interfa
 	values := make([]interface{}, 0, page.NumValues)
 
 	reader := bytes.NewReader(data)
-	for i := int32(0); i < page.NumValues; i++ {
+	for range int32(page.NumValues) {
 		val, err := pr.readValue(reader, desc)
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
+
 			return nil, err
 		}
+
 		values = append(values, val)
 	}
 
@@ -420,48 +431,61 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 	switch desc.Type {
 	case ParquetTypeBoolean:
 		var b byte
-		if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
+		err := binary.Read(reader, binary.LittleEndian, &b)
+		if err != nil {
 			return nil, err
 		}
+
 		return b != 0, nil
 
 	case ParquetTypeInt32:
 		var val int32
-		if err := binary.Read(reader, binary.LittleEndian, &val); err != nil {
+		err := binary.Read(reader, binary.LittleEndian, &val)
+		if err != nil {
 			return nil, err
 		}
+
 		return pr.convertInt32(val, desc), nil
 
 	case ParquetTypeInt64:
 		var val int64
-		if err := binary.Read(reader, binary.LittleEndian, &val); err != nil {
+		err := binary.Read(reader, binary.LittleEndian, &val)
+		if err != nil {
 			return nil, err
 		}
+
 		return pr.convertInt64(val, desc), nil
 
 	case ParquetTypeFloat:
 		var val float32
-		if err := binary.Read(reader, binary.LittleEndian, &val); err != nil {
+		err := binary.Read(reader, binary.LittleEndian, &val)
+		if err != nil {
 			return nil, err
 		}
+
 		return float64(val), nil
 
 	case ParquetTypeDouble:
 		var val float64
-		if err := binary.Read(reader, binary.LittleEndian, &val); err != nil {
+		err := binary.Read(reader, binary.LittleEndian, &val)
+		if err != nil {
 			return nil, err
 		}
+
 		return val, nil
 
 	case ParquetTypeByteArray:
 		var length int32
-		if err := binary.Read(reader, binary.LittleEndian, &length); err != nil {
+		err := binary.Read(reader, binary.LittleEndian, &length)
+		if err != nil {
 			return nil, err
 		}
+
 		data := make([]byte, length)
 		if _, err := io.ReadFull(reader, data); err != nil {
 			return nil, err
 		}
+
 		return pr.convertByteArray(data, desc), nil
 
 	case ParquetTypeFixedLenByteArray:
@@ -469,6 +493,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 		if _, err := io.ReadFull(reader, data); err != nil {
 			return nil, err
 		}
+
 		return pr.convertByteArray(data, desc), nil
 
 	case ParquetTypeInt96:
@@ -476,6 +501,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 		if _, err := io.ReadFull(reader, data); err != nil {
 			return nil, err
 		}
+
 		return pr.convertInt96(data), nil
 
 	default:
@@ -496,15 +522,15 @@ func (pr *ParquetReader) convertInt32(val int32, desc *ColumnDescriptor) interfa
 		// Decimal with precision and scale
 		return float64(val) / math.Pow10(int(desc.Scale))
 	case ConvertedTypeInt8:
-		return int8(val)
+		return int8(val) //nolint:gosec // G115: intentional type conversion per Parquet spec
 	case ConvertedTypeInt16:
-		return int16(val)
+		return int16(val) //nolint:gosec // G115: intentional type conversion per Parquet spec
 	case ConvertedTypeUint8:
-		return uint8(val)
+		return uint8(val) //nolint:gosec // G115: intentional type conversion per Parquet spec
 	case ConvertedTypeUint16:
-		return uint16(val)
+		return uint16(val) //nolint:gosec // G115: intentional type conversion per Parquet spec
 	case ConvertedTypeUint32:
-		return uint32(val)
+		return uint32(val) //nolint:gosec // G115: intentional type conversion per Parquet spec
 	default:
 		return val
 	}
@@ -522,7 +548,7 @@ func (pr *ParquetReader) convertInt64(val int64, desc *ColumnDescriptor) interfa
 	case ConvertedTypeDecimal:
 		return float64(val) / math.Pow10(int(desc.Scale))
 	case ConvertedTypeUint64:
-		return uint64(val)
+		return uint64(val) //nolint:gosec // G115: intentional type conversion per Parquet spec
 	default:
 		return val
 	}
@@ -535,9 +561,11 @@ func (pr *ParquetReader) convertByteArray(data []byte, desc *ColumnDescriptor) i
 		return string(data)
 	case ConvertedTypeJSON:
 		var result interface{}
-		if err := json.Unmarshal(data, &result); err != nil {
+		err := json.Unmarshal(data, &result)
+		if err != nil {
 			return string(data)
 		}
+
 		return result
 	case ConvertedTypeDecimal:
 		// Big-endian encoded decimal
@@ -559,6 +587,7 @@ func (pr *ParquetReader) convertInt96(data []byte) interface{} {
 
 	// Julian day 2440588 is Unix epoch (1970-01-01)
 	unixDay := int64(julianDay) - 2440588
+	//nolint:gosec // G115: nanos is nanoseconds since midnight, fits in int64
 	unixNanos := unixDay*86400*1e9 + int64(nanos)
 
 	return time.Unix(0, unixNanos).UTC()
@@ -627,6 +656,7 @@ func (e *ParquetSelectExecutor) Execute(query *SelectQuery) (*SelectResult, erro
 				if err != nil {
 					return nil, fmt.Errorf("failed to evaluate condition: %w", err)
 				}
+
 				if !match {
 					continue
 				}
@@ -634,6 +664,7 @@ func (e *ParquetSelectExecutor) Execute(query *SelectQuery) (*SelectResult, erro
 
 			// Project columns
 			var resultRow []interface{}
+
 			if len(query.Columns) == 1 && query.Columns[0] == "*" {
 				// Select all columns
 				for _, col := range e.reader.schema.Columns {
@@ -662,9 +693,9 @@ func (e *ParquetSelectExecutor) Execute(query *SelectQuery) (*SelectResult, erro
 
 // SelectQuery represents a parsed SELECT query.
 type SelectQuery struct {
-	Columns []string
-	From    string
 	Where   *Condition
+	From    string
+	Columns []string
 	Limit   int64
 }
 
@@ -676,12 +707,12 @@ type SelectResult struct {
 
 // Condition represents a WHERE condition.
 type Condition struct {
-	Type      ConditionType
-	Left      *Condition
-	Right     *Condition
-	Column    string
-	Operator  string
-	Value     interface{}
+	Value    interface{}
+	Left     *Condition
+	Right    *Condition
+	Column   string
+	Operator string
+	Type     ConditionType
 }
 
 // ConditionType represents the type of condition.
@@ -713,15 +744,18 @@ func evaluateCondition(cond *Condition, row map[string]interface{}) (bool, error
 		if err != nil || !left {
 			return false, err
 		}
+
 		return evaluateCondition(cond.Right, row)
 	case ConditionTypeOr:
 		left, err := evaluateCondition(cond.Left, row)
 		if err != nil {
 			return false, err
 		}
+
 		if left {
 			return true, nil
 		}
+
 		return evaluateCondition(cond.Right, row)
 	case ConditionTypeNot:
 		result, err := evaluateCondition(cond.Left, row)
@@ -783,6 +817,7 @@ func compareValues(a, b interface{}) int {
 			} else if aNum > bNum {
 				return 1
 			}
+
 			return 0
 		}
 	}
@@ -816,21 +851,28 @@ func matchPattern(value, pattern string) bool {
 	if strings.Contains(pattern, ".*") {
 		parts := strings.Split(pattern, ".*")
 		pos := 0
+
 		for _, part := range parts {
 			part = strings.TrimPrefix(part, "^")
+
 			part = strings.TrimSuffix(part, "$")
 			if part == "" {
 				continue
 			}
+
 			idx := strings.Index(value[pos:], part)
 			if idx < 0 {
 				return false
 			}
+
 			pos += idx + len(part)
 		}
+
 		return true
 	}
+
 	cleanPattern := strings.TrimPrefix(strings.TrimSuffix(pattern, "$"), "^")
+
 	return value == cleanPattern
 }
 
@@ -844,7 +886,7 @@ func evaluateBetween(cond *Condition, row map[string]interface{}) (bool, error) 
 	// Value should be a slice with [min, max]
 	bounds, ok := cond.Value.([]interface{})
 	if !ok || len(bounds) != 2 {
-		return false, fmt.Errorf("invalid BETWEEN bounds")
+		return false, errors.New("invalid BETWEEN bounds")
 	}
 
 	return compareValues(val, bounds[0]) >= 0 && compareValues(val, bounds[1]) <= 0, nil
@@ -860,7 +902,7 @@ func evaluateIn(cond *Condition, row map[string]interface{}) (bool, error) {
 	// Value should be a slice
 	values, ok := cond.Value.([]interface{})
 	if !ok {
-		return false, fmt.Errorf("invalid IN values")
+		return false, errors.New("invalid IN values")
 	}
 
 	for _, v := range values {
@@ -883,20 +925,22 @@ func Decompress(data []byte, codec CompressionCodec) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 		}
+
 		defer func() { _ = reader.Close() }()
+
 		return io.ReadAll(reader)
 
 	case CodecSnappy:
 		// Would need snappy library
-		return nil, fmt.Errorf("snappy decompression not implemented")
+		return nil, errors.New("snappy decompression not implemented")
 
 	case CodecLZ4:
 		// Would need LZ4 library
-		return nil, fmt.Errorf("lz4 decompression not implemented")
+		return nil, errors.New("lz4 decompression not implemented")
 
 	case CodecZstd:
 		// Would need zstd library
-		return nil, fmt.Errorf("zstd decompression not implemented")
+		return nil, errors.New("zstd decompression not implemented")
 
 	default:
 		return nil, fmt.Errorf("unsupported codec: %d", codec)
@@ -929,6 +973,7 @@ func formatJSON(result *SelectResult) ([]byte, error) {
 
 	for _, row := range result.Rows {
 		obj := make(map[string]interface{})
+
 		for i, col := range result.Columns {
 			if i < len(row) {
 				obj[col] = row[i]
@@ -939,6 +984,7 @@ func formatJSON(result *SelectResult) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		buf.Write(data)
 		buf.WriteByte('\n')
 	}
@@ -960,6 +1006,7 @@ func formatCSV(result *SelectResult) ([]byte, error) {
 		for _, v := range row {
 			vals = append(vals, formatCSVValue(v))
 		}
+
 		buf.WriteString(strings.Join(vals, ","))
 		buf.WriteByte('\n')
 	}

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// errLeaderNotAvailable is used in tests to simulate leader election errors
+// errLeaderNotAvailable is used in tests to simulate leader election errors.
 var errLeaderNotAvailable = errors.New("leader not available")
 
 func TestInit(t *testing.T) {
@@ -36,6 +36,7 @@ func TestRecordRequest(t *testing.T) {
 
 	// Record another request
 	RecordRequest("PUT", "PutObject", 201, 50*time.Millisecond)
+
 	count = testutil.ToFloat64(RequestsTotal.WithLabelValues("PUT", "PutObject", "2xx"))
 	assert.Equal(t, float64(1), count)
 }
@@ -51,6 +52,7 @@ func TestRecordS3Operation(t *testing.T) {
 	// Record multiple operations
 	RecordS3Operation("GetObject", "test-bucket")
 	RecordS3Operation("GetObject", "test-bucket")
+
 	count = testutil.ToFloat64(S3OperationsTotal.WithLabelValues("GetObject", "test-bucket"))
 	assert.Equal(t, float64(3), count)
 }
@@ -64,6 +66,7 @@ func TestRecordError(t *testing.T) {
 	assert.Equal(t, float64(1), count)
 
 	RecordError("GetObject", "NotFound")
+
 	count = testutil.ToFloat64(ErrorsTotal.WithLabelValues("GetObject", "NotFound"))
 	assert.Equal(t, float64(2), count)
 }
@@ -190,21 +193,21 @@ func TestSetClusterNodesTotal(t *testing.T) {
 
 func TestStatusCodeToString(t *testing.T) {
 	tests := []struct {
-		code     int
 		expected string
+		code     int
 	}{
-		{200, "2xx"},
-		{201, "2xx"},
-		{204, "2xx"},
-		{301, "3xx"},
-		{302, "3xx"},
-		{400, "4xx"},
-		{404, "4xx"},
-		{403, "4xx"},
-		{500, "5xx"},
-		{503, "5xx"},
-		{0, "unknown"},
-		{100, "unknown"},
+		{"2xx", 200},
+		{"2xx", 201},
+		{"2xx", 204},
+		{"3xx", 301},
+		{"3xx", 302},
+		{"4xx", 400},
+		{"4xx", 404},
+		{"4xx", 403},
+		{"5xx", 500},
+		{"5xx", 503},
+		{"unknown", 0},
+		{"unknown", 100},
 	}
 
 	for _, tt := range tests {
@@ -237,11 +240,11 @@ func TestMetricsRegistration(t *testing.T) {
 	require.NotNil(t, NodeInfo)
 }
 
-// MockNodeHost implements DragonboatNodeHost for testing
+// MockNodeHost implements DragonboatNodeHost for testing.
 type MockNodeHost struct {
+	leaderErr error
 	leaderID  uint64
 	term      uint64
-	leaderErr error
 }
 
 func (m *MockNodeHost) GetLeaderID(shardID uint64) (uint64, uint64, error) {
@@ -324,25 +327,25 @@ func TestVersionVariable(t *testing.T) {
 }
 
 func BenchmarkRecordRequest(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		RecordRequest("GET", "GetObject", 200, 10*time.Millisecond)
 	}
 }
 
 func BenchmarkRecordS3Operation(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		RecordS3Operation("GetObject", "test-bucket")
 	}
 }
 
 func BenchmarkIncrementActiveConnections(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		IncrementActiveConnections()
 	}
 }
 
 func BenchmarkSetStorageStats(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		SetStorageStats(int64(i*1024), int64(1000000))
 	}
 }

@@ -44,9 +44,11 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if localGroup == nil {
 		t.Fatal("LocalGroup returned nil")
 	}
+
 	if localGroup.ID != "pg-dc1" {
 		t.Errorf("Expected local group ID 'pg-dc1', got '%s'", localGroup.ID)
 	}
+
 	if !localGroup.IsLocal {
 		t.Error("Expected local group IsLocal to be true")
 	}
@@ -56,6 +58,7 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if !ok {
 		t.Fatal("GetGroup failed for pg-dc2")
 	}
+
 	if group.Name != "Datacenter 2" {
 		t.Errorf("Expected name 'Datacenter 2', got '%s'", group.Name)
 	}
@@ -65,6 +68,7 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if !ok {
 		t.Fatal("GetNodeGroup failed for node1")
 	}
+
 	if nodeGroup.ID != "pg-dc1" {
 		t.Errorf("Expected node1 in group 'pg-dc1', got '%s'", nodeGroup.ID)
 	}
@@ -73,6 +77,7 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if !ok {
 		t.Fatal("GetNodeGroup failed for node5")
 	}
+
 	if nodeGroup.ID != "pg-dc2" {
 		t.Errorf("Expected node5 in group 'pg-dc2', got '%s'", nodeGroup.ID)
 	}
@@ -81,9 +86,11 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if !mgr.IsLocalGroupNode("node1") {
 		t.Error("Expected node1 to be in local group")
 	}
+
 	if !mgr.IsLocalGroupNode("node2") {
 		t.Error("Expected node2 to be in local group")
 	}
+
 	if mgr.IsLocalGroupNode("node4") {
 		t.Error("Expected node4 to NOT be in local group")
 	}
@@ -99,6 +106,7 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if len(targets) != 1 {
 		t.Errorf("Expected 1 replication target, got %d", len(targets))
 	}
+
 	if targets[0].ID != "pg-dc2" {
 		t.Errorf("Expected replication target 'pg-dc2', got '%s'", targets[0].ID)
 	}
@@ -209,6 +217,7 @@ func TestPlacementGroupManager_ErasureCoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get shard placement nodes: %v", err)
 	}
+
 	if len(nodes) != 3 {
 		t.Errorf("Expected 3 placement nodes, got %d", len(nodes))
 	}
@@ -283,6 +292,7 @@ func TestPlacementGroupManager_SingleNodeMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
+
 	if len(nodes) != 0 {
 		t.Errorf("Expected 0 nodes in single node mode, got %d", len(nodes))
 	}
@@ -310,9 +320,11 @@ func TestPlacementGroupNodeMeta(t *testing.T) {
 	if decoded.PlacementGroupID != meta.PlacementGroupID {
 		t.Errorf("Expected PlacementGroupID '%s', got '%s'", meta.PlacementGroupID, decoded.PlacementGroupID)
 	}
+
 	if decoded.Datacenter != meta.Datacenter {
 		t.Errorf("Expected Datacenter '%s', got '%s'", meta.Datacenter, decoded.Datacenter)
 	}
+
 	if decoded.Region != meta.Region {
 		t.Errorf("Expected Region '%s', got '%s'", meta.Region, decoded.Region)
 	}
@@ -341,16 +353,19 @@ func TestPlacementGroupManager_ConcurrentReads(t *testing.T) {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
 
-	const numGoroutines = 100
-	const numIterations = 1000
+	const (
+		numGoroutines = 100
+		numIterations = 1000
+	)
 
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < numIterations; j++ {
+
+			for range numIterations {
 				// Concurrent reads should not panic or cause data races
 				_ = mgr.LocalGroup()
 				_ = mgr.AllGroups()
@@ -391,19 +406,26 @@ func TestPlacementGroupManager_ConcurrentReadWrite(t *testing.T) {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
 
-	const numReaders = 50
-	const numWriters = 10
-	const numIterations = 100
+	const (
+		numReaders    = 50
+		numWriters    = 10
+		numIterations = 100
+	)
 
-	var wg sync.WaitGroup
-	var nodeCounter int64
+	var (
+		wg          sync.WaitGroup
+		nodeCounter int64
+	)
 
 	// Start readers
+
 	wg.Add(numReaders)
-	for i := 0; i < numReaders; i++ {
+
+	for range numReaders {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < numIterations; j++ {
+
+			for range numIterations {
 				_ = mgr.LocalGroup()
 				_ = mgr.AllGroups()
 				_ = mgr.LocalGroupNodes()
@@ -414,10 +436,12 @@ func TestPlacementGroupManager_ConcurrentReadWrite(t *testing.T) {
 
 	// Start writers (add/remove nodes)
 	wg.Add(numWriters)
-	for i := 0; i < numWriters; i++ {
+
+	for i := range numWriters {
 		go func(writerID int) {
 			defer wg.Done()
-			for j := 0; j < numIterations; j++ {
+
+			for range numIterations {
 				nodeNum := atomic.AddInt64(&nodeCounter, 1)
 				nodeID := string(rune('A'+writerID)) + string(rune('0'+nodeNum%10))
 
@@ -451,8 +475,10 @@ func TestPlacementGroupManager_ConcurrentStatusUpdates(t *testing.T) {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
 
-	const numGoroutines = 50
-	const numIterations = 100
+	const (
+		numGoroutines = 50
+		numIterations = 100
+	)
 
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -464,10 +490,11 @@ func TestPlacementGroupManager_ConcurrentStatusUpdates(t *testing.T) {
 		PlacementGroupStatusUnknown,
 	}
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numIterations; j++ {
+
+			for j := range numIterations {
 				status := statuses[(id+j)%len(statuses)]
 				_ = mgr.UpdateGroupStatus("pg-main", status)
 
@@ -513,16 +540,19 @@ func TestPlacementGroupManager_ConcurrentCallbacks(t *testing.T) {
 		atomic.AddInt64(&statusCount, 1)
 	})
 
-	const numGoroutines = 20
-	const numIterations = 50
+	const (
+		numGoroutines = 20
+		numIterations = 50
+	)
 
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numIterations; j++ {
+
+			for j := range numIterations {
 				nodeID := string(rune('A'+id)) + string(rune('0'+j%10))
 
 				// Add and remove nodes (triggers callbacks)
@@ -580,9 +610,11 @@ func TestPlacementGroupManager_CopyPreventsExternalMutation(t *testing.T) {
 		t.Errorf("External mutation affected internal state: expected %d nodes, got %d",
 			originalNodes, len(actualGroup.Nodes))
 	}
+
 	if actualGroup.Name != "Main" {
 		t.Errorf("External mutation affected name: expected 'Main', got '%s'", actualGroup.Name)
 	}
+
 	if actualGroup.Status != PlacementGroupStatusHealthy {
 		t.Errorf("External mutation affected status: expected 'healthy', got '%s'", actualGroup.Status)
 	}
@@ -643,20 +675,23 @@ func TestPlacementGroupManager_GetShardPlacementNodesForObject(t *testing.T) {
 	// At least one position should differ (with high probability)
 	// We don't assert this as hash collisions are possible, just log
 	allSame := true
+
 	for i := range nodesA {
 		if nodesA[i] != nodesB[i] {
 			allSame = false
 			break
 		}
 	}
+
 	if allSame {
 		t.Log("Note: Different objects got same placement (possible but unlikely)")
 	}
 
 	// Test distribution - run many objects and check distribution
 	distribution := make(map[string]int)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		key := string(rune('a'+i%26)) + string(rune('0'+i/26))
+
 		nodes, _ := mgr.GetShardPlacementNodesForObject("test-bucket", key, 1)
 		if len(nodes) > 0 {
 			distribution[nodes[0]]++
@@ -678,7 +713,7 @@ func TestPlacementGroupManager_GetShardPlacementNodesForObject(t *testing.T) {
 	t.Logf("Distribution: %v", distribution)
 }
 
-// TestPlacementGroupManager_NilPointerHandling tests that nil pointers are handled gracefully
+// TestPlacementGroupManager_NilPointerHandling tests that nil pointers are handled gracefully.
 func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	// Test with empty config (no groups defined)
 	emptyConfig := PlacementGroupConfig{
@@ -712,6 +747,7 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if err != nil {
 		t.Error("GetShardPlacementNodes should not error with no local group")
 	}
+
 	if len(nodes) != 0 {
 		t.Error("GetShardPlacementNodes should return empty slice with no local group")
 	}
@@ -721,6 +757,7 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if err == nil {
 		t.Error("GetShardPlacementNodesForObject should error with no local group")
 	}
+
 	if len(nodes) != 0 {
 		t.Error("GetShardPlacementNodesForObject should return empty slice on error")
 	}
@@ -736,6 +773,7 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if allGroups == nil {
 		t.Error("AllGroups should return empty slice, not nil")
 	}
+
 	if len(allGroups) != 0 {
 		t.Error("AllGroups should be empty for empty config")
 	}
@@ -765,7 +803,7 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	}
 }
 
-// TestPlacementGroupManager_UnhealthyGroupOperations tests operations when group becomes unhealthy
+// TestPlacementGroupManager_UnhealthyGroupOperations tests operations when group becomes unhealthy.
 func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	config := PlacementGroupConfig{
 		LocalGroupID: "pg-main",
@@ -799,6 +837,7 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if err != nil {
 		t.Errorf("Shard placement should work when healthy: %v", err)
 	}
+
 	if len(nodes) != 3 {
 		t.Errorf("Expected 3 nodes, got %d", len(nodes))
 	}
@@ -808,6 +847,7 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to remove node: %v", err)
 	}
+
 	err = mgr.RemoveNodeFromGroup("pg-main", "node3")
 	if err != nil {
 		t.Fatalf("Failed to remove node: %v", err)
@@ -824,6 +864,7 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if err != nil {
 		t.Errorf("Shard placement should work when degraded: %v", err)
 	}
+
 	if len(nodes) != 2 {
 		t.Errorf("Expected 2 nodes, got %d", len(nodes))
 	}
@@ -839,6 +880,7 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to remove node: %v", err)
 	}
+
 	err = mgr.RemoveNodeFromGroup("pg-main", "node1")
 	if err != nil {
 		t.Fatalf("Failed to remove node: %v", err)
@@ -861,10 +903,12 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to add node: %v", err)
 	}
+
 	err = mgr.AddNodeToGroup("pg-main", "node6")
 	if err != nil {
 		t.Fatalf("Failed to add node: %v", err)
 	}
+
 	err = mgr.AddNodeToGroup("pg-main", "node7")
 	if err != nil {
 		t.Fatalf("Failed to add node: %v", err)
@@ -881,12 +925,13 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if err != nil {
 		t.Errorf("Shard placement should work after recovery: %v", err)
 	}
+
 	if len(nodes) != 3 {
 		t.Errorf("Expected 3 nodes after recovery, got %d", len(nodes))
 	}
 }
 
-// TestPlacementGroupManager_NumShardsValidation tests validation of numShards parameter
+// TestPlacementGroupManager_NumShardsValidation tests validation of numShards parameter.
 func TestPlacementGroupManager_NumShardsValidation(t *testing.T) {
 	config := PlacementGroupConfig{
 		LocalGroupID: "pg-main",
@@ -933,6 +978,7 @@ func TestPlacementGroupManager_NumShardsValidation(t *testing.T) {
 				if err != nil {
 					t.Errorf("Unexpected error for numShards=%d: %v", tc.numShards, err)
 				}
+
 				if len(nodes) != tc.numShards {
 					t.Errorf("Expected %d nodes, got %d", tc.numShards, len(nodes))
 				}

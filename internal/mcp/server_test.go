@@ -17,22 +17,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Errors for mock service
+// Errors for mock service.
 var (
 	errBucketNotFound = errors.New("bucket not found")
 	errObjectNotFound = errors.New("object not found")
 )
 
-// MockObjectStore implements the ObjectStore interface for testing
+// MockObjectStore implements the ObjectStore interface for testing.
 type MockObjectStore struct {
 	buckets map[string]bool
 	objects map[string]map[string]*mockObject
 }
 
 type mockObject struct {
-	data        []byte
-	contentType string
 	metadata    map[string]string
+	contentType string
+	data        []byte
 }
 
 func NewMockObjectStore() *MockObjectStore {
@@ -50,6 +50,7 @@ func (m *MockObjectStore) ListBuckets(ctx context.Context) ([]BucketInfo, error)
 			CreationDate: time.Now(),
 		})
 	}
+
 	return buckets, nil
 }
 
@@ -64,6 +65,7 @@ func (m *MockObjectStore) ListObjects(ctx context.Context, bucket, prefix string
 	}
 
 	var objects []ObjectInfo
+
 	for key, obj := range bucketObjects {
 		if prefix == "" || strings.HasPrefix(key, prefix) {
 			objects = append(objects, ObjectInfo{
@@ -77,6 +79,7 @@ func (m *MockObjectStore) ListObjects(ctx context.Context, bucket, prefix string
 			}
 		}
 	}
+
 	return objects, nil
 }
 
@@ -144,6 +147,7 @@ func (m *MockObjectStore) DeleteObject(ctx context.Context, bucket, key string) 
 	}
 
 	delete(bucketObjects, key)
+
 	return nil
 }
 
@@ -179,6 +183,7 @@ func (m *MockObjectStore) AddObject(bucket, key string, data []byte, contentType
 	if m.objects[bucket] == nil {
 		m.objects[bucket] = make(map[string]*mockObject)
 	}
+
 	m.objects[bucket][key] = &mockObject{
 		data:        data,
 		contentType: contentType,
@@ -186,26 +191,30 @@ func (m *MockObjectStore) AddObject(bucket, key string, data []byte, contentType
 	}
 }
 
-// createTestConfig creates a properly initialized test config
+// createTestConfig creates a properly initialized test config.
 func createTestConfig() *ServerConfig {
 	config := DefaultServerConfig()
 	config.ServerName = "test-mcp-server"
 	config.ServerVersion = "1.0.0"
+
 	return config
 }
 
-// Test helper to create a JSON-RPC request
+// Test helper to create a JSON-RPC request.
 func createJSONRPCRequest(method string, params interface{}, id interface{}) []byte {
 	req := JSONRPCRequest{
 		JSONRPC: "2.0",
 		Method:  method,
 		ID:      id,
 	}
+
 	if params != nil {
 		paramsJSON, _ := json.Marshal(params)
 		req.Params = paramsJSON
 	}
+
 	data, _ := json.Marshal(req)
+
 	return data
 }
 
@@ -245,6 +254,7 @@ func TestServerInitialize(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 
 	server.HandleHTTP(w, req)
@@ -252,13 +262,16 @@ func TestServerInitialize(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Nil(t, resp.Error)
 	assert.NotNil(t, resp.Result)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var initResult InitializeResult
+
 	err = json.Unmarshal(resultJSON, &initResult)
 	require.NoError(t, err)
 	assert.Equal(t, "2024-11-05", initResult.ProtocolVersion)
@@ -278,6 +291,7 @@ func TestServerListTools(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -286,20 +300,24 @@ func TestServerListTools(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(listToolsReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Nil(t, resp.Error)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var toolsResult struct {
 		Tools []Tool `json:"tools"`
 	}
+
 	err = json.Unmarshal(resultJSON, &toolsResult)
 	require.NoError(t, err)
 
@@ -308,12 +326,15 @@ func TestServerListTools(t *testing.T) {
 
 	// Find list_buckets tool
 	var foundListBuckets bool
+
 	for _, tool := range toolsResult.Tools {
 		if tool.Name == "list_buckets" {
 			foundListBuckets = true
+
 			assert.Contains(t, tool.Description, "bucket")
 		}
 	}
+
 	assert.True(t, foundListBuckets, "list_buckets tool should be registered")
 }
 
@@ -333,6 +354,7 @@ func TestServerListBucketsTool(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -344,18 +366,22 @@ func TestServerListBucketsTool(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(callReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Nil(t, resp.Error)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var callResult ToolResult
+
 	err = json.Unmarshal(resultJSON, &callResult)
 	require.NoError(t, err)
 
@@ -379,6 +405,7 @@ func TestServerPutAndGetObject(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -396,6 +423,7 @@ func TestServerPutAndGetObject(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(putReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -412,18 +440,22 @@ func TestServerPutAndGetObject(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(getReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Nil(t, resp.Error)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var callResult ToolResult
+
 	err = json.Unmarshal(resultJSON, &callResult)
 	require.NoError(t, err)
 
@@ -447,6 +479,7 @@ func TestServerDeleteObject(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -461,6 +494,7 @@ func TestServerDeleteObject(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(deleteReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -477,15 +511,19 @@ func TestServerDeleteObject(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(getReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var callResult ToolResult
+
 	err = json.Unmarshal(resultJSON, &callResult)
 	require.NoError(t, err)
 	assert.True(t, callResult.IsError)
@@ -504,6 +542,7 @@ func TestServerListPrompts(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -512,32 +551,39 @@ func TestServerListPrompts(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(listPromptsReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Nil(t, resp.Error)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var promptsResult struct {
 		Prompts []Prompt `json:"prompts"`
 	}
+
 	err = json.Unmarshal(resultJSON, &promptsResult)
 	require.NoError(t, err)
 
 	assert.GreaterOrEqual(t, len(promptsResult.Prompts), 2)
 
 	var foundAnalyzeData bool
+
 	for _, prompt := range promptsResult.Prompts {
 		if prompt.Name == "analyze_data" {
 			foundAnalyzeData = true
+
 			assert.NotEmpty(t, prompt.Description)
 		}
 	}
+
 	assert.True(t, foundAnalyzeData, "analyze_data prompt should be registered")
 }
 
@@ -554,6 +600,7 @@ func TestServerGetPrompt(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -569,18 +616,22 @@ func TestServerGetPrompt(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(getPromptReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Nil(t, resp.Error)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var promptResult map[string]interface{}
+
 	err = json.Unmarshal(resultJSON, &promptResult)
 	require.NoError(t, err)
 
@@ -605,6 +656,7 @@ func TestServerListResources(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -613,20 +665,24 @@ func TestServerListResources(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(listResourcesReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Nil(t, resp.Error)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var resourcesResult struct {
 		Resources []Resource `json:"resources"`
 	}
+
 	err = json.Unmarshal(resultJSON, &resourcesResult)
 	require.NoError(t, err)
 
@@ -653,6 +709,7 @@ func TestServerReadResource(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -663,17 +720,20 @@ func TestServerReadResource(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(readResourceReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Nil(t, resp.Error)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var readResult struct {
 		Contents []struct {
 			URI      string `json:"uri"`
@@ -681,6 +741,7 @@ func TestServerReadResource(t *testing.T) {
 			Text     string `json:"text"`
 		} `json:"contents"`
 	}
+
 	err = json.Unmarshal(resultJSON, &readResult)
 	require.NoError(t, err)
 
@@ -705,6 +766,7 @@ func TestServerHeadObject(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -719,18 +781,22 @@ func TestServerHeadObject(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(headReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Nil(t, resp.Error)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var callResult ToolResult
+
 	err = json.Unmarshal(resultJSON, &callResult)
 	require.NoError(t, err)
 
@@ -746,12 +812,14 @@ func TestServerInvalidMethod(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(invalidReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.Error)
@@ -765,12 +833,14 @@ func TestServerInvalidJSON(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("not valid json"))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.Error)
@@ -790,6 +860,7 @@ func TestServerToolNotFound(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -801,10 +872,12 @@ func TestServerToolNotFound(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(callReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.Error)
@@ -825,11 +898,12 @@ func TestServerMetrics(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	// Make several tool calls
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		callReq := createJSONRPCRequest("tools/call", map[string]interface{}{
 			"name":      "list_buckets",
 			"arguments": map[string]interface{}{},
@@ -837,6 +911,7 @@ func TestServerMetrics(t *testing.T) {
 
 		req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(callReq))
 		req.Header.Set("Content-Type", "application/json")
+
 		w = httptest.NewRecorder()
 		server.HandleHTTP(w, req)
 	}
@@ -865,6 +940,7 @@ func TestServerRegisterCustomTool(t *testing.T) {
 		},
 		Handler: func(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
 			msg, _ := args["message"].(string)
+
 			return &ToolResult{
 				Content: []ContentBlock{
 					{Type: "text", Text: "Echo: " + msg},
@@ -884,6 +960,7 @@ func TestServerRegisterCustomTool(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
@@ -897,18 +974,22 @@ func TestServerRegisterCustomTool(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(callReq))
 	req.Header.Set("Content-Type", "application/json")
+
 	w = httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Nil(t, resp.Error)
 
 	resultJSON, _ := json.Marshal(resp.Result)
+
 	var callResult ToolResult
+
 	err = json.Unmarshal(resultJSON, &callResult)
 	require.NoError(t, err)
 	assert.Contains(t, callResult.Content[0].Text, "Echo: Hello Custom!")
@@ -938,12 +1019,14 @@ func TestServerInvalidJSONRPCVersion(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(reqData))
 	req.Header.Set("Content-Type", "application/json")
+
 	w := httptest.NewRecorder()
 	server.HandleHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp JSONRPCResponse
+
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.Error)

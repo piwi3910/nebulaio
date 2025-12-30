@@ -21,6 +21,7 @@ package site
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -30,63 +31,57 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// Manager manages site replication across multiple datacenters
+// Manager manages site replication across multiple datacenters.
 type Manager struct {
-	mu              sync.RWMutex
-	config          Config
+	conflictHandler ConflictHandler
 	clients         map[string]*minio.Client
 	syncState       map[string]*SyncState
 	healthTicker    *time.Ticker
 	syncTicker      *time.Ticker
 	stopCh          chan struct{}
-	started         bool
-	localSite       string
 	eventCh         chan SyncEvent
+	localSite       string
+	config          Config
 	syncWorkers     int
-	conflictHandler ConflictHandler
+	mu              sync.RWMutex
+	started         bool
 }
 
-// ConflictHandler handles conflicts between versions
+// ConflictHandler handles conflicts between versions.
 type ConflictHandler interface {
 	// Resolve resolves a conflict between two versions
 	Resolve(local, remote *ObjectVersion) (*ObjectVersion, error)
 }
 
-// SyncEvent represents a synchronization event
+// SyncEvent represents a synchronization event.
 type SyncEvent struct {
-	// Type is the event type
-	Type SyncEventType
-	// Site is the site involved
-	Site string
-	// Bucket is the bucket involved
-	Bucket string
-	// Key is the object key
-	Key string
-	// Error is any error that occurred
-	Error error
-	// Timestamp is when the event occurred
 	Timestamp time.Time
+	Error     error
+	Type      SyncEventType
+	Site      string
+	Bucket    string
+	Key       string
 }
 
-// SyncEventType represents types of sync events
+// SyncEventType represents types of sync events.
 type SyncEventType string
 
 const (
-	// SyncEventObjectCreated indicates an object was synced
+	// SyncEventObjectCreated indicates an object was synced.
 	SyncEventObjectCreated SyncEventType = "object_created"
-	// SyncEventObjectDeleted indicates an object was deleted
+	// SyncEventObjectDeleted indicates an object was deleted.
 	SyncEventObjectDeleted SyncEventType = "object_deleted"
-	// SyncEventConflictResolved indicates a conflict was resolved
+	// SyncEventConflictResolved indicates a conflict was resolved.
 	SyncEventConflictResolved SyncEventType = "conflict_resolved"
-	// SyncEventError indicates a sync error
+	// SyncEventError indicates a sync error.
 	SyncEventError SyncEventType = "error"
-	// SyncEventSiteOnline indicates a site came online
+	// SyncEventSiteOnline indicates a site came online.
 	SyncEventSiteOnline SyncEventType = "site_online"
-	// SyncEventSiteOffline indicates a site went offline
+	// SyncEventSiteOffline indicates a site went offline.
 	SyncEventSiteOffline SyncEventType = "site_offline"
 )
 
-// ManagerConfig holds manager configuration
+// ManagerConfig holds manager configuration.
 type ManagerConfig struct {
 	// SyncWorkers is the number of sync workers
 	SyncWorkers int
@@ -94,7 +89,7 @@ type ManagerConfig struct {
 	EventBufferSize int
 }
 
-// DefaultManagerConfig returns sensible defaults
+// DefaultManagerConfig returns sensible defaults.
 func DefaultManagerConfig() ManagerConfig {
 	return ManagerConfig{
 		SyncWorkers:     4,
@@ -102,15 +97,16 @@ func DefaultManagerConfig() ManagerConfig {
 	}
 }
 
-// NewManager creates a new site replication manager
+// NewManager creates a new site replication manager.
 func NewManager(cfg Config, mgrCfg ManagerConfig) (*Manager, error) {
-	if err := cfg.Validate(); err != nil {
+	err := cfg.Validate()
+	if err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
 	localSite := cfg.GetLocalSite()
 	if localSite == nil {
-		return nil, fmt.Errorf("no local site configured")
+		return nil, errors.New("no local site configured")
 	}
 
 	mgr := &Manager{
@@ -137,13 +133,13 @@ func NewManager(cfg Config, mgrCfg ManagerConfig) (*Manager, error) {
 	return mgr, nil
 }
 
-// Start starts the site replication manager
+// Start starts the site replication manager.
 func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.started {
-		return fmt.Errorf("manager already started")
+		return errors.New("manager already started")
 	}
 
 	// Initialize clients for all sites
@@ -156,6 +152,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to create client for site %s: %w", site.Name, err)
 		}
+
 		m.clients[site.Name] = client
 	}
 
@@ -168,10 +165,11 @@ func (m *Manager) Start(ctx context.Context) error {
 	go m.syncLoop(ctx)
 
 	m.started = true
+
 	return nil
 }
 
-// Stop stops the site replication manager
+// Stop stops the site replication manager.
 func (m *Manager) Stop() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -185,16 +183,19 @@ func (m *Manager) Stop() error {
 	if m.healthTicker != nil {
 		m.healthTicker.Stop()
 	}
+
 	if m.syncTicker != nil {
 		m.syncTicker.Stop()
 	}
 
 	m.started = false
+
 	return nil
 }
 
-// createClient creates a MinIO client for a site
+// createClient creates a MinIO client for a site.
 func (m *Manager) createClient(site Site) (*minio.Client, error) {
+	//nolint:gosec // G402: InsecureSkipVerify only true for non-SSL connections (no TLS used)
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: !site.UseSSL,
@@ -214,7 +215,7 @@ func (m *Manager) createClient(site Site) (*minio.Client, error) {
 	return minio.New(site.Endpoint, opts)
 }
 
-// healthCheckLoop periodically checks site health
+// healthCheckLoop periodically checks site health.
 func (m *Manager) healthCheckLoop(ctx context.Context) {
 	for {
 		select {
@@ -228,7 +229,7 @@ func (m *Manager) healthCheckLoop(ctx context.Context) {
 	}
 }
 
-// checkAllSites checks the health of all remote sites
+// checkAllSites checks the health of all remote sites.
 func (m *Manager) checkAllSites(ctx context.Context) {
 	m.mu.RLock()
 	sites := m.config.GetRemoteSites()
@@ -239,7 +240,7 @@ func (m *Manager) checkAllSites(ctx context.Context) {
 	}
 }
 
-// checkSite checks the health of a single site
+// checkSite checks the health of a single site.
 func (m *Manager) checkSite(ctx context.Context, site Site) {
 	m.mu.RLock()
 	client, ok := m.clients[site.Name]
@@ -266,6 +267,7 @@ func (m *Manager) checkSite(ctx context.Context, site Site) {
 	if err != nil {
 		if siteConfig.Status != SiteStatusOffline {
 			siteConfig.Status = SiteStatusOffline
+
 			m.emitEvent(SyncEvent{
 				Type:      SyncEventSiteOffline,
 				Site:      site.Name,
@@ -276,17 +278,19 @@ func (m *Manager) checkSite(ctx context.Context, site Site) {
 	} else {
 		if siteConfig.Status != SiteStatusOnline {
 			siteConfig.Status = SiteStatusOnline
+
 			m.emitEvent(SyncEvent{
 				Type:      SyncEventSiteOnline,
 				Site:      site.Name,
 				Timestamp: time.Now(),
 			})
 		}
+
 		siteConfig.LastSeen = time.Now()
 	}
 }
 
-// syncLoop periodically syncs with remote sites
+// syncLoop periodically syncs with remote sites.
 func (m *Manager) syncLoop(ctx context.Context) {
 	for {
 		select {
@@ -300,7 +304,7 @@ func (m *Manager) syncLoop(ctx context.Context) {
 	}
 }
 
-// syncAllSites syncs with all remote sites
+// syncAllSites syncs with all remote sites.
 func (m *Manager) syncAllSites(ctx context.Context) {
 	m.mu.RLock()
 	sites := m.config.GetRemoteSites()
@@ -310,50 +314,63 @@ func (m *Manager) syncAllSites(ctx context.Context) {
 		if site.Status != SiteStatusOnline {
 			continue
 		}
+
 		m.syncWithSite(ctx, site)
 	}
 }
 
-// syncWithSite syncs with a single remote site
+// syncWithSite syncs with a single remote site.
 func (m *Manager) syncWithSite(ctx context.Context, site Site) {
 	m.mu.Lock()
+
 	state := m.syncState[site.Name]
 	if state.SyncInProgress {
 		m.mu.Unlock()
 		return
 	}
+
 	state.SyncInProgress = true
+
 	m.mu.Unlock()
 
 	defer func() {
 		m.mu.Lock()
+
 		state.SyncInProgress = false
+
 		m.mu.Unlock()
 	}()
 
 	// Sync buckets
-	if err := m.syncBuckets(ctx, site); err != nil {
+	err := m.syncBuckets(ctx, site)
+	if err != nil {
 		m.mu.Lock()
+
 		state.LastError = err.Error()
+
 		m.mu.Unlock()
+
 		return
 	}
 
 	// Sync IAM if enabled
 	if m.config.SyncIAM {
-		if err := m.syncIAM(ctx, site); err != nil {
+		err := m.syncIAM(ctx, site)
+		if err != nil {
 			// Log but continue
 			fmt.Printf("warning: IAM sync failed for site %s: %v\n", site.Name, err)
 		}
 	}
 
 	m.mu.Lock()
+
 	state.LastSync = time.Now()
 	state.LastError = ""
+
 	m.mu.Unlock()
 }
 
-// syncBuckets syncs bucket contents with a remote site
+// syncBuckets syncs bucket contents with a remote site.
 func (m *Manager) syncBuckets(ctx context.Context, site Site) error {
 	m.mu.RLock()
 	client, ok := m.clients[site.Name]
@@ -370,13 +387,15 @@ func (m *Manager) syncBuckets(ctx context.Context, site Site) error {
 		if err != nil {
 			return fmt.Errorf("failed to list buckets: %w", err)
 		}
+
 		for _, b := range remoteBuckets {
 			buckets = append(buckets, b.Name)
 		}
 	}
 
 	for _, bucket := range buckets {
-		if err := m.syncBucket(ctx, site, bucket); err != nil {
+		err := m.syncBucket(ctx, site, bucket)
+		if err != nil {
 			// Log but continue with other buckets
 			fmt.Printf("warning: bucket sync failed for %s on site %s: %v\n", bucket, site.Name, err)
 		}
@@ -385,7 +404,7 @@ func (m *Manager) syncBuckets(ctx context.Context, site Site) error {
 	return nil
 }
 
-// syncBucket syncs a single bucket with a remote site
+// syncBucket syncs a single bucket with a remote site.
 func (m *Manager) syncBucket(ctx context.Context, site Site, bucket string) error {
 	m.mu.RLock()
 	client, ok := m.clients[site.Name]
@@ -406,7 +425,8 @@ func (m *Manager) syncBucket(ctx context.Context, site Site, bucket string) erro
 		}
 
 		// Check if we need to sync this object
-		if err := m.syncObject(ctx, site, bucket, object); err != nil {
+		err := m.syncObject(ctx, site, bucket, object)
+		if err != nil {
 			// Log but continue
 			fmt.Printf("warning: object sync failed for %s/%s from site %s: %v\n", bucket, object.Key, site.Name, err)
 		}
@@ -415,7 +435,7 @@ func (m *Manager) syncBucket(ctx context.Context, site Site, bucket string) erro
 	return nil
 }
 
-// syncObject syncs a single object from a remote site
+// syncObject syncs a single object from a remote site.
 func (m *Manager) syncObject(ctx context.Context, site Site, bucket string, remote minio.ObjectInfo) error {
 	// This is a simplified implementation
 	// In a real implementation, we would:
@@ -423,7 +443,6 @@ func (m *Manager) syncObject(ctx context.Context, site Site, bucket string, remo
 	// 2. Compare versions/timestamps
 	// 3. Apply conflict resolution if needed
 	// 4. Copy the object if needed
-
 	m.emitEvent(SyncEvent{
 		Type:      SyncEventObjectCreated,
 		Site:      site.Name,
@@ -436,19 +455,20 @@ func (m *Manager) syncObject(ctx context.Context, site Site, bucket string, remo
 	state := m.syncState[site.Name]
 	state.SyncedObjects++
 	state.SyncedBytes += remote.Size
+
 	m.mu.Unlock()
 
 	return nil
 }
 
-// syncIAM syncs IAM policies and users with a remote site
+// syncIAM syncs IAM policies and users with a remote site.
 func (m *Manager) syncIAM(_ context.Context, _ Site) error {
 	// IAM sync implementation would require admin API
 	// This is a placeholder for the IAM sync logic
 	return nil
 }
 
-// emitEvent sends an event to the event channel
+// emitEvent sends an event to the event channel.
 func (m *Manager) emitEvent(event SyncEvent) {
 	select {
 	case m.eventCh <- event:
@@ -457,12 +477,12 @@ func (m *Manager) emitEvent(event SyncEvent) {
 	}
 }
 
-// Events returns the event channel
+// Events returns the event channel.
 func (m *Manager) Events() <-chan SyncEvent {
 	return m.eventCh
 }
 
-// GetSyncState returns the sync state for a site
+// GetSyncState returns the sync state for a site.
 func (m *Manager) GetSyncState(siteName string) (*SyncState, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -475,7 +495,7 @@ func (m *Manager) GetSyncState(siteName string) (*SyncState, error) {
 	return state, nil
 }
 
-// GetAllSyncStates returns sync states for all sites
+// GetAllSyncStates returns sync states for all sites.
 func (m *Manager) GetAllSyncStates() map[string]*SyncState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -484,10 +504,11 @@ func (m *Manager) GetAllSyncStates() map[string]*SyncState {
 	for name, state := range m.syncState {
 		states[name] = state
 	}
+
 	return states
 }
 
-// AddSite adds a new site to the cluster
+// AddSite adds a new site to the cluster.
 func (m *Manager) AddSite(ctx context.Context, site Site) error {
 	if err := site.Validate(); err != nil {
 		return err
@@ -523,22 +544,27 @@ func (m *Manager) AddSite(ctx context.Context, site Site) error {
 	return nil
 }
 
-// RemoveSite removes a site from the cluster
+// RemoveSite removes a site from the cluster.
 func (m *Manager) RemoveSite(siteName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// Find and remove site
 	var newSites []Site
+
 	found := false
+
 	for _, site := range m.config.Sites {
 		if site.Name == siteName {
 			found = true
+
 			if site.IsLocal {
-				return fmt.Errorf("cannot remove local site")
+				return errors.New("cannot remove local site")
 			}
+
 			continue
 		}
+
 		newSites = append(newSites, site)
 	}
 
@@ -553,13 +579,13 @@ func (m *Manager) RemoveSite(siteName string) error {
 	return nil
 }
 
-// TriggerSync manually triggers a sync with all sites
+// TriggerSync manually triggers a sync with all sites.
 func (m *Manager) TriggerSync(ctx context.Context) error {
 	m.syncAllSites(ctx)
 	return nil
 }
 
-// TriggerSiteSync manually triggers a sync with a specific site
+// TriggerSiteSync manually triggers a sync with a specific site.
 func (m *Manager) TriggerSiteSync(ctx context.Context, siteName string) error {
 	m.mu.RLock()
 	site := m.config.GetSite(siteName)
@@ -570,20 +596,21 @@ func (m *Manager) TriggerSiteSync(ctx context.Context, siteName string) error {
 	}
 
 	if site.IsLocal {
-		return fmt.Errorf("cannot sync with local site")
+		return errors.New("cannot sync with local site")
 	}
 
 	m.syncWithSite(ctx, *site)
+
 	return nil
 }
 
-// defaultConflictHandler implements the default conflict resolution
+// defaultConflictHandler implements the default conflict resolution.
 type defaultConflictHandler struct {
 	resolution ConflictResolution
 	localSite  string
 }
 
-// Resolve resolves a conflict between two versions
+// Resolve resolves a conflict between two versions.
 func (h *defaultConflictHandler) Resolve(local, remote *ObjectVersion) (*ObjectVersion, error) {
 	switch h.resolution {
 	case ConflictLastWriteWins:
@@ -600,6 +627,7 @@ func (h *defaultConflictHandler) Resolve(local, remote *ObjectVersion) (*ObjectV
 		if local.LastModified.After(remote.LastModified) {
 			return local, nil
 		}
+
 		return remote, nil
 
 	case ConflictLocalWins:

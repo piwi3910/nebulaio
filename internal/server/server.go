@@ -17,10 +17,12 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -52,7 +54,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Server is the main NebulaIO server
+// Server is the main NebulaIO server.
 type Server struct {
 	cfg *config.Config
 
@@ -90,10 +92,10 @@ type Server struct {
 	consoleServer *http.Server
 }
 
-// Version is the current version of NebulaIO
+// Version is the current version of NebulaIO.
 const Version = "0.1.0"
 
-// New creates a new NebulaIO server
+// New creates a new NebulaIO server.
 func New(cfg *config.Config) (*Server, error) {
 	srv := &Server{
 		cfg: cfg,
@@ -101,6 +103,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 	// Track initialization success for cleanup on failure
 	var initSuccess bool
+
 	defer func() {
 		if !initSuccess {
 			srv.cleanupOnInitFailure()
@@ -119,6 +122,7 @@ func New(cfg *config.Config) (*Server, error) {
 			Int64("max_transform_size_bytes", cfg.Lambda.ObjectLambda.MaxTransformSize).
 			Msg("Lambda max transform size configured")
 	}
+
 	if cfg.Lambda.ObjectLambda.StreamingThreshold > 0 {
 		lambda.SetStreamingThreshold(cfg.Lambda.ObjectLambda.StreamingThreshold)
 		metrics.SetLambdaStreamingThreshold(cfg.Lambda.ObjectLambda.StreamingThreshold)
@@ -133,6 +137,7 @@ func New(cfg *config.Config) (*Server, error) {
 	if raftBindAddr == "" {
 		raftBindAddr = "127.0.0.1"
 	}
+
 	var err error
 
 	// Create Dragonboat store configuration
@@ -188,9 +193,11 @@ func New(cfg *config.Config) (*Server, error) {
 			MaxNodes:   g.MaxNodes,
 		})
 	}
+
 	for _, target := range cfg.Storage.PlacementGroups.ReplicationTargets {
 		pgConfig.ReplicationTargets = append(pgConfig.ReplicationTargets, cluster.PlacementGroupID(target))
 	}
+
 	srv.placementGroupMgr, err = cluster.NewPlacementGroupManager(pgConfig)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize placement group manager, using single-node mode")
@@ -213,6 +220,7 @@ func New(cfg *config.Config) (*Server, error) {
 	createBackend := func(dataDir, tierName string) (backend.Backend, error) {
 		// Check if we have tier-specific configuration
 		tierBackend := cfg.Storage.Backend
+
 		var tierErasureConfig *config.ErasureStorageConfig
 
 		if cfg.Storage.Tiering.Enabled && cfg.Storage.Tiering.Tiers != nil {
@@ -221,9 +229,11 @@ func New(cfg *config.Config) (*Server, error) {
 				if tierCfg.Backend != "" {
 					tierBackend = tierCfg.Backend
 				}
+
 				if tierCfg.DataDir != "" {
 					dataDir = tierCfg.DataDir
 				}
+
 				tierErasureConfig = tierCfg.ErasureConfig
 			}
 		}
@@ -267,6 +277,7 @@ func New(cfg *config.Config) (*Server, error) {
 				Int("parity_shards", erasureCfg.ParityShards).
 				Bool("distributed", srv.placementGroupMgr != nil).
 				Msg("Initializing erasure coded storage")
+
 			return erasure.New(erasureCfg, cfg.NodeID)
 		case "volume":
 			log.Info().Str("tier", tierName).Msg("Initializing volume storage")
@@ -294,12 +305,14 @@ func New(cfg *config.Config) (*Server, error) {
 	// Use hot tier as the primary storage backend for all S3 operations
 	// This ensures all objects start in the hot tier
 	srv.storageBackend = &multipartWrapper{Backend: hotBackend}
+
 	log.Info().Str("path", hotDataDir).Msg("Hot tier initialized as primary storage")
 
 	// Initialize warm tier
 	warmBackend, err := createBackend(warmDataDir, "warm")
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize warm tier, warm tier disabled")
+
 		warmBackend = nil
 	} else {
 		log.Info().Str("path", warmDataDir).Msg("Warm tier initialized")
@@ -307,6 +320,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 	// Initialize cold tier
 	coldManager := tiering.NewColdStorageManager()
+
 	coldBackend, err := createBackend(coldDataDir, "cold")
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize cold tier backend, cold tier disabled")
@@ -328,6 +342,7 @@ func New(cfg *config.Config) (*Server, error) {
 	// The tiering service manages transitions between hot -> warm -> cold
 	tieringConfig := tiering.DefaultAdvancedServiceConfig()
 	tieringConfig.NodeID = cfg.NodeID
+
 	srv.tieringService, err = tiering.NewAdvancedService(
 		tieringConfig,
 		hotBackend,
@@ -367,6 +382,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 	// Initialize audit logger
 	auditLogPath := filepath.Join(cfg.DataDir, "audit.log")
+
 	srv.auditLogger, err = audit.NewAuditLogger(audit.Config{
 		Store:      srv.metaStore,
 		FilePath:   auditLogPath,
@@ -375,6 +391,7 @@ func New(cfg *config.Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize audit logger: %w", err)
 	}
+
 	log.Info().Str("path", auditLogPath).Msg("Audit logger initialized")
 
 	// Initialize TLS if enabled
@@ -383,10 +400,12 @@ func New(cfg *config.Config) (*Server, error) {
 		if hostname == "" {
 			hostname = "localhost"
 		}
+
 		tlsManager, err := security.NewTLSManager(&cfg.TLS, hostname)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize TLS: %w", err)
 		}
+
 		srv.tlsManager = tlsManager
 		log.Info().
 			Str("cert_file", tlsManager.GetCertFile()).
@@ -404,16 +423,18 @@ func New(cfg *config.Config) (*Server, error) {
 
 	// Mark initialization as successful to prevent cleanup
 	initSuccess = true
+
 	return srv, nil
 }
 
-// cleanupOnInitFailure cleans up resources if initialization fails
+// cleanupOnInitFailure cleans up resources if initialization fails.
 func (s *Server) cleanupOnInitFailure() {
 	log.Debug().Msg("Cleaning up resources after initialization failure")
 
 	// Close metadata store if initialized
 	if s.metaStore != nil {
-		if err := s.metaStore.Close(); err != nil {
+		err := s.metaStore.Close()
+		if err != nil {
 			log.Warn().Err(err).Msg("Failed to close metadata store during cleanup")
 		}
 	}
@@ -421,7 +442,8 @@ func (s *Server) cleanupOnInitFailure() {
 	// Close storage backend if initialized
 	if s.storageBackend != nil {
 		if closer, ok := s.storageBackend.(interface{ Close() error }); ok {
-			if err := closer.Close(); err != nil {
+			err := closer.Close()
+			if err != nil {
 				log.Warn().Err(err).Msg("Failed to close storage backend during cleanup")
 			}
 		}
@@ -429,7 +451,8 @@ func (s *Server) cleanupOnInitFailure() {
 
 	// Stop discovery if initialized
 	if s.discovery != nil {
-		if err := s.discovery.Stop(); err != nil {
+		err := s.discovery.Stop()
+		if err != nil {
 			log.Warn().Err(err).Msg("Failed to stop discovery during cleanup")
 		}
 	}
@@ -541,6 +564,7 @@ func (s *Server) setupAdminServer() {
 
 	// Console API handlers (user-facing)
 	consoleHandler := console.NewHandler(s.authService, s.bucketService, s.objectService, s.metaStore)
+
 	r.Route("/api/v1/console", func(r chi.Router) {
 		consoleHandler.RegisterRoutes(r)
 	})
@@ -588,10 +612,11 @@ func (s *Server) setupConsoleServer() {
 	}
 }
 
-// Start starts all servers
+// Start starts all servers.
 func (s *Server) Start(ctx context.Context) error {
 	// Ensure root admin user exists
-	if err := s.ensureRootUser(ctx); err != nil {
+	err := s.ensureRootUser(ctx)
+	if err != nil {
 		return fmt.Errorf("failed to ensure root user: %w", err)
 	}
 
@@ -603,9 +628,11 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Start cluster discovery
 	if s.discovery != nil {
-		if err := s.discovery.Start(ctx); err != nil {
+		err := s.discovery.Start(ctx)
+		if err != nil {
 			return fmt.Errorf("failed to start cluster discovery: %w", err)
 		}
+
 		log.Info().
 			Str("node_id", s.cfg.NodeID).
 			Int("gossip_port", s.cfg.Cluster.GossipPort).
@@ -630,6 +657,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// Start S3 server
 	g.Go(func() error {
 		var err error
+
 		if s.tlsManager != nil {
 			log.Info().Int("port", s.cfg.S3Port).Msg("Starting S3 API server (TLS enabled)")
 			err = s.s3Server.ListenAndServeTLS(s.tlsManager.GetCertFile(), s.tlsManager.GetKeyFile())
@@ -637,15 +665,18 @@ func (s *Server) Start(ctx context.Context) error {
 			log.Info().Int("port", s.cfg.S3Port).Msg("Starting S3 API server")
 			err = s.s3Server.ListenAndServe()
 		}
+
 		if err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("S3 server error: %w", err)
 		}
+
 		return nil
 	})
 
 	// Start Admin server
 	g.Go(func() error {
 		var err error
+
 		if s.tlsManager != nil {
 			log.Info().Int("port", s.cfg.AdminPort).Msg("Starting Admin API server (TLS enabled)")
 			log.Info().Int("port", s.cfg.AdminPort).Msg("Prometheus metrics available at /metrics")
@@ -655,15 +686,18 @@ func (s *Server) Start(ctx context.Context) error {
 			log.Info().Int("port", s.cfg.AdminPort).Msg("Prometheus metrics available at /metrics")
 			err = s.adminServer.ListenAndServe()
 		}
+
 		if err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("Admin server error: %w", err)
 		}
+
 		return nil
 	})
 
 	// Start Console server
 	g.Go(func() error {
 		var err error
+
 		if s.tlsManager != nil {
 			log.Info().Int("port", s.cfg.ConsolePort).Msg("Starting Web Console server (TLS enabled)")
 			err = s.consoleServer.ListenAndServeTLS(s.tlsManager.GetCertFile(), s.tlsManager.GetKeyFile())
@@ -671,9 +705,11 @@ func (s *Server) Start(ctx context.Context) error {
 			log.Info().Int("port", s.cfg.ConsolePort).Msg("Starting Web Console server")
 			err = s.consoleServer.ListenAndServe()
 		}
+
 		if err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("Console server error: %w", err)
 		}
+
 		return nil
 	})
 
@@ -687,7 +723,8 @@ func (s *Server) Start(ctx context.Context) error {
 
 		// Stop cluster discovery first (graceful leave)
 		if s.discovery != nil {
-			if err := s.discovery.Stop(); err != nil {
+			err := s.discovery.Stop()
+			if err != nil {
 				log.Error().Err(err).Msg("Error stopping cluster discovery")
 			}
 		}
@@ -698,13 +735,18 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 
 		// Shutdown all servers
-		if err := s.s3Server.Shutdown(shutdownCtx); err != nil {
+		err := s.s3Server.Shutdown(shutdownCtx)
+		if err != nil {
 			log.Error().Err(err).Msg("Error shutting down S3 server")
 		}
-		if err := s.adminServer.Shutdown(shutdownCtx); err != nil {
+		err = s.adminServer.Shutdown(shutdownCtx)
+
+		if err != nil {
 			log.Error().Err(err).Msg("Error shutting down Admin server")
 		}
-		if err := s.consoleServer.Shutdown(shutdownCtx); err != nil {
+		err = s.consoleServer.Shutdown(shutdownCtx)
+
+		if err != nil {
 			log.Error().Err(err).Msg("Error shutting down Console server")
 		}
 
@@ -715,7 +757,8 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 
 		// Close metadata store
-		if err := s.metaStore.Close(); err != nil {
+		err = s.metaStore.Close()
+		if err != nil {
 			log.Error().Err(err).Msg("Error closing metadata store")
 		}
 
@@ -725,7 +768,7 @@ func (s *Server) Start(ctx context.Context) error {
 	return g.Wait()
 }
 
-// runMetricsCollector periodically collects and updates metrics
+// runMetricsCollector periodically collects and updates metrics.
 func (s *Server) runMetricsCollector(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -743,10 +786,10 @@ func (s *Server) runMetricsCollector(ctx context.Context) {
 	}
 }
 
-// collectMetrics gathers system metrics and updates Prometheus gauges
+// collectMetrics gathers system metrics and updates Prometheus gauges.
 func (s *Server) collectMetrics(ctx context.Context) {
 	// Update Raft state metrics
-	shardID := fmt.Sprintf("%d", s.cfg.Cluster.ShardID)
+	shardID := strconv.FormatUint(s.cfg.Cluster.ShardID, 10)
 	isLeader := s.metaStore.IsLeader()
 	metrics.SetRaftLeader(shardID, isLeader)
 
@@ -767,6 +810,7 @@ func (s *Server) collectMetrics(ctx context.Context) {
 
 	// Update multipart uploads count (approximate - count for all buckets)
 	var multipartCount int
+
 	if buckets, err := s.metaStore.ListBuckets(ctx, ""); err == nil {
 		for _, bucket := range buckets {
 			if uploads, err := s.metaStore.ListMultipartUploads(ctx, bucket.Name); err == nil {
@@ -774,10 +818,11 @@ func (s *Server) collectMetrics(ctx context.Context) {
 			}
 		}
 	}
+
 	metrics.SetMultipartUploadsActive(multipartCount)
 }
 
-// ensureRootUser ensures the root admin user exists on startup
+// ensureRootUser ensures the root admin user exists on startup.
 func (s *Server) ensureRootUser(ctx context.Context) error {
 	log.Info().Str("username", s.cfg.Auth.RootUser).Msg("Ensuring root admin user exists")
 
@@ -814,17 +859,17 @@ func s3LoggerMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// Discovery returns the cluster discovery instance
+// Discovery returns the cluster discovery instance.
 func (s *Server) Discovery() *cluster.Discovery {
 	return s.discovery
 }
 
-// MetaStore returns the metadata store (for admin API)
+// MetaStore returns the metadata store (for admin API).
 func (s *Server) MetaStore() *metadata.DragonboatStore {
 	return s.metaStore
 }
 
-// lifecycleObjectService adapts object.Service to lifecycle.ObjectService interface
+// lifecycleObjectService adapts object.Service to lifecycle.ObjectService interface.
 type lifecycleObjectService struct {
 	svc *object.Service
 }
@@ -844,27 +889,27 @@ func (l *lifecycleObjectService) TransitionStorageClass(ctx context.Context, buc
 }
 
 // multipartWrapper wraps a basic Backend to provide a stub MultipartBackend interface
-// This is used for backends that don't yet support multipart uploads natively
+// This is used for backends that don't yet support multipart uploads natively.
 type multipartWrapper struct {
 	backend.Backend
 }
 
 func (m *multipartWrapper) CreateMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
-	return fmt.Errorf("multipart uploads not yet supported by volume backend")
+	return errors.New("multipart uploads not yet supported by volume backend")
 }
 
 func (m *multipartWrapper) PutPart(ctx context.Context, bucket, key, uploadID string, partNumber int, reader io.Reader, size int64) (*backend.PutResult, error) {
-	return nil, fmt.Errorf("multipart uploads not yet supported by volume backend")
+	return nil, errors.New("multipart uploads not yet supported by volume backend")
 }
 
 func (m *multipartWrapper) GetPart(ctx context.Context, bucket, key, uploadID string, partNumber int) (io.ReadCloser, error) {
-	return nil, fmt.Errorf("multipart uploads not yet supported by volume backend")
+	return nil, errors.New("multipart uploads not yet supported by volume backend")
 }
 
 func (m *multipartWrapper) CompleteParts(ctx context.Context, bucket, key, uploadID string, parts []int) (*backend.PutResult, error) {
-	return nil, fmt.Errorf("multipart uploads not yet supported by volume backend")
+	return nil, errors.New("multipart uploads not yet supported by volume backend")
 }
 
 func (m *multipartWrapper) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
-	return fmt.Errorf("multipart uploads not yet supported by volume backend")
+	return errors.New("multipart uploads not yet supported by volume backend")
 }

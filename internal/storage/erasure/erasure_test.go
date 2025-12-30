@@ -14,6 +14,7 @@ func TestConfig(t *testing.T) {
 		if cfg.DataShards != 10 {
 			t.Errorf("expected DataShards=10, got %d", cfg.DataShards)
 		}
+
 		if cfg.ParityShards != 4 {
 			t.Errorf("expected ParityShards=4, got %d", cfg.ParityShards)
 		}
@@ -35,6 +36,7 @@ func TestConfig(t *testing.T) {
 			if cfg.DataShards != tt.dataShards {
 				t.Errorf("preset %s: expected DataShards=%d, got %d", tt.preset, tt.dataShards, cfg.DataShards)
 			}
+
 			if cfg.ParityShards != tt.parityShards {
 				t.Errorf("preset %s: expected ParityShards=%d, got %d", tt.preset, tt.parityShards, cfg.ParityShards)
 			}
@@ -43,27 +45,35 @@ func TestConfig(t *testing.T) {
 
 	t.Run("Validate", func(t *testing.T) {
 		cfg := DefaultConfig()
+
 		cfg.DataDir = "/data"
-		if err := cfg.Validate(); err != nil {
+		err := cfg.Validate()
+		if err != nil {
 			t.Errorf("valid config should not error: %v", err)
 		}
 
 		// Test invalid configs
 		invalid := cfg
+
 		invalid.DataShards = 0
-		if err := invalid.Validate(); err == nil {
+		err = invalid.Validate()
+		if err == nil {
 			t.Error("expected error for DataShards=0")
 		}
 
 		invalid = cfg
+
 		invalid.ParityShards = 0
-		if err := invalid.Validate(); err == nil {
+		err = invalid.Validate()
+		if err == nil {
 			t.Error("expected error for ParityShards=0")
 		}
 
 		invalid = cfg
+
 		invalid.DataDir = ""
-		if err := invalid.Validate(); err == nil {
+		err = invalid.Validate()
+		if err == nil {
 			t.Error("expected error for empty DataDir")
 		}
 	})
@@ -77,6 +87,7 @@ func TestEncoder(t *testing.T) {
 
 	t.Run("EncodeSmallData", func(t *testing.T) {
 		data := []byte("Hello, World!")
+
 		encoded, err := enc.Encode(bytes.NewReader(data))
 		if err != nil {
 			t.Fatalf("failed to encode: %v", err)
@@ -126,6 +137,7 @@ func TestDecoder(t *testing.T) {
 
 	t.Run("DecodeComplete", func(t *testing.T) {
 		data := []byte("Test data for decoding")
+
 		encoded, err := enc.Encode(bytes.NewReader(data))
 		if err != nil {
 			t.Fatalf("failed to encode: %v", err)
@@ -146,6 +158,7 @@ func TestDecoder(t *testing.T) {
 
 	t.Run("DecodeWithMissingShard", func(t *testing.T) {
 		data := []byte("Test data for partial decode")
+
 		encoded, err := enc.Encode(bytes.NewReader(data))
 		if err != nil {
 			t.Fatalf("failed to encode: %v", err)
@@ -173,13 +186,14 @@ func TestDecoder(t *testing.T) {
 
 	t.Run("DecodeWithMaxMissing", func(t *testing.T) {
 		data := []byte("Test data for max missing")
+
 		encoded, err := enc.Encode(bytes.NewReader(data))
 		if err != nil {
 			t.Fatalf("failed to encode: %v", err)
 		}
 
 		// Remove parityShards shards (maximum allowed)
-		for i := 0; i < parityShards; i++ {
+		for i := range parityShards {
 			encoded.Shards[i] = nil
 		}
 
@@ -198,6 +212,7 @@ func TestDecoder(t *testing.T) {
 
 	t.Run("DecodeFailsWithTooManyMissing", func(t *testing.T) {
 		data := []byte("Test data for failure case")
+
 		encoded, err := enc.Encode(bytes.NewReader(data))
 		if err != nil {
 			t.Fatalf("failed to encode: %v", err)
@@ -280,6 +295,7 @@ func TestPlacement(t *testing.T) {
 		}
 
 		placement := NewRoundRobinPlacement()
+
 		assignments, err := placement.PlaceShards("bucket/key", 4, nodesWithDead)
 		if err != nil {
 			t.Fatalf("failed to place shards: %v", err)
@@ -298,6 +314,7 @@ func TestShardManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
+
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	mgr, err := NewShardManager(tmpDir)
@@ -309,6 +326,7 @@ func TestShardManager(t *testing.T) {
 
 	t.Run("WriteAndReadShard", func(t *testing.T) {
 		data := []byte("test shard data")
+
 		path, err := mgr.WriteShard(ctx, "bucket", "key", 0, data)
 		if err != nil {
 			t.Fatalf("failed to write shard: %v", err)
@@ -355,6 +373,7 @@ func TestBackend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
+
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := Config{
@@ -391,9 +410,11 @@ func TestBackend(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get object: %v", err)
 		}
+
 		defer func() { _ = reader.Close() }()
 
 		readData := make([]byte, len(data))
+
 		n, err := reader.Read(readData)
 		if err != nil {
 			t.Fatalf("failed to read object: %v", err)
@@ -449,9 +470,11 @@ func TestBackend(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get large object: %v", err)
 		}
+
 		defer func() { _ = reader.Close() }()
 
 		var buf bytes.Buffer
+
 		_, err = buf.ReadFrom(reader)
 		if err != nil {
 			t.Fatalf("failed to read large object: %v", err)
@@ -469,7 +492,8 @@ func BenchmarkEncode(b *testing.B) {
 	_, _ = rand.Read(data)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = enc.Encode(bytes.NewReader(data))
 	}
 }
@@ -483,7 +507,8 @@ func BenchmarkDecode(b *testing.B) {
 	encoded, _ := enc.Encode(bytes.NewReader(data))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = dec.Decode(&DecodeInput{
 			Shards:       encoded.Shards,
 			OriginalSize: encoded.OriginalSize,

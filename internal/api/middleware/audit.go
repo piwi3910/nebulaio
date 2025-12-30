@@ -12,29 +12,29 @@ import (
 	"github.com/piwi3910/nebulaio/internal/audit"
 )
 
-// auditContextKey is a type for audit context keys to avoid collisions
+// auditContextKey is a type for audit context keys to avoid collisions.
 type auditContextKey string
 
 const (
-	// auditEventKey is the context key for the audit event
+	// auditEventKey is the context key for the audit event.
 	auditEventKey auditContextKey = "audit_event"
-	// auditStartTimeKey is the context key for the request start time
+	// auditStartTimeKey is the context key for the request start time.
 	auditStartTimeKey auditContextKey = "audit_start_time"
-	// userIDKey is the context key for the user ID
+	// userIDKey is the context key for the user ID.
 	userIDKey auditContextKey = "user_id"
-	// usernameKey is the context key for the username
+	// usernameKey is the context key for the username.
 	usernameKey auditContextKey = "username"
-	// accessKeyIDKey is the context key for the access key ID
+	// accessKeyIDKey is the context key for the access key ID.
 	accessKeyIDKey auditContextKey = "access_key_id"
 )
 
-// AuditMiddleware creates middleware that captures request information for audit logging
+// AuditMiddleware creates middleware that captures request information for audit logging.
 type AuditMiddleware struct {
 	logger      *audit.AuditLogger
 	eventSource audit.EventSource
 }
 
-// NewAuditMiddleware creates a new audit middleware
+// NewAuditMiddleware creates a new audit middleware.
 func NewAuditMiddleware(logger *audit.AuditLogger, source audit.EventSource) *AuditMiddleware {
 	return &AuditMiddleware{
 		logger:      logger,
@@ -42,7 +42,7 @@ func NewAuditMiddleware(logger *audit.AuditLogger, source audit.EventSource) *Au
 	}
 }
 
-// responseWriter wraps http.ResponseWriter to capture response details
+// responseWriter wraps http.ResponseWriter to capture response details.
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode   int
@@ -64,6 +64,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 func (rw *responseWriter) Write(b []byte) (int, error) {
 	n, err := rw.ResponseWriter.Write(b)
 	rw.bytesWritten += int64(n)
+
 	return n, err
 }
 
@@ -72,7 +73,7 @@ func (rw *responseWriter) Unwrap() http.ResponseWriter {
 	return rw.ResponseWriter
 }
 
-// countingReader wraps an io.ReadCloser to count bytes read
+// countingReader wraps an io.ReadCloser to count bytes read.
 type countingReader struct {
 	io.ReadCloser
 	bytesRead int64
@@ -81,10 +82,11 @@ type countingReader struct {
 func (r *countingReader) Read(p []byte) (int, error) {
 	n, err := r.ReadCloser.Read(p)
 	r.bytesRead += int64(n)
+
 	return n, err
 }
 
-// Handler returns the middleware handler function
+// Handler returns the middleware handler function.
 func (m *AuditMiddleware) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
@@ -127,14 +129,17 @@ func (m *AuditMiddleware) Handler(next http.Handler) http.Handler {
 		if userID, ok := ctx.Value(userIDKey).(string); ok {
 			event.UserIdentity.UserID = userID
 		}
+
 		if username, ok := ctx.Value(usernameKey).(string); ok {
 			event.UserIdentity.Username = username
 			event.UserIdentity.Type = audit.IdentityIAMUser
 		}
+
 		if accessKeyID, ok := ctx.Value(accessKeyIDKey).(string); ok {
 			event.UserIdentity.AccessKeyID = accessKeyID
 			event.UserIdentity.Type = audit.IdentityAccessKey
 		}
+
 		if event.UserIdentity.Type == "" {
 			event.UserIdentity.Type = audit.IdentityAnonymous
 		}
@@ -146,7 +151,7 @@ func (m *AuditMiddleware) Handler(next http.Handler) http.Handler {
 	})
 }
 
-// SetAuditEvent updates the audit event in the request context
+// SetAuditEvent updates the audit event in the request context.
 func SetAuditEvent(r *http.Request, eventType audit.EventType, resource audit.ResourceInfo) {
 	if event, ok := r.Context().Value(auditEventKey).(*audit.AuditEvent); ok {
 		event.EventType = eventType
@@ -154,21 +159,21 @@ func SetAuditEvent(r *http.Request, eventType audit.EventType, resource audit.Re
 	}
 }
 
-// SetAuditEventType sets the event type for the current request
+// SetAuditEventType sets the event type for the current request.
 func SetAuditEventType(r *http.Request, eventType audit.EventType) {
 	if event, ok := r.Context().Value(auditEventKey).(*audit.AuditEvent); ok {
 		event.EventType = eventType
 	}
 }
 
-// SetAuditResource sets the resource info for the current request
+// SetAuditResource sets the resource info for the current request.
 func SetAuditResource(r *http.Request, resource audit.ResourceInfo) {
 	if event, ok := r.Context().Value(auditEventKey).(*audit.AuditEvent); ok {
 		event.Resource = resource
 	}
 }
 
-// SetAuditError sets the error information for the current request
+// SetAuditError sets the error information for the current request.
 func SetAuditError(r *http.Request, errorCode, errorMessage string) {
 	if event, ok := r.Context().Value(auditEventKey).(*audit.AuditEvent); ok {
 		event.Result = audit.ResultFailure
@@ -177,39 +182,44 @@ func SetAuditError(r *http.Request, errorCode, errorMessage string) {
 	}
 }
 
-// SetAuditExtra adds extra metadata to the audit event
+// SetAuditExtra adds extra metadata to the audit event.
 func SetAuditExtra(r *http.Request, key, value string) {
 	if event, ok := r.Context().Value(auditEventKey).(*audit.AuditEvent); ok {
 		if event.Extra == nil {
 			event.Extra = make(map[string]string)
 		}
+
 		event.Extra[key] = value
 	}
 }
 
-// SetUserIdentity sets the user identity for audit logging
+// SetUserIdentity sets the user identity for audit logging.
 func SetUserIdentity(ctx context.Context, userID, username, accessKeyID string) context.Context {
 	if userID != "" {
 		ctx = context.WithValue(ctx, userIDKey, userID)
 	}
+
 	if username != "" {
 		ctx = context.WithValue(ctx, usernameKey, username)
 	}
+
 	if accessKeyID != "" {
 		ctx = context.WithValue(ctx, accessKeyIDKey, accessKeyID)
 	}
+
 	return ctx
 }
 
-// GetAuditEvent retrieves the audit event from the request context
+// GetAuditEvent retrieves the audit event from the request context.
 func GetAuditEvent(r *http.Request) *audit.AuditEvent {
 	if event, ok := r.Context().Value(auditEventKey).(*audit.AuditEvent); ok {
 		return event
 	}
+
 	return nil
 }
 
-// getClientIP extracts the client IP address from the request
+// getClientIP extracts the client IP address from the request.
 func getClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header first
 	xff := r.Header.Get("X-Forwarded-For")
@@ -235,10 +245,11 @@ func getClientIP(r *http.Request) string {
 	if err != nil {
 		return r.RemoteAddr
 	}
+
 	return host
 }
 
-// LogAuditEvent is a helper function to log an audit event directly
+// LogAuditEvent is a helper function to log an audit event directly.
 func LogAuditEvent(logger *audit.AuditLogger, r *http.Request, eventType audit.EventType, source audit.EventSource, resource audit.ResourceInfo, result audit.Result, errorCode, errorMessage string, duration time.Duration) {
 	event := audit.NewEvent(eventType, source, r.Method+" "+r.URL.Path)
 	event.RequestID = middleware.GetReqID(r.Context())

@@ -2,96 +2,97 @@ package lifecycle
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 )
 
-// LifecycleConfiguration represents the complete lifecycle configuration for a bucket
+// LifecycleConfiguration represents the complete lifecycle configuration for a bucket.
 type LifecycleConfiguration struct {
-	XMLName xml.Name        `xml:"LifecycleConfiguration" json:"-"`
-	Rules   []LifecycleRule `xml:"Rule" json:"rules"`
+	XMLName xml.Name        `json:"-"     xml:"LifecycleConfiguration"`
+	Rules   []LifecycleRule `json:"rules" xml:"Rule"`
 }
 
-// LifecycleRule represents a single lifecycle rule
+// LifecycleRule represents a single lifecycle rule.
 type LifecycleRule struct {
-	ID                             string                          `xml:"ID" json:"id"`
-	Status                         string                          `xml:"Status" json:"status"` // Enabled/Disabled
-	Filter                         Filter                          `xml:"Filter" json:"filter"`
-	Expiration                     *Expiration                     `xml:"Expiration,omitempty" json:"expiration,omitempty"`
-	Transition                     []Transition                    `xml:"Transition,omitempty" json:"transitions,omitempty"`
-	NoncurrentVersionExpiration    *NoncurrentVersionExpiration    `xml:"NoncurrentVersionExpiration,omitempty" json:"noncurrentVersionExpiration,omitempty"`
-	NoncurrentVersionTransition    []NoncurrentVersionTransition   `xml:"NoncurrentVersionTransition,omitempty" json:"noncurrentVersionTransitions,omitempty"`
-	AbortIncompleteMultipartUpload *AbortIncompleteMultipartUpload `xml:"AbortIncompleteMultipartUpload,omitempty" json:"abortIncompleteMultipartUpload,omitempty"`
+	ID                             string                          `json:"id"                                       xml:"ID"`
+	Status                         string                          `json:"status"                                   xml:"Status"` // Enabled/Disabled
+	Filter                         Filter                          `json:"filter"                                   xml:"Filter"`
+	Expiration                     *Expiration                     `json:"expiration,omitempty"                     xml:"Expiration,omitempty"`
+	Transition                     []Transition                    `json:"transitions,omitempty"                    xml:"Transition,omitempty"`
+	NoncurrentVersionExpiration    *NoncurrentVersionExpiration    `json:"noncurrentVersionExpiration,omitempty"    xml:"NoncurrentVersionExpiration,omitempty"`
+	NoncurrentVersionTransition    []NoncurrentVersionTransition   `json:"noncurrentVersionTransitions,omitempty"   xml:"NoncurrentVersionTransition,omitempty"`
+	AbortIncompleteMultipartUpload *AbortIncompleteMultipartUpload `json:"abortIncompleteMultipartUpload,omitempty" xml:"AbortIncompleteMultipartUpload,omitempty"`
 }
 
-// Filter specifies which objects the rule applies to
+// Filter specifies which objects the rule applies to.
 type Filter struct {
-	Prefix string `xml:"Prefix,omitempty" json:"prefix,omitempty"`
-	Tag    *Tag   `xml:"Tag,omitempty" json:"tag,omitempty"`
-	And    *And   `xml:"And,omitempty" json:"and,omitempty"`
+	Prefix string `json:"prefix,omitempty" xml:"Prefix,omitempty"`
+	Tag    *Tag   `json:"tag,omitempty"    xml:"Tag,omitempty"`
+	And    *And   `json:"and,omitempty"    xml:"And,omitempty"`
 }
 
-// Tag represents a key-value tag filter
+// Tag represents a key-value tag filter.
 type Tag struct {
-	Key   string `xml:"Key" json:"key"`
-	Value string `xml:"Value" json:"value"`
+	Key   string `json:"key"   xml:"Key"`
+	Value string `json:"value" xml:"Value"`
 }
 
-// And combines multiple filter conditions
+// And combines multiple filter conditions.
 type And struct {
-	Prefix string `xml:"Prefix,omitempty" json:"prefix,omitempty"`
-	Tags   []Tag  `xml:"Tag,omitempty" json:"tags,omitempty"`
+	Prefix string `json:"prefix,omitempty" xml:"Prefix,omitempty"`
+	Tags   []Tag  `json:"tags,omitempty"   xml:"Tag,omitempty"`
 }
 
-// Expiration specifies when objects should be deleted
+// Expiration specifies when objects should be deleted.
 type Expiration struct {
-	Days                      int       `xml:"Days,omitempty" json:"days,omitempty"`
-	Date                      time.Time `xml:"Date,omitempty" json:"date,omitempty"`
-	ExpiredObjectDeleteMarker bool      `xml:"ExpiredObjectDeleteMarker,omitempty" json:"expiredObjectDeleteMarker,omitempty"`
+	Days                      int       `json:"days,omitempty"                      xml:"Days,omitempty"`
+	Date                      time.Time `json:"date,omitempty"                      xml:"Date,omitempty"`
+	ExpiredObjectDeleteMarker bool      `json:"expiredObjectDeleteMarker,omitempty" xml:"ExpiredObjectDeleteMarker,omitempty"`
 }
 
-// Transition specifies when objects should transition to a different storage class
+// Transition specifies when objects should transition to a different storage class.
 type Transition struct {
-	Days         int       `xml:"Days,omitempty" json:"days,omitempty"`
-	Date         time.Time `xml:"Date,omitempty" json:"date,omitempty"`
-	StorageClass string    `xml:"StorageClass" json:"storageClass"`
+	Days         int       `json:"days,omitempty" xml:"Days,omitempty"`
+	Date         time.Time `json:"date,omitempty" xml:"Date,omitempty"`
+	StorageClass string    `json:"storageClass"   xml:"StorageClass"`
 }
 
-// NoncurrentVersionExpiration specifies when noncurrent versions should be deleted
+// NoncurrentVersionExpiration specifies when noncurrent versions should be deleted.
 type NoncurrentVersionExpiration struct {
-	NoncurrentDays          int `xml:"NoncurrentDays,omitempty" json:"noncurrentDays,omitempty"`
-	NewerNoncurrentVersions int `xml:"NewerNoncurrentVersions,omitempty" json:"newerNoncurrentVersions,omitempty"`
+	NoncurrentDays          int `json:"noncurrentDays,omitempty"          xml:"NoncurrentDays,omitempty"`
+	NewerNoncurrentVersions int `json:"newerNoncurrentVersions,omitempty" xml:"NewerNoncurrentVersions,omitempty"`
 }
 
-// NoncurrentVersionTransition specifies when noncurrent versions should transition
+// NoncurrentVersionTransition specifies when noncurrent versions should transition.
 type NoncurrentVersionTransition struct {
-	NoncurrentDays int    `xml:"NoncurrentDays" json:"noncurrentDays"`
-	StorageClass   string `xml:"StorageClass" json:"storageClass"`
+	NoncurrentDays int    `json:"noncurrentDays" xml:"NoncurrentDays"`
+	StorageClass   string `json:"storageClass"   xml:"StorageClass"`
 }
 
-// AbortIncompleteMultipartUpload specifies when to abort incomplete multipart uploads
+// AbortIncompleteMultipartUpload specifies when to abort incomplete multipart uploads.
 type AbortIncompleteMultipartUpload struct {
-	DaysAfterInitiation int `xml:"DaysAfterInitiation" json:"daysAfterInitiation"`
+	DaysAfterInitiation int `json:"daysAfterInitiation" xml:"DaysAfterInitiation"`
 }
 
-// Action represents the action to take on an object
+// Action represents the action to take on an object.
 type Action int
 
 const (
-	// ActionNone means no action should be taken
+	// ActionNone means no action should be taken.
 	ActionNone Action = iota
-	// ActionDelete means the object should be deleted
+	// ActionDelete means the object should be deleted.
 	ActionDelete
-	// ActionTransition means the object should be transitioned to a different storage class
+	// ActionTransition means the object should be transitioned to a different storage class.
 	ActionTransition
-	// ActionDeleteMarker means a delete marker should be removed
+	// ActionDeleteMarker means a delete marker should be removed.
 	ActionDeleteMarker
-	// ActionAbortMultipart means the multipart upload should be aborted
+	// ActionAbortMultipart means the multipart upload should be aborted.
 	ActionAbortMultipart
 )
 
-// ActionResult contains the result of evaluating a lifecycle rule
+// ActionResult contains the result of evaluating a lifecycle rule.
 type ActionResult struct {
 	Action       Action
 	TargetClass  string // For transition actions
@@ -99,28 +100,32 @@ type ActionResult struct {
 	DeleteMarker bool // Whether this is a delete marker cleanup
 }
 
-// ParseLifecycleConfig parses XML lifecycle configuration
+// ParseLifecycleConfig parses XML lifecycle configuration.
 func ParseLifecycleConfig(data []byte) (*LifecycleConfiguration, error) {
 	var config LifecycleConfiguration
-	if err := xml.Unmarshal(data, &config); err != nil {
+	err := xml.Unmarshal(data, &config)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse lifecycle configuration: %w", err)
 	}
+
 	return &config, nil
 }
 
-// Validate validates the lifecycle configuration
+// Validate validates the lifecycle configuration.
 func (c *LifecycleConfiguration) Validate() error {
 	if len(c.Rules) == 0 {
-		return fmt.Errorf("lifecycle configuration must have at least one rule")
+		return errors.New("lifecycle configuration must have at least one rule")
 	}
 
 	if len(c.Rules) > 1000 {
-		return fmt.Errorf("lifecycle configuration cannot have more than 1000 rules")
+		return errors.New("lifecycle configuration cannot have more than 1000 rules")
 	}
 
 	seenIDs := make(map[string]bool)
+
 	for i, rule := range c.Rules {
-		if err := rule.Validate(); err != nil {
+		err := rule.Validate()
+		if err != nil {
 			return fmt.Errorf("rule %d: %w", i, err)
 		}
 
@@ -129,6 +134,7 @@ func (c *LifecycleConfiguration) Validate() error {
 			if seenIDs[rule.ID] {
 				return fmt.Errorf("duplicate rule ID: %s", rule.ID)
 			}
+
 			seenIDs[rule.ID] = true
 		}
 	}
@@ -136,11 +142,11 @@ func (c *LifecycleConfiguration) Validate() error {
 	return nil
 }
 
-// Validate validates a single lifecycle rule
+// Validate validates a single lifecycle rule.
 func (r *LifecycleRule) Validate() error {
 	// Validate ID
 	if len(r.ID) > 255 {
-		return fmt.Errorf("rule ID must be 255 characters or less")
+		return errors.New("rule ID must be 255 characters or less")
 	}
 
 	// Validate status
@@ -150,7 +156,8 @@ func (r *LifecycleRule) Validate() error {
 	}
 
 	// Validate filter
-	if err := r.Filter.Validate(); err != nil {
+	err := r.Filter.Validate()
+	if err != nil {
 		return fmt.Errorf("invalid filter: %w", err)
 	}
 
@@ -162,40 +169,45 @@ func (r *LifecycleRule) Validate() error {
 		r.AbortIncompleteMultipartUpload != nil
 
 	if !hasAction {
-		return fmt.Errorf("rule must have at least one action (Expiration, Transition, NoncurrentVersionExpiration, NoncurrentVersionTransition, or AbortIncompleteMultipartUpload)")
+		return errors.New("rule must have at least one action (Expiration, Transition, NoncurrentVersionExpiration, NoncurrentVersionTransition, or AbortIncompleteMultipartUpload)")
 	}
 
 	// Validate expiration
 	if r.Expiration != nil {
-		if err := r.Expiration.Validate(); err != nil {
+		err := r.Expiration.Validate()
+		if err != nil {
 			return fmt.Errorf("invalid expiration: %w", err)
 		}
 	}
 
 	// Validate transitions
 	for i, t := range r.Transition {
-		if err := t.Validate(); err != nil {
+		err := t.Validate()
+		if err != nil {
 			return fmt.Errorf("invalid transition %d: %w", i, err)
 		}
 	}
 
 	// Validate noncurrent version expiration
 	if r.NoncurrentVersionExpiration != nil {
-		if err := r.NoncurrentVersionExpiration.Validate(); err != nil {
+		err := r.NoncurrentVersionExpiration.Validate()
+		if err != nil {
 			return fmt.Errorf("invalid noncurrent version expiration: %w", err)
 		}
 	}
 
 	// Validate noncurrent version transitions
 	for i, t := range r.NoncurrentVersionTransition {
-		if err := t.Validate(); err != nil {
+		err := t.Validate()
+		if err != nil {
 			return fmt.Errorf("invalid noncurrent version transition %d: %w", i, err)
 		}
 	}
 
 	// Validate abort incomplete multipart upload
 	if r.AbortIncompleteMultipartUpload != nil {
-		if err := r.AbortIncompleteMultipartUpload.Validate(); err != nil {
+		err := r.AbortIncompleteMultipartUpload.Validate()
+		if err != nil {
 			return fmt.Errorf("invalid abort incomplete multipart upload: %w", err)
 		}
 	}
@@ -203,7 +215,7 @@ func (r *LifecycleRule) Validate() error {
 	return nil
 }
 
-// Validate validates a filter
+// Validate validates a filter.
 func (f *Filter) Validate() error {
 	hasPrefix := f.Prefix != ""
 	hasTag := f.Tag != nil
@@ -211,21 +223,22 @@ func (f *Filter) Validate() error {
 
 	// Can only have one of prefix/tag or And
 	if hasAnd && (hasPrefix || hasTag) {
-		return fmt.Errorf("cannot use And with Prefix or Tag at the same level")
+		return errors.New("cannot use And with Prefix or Tag at the same level")
 	}
 
 	// Validate tag
 	if hasTag {
 		if f.Tag.Key == "" {
-			return fmt.Errorf("tag key cannot be empty")
+			return errors.New("tag key cannot be empty")
 		}
 	}
 
 	// Validate And
 	if hasAnd {
 		if len(f.And.Tags) == 0 && f.And.Prefix == "" {
-			return fmt.Errorf("And filter must have at least a prefix or one tag")
+			return errors.New("And filter must have at least a prefix or one tag")
 		}
+
 		for i, tag := range f.And.Tags {
 			if tag.Key == "" {
 				return fmt.Errorf("tag %d in And filter has empty key", i)
@@ -236,7 +249,7 @@ func (f *Filter) Validate() error {
 	return nil
 }
 
-// Validate validates an expiration configuration
+// Validate validates an expiration configuration.
 func (e *Expiration) Validate() error {
 	hasDays := e.Days > 0
 	hasDate := !e.Date.IsZero()
@@ -244,45 +257,45 @@ func (e *Expiration) Validate() error {
 
 	// Days and Date are mutually exclusive
 	if hasDays && hasDate {
-		return fmt.Errorf("cannot specify both Days and Date")
+		return errors.New("cannot specify both Days and Date")
 	}
 
 	// ExpiredObjectDeleteMarker is mutually exclusive with Days and Date
 	if hasDeleteMarker && (hasDays || hasDate) {
-		return fmt.Errorf("ExpiredObjectDeleteMarker cannot be used with Days or Date")
+		return errors.New("ExpiredObjectDeleteMarker cannot be used with Days or Date")
 	}
 
 	// Must have at least one
 	if !hasDays && !hasDate && !hasDeleteMarker {
-		return fmt.Errorf("expiration must have Days, Date, or ExpiredObjectDeleteMarker")
+		return errors.New("expiration must have Days, Date, or ExpiredObjectDeleteMarker")
 	}
 
 	// Validate days
 	if hasDays && e.Days < 1 {
-		return fmt.Errorf("days must be a positive integer")
+		return errors.New("days must be a positive integer")
 	}
 
 	return nil
 }
 
-// Validate validates a transition configuration
+// Validate validates a transition configuration.
 func (t *Transition) Validate() error {
 	hasDays := t.Days > 0
 	hasDate := !t.Date.IsZero()
 
 	// Must have exactly one of Days or Date
 	if hasDays == hasDate {
-		return fmt.Errorf("transition must have exactly one of Days or Date")
+		return errors.New("transition must have exactly one of Days or Date")
 	}
 
 	// Validate days
 	if hasDays && t.Days < 0 {
-		return fmt.Errorf("days must be a positive integer")
+		return errors.New("days must be a positive integer")
 	}
 
 	// Must have storage class
 	if t.StorageClass == "" {
-		return fmt.Errorf("storage class is required")
+		return errors.New("storage class is required")
 	}
 
 	// Validate storage class
@@ -302,46 +315,48 @@ func (t *Transition) Validate() error {
 	return nil
 }
 
-// Validate validates a noncurrent version expiration configuration
+// Validate validates a noncurrent version expiration configuration.
 func (n *NoncurrentVersionExpiration) Validate() error {
 	if n.NoncurrentDays < 1 && n.NewerNoncurrentVersions < 1 {
-		return fmt.Errorf("must specify NoncurrentDays or NewerNoncurrentVersions")
+		return errors.New("must specify NoncurrentDays or NewerNoncurrentVersions")
 	}
+
 	return nil
 }
 
-// Validate validates a noncurrent version transition configuration
+// Validate validates a noncurrent version transition configuration.
 func (n *NoncurrentVersionTransition) Validate() error {
 	if n.NoncurrentDays < 0 {
-		return fmt.Errorf("noncurrent days must be a positive integer")
+		return errors.New("noncurrent days must be a positive integer")
 	}
 
 	if n.StorageClass == "" {
-		return fmt.Errorf("storage class is required")
+		return errors.New("storage class is required")
 	}
 
 	return nil
 }
 
-// Validate validates an abort incomplete multipart upload configuration
+// Validate validates an abort incomplete multipart upload configuration.
 func (a *AbortIncompleteMultipartUpload) Validate() error {
 	if a.DaysAfterInitiation < 1 {
-		return fmt.Errorf("days after initiation must be a positive integer")
+		return errors.New("days after initiation must be a positive integer")
 	}
+
 	return nil
 }
 
-// IsEnabled returns true if the rule is enabled
+// IsEnabled returns true if the rule is enabled.
 func (r *LifecycleRule) IsEnabled() bool {
 	return strings.EqualFold(r.Status, "Enabled")
 }
 
-// MatchesObject returns true if the rule's filter matches the given object
+// MatchesObject returns true if the rule's filter matches the given object.
 func (r *LifecycleRule) MatchesObject(key string, tags map[string]string) bool {
 	return r.Filter.Matches(key, tags)
 }
 
-// Matches returns true if the filter matches the given object key and tags
+// Matches returns true if the filter matches the given object key and tags.
 func (f *Filter) Matches(key string, tags map[string]string) bool {
 	// Check prefix
 	if f.Prefix != "" && !strings.HasPrefix(key, f.Prefix) {
@@ -353,6 +368,7 @@ func (f *Filter) Matches(key string, tags map[string]string) bool {
 		if tags == nil {
 			return false
 		}
+
 		if val, ok := tags[f.Tag.Key]; !ok || val != f.Tag.Value {
 			return false
 		}
@@ -370,6 +386,7 @@ func (f *Filter) Matches(key string, tags map[string]string) bool {
 			if tags == nil {
 				return false
 			}
+
 			if val, ok := tags[tag.Key]; !ok || val != tag.Value {
 				return false
 			}
@@ -379,7 +396,7 @@ func (f *Filter) Matches(key string, tags map[string]string) bool {
 	return true
 }
 
-// ToXML serializes the configuration to XML
+// ToXML serializes the configuration to XML.
 func (c *LifecycleConfiguration) ToXML() ([]byte, error) {
 	return xml.MarshalIndent(c, "", "  ")
 }

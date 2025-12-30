@@ -126,8 +126,7 @@ linters:
     - exhaustive        # Too strict - not all cases need handling
     - exhaustruct       # Too strict - partial struct init is common
     - nlreturn          # Style preference
-    - wsl               # Style preference - whitespace linting (deprecated)
-    - wsl_v5            # Style preference - whitespace linting (v5)
+    - wsl               # Style preference
     - lll               # Line length - not enforced
     - forbidigo         # Bans specific identifiers - not needed
     - varnamelen        # Variable name length - too strict
@@ -147,47 +146,6 @@ linters:
     - funcorder         # Function ordering - style preference, not enforced
     - forcetypeassert   # Type assertion checking - sometimes appropriate for known types
     - funlen            # Function length - some complex functions legitimately exceed limits
-    # Additional linters disabled due to strict style requirements
-    - unparam           # Unused params - often intentional for interface compliance
-    - tagalign          # Struct tag alignment - style preference
-    - mnd               # Magic numbers - too noisy for complex math/algorithms
-    - godoclint         # Documentation lint - too strict for internal packages
-    - goconst           # Constant strings - context-dependent optimization
-    - usetesting        # Testing best practices - style preference
-    - nonamedreturns    # Named returns - useful for documentation
-    - prealloc          # Slice preallocation - micro-optimization
-    - testifylint       # Testify linting - custom patterns acceptable
-    - usestdlibvars     # Stdlib vars - style preference
-    - dupl              # Duplicate code - sometimes intentional for clarity
-    - perfsprint        # Printf performance - micro-optimization
-    - noctx             # Context usage - internal code may have valid reasons
-    - nestif            # Nested if - complex logic sometimes necessary
-    - ireturn           # Interface returns - valid design pattern
-    - cyclop            # Cyclomatic complexity - already covered by gocyclo/gocognit
-    - maintidx          # Maintainability index - subjective metric
-    - gocyclo           # Cyclomatic complexity - excluded to reduce noise
-    - gocognit          # Cognitive complexity - excluded to reduce noise
-    # Additional style and strict linters
-    - gocritic          # Style recommendations - too opinionated
-    - revive            # Many false positives in complex code
-    - promlinter        # Prometheus linting - not using Prometheus extensively
-    - predeclared       # Predeclared identifiers - false positives
-    - nilerr            # Nil error returns - context-dependent
-    - interfacebloat    # Interface size - design decisions
-    - intrange          # Go 1.22 range - optional syntax
-    - noinlineerr       # Inline error handling - acceptable in some cases
-    - nilnil            # Nil returns - acceptable in mocks
-    - musttag           # Struct tags - not all structs need tags
-    - gosmopolitan      # i18n checks - not relevant
-    - unconvert         # Unnecessary conversions - sometimes explicit for clarity
-    - thelper           # Test helpers - style preference
-    - recvcheck         # Receiver consistency - style preference
-    - inamedparam       # Interface param naming - style preference
-    # Core linters with too many issues - will enable incrementally
-    - govet             # Go vet - fieldalignment causes many issues
-    - gosec             # Security - many false positives, review separately
-    - unqueryvet        # SQL query linting - SELECT * used intentionally in tests
-    - godot             # Comment periods - style preference, disable for now
 
   exclusions:
     paths:
@@ -206,20 +164,6 @@ linters:
           - gocognit    # Test complexity is acceptable
           - errcheck    # Tests often intentionally ignore errors
           - gosec       # Tests may use insecure operations
-
-      # Exclude testutil package - test utilities have different requirements
-      - path: internal/testutil/
-        linters:
-          - mnd         # Magic numbers acceptable in test fixtures
-          - govet       # Field alignment not critical for test mocks
-          - unparam     # Unused params acceptable in test helpers
-          - nilnil      # Nil returns acceptable in mock implementations
-          - testifylint # Test utilities use various assertion patterns
-          - noinlineerr # Inline error handling acceptable in test code
-          - intrange    # Go 1.22 range syntax optional in test code
-          - wsl         # Whitespace style not enforced in test utilities
-          - wsl_v5      # Whitespace style v5 not enforced in test utilities
-          - nolintlint  # Nolint directives may become stale when rules change
 
       # Exclude benchmark files
       - path: _bench_test\.go

@@ -2,7 +2,7 @@ package metadata
 
 import "encoding/json"
 
-// commandType represents the type of Raft command
+// commandType represents the type of Raft command.
 type commandType string
 
 const (
@@ -31,13 +31,13 @@ const (
 	cmdDeleteAuditEvent        commandType = "delete_audit_event"
 )
 
-// command represents a Raft command to be applied to the state machine
+// command represents a Raft command to be applied to the state machine.
 type command struct {
 	Type commandType     `json:"type"`
 	Data json.RawMessage `json:"data"`
 }
 
-// Key prefixes for BadgerDB storage
+// Key prefixes for BadgerDB storage.
 const (
 	prefixBucket        = "bucket:"
 	prefixObject        = "object:"

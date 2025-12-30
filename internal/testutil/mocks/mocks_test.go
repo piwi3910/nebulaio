@@ -17,9 +17,9 @@ func TestMockMetadataStore_ErrorInjection(t *testing.T) {
 	expectedErr := errors.New("injected error")
 
 	tests := []struct {
-		name      string
 		setError  func(*MockMetadataStore)
 		operation func(*MockMetadataStore) error
+		name      string
 	}{
 		{
 			name: "CreateBucket",
@@ -137,23 +137,29 @@ func TestMockMetadataStore_ErrorInjection(t *testing.T) {
 func TestMockMetadataStore_ThreadSafety(t *testing.T) {
 	store := NewMockMetadataStore()
 	ctx := context.Background()
+
 	var wg sync.WaitGroup
+
 	iterations := 100
 
 	// Concurrent bucket operations
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		wg.Add(3)
+
 		go func(n int) {
 			defer wg.Done()
+
 			bucket := &metadata.Bucket{Name: "test-bucket", Owner: "owner"}
 			_ = store.CreateBucket(ctx, bucket)
 		}(i)
 		go func(n int) {
 			defer wg.Done()
+
 			_, _ = store.GetBucket(ctx, "test-bucket")
 		}(i)
 		go func(n int) {
 			defer wg.Done()
+
 			_, _ = store.ListBuckets(ctx, "")
 		}(i)
 	}
@@ -228,7 +234,7 @@ func TestMockMetadataStore_Reset(t *testing.T) {
 
 	// Verify data is cleared
 	buckets = store.GetBuckets()
-	assert.Len(t, buckets, 0)
+	assert.Empty(t, buckets)
 
 	// Verify cluster state is reset
 	assert.True(t, store.IsLeader())
@@ -316,9 +322,9 @@ func TestMockStorageBackend_ErrorInjection(t *testing.T) {
 	expectedErr := errors.New("injected error")
 
 	tests := []struct {
-		name      string
 		setError  func(*MockStorageBackend)
 		operation func(*MockStorageBackend) error
+		name      string
 	}{
 		{
 			name: "Init",
@@ -384,21 +390,27 @@ func TestMockStorageBackend_ErrorInjection(t *testing.T) {
 func TestMockStorageBackend_ThreadSafety(t *testing.T) {
 	backend := NewMockStorageBackend()
 	ctx := context.Background()
+
 	var wg sync.WaitGroup
+
 	iterations := 100
 
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		wg.Add(3)
+
 		go func() {
 			defer wg.Done()
+
 			_ = backend.CreateBucket(ctx, "test-bucket")
 		}()
 		go func() {
 			defer wg.Done()
+
 			_, _ = backend.BucketExists(ctx, "test-bucket")
 		}()
 		go func() {
 			defer wg.Done()
+
 			_, _ = backend.ListBuckets(ctx)
 		}()
 	}
@@ -592,7 +604,7 @@ func TestMockObjectService_Reset(t *testing.T) {
 
 	// Verify data is cleared
 	deleted = svc.GetDeletedObjects()
-	assert.Len(t, deleted, 0)
+	assert.Empty(t, deleted)
 
 	// Verify errors are cleared
 	err := svc.DeleteObject(ctx, "bucket", "key2")
@@ -614,7 +626,7 @@ func TestMockMultipartService_Reset(t *testing.T) {
 	// Verify data is cleared
 	uploads, err := svc.ListMultipartUploads(ctx, "bucket")
 	assert.NoError(t, err)
-	assert.Len(t, uploads, 0)
+	assert.Empty(t, uploads)
 }
 
 // TestMockEventTarget_Reset verifies Reset clears all state.

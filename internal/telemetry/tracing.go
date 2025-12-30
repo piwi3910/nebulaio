@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// SpanKind represents the kind of span
+// SpanKind represents the kind of span.
 type SpanKind int
 
 const (
@@ -23,7 +23,7 @@ const (
 	SpanKindConsumer
 )
 
-// SpanStatus represents the status of a span
+// SpanStatus represents the status of a span.
 type SpanStatus int
 
 const (
@@ -32,55 +32,56 @@ const (
 	SpanStatusError
 )
 
-// AttributeValue represents a span attribute value
+// AttributeValue represents a span attribute value.
 type AttributeValue struct {
-	Type  string      `json:"type"`
 	Value interface{} `json:"value"`
+	Type  string      `json:"type"`
 }
 
-// SpanContext contains the trace context
+// SpanContext contains the trace context.
 type SpanContext struct {
 	TraceID    string `json:"trace_id"`
 	SpanID     string `json:"span_id"`
-	TraceFlags byte   `json:"trace_flags"`
 	TraceState string `json:"trace_state,omitempty"`
+	TraceFlags byte   `json:"trace_flags"`
 	Remote     bool   `json:"remote"`
 }
 
-// SpanEvent represents an event within a span
+// SpanEvent represents an event within a span.
 type SpanEvent struct {
-	Name       string                    `json:"name"`
 	Timestamp  time.Time                 `json:"timestamp"`
 	Attributes map[string]AttributeValue `json:"attributes,omitempty"`
+	Name       string                    `json:"name"`
 }
 
-// SpanLink represents a link to another span
+// SpanLink represents a link to another span.
 type SpanLink struct {
-	SpanContext SpanContext               `json:"span_context"`
 	Attributes  map[string]AttributeValue `json:"attributes,omitempty"`
+	SpanContext SpanContext               `json:"span_context"`
 }
 
-// Span represents a distributed tracing span
+// Span represents a distributed tracing span.
 type Span struct {
-	mu            sync.RWMutex
+	StartTime     time.Time `json:"start_time"`
+	EndTime       time.Time `json:"end_time,omitempty"`
+	tracer        *Tracer
+	Resource      *Resource                 `json:"resource,omitempty"`
+	Attributes    map[string]AttributeValue `json:"attributes"`
+	ParentSpanID  string                    `json:"parent_span_id,omitempty"`
+	StatusMessage string                    `json:"status_message,omitempty"`
 	Name          string                    `json:"name"`
 	SpanContext   SpanContext               `json:"span_context"`
-	ParentSpanID  string                    `json:"parent_span_id,omitempty"`
-	Kind          SpanKind                  `json:"kind"`
-	StartTime     time.Time                 `json:"start_time"`
-	EndTime       time.Time                 `json:"end_time,omitempty"`
-	Attributes    map[string]AttributeValue `json:"attributes"`
 	Events        []*SpanEvent              `json:"events,omitempty"`
 	Links         []*SpanLink               `json:"links,omitempty"`
+	Kind          SpanKind                  `json:"kind"`
 	Status        SpanStatus                `json:"status"`
-	StatusMessage string                    `json:"status_message,omitempty"`
-	Resource      *Resource                 `json:"resource,omitempty"`
-	tracer        *Tracer
+	mu            sync.RWMutex
 	ended         bool
 }
 
-// Resource represents resource information
+// Resource represents resource information.
 type Resource struct {
+	Attributes     map[string]string `json:"attributes,omitempty"`
 	ServiceName    string            `json:"service.name"`
 	ServiceVersion string            `json:"service.version"`
 	Environment    string            `json:"deployment.environment"`
@@ -88,65 +89,64 @@ type Resource struct {
 	HostID         string            `json:"host.id"`
 	OSType         string            `json:"os.type"`
 	ProcessPID     int               `json:"process.pid"`
-	Attributes     map[string]string `json:"attributes,omitempty"`
 }
 
-// TracerConfig contains configuration for the tracer
+// TracerConfig contains configuration for the tracer.
 type TracerConfig struct {
+	ExporterHeaders    map[string]string `json:"exporter_headers,omitempty"`
 	ServiceName        string            `json:"service_name"`
 	ServiceVersion     string            `json:"service_version"`
 	Environment        string            `json:"environment"`
+	ExporterType       string            `json:"exporter_type"`
+	ExporterEndpoint   string            `json:"exporter_endpoint"`
+	PropagatorType     string            `json:"propagator_type"`
 	SamplingRate       float64           `json:"sampling_rate"`
 	MaxSpansPerTrace   int               `json:"max_spans_per_trace"`
-	ExporterType       string            `json:"exporter_type"` // otlp, jaeger, zipkin, console
-	ExporterEndpoint   string            `json:"exporter_endpoint"`
-	ExporterHeaders    map[string]string `json:"exporter_headers,omitempty"`
 	BatchTimeout       time.Duration     `json:"batch_timeout"`
 	MaxExportBatchSize int               `json:"max_export_batch_size"`
 	EnableMetrics      bool              `json:"enable_metrics"`
-	PropagatorType     string            `json:"propagator_type"` // w3c, b3, jaeger
 }
 
-// Tracer creates and manages spans
+// Tracer creates and manages spans.
 type Tracer struct {
-	mu          sync.RWMutex
+	sampler     Sampler
+	propagator  Propagator
 	config      *TracerConfig
 	resource    *Resource
 	spans       chan *Span
-	exporters   []SpanExporter
-	sampler     Sampler
-	propagator  Propagator
 	activeSpans map[string]*Span
-	spanCount   int64
 	stopChan    chan struct{}
+	exporters   []SpanExporter
 	wg          sync.WaitGroup
+	spanCount   int64
+	mu          sync.RWMutex
 }
 
-// SpanExporter defines the interface for exporting spans
+// SpanExporter defines the interface for exporting spans.
 type SpanExporter interface {
 	ExportSpans(ctx context.Context, spans []*Span) error
 	Shutdown(ctx context.Context) error
 }
 
-// Sampler defines the interface for sampling decisions
+// Sampler defines the interface for sampling decisions.
 type Sampler interface {
 	ShouldSample(ctx context.Context, traceID string, name string, kind SpanKind) bool
 }
 
-// Propagator defines the interface for context propagation
+// Propagator defines the interface for context propagation.
 type Propagator interface {
 	Inject(ctx context.Context, carrier http.Header)
 	Extract(ctx context.Context, carrier http.Header) SpanContext
 }
 
-// TraceContext type for context key
+// TraceContext type for context key.
 type contextKey string
 
 const (
 	spanContextKey contextKey = "span"
 )
 
-// NewTracer creates a new tracer
+// NewTracer creates a new tracer.
 func NewTracer(config *TracerConfig) (*Tracer, error) {
 	if config == nil {
 		config = &TracerConfig{
@@ -213,12 +213,13 @@ func NewTracer(config *TracerConfig) (*Tracer, error) {
 
 	// Start batch processor
 	t.wg.Add(1)
+
 	go t.batchProcessor()
 
 	return t, nil
 }
 
-// StartSpan starts a new span
+// StartSpan starts a new span.
 func (t *Tracer) StartSpan(ctx context.Context, name string, opts ...SpanOption) (context.Context, *Span) {
 	options := &spanOptions{
 		kind: SpanKindInternal,
@@ -228,8 +229,11 @@ func (t *Tracer) StartSpan(ctx context.Context, name string, opts ...SpanOption)
 	}
 
 	// Get parent span from context
-	var parentSpanID string
-	var traceID string
+	var (
+		parentSpanID string
+		traceID      string
+	)
+
 	if parentSpan := SpanFromContext(ctx); parentSpan != nil {
 		parentSpanID = parentSpan.SpanContext.SpanID
 		traceID = parentSpan.SpanContext.TraceID
@@ -250,6 +254,7 @@ func (t *Tracer) StartSpan(ctx context.Context, name string, opts ...SpanOption)
 			},
 			tracer: t,
 		}
+
 		return context.WithValue(ctx, spanContextKey, span), span
 	}
 
@@ -286,42 +291,43 @@ func (t *Tracer) StartSpan(ctx context.Context, name string, opts ...SpanOption)
 	return context.WithValue(ctx, spanContextKey, span), span
 }
 
-// SpanOption configures a span
+// SpanOption configures a span.
 type SpanOption func(*spanOptions)
 
 type spanOptions struct {
-	kind       SpanKind
 	attributes map[string]interface{}
 	links      []*SpanLink
+	kind       SpanKind
 }
 
-// WithSpanKind sets the span kind
+// WithSpanKind sets the span kind.
 func WithSpanKind(kind SpanKind) SpanOption {
 	return func(o *spanOptions) {
 		o.kind = kind
 	}
 }
 
-// WithAttributes sets initial attributes
+// WithAttributes sets initial attributes.
 func WithAttributes(attrs map[string]interface{}) SpanOption {
 	return func(o *spanOptions) {
 		o.attributes = attrs
 	}
 }
 
-// WithLinks sets span links
+// WithLinks sets span links.
 func WithLinks(links []*SpanLink) SpanOption {
 	return func(o *spanOptions) {
 		o.links = links
 	}
 }
 
-// SetAttribute sets an attribute on the span
+// SetAttribute sets an attribute on the span.
 func (s *Span) SetAttribute(key string, value interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	var attrValue AttributeValue
+
 	switch v := value.(type) {
 	case string:
 		attrValue = AttributeValue{Type: "string", Value: v}
@@ -340,7 +346,7 @@ func (s *Span) SetAttribute(key string, value interface{}) {
 	s.Attributes[key] = attrValue
 }
 
-// AddEvent adds an event to the span
+// AddEvent adds an event to the span.
 func (s *Span) AddEvent(name string, attrs map[string]interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -358,7 +364,7 @@ func (s *Span) AddEvent(name string, attrs map[string]interface{}) {
 	s.Events = append(s.Events, event)
 }
 
-// RecordError records an error on the span
+// RecordError records an error on the span.
 func (s *Span) RecordError(err error) {
 	if err == nil {
 		return
@@ -373,7 +379,7 @@ func (s *Span) RecordError(err error) {
 	s.SetStatus(SpanStatusError, err.Error())
 }
 
-// SetStatus sets the span status
+// SetStatus sets the span status.
 func (s *Span) SetStatus(status SpanStatus, message string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -382,13 +388,15 @@ func (s *Span) SetStatus(status SpanStatus, message string) {
 	s.StatusMessage = message
 }
 
-// End ends the span
+// End ends the span.
 func (s *Span) End() {
 	s.mu.Lock()
+
 	if s.ended {
 		s.mu.Unlock()
 		return
 	}
+
 	s.ended = true
 	s.EndTime = time.Now()
 	s.mu.Unlock()
@@ -407,7 +415,7 @@ func (s *Span) End() {
 	}
 }
 
-// Duration returns the span duration
+// Duration returns the span duration.
 func (s *Span) Duration() time.Duration {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -415,22 +423,25 @@ func (s *Span) Duration() time.Duration {
 	if s.EndTime.IsZero() {
 		return time.Since(s.StartTime)
 	}
+
 	return s.EndTime.Sub(s.StartTime)
 }
 
-// SpanFromContext retrieves the current span from context
+// SpanFromContext retrieves the current span from context.
 func SpanFromContext(ctx context.Context) *Span {
 	if span, ok := ctx.Value(spanContextKey).(*Span); ok {
 		return span
 	}
+
 	return nil
 }
 
-// batchProcessor processes spans in batches
+// batchProcessor processes spans in batches.
 func (t *Tracer) batchProcessor() {
 	defer t.wg.Done()
 
 	batch := make([]*Span, 0, t.config.MaxExportBatchSize)
+
 	ticker := time.NewTicker(t.config.BatchTimeout)
 	defer ticker.Stop()
 
@@ -441,6 +452,7 @@ func (t *Tracer) batchProcessor() {
 			if len(batch) > 0 {
 				t.exportBatch(batch)
 			}
+
 			return
 
 		case span := <-t.spans:
@@ -459,7 +471,7 @@ func (t *Tracer) batchProcessor() {
 	}
 }
 
-// exportBatch exports a batch of spans
+// exportBatch exports a batch of spans.
 func (t *Tracer) exportBatch(spans []*Span) {
 	ctx := context.Background()
 	for _, exporter := range t.exporters {
@@ -468,30 +480,33 @@ func (t *Tracer) exportBatch(spans []*Span) {
 	}
 }
 
-// Inject injects the span context into HTTP headers
+// Inject injects the span context into HTTP headers.
 func (t *Tracer) Inject(ctx context.Context, carrier http.Header) {
 	t.propagator.Inject(ctx, carrier)
 }
 
-// Extract extracts the span context from HTTP headers
+// Extract extracts the span context from HTTP headers.
 func (t *Tracer) Extract(ctx context.Context, carrier http.Header) context.Context {
 	spanCtx := t.propagator.Extract(ctx, carrier)
 	if spanCtx.TraceID != "" {
 		span := &Span{
 			SpanContext: spanCtx,
 		}
+
 		return context.WithValue(ctx, spanContextKey, span)
 	}
+
 	return ctx
 }
 
-// Shutdown shuts down the tracer
+// Shutdown shuts down the tracer.
 func (t *Tracer) Shutdown(ctx context.Context) error {
 	close(t.stopChan)
 	t.wg.Wait()
 
 	for _, exporter := range t.exporters {
-		if err := exporter.Shutdown(ctx); err != nil {
+		err := exporter.Shutdown(ctx)
+		if err != nil {
 			return err
 		}
 	}
@@ -499,30 +514,33 @@ func (t *Tracer) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// GetActiveSpans returns the number of active spans
+// GetActiveSpans returns the number of active spans.
 func (t *Tracer) GetActiveSpans() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
 	return len(t.activeSpans)
 }
 
-// GetSpanCount returns the total number of spans created
+// GetSpanCount returns the total number of spans created.
 func (t *Tracer) GetSpanCount() int64 {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
 	return t.spanCount
 }
 
-// ProbabilitySampler samples based on probability
+// ProbabilitySampler samples based on probability.
 type ProbabilitySampler struct {
 	rate float64
 }
 
-// ShouldSample determines if a span should be sampled
+// ShouldSample determines if a span should be sampled.
 func (s *ProbabilitySampler) ShouldSample(ctx context.Context, traceID string, name string, kind SpanKind) bool {
 	if s.rate >= 1.0 {
 		return true
 	}
+
 	if s.rate <= 0.0 {
 		return false
 	}
@@ -531,13 +549,14 @@ func (s *ProbabilitySampler) ShouldSample(ctx context.Context, traceID string, n
 	for _, c := range traceID {
 		hash = hash*31 + int(c)
 	}
+
 	return float64(hash%1000)/1000.0 < s.rate
 }
 
-// W3CTraceContextPropagator implements W3C Trace Context propagation
+// W3CTraceContextPropagator implements W3C Trace Context propagation.
 type W3CTraceContextPropagator struct{}
 
-// Inject injects the span context into HTTP headers
+// Inject injects the span context into HTTP headers.
 func (p *W3CTraceContextPropagator) Inject(ctx context.Context, carrier http.Header) {
 	span := SpanFromContext(ctx)
 	if span == nil {
@@ -557,15 +576,17 @@ func (p *W3CTraceContextPropagator) Inject(ctx context.Context, carrier http.Hea
 	}
 }
 
-// Extract extracts the span context from HTTP headers
+// Extract extracts the span context from HTTP headers.
 func (p *W3CTraceContextPropagator) Extract(ctx context.Context, carrier http.Header) SpanContext {
 	Traceparent := carrier.Get("Traceparent")
 	if Traceparent == "" {
 		return SpanContext{}
 	}
 
-	var version, traceID, spanID string
-	var flags byte
+	var (
+		version, traceID, spanID string
+		flags                    byte
+	)
 
 	_, err := fmt.Sscanf(Traceparent, "%2s-%32s-%16s-%02x", &version, &traceID, &spanID, &flags)
 	if err != nil {
@@ -581,10 +602,10 @@ func (p *W3CTraceContextPropagator) Extract(ctx context.Context, carrier http.He
 	}
 }
 
-// B3Propagator implements B3 propagation (Zipkin style)
+// B3Propagator implements B3 propagation (Zipkin style).
 type B3Propagator struct{}
 
-// Inject injects the span context into HTTP headers
+// Inject injects the span context into HTTP headers.
 func (p *B3Propagator) Inject(ctx context.Context, carrier http.Header) {
 	span := SpanFromContext(ctx)
 	if span == nil {
@@ -593,9 +614,11 @@ func (p *B3Propagator) Inject(ctx context.Context, carrier http.Header) {
 
 	carrier.Set("X-B3-Traceid", span.SpanContext.TraceID)
 	carrier.Set("X-B3-Spanid", span.SpanContext.SpanID)
+
 	if span.ParentSpanID != "" {
 		carrier.Set("X-B3-Parentspanid", span.ParentSpanID)
 	}
+
 	if span.SpanContext.TraceFlags&1 == 1 {
 		carrier.Set("X-B3-Sampled", "1")
 	} else {
@@ -603,7 +626,7 @@ func (p *B3Propagator) Inject(ctx context.Context, carrier http.Header) {
 	}
 }
 
-// Extract extracts the span context from HTTP headers
+// Extract extracts the span context from HTTP headers.
 func (p *B3Propagator) Extract(ctx context.Context, carrier http.Header) SpanContext {
 	traceID := carrier.Get("X-B3-Traceid")
 	spanID := carrier.Get("X-B3-Spanid")
@@ -625,10 +648,10 @@ func (p *B3Propagator) Extract(ctx context.Context, carrier http.Header) SpanCon
 	}
 }
 
-// JaegerPropagator implements Jaeger propagation
+// JaegerPropagator implements Jaeger propagation.
 type JaegerPropagator struct{}
 
-// Inject injects the span context into HTTP headers
+// Inject injects the span context into HTTP headers.
 func (p *JaegerPropagator) Inject(ctx context.Context, carrier http.Header) {
 	span := SpanFromContext(ctx)
 	if span == nil {
@@ -650,15 +673,17 @@ func (p *JaegerPropagator) Inject(ctx context.Context, carrier http.Header) {
 	carrier.Set("Uber-Trace-Id", header)
 }
 
-// Extract extracts the span context from HTTP headers
+// Extract extracts the span context from HTTP headers.
 func (p *JaegerPropagator) Extract(ctx context.Context, carrier http.Header) SpanContext {
 	header := carrier.Get("Uber-Trace-Id")
 	if header == "" {
 		return SpanContext{}
 	}
 
-	var traceID, spanID, parentID string
-	var flags byte
+	var (
+		traceID, spanID, parentID string
+		flags                     byte
+	)
 
 	_, err := fmt.Sscanf(header, "%s:%s:%s:%d", &traceID, &spanID, &parentID, &flags)
 	if err != nil {
@@ -673,15 +698,15 @@ func (p *JaegerPropagator) Extract(ctx context.Context, carrier http.Header) Spa
 	}
 }
 
-// ConsoleExporter exports spans to console
+// ConsoleExporter exports spans to console.
 type ConsoleExporter struct{}
 
-// NewConsoleExporter creates a new console exporter
+// NewConsoleExporter creates a new console exporter.
 func NewConsoleExporter() *ConsoleExporter {
 	return &ConsoleExporter{}
 }
 
-// ExportSpans exports spans to console
+// ExportSpans exports spans to console.
 func (e *ConsoleExporter) ExportSpans(ctx context.Context, spans []*Span) error {
 	for _, span := range spans {
 		fmt.Printf("[TRACE] %s | trace=%s span=%s parent=%s | duration=%v | status=%d\n",
@@ -692,22 +717,23 @@ func (e *ConsoleExporter) ExportSpans(ctx context.Context, spans []*Span) error 
 			span.Duration(),
 			span.Status)
 	}
+
 	return nil
 }
 
-// Shutdown shuts down the exporter
+// Shutdown shuts down the exporter.
 func (e *ConsoleExporter) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// OTLPExporter exports spans via OTLP protocol
+// OTLPExporter exports spans via OTLP protocol.
 type OTLPExporter struct {
-	endpoint string
 	headers  map[string]string
 	client   *http.Client
+	endpoint string
 }
 
-// NewOTLPExporter creates a new OTLP exporter
+// NewOTLPExporter creates a new OTLP exporter.
 func NewOTLPExporter(endpoint string, headers map[string]string) *OTLPExporter {
 	return &OTLPExporter{
 		endpoint: endpoint,
@@ -718,7 +744,7 @@ func NewOTLPExporter(endpoint string, headers map[string]string) *OTLPExporter {
 	}
 }
 
-// ExportSpans exports spans via OTLP
+// ExportSpans exports spans via OTLP.
 func (e *OTLPExporter) ExportSpans(ctx context.Context, spans []*Span) error {
 	// In a real implementation, this would serialize spans to OTLP format
 	// and send them to the configured endpoint
@@ -726,18 +752,18 @@ func (e *OTLPExporter) ExportSpans(ctx context.Context, spans []*Span) error {
 	return nil
 }
 
-// Shutdown shuts down the exporter
+// Shutdown shuts down the exporter.
 func (e *OTLPExporter) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// JaegerExporter exports spans to Jaeger
+// JaegerExporter exports spans to Jaeger.
 type JaegerExporter struct {
-	endpoint string
 	client   *http.Client
+	endpoint string
 }
 
-// NewJaegerExporter creates a new Jaeger exporter
+// NewJaegerExporter creates a new Jaeger exporter.
 func NewJaegerExporter(endpoint string) *JaegerExporter {
 	return &JaegerExporter{
 		endpoint: endpoint,
@@ -747,25 +773,25 @@ func NewJaegerExporter(endpoint string) *JaegerExporter {
 	}
 }
 
-// ExportSpans exports spans to Jaeger
+// ExportSpans exports spans to Jaeger.
 func (e *JaegerExporter) ExportSpans(ctx context.Context, spans []*Span) error {
 	// In a real implementation, this would serialize spans to Jaeger format
 	// and send them to the configured endpoint
 	return nil
 }
 
-// Shutdown shuts down the exporter
+// Shutdown shuts down the exporter.
 func (e *JaegerExporter) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// ZipkinExporter exports spans to Zipkin
+// ZipkinExporter exports spans to Zipkin.
 type ZipkinExporter struct {
-	endpoint string
 	client   *http.Client
+	endpoint string
 }
 
-// NewZipkinExporter creates a new Zipkin exporter
+// NewZipkinExporter creates a new Zipkin exporter.
 func NewZipkinExporter(endpoint string) *ZipkinExporter {
 	return &ZipkinExporter{
 		endpoint: endpoint,
@@ -775,19 +801,19 @@ func NewZipkinExporter(endpoint string) *ZipkinExporter {
 	}
 }
 
-// ExportSpans exports spans to Zipkin
+// ExportSpans exports spans to Zipkin.
 func (e *ZipkinExporter) ExportSpans(ctx context.Context, spans []*Span) error {
 	// In a real implementation, this would serialize spans to Zipkin format
 	// and send them to the configured endpoint
 	return nil
 }
 
-// Shutdown shuts down the exporter
+// Shutdown shuts down the exporter.
 func (e *ZipkinExporter) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// HTTPMiddleware returns an HTTP middleware for tracing
+// HTTPMiddleware returns an HTTP middleware for tracing.
 func (t *Tracer) HTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract parent context
@@ -813,6 +839,7 @@ func (t *Tracer) HTTPMiddleware(next http.Handler) http.Handler {
 
 		// Set response attributes
 		span.SetAttribute("http.status_code", wrapped.statusCode)
+
 		if wrapped.statusCode >= 400 {
 			span.SetStatus(SpanStatusError, fmt.Sprintf("HTTP %d", wrapped.statusCode))
 		} else {
@@ -821,7 +848,7 @@ func (t *Tracer) HTTPMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// responseWriterWrapper wraps http.ResponseWriter to capture status code
+// responseWriterWrapper wraps http.ResponseWriter to capture status code.
 type responseWriterWrapper struct {
 	http.ResponseWriter
 	statusCode int
@@ -832,7 +859,7 @@ func (w *responseWriterWrapper) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
-// S3OperationSpan creates a span for S3 operations
+// S3OperationSpan creates a span for S3 operations.
 func (t *Tracer) S3OperationSpan(ctx context.Context, operation, bucket, key string) (context.Context, *Span) {
 	return t.StartSpan(ctx, "s3."+operation,
 		WithSpanKind(SpanKindServer),
@@ -843,7 +870,7 @@ func (t *Tracer) S3OperationSpan(ctx context.Context, operation, bucket, key str
 		}))
 }
 
-// DatabaseSpan creates a span for database operations
+// DatabaseSpan creates a span for database operations.
 func (t *Tracer) DatabaseSpan(ctx context.Context, operation, query string) (context.Context, *Span) {
 	return t.StartSpan(ctx, "db."+operation,
 		WithSpanKind(SpanKindClient),
@@ -869,9 +896,11 @@ func truncateID(id string) string {
 	if len(id) > 8 {
 		return id[:8]
 	}
+
 	if id == "" {
 		return "none"
 	}
+
 	return id
 }
 
@@ -885,17 +914,17 @@ func getPID() int {
 	return 1
 }
 
-// MetricsBridge allows tracing metrics to be exported to Prometheus
+// MetricsBridge allows tracing metrics to be exported to Prometheus.
 type MetricsBridge struct {
 	tracer *Tracer
 }
 
-// NewMetricsBridge creates a new metrics bridge
+// NewMetricsBridge creates a new metrics bridge.
 func NewMetricsBridge(tracer *Tracer) *MetricsBridge {
 	return &MetricsBridge{tracer: tracer}
 }
 
-// GetMetrics returns current tracing metrics
+// GetMetrics returns current tracing metrics.
 func (m *MetricsBridge) GetMetrics() map[string]interface{} {
 	return map[string]interface{}{
 		"active_spans": m.tracer.GetActiveSpans(),

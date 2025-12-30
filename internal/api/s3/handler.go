@@ -37,14 +37,14 @@ import (
 	"github.com/piwi3910/nebulaio/pkg/s3types"
 )
 
-// Handler handles S3 API requests
+// Handler handles S3 API requests.
 type Handler struct {
 	auth   *auth.Service
 	bucket *bucket.Service
 	object *object.Service
 }
 
-// NewHandler creates a new S3 API handler
+// NewHandler creates a new S3 API handler.
 func NewHandler(authService *auth.Service, bucketService *bucket.Service, objectService *object.Service) *Handler {
 	return &Handler{
 		auth:   authService,
@@ -53,7 +53,7 @@ func NewHandler(authService *auth.Service, bucketService *bucket.Service, object
 	}
 }
 
-// RegisterRoutes registers S3 API routes
+// RegisterRoutes registers S3 API routes.
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Service operations
 	r.Get("/", h.ListBuckets)
@@ -77,7 +77,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	})
 }
 
-// ListBuckets lists all buckets
+// ListBuckets lists all buckets.
 func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -108,7 +108,7 @@ func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// CreateBucket creates a new bucket
+// CreateBucket creates a new bucket.
 func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -126,7 +126,7 @@ func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// DeleteBucket deletes a bucket
+// DeleteBucket deletes a bucket.
 func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -140,7 +140,7 @@ func (h *Handler) DeleteBucket(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// HeadBucket checks if a bucket exists
+// HeadBucket checks if a bucket exists.
 func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -154,7 +154,7 @@ func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// handleBucketPut handles PUT requests on buckets (create bucket or bucket subresources)
+// handleBucketPut handles PUT requests on buckets (create bucket or bucket subresources).
 func (h *Handler) handleBucketPut(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
@@ -163,62 +163,77 @@ func (h *Handler) handleBucketPut(w http.ResponseWriter, r *http.Request) {
 		h.PutBucketVersioning(w, r)
 		return
 	}
+
 	if _, ok := query["policy"]; ok {
 		h.PutBucketPolicy(w, r)
 		return
 	}
+
 	if _, ok := query["tagging"]; ok {
 		h.PutBucketTagging(w, r)
 		return
 	}
+
 	if _, ok := query["cors"]; ok {
 		h.PutBucketCORS(w, r)
 		return
 	}
+
 	if _, ok := query["lifecycle"]; ok {
 		h.PutBucketLifecycle(w, r)
 		return
 	}
+
 	if _, ok := query["acl"]; ok {
 		h.PutBucketAcl(w, r)
 		return
 	}
+
 	if _, ok := query["encryption"]; ok {
 		h.PutBucketEncryption(w, r)
 		return
 	}
+
 	if _, ok := query["website"]; ok {
 		h.PutBucketWebsite(w, r)
 		return
 	}
+
 	if _, ok := query["logging"]; ok {
 		h.PutBucketLogging(w, r)
 		return
 	}
+
 	if _, ok := query["notification"]; ok {
 		h.PutBucketNotificationConfiguration(w, r)
 		return
 	}
+
 	if _, ok := query["replication"]; ok {
 		h.PutBucketReplication(w, r)
 		return
 	}
+
 	if _, ok := query["object-lock"]; ok {
 		h.PutObjectLockConfiguration(w, r)
 		return
 	}
+
 	if _, ok := query["publicAccessBlock"]; ok {
 		h.PutPublicAccessBlock(w, r)
 		return
 	}
+
 	if _, ok := query["ownershipControls"]; ok {
 		h.PutBucketOwnershipControls(w, r)
 		return
 	}
+
 	if _, ok := query["accelerate"]; ok {
 		h.PutBucketAccelerateConfiguration(w, r)
 		return
 	}
+
 	if _, ok := query["intelligent-tiering"]; ok {
 		h.PutBucketIntelligentTieringConfiguration(w, r)
 		return
@@ -228,7 +243,7 @@ func (h *Handler) handleBucketPut(w http.ResponseWriter, r *http.Request) {
 	h.CreateBucket(w, r)
 }
 
-// handleBucketDelete handles DELETE requests on buckets (delete bucket or bucket subresources)
+// handleBucketDelete handles DELETE requests on buckets (delete bucket or bucket subresources).
 func (h *Handler) handleBucketDelete(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
@@ -237,38 +252,47 @@ func (h *Handler) handleBucketDelete(w http.ResponseWriter, r *http.Request) {
 		h.DeleteBucketPolicy(w, r)
 		return
 	}
+
 	if _, ok := query["tagging"]; ok {
 		h.DeleteBucketTagging(w, r)
 		return
 	}
+
 	if _, ok := query["cors"]; ok {
 		h.DeleteBucketCORS(w, r)
 		return
 	}
+
 	if _, ok := query["lifecycle"]; ok {
 		h.DeleteBucketLifecycle(w, r)
 		return
 	}
+
 	if _, ok := query["encryption"]; ok {
 		h.DeleteBucketEncryption(w, r)
 		return
 	}
+
 	if _, ok := query["website"]; ok {
 		h.DeleteBucketWebsite(w, r)
 		return
 	}
+
 	if _, ok := query["replication"]; ok {
 		h.DeleteBucketReplication(w, r)
 		return
 	}
+
 	if _, ok := query["publicAccessBlock"]; ok {
 		h.DeletePublicAccessBlock(w, r)
 		return
 	}
+
 	if _, ok := query["ownershipControls"]; ok {
 		h.DeleteBucketOwnershipControls(w, r)
 		return
 	}
+
 	if _, ok := query["intelligent-tiering"]; ok {
 		h.DeleteBucketIntelligentTieringConfiguration(w, r)
 		return
@@ -278,7 +302,7 @@ func (h *Handler) handleBucketDelete(w http.ResponseWriter, r *http.Request) {
 	h.DeleteBucket(w, r)
 }
 
-// handleBucketGet handles GET requests on buckets (list objects or bucket subresources)
+// handleBucketGet handles GET requests on buckets (list objects or bucket subresources).
 func (h *Handler) handleBucketGet(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
@@ -287,74 +311,92 @@ func (h *Handler) handleBucketGet(w http.ResponseWriter, r *http.Request) {
 		h.GetBucketVersioning(w, r)
 		return
 	}
+
 	if _, ok := query["policy"]; ok {
 		h.GetBucketPolicy(w, r)
 		return
 	}
+
 	if _, ok := query["tagging"]; ok {
 		h.GetBucketTagging(w, r)
 		return
 	}
+
 	if _, ok := query["cors"]; ok {
 		h.GetBucketCORS(w, r)
 		return
 	}
+
 	if _, ok := query["lifecycle"]; ok {
 		h.GetBucketLifecycle(w, r)
 		return
 	}
+
 	if _, ok := query["uploads"]; ok {
 		h.ListMultipartUploads(w, r)
 		return
 	}
+
 	if _, ok := query["versions"]; ok {
 		h.ListObjectVersions(w, r)
 		return
 	}
+
 	if _, ok := query["location"]; ok {
 		h.GetBucketLocation(w, r)
 		return
 	}
+
 	if _, ok := query["acl"]; ok {
 		h.GetBucketAcl(w, r)
 		return
 	}
+
 	if _, ok := query["encryption"]; ok {
 		h.GetBucketEncryption(w, r)
 		return
 	}
+
 	if _, ok := query["website"]; ok {
 		h.GetBucketWebsite(w, r)
 		return
 	}
+
 	if _, ok := query["logging"]; ok {
 		h.GetBucketLogging(w, r)
 		return
 	}
+
 	if _, ok := query["notification"]; ok {
 		h.GetBucketNotificationConfiguration(w, r)
 		return
 	}
+
 	if _, ok := query["replication"]; ok {
 		h.GetBucketReplication(w, r)
 		return
 	}
+
 	if _, ok := query["object-lock"]; ok {
 		h.GetObjectLockConfiguration(w, r)
 		return
 	}
+
 	if _, ok := query["publicAccessBlock"]; ok {
 		h.GetPublicAccessBlock(w, r)
 		return
 	}
+
 	if _, ok := query["ownershipControls"]; ok {
 		h.GetBucketOwnershipControls(w, r)
 		return
 	}
+
 	if _, ok := query["accelerate"]; ok {
 		h.GetBucketAccelerateConfiguration(w, r)
 		return
 	}
+
 	if _, ok := query["intelligent-tiering"]; ok {
 		// Check if id parameter is present for single config
 		if id := query.Get("id"); id != "" {
@@ -362,6 +404,7 @@ func (h *Handler) handleBucketGet(w http.ResponseWriter, r *http.Request) {
 		} else {
 			h.ListBucketIntelligentTieringConfigurations(w, r)
 		}
+
 		return
 	}
 
@@ -369,7 +412,7 @@ func (h *Handler) handleBucketGet(w http.ResponseWriter, r *http.Request) {
 	h.ListObjectsV2(w, r)
 }
 
-// handleBucketPost handles POST requests on buckets (e.g., ?delete for batch delete)
+// handleBucketPost handles POST requests on buckets (e.g., ?delete for batch delete).
 func (h *Handler) handleBucketPost(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
@@ -383,7 +426,7 @@ func (h *Handler) handleBucketPost(w http.ResponseWriter, r *http.Request) {
 	writeS3Error(w, "InvalidRequest", "Invalid POST request on bucket", http.StatusBadRequest)
 }
 
-// ListObjectsV2 lists objects in a bucket
+// ListObjectsV2 lists objects in a bucket.
 func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -395,6 +438,7 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request) {
 	continuationToken := query.Get("continuation-token")
 
 	maxKeys := 1000
+
 	if maxKeysStr != "" {
 		if mk, err := strconv.Atoi(maxKeysStr); err == nil && mk > 0 && mk <= 1000 {
 			maxKeys = mk
@@ -407,7 +451,9 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -445,7 +491,7 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// handleObjectPut handles PUT requests on objects
+// handleObjectPut handles PUT requests on objects.
 func (h *Handler) handleObjectPut(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
@@ -489,7 +535,7 @@ func (h *Handler) handleObjectPut(w http.ResponseWriter, r *http.Request) {
 	h.PutObject(w, r)
 }
 
-// handleObjectGet handles GET requests on objects (get object or object subresources)
+// handleObjectGet handles GET requests on objects (get object or object subresources).
 func (h *Handler) handleObjectGet(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
@@ -533,7 +579,7 @@ func (h *Handler) handleObjectGet(w http.ResponseWriter, r *http.Request) {
 	h.GetObject(w, r)
 }
 
-// handleObjectDelete handles DELETE requests on objects (delete object or object subresources)
+// handleObjectDelete handles DELETE requests on objects (delete object or object subresources).
 func (h *Handler) handleObjectDelete(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
@@ -548,7 +594,7 @@ func (h *Handler) handleObjectDelete(w http.ResponseWriter, r *http.Request) {
 	h.DeleteObject(w, r)
 }
 
-// PutObject uploads an object
+// PutObject uploads an object.
 func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -566,6 +612,7 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 
 	// Parse user metadata
 	userMetadata := make(map[string]string)
+
 	for key, values := range r.Header {
 		if strings.HasPrefix(strings.ToLower(key), "x-amz-meta-") {
 			metaKey := strings.TrimPrefix(strings.ToLower(key), "x-amz-meta-")
@@ -581,6 +628,7 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "InvalidArgument", err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		opts = &object.PutObjectOptions{Tags: tags}
 	}
 
@@ -590,22 +638,27 @@ func (h *Handler) PutObject(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		if strings.Contains(err.Error(), "invalid tags") {
 			writeS3Error(w, "InvalidTag", err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.Header().Set("ETag", meta.ETag)
+
 	if meta.VersionID != "" {
 		w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetObject retrieves an object or lists parts for a multipart upload
+// GetObject retrieves an object or lists parts for a multipart upload.
 func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request) {
 	// Check for ListParts
 	if uploadID := r.URL.Query().Get("uploadId"); uploadID != "" {
@@ -623,9 +676,12 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Set response headers
@@ -633,6 +689,7 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(meta.Size, 10))
 	w.Header().Set("ETag", meta.ETag)
 	w.Header().Set("Last-Modified", meta.ModifiedAt.Format(http.TimeFormat))
+
 	if meta.VersionID != "" {
 		w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 	}
@@ -646,7 +703,7 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, reader)
 }
 
-// ListParts lists the uploaded parts for a multipart upload
+// ListParts lists the uploaded parts for a multipart upload.
 func (h *Handler) ListParts(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -657,6 +714,7 @@ func (h *Handler) ListParts(w http.ResponseWriter, r *http.Request) {
 
 	// Parse pagination parameters
 	maxParts := 1000
+
 	if maxPartsStr := query.Get("max-parts"); maxPartsStr != "" {
 		if mp, err := strconv.Atoi(maxPartsStr); err == nil && mp > 0 && mp <= 1000 {
 			maxParts = mp
@@ -664,6 +722,7 @@ func (h *Handler) ListParts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	partNumberMarker := 0
+
 	if markerStr := query.Get("part-number-marker"); markerStr != "" {
 		if pm, err := strconv.Atoi(markerStr); err == nil && pm >= 0 {
 			partNumberMarker = pm
@@ -676,7 +735,9 @@ func (h *Handler) ListParts(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchUpload", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -704,15 +765,17 @@ func (h *Handler) ListParts(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// HeadObject retrieves object metadata
+// HeadObject retrieves object metadata.
 func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 	key := chi.URLParam(r, "key")
 	versionID := r.URL.Query().Get("versionId")
 
-	var meta *metadata.ObjectMeta
-	var err error
+	var (
+		meta *metadata.ObjectMeta
+		err  error
+	)
 
 	if versionID != "" {
 		meta, err = h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
@@ -725,17 +788,22 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
 	// Handle delete markers
 	if meta.DeleteMarker {
 		w.Header().Set("X-Amz-Delete-Marker", "true")
+
 		if meta.VersionID != "" {
 			w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 		}
+
 		w.WriteHeader(http.StatusMethodNotAllowed)
+
 		return
 	}
 
@@ -743,6 +811,7 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(meta.Size, 10))
 	w.Header().Set("ETag", meta.ETag)
 	w.Header().Set("Last-Modified", meta.ModifiedAt.Format(http.TimeFormat))
+
 	if meta.VersionID != "" {
 		w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 	}
@@ -754,7 +823,7 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// DeleteObject deletes an object or aborts a multipart upload
+// DeleteObject deletes an object or aborts a multipart upload.
 func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	// Check for AbortMultipartUpload
 	if uploadID := r.URL.Query().Get("uploadId"); uploadID != "" {
@@ -781,8 +850,10 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request) {
 		if result.VersionID != "" {
 			w.Header().Set("X-Amz-Version-Id", result.VersionID)
 		}
+
 		if result.DeleteMarker {
 			w.Header().Set("X-Amz-Delete-Marker", "true")
+
 			if result.DeleteMarkerVersionID != "" {
 				w.Header().Set("X-Amz-Version-Id", result.DeleteMarkerVersionID)
 			}
@@ -792,7 +863,7 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// AbortMultipartUpload aborts an in-progress multipart upload
+// AbortMultipartUpload aborts an in-progress multipart upload.
 func (h *Handler) AbortMultipartUpload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -805,14 +876,16 @@ func (h *Handler) AbortMultipartUpload(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchUpload", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// CopyObject copies an object
+// CopyObject copies an object.
 func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	dstBucket := chi.URLParam(r, "bucket")
@@ -824,18 +897,22 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 	// Parse copy source
 	copySource := r.Header.Get("X-Amz-Copy-Source")
 	copySource = strings.TrimPrefix(copySource, "/")
+
 	parts := strings.SplitN(copySource, "/", 2)
 	if len(parts) != 2 {
 		writeS3Error(w, "InvalidArgument", "Invalid copy source", http.StatusBadRequest)
 		return
 	}
+
 	srcBucket, srcKey := parts[0], parts[1]
 
 	// Parse tagging directive
 	var opts *object.CopyObjectOptions
+
 	taggingDirective := r.Header.Get("X-Amz-Tagging-Directive")
 	if taggingDirective != "" {
 		opts = &object.CopyObjectOptions{}
+
 		switch strings.ToUpper(taggingDirective) {
 		case "COPY":
 			opts.TaggingDirective = object.TaggingDirectiveCopy
@@ -848,6 +925,7 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 					writeS3Error(w, "InvalidArgument", err.Error(), http.StatusBadRequest)
 					return
 				}
+
 				opts.Tags = tags
 			}
 		default:
@@ -862,11 +940,14 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		if strings.Contains(err.Error(), "invalid tags") {
 			writeS3Error(w, "InvalidTag", err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -878,7 +959,7 @@ func (h *Handler) CopyObject(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// handleObjectPost handles POST requests on objects (multipart operations, select, restore)
+// handleObjectPost handles POST requests on objects (multipart operations, select, restore).
 func (h *Handler) handleObjectPost(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
@@ -907,7 +988,7 @@ func (h *Handler) handleObjectPost(w http.ResponseWriter, r *http.Request) {
 	writeS3Error(w, "InvalidRequest", "Invalid POST request", http.StatusBadRequest)
 }
 
-// CreateMultipartUpload initiates a multipart upload
+// CreateMultipartUpload initiates a multipart upload.
 func (h *Handler) CreateMultipartUpload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -923,6 +1004,7 @@ func (h *Handler) CreateMultipartUpload(w http.ResponseWriter, r *http.Request) 
 
 	// Parse user metadata from headers
 	userMetadata := make(map[string]string)
+
 	for key, values := range r.Header {
 		if strings.HasPrefix(strings.ToLower(key), "x-amz-meta-") {
 			metaKey := strings.TrimPrefix(strings.ToLower(key), "x-amz-meta-")
@@ -936,7 +1018,9 @@ func (h *Handler) CreateMultipartUpload(w http.ResponseWriter, r *http.Request) 
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -949,7 +1033,7 @@ func (h *Handler) CreateMultipartUpload(w http.ResponseWriter, r *http.Request) 
 	writeXML(w, http.StatusOK, response)
 }
 
-// UploadPart uploads a part of a multipart upload
+// UploadPart uploads a part of a multipart upload.
 func (h *Handler) UploadPart(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -971,7 +1055,9 @@ func (h *Handler) UploadPart(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchUpload", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -979,7 +1065,7 @@ func (h *Handler) UploadPart(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// CompleteMultipartUpload completes a multipart upload
+// CompleteMultipartUpload completes a multipart upload.
 func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1014,19 +1100,24 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 			writeS3Error(w, "NoSuchUpload", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		if strings.Contains(err.Error(), "ETag mismatch") {
 			writeS3Error(w, "InvalidPart", err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		if strings.Contains(err.Error(), "ascending order") {
 			writeS3Error(w, "InvalidPartOrder", err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		if strings.Contains(err.Error(), "too small") {
 			writeS3Error(w, "EntityTooSmall", err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -1040,7 +1131,7 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 	writeXML(w, http.StatusOK, response)
 }
 
-// ListMultipartUploads lists in-progress multipart uploads
+// ListMultipartUploads lists in-progress multipart uploads.
 func (h *Handler) ListMultipartUploads(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1087,20 +1178,22 @@ func (h *Handler) GetBucketVersioning(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketVersioning enables or suspends versioning for a bucket
+// PutBucketVersioning enables or suspends versioning for a bucket.
 func (h *Handler) PutBucketVersioning(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	// Parse the versioning configuration from request body
 	var config s3types.VersioningConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&config); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&config)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Validate status
 	var status metadata.VersioningStatus
+
 	switch config.Status {
 	case "Enabled":
 		status = metadata.VersioningEnabled
@@ -1115,23 +1208,27 @@ func (h *Handler) PutBucketVersioning(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.bucket.SetVersioning(ctx, bucketName, status); err != nil {
+	err = h.bucket.SetVersioning(ctx, bucketName, status)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		if strings.Contains(err.Error(), "cannot be disabled") {
 			writeS3Error(w, "IllegalVersioningConfigurationException", err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-// ListObjectVersions lists all versions of objects in a bucket
+// ListObjectVersions lists all versions of objects in a bucket.
 func (h *Handler) ListObjectVersions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1144,6 +1241,7 @@ func (h *Handler) ListObjectVersions(w http.ResponseWriter, r *http.Request) {
 	maxKeysStr := query.Get("max-keys")
 
 	maxKeys := 1000
+
 	if maxKeysStr != "" {
 		if mk, err := strconv.Atoi(maxKeysStr); err == nil && mk > 0 && mk <= 1000 {
 			maxKeys = mk
@@ -1156,7 +1254,9 @@ func (h *Handler) ListObjectVersions(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -1213,7 +1313,7 @@ func (h *Handler) ListObjectVersions(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// GetObjectVersion retrieves a specific version of an object
+// GetObjectVersion retrieves a specific version of an object.
 func (h *Handler) GetObjectVersion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1225,19 +1325,26 @@ func (h *Handler) GetObjectVersion(w http.ResponseWriter, r *http.Request) {
 		// Check if it's a delete marker
 		if strings.Contains(err.Error(), "delete marker") {
 			w.Header().Set("X-Amz-Delete-Marker", "true")
+
 			if meta != nil && meta.VersionID != "" {
 				w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 			}
+
 			writeS3Error(w, "MethodNotAllowed", "The specified method is not allowed against this resource", http.StatusMethodNotAllowed)
+
 			return
 		}
+
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchVersion", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Set response headers
@@ -1245,6 +1352,7 @@ func (h *Handler) GetObjectVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(meta.Size, 10))
 	w.Header().Set("ETag", meta.ETag)
 	w.Header().Set("Last-Modified", meta.ModifiedAt.Format(http.TimeFormat))
+
 	if meta.VersionID != "" {
 		w.Header().Set("X-Amz-Version-Id", meta.VersionID)
 	}
@@ -1268,7 +1376,9 @@ func (h *Handler) GetBucketPolicy(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucketPolicy", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -1287,7 +1397,9 @@ func (h *Handler) GetBucketTagging(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -1304,7 +1416,7 @@ func (h *Handler) GetBucketTagging(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketTagging sets bucket tags
+// PutBucketTagging sets bucket tags.
 func (h *Handler) PutBucketTagging(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1321,9 +1433,10 @@ func (h *Handler) PutBucketTagging(w http.ResponseWriter, r *http.Request) {
 	for _, tag := range tagging.TagSet.Tag {
 		// Check for duplicate keys
 		if _, exists := tags[tag.Key]; exists {
-			writeS3Error(w, "InvalidTag", fmt.Sprintf("Duplicate tag key: %s", tag.Key), http.StatusBadRequest)
+			writeS3Error(w, "InvalidTag", "Duplicate tag key: "+tag.Key, http.StatusBadRequest)
 			return
 		}
+
 		tags[tag.Key] = tag.Value
 	}
 
@@ -1333,20 +1446,23 @@ func (h *Handler) PutBucketTagging(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		if strings.Contains(err.Error(), "exceeds maximum") ||
 			strings.Contains(err.Error(), "cannot be empty") ||
 			strings.Contains(err.Error(), "reserved") {
 			writeS3Error(w, "InvalidTag", err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DeleteBucketTagging deletes bucket tags
+// DeleteBucketTagging deletes bucket tags.
 func (h *Handler) DeleteBucketTagging(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1357,14 +1473,16 @@ func (h *Handler) DeleteBucketTagging(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetObjectTagging returns object tags
+// GetObjectTagging returns object tags.
 func (h *Handler) GetObjectTagging(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1376,11 +1494,14 @@ func (h *Handler) GetObjectTagging(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -1392,7 +1513,7 @@ func (h *Handler) GetObjectTagging(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutObjectTagging sets object tags
+// PutObjectTagging sets object tags.
 func (h *Handler) PutObjectTagging(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1410,9 +1531,10 @@ func (h *Handler) PutObjectTagging(w http.ResponseWriter, r *http.Request) {
 	for _, tag := range tagging.TagSet.Tag {
 		// Check for duplicate keys
 		if _, exists := tags[tag.Key]; exists {
-			writeS3Error(w, "InvalidTag", fmt.Sprintf("Duplicate tag key: %s", tag.Key), http.StatusBadRequest)
+			writeS3Error(w, "InvalidTag", "Duplicate tag key: "+tag.Key, http.StatusBadRequest)
 			return
 		}
+
 		tags[tag.Key] = tag.Value
 	}
 
@@ -1422,10 +1544,12 @@ func (h *Handler) PutObjectTagging(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		if strings.Contains(err.Error(), "exceeds maximum") ||
 			strings.Contains(err.Error(), "cannot be empty") ||
 			strings.Contains(err.Error(), "reserved") ||
@@ -1433,14 +1557,16 @@ func (h *Handler) PutObjectTagging(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "InvalidTag", err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-// DeleteObjectTagging deletes object tags
+// DeleteObjectTagging deletes object tags.
 func (h *Handler) DeleteObjectTagging(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1452,11 +1578,14 @@ func (h *Handler) DeleteObjectTagging(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "delete marker") {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -1473,7 +1602,9 @@ func (h *Handler) GetBucketCORS(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchCORSConfiguration", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -1501,11 +1632,14 @@ func (h *Handler) GetBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchLifecycleConfiguration", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	response := s3types.LifecycleConfiguration{}
+
 	for _, rule := range rules {
 		status := "Disabled"
 		if rule.Enabled {
@@ -1548,7 +1682,7 @@ func (h *Handler) GetBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketPolicy sets the bucket policy
+// PutBucketPolicy sets the bucket policy.
 func (h *Handler) PutBucketPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1580,31 +1714,36 @@ func (h *Handler) PutBucketPolicy(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DeleteBucketPolicy deletes the bucket policy
+// DeleteBucketPolicy deletes the bucket policy.
 func (h *Handler) DeleteBucketPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
-	if err := h.bucket.DeleteBucketPolicy(ctx, bucketName); err != nil {
+	err := h.bucket.DeleteBucketPolicy(ctx, bucketName)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// PutBucketCORS sets CORS configuration for a bucket
+// PutBucketCORS sets CORS configuration for a bucket.
 func (h *Handler) PutBucketCORS(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1627,37 +1766,43 @@ func (h *Handler) PutBucketCORS(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-// DeleteBucketCORS deletes CORS configuration for a bucket
+// DeleteBucketCORS deletes CORS configuration for a bucket.
 func (h *Handler) DeleteBucketCORS(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
-	if err := h.bucket.DeleteCORS(ctx, bucketName); err != nil {
+	err := h.bucket.DeleteCORS(ctx, bucketName)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// PutBucketLifecycle sets lifecycle rules for a bucket
+// PutBucketLifecycle sets lifecycle rules for a bucket.
 func (h *Handler) PutBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	var lifecycleConfig s3types.LifecycleConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&lifecycleConfig); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&lifecycleConfig)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1712,36 +1857,42 @@ func (h *Handler) PutBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 		rules[i] = rule
 	}
 
-	if err := h.bucket.SetLifecycle(ctx, bucketName, rules); err != nil {
+	err = h.bucket.SetLifecycle(ctx, bucketName, rules)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-// DeleteBucketLifecycle deletes lifecycle rules for a bucket
+// DeleteBucketLifecycle deletes lifecycle rules for a bucket.
 func (h *Handler) DeleteBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
-	if err := h.bucket.DeleteLifecycle(ctx, bucketName); err != nil {
+	err := h.bucket.DeleteLifecycle(ctx, bucketName)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DeleteObjects handles the S3 DeleteObjects (batch delete) API
+// DeleteObjects handles the S3 DeleteObjects (batch delete) API.
 func (h *Handler) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1772,6 +1923,7 @@ func (h *Handler) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "InvalidArgument", "Object key cannot be empty", http.StatusBadRequest)
 			return
 		}
+
 		objects = append(objects, object.DeleteObjectInput{
 			Key:       obj.Key,
 			VersionID: obj.VersionId,
@@ -1785,7 +1937,9 @@ func (h *Handler) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -1817,7 +1971,7 @@ func (h *Handler) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// GetBucketLocation returns the bucket's region/location
+// GetBucketLocation returns the bucket's region/location.
 func (h *Handler) GetBucketLocation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1837,7 +1991,7 @@ func (h *Handler) GetBucketLocation(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// GetBucketAcl returns the bucket's ACL
+// GetBucketAcl returns the bucket's ACL.
 func (h *Handler) GetBucketAcl(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1871,7 +2025,7 @@ func (h *Handler) GetBucketAcl(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketAcl sets the bucket's ACL
+// PutBucketAcl sets the bucket's ACL.
 func (h *Handler) PutBucketAcl(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1912,17 +2066,21 @@ func (h *Handler) PutBucketAcl(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := h.bucket.SetBucketACL(ctx, bucketName, acl); err != nil {
+		err := h.bucket.SetBucketACL(ctx, bucketName, acl)
+		if err != nil {
 			writeS3ErrorTypedWithResource(w, r, err, bucketName)
 			return
 		}
+
 		w.WriteHeader(http.StatusOK)
+
 		return
 	}
 
 	// Parse XML body
 	var aclPolicy s3types.AccessControlPolicy
-	if err := xml.NewDecoder(r.Body).Decode(&aclPolicy); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&aclPolicy)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1942,7 +2100,8 @@ func (h *Handler) PutBucketAcl(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := h.bucket.SetBucketACL(ctx, bucketName, acl); err != nil {
+	err = h.bucket.SetBucketACL(ctx, bucketName, acl)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -1950,7 +2109,7 @@ func (h *Handler) PutBucketAcl(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetBucketEncryption returns the bucket's encryption configuration
+// GetBucketEncryption returns the bucket's encryption configuration.
 func (h *Handler) GetBucketEncryption(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -1974,13 +2133,14 @@ func (h *Handler) GetBucketEncryption(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketEncryption sets the bucket's encryption configuration
+// PutBucketEncryption sets the bucket's encryption configuration.
 func (h *Handler) PutBucketEncryption(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	var sseConfig s3types.ServerSideEncryptionConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&sseConfig); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&sseConfig)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1994,7 +2154,8 @@ func (h *Handler) PutBucketEncryption(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := h.bucket.SetEncryption(ctx, bucketName, config); err != nil {
+	err = h.bucket.SetEncryption(ctx, bucketName, config)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2002,12 +2163,13 @@ func (h *Handler) PutBucketEncryption(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// DeleteBucketEncryption deletes the bucket's encryption configuration
+// DeleteBucketEncryption deletes the bucket's encryption configuration.
 func (h *Handler) DeleteBucketEncryption(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
-	if err := h.bucket.DeleteEncryption(ctx, bucketName); err != nil {
+	err := h.bucket.DeleteEncryption(ctx, bucketName)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2015,7 +2177,7 @@ func (h *Handler) DeleteBucketEncryption(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetBucketWebsite returns the bucket's website configuration
+// GetBucketWebsite returns the bucket's website configuration.
 func (h *Handler) GetBucketWebsite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2036,9 +2198,11 @@ func (h *Handler) GetBucketWebsite(w http.ResponseWriter, r *http.Request) {
 		if config.IndexDocument != "" {
 			response.IndexDocument = &s3types.IndexDocument{Suffix: config.IndexDocument}
 		}
+
 		if config.ErrorDocument != "" {
 			response.ErrorDocument = &s3types.ErrorDocument{Key: config.ErrorDocument}
 		}
+
 		if len(config.RoutingRules) > 0 {
 			response.RoutingRules = &struct {
 				RoutingRule []s3types.RoutingRule `xml:"RoutingRule"`
@@ -2064,13 +2228,14 @@ func (h *Handler) GetBucketWebsite(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketWebsite sets the bucket's website configuration
+// PutBucketWebsite sets the bucket's website configuration.
 func (h *Handler) PutBucketWebsite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	var websiteConfig s3types.WebsiteConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&websiteConfig); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&websiteConfig)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -2083,9 +2248,11 @@ func (h *Handler) PutBucketWebsite(w http.ResponseWriter, r *http.Request) {
 		if websiteConfig.IndexDocument != nil {
 			config.IndexDocument = websiteConfig.IndexDocument.Suffix
 		}
+
 		if websiteConfig.ErrorDocument != nil {
 			config.ErrorDocument = websiteConfig.ErrorDocument.Key
 		}
+
 		if websiteConfig.RoutingRules != nil {
 			for _, rule := range websiteConfig.RoutingRules.RoutingRule {
 				config.RoutingRules = append(config.RoutingRules, metadata.WebsiteRoutingRule{
@@ -2114,7 +2281,8 @@ func (h *Handler) PutBucketWebsite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.bucket.SetWebsite(ctx, bucketName, config); err != nil {
+	err = h.bucket.SetWebsite(ctx, bucketName, config)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2122,12 +2290,13 @@ func (h *Handler) PutBucketWebsite(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// DeleteBucketWebsite deletes the bucket's website configuration
+// DeleteBucketWebsite deletes the bucket's website configuration.
 func (h *Handler) DeleteBucketWebsite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
-	if err := h.bucket.DeleteWebsite(ctx, bucketName); err != nil {
+	err := h.bucket.DeleteWebsite(ctx, bucketName)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2135,7 +2304,7 @@ func (h *Handler) DeleteBucketWebsite(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetBucketLogging returns the bucket's logging configuration
+// GetBucketLogging returns the bucket's logging configuration.
 func (h *Handler) GetBucketLogging(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2157,13 +2326,14 @@ func (h *Handler) GetBucketLogging(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketLogging sets the bucket's logging configuration
+// PutBucketLogging sets the bucket's logging configuration.
 func (h *Handler) PutBucketLogging(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	var loggingStatus s3types.BucketLoggingStatus
-	if err := xml.NewDecoder(r.Body).Decode(&loggingStatus); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&loggingStatus)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -2176,7 +2346,8 @@ func (h *Handler) PutBucketLogging(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.bucket.SetLogging(ctx, bucketName, config); err != nil {
+	err = h.bucket.SetLogging(ctx, bucketName, config)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2184,7 +2355,7 @@ func (h *Handler) PutBucketLogging(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetBucketNotificationConfiguration returns the bucket's notification configuration
+// GetBucketNotificationConfiguration returns the bucket's notification configuration.
 func (h *Handler) GetBucketNotificationConfiguration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2203,6 +2374,7 @@ func (h *Handler) GetBucketNotificationConfiguration(w http.ResponseWriter, r *h
 			Event: topic.Events,
 		})
 	}
+
 	for _, queue := range config.QueueConfigurations {
 		response.QueueConfiguration = append(response.QueueConfiguration, s3types.QueueConfiguration{
 			Id:    queue.ID,
@@ -2210,6 +2382,7 @@ func (h *Handler) GetBucketNotificationConfiguration(w http.ResponseWriter, r *h
 			Event: queue.Events,
 		})
 	}
+
 	for _, lambda := range config.LambdaConfigurations {
 		response.LambdaFunctionConfiguration = append(response.LambdaFunctionConfiguration, s3types.LambdaFunctionConfiguration{
 			Id:             lambda.ID,
@@ -2221,13 +2394,14 @@ func (h *Handler) GetBucketNotificationConfiguration(w http.ResponseWriter, r *h
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketNotificationConfiguration sets the bucket's notification configuration
+// PutBucketNotificationConfiguration sets the bucket's notification configuration.
 func (h *Handler) PutBucketNotificationConfiguration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	var notifConfig s3types.NotificationConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&notifConfig); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&notifConfig)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -2240,6 +2414,7 @@ func (h *Handler) PutBucketNotificationConfiguration(w http.ResponseWriter, r *h
 			Events:   topic.Event,
 		})
 	}
+
 	for _, queue := range notifConfig.QueueConfiguration {
 		config.QueueConfigurations = append(config.QueueConfigurations, metadata.QueueNotification{
 			ID:       queue.Id,
@@ -2247,6 +2422,7 @@ func (h *Handler) PutBucketNotificationConfiguration(w http.ResponseWriter, r *h
 			Events:   queue.Event,
 		})
 	}
+
 	for _, lambda := range notifConfig.LambdaFunctionConfiguration {
 		config.LambdaConfigurations = append(config.LambdaConfigurations, metadata.LambdaNotification{
 			ID:        lambda.Id,
@@ -2255,7 +2431,8 @@ func (h *Handler) PutBucketNotificationConfiguration(w http.ResponseWriter, r *h
 		})
 	}
 
-	if err := h.bucket.SetNotification(ctx, bucketName, config); err != nil {
+	err = h.bucket.SetNotification(ctx, bucketName, config)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2263,7 +2440,7 @@ func (h *Handler) PutBucketNotificationConfiguration(w http.ResponseWriter, r *h
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetBucketReplication returns the bucket's replication configuration
+// GetBucketReplication returns the bucket's replication configuration.
 func (h *Handler) GetBucketReplication(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2293,19 +2470,21 @@ func (h *Handler) GetBucketReplication(w http.ResponseWriter, r *http.Request) {
 				Status: rule.DeleteMarkerReplication,
 			}
 		}
+
 		response.Rule = append(response.Rule, replRule)
 	}
 
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketReplication sets the bucket's replication configuration
+// PutBucketReplication sets the bucket's replication configuration.
 func (h *Handler) PutBucketReplication(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	var replConfig s3types.ReplicationConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&replConfig); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&replConfig)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -2328,10 +2507,12 @@ func (h *Handler) PutBucketReplication(w http.ResponseWriter, r *http.Request) {
 		if rule.DeleteMarkerReplication != nil {
 			replRule.DeleteMarkerReplication = rule.DeleteMarkerReplication.Status
 		}
+
 		config.Rules = append(config.Rules, replRule)
 	}
 
-	if err := h.bucket.SetReplication(ctx, bucketName, config); err != nil {
+	err = h.bucket.SetReplication(ctx, bucketName, config)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2339,12 +2520,13 @@ func (h *Handler) PutBucketReplication(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// DeleteBucketReplication deletes the bucket's replication configuration
+// DeleteBucketReplication deletes the bucket's replication configuration.
 func (h *Handler) DeleteBucketReplication(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
-	if err := h.bucket.DeleteReplication(ctx, bucketName); err != nil {
+	err := h.bucket.DeleteReplication(ctx, bucketName)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2352,7 +2534,7 @@ func (h *Handler) DeleteBucketReplication(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetObjectLockConfiguration returns the bucket's object lock configuration
+// GetObjectLockConfiguration returns the bucket's object lock configuration.
 func (h *Handler) GetObjectLockConfiguration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2383,13 +2565,14 @@ func (h *Handler) GetObjectLockConfiguration(w http.ResponseWriter, r *http.Requ
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutObjectLockConfiguration sets the bucket's object lock configuration
+// PutObjectLockConfiguration sets the bucket's object lock configuration.
 func (h *Handler) PutObjectLockConfiguration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	var lockConfig s3types.ObjectLockConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&lockConfig); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&lockConfig)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -2405,7 +2588,8 @@ func (h *Handler) PutObjectLockConfiguration(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	if err := h.bucket.SetObjectLockConfiguration(ctx, bucketName, config); err != nil {
+	err = h.bucket.SetObjectLockConfiguration(ctx, bucketName, config)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2413,7 +2597,7 @@ func (h *Handler) PutObjectLockConfiguration(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetPublicAccessBlock returns the bucket's public access block configuration
+// GetPublicAccessBlock returns the bucket's public access block configuration.
 func (h *Handler) GetPublicAccessBlock(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2434,13 +2618,14 @@ func (h *Handler) GetPublicAccessBlock(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutPublicAccessBlock sets the bucket's public access block configuration
+// PutPublicAccessBlock sets the bucket's public access block configuration.
 func (h *Handler) PutPublicAccessBlock(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	var pabConfig s3types.PublicAccessBlockConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&pabConfig); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&pabConfig)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -2452,7 +2637,8 @@ func (h *Handler) PutPublicAccessBlock(w http.ResponseWriter, r *http.Request) {
 		RestrictPublicBuckets: pabConfig.RestrictPublicBuckets,
 	}
 
-	if err := h.bucket.SetPublicAccessBlock(ctx, bucketName, config); err != nil {
+	err = h.bucket.SetPublicAccessBlock(ctx, bucketName, config)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2460,12 +2646,13 @@ func (h *Handler) PutPublicAccessBlock(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// DeletePublicAccessBlock deletes the bucket's public access block configuration
+// DeletePublicAccessBlock deletes the bucket's public access block configuration.
 func (h *Handler) DeletePublicAccessBlock(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
-	if err := h.bucket.DeletePublicAccessBlock(ctx, bucketName); err != nil {
+	err := h.bucket.DeletePublicAccessBlock(ctx, bucketName)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2473,7 +2660,7 @@ func (h *Handler) DeletePublicAccessBlock(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetBucketOwnershipControls returns the bucket's ownership controls
+// GetBucketOwnershipControls returns the bucket's ownership controls.
 func (h *Handler) GetBucketOwnershipControls(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2496,13 +2683,14 @@ func (h *Handler) GetBucketOwnershipControls(w http.ResponseWriter, r *http.Requ
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketOwnershipControls sets the bucket's ownership controls
+// PutBucketOwnershipControls sets the bucket's ownership controls.
 func (h *Handler) PutBucketOwnershipControls(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	var ownershipConfig s3types.OwnershipControls
-	if err := xml.NewDecoder(r.Body).Decode(&ownershipConfig); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&ownershipConfig)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -2514,7 +2702,8 @@ func (h *Handler) PutBucketOwnershipControls(w http.ResponseWriter, r *http.Requ
 		})
 	}
 
-	if err := h.bucket.SetOwnershipControls(ctx, bucketName, config); err != nil {
+	err = h.bucket.SetOwnershipControls(ctx, bucketName, config)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2522,12 +2711,13 @@ func (h *Handler) PutBucketOwnershipControls(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusOK)
 }
 
-// DeleteBucketOwnershipControls deletes the bucket's ownership controls
+// DeleteBucketOwnershipControls deletes the bucket's ownership controls.
 func (h *Handler) DeleteBucketOwnershipControls(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
-	if err := h.bucket.DeleteOwnershipControls(ctx, bucketName); err != nil {
+	err := h.bucket.DeleteOwnershipControls(ctx, bucketName)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2535,7 +2725,7 @@ func (h *Handler) DeleteBucketOwnershipControls(w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetBucketAccelerateConfiguration returns the bucket's accelerate configuration
+// GetBucketAccelerateConfiguration returns the bucket's accelerate configuration.
 func (h *Handler) GetBucketAccelerateConfiguration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2553,18 +2743,20 @@ func (h *Handler) GetBucketAccelerateConfiguration(w http.ResponseWriter, r *htt
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketAccelerateConfiguration sets the bucket's accelerate configuration
+// PutBucketAccelerateConfiguration sets the bucket's accelerate configuration.
 func (h *Handler) PutBucketAccelerateConfiguration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 
 	var accelConfig s3types.AccelerateConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&accelConfig); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&accelConfig)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := h.bucket.SetAccelerate(ctx, bucketName, accelConfig.Status); err != nil {
+	err = h.bucket.SetAccelerate(ctx, bucketName, accelConfig.Status)
+	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, bucketName)
 		return
 	}
@@ -2572,7 +2764,7 @@ func (h *Handler) PutBucketAccelerateConfiguration(w http.ResponseWriter, r *htt
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetObjectAcl returns the object's ACL
+// GetObjectAcl returns the object's ACL.
 func (h *Handler) GetObjectAcl(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2584,7 +2776,9 @@ func (h *Handler) GetObjectAcl(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -2626,7 +2820,7 @@ func (h *Handler) GetObjectAcl(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutObjectAcl sets the object's ACL
+// PutObjectAcl sets the object's ACL.
 func (h *Handler) PutObjectAcl(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2638,7 +2832,9 @@ func (h *Handler) PutObjectAcl(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -2684,11 +2880,14 @@ func (h *Handler) PutObjectAcl(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := h.object.SetObjectACL(ctx, bucketName, key, acl); err != nil {
+		err := h.object.SetObjectACL(ctx, bucketName, key, acl)
+		if err != nil {
 			writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 		w.WriteHeader(http.StatusOK)
+
 		return
 	}
 
@@ -2721,15 +2920,18 @@ func (h *Handler) PutObjectAcl(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetObjectRetention returns the object's retention configuration
+// GetObjectRetention returns the object's retention configuration.
 func (h *Handler) GetObjectRetention(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 	key := chi.URLParam(r, "key")
 	versionID := r.URL.Query().Get("versionId")
 
-	var meta *metadata.ObjectMeta
-	var err error
+	var (
+		meta *metadata.ObjectMeta
+		err  error
+	)
+
 	if versionID != "" {
 		meta, err = h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
 	} else {
@@ -2741,7 +2943,9 @@ func (h *Handler) GetObjectRetention(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -2758,7 +2962,7 @@ func (h *Handler) GetObjectRetention(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutObjectRetention sets the object's retention configuration
+// PutObjectRetention sets the object's retention configuration.
 func (h *Handler) PutObjectRetention(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2782,22 +2986,27 @@ func (h *Handler) PutObjectRetention(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetObjectLegalHold returns the object's legal hold status
+// GetObjectLegalHold returns the object's legal hold status.
 func (h *Handler) GetObjectLegalHold(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
 	key := chi.URLParam(r, "key")
 	versionID := r.URL.Query().Get("versionId")
 
-	var meta *metadata.ObjectMeta
-	var err error
+	var (
+		meta *metadata.ObjectMeta
+		err  error
+	)
+
 	if versionID != "" {
 		meta, err = h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
 	} else {
@@ -2809,7 +3018,9 @@ func (h *Handler) GetObjectLegalHold(w http.ResponseWriter, r *http.Request) {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -2825,7 +3036,7 @@ func (h *Handler) GetObjectLegalHold(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutObjectLegalHold sets the object's legal hold status
+// PutObjectLegalHold sets the object's legal hold status.
 func (h *Handler) PutObjectLegalHold(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -2833,7 +3044,8 @@ func (h *Handler) PutObjectLegalHold(w http.ResponseWriter, r *http.Request) {
 	versionID := r.URL.Query().Get("versionId")
 
 	var legalHold s3types.LegalHold
-	if err := xml.NewDecoder(r.Body).Decode(&legalHold); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&legalHold)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -2843,12 +3055,15 @@ func (h *Handler) PutObjectLegalHold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.object.SetObjectLegalHold(ctx, bucketName, key, versionID, legalHold.Status); err != nil {
+	err = h.object.SetObjectLegalHold(ctx, bucketName, key, versionID, legalHold.Status)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -2864,7 +3079,7 @@ func writeXML(w http.ResponseWriter, status int, v interface{}) {
 	_ = xml.NewEncoder(w).Encode(v)
 }
 
-// writeS3Error writes an S3 error response (legacy signature for backward compatibility)
+// writeS3Error writes an S3 error response (legacy signature for backward compatibility).
 func writeS3Error(w http.ResponseWriter, code, message string, status int) {
 	response := s3types.ErrorResponse{
 		Code:    code,
@@ -2873,7 +3088,7 @@ func writeS3Error(w http.ResponseWriter, code, message string, status int) {
 	writeXML(w, status, response)
 }
 
-// writeS3ErrorTyped writes an S3 error response using the typed S3Error
+// writeS3ErrorTyped writes an S3 error response using the typed S3Error.
 func writeS3ErrorTyped(w http.ResponseWriter, r *http.Request, err error) {
 	requestID := middleware.GetRequestID(r.Context())
 
@@ -2888,7 +3103,7 @@ func writeS3ErrorTyped(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-// writeS3ErrorTypedWithResource writes an S3 error with resource context
+// writeS3ErrorTypedWithResource writes an S3 error with resource context.
 func writeS3ErrorTypedWithResource(w http.ResponseWriter, r *http.Request, err error, resource string) {
 	requestID := middleware.GetRequestID(r.Context())
 

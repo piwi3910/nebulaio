@@ -32,6 +32,7 @@ func TestNewService(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	require.NotNil(t, service)
 	defer service.Close()
 
@@ -43,6 +44,7 @@ func TestNewServiceWithNilConfig(t *testing.T) {
 
 	service, err := NewService(nil, backend)
 	require.NoError(t, err)
+
 	require.NotNil(t, service)
 	defer service.Close()
 
@@ -56,6 +58,7 @@ func TestNewServiceWithNilBackend(t *testing.T) {
 
 	service, err := NewService(config, nil)
 	require.NoError(t, err)
+
 	require.NotNil(t, service)
 	defer service.Close()
 
@@ -70,6 +73,7 @@ func TestServiceDetectGPUs(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	gpus := service.GetGPUs()
@@ -91,6 +95,7 @@ func TestServiceMaxGPUs(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	gpus := service.GetGPUs()
@@ -104,6 +109,7 @@ func TestServiceGetBuffer(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -115,7 +121,7 @@ func TestServiceGetBuffer(t *testing.T) {
 
 	assert.Equal(t, 0, buf.DeviceID)
 	assert.True(t, buf.InUse)
-	assert.Greater(t, buf.Size, int64(0))
+	assert.Positive(t, buf.Size)
 
 	// Release the buffer
 	service.ReleaseBuffer(buf)
@@ -129,6 +135,7 @@ func TestServiceGetBufferTooLarge(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -145,6 +152,7 @@ func TestServiceGetBufferInvalidGPU(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -161,6 +169,7 @@ func TestServiceRegisterFile(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	// Register a file
@@ -176,11 +185,13 @@ func TestServiceRegisterFile(t *testing.T) {
 func TestServiceRead(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000, 1000) // 1μs for faster tests
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -191,6 +202,7 @@ func TestServiceRead(t *testing.T) {
 
 	buf, err := service.GetBuffer(ctx, 0, 64<<10)
 	require.NoError(t, err)
+
 	defer service.ReleaseBuffer(buf)
 
 	// Perform read
@@ -203,11 +215,13 @@ func TestServiceRead(t *testing.T) {
 func TestServiceWrite(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000, 1000)
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -218,6 +232,7 @@ func TestServiceWrite(t *testing.T) {
 
 	buf, err := service.GetBuffer(ctx, 0, 64<<10)
 	require.NoError(t, err)
+
 	defer service.ReleaseBuffer(buf)
 
 	// Perform write
@@ -226,90 +241,82 @@ func TestServiceWrite(t *testing.T) {
 	assert.Equal(t, int64(64<<10), result.BytesTransferred)
 }
 
-func TestServiceAsyncRead(t *testing.T) {
+// asyncTransferOperation is a function type for async read/write operations.
+type asyncTransferOperation func(handle uintptr, buf *GPUBuffer, offset, length int64, callback func(error)) error
+
+// testAsyncTransfer is a helper for testing async read/write operations.
+func testAsyncTransfer(t *testing.T, asyncOp func(*Service) asyncTransferOperation) {
+	t.Helper()
+
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000, 1000)
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 	config.EnableAsyncTransfers = true
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
 
-	// Register file and get buffer
 	handle, err := service.RegisterFile("/test/file")
 	require.NoError(t, err)
 
 	buf, err := service.GetBuffer(ctx, 0, 64<<10)
 	require.NoError(t, err)
+
 	defer service.ReleaseBuffer(buf)
 
-	// Perform async read
-	var wg sync.WaitGroup
-	var readErr error
+	var (
+		wg     sync.WaitGroup
+		opErr  error
+	)
+
 	wg.Add(1)
-	err = service.ReadAsync(handle, buf, 0, 64<<10, func(err error) {
-		readErr = err
+
+	op := asyncOp(service)
+	err = op(handle, buf, 0, 64<<10, func(err error) {
+		opErr = err
 		wg.Done()
 	})
 	require.NoError(t, err)
 
 	wg.Wait()
-	assert.NoError(t, readErr)
+	assert.NoError(t, opErr)
+}
+
+func TestServiceAsyncRead(t *testing.T) {
+	testAsyncTransfer(t, func(s *Service) asyncTransferOperation {
+		return s.ReadAsync
+	})
 }
 
 func TestServiceAsyncWrite(t *testing.T) {
-	backend := NewSimulatedBackend()
-	backend.SetSimulatedLatency(1000, 1000)
-	config := DefaultConfig()
-	config.MaxBufferSize = 1 << 20
-	config.EnableAsyncTransfers = true
-
-	service, err := NewService(config, backend)
-	require.NoError(t, err)
-	defer service.Close()
-
-	ctx := context.Background()
-
-	// Register file and get buffer
-	handle, err := service.RegisterFile("/test/file")
-	require.NoError(t, err)
-
-	buf, err := service.GetBuffer(ctx, 0, 64<<10)
-	require.NoError(t, err)
-	defer service.ReleaseBuffer(buf)
-
-	// Perform async write
-	var wg sync.WaitGroup
-	var writeErr error
-	wg.Add(1)
-	err = service.WriteAsync(handle, buf, 0, 64<<10, func(err error) {
-		writeErr = err
-		wg.Done()
+	testAsyncTransfer(t, func(s *Service) asyncTransferOperation {
+		return s.WriteAsync
 	})
-	require.NoError(t, err)
-
-	wg.Wait()
-	assert.NoError(t, writeErr)
 }
 
 func TestServiceMetrics(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000, 1000)
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
 
 	// Perform some operations
 	handle, _ := service.RegisterFile("/test/file")
+
 	buf, _ := service.GetBuffer(ctx, 0, 64<<10)
 	defer service.ReleaseBuffer(buf)
 
@@ -353,6 +360,7 @@ func TestServiceClose(t *testing.T) {
 func TestServiceFallbackToStandardIO(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000, 1000)
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 	config.MinTransferSize = 64 << 10 // 64KB minimum
@@ -360,11 +368,13 @@ func TestServiceFallbackToStandardIO(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
 
 	handle, _ := service.RegisterFile("/test/file")
+
 	buf, _ := service.GetBuffer(ctx, 0, 32<<10)
 	defer service.ReleaseBuffer(buf)
 
@@ -375,7 +385,7 @@ func TestServiceFallbackToStandardIO(t *testing.T) {
 
 	// Check fallback metric
 	metrics := service.GetMetrics()
-	assert.Greater(t, metrics.FallbackOps, int64(0))
+	assert.Positive(t, metrics.FallbackOps)
 }
 
 // S3 Integration Tests
@@ -383,14 +393,17 @@ func TestServiceFallbackToStandardIO(t *testing.T) {
 func TestS3Integration(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000, 1000)
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	s3 := NewS3Integration(service)
+
 	require.NotNil(t, s3)
 	defer s3.Close()
 }
@@ -402,6 +415,7 @@ func TestS3IntegrationGetStatus(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	s3 := NewS3Integration(service)
@@ -415,11 +429,13 @@ func TestS3IntegrationGetStatus(t *testing.T) {
 func TestS3IntegrationGetObject(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000, 1000)
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	s3 := NewS3Integration(service)
@@ -435,17 +451,19 @@ func TestS3IntegrationGetObject(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, resp.Used)
 	assert.Equal(t, 0, resp.DeviceID)
-	assert.Greater(t, resp.BytesTransferred, int64(0))
+	assert.Positive(t, resp.BytesTransferred)
 }
 
 func TestS3IntegrationPutObject(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000, 1000)
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	s3 := NewS3Integration(service)
@@ -469,6 +487,7 @@ func TestS3IntegrationDisabled(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	s3 := NewS3Integration(service)
@@ -491,6 +510,7 @@ func TestS3IntegrationInvalidDevice(t *testing.T) {
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	s3 := NewS3Integration(service)
@@ -505,14 +525,14 @@ func TestS3IntegrationInvalidDevice(t *testing.T) {
 	resp, err := s3.GetObject(ctx, "bucket", "key", req, nil)
 	require.NoError(t, err)
 	assert.False(t, resp.Used)
-	assert.NotNil(t, resp.Error)
+	assert.Error(t, resp.Error)
 }
 
 func TestParseGPUDirectRequest(t *testing.T) {
 	tests := []struct {
-		name     string
 		headers  map[string]string
 		expected *GPUDirectRequest
+		name     string
 	}{
 		{
 			name:    "no headers",
@@ -662,6 +682,7 @@ func TestSimulatedBackendInit(t *testing.T) {
 
 func TestSimulatedBackendDetectGPUs(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -682,6 +703,7 @@ func TestSimulatedBackendNotInitialized(t *testing.T) {
 
 func TestSimulatedBackendAllocateBuffer(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -699,6 +721,7 @@ func TestSimulatedBackendAllocateBuffer(t *testing.T) {
 
 func TestSimulatedBackendSetLatency(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -711,6 +734,7 @@ func TestSimulatedBackendSetLatency(t *testing.T) {
 
 func TestSimulatedBackendCustomGPUs(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	backend.Init()
 	defer backend.Close()
 
@@ -737,11 +761,13 @@ func TestSimulatedBackendCustomGPUs(t *testing.T) {
 func TestBufferPoolReuse(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1, 1)
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
@@ -749,12 +775,14 @@ func TestBufferPoolReuse(t *testing.T) {
 	// Get and release a buffer
 	buf1, err := service.GetBuffer(ctx, 0, 512<<10)
 	require.NoError(t, err)
+
 	ptr1 := buf1.Pointer
 	service.ReleaseBuffer(buf1)
 
 	// Get another buffer - should reuse
 	buf2, err := service.GetBuffer(ctx, 0, 256<<10)
 	require.NoError(t, err)
+
 	ptr2 := buf2.Pointer
 	service.ReleaseBuffer(buf2)
 
@@ -763,7 +791,7 @@ func TestBufferPoolReuse(t *testing.T) {
 
 	// Check metrics
 	metrics := service.GetMetrics()
-	assert.Greater(t, metrics.BufferHits, int64(0))
+	assert.Positive(t, metrics.BufferHits)
 }
 
 // Reader/Writer Tests
@@ -771,16 +799,19 @@ func TestBufferPoolReuse(t *testing.T) {
 func TestStorageReader(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000, 1000)
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
 
 	handle, _ := service.RegisterFile("/test")
+
 	buf, _ := service.GetBuffer(ctx, 0, 64<<10)
 	defer service.ReleaseBuffer(buf)
 
@@ -797,16 +828,19 @@ func TestStorageReader(t *testing.T) {
 func TestStorageWriter(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000, 1000)
+
 	config := DefaultConfig()
 	config.MaxBufferSize = 1 << 20
 
 	service, err := NewService(config, backend)
 	require.NoError(t, err)
+
 	defer service.Close()
 
 	ctx := context.Background()
 
 	handle, _ := service.RegisterFile("/test")
+
 	buf, _ := service.GetBuffer(ctx, 0, 64<<10)
 	defer service.ReleaseBuffer(buf)
 

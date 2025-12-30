@@ -10,14 +10,14 @@ import (
 	_ "github.com/piwi3910/nebulaio/internal/events/targets"
 )
 
-// MockTarget is a mock event target for testing
+// MockTarget is a mock event target for testing.
 type MockTarget struct {
+	publishFunc func(ctx context.Context, event *events.S3Event) error
 	name        string
 	targetType  string
-	publishFunc func(ctx context.Context, event *events.S3Event) error
+	published   int32
 	healthy     bool
 	closed      bool
-	published   int32
 }
 
 func NewMockTarget(name string) *MockTarget {
@@ -38,9 +38,11 @@ func (t *MockTarget) Type() string {
 
 func (t *MockTarget) Publish(ctx context.Context, event *events.S3Event) error {
 	atomic.AddInt32(&t.published, 1)
+
 	if t.publishFunc != nil {
 		return t.publishFunc(ctx, event)
 	}
+
 	return nil
 }
 
@@ -57,7 +59,7 @@ func (t *MockTarget) PublishCount() int {
 	return int(atomic.LoadInt32(&t.published))
 }
 
-// Ensure MockTarget implements Target
+// Ensure MockTarget implements Target.
 var _ events.Target = (*MockTarget)(nil)
 
 func TestS3Event(t *testing.T) {
@@ -80,18 +82,23 @@ func TestS3Event(t *testing.T) {
 		if record.EventName != string(events.EventObjectCreatedPut) {
 			t.Errorf("Expected event name %s, got %s", events.EventObjectCreatedPut, record.EventName)
 		}
+
 		if record.S3.Bucket.Name != "test-bucket" {
 			t.Errorf("Expected bucket name 'test-bucket', got '%s'", record.S3.Bucket.Name)
 		}
+
 		if record.S3.Object.Key != "test-key.txt" {
 			t.Errorf("Expected object key 'test-key.txt', got '%s'", record.S3.Object.Key)
 		}
+
 		if record.S3.Object.Size != 1024 {
 			t.Errorf("Expected size 1024, got %d", record.S3.Object.Size)
 		}
+
 		if record.S3.Object.ETag != "abc123" {
 			t.Errorf("Expected ETag 'abc123', got '%s'", record.S3.Object.ETag)
 		}
+
 		if record.S3.Object.VersionID != "v1" {
 			t.Errorf("Expected version ID 'v1', got '%s'", record.S3.Object.VersionID)
 		}
@@ -130,6 +137,7 @@ func TestEventQueue(t *testing.T) {
 
 		mockTarget := NewMockTarget("test-target")
 		queue.AddTarget(mockTarget)
+
 		queue.Start()
 		defer queue.Stop()
 
@@ -166,8 +174,10 @@ func TestEventQueue(t *testing.T) {
 
 		target1 := NewMockTarget("target1")
 		target2 := NewMockTarget("target2")
+
 		queue.AddTarget(target1)
 		queue.AddTarget(target2)
+
 		queue.Start()
 		defer queue.Stop()
 
@@ -192,6 +202,7 @@ func TestEventQueue(t *testing.T) {
 		if target1.PublishCount() != 1 {
 			t.Errorf("Expected 1 publish to target1, got %d", target1.PublishCount())
 		}
+
 		if target2.PublishCount() != 1 {
 			t.Errorf("Expected 1 publish to target2, got %d", target2.PublishCount())
 		}
@@ -212,10 +223,12 @@ func TestEventQueue(t *testing.T) {
 			if count < 3 {
 				return events.ErrPublishFailed
 			}
+
 			return nil
 		}
 
 		queue.AddTarget(mockTarget)
+
 		queue.Start()
 		defer queue.Stop()
 
@@ -263,6 +276,7 @@ func TestEmitter(t *testing.T) {
 			Enabled:     true,
 			QueueConfig: events.DefaultQueueConfig(),
 		})
+
 		emitter.Start()
 		defer emitter.Stop()
 
@@ -282,6 +296,7 @@ func TestEmitter(t *testing.T) {
 		emitter.SetBucketConfig("test-bucket", config)
 
 		ctx := context.Background()
+
 		err := emitter.EmitObjectCreated(
 			ctx,
 			events.EventObjectCreatedPut,
@@ -304,7 +319,10 @@ func TestEmitter(t *testing.T) {
 		}
 	})
 
-	t.Run("EmitWithFilter", func(t *testing.T) {
+	// runFilterTest is a helper for testing event filters.
+	runFilterTest := func(t *testing.T, targetName, configID, filterName, filterValue, nonMatchKey, matchKey, description string) {
+		t.Helper()
+
 		emitter := events.NewEmitter(events.EmitterConfig{
 			Enabled:     true,
 			QueueConfig: events.DefaultQueueConfig(),
@@ -312,20 +330,19 @@ func TestEmitter(t *testing.T) {
 		emitter.Start()
 		defer emitter.Stop()
 
-		mockTarget := NewMockTarget("filtered-webhook")
+		mockTarget := NewMockTarget(targetName)
 		emitter.AddTarget(mockTarget)
 
-		// Set bucket notification config with prefix filter
 		config := &events.NotificationConfiguration{
 			LambdaFunctionConfigurations: []events.LambdaFunctionConfiguration{
 				{
-					ID:                "filtered-config",
-					LambdaFunctionARN: "filtered-webhook",
+					ID:                configID,
+					LambdaFunctionARN: targetName,
 					Events:            []events.EventType{events.EventObjectCreated},
 					Filter: &events.NotificationFilter{
 						Key: &events.KeyFilter{
 							FilterRules: []events.FilterRule{
-								{Name: "prefix", Value: "logs/"},
+								{Name: filterName, Value: filterValue},
 							},
 						},
 					},
@@ -336,92 +353,33 @@ func TestEmitter(t *testing.T) {
 
 		ctx := context.Background()
 
-		// This should NOT match (different prefix)
-		err := emitter.EmitObjectCreated(
-			ctx,
-			events.EventObjectCreatedPut,
-			"test-bucket",
-			"data/file.txt",
-			1024,
-			"abc123",
-			"",
-			"testuser",
-		)
+		// Emit non-matching event
+		err := emitter.EmitObjectCreated(ctx, events.EventObjectCreatedPut, "test-bucket", nonMatchKey, 1024, "abc123", "", "testuser")
 		if err != nil {
 			t.Fatalf("EmitObjectCreated failed: %v", err)
 		}
 
-		// This SHOULD match
-		err = emitter.EmitObjectCreated(
-			ctx,
-			events.EventObjectCreatedPut,
-			"test-bucket",
-			"logs/file.txt",
-			1024,
-			"abc123",
-			"",
-			"testuser",
-		)
+		// Emit matching event
+		err = emitter.EmitObjectCreated(ctx, events.EventObjectCreatedPut, "test-bucket", matchKey, 1024, "abc123", "", "testuser")
 		if err != nil {
 			t.Fatalf("EmitObjectCreated failed: %v", err)
 		}
 
-		// Wait for processing
 		time.Sleep(100 * time.Millisecond)
 
 		if mockTarget.PublishCount() != 1 {
-			t.Errorf("Expected 1 publish (only logs/ prefix), got %d", mockTarget.PublishCount())
+			t.Errorf("Expected 1 publish (%s), got %d", description, mockTarget.PublishCount())
 		}
+	}
+
+	t.Run("EmitWithFilter", func(t *testing.T) {
+		runFilterTest(t, "filtered-webhook", "filtered-config", "prefix", "logs/",
+			"data/file.txt", "logs/file.txt", "only logs/ prefix")
 	})
 
 	t.Run("EmitWithSuffixFilter", func(t *testing.T) {
-		emitter := events.NewEmitter(events.EmitterConfig{
-			Enabled:     true,
-			QueueConfig: events.DefaultQueueConfig(),
-		})
-		emitter.Start()
-		defer emitter.Stop()
-
-		mockTarget := NewMockTarget("suffix-webhook")
-		emitter.AddTarget(mockTarget)
-
-		config := &events.NotificationConfiguration{
-			LambdaFunctionConfigurations: []events.LambdaFunctionConfiguration{
-				{
-					ID:                "suffix-config",
-					LambdaFunctionARN: "suffix-webhook",
-					Events:            []events.EventType{events.EventObjectCreated},
-					Filter: &events.NotificationFilter{
-						Key: &events.KeyFilter{
-							FilterRules: []events.FilterRule{
-								{Name: "suffix", Value: ".jpg"},
-							},
-						},
-					},
-				},
-			},
-		}
-		emitter.SetBucketConfig("test-bucket", config)
-
-		ctx := context.Background()
-
-		// This should NOT match
-		err := emitter.EmitObjectCreated(ctx, events.EventObjectCreatedPut, "test-bucket", "file.txt", 1024, "", "", "user")
-		if err != nil {
-			t.Fatalf("Emit failed: %v", err)
-		}
-
-		// This SHOULD match
-		err = emitter.EmitObjectCreated(ctx, events.EventObjectCreatedPut, "test-bucket", "image.jpg", 1024, "", "", "user")
-		if err != nil {
-			t.Fatalf("Emit failed: %v", err)
-		}
-
-		time.Sleep(100 * time.Millisecond)
-
-		if mockTarget.PublishCount() != 1 {
-			t.Errorf("Expected 1 publish (only .jpg suffix), got %d", mockTarget.PublishCount())
-		}
+		runFilterTest(t, "suffix-webhook", "suffix-config", "suffix", ".jpg",
+			"file.txt", "image.jpg", "only .jpg suffix")
 	})
 
 	t.Run("EmitWithWildcardEvent", func(t *testing.T) {
@@ -429,6 +387,7 @@ func TestEmitter(t *testing.T) {
 			Enabled:     true,
 			QueueConfig: events.DefaultQueueConfig(),
 		})
+
 		emitter.Start()
 		defer emitter.Stop()
 
@@ -465,6 +424,7 @@ func TestEmitter(t *testing.T) {
 			Enabled:     true,
 			QueueConfig: events.DefaultQueueConfig(),
 		})
+
 		emitter.Start()
 		defer emitter.Stop()
 
@@ -499,6 +459,7 @@ func TestEmitter(t *testing.T) {
 		if !stats.Enabled {
 			t.Error("Expected emitter to be enabled")
 		}
+
 		if stats.BucketConfigCount != 2 {
 			t.Errorf("Expected 2 bucket configs, got %d", stats.BucketConfigCount)
 		}
@@ -549,10 +510,12 @@ func TestTargetRegistry(t *testing.T) {
 		// Check for expected types
 		hasWebhook := false
 		hasKafka := false
+
 		for _, tt := range types {
 			if tt == "webhook" {
 				hasWebhook = true
 			}
+
 			if tt == "kafka" {
 				hasKafka = true
 			}
@@ -561,6 +524,7 @@ func TestTargetRegistry(t *testing.T) {
 		if !hasWebhook {
 			t.Error("Expected 'webhook' target type to be registered")
 		}
+
 		if !hasKafka {
 			t.Error("Expected 'kafka' target type to be registered")
 		}
@@ -580,6 +544,7 @@ func TestTargetRegistry(t *testing.T) {
 		if target.Name() != "test-webhook" {
 			t.Errorf("Expected name 'test-webhook', got '%s'", target.Name())
 		}
+
 		if target.Type() != "webhook" {
 			t.Errorf("Expected type 'webhook', got '%s'", target.Type())
 		}
@@ -589,6 +554,7 @@ func TestTargetRegistry(t *testing.T) {
 
 	t.Run("CreateUnknownTarget", func(t *testing.T) {
 		config := map[string]interface{}{}
+
 		_, err := events.CreateTarget("unknown-type", config)
 		if err == nil {
 			t.Error("Expected error for unknown target type")

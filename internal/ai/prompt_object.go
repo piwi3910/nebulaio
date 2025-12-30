@@ -16,37 +16,37 @@ import (
 	"time"
 )
 
-// PromptObjectService provides AI/LLM integration for querying objects
+// PromptObjectService provides AI/LLM integration for querying objects.
 type PromptObjectService struct {
-	mu        sync.RWMutex
 	providers map[string]LLMProvider
 	configs   map[string]*AIConfig
 	cache     *ResponseCache
 	metrics   *AIMetrics
+	mu        sync.RWMutex
 }
 
-// AIConfig stores AI configuration for a bucket or globally
+// AIConfig stores AI configuration for a bucket or globally.
 type AIConfig struct {
-	ID              string            `json:"id"`
-	Name            string            `json:"name"`
-	Provider        string            `json:"provider"`        // openai, anthropic, bedrock, ollama, custom
-	Model           string            `json:"model"`           // gpt-4, claude-3, etc.
-	Endpoint        string            `json:"endpoint"`        // Custom endpoint URL
-	APIKey          string            `json:"api_key"`         // API key (encrypted)
-	MaxTokens       int               `json:"max_tokens"`      // Max response tokens
-	Temperature     float64           `json:"temperature"`     // Model temperature
-	SystemPrompt    string            `json:"system_prompt"`   // Default system prompt
-	EnableCache     bool              `json:"enable_cache"`    // Cache responses
-	CacheTTL        time.Duration     `json:"cache_ttl"`       // Cache TTL
-	RateLimitRPM    int               `json:"rate_limit_rpm"`  // Requests per minute
-	AllowedBuckets  []string          `json:"allowed_buckets"` // Restrict to buckets
-	EnabledFeatures []string          `json:"enabled_features"`
-	Metadata        map[string]string `json:"metadata"`
-	CreatedAt       time.Time         `json:"created_at"`
 	UpdatedAt       time.Time         `json:"updated_at"`
+	CreatedAt       time.Time         `json:"created_at"`
+	Metadata        map[string]string `json:"metadata"`
+	SystemPrompt    string            `json:"system_prompt"`
+	APIKey          string            `json:"api_key"`
+	Name            string            `json:"name"`
+	Endpoint        string            `json:"endpoint"`
+	ID              string            `json:"id"`
+	Provider        string            `json:"provider"`
+	Model           string            `json:"model"`
+	AllowedBuckets  []string          `json:"allowed_buckets"`
+	EnabledFeatures []string          `json:"enabled_features"`
+	Temperature     float64           `json:"temperature"`
+	RateLimitRPM    int               `json:"rate_limit_rpm"`
+	CacheTTL        time.Duration     `json:"cache_ttl"`
+	MaxTokens       int               `json:"max_tokens"`
+	EnableCache     bool              `json:"enable_cache"`
 }
 
-// LLMProvider interface for different AI providers
+// LLMProvider interface for different AI providers.
 type LLMProvider interface {
 	// Name returns the provider name
 	Name() string
@@ -64,59 +64,52 @@ type LLMProvider interface {
 	SupportedModels() []string
 }
 
-// PromptRequest represents a prompt query request
+// PromptRequest represents a prompt query request.
 type PromptRequest struct {
-	// Object context
-	Bucket    string `json:"bucket"`
-	Key       string `json:"key"`
-	VersionID string `json:"version_id,omitempty"`
-
-	// Object content (provided by caller)
-	ObjectContent     io.Reader `json:"-"`
-	ObjectContentType string    `json:"object_content_type"`
-	ObjectSize        int64     `json:"object_size"`
-
-	// Prompt details
-	Prompt       string            `json:"prompt"`
-	SystemPrompt string            `json:"system_prompt,omitempty"`
-	Model        string            `json:"model,omitempty"`
-	MaxTokens    int               `json:"max_tokens,omitempty"`
-	Temperature  float64           `json:"temperature,omitempty"`
-	Stream       bool              `json:"stream,omitempty"`
-	Parameters   map[string]string `json:"parameters,omitempty"`
-
-	// Context options
-	IncludeMetadata bool     `json:"include_metadata,omitempty"`
-	ChunkSize       int      `json:"chunk_size,omitempty"`
-	ChunkOverlap    int      `json:"chunk_overlap,omitempty"`
-	MaxChunks       int      `json:"max_chunks,omitempty"`
-	SelectFields    []string `json:"select_fields,omitempty"` // For structured data
+	ObjectContent     io.Reader         `json:"-"`
+	Parameters        map[string]string `json:"parameters,omitempty"`
+	ObjectContentType string            `json:"object_content_type"`
+	Key               string            `json:"key"`
+	Bucket            string            `json:"bucket"`
+	VersionID         string            `json:"version_id,omitempty"`
+	Prompt            string            `json:"prompt"`
+	SystemPrompt      string            `json:"system_prompt,omitempty"`
+	Model             string            `json:"model,omitempty"`
+	SelectFields      []string          `json:"select_fields,omitempty"`
+	MaxTokens         int               `json:"max_tokens,omitempty"`
+	Temperature       float64           `json:"temperature,omitempty"`
+	ObjectSize        int64             `json:"object_size"`
+	ChunkSize         int               `json:"chunk_size,omitempty"`
+	ChunkOverlap      int               `json:"chunk_overlap,omitempty"`
+	MaxChunks         int               `json:"max_chunks,omitempty"`
+	Stream            bool              `json:"stream,omitempty"`
+	IncludeMetadata   bool              `json:"include_metadata,omitempty"`
 }
 
-// PromptResponse contains the AI response
+// PromptResponse contains the AI response.
 type PromptResponse struct {
+	CreatedAt      time.Time              `json:"created_at"`
+	Usage          *TokenUsage            `json:"usage,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 	RequestID      string                 `json:"request_id"`
 	Bucket         string                 `json:"bucket"`
 	Key            string                 `json:"key"`
 	Model          string                 `json:"model"`
 	Response       string                 `json:"response"`
 	FinishReason   string                 `json:"finish_reason"`
-	Usage          *TokenUsage            `json:"usage,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 	Citations      []Citation             `json:"citations,omitempty"`
 	ProcessingTime time.Duration          `json:"processing_time"`
 	Cached         bool                   `json:"cached"`
-	CreatedAt      time.Time              `json:"created_at"`
 }
 
-// TokenUsage tracks token consumption
+// TokenUsage tracks token consumption.
 type TokenUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
 }
 
-// Citation references a specific part of the object
+// Citation references a specific part of the object.
 type Citation struct {
 	Text      string `json:"text"`
 	StartChar int    `json:"start_char"`
@@ -124,42 +117,42 @@ type Citation struct {
 	ChunkID   int    `json:"chunk_id,omitempty"`
 }
 
-// StreamChunk represents a streaming response chunk
+// StreamChunk represents a streaming response chunk.
 type StreamChunk struct {
+	Error        error  `json:"-"`
 	RequestID    string `json:"request_id"`
-	Index        int    `json:"index"`
 	Content      string `json:"content"`
 	FinishReason string `json:"finish_reason,omitempty"`
-	Error        error  `json:"-"`
+	Index        int    `json:"index"`
 }
 
-// ResponseCache caches AI responses
+// ResponseCache caches AI responses.
 type ResponseCache struct {
-	mu      sync.RWMutex
 	entries map[string]*CacheEntry
 	maxSize int
+	mu      sync.RWMutex
 }
 
-// CacheEntry represents a cached response
+// CacheEntry represents a cached response.
 type CacheEntry struct {
 	Response  *PromptResponse
 	ExpiresAt time.Time
 }
 
-// AIMetrics tracks AI usage metrics
+// AIMetrics tracks AI usage metrics.
 type AIMetrics struct {
-	mu               sync.RWMutex
+	RequestsByModel  map[string]int64
+	RequestsByBucket map[string]int64
 	TotalRequests    int64
 	CacheHits        int64
 	CacheMisses      int64
 	TotalTokens      int64
 	TotalLatencyMs   int64
 	ErrorCount       int64
-	RequestsByModel  map[string]int64
-	RequestsByBucket map[string]int64
+	mu               sync.RWMutex
 }
 
-// NewPromptObjectService creates a new prompt object service
+// NewPromptObjectService creates a new prompt object service.
 func NewPromptObjectService() *PromptObjectService {
 	return &PromptObjectService{
 		providers: make(map[string]LLMProvider),
@@ -175,18 +168,20 @@ func NewPromptObjectService() *PromptObjectService {
 	}
 }
 
-// RegisterProvider registers an LLM provider
+// RegisterProvider registers an LLM provider.
 func (s *PromptObjectService) RegisterProvider(provider LLMProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.providers[provider.Name()] = provider
 }
 
-// CreateConfig creates an AI configuration
+// CreateConfig creates an AI configuration.
 func (s *PromptObjectService) CreateConfig(cfg *AIConfig) error {
 	if cfg.Name == "" {
 		return errors.New("config name required")
 	}
+
 	if cfg.Provider == "" {
 		return errors.New("provider required")
 	}
@@ -202,12 +197,15 @@ func (s *PromptObjectService) CreateConfig(cfg *AIConfig) error {
 	if cfg.ID == "" {
 		cfg.ID = fmt.Sprintf("ai-config-%d", time.Now().UnixNano())
 	}
+
 	if cfg.MaxTokens == 0 {
 		cfg.MaxTokens = 4096
 	}
+
 	if cfg.Temperature == 0 {
 		cfg.Temperature = 0.7
 	}
+
 	if cfg.CacheTTL == 0 {
 		cfg.CacheTTL = time.Hour
 	}
@@ -215,10 +213,11 @@ func (s *PromptObjectService) CreateConfig(cfg *AIConfig) error {
 	cfg.CreatedAt = time.Now()
 	cfg.UpdatedAt = cfg.CreatedAt
 	s.configs[cfg.Name] = cfg
+
 	return nil
 }
 
-// GetConfig retrieves an AI configuration
+// GetConfig retrieves an AI configuration.
 func (s *PromptObjectService) GetConfig(name string) (*AIConfig, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -227,10 +226,11 @@ func (s *PromptObjectService) GetConfig(name string) (*AIConfig, error) {
 	if !exists {
 		return nil, fmt.Errorf("config %s not found", name)
 	}
+
 	return cfg, nil
 }
 
-// ListConfigs lists all AI configurations
+// ListConfigs lists all AI configurations.
 func (s *PromptObjectService) ListConfigs() []*AIConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -239,10 +239,11 @@ func (s *PromptObjectService) ListConfigs() []*AIConfig {
 	for _, cfg := range s.configs {
 		configs = append(configs, cfg)
 	}
+
 	return configs
 }
 
-// DeleteConfig removes an AI configuration
+// DeleteConfig removes an AI configuration.
 func (s *PromptObjectService) DeleteConfig(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -250,11 +251,13 @@ func (s *PromptObjectService) DeleteConfig(name string) error {
 	if _, exists := s.configs[name]; !exists {
 		return fmt.Errorf("config %s not found", name)
 	}
+
 	delete(s.configs, name)
+
 	return nil
 }
 
-// PromptObject queries an object using natural language
+// PromptObject queries an object using natural language.
 func (s *PromptObjectService) PromptObject(ctx context.Context, configName string, req *PromptRequest) (*PromptResponse, error) {
 	start := time.Now()
 
@@ -267,12 +270,14 @@ func (s *PromptObjectService) PromptObject(ctx context.Context, configName strin
 	// Check bucket permissions
 	if len(cfg.AllowedBuckets) > 0 {
 		allowed := false
+
 		for _, b := range cfg.AllowedBuckets {
 			if b == req.Bucket {
 				allowed = true
 				break
 			}
 		}
+
 		if !allowed {
 			return nil, fmt.Errorf("bucket %s not allowed for config %s", req.Bucket, configName)
 		}
@@ -291,6 +296,7 @@ func (s *PromptObjectService) PromptObject(ctx context.Context, configName strin
 	s.mu.RLock()
 	provider, exists := s.providers[cfg.Provider]
 	s.mu.RUnlock()
+
 	if !exists {
 		return nil, fmt.Errorf("provider %s not registered", cfg.Provider)
 	}
@@ -299,12 +305,15 @@ func (s *PromptObjectService) PromptObject(ctx context.Context, configName strin
 	if req.Model == "" {
 		req.Model = cfg.Model
 	}
+
 	if req.MaxTokens == 0 {
 		req.MaxTokens = cfg.MaxTokens
 	}
+
 	if req.Temperature == 0 {
 		req.Temperature = cfg.Temperature
 	}
+
 	if req.SystemPrompt == "" {
 		req.SystemPrompt = cfg.SystemPrompt
 	}
@@ -315,6 +324,7 @@ func (s *PromptObjectService) PromptObject(ctx context.Context, configName strin
 		s.metrics.mu.Lock()
 		s.metrics.ErrorCount++
 		s.metrics.mu.Unlock()
+
 		return nil, err
 	}
 
@@ -326,10 +336,11 @@ func (s *PromptObjectService) PromptObject(ctx context.Context, configName strin
 	}
 
 	s.recordMetrics(req, resp, false)
+
 	return resp, nil
 }
 
-// StreamPromptObject queries an object with streaming response
+// StreamPromptObject queries an object with streaming response.
 func (s *PromptObjectService) StreamPromptObject(ctx context.Context, configName string, req *PromptRequest) (<-chan *StreamChunk, error) {
 	// Get config
 	cfg, err := s.GetConfig(configName)
@@ -341,6 +352,7 @@ func (s *PromptObjectService) StreamPromptObject(ctx context.Context, configName
 	s.mu.RLock()
 	provider, exists := s.providers[cfg.Provider]
 	s.mu.RUnlock()
+
 	if !exists {
 		return nil, fmt.Errorf("provider %s not registered", cfg.Provider)
 	}
@@ -349,21 +361,25 @@ func (s *PromptObjectService) StreamPromptObject(ctx context.Context, configName
 	if req.Model == "" {
 		req.Model = cfg.Model
 	}
+
 	if req.MaxTokens == 0 {
 		req.MaxTokens = cfg.MaxTokens
 	}
+
 	if req.Temperature == 0 {
 		req.Temperature = cfg.Temperature
 	}
+
 	if req.SystemPrompt == "" {
 		req.SystemPrompt = cfg.SystemPrompt
 	}
 
 	req.Stream = true
+
 	return provider.StreamQuery(ctx, req)
 }
 
-// GenerateEmbedding generates embeddings for object content
+// GenerateEmbedding generates embeddings for object content.
 func (s *PromptObjectService) GenerateEmbedding(ctx context.Context, configName string, content string) ([]float64, error) {
 	cfg, err := s.GetConfig(configName)
 	if err != nil {
@@ -373,6 +389,7 @@ func (s *PromptObjectService) GenerateEmbedding(ctx context.Context, configName 
 	s.mu.RLock()
 	provider, exists := s.providers[cfg.Provider]
 	s.mu.RUnlock()
+
 	if !exists {
 		return nil, fmt.Errorf("provider %s not registered", cfg.Provider)
 	}
@@ -380,7 +397,7 @@ func (s *PromptObjectService) GenerateEmbedding(ctx context.Context, configName 
 	return provider.Embed(ctx, content)
 }
 
-// GetMetrics returns AI usage metrics
+// GetMetrics returns AI usage metrics.
 func (s *PromptObjectService) GetMetrics() *AIMetrics {
 	s.metrics.mu.RLock()
 	defer s.metrics.mu.RUnlock()
@@ -399,9 +416,11 @@ func (s *PromptObjectService) GetMetrics() *AIMetrics {
 	for k, v := range s.metrics.RequestsByModel {
 		metrics.RequestsByModel[k] = v
 	}
+
 	for k, v := range s.metrics.RequestsByBucket {
 		metrics.RequestsByBucket[k] = v
 	}
+
 	return metrics
 }
 
@@ -419,15 +438,17 @@ func (s *PromptObjectService) recordMetrics(req *PromptRequest, resp *PromptResp
 	} else {
 		s.metrics.CacheMisses++
 	}
+
 	if resp.Usage != nil {
 		s.metrics.TotalTokens += int64(resp.Usage.TotalTokens)
 	}
+
 	s.metrics.TotalLatencyMs += resp.ProcessingTime.Milliseconds()
 	s.metrics.RequestsByModel[resp.Model]++
 	s.metrics.RequestsByBucket[req.Bucket]++
 }
 
-// Cache methods
+// Cache methods.
 func (c *ResponseCache) Get(key string) *PromptResponse {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -436,11 +457,14 @@ func (c *ResponseCache) Get(key string) *PromptResponse {
 	if !exists {
 		return nil
 	}
+
 	if time.Now().After(entry.ExpiresAt) {
 		return nil
 	}
+
 	resp := *entry.Response
 	resp.Cached = true
+
 	return &resp
 }
 
@@ -469,14 +493,14 @@ func (c *ResponseCache) Set(key string, resp *PromptResponse, ttl time.Duration)
 // Built-in LLM Providers
 // ========================================
 
-// OpenAIProvider implements LLMProvider for OpenAI
+// OpenAIProvider implements LLMProvider for OpenAI.
 type OpenAIProvider struct {
+	client   *http.Client
 	apiKey   string
 	endpoint string
-	client   *http.Client
 }
 
-// NewOpenAIProvider creates a new OpenAI provider
+// NewOpenAIProvider creates a new OpenAI provider.
 func NewOpenAIProvider(apiKey string) *OpenAIProvider {
 	return &OpenAIProvider{
 		apiKey:   apiKey,
@@ -494,11 +518,13 @@ func (p *OpenAIProvider) SupportedModels() []string {
 func (p *OpenAIProvider) Query(ctx context.Context, req *PromptRequest) (*PromptResponse, error) {
 	// Read object content
 	var content string
+
 	if req.ObjectContent != nil {
 		data, err := io.ReadAll(req.ObjectContent)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read object content: %w", err)
 		}
+
 		content = string(data)
 	}
 
@@ -532,10 +558,11 @@ func (p *OpenAIProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint+"/chat/completions", bytes.NewReader(jsonBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint+"/chat/completions", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, err
 	}
+
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
@@ -543,6 +570,7 @@ func (p *OpenAIProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -624,10 +652,11 @@ func (p *OpenAIProvider) Embed(ctx context.Context, content string) ([]float64, 
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint+"/embeddings", bytes.NewReader(jsonBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint+"/embeddings", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, err
 	}
+
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
@@ -635,6 +664,7 @@ func (p *OpenAIProvider) Embed(ctx context.Context, content string) ([]float64, 
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -659,14 +689,14 @@ func (p *OpenAIProvider) Embed(ctx context.Context, content string) ([]float64, 
 	return result.Data[0].Embedding, nil
 }
 
-// AnthropicProvider implements LLMProvider for Anthropic Claude
+// AnthropicProvider implements LLMProvider for Anthropic Claude.
 type AnthropicProvider struct {
+	client   *http.Client
 	apiKey   string
 	endpoint string
-	client   *http.Client
 }
 
-// NewAnthropicProvider creates a new Anthropic provider
+// NewAnthropicProvider creates a new Anthropic provider.
 func NewAnthropicProvider(apiKey string) *AnthropicProvider {
 	return &AnthropicProvider{
 		apiKey:   apiKey,
@@ -684,11 +714,13 @@ func (p *AnthropicProvider) SupportedModels() []string {
 func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*PromptResponse, error) {
 	// Read object content
 	var content string
+
 	if req.ObjectContent != nil {
 		data, err := io.ReadAll(req.ObjectContent)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read object content: %w", err)
 		}
+
 		content = string(data)
 	}
 
@@ -714,10 +746,11 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint+"/messages", bytes.NewReader(jsonBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint+"/messages", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, err
 	}
+
 	httpReq.Header.Set("X-Api-Key", p.apiKey)
 	httpReq.Header.Set("Anthropic-Version", "2023-06-01")
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -726,6 +759,7 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -734,13 +768,13 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 	}
 
 	var result struct {
-		ID      string `json:"id"`
-		Content []struct {
+		ID         string `json:"id"`
+		StopReason string `json:"stop_reason"`
+		Content    []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
-		StopReason string `json:"stop_reason"`
-		Usage      struct {
+		Usage struct {
 			InputTokens  int `json:"input_tokens"`
 			OutputTokens int `json:"output_tokens"`
 		} `json:"usage"`
@@ -751,6 +785,7 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 	}
 
 	var responseText string
+
 	for _, c := range result.Content {
 		if c.Type == "text" {
 			responseText += c.Text
@@ -778,11 +813,13 @@ func (p *AnthropicProvider) StreamQuery(ctx context.Context, req *PromptRequest)
 
 	go func() {
 		defer close(chunks)
+
 		resp, err := p.Query(ctx, req)
 		if err != nil {
 			chunks <- &StreamChunk{Error: err}
 			return
 		}
+
 		chunks <- &StreamChunk{
 			RequestID:    resp.RequestID,
 			Index:        0,
@@ -799,13 +836,13 @@ func (p *AnthropicProvider) Embed(ctx context.Context, content string) ([]float6
 	return nil, errors.New("anthropic does not support embeddings directly")
 }
 
-// OllamaProvider implements LLMProvider for local Ollama
+// OllamaProvider implements LLMProvider for local Ollama.
 type OllamaProvider struct {
-	endpoint string
 	client   *http.Client
+	endpoint string
 }
 
-// NewOllamaProvider creates a new Ollama provider for local LLMs
+// NewOllamaProvider creates a new Ollama provider for local LLMs.
 func NewOllamaProvider(endpoint string) *OllamaProvider {
 	if endpoint == "" {
 		// Use OLLAMA_HOST environment variable if set, otherwise use default
@@ -814,6 +851,7 @@ func NewOllamaProvider(endpoint string) *OllamaProvider {
 			endpoint = "http://localhost:11434"
 		}
 	}
+
 	return &OllamaProvider{
 		endpoint: endpoint,
 		client:   &http.Client{Timeout: 120 * time.Second},
@@ -829,11 +867,13 @@ func (p *OllamaProvider) SupportedModels() []string {
 func (p *OllamaProvider) Query(ctx context.Context, req *PromptRequest) (*PromptResponse, error) {
 	// Read object content
 	var content string
+
 	if req.ObjectContent != nil {
 		data, err := io.ReadAll(req.ObjectContent)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read object content: %w", err)
 		}
+
 		content = string(data)
 	}
 
@@ -860,16 +900,18 @@ func (p *OllamaProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint+"/api/generate", bytes.NewReader(jsonBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint+"/api/generate", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, err
 	}
+
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -907,11 +949,13 @@ func (p *OllamaProvider) StreamQuery(ctx context.Context, req *PromptRequest) (<
 
 	go func() {
 		defer close(chunks)
+
 		resp, err := p.Query(ctx, req)
 		if err != nil {
 			chunks <- &StreamChunk{Error: err}
 			return
 		}
+
 		chunks <- &StreamChunk{
 			RequestID:    resp.RequestID,
 			Index:        0,
@@ -934,16 +978,18 @@ func (p *OllamaProvider) Embed(ctx context.Context, content string) ([]float64, 
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint+"/api/embeddings", bytes.NewReader(jsonBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint+"/api/embeddings", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, err
 	}
+
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -966,10 +1012,10 @@ func (p *OllamaProvider) Embed(ctx context.Context, content string) ([]float64, 
 // Content Processing Utilities
 // ========================================
 
-// ContentProcessor handles different content types for AI processing
+// ContentProcessor handles different content types for AI processing.
 type ContentProcessor struct{}
 
-// ProcessForLLM prepares content for LLM consumption
+// ProcessForLLM prepares content for LLM consumption.
 func (p *ContentProcessor) ProcessForLLM(content io.Reader, contentType string, maxChars int) (string, error) {
 	data, err := io.ReadAll(content)
 	if err != nil {
@@ -983,7 +1029,8 @@ func (p *ContentProcessor) ProcessForLLM(content io.Reader, contentType string, 
 	case strings.HasPrefix(contentType, "application/json"):
 		// Pretty print JSON for better readability
 		var v interface{}
-		if err := json.Unmarshal(data, &v); err == nil {
+		err := json.Unmarshal(data, &v)
+		if err == nil {
 			pretty, _ := json.MarshalIndent(v, "", "  ")
 			text = string(pretty)
 		}
@@ -1012,26 +1059,30 @@ func (p *ContentProcessor) ProcessForLLM(content io.Reader, contentType string, 
 	return text, nil
 }
 
-// ChunkContent splits content into chunks for processing
+// ChunkContent splits content into chunks for processing.
 func (p *ContentProcessor) ChunkContent(content string, chunkSize, overlap int) []string {
 	if chunkSize <= 0 {
 		chunkSize = 4000
 	}
+
 	if overlap < 0 {
 		overlap = 200
 	}
 
 	var chunks []string
+
 	for i := 0; i < len(content); i += chunkSize - overlap {
 		end := i + chunkSize
 		if end > len(content) {
 			end = len(content)
 		}
+
 		chunks = append(chunks, content[i:end])
 		if end >= len(content) {
 			break
 		}
 	}
+
 	return chunks
 }
 
@@ -1042,6 +1093,7 @@ func isTextContent(data []byte) bool {
 	}
 
 	printable := 0
+
 	for _, b := range data[:min(len(data), 1000)] {
 		if b >= 32 && b < 127 || b == '\n' || b == '\r' || b == '\t' {
 			printable++
@@ -1055,6 +1107,7 @@ func min(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }
 
@@ -1062,34 +1115,34 @@ func min(a, b int) int {
 // S3 API Compatibility
 // ========================================
 
-// PromptObjectInput represents the S3-compatible API input
+// PromptObjectInput represents the S3-compatible API input.
 type PromptObjectInput struct {
+	Parameters   map[string]string `json:"Parameters,omitempty"`
 	Bucket       string            `json:"Bucket"`
 	Key          string            `json:"Key"`
 	VersionID    string            `json:"VersionId,omitempty"`
 	Prompt       string            `json:"Prompt"`
 	Model        string            `json:"Model,omitempty"`
+	SystemPrompt string            `json:"SystemPrompt,omitempty"`
+	Config       string            `json:"Config,omitempty"`
 	MaxTokens    int               `json:"MaxTokens,omitempty"`
 	Temperature  float64           `json:"Temperature,omitempty"`
-	SystemPrompt string            `json:"SystemPrompt,omitempty"`
 	Stream       bool              `json:"Stream,omitempty"`
-	Config       string            `json:"Config,omitempty"` // AI config name
-	Parameters   map[string]string `json:"Parameters,omitempty"`
 }
 
-// PromptObjectOutput represents the S3-compatible API output
+// PromptObjectOutput represents the S3-compatible API output.
 type PromptObjectOutput struct {
+	Usage          *TokenUsage            `json:"Usage,omitempty"`
+	Metadata       map[string]interface{} `json:"Metadata,omitempty"`
 	RequestID      string                 `json:"RequestId"`
 	Response       string                 `json:"Response"`
 	Model          string                 `json:"Model"`
 	FinishReason   string                 `json:"FinishReason"`
-	Usage          *TokenUsage            `json:"Usage,omitempty"`
 	ProcessingTime int64                  `json:"ProcessingTimeMs"`
 	Cached         bool                   `json:"Cached"`
-	Metadata       map[string]interface{} `json:"Metadata,omitempty"`
 }
 
-// PromptObjectAPI provides S3-compatible API for promptObject
+// PromptObjectAPI provides S3-compatible API for promptObject.
 func (s *PromptObjectService) PromptObjectAPI(ctx context.Context, input *PromptObjectInput, objectContent io.Reader, contentType string, size int64) (*PromptObjectOutput, error) {
 	configName := input.Config
 	if configName == "" {

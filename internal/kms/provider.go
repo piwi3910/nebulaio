@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-// Provider is the interface for Key Management Services
+// Provider is the interface for Key Management Services.
 type Provider interface {
 	// Name returns the provider name
 	Name() string
@@ -63,51 +63,46 @@ type Provider interface {
 	Close() error
 }
 
-// KeySpec specifies key creation parameters
+// KeySpec specifies key creation parameters.
 type KeySpec struct {
-	// Name is the key name/alias
-	Name string `json:"name"`
-	// Description of the key
-	Description string `json:"description,omitempty"`
-	// Algorithm is the encryption algorithm (e.g., AES_256, RSA_4096)
-	Algorithm Algorithm `json:"algorithm"`
-	// Usage specifies how the key can be used
-	Usage KeyUsage `json:"usage"`
-	// Metadata is custom key metadata
-	Metadata map[string]string `json:"metadata,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Algorithm   Algorithm         `json:"algorithm"`
+	Usage       KeyUsage          `json:"usage"`
 }
 
-// Algorithm represents encryption algorithms
+// Algorithm represents encryption algorithms.
 type Algorithm string
 
 const (
-	// Symmetric encryption algorithms
-	AlgorithmAES128      Algorithm = "AES_128"
-	AlgorithmAES256      Algorithm = "AES_256"
-	AlgorithmAES256GCM   Algorithm = "AES_256_GCM"
-	AlgorithmChaCha20    Algorithm = "CHACHA20_POLY1305"
+	// Symmetric encryption algorithms.
+	AlgorithmAES128    Algorithm = "AES_128"
+	AlgorithmAES256    Algorithm = "AES_256"
+	AlgorithmAES256GCM Algorithm = "AES_256_GCM"
+	AlgorithmChaCha20  Algorithm = "CHACHA20_POLY1305"
 
-	// Asymmetric encryption algorithms
-	AlgorithmRSA2048     Algorithm = "RSA_2048"
-	AlgorithmRSA3072     Algorithm = "RSA_3072"
-	AlgorithmRSA4096     Algorithm = "RSA_4096"
-	AlgorithmECDSAP256   Algorithm = "ECDSA_P256"
-	AlgorithmECDSAP384   Algorithm = "ECDSA_P384"
+	// Asymmetric encryption algorithms.
+	AlgorithmRSA2048   Algorithm = "RSA_2048"
+	AlgorithmRSA3072   Algorithm = "RSA_3072"
+	AlgorithmRSA4096   Algorithm = "RSA_4096"
+	AlgorithmECDSAP256 Algorithm = "ECDSA_P256"
+	AlgorithmECDSAP384 Algorithm = "ECDSA_P384"
 )
 
-// KeyUsage specifies how a key can be used
+// KeyUsage specifies how a key can be used.
 type KeyUsage string
 
 const (
-	// KeyUsageEncrypt means key is for encryption/decryption
+	// KeyUsageEncrypt means key is for encryption/decryption.
 	KeyUsageEncrypt KeyUsage = "ENCRYPT_DECRYPT"
-	// KeyUsageSign means key is for signing/verification
+	// KeyUsageSign means key is for signing/verification.
 	KeyUsageSign KeyUsage = "SIGN_VERIFY"
-	// KeyUsageWrap means key is for wrapping other keys
+	// KeyUsageWrap means key is for wrapping other keys.
 	KeyUsageWrap KeyUsage = "KEY_WRAP"
 )
 
-// KeyState represents the state of a key
+// KeyState represents the state of a key.
 type KeyState string
 
 const (
@@ -117,55 +112,37 @@ const (
 	KeyStateDeleted         KeyState = "DELETED"
 )
 
-// KeyInfo contains information about an encryption key
+// KeyInfo contains information about an encryption key.
 type KeyInfo struct {
-	// KeyID is the unique key identifier
-	KeyID string `json:"keyId"`
-	// Name is the key name/alias
-	Name string `json:"name,omitempty"`
-	// Description of the key
-	Description string `json:"description,omitempty"`
-	// Algorithm used by this key
-	Algorithm Algorithm `json:"algorithm"`
-	// Usage specifies how the key can be used
-	Usage KeyUsage `json:"usage"`
-	// State is the current key state
-	State KeyState `json:"state"`
-	// CreatedAt is when the key was created
-	CreatedAt time.Time `json:"createdAt"`
-	// RotatedAt is when the key was last rotated
-	RotatedAt *time.Time `json:"rotatedAt,omitempty"`
-	// DeletionDate is when the key will be deleted (if pending)
-	DeletionDate *time.Time `json:"deletionDate,omitempty"`
-	// Metadata is custom key metadata
-	Metadata map[string]string `json:"metadata,omitempty"`
+	CreatedAt    time.Time         `json:"createdAt"`
+	RotatedAt    *time.Time        `json:"rotatedAt,omitempty"`
+	DeletionDate *time.Time        `json:"deletionDate,omitempty"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	KeyID        string            `json:"keyId"`
+	Name         string            `json:"name,omitempty"`
+	Description  string            `json:"description,omitempty"`
+	Algorithm    Algorithm         `json:"algorithm"`
+	Usage        KeyUsage          `json:"usage"`
+	State        KeyState          `json:"state"`
 }
 
-// DataKey contains a data encryption key
+// DataKey contains a data encryption key.
 type DataKey struct {
-	// KeyID is the ID of the master key used to encrypt this data key
-	KeyID string `json:"keyId"`
-	// Plaintext is the unencrypted data key (for immediate use)
-	Plaintext []byte `json:"-"`
-	// Ciphertext is the encrypted data key (for storage)
-	Ciphertext []byte `json:"ciphertext"`
-	// Algorithm used for the data key
-	Algorithm Algorithm `json:"algorithm"`
+	KeyID      string    `json:"keyId"`
+	Algorithm  Algorithm `json:"algorithm"`
+	Plaintext  []byte    `json:"-"`
+	Ciphertext []byte    `json:"ciphertext"`
 }
 
-// ProviderConfig is the base configuration for KMS providers
+// ProviderConfig is the base configuration for KMS providers.
 type ProviderConfig struct {
-	// Type is the provider type (vault, aws, gcp, azure, local)
-	Type string `json:"type" yaml:"type"`
-	// Enabled indicates if this provider is active
-	Enabled bool `json:"enabled" yaml:"enabled"`
-	// DefaultKeyID is the default key for encryption
-	DefaultKeyID string `json:"defaultKeyId,omitempty" yaml:"defaultKeyId,omitempty"`
-	// KeyCacheTTL is how long to cache decrypted data keys
-	KeyCacheTTL time.Duration `json:"keyCacheTtl,omitempty" yaml:"keyCacheTtl,omitempty"`
+	Type         string        `json:"type" yaml:"type"`
+	DefaultKeyID string        `json:"defaultKeyId,omitempty" yaml:"defaultKeyId,omitempty"`
+	KeyCacheTTL  time.Duration `json:"keyCacheTtl,omitempty" yaml:"keyCacheTtl,omitempty"`
+	Enabled      bool          `json:"enabled" yaml:"enabled"`
 }
 
-// Common errors
+// Common errors.
 var (
 	ErrKeyNotFound       = errors.New("key not found")
 	ErrKeyDisabled       = errors.New("key is disabled")
@@ -177,17 +154,18 @@ var (
 	ErrKeyRotationFailed = errors.New("key rotation failed")
 )
 
-// WrapError wraps an error with additional context
+// WrapError wraps an error with additional context.
 type WrapError struct {
-	Op      string
-	KeyID   string
-	Err     error
+	Err   error
+	Op    string
+	KeyID string
 }
 
 func (e *WrapError) Error() string {
 	if e.KeyID != "" {
 		return e.Op + " [" + e.KeyID + "]: " + e.Err.Error()
 	}
+
 	return e.Op + ": " + e.Err.Error()
 }
 

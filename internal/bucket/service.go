@@ -20,6 +20,7 @@ package bucket
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -34,14 +35,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Tag validation constants for buckets
+// Tag validation constants for buckets.
 const (
 	MaxTagsPerBucket  = 50 // Buckets can have more tags than objects
 	MaxTagKeyLength   = 128
 	MaxTagValueLength = 256
 )
 
-// validateBucketTags validates tags according to S3 tagging rules for buckets
+// validateBucketTags validates tags according to S3 tagging rules for buckets.
 func validateBucketTags(tags map[string]string) error {
 	if len(tags) > MaxTagsPerBucket {
 		return fmt.Errorf("tag count exceeds maximum of %d", MaxTagsPerBucket)
@@ -52,7 +53,7 @@ func validateBucketTags(tags map[string]string) error {
 		valueLen := utf8.RuneCountInString(value)
 
 		if keyLen == 0 {
-			return fmt.Errorf("tag key cannot be empty")
+			return errors.New("tag key cannot be empty")
 		}
 
 		if keyLen > MaxTagKeyLength {
@@ -72,13 +73,13 @@ func validateBucketTags(tags map[string]string) error {
 	return nil
 }
 
-// Service handles bucket operations
+// Service handles bucket operations.
 type Service struct {
 	store   metadata.Store
 	storage object.StorageBackend
 }
 
-// NewService creates a new bucket service
+// NewService creates a new bucket service.
 func NewService(store metadata.Store, storage object.StorageBackend) *Service {
 	return &Service{
 		store:   store,
@@ -86,13 +87,14 @@ func NewService(store metadata.Store, storage object.StorageBackend) *Service {
 	}
 }
 
-// bucketNameRegex validates S3 bucket naming rules
+// bucketNameRegex validates S3 bucket naming rules.
 var bucketNameRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
 
-// CreateBucket creates a new bucket
+// CreateBucket creates a new bucket.
 func (s *Service) CreateBucket(ctx context.Context, name, owner, region, storageClass string) (*metadata.Bucket, error) {
 	// Validate bucket name
-	if err := validateBucketName(name); err != nil {
+	err := validateBucketName(name)
+	if err != nil {
 		return nil, err
 	}
 
@@ -105,6 +107,7 @@ func (s *Service) CreateBucket(ctx context.Context, name, owner, region, storage
 	if region == "" {
 		region = "us-east-1"
 	}
+
 	if storageClass == "" {
 		storageClass = "STANDARD"
 	}
@@ -118,15 +121,18 @@ func (s *Service) CreateBucket(ctx context.Context, name, owner, region, storage
 	}
 
 	// Create metadata
-	if err := s.store.CreateBucket(ctx, bucket); err != nil {
+	err = s.store.CreateBucket(ctx, bucket)
+	if err != nil {
 		return nil, s3errors.ErrInternalError.WithMessage("failed to create bucket metadata: " + err.Error())
 	}
 
 	// Create storage
-	if err := s.storage.CreateBucket(ctx, name); err != nil {
+	err = s.storage.CreateBucket(ctx, name)
+	if err != nil {
 		storageErr := fmt.Errorf("failed to create bucket storage: %w", err)
 		// Rollback metadata - log error if rollback fails
-		if rollbackErr := s.store.DeleteBucket(ctx, name); rollbackErr != nil {
+		rollbackErr := s.store.DeleteBucket(ctx, name)
+		if rollbackErr != nil {
 			log.Error().
 				Err(rollbackErr).
 				Str("bucket", name).
@@ -136,22 +142,24 @@ func (s *Service) CreateBucket(ctx context.Context, name, owner, region, storage
 			return nil, s3errors.ErrInternalError.WithMessage(
 				fmt.Sprintf("%s (additionally, metadata rollback failed: %s)", storageErr.Error(), rollbackErr.Error()))
 		}
+
 		return nil, s3errors.ErrInternalError.WithMessage(storageErr.Error())
 	}
 
 	return bucket, nil
 }
 
-// GetBucket retrieves a bucket by name
+// GetBucket retrieves a bucket by name.
 func (s *Service) GetBucket(ctx context.Context, name string) (*metadata.Bucket, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	return bucket, nil
 }
 
-// DeleteBucket deletes a bucket
+// DeleteBucket deletes a bucket.
 func (s *Service) DeleteBucket(ctx context.Context, name string) error {
 	// Check if bucket exists
 	if _, err := s.store.GetBucket(ctx, name); err != nil {
@@ -163,6 +171,7 @@ func (s *Service) DeleteBucket(ctx context.Context, name string) error {
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to check bucket contents: " + err.Error())
 	}
+
 	if len(listing.Objects) > 0 {
 		return s3errors.ErrBucketNotEmpty.WithResource(name)
 	}
@@ -180,25 +189,27 @@ func (s *Service) DeleteBucket(ctx context.Context, name string) error {
 	return nil
 }
 
-// ListBuckets lists all buckets owned by a user
+// ListBuckets lists all buckets owned by a user.
 func (s *Service) ListBuckets(ctx context.Context, owner string) ([]*metadata.Bucket, error) {
 	buckets, err := s.store.ListBuckets(ctx, owner)
 	if err != nil {
 		return nil, s3errors.ErrInternalError.WithMessage("failed to list buckets: " + err.Error())
 	}
+
 	return buckets, nil
 }
 
-// HeadBucket checks if a bucket exists
+// HeadBucket checks if a bucket exists.
 func (s *Service) HeadBucket(ctx context.Context, name string) error {
 	_, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	return nil
 }
 
-// SetVersioning enables or disables versioning for a bucket
+// SetVersioning enables or disables versioning for a bucket.
 func (s *Service) SetVersioning(ctx context.Context, name string, status metadata.VersioningStatus) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -214,19 +225,21 @@ func (s *Service) SetVersioning(ctx context.Context, name string, status metadat
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to update versioning: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetVersioning returns the versioning status for a bucket
+// GetVersioning returns the versioning status for a bucket.
 func (s *Service) GetVersioning(ctx context.Context, name string) (metadata.VersioningStatus, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return "", s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	return bucket.Versioning, nil
 }
 
-// SetBucketPolicy sets the bucket policy
+// SetBucketPolicy sets the bucket policy.
 func (s *Service) SetBucketPolicy(ctx context.Context, name, policyJSON string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -248,22 +261,25 @@ func (s *Service) SetBucketPolicy(ctx context.Context, name, policyJSON string) 
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set bucket policy: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetBucketPolicy returns the bucket policy
+// GetBucketPolicy returns the bucket policy.
 func (s *Service) GetBucketPolicy(ctx context.Context, name string) (string, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return "", s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	if bucket.Policy == "" {
 		return "", s3errors.ErrNoSuchBucketPolicy.WithResource(name)
 	}
+
 	return bucket.Policy, nil
 }
 
-// DeleteBucketPolicy deletes the bucket policy
+// DeleteBucketPolicy deletes the bucket policy.
 func (s *Service) DeleteBucketPolicy(ctx context.Context, name string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -274,10 +290,11 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, name string) error {
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete bucket policy: " + err.Error())
 	}
+
 	return nil
 }
 
-// PutBucketTagging sets bucket tags with validation
+// PutBucketTagging sets bucket tags with validation.
 func (s *Service) PutBucketTagging(ctx context.Context, name string, tags map[string]string) error {
 	// Validate tags
 	if err := validateBucketTags(tags); err != nil {
@@ -293,10 +310,11 @@ func (s *Service) PutBucketTagging(ctx context.Context, name string, tags map[st
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set bucket tags: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetBucketTagging returns bucket tags
+// GetBucketTagging returns bucket tags.
 func (s *Service) GetBucketTagging(ctx context.Context, name string) (map[string]string, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -311,7 +329,7 @@ func (s *Service) GetBucketTagging(ctx context.Context, name string) (map[string
 	return bucket.Tags, nil
 }
 
-// DeleteBucketTagging deletes all bucket tags
+// DeleteBucketTagging deletes all bucket tags.
 func (s *Service) DeleteBucketTagging(ctx context.Context, name string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -322,25 +340,26 @@ func (s *Service) DeleteBucketTagging(ctx context.Context, name string) error {
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete bucket tags: " + err.Error())
 	}
+
 	return nil
 }
 
-// SetBucketTags sets bucket tags (legacy method, calls PutBucketTagging)
+// SetBucketTags sets bucket tags (legacy method, calls PutBucketTagging).
 func (s *Service) SetBucketTags(ctx context.Context, name string, tags map[string]string) error {
 	return s.PutBucketTagging(ctx, name, tags)
 }
 
-// GetBucketTags returns bucket tags (legacy method, calls GetBucketTagging)
+// GetBucketTags returns bucket tags (legacy method, calls GetBucketTagging).
 func (s *Service) GetBucketTags(ctx context.Context, name string) (map[string]string, error) {
 	return s.GetBucketTagging(ctx, name)
 }
 
-// DeleteBucketTags deletes all bucket tags (legacy method, calls DeleteBucketTagging)
+// DeleteBucketTags deletes all bucket tags (legacy method, calls DeleteBucketTagging).
 func (s *Service) DeleteBucketTags(ctx context.Context, name string) error {
 	return s.DeleteBucketTagging(ctx, name)
 }
 
-// SetCORS sets CORS configuration for a bucket
+// SetCORS sets CORS configuration for a bucket.
 func (s *Service) SetCORS(ctx context.Context, name string, rules []metadata.CORSRule) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -351,22 +370,25 @@ func (s *Service) SetCORS(ctx context.Context, name string, rules []metadata.COR
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set CORS configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetCORS returns CORS configuration for a bucket
+// GetCORS returns CORS configuration for a bucket.
 func (s *Service) GetCORS(ctx context.Context, name string) ([]metadata.CORSRule, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	if len(bucket.CORS) == 0 {
 		return nil, s3errors.ErrNoSuchCORSConfiguration.WithResource(name)
 	}
+
 	return bucket.CORS, nil
 }
 
-// DeleteCORS deletes CORS configuration for a bucket
+// DeleteCORS deletes CORS configuration for a bucket.
 func (s *Service) DeleteCORS(ctx context.Context, name string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -377,10 +399,11 @@ func (s *Service) DeleteCORS(ctx context.Context, name string) error {
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete CORS configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// SetLifecycle sets lifecycle rules for a bucket
+// SetLifecycle sets lifecycle rules for a bucket.
 func (s *Service) SetLifecycle(ctx context.Context, name string, rules []metadata.LifecycleRule) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -391,22 +414,25 @@ func (s *Service) SetLifecycle(ctx context.Context, name string, rules []metadat
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set lifecycle configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetLifecycle returns lifecycle rules for a bucket
+// GetLifecycle returns lifecycle rules for a bucket.
 func (s *Service) GetLifecycle(ctx context.Context, name string) ([]metadata.LifecycleRule, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	if len(bucket.Lifecycle) == 0 {
 		return nil, s3errors.ErrNoSuchLifecycleConfiguration.WithResource(name)
 	}
+
 	return bucket.Lifecycle, nil
 }
 
-// DeleteLifecycle deletes lifecycle rules for a bucket
+// DeleteLifecycle deletes lifecycle rules for a bucket.
 func (s *Service) DeleteLifecycle(ctx context.Context, name string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -417,10 +443,11 @@ func (s *Service) DeleteLifecycle(ctx context.Context, name string) error {
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete lifecycle configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// validateBucketName validates S3 bucket naming rules
+// validateBucketName validates S3 bucket naming rules.
 func validateBucketName(name string) error {
 	if len(name) < 3 || len(name) > 63 {
 		return s3errors.ErrInvalidBucketName.WithMessage("bucket name must be between 3 and 63 characters")
@@ -448,8 +475,7 @@ func validateBucketName(name string) error {
 	return nil
 }
 
-
-// FindMatchingCORSRule finds a CORS rule that matches the given origin and method
+// FindMatchingCORSRule finds a CORS rule that matches the given origin and method.
 func (s *Service) FindMatchingCORSRule(rules []metadata.CORSRule, origin, method string) *metadata.CORSRule {
 	for i := range rules {
 		rule := &rules[i]
@@ -460,29 +486,32 @@ func (s *Service) FindMatchingCORSRule(rules []metadata.CORSRule, origin, method
 
 		// Check if method is allowed
 		methodAllowed := false
+
 		for _, allowedMethod := range rule.AllowedMethods {
 			if strings.EqualFold(allowedMethod, method) {
 				methodAllowed = true
 				break
 			}
 		}
+
 		if !methodAllowed {
 			continue
 		}
 
 		return rule
 	}
+
 	return nil
 }
 
-// ParseAndValidateCORSRules converts S3 CORS rules to internal format with validation
+// ParseAndValidateCORSRules converts S3 CORS rules to internal format with validation.
 func (s *Service) ParseAndValidateCORSRules(s3Rules []s3types.CORSRule) ([]metadata.CORSRule, error) {
 	if len(s3Rules) == 0 {
-		return nil, fmt.Errorf("CORS configuration must have at least one rule")
+		return nil, errors.New("CORS configuration must have at least one rule")
 	}
 
 	if len(s3Rules) > 100 {
-		return nil, fmt.Errorf("CORS configuration cannot have more than 100 rules")
+		return nil, errors.New("CORS configuration cannot have more than 100 rules")
 	}
 
 	rules := make([]metadata.CORSRule, 0, len(s3Rules))
@@ -491,6 +520,7 @@ func (s *Service) ParseAndValidateCORSRules(s3Rules []s3types.CORSRule) ([]metad
 		if len(s3Rule.AllowedOrigin) == 0 {
 			return nil, fmt.Errorf("rule %d: AllowedOrigin is required", i+1)
 		}
+
 		if len(s3Rule.AllowedMethod) == 0 {
 			return nil, fmt.Errorf("rule %d: AllowedMethod is required", i+1)
 		}
@@ -509,6 +539,7 @@ func (s *Service) ParseAndValidateCORSRules(s3Rules []s3types.CORSRule) ([]metad
 		if s3Rule.MaxAgeSeconds < 0 {
 			return nil, fmt.Errorf("rule %d: MaxAgeSeconds cannot be negative", i+1)
 		}
+
 		if s3Rule.MaxAgeSeconds > 86400 {
 			return nil, fmt.Errorf("rule %d: MaxAgeSeconds cannot exceed 86400", i+1)
 		}
@@ -526,13 +557,14 @@ func (s *Service) ParseAndValidateCORSRules(s3Rules []s3types.CORSRule) ([]metad
 }
 
 // MatchCORSOrigin checks if the origin matches any of the allowed origins
-// Returns the origin to use in the response and whether it matched
+// Returns the origin to use in the response and whether it matched.
 func MatchCORSOrigin(allowedOrigins []string, origin string) (string, bool) {
 	for _, allowed := range allowedOrigins {
 		// Exact match or wildcard
 		if allowed == "*" {
 			return "*", true
 		}
+
 		if allowed == origin {
 			return origin, true
 		}
@@ -548,19 +580,21 @@ func MatchCORSOrigin(allowedOrigins []string, origin string) (string, bool) {
 			}
 		}
 	}
+
 	return "", false
 }
 
-// GetLocation returns the bucket's region/location
+// GetLocation returns the bucket's region/location.
 func (s *Service) GetLocation(ctx context.Context, name string) (string, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return "", s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	return bucket.Region, nil
 }
 
-// GetBucketACL returns the bucket's ACL
+// GetBucketACL returns the bucket's ACL.
 func (s *Service) GetBucketACL(ctx context.Context, name string) (*metadata.BucketACL, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -582,10 +616,11 @@ func (s *Service) GetBucketACL(ctx context.Context, name string) (*metadata.Buck
 			},
 		}, nil
 	}
+
 	return bucket.ACL, nil
 }
 
-// SetBucketACL sets the bucket's ACL
+// SetBucketACL sets the bucket's ACL.
 func (s *Service) SetBucketACL(ctx context.Context, name string, acl *metadata.BucketACL) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -596,22 +631,25 @@ func (s *Service) SetBucketACL(ctx context.Context, name string, acl *metadata.B
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set bucket ACL: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetEncryption returns the bucket's encryption configuration
+// GetEncryption returns the bucket's encryption configuration.
 func (s *Service) GetEncryption(ctx context.Context, name string) (*metadata.EncryptionConfig, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	if bucket.Encryption == nil {
 		return nil, s3errors.ErrServerSideEncryptionConfigurationNotFoundError.WithResource(name)
 	}
+
 	return bucket.Encryption, nil
 }
 
-// SetEncryption sets the bucket's encryption configuration
+// SetEncryption sets the bucket's encryption configuration.
 func (s *Service) SetEncryption(ctx context.Context, name string, config *metadata.EncryptionConfig) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -622,10 +660,11 @@ func (s *Service) SetEncryption(ctx context.Context, name string, config *metada
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set encryption configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// DeleteEncryption deletes the bucket's encryption configuration
+// DeleteEncryption deletes the bucket's encryption configuration.
 func (s *Service) DeleteEncryption(ctx context.Context, name string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -636,22 +675,25 @@ func (s *Service) DeleteEncryption(ctx context.Context, name string) error {
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete encryption configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetWebsite returns the bucket's website configuration
+// GetWebsite returns the bucket's website configuration.
 func (s *Service) GetWebsite(ctx context.Context, name string) (*metadata.WebsiteConfig, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	if bucket.Website == nil {
 		return nil, s3errors.ErrNoSuchWebsiteConfiguration.WithResource(name)
 	}
+
 	return bucket.Website, nil
 }
 
-// SetWebsite sets the bucket's website configuration
+// SetWebsite sets the bucket's website configuration.
 func (s *Service) SetWebsite(ctx context.Context, name string, config *metadata.WebsiteConfig) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -662,10 +704,11 @@ func (s *Service) SetWebsite(ctx context.Context, name string, config *metadata.
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set website configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// DeleteWebsite deletes the bucket's website configuration
+// DeleteWebsite deletes the bucket's website configuration.
 func (s *Service) DeleteWebsite(ctx context.Context, name string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -676,10 +719,11 @@ func (s *Service) DeleteWebsite(ctx context.Context, name string) error {
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete website configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetLogging returns the bucket's logging configuration
+// GetLogging returns the bucket's logging configuration.
 func (s *Service) GetLogging(ctx context.Context, name string) (*metadata.LoggingConfig, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -689,10 +733,11 @@ func (s *Service) GetLogging(ctx context.Context, name string) (*metadata.Loggin
 	if bucket.Logging == nil {
 		return &metadata.LoggingConfig{}, nil
 	}
+
 	return bucket.Logging, nil
 }
 
-// SetLogging sets the bucket's logging configuration
+// SetLogging sets the bucket's logging configuration.
 func (s *Service) SetLogging(ctx context.Context, name string, config *metadata.LoggingConfig) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -710,10 +755,11 @@ func (s *Service) SetLogging(ctx context.Context, name string, config *metadata.
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set logging configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetNotification returns the bucket's notification configuration
+// GetNotification returns the bucket's notification configuration.
 func (s *Service) GetNotification(ctx context.Context, name string) (*metadata.NotificationConfig, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -723,10 +769,11 @@ func (s *Service) GetNotification(ctx context.Context, name string) (*metadata.N
 	if bucket.Notification == nil {
 		return &metadata.NotificationConfig{}, nil
 	}
+
 	return bucket.Notification, nil
 }
 
-// SetNotification sets the bucket's notification configuration
+// SetNotification sets the bucket's notification configuration.
 func (s *Service) SetNotification(ctx context.Context, name string, config *metadata.NotificationConfig) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -737,22 +784,25 @@ func (s *Service) SetNotification(ctx context.Context, name string, config *meta
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set notification configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetReplication returns the bucket's replication configuration
+// GetReplication returns the bucket's replication configuration.
 func (s *Service) GetReplication(ctx context.Context, name string) (*metadata.ReplicationConfig, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	if bucket.Replication == nil {
 		return nil, s3errors.ErrReplicationConfigurationNotFoundError.WithResource(name)
 	}
+
 	return bucket.Replication, nil
 }
 
-// SetReplication sets the bucket's replication configuration
+// SetReplication sets the bucket's replication configuration.
 func (s *Service) SetReplication(ctx context.Context, name string, config *metadata.ReplicationConfig) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -768,10 +818,11 @@ func (s *Service) SetReplication(ctx context.Context, name string, config *metad
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set replication configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// DeleteReplication deletes the bucket's replication configuration
+// DeleteReplication deletes the bucket's replication configuration.
 func (s *Service) DeleteReplication(ctx context.Context, name string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -782,22 +833,25 @@ func (s *Service) DeleteReplication(ctx context.Context, name string) error {
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete replication configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetObjectLockConfiguration returns the bucket's object lock configuration
+// GetObjectLockConfiguration returns the bucket's object lock configuration.
 func (s *Service) GetObjectLockConfiguration(ctx context.Context, name string) (*metadata.ObjectLockConfig, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	if bucket.ObjectLockConfig == nil {
 		return nil, s3errors.ErrNoSuchObjectLockConfiguration.WithResource(name)
 	}
+
 	return bucket.ObjectLockConfig, nil
 }
 
-// SetObjectLockConfiguration sets the bucket's object lock configuration
+// SetObjectLockConfiguration sets the bucket's object lock configuration.
 func (s *Service) SetObjectLockConfiguration(ctx context.Context, name string, config *metadata.ObjectLockConfig) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -813,22 +867,25 @@ func (s *Service) SetObjectLockConfiguration(ctx context.Context, name string, c
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set object lock configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetPublicAccessBlock returns the bucket's public access block configuration
+// GetPublicAccessBlock returns the bucket's public access block configuration.
 func (s *Service) GetPublicAccessBlock(ctx context.Context, name string) (*metadata.PublicAccessBlockConfig, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	if bucket.PublicAccessBlock == nil {
 		return nil, s3errors.ErrNoSuchPublicAccessBlockConfiguration.WithResource(name)
 	}
+
 	return bucket.PublicAccessBlock, nil
 }
 
-// SetPublicAccessBlock sets the bucket's public access block configuration
+// SetPublicAccessBlock sets the bucket's public access block configuration.
 func (s *Service) SetPublicAccessBlock(ctx context.Context, name string, config *metadata.PublicAccessBlockConfig) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -839,10 +896,11 @@ func (s *Service) SetPublicAccessBlock(ctx context.Context, name string, config 
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set public access block configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// DeletePublicAccessBlock deletes the bucket's public access block configuration
+// DeletePublicAccessBlock deletes the bucket's public access block configuration.
 func (s *Service) DeletePublicAccessBlock(ctx context.Context, name string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -853,22 +911,25 @@ func (s *Service) DeletePublicAccessBlock(ctx context.Context, name string) erro
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete public access block configuration: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetOwnershipControls returns the bucket's ownership controls
+// GetOwnershipControls returns the bucket's ownership controls.
 func (s *Service) GetOwnershipControls(ctx context.Context, name string) (*metadata.OwnershipControlsConfig, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
 		return nil, s3errors.ErrNoSuchBucket.WithResource(name)
 	}
+
 	if bucket.OwnershipControls == nil {
 		return nil, s3errors.ErrOwnershipControlsNotFoundError.WithResource(name)
 	}
+
 	return bucket.OwnershipControls, nil
 }
 
-// SetOwnershipControls sets the bucket's ownership controls
+// SetOwnershipControls sets the bucket's ownership controls.
 func (s *Service) SetOwnershipControls(ctx context.Context, name string, config *metadata.OwnershipControlsConfig) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -879,10 +940,11 @@ func (s *Service) SetOwnershipControls(ctx context.Context, name string, config 
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set ownership controls: " + err.Error())
 	}
+
 	return nil
 }
 
-// DeleteOwnershipControls deletes the bucket's ownership controls
+// DeleteOwnershipControls deletes the bucket's ownership controls.
 func (s *Service) DeleteOwnershipControls(ctx context.Context, name string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -893,10 +955,11 @@ func (s *Service) DeleteOwnershipControls(ctx context.Context, name string) erro
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete ownership controls: " + err.Error())
 	}
+
 	return nil
 }
 
-// GetAccelerate returns the bucket's accelerate configuration
+// GetAccelerate returns the bucket's accelerate configuration.
 func (s *Service) GetAccelerate(ctx context.Context, name string) (string, error) {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -906,7 +969,7 @@ func (s *Service) GetAccelerate(ctx context.Context, name string) (string, error
 	return bucket.Accelerate, nil
 }
 
-// SetAccelerate sets the bucket's accelerate configuration
+// SetAccelerate sets the bucket's accelerate configuration.
 func (s *Service) SetAccelerate(ctx context.Context, name string, status string) error {
 	bucket, err := s.store.GetBucket(ctx, name)
 	if err != nil {
@@ -922,5 +985,6 @@ func (s *Service) SetAccelerate(ctx context.Context, name string, status string)
 	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set accelerate configuration: " + err.Error())
 	}
+
 	return nil
 }

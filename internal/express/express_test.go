@@ -11,17 +11,17 @@ import (
 	"time"
 )
 
-// MockObjectStore implements ObjectStore for testing
+// MockObjectStore implements ObjectStore for testing.
 type MockObjectStore struct {
-	mu      sync.RWMutex
 	objects map[string]*mockObject
 	buckets map[string]*BucketInfo
+	mu      sync.RWMutex
 }
 
 type mockObject struct {
-	data     []byte
-	meta     map[string]string
 	modified time.Time
+	meta     map[string]string
+	data     []byte
 }
 
 func newMockStore() *MockObjectStore {
@@ -49,6 +49,7 @@ func (m *MockObjectStore) GetObject(ctx context.Context, bucket, key string) (*O
 	defer m.mu.RUnlock()
 
 	k := bucket + "/" + key
+
 	obj, ok := m.objects[k]
 	if !ok {
 		return nil, ErrObjectNotFound
@@ -95,6 +96,7 @@ func (m *MockObjectStore) DeleteObject(ctx context.Context, bucket, key string) 
 
 	k := bucket + "/" + key
 	delete(m.objects, k)
+
 	return nil
 }
 
@@ -119,6 +121,7 @@ func (m *MockObjectStore) ListObjects(ctx context.Context, bucket, prefix string
 			if len(k) <= len(bucket)+1 {
 				continue
 			}
+
 			if k[:len(bucket)] != bucket {
 				continue
 			}
@@ -127,6 +130,7 @@ func (m *MockObjectStore) ListObjects(ctx context.Context, bucket, prefix string
 			if prefix != "" && len(key) < len(prefix) {
 				continue
 			}
+
 			if prefix != "" && key[:len(prefix)] != prefix {
 				continue
 			}
@@ -154,6 +158,7 @@ func (m *MockObjectStore) GetObjectSize(ctx context.Context, bucket, key string)
 	defer m.mu.RUnlock()
 
 	k := bucket + "/" + key
+
 	obj, ok := m.objects[k]
 	if !ok {
 		return 0, ErrObjectNotFound
@@ -167,6 +172,7 @@ func (m *MockObjectStore) AppendObject(ctx context.Context, bucket, key string, 
 	defer m.mu.Unlock()
 
 	k := bucket + "/" + key
+
 	content, err := io.ReadAll(data)
 	if err != nil {
 		return err
@@ -180,6 +186,7 @@ func (m *MockObjectStore) AppendObject(ctx context.Context, bucket, key string, 
 			meta:     map[string]string{"x-amz-express-object": "true"},
 			modified: time.Now(),
 		}
+
 		return nil
 	}
 
@@ -203,6 +210,7 @@ func (m *MockObjectStore) HeadBucket(ctx context.Context, bucket string) (*Bucke
 	if !ok {
 		return nil, errors.New("bucket not found")
 	}
+
 	return info, nil
 }
 
@@ -272,6 +280,7 @@ func TestExpressPutObject(t *testing.T) {
 	ctx := context.Background()
 
 	data := []byte("Hello, Express API!")
+
 	result, err := svc.ExpressPutObject(ctx, "express-bucket", "test-key", bytes.NewReader(data), int64(len(data)), nil)
 	if err != nil {
 		t.Fatalf("ExpressPutObject failed: %v", err)
@@ -308,6 +317,7 @@ func TestExpressAppendObject(t *testing.T) {
 
 	// First append creates the object
 	data1 := []byte("Hello, ")
+
 	result1, err := svc.ExpressAppendObject(ctx, "express-bucket", "append-key", bytes.NewReader(data1), int64(len(data1)), -1, "writer1")
 	if err != nil {
 		t.Fatalf("First append failed: %v", err)
@@ -323,6 +333,7 @@ func TestExpressAppendObject(t *testing.T) {
 
 	// Second append continues from end
 	data2 := []byte("World!")
+
 	result2, err := svc.ExpressAppendObject(ctx, "express-bucket", "append-key", bytes.NewReader(data2), int64(len(data2)), -1, "writer1")
 	if err != nil {
 		t.Fatalf("Second append failed: %v", err)
@@ -345,6 +356,7 @@ func TestExpressAppendObject(t *testing.T) {
 	defer obj.Data.Close()
 
 	content, _ := io.ReadAll(obj.Data)
+
 	expected := "Hello, World!"
 	if string(content) != expected {
 		t.Errorf("Content mismatch: expected '%s', got '%s'", expected, content)
@@ -359,6 +371,7 @@ func TestExpressAppendOffsetConflict(t *testing.T) {
 
 	// Create initial object
 	data1 := []byte("Initial data")
+
 	_, err := svc.ExpressAppendObject(ctx, "express-bucket", "conflict-key", bytes.NewReader(data1), int64(len(data1)), -1, "writer1")
 	if err != nil {
 		t.Fatalf("Initial append failed: %v", err)
@@ -366,6 +379,7 @@ func TestExpressAppendOffsetConflict(t *testing.T) {
 
 	// Try to append at wrong offset
 	data2 := []byte("More data")
+
 	_, err = svc.ExpressAppendObject(ctx, "express-bucket", "conflict-key", bytes.NewReader(data2), int64(len(data2)), 0, "writer2")
 	if err == nil {
 		t.Error("Expected offset conflict error")
@@ -394,8 +408,9 @@ func TestExpressListObjects(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test objects
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		data := []byte("test data")
+
 		_, err := svc.ExpressPutObject(ctx, "express-bucket", "list-test/file"+string(rune('0'+i))+".txt", bytes.NewReader(data), int64(len(data)), nil)
 		if err != nil {
 			t.Fatalf("PutObject failed: %v", err)
@@ -432,6 +447,7 @@ func TestGetWriteMarker(t *testing.T) {
 
 	// Create object with appends
 	data := []byte("Test data for marker")
+
 	_, err := svc.ExpressAppendObject(ctx, "express-bucket", "marker-key", bytes.NewReader(data), int64(len(data)), -1, "test-writer")
 	if err != nil {
 		t.Fatalf("Append failed: %v", err)
@@ -483,6 +499,7 @@ func TestBatchAppend(t *testing.T) {
 			t.Errorf("Object %s not found: %v", req.Key, err)
 			continue
 		}
+
 		obj.Data.Close()
 
 		if obj.Size != int64(len(req.Data)) {
@@ -541,8 +558,10 @@ func TestMetrics(t *testing.T) {
 
 	// Perform some operations
 	data := []byte("Metrics test data")
-	for i := 0; i < 3; i++ {
+
+	for i := range 3 {
 		key := "metrics-test-" + string(rune('0'+i))
+
 		_, err := svc.ExpressPutObject(ctx, "express-bucket", key, bytes.NewReader(data), int64(len(data)), nil)
 		if err != nil {
 			t.Fatalf("PutObject failed: %v", err)
@@ -582,6 +601,7 @@ func TestConcurrentAppends(t *testing.T) {
 
 	// Create initial object
 	initial := []byte("Start:")
+
 	_, err := svc.ExpressAppendObject(ctx, "express-bucket", "concurrent-key", bytes.NewReader(initial), int64(len(initial)), -1, "init")
 	if err != nil {
 		t.Fatalf("Initial append failed: %v", err)
@@ -589,17 +609,19 @@ func TestConcurrentAppends(t *testing.T) {
 
 	// Concurrent appends - only one should succeed at each offset
 	var wg sync.WaitGroup
+
 	successCount := int64(0)
 	conflictCount := int64(0)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		wg.Add(1)
+
 		go func(id int) {
 			defer wg.Done()
 
 			data := []byte("X")
-			_, err := svc.ExpressAppendObject(ctx, "express-bucket", "concurrent-key", bytes.NewReader(data), 1, -1, "writer"+string(rune('0'+id)))
 
+			_, err := svc.ExpressAppendObject(ctx, "express-bucket", "concurrent-key", bytes.NewReader(data), 1, -1, "writer"+string(rune('0'+id)))
 			if err == nil {
 				atomic.AddInt64(&successCount, 1)
 			} else if errors.Is(err, ErrOffsetConflict) {
@@ -648,6 +670,7 @@ func TestExpressDeleteObject(t *testing.T) {
 
 	// Create object
 	data := []byte("To be deleted")
+
 	_, err := svc.ExpressPutObject(ctx, "express-bucket", "delete-me", bytes.NewReader(data), int64(len(data)), nil)
 	if err != nil {
 		t.Fatalf("PutObject failed: %v", err)
@@ -674,6 +697,7 @@ func TestExpressCopyObject(t *testing.T) {
 
 	// Create source object
 	data := []byte("Source content to copy")
+
 	_, err := svc.ExpressPutObject(ctx, "express-bucket", "source-key", bytes.NewReader(data), int64(len(data)), nil)
 	if err != nil {
 		t.Fatalf("PutObject failed: %v", err)

@@ -28,7 +28,9 @@ func NewTestBucket(name string) *metadata.Bucket {
 	if name == "" {
 		name = DefaultTestBucketName
 	}
+
 	now := time.Now()
+
 	return &metadata.Bucket{
 		Name:       name,
 		Owner:      DefaultTestOwner,
@@ -44,10 +46,13 @@ func NewTestObjectMeta(bucket, key string, size int64) *metadata.ObjectMeta {
 	if bucket == "" {
 		bucket = DefaultTestBucketName
 	}
+
 	if key == "" {
 		key = DefaultTestObjectKey
 	}
+
 	now := time.Now()
+
 	return &metadata.ObjectMeta{
 		Bucket:       bucket,
 		Key:          key,
@@ -66,7 +71,9 @@ func NewTestUser(username string) *metadata.User {
 	if username == "" {
 		username = "test-user"
 	}
+
 	now := time.Now()
+
 	return &metadata.User{
 		ID:        username,
 		Username:  username,
@@ -83,13 +90,17 @@ func NewTestAccessKey(userID, accessKeyID, secretKey string) *metadata.AccessKey
 	if userID == "" {
 		userID = "test-user"
 	}
+
 	if accessKeyID == "" {
 		accessKeyID = "AKIAIOSFODNN7EXAMPLE"
 	}
+
 	if secretKey == "" {
 		secretKey = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 	}
+
 	now := time.Now()
+
 	return &metadata.AccessKey{
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secretKey,
@@ -104,7 +115,9 @@ func NewTestPolicy(name string) *metadata.Policy {
 	if name == "" {
 		name = "test-policy"
 	}
+
 	now := time.Now()
+
 	return &metadata.Policy{
 		Name:        name,
 		Description: "Test policy",
@@ -119,13 +132,17 @@ func NewTestMultipartUpload(bucket, key, uploadID string) *metadata.MultipartUpl
 	if bucket == "" {
 		bucket = DefaultTestBucketName
 	}
+
 	if key == "" {
 		key = DefaultTestObjectKey
 	}
+
 	if uploadID == "" {
 		uploadID = "test-upload-id"
 	}
+
 	now := time.Now()
+
 	return &metadata.MultipartUpload{
 		UploadID:  uploadID,
 		Bucket:    bucket,
@@ -154,9 +171,11 @@ func init() {
 	for i := range TestData.SmallData {
 		TestData.SmallData[i] = byte(i % 256)
 	}
+
 	for i := range TestData.MediumData {
 		TestData.MediumData[i] = byte(i % 256)
 	}
+
 	for i := range TestData.LargeData {
 		TestData.LargeData[i] = byte(i % 256)
 	}

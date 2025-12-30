@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/s3select"
 )
 
-// TestDRAMCacheWithFirewall tests that DRAM cache respects firewall rules
+// TestDRAMCacheWithFirewall tests that DRAM cache respects firewall rules.
 func TestDRAMCacheWithFirewall(t *testing.T) {
 	// Create firewall with rate limiting
 	fw, err := firewall.New(firewall.Config{
@@ -55,7 +56,7 @@ func TestDRAMCacheWithFirewall(t *testing.T) {
 	hits := 0
 	misses := 0
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		// Check firewall first
 		decision := fw.Evaluate(ctx, &firewall.Request{
 			SourceIP:  "192.168.1.100",
@@ -71,6 +72,7 @@ func TestDRAMCacheWithFirewall(t *testing.T) {
 
 		// Try cache
 		key := fmt.Sprintf("%s/object-%d", bucket, i%10) // Use 10 unique keys
+
 		entry, found := c.Get(ctx, key)
 		if found {
 			hits++
@@ -92,7 +94,7 @@ func TestDRAMCacheWithFirewall(t *testing.T) {
 	}
 }
 
-// TestS3SelectWithAudit tests that S3 Select queries are properly audited
+// TestS3SelectWithAudit tests that S3 Select queries are properly audited.
 func TestS3SelectWithAudit(t *testing.T) {
 	// Create temp directory for audit logs
 	tmpDir, err := os.MkdirTemp("", "audit-test-*")
@@ -122,6 +124,7 @@ func TestS3SelectWithAudit(t *testing.T) {
 		t.Fatalf("Failed to create audit logger: %v", err)
 	}
 	defer auditLogger.Stop()
+
 	auditLogger.Start()
 
 	// Create S3 Select engine
@@ -174,7 +177,7 @@ Diana,28,Houston`
 		},
 	}
 	event.WithExtra("query", "SELECT * FROM s3object s WHERE s.age > 26")
-	event.WithExtra("bytes_returned", fmt.Sprintf("%d", result.BytesReturned))
+	event.WithExtra("bytes_returned", strconv.FormatInt(result.BytesReturned, 10))
 
 	err = auditLogger.LogSync(context.Background(), event)
 	if err != nil {
@@ -194,7 +197,7 @@ Diana,28,Houston`
 	}
 }
 
-// TestFirewallBandwidthWithCache tests bandwidth throttling with cache bypass
+// TestFirewallBandwidthWithCache tests bandwidth throttling with cache bypass.
 func TestFirewallBandwidthWithCache(t *testing.T) {
 	// Create firewall with bandwidth limiting
 	fw, err := firewall.New(firewall.Config{
@@ -250,12 +253,13 @@ func TestFirewallBandwidthWithCache(t *testing.T) {
 	if !found {
 		t.Error("Object should be in cache")
 	}
+
 	if int64(len(entry.Data)) != objectSize {
 		t.Errorf("Cached data size mismatch: got %d, want %d", len(entry.Data), objectSize)
 	}
 }
 
-// TestConcurrentAdvancedFeatures tests concurrent access to advanced features
+// TestConcurrentAdvancedFeatures tests concurrent access to advanced features.
 func TestConcurrentAdvancedFeatures(t *testing.T) {
 	// Create firewall
 	fw, err := firewall.New(firewall.Config{
@@ -296,16 +300,19 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 		t.Fatalf("Failed to create audit logger: %v", err)
 	}
 	defer auditLogger.Stop()
+
 	auditLogger.Start()
 
 	// Run concurrent operations
 	var wg sync.WaitGroup
+
 	errCh := make(chan error, 100)
 
 	ctx := context.Background()
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
+
 		go func(id int) {
 			defer wg.Done()
 
@@ -354,8 +361,10 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 
 	// Check for errors
 	errorCount := 0
+
 	for err := range errCh {
 		t.Errorf("Concurrent operation error: %v", err)
+
 		errorCount++
 	}
 
@@ -370,7 +379,7 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 	}
 }
 
-// TestAuditIntegrityChain tests the cryptographic integrity chain
+// TestAuditIntegrityChain tests the cryptographic integrity chain.
 func TestAuditIntegrityChain(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "audit-integrity-*")
 	if err != nil {
@@ -392,13 +401,14 @@ func TestAuditIntegrityChain(t *testing.T) {
 		t.Fatalf("Failed to create audit logger: %v", err)
 	}
 	defer auditLogger.Stop()
+
 	auditLogger.Start()
 
 	// Log a series of events
 	ctx := context.Background()
 	events := make([]*audit.EnhancedAuditEvent, 10)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		events[i] = &audit.EnhancedAuditEvent{
 			AuditEvent: audit.AuditEvent{
 				EventType:   audit.EventObjectCreated,
@@ -412,6 +422,7 @@ func TestAuditIntegrityChain(t *testing.T) {
 				},
 			},
 		}
+
 		err := auditLogger.LogSync(ctx, events[i])
 		if err != nil {
 			t.Fatalf("Failed to log event %d: %v", i, err)
@@ -423,21 +434,27 @@ func TestAuditIntegrityChain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Integrity verification failed: %v", err)
 	}
+
 	if !valid {
 		t.Error("Integrity chain should be valid")
 	}
 }
 
-// TestWebhookAuditOutput tests audit event delivery to webhooks
+// TestWebhookAuditOutput tests audit event delivery to webhooks.
 func TestWebhookAuditOutput(t *testing.T) {
 	// Create a test webhook server
-	var receivedEvents []string
-	var mu sync.Mutex
+	var (
+		receivedEvents []string
+		mu             sync.Mutex
+	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
+
 		mu.Lock()
+
 		receivedEvents = append(receivedEvents, string(body))
+
 		mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -464,10 +481,11 @@ func TestWebhookAuditOutput(t *testing.T) {
 		t.Fatalf("Failed to create audit logger: %v", err)
 	}
 	defer auditLogger.Stop()
+
 	auditLogger.Start()
 
 	// Log events
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		event := &audit.EnhancedAuditEvent{
 			AuditEvent: audit.AuditEvent{
 				EventType:   audit.EventBucketCreated,
@@ -480,6 +498,7 @@ func TestWebhookAuditOutput(t *testing.T) {
 				},
 			},
 		}
+
 		err := auditLogger.LogSync(context.Background(), event)
 		if err != nil {
 			t.Logf("Warning: Failed to log event %d: %v", i, err)
@@ -490,7 +509,9 @@ func TestWebhookAuditOutput(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	mu.Lock()
+
 	count := len(receivedEvents)
+
 	mu.Unlock()
 
 	if count == 0 {
@@ -500,7 +521,7 @@ func TestWebhookAuditOutput(t *testing.T) {
 	}
 }
 
-// TestS3SelectFormats tests S3 Select with different input formats
+// TestS3SelectFormats tests S3 Select with different input formats.
 func TestS3SelectFormats(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -545,6 +566,7 @@ func TestS3SelectFormats(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			engine := s3select.NewEngine(tc.input, tc.output)
+
 			result, err := engine.Execute([]byte(tc.data), tc.query)
 			if err != nil {
 				t.Fatalf("Execute failed: %v", err)
@@ -557,7 +579,7 @@ func TestS3SelectFormats(t *testing.T) {
 	}
 }
 
-// TestFirewallRulesPriority tests firewall rule priority ordering
+// TestFirewallRulesPriority tests firewall rule priority ordering.
 func TestFirewallRulesPriority(t *testing.T) {
 	// Create firewall with multiple rules
 	// Note: Rules are evaluated in order they are defined, so high-priority rules should be listed first
@@ -612,6 +634,7 @@ func TestFirewallRulesPriority(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			decision := fw.Evaluate(ctx, &firewall.Request{
@@ -628,10 +651,11 @@ func TestFirewallRulesPriority(t *testing.T) {
 	}
 }
 
-// TestCacheEvictionUnderPressure tests cache behavior under memory pressure
+// TestCacheEvictionUnderPressure tests cache behavior under memory pressure.
 func TestCacheEvictionUnderPressure(t *testing.T) {
 	// Create small cache with single shard to properly test eviction
 	maxSize := int64(1024 * 10) // 10KB
+
 	c := dram.New(dram.Config{
 		MaxSize:        maxSize,
 		ShardCount:     1, // Single shard for predictable eviction
@@ -644,7 +668,7 @@ func TestCacheEvictionUnderPressure(t *testing.T) {
 	objectSize := 1024 // 1KB per object
 
 	// Insert more data than cache can hold
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		key := fmt.Sprintf("%s/object-%d", bucket, i)
 		data := make([]byte, objectSize)
 		c.Put(ctx, key, data, "application/octet-stream", fmt.Sprintf("etag-%d", i))
@@ -665,7 +689,7 @@ func TestCacheEvictionUnderPressure(t *testing.T) {
 		metrics.Size, metrics.Evictions, metrics.Objects)
 }
 
-// TestAdvancedFeatureIntegration tests the complete integration of advanced features
+// TestAdvancedFeatureIntegration tests the complete integration of advanced features.
 func TestAdvancedFeatureIntegration(t *testing.T) {
 	// This test simulates a complete request flow through all feature components
 
@@ -709,6 +733,7 @@ func TestAdvancedFeatureIntegration(t *testing.T) {
 		t.Fatalf("Failed to create audit logger: %v", err)
 	}
 	defer auditLogger.Stop()
+
 	auditLogger.Start()
 
 	// 2. Simulate a request flow
@@ -759,6 +784,7 @@ func TestAdvancedFeatureIntegration(t *testing.T) {
 			UserAgent: "aws-sdk-go/1.44.0",
 		},
 	}
+
 	err = auditLogger.LogSync(ctx, event)
 	if err != nil {
 		t.Errorf("Failed to log audit event: %v", err)
@@ -769,6 +795,7 @@ func TestAdvancedFeatureIntegration(t *testing.T) {
 	if !found {
 		t.Error("Second request should hit cache")
 	}
+
 	if entry == nil || len(entry.Data) == 0 {
 		t.Error("Cached entry should have data")
 	}
@@ -799,15 +826,14 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 	// - DC1: Hot tier placement group (fast NVMe)
 	// - DC2: Cold tier placement group (high-capacity HDD)
 	// Tiering policy should move old objects from DC1 hot tier to DC2 cold tier
-
 	type tieringObject struct {
+		lastAccess   time.Time
 		bucket       string
 		key          string
-		size         int64
-		lastAccess   time.Time
 		tier         string
 		datacenter   string
 		placementGrp string
+		size         int64
 	}
 
 	// Simulate objects in different placement groups
@@ -826,8 +852,10 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 	tieringThreshold := 30 * 24 * time.Hour
 
 	// Track objects that should be tiered
-	var objectsToTier []tieringObject
-	var objectsToKeepHot []tieringObject
+	var (
+		objectsToTier    []tieringObject
+		objectsToKeepHot []tieringObject
+	)
 
 	for _, obj := range objects {
 		if obj.tier == "hot" {
@@ -844,6 +872,7 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 	if len(objectsToTier) != 2 {
 		t.Errorf("Expected 2 objects to tier, got %d", len(objectsToTier))
 	}
+
 	if len(objectsToKeepHot) != 2 {
 		t.Errorf("Expected 2 objects to keep hot, got %d", len(objectsToKeepHot))
 	}
@@ -855,9 +884,9 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 		toPG         string
 		fromDC       string
 		toDC         string
+		errorMessage string
 		bytesMovied  int64
 		successful   bool
-		errorMessage string
 	}
 
 	var transitions []tierTransition
@@ -869,7 +898,6 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 		// 3. Replicate data using erasure coding
 		// 4. Update metadata with new locations
 		// 5. Delete from source placement group
-
 		transition := tierTransition{
 			object:      obj,
 			fromPG:      obj.placementGrp,
@@ -901,22 +929,26 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 
 	// Verify cross-datacenter transitions
 	var crossDCTransitions int
+
 	for _, tr := range transitions {
 		if tr.fromDC != tr.toDC {
 			crossDCTransitions++
 		}
 	}
+
 	if crossDCTransitions != 2 {
 		t.Errorf("Expected 2 cross-DC transitions, got %d", crossDCTransitions)
 	}
 
 	// Calculate total bytes moved
 	var totalBytesMoved int64
+
 	for _, tr := range transitions {
 		if tr.successful {
 			totalBytesMoved += tr.bytesMovied
 		}
 	}
+
 	expectedBytes := int64(10240 + 20480)
 	if totalBytesMoved != expectedBytes {
 		t.Errorf("Expected %d bytes moved, got %d", expectedBytes, totalBytesMoved)
@@ -930,14 +962,13 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 // becomes unhealthy during an active tiering operation.
 func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 	// Simulate a tiering operation where the target placement group degrades mid-transfer
-
 	type transferState struct {
 		objectKey      string
+		targetPG       string
+		transferStatus string
 		shardsTotal    int
 		shardsWritten  int
-		targetPG       string
 		pgHealthy      bool
-		transferStatus string // "pending", "in_progress", "completed", "failed", "paused"
 	}
 
 	// Initial state: 3 objects being tiered
@@ -987,9 +1018,11 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 	if completedCount != 1 {
 		t.Errorf("Expected 1 completed transfer, got %d", completedCount)
 	}
+
 	if pausedCount != 1 {
 		t.Errorf("Expected 1 paused transfer, got %d", pausedCount)
 	}
+
 	if pendingCount != 1 {
 		t.Errorf("Expected 1 pending transfer, got %d", pendingCount)
 	}
@@ -1078,16 +1111,18 @@ func TestErasureCodingWithPlacementGroups(t *testing.T) {
 
 	// Distribute shards across fault domains (rack-aware placement)
 	type shardPlacement struct {
-		shardIndex  int
 		nodeID      string
 		faultDomain string
+		shardIndex  int
 	}
 
 	var placements []shardPlacement
+
 	faultDomainCounts := make(map[string]int)
 
 	// Group nodes by fault domain for fault-aware placement
 	nodesByFaultDomain := make(map[string][]node)
+
 	for _, n := range pgNodes {
 		if n.available {
 			nodesByFaultDomain[n.faultDomain] = append(nodesByFaultDomain[n.faultDomain], n)
@@ -1100,7 +1135,7 @@ func TestErasureCodingWithPlacementGroups(t *testing.T) {
 		faultDomains = append(faultDomains, fd)
 	}
 	// Sort for deterministic placement
-	for i := 0; i < len(faultDomains)-1; i++ {
+	for i := range len(faultDomains) - 1 {
 		for j := i + 1; j < len(faultDomains); j++ {
 			if faultDomains[i] > faultDomains[j] {
 				faultDomains[i], faultDomains[j] = faultDomains[j], faultDomains[i]
@@ -1111,7 +1146,8 @@ func TestErasureCodingWithPlacementGroups(t *testing.T) {
 	// Fault-aware round-robin: rotate through fault domains first, then nodes within each domain
 	// This ensures shards are spread evenly across fault domains
 	domainNodeIndex := make(map[string]int)
-	for shard := 0; shard < totalShards; shard++ {
+
+	for shard := range totalShards {
 		// Select fault domain in round-robin fashion
 		fd := faultDomains[shard%len(faultDomains)]
 		nodes := nodesByFaultDomain[fd]
@@ -1148,6 +1184,7 @@ func TestErasureCodingWithPlacementGroups(t *testing.T) {
 	// Simulate rack failure and verify data is still recoverable
 	failedRack := "rack1"
 	availableShards := 0
+
 	for _, p := range placements {
 		if p.faultDomain != failedRack {
 			availableShards++

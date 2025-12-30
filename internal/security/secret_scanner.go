@@ -20,39 +20,39 @@ import (
 type SecretType string
 
 const (
-	SecretTypeAWSAccessKey       SecretType = "aws_access_key"
-	SecretTypeAWSSecretKey       SecretType = "aws_secret_key"
-	SecretTypeGCPServiceAccount  SecretType = "gcp_service_account"
-	SecretTypeAzureStorageKey    SecretType = "azure_storage_key"
-	SecretTypeGitHubToken        SecretType = "github_token"
-	SecretTypeGitHubAppToken     SecretType = "github_app_token"
-	SecretTypeGitLabToken        SecretType = "gitlab_token"
-	SecretTypeSlackToken         SecretType = "slack_token"
-	SecretTypeSlackWebhook       SecretType = "slack_webhook"
-	SecretTypeStripeKey          SecretType = "stripe_key"
-	SecretTypeTwilioKey          SecretType = "twilio_key"
-	SecretTypeSendGridKey        SecretType = "sendgrid_key"
-	SecretTypeMailchimpKey       SecretType = "mailchimp_key"
-	SecretTypeSSHPrivateKey      SecretType = "ssh_private_key"
-	SecretTypePGPPrivateKey      SecretType = "pgp_private_key"
-	SecretTypeRSAPrivateKey      SecretType = "rsa_private_key"
-	SecretTypeCertificate        SecretType = "certificate"
-	SecretTypeJWT                SecretType = "jwt"
-	SecretTypeGenericAPIKey      SecretType = "generic_api_key"
-	SecretTypeGenericPassword    SecretType = "generic_password"
-	SecretTypeBasicAuth          SecretType = "basic_auth"
-	SecretTypeBearerToken        SecretType = "bearer_token"
-	SecretTypeDatabaseURL        SecretType = "database_url"
-	SecretTypePrivateKeyPEM      SecretType = "private_key_pem"
-	SecretTypeOpenAIKey          SecretType = "openai_key"
-	SecretTypeAnthropicKey       SecretType = "anthropic_key"
-	SecretTypeHuggingFaceToken   SecretType = "huggingface_token"
-	SecretTypeNPMToken           SecretType = "npm_token"
-	SecretTypePyPIToken          SecretType = "pypi_token"
-	SecretTypeDockerHubToken     SecretType = "dockerhub_token"
-	SecretTypeHerokuKey          SecretType = "heroku_key"
-	SecretTypeDigitalOceanToken  SecretType = "digitalocean_token"
-	SecretTypeFirebaseKey        SecretType = "firebase_key"
+	SecretTypeAWSAccessKey      SecretType = "aws_access_key"
+	SecretTypeAWSSecretKey      SecretType = "aws_secret_key"
+	SecretTypeGCPServiceAccount SecretType = "gcp_service_account"
+	SecretTypeAzureStorageKey   SecretType = "azure_storage_key"
+	SecretTypeGitHubToken       SecretType = "github_token"
+	SecretTypeGitHubAppToken    SecretType = "github_app_token"
+	SecretTypeGitLabToken       SecretType = "gitlab_token"
+	SecretTypeSlackToken        SecretType = "slack_token"
+	SecretTypeSlackWebhook      SecretType = "slack_webhook"
+	SecretTypeStripeKey         SecretType = "stripe_key"
+	SecretTypeTwilioKey         SecretType = "twilio_key"
+	SecretTypeSendGridKey       SecretType = "sendgrid_key"
+	SecretTypeMailchimpKey      SecretType = "mailchimp_key"
+	SecretTypeSSHPrivateKey     SecretType = "ssh_private_key"
+	SecretTypePGPPrivateKey     SecretType = "pgp_private_key"
+	SecretTypeRSAPrivateKey     SecretType = "rsa_private_key"
+	SecretTypeCertificate       SecretType = "certificate"
+	SecretTypeJWT               SecretType = "jwt"
+	SecretTypeGenericAPIKey     SecretType = "generic_api_key"
+	SecretTypeGenericPassword   SecretType = "generic_password"
+	SecretTypeBasicAuth         SecretType = "basic_auth"
+	SecretTypeBearerToken       SecretType = "bearer_token"
+	SecretTypeDatabaseURL       SecretType = "database_url"
+	SecretTypePrivateKeyPEM     SecretType = "private_key_pem"
+	SecretTypeOpenAIKey         SecretType = "openai_key"
+	SecretTypeAnthropicKey      SecretType = "anthropic_key"
+	SecretTypeHuggingFaceToken  SecretType = "huggingface_token"
+	SecretTypeNPMToken          SecretType = "npm_token"
+	SecretTypePyPIToken         SecretType = "pypi_token"
+	SecretTypeDockerHubToken    SecretType = "dockerhub_token"
+	SecretTypeHerokuKey         SecretType = "heroku_key"
+	SecretTypeDigitalOceanToken SecretType = "digitalocean_token"
+	SecretTypeFirebaseKey       SecretType = "firebase_key"
 )
 
 // Severity represents the severity of a secret finding.
@@ -78,68 +78,61 @@ type SecretPattern struct {
 
 // SecretFinding represents a detected secret.
 type SecretFinding struct {
-	ID           string     `json:"id"`
-	Type         SecretType `json:"type"`
-	Severity     Severity   `json:"severity"`
-	Description  string     `json:"description"`
-	Bucket       string     `json:"bucket"`
-	Key          string     `json:"key"`
-	VersionID    string     `json:"versionId,omitempty"`
-	LineNumber   int        `json:"lineNumber,omitempty"`
-	ColumnStart  int        `json:"columnStart,omitempty"`
-	ColumnEnd    int        `json:"columnEnd,omitempty"`
-	Match        string     `json:"match"` // Redacted partial match
-	Context      string     `json:"context,omitempty"`
-	DetectedAt   time.Time  `json:"detectedAt"`
-	Verified     bool       `json:"verified"`
-	FalsePositive bool      `json:"falsePositive"`
+	DetectedAt    time.Time  `json:"detectedAt"`
+	VersionID     string     `json:"versionId,omitempty"`
+	Context       string     `json:"context,omitempty"`
+	Description   string     `json:"description"`
+	Bucket        string     `json:"bucket"`
+	Key           string     `json:"key"`
+	ID            string     `json:"id"`
+	Type          SecretType `json:"type"`
+	Severity      Severity   `json:"severity"`
+	Match         string     `json:"match"`
+	ColumnEnd     int        `json:"columnEnd,omitempty"`
+	ColumnStart   int        `json:"columnStart,omitempty"`
+	LineNumber    int        `json:"lineNumber,omitempty"`
+	Verified      bool       `json:"verified"`
+	FalsePositive bool       `json:"falsePositive"`
 }
 
 // ScanResult contains the results of a secret scan.
 type ScanResult struct {
-	ID          string          `json:"id"`
-	Bucket      string          `json:"bucket"`
-	Key         string          `json:"key"`
-	Size        int64           `json:"size"`
-	ContentType string          `json:"contentType"`
+	ScannedAt   time.Time        `json:"scannedAt"`
+	ID          string           `json:"id"`
+	Bucket      string           `json:"bucket"`
+	Key         string           `json:"key"`
+	ContentType string           `json:"contentType"`
+	Error       string           `json:"error,omitempty"`
 	Findings    []*SecretFinding `json:"findings"`
-	ScanTime    time.Duration   `json:"scanTime"`
-	ScannedAt   time.Time       `json:"scannedAt"`
-	Error       string          `json:"error,omitempty"`
+	Size        int64            `json:"size"`
+	ScanTime    time.Duration    `json:"scanTime"`
 }
 
 // ScannerConfig configures the secret scanner.
 type ScannerConfig struct {
-	// Scanning behavior
-	MaxFileSize      int64   // Maximum file size to scan
-	MaxLineLength    int     // Maximum line length to scan
-	ScanBinaryFiles  bool    // Whether to scan binary files
-	EnableValidation bool    // Whether to validate found secrets
-	Concurrency      int     // Number of concurrent scanners
-
-	// Pattern configuration
+	AllowedTypes     []SecretType
 	CustomPatterns   []*SecretPattern
 	DisabledPatterns []SecretType
-
-	// Output configuration
-	IncludeContext   bool // Include surrounding context in findings
-	ContextLines     int  // Number of context lines to include
-	RedactSecrets    bool // Redact actual secret values
-
-	// Actions
-	BlockOnFinding   bool     // Block upload if secrets found
-	AlertOnFinding   bool     // Send alerts for findings
-	AllowedTypes     []SecretType // Allow specific secret types (for testing)
+	ContextLines     int
+	MaxLineLength    int
+	MaxFileSize      int64
+	Concurrency      int
+	EnableValidation bool
+	IncludeContext   bool
+	RedactSecrets    bool
+	BlockOnFinding   bool
+	AlertOnFinding   bool
+	ScanBinaryFiles  bool
 }
 
 // SecretScanner scans objects for secrets.
 type SecretScanner struct {
-	mu         sync.RWMutex
-	config     *ScannerConfig
-	patterns   []*SecretPattern
-	findings   map[string][]*SecretFinding // bucket/key -> findings
-	stats      *ScannerStats
-	storage    SecretStorage
+	storage  SecretStorage
+	config   *ScannerConfig
+	findings map[string][]*SecretFinding
+	stats    *ScannerStats
+	patterns []*SecretPattern
+	mu       sync.RWMutex
 }
 
 // SecretStorage interface for persisting findings.
@@ -152,13 +145,13 @@ type SecretStorage interface {
 
 // ScannerStats tracks scanner statistics.
 type ScannerStats struct {
-	ObjectsScanned   int64
-	BytesScanned     int64
-	FindingsTotal    int64
-	FindingsByType   map[SecretType]int64
+	LastScanTime       time.Time
+	FindingsByType     map[SecretType]int64
 	FindingsBySeverity map[Severity]int64
-	ScanErrors       int64
-	LastScanTime     time.Time
+	ObjectsScanned     int64
+	BytesScanned       int64
+	FindingsTotal      int64
+	ScanErrors         int64
 }
 
 // DefaultConfig returns the default scanner configuration.
@@ -214,11 +207,13 @@ func buildPatterns(config *ScannerConfig) []*SecretPattern {
 		}
 
 		filtered := make([]*SecretPattern, 0)
+
 		for _, p := range patterns {
 			if !disabled[p.Type] {
 				filtered = append(filtered, p)
 			}
 		}
+
 		patterns = filtered
 	}
 
@@ -512,8 +507,10 @@ func (s *SecretScanner) ScanObject(ctx context.Context, bucket, key string, read
 	}
 
 	// Read content
-	var content []byte
-	var err error
+	var (
+		content []byte
+		err     error
+	)
 
 	if size < 10*1024*1024 { // Less than 10MB, read all
 		content, err = io.ReadAll(io.LimitReader(reader, s.config.MaxFileSize))
@@ -521,6 +518,7 @@ func (s *SecretScanner) ScanObject(ctx context.Context, bucket, key string, read
 			result.Error = err.Error()
 			return result, nil
 		}
+
 		result.Findings = s.scanContent(bucket, key, content)
 	} else {
 		// Larger files, scan line by line
@@ -668,6 +666,7 @@ func (s *SecretScanner) isAllowed(t SecretType) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -691,17 +690,20 @@ func (s *SecretScanner) getContext(lines [][]byte, lineNum, contextLines int) st
 	if start < 0 {
 		start = 0
 	}
+
 	end := lineNum + contextLines + 1
 	if end > len(lines) {
 		end = len(lines)
 	}
 
 	var context []string
+
 	for i := start; i < end; i++ {
 		prefix := "  "
 		if i == lineNum {
 			prefix = "> "
 		}
+
 		context = append(context, prefix+string(lines[i]))
 	}
 
@@ -753,6 +755,7 @@ func (s *SecretScanner) MarkFalsePositive(ctx context.Context, findingID string)
 	if s.storage != nil {
 		return s.storage.MarkFalsePositive(ctx, findingID)
 	}
+
 	return nil
 }
 
@@ -775,6 +778,7 @@ func (s *SecretScanner) GetStats() *ScannerStats {
 	for k, v := range s.stats.FindingsByType {
 		stats.FindingsByType[k] = v
 	}
+
 	for k, v := range s.stats.FindingsBySeverity {
 		stats.FindingsBySeverity[k] = v
 	}
@@ -816,10 +820,12 @@ func (s *SecretScanner) RemovePattern(t SecretType) {
 	defer s.mu.Unlock()
 
 	newPatterns := make([]*SecretPattern, 0)
+
 	for _, p := range s.patterns {
 		if p.Type != t {
 			newPatterns = append(newPatterns, p)
 		}
 	}
+
 	s.patterns = newPatterns
 }

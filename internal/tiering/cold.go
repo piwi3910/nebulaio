@@ -2,7 +2,7 @@ package tiering
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"sync"
 	"time"
@@ -10,21 +10,21 @@ import (
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 )
 
-// ColdStorageType represents the type of cold storage backend
+// ColdStorageType represents the type of cold storage backend.
 type ColdStorageType string
 
 const (
-	// ColdStorageS3 uses an S3-compatible backend
+	// ColdStorageS3 uses an S3-compatible backend.
 	ColdStorageS3 ColdStorageType = "s3"
-	// ColdStorageAzure uses Azure Blob Storage
+	// ColdStorageAzure uses Azure Blob Storage.
 	ColdStorageAzure ColdStorageType = "azure"
-	// ColdStorageGCS uses Google Cloud Storage
+	// ColdStorageGCS uses Google Cloud Storage.
 	ColdStorageGCS ColdStorageType = "gcs"
-	// ColdStorageFileSystem uses a local filesystem path
+	// ColdStorageFileSystem uses a local filesystem path.
 	ColdStorageFileSystem ColdStorageType = "filesystem"
 )
 
-// ColdStorageConfig configures a cold storage backend
+// ColdStorageConfig configures a cold storage backend.
 type ColdStorageConfig struct {
 	// Type of cold storage
 	Type ColdStorageType `json:"type" yaml:"type"`
@@ -57,42 +57,42 @@ type ColdStorageConfig struct {
 	EncryptionEnabled bool `json:"encryptionEnabled,omitempty" yaml:"encryptionEnabled,omitempty"`
 }
 
-// S3ColdConfig configures S3-compatible cold storage
+// S3ColdConfig configures S3-compatible cold storage.
 type S3ColdConfig struct {
-	Endpoint        string `json:"endpoint" yaml:"endpoint"`
-	Region          string `json:"region" yaml:"region"`
-	Bucket          string `json:"bucket" yaml:"bucket"`
-	Prefix          string `json:"prefix,omitempty" yaml:"prefix,omitempty"`
-	AccessKeyID     string `json:"-" yaml:"accessKeyId,omitempty"`
-	SecretAccessKey string `json:"-" yaml:"secretAccessKey,omitempty"`
-	UseSSL          bool   `json:"useSsl,omitempty" yaml:"useSsl,omitempty"`
+	Endpoint        string `json:"endpoint"               yaml:"endpoint"`
+	Region          string `json:"region"                 yaml:"region"`
+	Bucket          string `json:"bucket"                 yaml:"bucket"`
+	Prefix          string `json:"prefix,omitempty"       yaml:"prefix,omitempty"`
+	AccessKeyID     string `json:"-"                      yaml:"accessKeyId,omitempty"`
+	SecretAccessKey string `json:"-"                      yaml:"secretAccessKey,omitempty"`
+	UseSSL          bool   `json:"useSsl,omitempty"       yaml:"useSsl,omitempty"`
 	StorageClass    string `json:"storageClass,omitempty" yaml:"storageClass,omitempty"`
 }
 
-// AzureColdConfig configures Azure Blob cold storage
+// AzureColdConfig configures Azure Blob cold storage.
 type AzureColdConfig struct {
-	AccountName   string `json:"accountName" yaml:"accountName"`
-	AccountKey    string `json:"-" yaml:"accountKey,omitempty"`
-	ContainerName string `json:"containerName" yaml:"containerName"`
-	Prefix        string `json:"prefix,omitempty" yaml:"prefix,omitempty"`
+	AccountName   string `json:"accountName"          yaml:"accountName"`
+	AccountKey    string `json:"-"                    yaml:"accountKey,omitempty"`
+	ContainerName string `json:"containerName"        yaml:"containerName"`
+	Prefix        string `json:"prefix,omitempty"     yaml:"prefix,omitempty"`
 	AccessTier    string `json:"accessTier,omitempty" yaml:"accessTier,omitempty"` // Hot, Cool, Cold, Archive
 }
 
-// GCSColdConfig configures Google Cloud Storage cold storage
+// GCSColdConfig configures Google Cloud Storage cold storage.
 type GCSColdConfig struct {
-	ProjectID       string `json:"projectId" yaml:"projectId"`
-	Bucket          string `json:"bucket" yaml:"bucket"`
-	Prefix          string `json:"prefix,omitempty" yaml:"prefix,omitempty"`
-	CredentialsFile string `json:"-" yaml:"credentialsFile,omitempty"`
+	ProjectID       string `json:"projectId"              yaml:"projectId"`
+	Bucket          string `json:"bucket"                 yaml:"bucket"`
+	Prefix          string `json:"prefix,omitempty"       yaml:"prefix,omitempty"`
+	CredentialsFile string `json:"-"                      yaml:"credentialsFile,omitempty"`
 	StorageClass    string `json:"storageClass,omitempty" yaml:"storageClass,omitempty"` // STANDARD, NEARLINE, COLDLINE, ARCHIVE
 }
 
-// FilesystemColdConfig configures filesystem cold storage
+// FilesystemColdConfig configures filesystem cold storage.
 type FilesystemColdConfig struct {
 	Path string `json:"path" yaml:"path"`
 }
 
-// ColdStorage represents a cold storage backend
+// ColdStorage represents a cold storage backend.
 type ColdStorage struct {
 	config  ColdStorageConfig
 	backend backend.Backend
@@ -100,10 +100,10 @@ type ColdStorage struct {
 	closed  bool
 }
 
-// NewColdStorage creates a new cold storage backend
+// NewColdStorage creates a new cold storage backend.
 func NewColdStorage(config ColdStorageConfig, b backend.Backend) (*ColdStorage, error) {
 	if !config.Enabled {
-		return nil, fmt.Errorf("cold storage is not enabled")
+		return nil, errors.New("cold storage is not enabled")
 	}
 
 	return &ColdStorage{
@@ -112,23 +112,25 @@ func NewColdStorage(config ColdStorageConfig, b backend.Backend) (*ColdStorage, 
 	}, nil
 }
 
-// Name returns the cold storage name
+// Name returns the cold storage name.
 func (c *ColdStorage) Name() string {
 	return c.config.Name
 }
 
-// Type returns the cold storage type
+// Type returns the cold storage type.
 func (c *ColdStorage) Type() ColdStorageType {
 	return c.config.Type
 }
 
-// PutObject stores an object in cold storage
+// PutObject stores an object in cold storage.
 func (c *ColdStorage) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
 	c.mu.RLock()
+
 	if c.closed {
 		c.mu.RUnlock()
-		return nil, fmt.Errorf("cold storage is closed")
+		return nil, errors.New("cold storage is closed")
 	}
+
 	c.mu.RUnlock()
 
 	// Build the cold storage key with prefix
@@ -139,55 +141,66 @@ func (c *ColdStorage) PutObject(ctx context.Context, bucket, key string, reader 
 	return c.backend.PutObject(ctx, coldBucket, coldKey, reader, size)
 }
 
-// GetObject retrieves an object from cold storage
+// GetObject retrieves an object from cold storage.
 func (c *ColdStorage) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
 	c.mu.RLock()
+
 	if c.closed {
 		c.mu.RUnlock()
-		return nil, fmt.Errorf("cold storage is closed")
+		return nil, errors.New("cold storage is closed")
 	}
+
 	c.mu.RUnlock()
 
 	coldKey := c.buildKey(bucket, key)
 	coldBucket := c.getBucket()
+
 	return c.backend.GetObject(ctx, coldBucket, coldKey)
 }
 
-// ObjectExists checks if an object exists in cold storage
+// ObjectExists checks if an object exists in cold storage.
 func (c *ColdStorage) ObjectExists(ctx context.Context, bucket, key string) (bool, error) {
 	c.mu.RLock()
+
 	if c.closed {
 		c.mu.RUnlock()
-		return false, fmt.Errorf("cold storage is closed")
+		return false, errors.New("cold storage is closed")
 	}
+
 	c.mu.RUnlock()
 
 	coldKey := c.buildKey(bucket, key)
 	coldBucket := c.getBucket()
+
 	return c.backend.ObjectExists(ctx, coldBucket, coldKey)
 }
 
-// DeleteObject removes an object from cold storage
+// DeleteObject removes an object from cold storage.
 func (c *ColdStorage) DeleteObject(ctx context.Context, bucket, key string) error {
 	c.mu.RLock()
+
 	if c.closed {
 		c.mu.RUnlock()
-		return fmt.Errorf("cold storage is closed")
+		return errors.New("cold storage is closed")
 	}
+
 	c.mu.RUnlock()
 
 	coldKey := c.buildKey(bucket, key)
 	coldBucket := c.getBucket()
+
 	return c.backend.DeleteObject(ctx, coldBucket, coldKey)
 }
 
-// IsHealthy checks if cold storage is accessible
+// IsHealthy checks if cold storage is accessible.
 func (c *ColdStorage) IsHealthy(ctx context.Context) bool {
 	c.mu.RLock()
+
 	if c.closed {
 		c.mu.RUnlock()
 		return false
 	}
+
 	c.mu.RUnlock()
 
 	// Try to check bucket existence as a health check
@@ -196,10 +209,11 @@ func (c *ColdStorage) IsHealthy(ctx context.Context) bool {
 
 	coldBucket := c.getBucket()
 	_, err := c.backend.BucketExists(ctx, coldBucket)
+
 	return err == nil
 }
 
-// Close closes the cold storage connection
+// Close closes the cold storage connection.
 func (c *ColdStorage) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -209,10 +223,11 @@ func (c *ColdStorage) Close() error {
 	}
 
 	c.closed = true
+
 	return nil
 }
 
-// buildKey constructs the cold storage key with prefix
+// buildKey constructs the cold storage key with prefix.
 func (c *ColdStorage) buildKey(bucket, key string) string {
 	prefix := ""
 
@@ -234,10 +249,11 @@ func (c *ColdStorage) buildKey(bucket, key string) string {
 	if prefix == "" {
 		return bucket + "/" + key
 	}
+
 	return prefix + "/" + bucket + "/" + key
 }
 
-// getBucket returns the bucket/container name for cold storage
+// getBucket returns the bucket/container name for cold storage.
 func (c *ColdStorage) getBucket() string {
 	switch c.config.Type {
 	case ColdStorageS3:
@@ -255,38 +271,42 @@ func (c *ColdStorage) getBucket() string {
 	case ColdStorageFileSystem:
 		return "" // Filesystem doesn't use buckets
 	}
+
 	return ""
 }
 
-// ColdStorageManager manages multiple cold storage backends
+// ColdStorageManager manages multiple cold storage backends.
 type ColdStorageManager struct {
 	storages map[string]*ColdStorage
 	mu       sync.RWMutex
 }
 
-// NewColdStorageManager creates a new cold storage manager
+// NewColdStorageManager creates a new cold storage manager.
 func NewColdStorageManager() *ColdStorageManager {
 	return &ColdStorageManager{
 		storages: make(map[string]*ColdStorage),
 	}
 }
 
-// Register adds a cold storage backend
+// Register adds a cold storage backend.
 func (m *ColdStorageManager) Register(storage *ColdStorage) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.storages[storage.Name()] = storage
 }
 
-// Get retrieves a cold storage backend by name
+// Get retrieves a cold storage backend by name.
 func (m *ColdStorageManager) Get(name string) (*ColdStorage, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	storage, ok := m.storages[name]
+
 	return storage, ok
 }
 
-// List returns all registered cold storage backends
+// List returns all registered cold storage backends.
 func (m *ColdStorageManager) List() []*ColdStorage {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -295,10 +315,11 @@ func (m *ColdStorageManager) List() []*ColdStorage {
 	for _, storage := range m.storages {
 		result = append(result, storage)
 	}
+
 	return result
 }
 
-// GetByTier returns cold storage for a specific tier
+// GetByTier returns cold storage for a specific tier.
 func (m *ColdStorageManager) GetByTier(tier TierType) *ColdStorage {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -309,18 +330,21 @@ func (m *ColdStorageManager) GetByTier(tier TierType) *ColdStorage {
 			return storage
 		}
 	}
+
 	return nil
 }
 
-// Close closes all cold storage backends
+// Close closes all cold storage backends.
 func (m *ColdStorageManager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	for _, storage := range m.storages {
-		if err := storage.Close(); err != nil {
+		err := storage.Close()
+		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }

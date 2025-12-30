@@ -115,14 +115,17 @@ func TestCertificateGeneration(t *testing.T) {
 		// Verify IP addresses
 		hasLoopback := false
 		hasCustomIP := false
+
 		for _, ip := range x509Cert.IPAddresses {
 			if ip.Equal(net.ParseIP("127.0.0.1")) {
 				hasLoopback = true
 			}
+
 			if ip.Equal(net.ParseIP("192.168.1.100")) {
 				hasCustomIP = true
 			}
 		}
+
 		assert.True(t, hasLoopback, "Should include loopback IP")
 		assert.True(t, hasCustomIP, "Should include custom IP")
 	})
@@ -233,6 +236,7 @@ func TestTLSConfig(t *testing.T) {
 
 		// Verify we have AEAD cipher suites
 		hasAEAD := false
+
 		for _, suite := range tlsConfig.CipherSuites {
 			switch suite {
 			case tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
@@ -244,6 +248,7 @@ func TestTLSConfig(t *testing.T) {
 				hasAEAD = true
 			}
 		}
+
 		assert.True(t, hasAEAD, "Should include AEAD cipher suites")
 	})
 }
@@ -267,6 +272,7 @@ func TestCertificateReuse(t *testing.T) {
 	// Get certificate modification time
 	certInfo1, err := os.Stat(manager1.GetCertFile())
 	require.NoError(t, err)
+
 	modTime1 := certInfo1.ModTime()
 
 	// Wait a bit
@@ -279,6 +285,7 @@ func TestCertificateReuse(t *testing.T) {
 	// Get certificate modification time again
 	certInfo2, err := os.Stat(manager2.GetCertFile())
 	require.NoError(t, err)
+
 	modTime2 := certInfo2.ModTime()
 
 	// Modification times should be the same (certificate was reused)
@@ -353,6 +360,7 @@ func TestGetLocalIPs(t *testing.T) {
 	// Should at least have some IPs on a typical system
 	// This may be empty in some CI environments
 	t.Logf("Detected %d local IPs", len(ips))
+
 	for _, ip := range ips {
 		t.Logf("  - %s", ip.String())
 		// Should not include loopback (that's added separately)
@@ -404,6 +412,7 @@ func TestTLSHandshake(t *testing.T) {
 	// Create a test server
 	listener, err := tls.Listen("tcp", "127.0.0.1:0", tlsConfig)
 	require.NoError(t, err)
+
 	defer listener.Close()
 
 	// Get the port
@@ -416,6 +425,7 @@ func TestTLSHandshake(t *testing.T) {
 			return
 		}
 		defer conn.Close()
+
 		conn.Write([]byte("hello"))
 	}()
 
@@ -434,6 +444,7 @@ func TestTLSHandshake(t *testing.T) {
 
 	conn, err := tls.Dial("tcp", addr, clientConfig)
 	require.NoError(t, err, "TLS handshake should succeed")
+
 	defer conn.Close()
 
 	// Read response

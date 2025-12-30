@@ -43,10 +43,10 @@ func TestParseLifecycleConfig(t *testing.T) {
 
 func TestLifecycleConfigurationValidate(t *testing.T) {
 	tests := []struct {
-		name        string
 		config      *LifecycleConfiguration
-		expectError bool
+		name        string
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name: "valid config",
@@ -96,6 +96,7 @@ func TestLifecycleConfigurationValidate(t *testing.T) {
 			err := tt.config.Validate()
 			if tt.expectError {
 				assert.Error(t, err)
+
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
@@ -108,10 +109,10 @@ func TestLifecycleConfigurationValidate(t *testing.T) {
 
 func TestLifecycleRuleValidate(t *testing.T) {
 	tests := []struct {
-		name        string
 		rule        LifecycleRule
-		expectError bool
+		name        string
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name: "valid rule with expiration",
@@ -213,6 +214,7 @@ func TestLifecycleRuleValidate(t *testing.T) {
 			err := tt.rule.Validate()
 			if tt.expectError {
 				assert.Error(t, err)
+
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
@@ -225,10 +227,10 @@ func TestLifecycleRuleValidate(t *testing.T) {
 
 func TestFilterValidate(t *testing.T) {
 	tests := []struct {
-		name        string
 		filter      Filter
-		expectError bool
+		name        string
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name:        "empty filter",
@@ -304,6 +306,7 @@ func TestFilterValidate(t *testing.T) {
 			err := tt.filter.Validate()
 			if tt.expectError {
 				assert.Error(t, err)
+
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
@@ -318,10 +321,10 @@ func TestExpirationValidate(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name        string
 		exp         Expiration
-		expectError bool
+		name        string
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name:        "valid days",
@@ -368,6 +371,7 @@ func TestExpirationValidate(t *testing.T) {
 			err := tt.exp.Validate()
 			if tt.expectError {
 				assert.Error(t, err)
+
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
@@ -382,10 +386,10 @@ func TestTransitionValidate(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name        string
 		transition  Transition
-		expectError bool
+		name        string
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name:        "valid with days",
@@ -448,6 +452,7 @@ func TestTransitionValidate(t *testing.T) {
 			err := tt.transition.Validate()
 			if tt.expectError {
 				assert.Error(t, err)
+
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
@@ -570,10 +575,10 @@ func TestAbortIncompleteMultipartUploadValidate(t *testing.T) {
 
 func TestFilterMatches(t *testing.T) {
 	tests := []struct {
-		name     string
 		filter   Filter
-		key      string
 		tags     map[string]string
+		name     string
+		key      string
 		expected bool
 	}{
 		{
@@ -785,11 +790,11 @@ func TestRuleFilterTags(t *testing.T) {
 
 func TestActionConstants(t *testing.T) {
 	// Verify action constants are defined correctly
-	assert.Equal(t, Action(0), ActionNone)
-	assert.Equal(t, Action(1), ActionDelete)
-	assert.Equal(t, Action(2), ActionTransition)
-	assert.Equal(t, Action(3), ActionDeleteMarker)
-	assert.Equal(t, Action(4), ActionAbortMultipart)
+	assert.Equal(t, ActionNone, Action(0))
+	assert.Equal(t, ActionDelete, Action(1))
+	assert.Equal(t, ActionTransition, Action(2))
+	assert.Equal(t, ActionDeleteMarker, Action(3))
+	assert.Equal(t, ActionAbortMultipart, Action(4))
 }
 
 func TestActionResult(t *testing.T) {
@@ -814,7 +819,8 @@ func BenchmarkFilterMatches(b *testing.B) {
 	tags := map[string]string{"env": "prod", "team": "platform"}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		filter.Matches("logs/app.log", tags)
 	}
 }
@@ -833,7 +839,8 @@ func BenchmarkLifecycleRuleValidate(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		rule.Validate()
 	}
 }

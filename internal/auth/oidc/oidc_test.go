@@ -17,7 +17,8 @@ func TestConfigValidation(t *testing.T) {
 			Scopes:       []string{"openid", "profile", "email"},
 		}
 
-		if err := cfg.Validate(); err != nil {
+		err := cfg.Validate()
+		if err != nil {
 			t.Errorf("valid config should not error: %v", err)
 		}
 	})
@@ -30,7 +31,8 @@ func TestConfigValidation(t *testing.T) {
 			Scopes:       []string{"openid"},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing issuer URL")
 		}
 	})
@@ -43,7 +45,8 @@ func TestConfigValidation(t *testing.T) {
 			Scopes:       []string{"openid"},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing client ID")
 		}
 	})
@@ -57,7 +60,8 @@ func TestConfigValidation(t *testing.T) {
 			PKCE:        false,
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing client secret without PKCE")
 		}
 	})
@@ -71,7 +75,8 @@ func TestConfigValidation(t *testing.T) {
 			PKCE:        true,
 		}
 
-		if err := cfg.Validate(); err != nil {
+		err := cfg.Validate()
+		if err != nil {
 			t.Errorf("PKCE client without secret should be valid: %v", err)
 		}
 	})
@@ -84,7 +89,8 @@ func TestConfigValidation(t *testing.T) {
 			Scopes:       []string{"openid"},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing redirect URL")
 		}
 	})
@@ -98,7 +104,8 @@ func TestConfigValidation(t *testing.T) {
 			Scopes:       []string{"profile", "email"}, // Missing openid
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing openid scope")
 		}
 	})
@@ -113,7 +120,8 @@ func TestConfigValidation(t *testing.T) {
 			TokenEndpointAuth: "invalid_method",
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for invalid token endpoint auth")
 		}
 	})
@@ -130,7 +138,8 @@ func TestConfigValidation(t *testing.T) {
 				TokenEndpointAuth: method,
 			}
 
-			if err := cfg.Validate(); err != nil {
+			err := cfg.Validate()
+			if err != nil {
 				t.Errorf("valid token endpoint auth %s should not error: %v", method, err)
 			}
 		}
@@ -145,12 +154,14 @@ func TestDefaultConfig(t *testing.T) {
 	}
 
 	hasOpenID := false
+
 	for _, scope := range cfg.Scopes {
 		if scope == "openid" {
 			hasOpenID = true
 			break
 		}
 	}
+
 	if !hasOpenID {
 		t.Error("default config should have openid scope")
 	}
@@ -170,6 +181,7 @@ func TestProviderPresets(t *testing.T) {
 		if cfg.IssuerURL != "https://accounts.google.com" {
 			t.Error("Google config should have correct issuer URL")
 		}
+
 		if cfg.ClaimsMapping.Username != "email" {
 			t.Error("Google config should use email as username")
 		}
@@ -199,12 +211,14 @@ func TestProviderPresets(t *testing.T) {
 	t.Run("Auth0Config", func(t *testing.T) {
 		cfg := Auth0Config()
 		hasOpenID := false
+
 		for _, scope := range cfg.Scopes {
 			if scope == "openid" {
 				hasOpenID = true
 				break
 			}
 		}
+
 		if !hasOpenID {
 			t.Error("Auth0 config should have openid scope")
 		}
@@ -297,7 +311,8 @@ func TestInMemoryStateStore(t *testing.T) {
 		_ = store.SaveState(validState)
 
 		// Cleanup
-		if err := store.CleanupExpired(); err != nil {
+		err := store.CleanupExpired()
+		if err != nil {
 			t.Fatalf("cleanup failed: %v", err)
 		}
 
@@ -343,18 +358,23 @@ func TestClaimsToUser(t *testing.T) {
 		if user.Username != "testuser" {
 			t.Errorf("expected username 'testuser', got %s", user.Username)
 		}
+
 		if user.Email != "test@example.com" {
 			t.Errorf("expected email 'test@example.com', got %s", user.Email)
 		}
+
 		if user.DisplayName != "Test User" {
 			t.Errorf("expected display name 'Test User', got %s", user.DisplayName)
 		}
+
 		if len(user.Groups) != 2 {
 			t.Errorf("expected 2 groups, got %d", len(user.Groups))
 		}
+
 		if user.ProviderID != "user-123" {
 			t.Error("provider ID should be set from sub claim")
 		}
+
 		if user.Attributes["department"][0] != "Engineering" {
 			t.Error("additional attribute should be set")
 		}

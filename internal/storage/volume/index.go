@@ -10,26 +10,26 @@ import (
 )
 
 // Index is an in-memory sorted index of objects in a volume
-// Uses a sorted slice for O(log n) lookups via binary search
+// Uses a sorted slice for O(log n) lookups via binary search.
 type Index struct {
 	entries []IndexEntryFull
 	mu      sync.RWMutex
 }
 
-// IndexEntryFull is the full index entry including the variable-length key
+// IndexEntryFull is the full index entry including the variable-length key.
 type IndexEntryFull struct {
+	Key string
 	IndexEntry
-	Key string // Full key (bucket/object)
 }
 
-// NewIndex creates a new empty index
+// NewIndex creates a new empty index.
 func NewIndex() *Index {
 	return &Index{
 		entries: make([]IndexEntryFull, 0, 1024),
 	}
 }
 
-// ReadIndex reads an index from disk
+// ReadIndex reads an index from disk.
 func ReadIndex(file *os.File, offset int64, size int64) (*Index, error) {
 	if size == 0 {
 		return NewIndex(), nil
@@ -43,7 +43,7 @@ func ReadIndex(file *os.File, offset int64, size int64) (*Index, error) {
 	return unmarshalIndex(buf)
 }
 
-// WriteTo writes the index to disk at the given offset
+// WriteTo writes the index to disk at the given offset.
 func (idx *Index) WriteTo(file *os.File, offset int64) (int64, error) {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
@@ -52,20 +52,21 @@ func (idx *Index) WriteTo(file *os.File, offset int64) (int64, error) {
 	if _, err := file.WriteAt(data, offset); err != nil {
 		return 0, err
 	}
+
 	return int64(len(data)), nil
 }
 
-// marshal serializes the index to bytes
+// marshal serializes the index to bytes.
 func (idx *Index) marshal() []byte {
 	// Format:
 	// 4 bytes: entry count
 	// For each entry:
 	//   64 bytes: fixed IndexEntry fields
 	//   N bytes: key string
-
 	var buf bytes.Buffer
 
 	// Write count
+	//nolint:gosec // G115: entry count bounded by volume capacity
 	binary.Write(&buf, binary.LittleEndian, uint32(len(idx.entries)))
 
 	// Write entries
@@ -78,6 +79,7 @@ func (idx *Index) marshal() []byte {
 		binary.Write(&buf, binary.LittleEndian, entry.Size)
 		binary.Write(&buf, binary.LittleEndian, entry.Created)
 		binary.Write(&buf, binary.LittleEndian, entry.Flags)
+		//nolint:gosec // G115: key length bounded by S3 key limits
 		binary.Write(&buf, binary.LittleEndian, uint16(len(entry.Key)))
 		// Variable key
 		buf.WriteString(entry.Key)
@@ -86,7 +88,7 @@ func (idx *Index) marshal() []byte {
 	return buf.Bytes()
 }
 
-// unmarshalIndex deserializes an index from bytes
+// unmarshalIndex deserializes an index from bytes.
 func unmarshalIndex(data []byte) (*Index, error) {
 	if len(data) < 4 {
 		return nil, ErrIndexCorrupted
@@ -99,32 +101,46 @@ func unmarshalIndex(data []byte) (*Index, error) {
 
 	r := bytes.NewReader(data[4:])
 
-	for i := uint32(0); i < count; i++ {
+	for range count {
 		var entry IndexEntryFull
 
 		// Read fixed fields
 		if _, err := io.ReadFull(r, entry.KeyHash[:]); err != nil {
 			return nil, ErrIndexCorrupted
 		}
-		if err := binary.Read(r, binary.LittleEndian, &entry.BlockNum); err != nil {
+		err := binary.Read(r, binary.LittleEndian, &entry.BlockNum)
+
+		if err != nil {
 			return nil, ErrIndexCorrupted
 		}
-		if err := binary.Read(r, binary.LittleEndian, &entry.BlockCount); err != nil {
+		err = binary.Read(r, binary.LittleEndian, &entry.BlockCount)
+
+		if err != nil {
 			return nil, ErrIndexCorrupted
 		}
-		if err := binary.Read(r, binary.LittleEndian, &entry.OffsetInBlock); err != nil {
+		err = binary.Read(r, binary.LittleEndian, &entry.OffsetInBlock)
+
+		if err != nil {
 			return nil, ErrIndexCorrupted
 		}
-		if err := binary.Read(r, binary.LittleEndian, &entry.Size); err != nil {
+		err = binary.Read(r, binary.LittleEndian, &entry.Size)
+
+		if err != nil {
 			return nil, ErrIndexCorrupted
 		}
-		if err := binary.Read(r, binary.LittleEndian, &entry.Created); err != nil {
+		err = binary.Read(r, binary.LittleEndian, &entry.Created)
+
+		if err != nil {
 			return nil, ErrIndexCorrupted
 		}
-		if err := binary.Read(r, binary.LittleEndian, &entry.Flags); err != nil {
+		err = binary.Read(r, binary.LittleEndian, &entry.Flags)
+
+		if err != nil {
 			return nil, ErrIndexCorrupted
 		}
-		if err := binary.Read(r, binary.LittleEndian, &entry.KeyLen); err != nil {
+		err = binary.Read(r, binary.LittleEndian, &entry.KeyLen)
+
+		if err != nil {
 			return nil, ErrIndexCorrupted
 		}
 
@@ -133,6 +149,7 @@ func unmarshalIndex(data []byte) (*Index, error) {
 		if _, err := io.ReadFull(r, keyBytes); err != nil {
 			return nil, ErrIndexCorrupted
 		}
+
 		entry.Key = string(keyBytes)
 
 		idx.entries = append(idx.entries, entry)
@@ -141,7 +158,7 @@ func unmarshalIndex(data []byte) (*Index, error) {
 	return idx, nil
 }
 
-// Get looks up an entry by key
+// Get looks up an entry by key.
 func (idx *Index) Get(bucket, key string) (*IndexEntryFull, bool) {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
@@ -159,11 +176,14 @@ func (idx *Index) Get(bucket, key string) (*IndexEntryFull, bool) {
 		if idx.entries[i].KeyHash != keyHash {
 			break
 		}
+
 		if idx.entries[i].Key == fullKey {
 			if idx.entries[i].Flags&FlagDeleted != 0 {
 				return nil, false // Deleted
 			}
+
 			entry := idx.entries[i]
+
 			return &entry, true
 		}
 	}
@@ -171,7 +191,7 @@ func (idx *Index) Get(bucket, key string) (*IndexEntryFull, bool) {
 	return nil, false
 }
 
-// Put adds or updates an entry in the index
+// Put adds or updates an entry in the index.
 func (idx *Index) Put(entry IndexEntryFull) {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
@@ -188,6 +208,7 @@ func (idx *Index) Put(entry IndexEntryFull) {
 		if idx.entries[j].KeyHash != keyHash {
 			break
 		}
+
 		if idx.entries[j].Key == entry.Key {
 			// Update existing entry
 			idx.entries[j] = entry
@@ -201,7 +222,7 @@ func (idx *Index) Put(entry IndexEntryFull) {
 	idx.entries[i] = entry
 }
 
-// Delete marks an entry as deleted
+// Delete marks an entry as deleted.
 func (idx *Index) Delete(bucket, key string) bool {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
@@ -217,6 +238,7 @@ func (idx *Index) Delete(bucket, key string) bool {
 		if idx.entries[i].KeyHash != keyHash {
 			break
 		}
+
 		if idx.entries[i].Key == fullKey {
 			idx.entries[i].Flags |= FlagDeleted
 			return true
@@ -226,7 +248,7 @@ func (idx *Index) Delete(bucket, key string) bool {
 	return false
 }
 
-// Remove physically removes an entry from the index
+// Remove physically removes an entry from the index.
 func (idx *Index) Remove(bucket, key string) bool {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
@@ -242,6 +264,7 @@ func (idx *Index) Remove(bucket, key string) bool {
 		if idx.entries[i].KeyHash != keyHash {
 			break
 		}
+
 		if idx.entries[i].Key == fullKey {
 			// Remove entry by shifting
 			idx.entries = append(idx.entries[:i], idx.entries[i+1:]...)
@@ -252,7 +275,7 @@ func (idx *Index) Remove(bucket, key string) bool {
 	return false
 }
 
-// List returns entries matching a prefix
+// List returns entries matching a prefix.
 func (idx *Index) List(bucket, prefix string, maxKeys int) []IndexEntryFull {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
@@ -268,6 +291,7 @@ func (idx *Index) List(bucket, prefix string, maxKeys int) []IndexEntryFull {
 		if entry.Flags&FlagDeleted != 0 {
 			continue
 		}
+
 		if len(entry.Key) >= len(fullPrefix) && entry.Key[:len(fullPrefix)] == fullPrefix {
 			result = append(result, entry)
 			if len(result) >= maxKeys {
@@ -279,34 +303,38 @@ func (idx *Index) List(bucket, prefix string, maxKeys int) []IndexEntryFull {
 	return result
 }
 
-// Count returns the number of non-deleted entries
+// Count returns the number of non-deleted entries.
 func (idx *Index) Count() int {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
 
 	count := 0
+
 	for _, entry := range idx.entries {
 		if entry.Flags&FlagDeleted == 0 {
 			count++
 		}
 	}
+
 	return count
 }
 
-// TotalCount returns the total number of entries including deleted
+// TotalCount returns the total number of entries including deleted.
 func (idx *Index) TotalCount() int {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
+
 	return len(idx.entries)
 }
 
-// Compact removes deleted entries from the index
+// Compact removes deleted entries from the index.
 func (idx *Index) Compact() int {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 
 	removed := 0
 	j := 0
+
 	for i := 0; i < len(idx.entries); i++ {
 		if idx.entries[i].Flags&FlagDeleted == 0 {
 			idx.entries[j] = idx.entries[i]
@@ -315,11 +343,13 @@ func (idx *Index) Compact() int {
 			removed++
 		}
 	}
+
 	idx.entries = idx.entries[:j]
+
 	return removed
 }
 
-// All returns all non-deleted entries (for iteration)
+// All returns all non-deleted entries (for iteration).
 func (idx *Index) All() []IndexEntryFull {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
@@ -330,33 +360,38 @@ func (idx *Index) All() []IndexEntryFull {
 			result = append(result, entry)
 		}
 	}
+
 	return result
 }
 
-// EntriesForBlock returns all entries stored in a specific block
+// EntriesForBlock returns all entries stored in a specific block.
 func (idx *Index) EntriesForBlock(blockNum uint32) []IndexEntryFull {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
 
 	result := make([]IndexEntryFull, 0)
+
 	for _, entry := range idx.entries {
 		if entry.BlockNum == blockNum && entry.Flags&FlagDeleted == 0 {
 			result = append(result, entry)
 		}
 	}
+
 	return result
 }
 
-// DeletedEntriesForBlock returns all deleted entries in a block
+// DeletedEntriesForBlock returns all deleted entries in a block.
 func (idx *Index) DeletedEntriesForBlock(blockNum uint32) []IndexEntryFull {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
 
 	result := make([]IndexEntryFull, 0)
+
 	for _, entry := range idx.entries {
 		if entry.BlockNum == blockNum && entry.Flags&FlagDeleted != 0 {
 			result = append(result, entry)
 		}
 	}
+
 	return result
 }

@@ -11,13 +11,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/piwi3910/nebulaio/internal/api/middleware"
-	"github.com/piwi3910/nebulaio/internal/s3select"
 	"github.com/piwi3910/nebulaio/internal/metadata"
+	"github.com/piwi3910/nebulaio/internal/s3select"
 	"github.com/piwi3910/nebulaio/pkg/s3types"
 )
 
 // GetObjectAttributes returns object metadata without the object body
-// This is a lighter-weight alternative to HeadObject when you only need specific attributes
+// This is a lighter-weight alternative to HeadObject when you only need specific attributes.
 func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -32,13 +32,17 @@ func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get object metadata
-	var meta *metadata.ObjectMeta
-	var err error
+	var (
+		meta *metadata.ObjectMeta
+		err  error
+	)
+
 	if versionID != "" {
 		meta, err = h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
 	} else {
 		meta, err = h.object.HeadObject(ctx, bucketName, key)
 	}
+
 	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, key)
 		return
@@ -56,22 +60,27 @@ func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
 			if meta.Metadata != nil {
 				checksum := &s3types.Checksum{}
 				hasChecksum := false
+
 				if v, ok := meta.Metadata["x-amz-checksum-crc32"]; ok {
 					checksum.ChecksumCRC32 = v
 					hasChecksum = true
 				}
+
 				if v, ok := meta.Metadata["x-amz-checksum-crc32c"]; ok {
 					checksum.ChecksumCRC32C = v
 					hasChecksum = true
 				}
+
 				if v, ok := meta.Metadata["x-amz-checksum-sha1"]; ok {
 					checksum.ChecksumSHA1 = v
 					hasChecksum = true
 				}
+
 				if v, ok := meta.Metadata["x-amz-checksum-sha256"]; ok {
 					checksum.ChecksumSHA256 = v
 					hasChecksum = true
 				}
+
 				if hasChecksum {
 					response.Checksum = checksum
 				}
@@ -102,9 +111,11 @@ func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
 
 	// Set response headers
 	w.Header().Set("Last-Modified", meta.ModifiedAt.Format(http.TimeFormat))
+
 	if versionID != "" {
 		w.Header().Set("X-Amz-Version-Id", versionID)
 	}
+
 	if meta.DeleteMarker {
 		w.Header().Set("X-Amz-Delete-Marker", "true")
 	}
@@ -112,12 +123,14 @@ func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
 	writeXML(w, http.StatusOK, response)
 }
 
-// parseObjectAttributesHeader parses the x-amz-object-attributes header
+// parseObjectAttributesHeader parses the x-amz-object-attributes header.
 func parseObjectAttributesHeader(header string) []string {
 	if header == "" {
 		return nil
 	}
+
 	attrs := strings.Split(header, ",")
+
 	result := make([]string, 0, len(attrs))
 	for _, attr := range attrs {
 		trimmed := strings.TrimSpace(attr)
@@ -125,11 +138,12 @@ func parseObjectAttributesHeader(header string) []string {
 			result = append(result, trimmed)
 		}
 	}
+
 	return result
 }
 
 // SelectObjectContent executes SQL queries on object content (CSV, JSON, Parquet)
-// Supports full SQL SELECT with projections, WHERE filters, aggregates (COUNT, SUM, AVG, MIN, MAX)
+// Supports full SQL SELECT with projections, WHERE filters, aggregates (COUNT, SUM, AVG, MIN, MAX).
 func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -154,6 +168,7 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 		writeS3ErrorTypedWithResource(w, r, err, key)
 		return
 	}
+
 	defer func() { _ = data.Close() }()
 
 	// Read all data
@@ -171,6 +186,7 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 
 	// Create S3 Select engine and execute query
 	engine := s3select.NewEngine(inputFormat, outputFormat)
+
 	result, err := engine.Execute(content, selectReq.Expression)
 	if err != nil {
 		writeS3Error(w, "InvalidRequest", "Query execution failed: "+err.Error(), http.StatusBadRequest)
@@ -198,12 +214,13 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(endMsg)
 }
 
-// buildInputFormat converts S3 InputSerialization to s3select.InputFormat
+// buildInputFormat converts S3 InputSerialization to s3select.InputFormat.
 func buildInputFormat(input s3types.InputSerialization) s3select.InputFormat {
 	format := s3select.InputFormat{}
 
 	if input.CSV != nil {
 		format.Type = "CSV"
+
 		format.CSVConfig = &s3select.CSVConfig{
 			FileHeaderInfo:  input.CSV.FileHeaderInfo,
 			Comments:        input.CSV.Comments,
@@ -214,14 +231,17 @@ func buildInputFormat(input s3types.InputSerialization) s3select.InputFormat {
 		if format.CSVConfig.FileHeaderInfo == "" {
 			format.CSVConfig.FileHeaderInfo = "USE"
 		}
+
 		if format.CSVConfig.FieldDelimiter == "" {
 			format.CSVConfig.FieldDelimiter = ","
 		}
+
 		if format.CSVConfig.RecordDelimiter == "" {
 			format.CSVConfig.RecordDelimiter = "\n"
 		}
 	} else if input.JSON != nil {
 		format.Type = "JSON"
+
 		format.JSONConfig = &s3select.JSONConfig{
 			Type: input.JSON.Type,
 		}
@@ -240,12 +260,13 @@ func buildInputFormat(input s3types.InputSerialization) s3select.InputFormat {
 	return format
 }
 
-// buildOutputFormat converts S3 OutputSerialization to s3select.OutputFormat
+// buildOutputFormat converts S3 OutputSerialization to s3select.OutputFormat.
 func buildOutputFormat(output s3types.OutputSerialization) s3select.OutputFormat {
 	format := s3select.OutputFormat{}
 
 	if output.CSV != nil {
 		format.Type = "CSV"
+
 		format.CSVConfig = &s3select.CSVOutputConfig{
 			QuoteFields:     output.CSV.QuoteFields,
 			FieldDelimiter:  output.CSV.FieldDelimiter,
@@ -255,14 +276,17 @@ func buildOutputFormat(output s3types.OutputSerialization) s3select.OutputFormat
 		if format.CSVConfig.FieldDelimiter == "" {
 			format.CSVConfig.FieldDelimiter = ","
 		}
+
 		if format.CSVConfig.RecordDelimiter == "" {
 			format.CSVConfig.RecordDelimiter = "\n"
 		}
+
 		if format.CSVConfig.QuoteFields == "" {
 			format.CSVConfig.QuoteFields = "ASNEEDED"
 		}
 	} else if output.JSON != nil {
 		format.Type = "JSON"
+
 		format.JSONConfig = &s3select.JSONOutputConfig{
 			RecordDelimiter: output.JSON.RecordDelimiter,
 		}
@@ -280,7 +304,7 @@ func buildOutputFormat(output s3types.OutputSerialization) s3select.OutputFormat
 	return format
 }
 
-// createSelectEventMessage creates an S3 Select event stream message
+// createSelectEventMessage creates an S3 Select event stream message.
 func createSelectEventMessage(eventType string, payload []byte) []byte {
 	// Simplified event stream format
 	// In production, this should follow the AWS binary event stream format
@@ -289,10 +313,11 @@ func createSelectEventMessage(eventType string, payload []byte) []byte {
 	result = append(result, []byte(header)...)
 	result = append(result, payload...)
 	result = append(result, '\n')
+
 	return result
 }
 
-// RestoreObject initiates restore of an object from archive storage
+// RestoreObject initiates restore of an object from archive storage.
 func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -318,13 +343,17 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if object exists and is in GLACIER or DEEP_ARCHIVE
-	var meta *metadata.ObjectMeta
-	var err error
+	var (
+		meta *metadata.ObjectMeta
+		err  error
+	)
+
 	if versionID != "" {
 		meta, err = h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
 	} else {
 		meta, err = h.object.HeadObject(ctx, bucketName, key)
 	}
+
 	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, key)
 		return
@@ -343,8 +372,10 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 				// Restore already in progress
 				w.Header().Set("X-Amz-Restore", `ongoing-request="true"`)
 				w.WriteHeader(http.StatusConflict)
+
 				return
 			}
+
 			if restoreStatus == "completed" {
 				if expiryStr, ok := meta.Metadata["x-amz-restore-expiry"]; ok {
 					if expiryTime, err := time.Parse(time.RFC3339, expiryStr); err == nil && expiryTime.After(time.Now()) {
@@ -352,6 +383,7 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 						w.Header().Set("X-Amz-Restore", fmt.Sprintf(`ongoing-request="false", expiry-date="%s"`,
 							expiryTime.Format(time.RFC1123)))
 						w.WriteHeader(http.StatusOK)
+
 						return
 					}
 				}
@@ -380,7 +412,7 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 }
 
 // WriteGetObjectResponse writes a response on behalf of a Lambda function
-// This is used for S3 Object Lambda
+// This is used for S3 Object Lambda.
 func (h *Handler) WriteGetObjectResponse(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
 	query := r.URL.Query()
@@ -394,6 +426,7 @@ func (h *Handler) WriteGetObjectResponse(w http.ResponseWriter, r *http.Request)
 
 	// Parse response headers from request
 	statusCode := http.StatusOK
+
 	if sc := r.Header.Get("X-Amz-Fwd-Status"); sc != "" {
 		if parsed, err := strconv.Atoi(sc); err == nil {
 			statusCode = parsed
@@ -411,12 +444,15 @@ func (h *Handler) WriteGetObjectResponse(w http.ResponseWriter, r *http.Request)
 	if contentType := r.Header.Get("X-Amz-Fwd-Header-Content-Type"); contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
+
 	if contentLength := r.Header.Get("X-Amz-Fwd-Header-Content-Length"); contentLength != "" {
 		w.Header().Set("Content-Length", contentLength)
 	}
+
 	if etag := r.Header.Get("X-Amz-Fwd-Header-Etag"); etag != "" {
 		w.Header().Set("ETag", etag)
 	}
+
 	if lastModified := r.Header.Get("X-Amz-Fwd-Header-Last-Modified"); lastModified != "" {
 		w.Header().Set("Last-Modified", lastModified)
 	}
@@ -426,7 +462,7 @@ func (h *Handler) WriteGetObjectResponse(w http.ResponseWriter, r *http.Request)
 	_, _ = w.Write(body)
 }
 
-// GetBucketIntelligentTieringConfiguration gets intelligent tiering configuration
+// GetBucketIntelligentTieringConfiguration gets intelligent tiering configuration.
 func (h *Handler) GetBucketIntelligentTieringConfiguration(w http.ResponseWriter, r *http.Request) {
 	_ = chi.URLParam(r, "bucket") // bucketName - used for bucket lookup in production
 	configID := r.URL.Query().Get("id")
@@ -459,7 +495,7 @@ func (h *Handler) GetBucketIntelligentTieringConfiguration(w http.ResponseWriter
 	writeXML(w, http.StatusOK, response)
 }
 
-// PutBucketIntelligentTieringConfiguration sets intelligent tiering configuration
+// PutBucketIntelligentTieringConfiguration sets intelligent tiering configuration.
 func (h *Handler) PutBucketIntelligentTieringConfiguration(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 	configID := r.URL.Query().Get("id")
@@ -470,7 +506,8 @@ func (h *Handler) PutBucketIntelligentTieringConfiguration(w http.ResponseWriter
 	}
 
 	var config s3types.IntelligentTieringConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&config); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&config)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", "Failed to parse configuration: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -487,7 +524,7 @@ func (h *Handler) PutBucketIntelligentTieringConfiguration(w http.ResponseWriter
 	w.WriteHeader(http.StatusOK)
 }
 
-// ListBucketIntelligentTieringConfigurations lists all intelligent tiering configurations
+// ListBucketIntelligentTieringConfigurations lists all intelligent tiering configurations.
 func (h *Handler) ListBucketIntelligentTieringConfigurations(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 
@@ -502,7 +539,7 @@ func (h *Handler) ListBucketIntelligentTieringConfigurations(w http.ResponseWrit
 	writeXML(w, http.StatusOK, response)
 }
 
-// DeleteBucketIntelligentTieringConfiguration deletes an intelligent tiering configuration
+// DeleteBucketIntelligentTieringConfiguration deletes an intelligent tiering configuration.
 func (h *Handler) DeleteBucketIntelligentTieringConfiguration(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 	configID := r.URL.Query().Get("id")

@@ -23,9 +23,11 @@ func TestPredictiveEngine(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if pred == nil {
 			t.Fatal("expected prediction, got nil")
 		}
+
 		if pred.Confidence != 0 {
 			t.Errorf("expected 0 confidence with no data, got %f", pred.Confidence)
 		}
@@ -37,7 +39,7 @@ func TestPredictiveEngine(t *testing.T) {
 		ctx := context.Background()
 
 		// Simulate access history
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			tracker.RecordAccess(ctx, bucket, key, "GET", 1024)
 		}
 
@@ -45,6 +47,7 @@ func TestPredictiveEngine(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if pred == nil {
 			t.Fatal("expected prediction, got nil")
 		}
@@ -68,6 +71,7 @@ func TestLinearRegression(t *testing.T) {
 		if math.Abs(slope-1.0) > 0.01 {
 			t.Errorf("expected slope ~1.0, got %f", slope)
 		}
+
 		if math.Abs(intercept-1.0) > 0.1 {
 			t.Errorf("expected intercept ~1.0, got %f", intercept)
 		}
@@ -89,6 +93,7 @@ func TestLinearRegression(t *testing.T) {
 		if math.Abs(slope) > 0.01 {
 			t.Errorf("expected slope ~0, got %f", slope)
 		}
+
 		if math.Abs(intercept-5.0) > 0.01 {
 			t.Errorf("expected intercept ~5.0, got %f", intercept)
 		}
@@ -157,9 +162,11 @@ func TestDecomposeTimeSeries(t *testing.T) {
 		if len(trend) != len(data) {
 			t.Errorf("expected trend length %d, got %d", len(data), len(trend))
 		}
+
 		if len(seasonal) != len(data) {
 			t.Errorf("expected seasonal length %d, got %d", len(data), len(seasonal))
 		}
+
 		if len(residual) != len(data) {
 			t.Errorf("expected residual length %d, got %d", len(data), len(residual))
 		}
@@ -180,14 +187,14 @@ func TestTierRecommendation(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		dailyAccess  float64
 		expectedTier TierType
+		dailyAccess  float64
 	}{
-		{"high access -> hot", 10.0, TierHot},
-		{"moderate access -> warm", 2.0, TierWarm},
-		{"low access -> cold", 0.5, TierCold},
-		{"minimal access -> archive", 0.01, TierArchive},
-		{"zero access -> archive", 0.0, TierArchive},
+		{"high access -> hot", TierHot, 10.0},
+		{"moderate access -> warm", TierWarm, 2.0},
+		{"low access -> cold", TierCold, 0.5},
+		{"minimal access -> archive", TierArchive, 0.01},
+		{"zero access -> archive", TierArchive, 0.0},
 	}
 
 	for _, tt := range tests {
@@ -218,6 +225,7 @@ func TestAnomalyDetector(t *testing.T) {
 		for i := range hourlyData {
 			hourlyData[i] = 10 // Consistent 10 accesses per hour
 		}
+
 		detector.UpdateBaseline("bucket", "key", hourlyData)
 
 		// Normal access (within 3 std dev)
@@ -233,6 +241,7 @@ func TestAnomalyDetector(t *testing.T) {
 		for i := range hourlyData {
 			hourlyData[i] = 10.0
 		}
+
 		detector.UpdateBaseline("bucket", "spike-key", hourlyData)
 
 		// Massive spike (way beyond 3 std dev)
@@ -261,10 +270,12 @@ func TestAggregateToHourly(t *testing.T) {
 		records := []AccessRecord{
 			{Timestamp: time.Now()},
 		}
+
 		result := engine.aggregateToHourly(records)
 		if len(result) != 1 {
 			t.Errorf("expected 1 hour bucket, got %d", len(result))
 		}
+
 		if result[0] != 1 {
 			t.Errorf("expected count 1, got %f", result[0])
 		}
@@ -277,10 +288,12 @@ func TestAggregateToHourly(t *testing.T) {
 			{Timestamp: now.Add(5 * time.Minute)},
 			{Timestamp: now.Add(30 * time.Minute)},
 		}
+
 		result := engine.aggregateToHourly(records)
 		if len(result) != 1 {
 			t.Errorf("expected 1 hour bucket, got %d", len(result))
 		}
+
 		if result[0] != 3 {
 			t.Errorf("expected count 3, got %f", result[0])
 		}
@@ -293,6 +306,7 @@ func TestAggregateToHourly(t *testing.T) {
 			{Timestamp: now.Add(-1 * time.Hour)},
 			{Timestamp: now.Add(-2 * time.Hour)},
 		}
+
 		result := engine.aggregateToHourly(records)
 		if len(result) != 3 {
 			t.Errorf("expected 3 hour buckets, got %d", len(result))
@@ -304,15 +318,15 @@ func TestTrendDirection(t *testing.T) {
 	engine := NewPredictiveEngine(DefaultPredictiveConfig(), nil)
 
 	tests := []struct {
-		name      string
-		slope     float64
-		expected  string
+		name     string
+		expected string
+		slope    float64
 	}{
-		{"increasing", 0.01, "increasing"},
-		{"declining", -0.01, "declining"},
-		{"stable_positive", 0.0005, "stable"},
-		{"stable_negative", -0.0005, "stable"},
-		{"zero", 0, "stable"},
+		{"increasing", "increasing", 0.01},
+		{"declining", "declining", -0.01},
+		{"stable_positive", "stable", 0.0005},
+		{"stable_negative", "stable", -0.0005},
+		{"zero", "stable", 0},
 	}
 
 	for _, tt := range tests {
@@ -320,6 +334,7 @@ func TestTrendDirection(t *testing.T) {
 			model := &ObjectModel{
 				TrendCoefficient: tt.slope,
 			}
+
 			result := engine.getTrendDirection(model)
 			if result != tt.expected {
 				t.Errorf("expected %s, got %s", tt.expected, result)
@@ -330,13 +345,13 @@ func TestTrendDirection(t *testing.T) {
 
 func TestFormatFloat(t *testing.T) {
 	tests := []struct {
-		input    float64
 		expected string
+		input    float64
 	}{
-		{15.0, "15"},
-		{5.0, "5"},
-		{0.5, "0.5"},
-		{0.1, "0.1"},
+		{"15", 15.0},
+		{"5", 5.0},
+		{"0.5", 0.5},
+		{"0.1", 0.1},
 	}
 
 	for _, tt := range tests {

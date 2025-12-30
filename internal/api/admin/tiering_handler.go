@@ -11,29 +11,43 @@ import (
 	"github.com/piwi3910/nebulaio/internal/tiering"
 )
 
-// TieringHandler handles tiering policy API requests
-type TieringHandler struct {
-	service tiering.AdvancedServiceInterface
+// TieringRouteHandlers defines the interface for tiering route handlers.
+// This interface is used to register routes for both production and test handlers.
+type TieringRouteHandlers interface {
+	ListTieringPolicies(w http.ResponseWriter, r *http.Request)
+	CreateTieringPolicy(w http.ResponseWriter, r *http.Request)
+	GetTieringPolicy(w http.ResponseWriter, r *http.Request)
+	UpdateTieringPolicy(w http.ResponseWriter, r *http.Request)
+	DeleteTieringPolicy(w http.ResponseWriter, r *http.Request)
+	EnableTieringPolicy(w http.ResponseWriter, r *http.Request)
+	DisableTieringPolicy(w http.ResponseWriter, r *http.Request)
+	GetTieringPolicyStats(w http.ResponseWriter, r *http.Request)
+	GetBucketAccessStats(w http.ResponseWriter, r *http.Request)
+	GetObjectAccessStats(w http.ResponseWriter, r *http.Request)
+	ManualTransition(w http.ResponseWriter, r *http.Request)
+	GetS3Lifecycle(w http.ResponseWriter, r *http.Request)
+	PutS3Lifecycle(w http.ResponseWriter, r *http.Request)
+	DeleteS3Lifecycle(w http.ResponseWriter, r *http.Request)
+	GetTieringStatus(w http.ResponseWriter, r *http.Request)
+	GetTieringMetrics(w http.ResponseWriter, r *http.Request)
+	GetAccessPrediction(w http.ResponseWriter, r *http.Request)
+	GetTierRecommendations(w http.ResponseWriter, r *http.Request)
+	GetHotObjectsPrediction(w http.ResponseWriter, r *http.Request)
+	GetColdObjectsPrediction(w http.ResponseWriter, r *http.Request)
+	GetAccessAnomalies(w http.ResponseWriter, r *http.Request)
 }
 
-// NewTieringHandler creates a new tiering policy handler
-func NewTieringHandler(service tiering.AdvancedServiceInterface) *TieringHandler {
-	return &TieringHandler{
-		service: service,
-	}
-}
-
-// RegisterTieringRoutes registers tiering policy routes
-func (h *TieringHandler) RegisterTieringRoutes(r chi.Router) {
-	// Tiering Policies (matches frontend API client)
-	r.Get("/tiering-policies", h.ListTieringPolicies)
-	r.Post("/tiering-policies", h.CreateTieringPolicy)
-	r.Get("/tiering-policies/{id}", h.GetTieringPolicy)
-	r.Put("/tiering-policies/{id}", h.UpdateTieringPolicy)
-	r.Delete("/tiering-policies/{id}", h.DeleteTieringPolicy)
-	r.Post("/tiering-policies/{id}/enable", h.EnableTieringPolicy)
-	r.Post("/tiering-policies/{id}/disable", h.DisableTieringPolicy)
-	r.Get("/tiering-policies/{id}/stats", h.GetTieringPolicyStats)
+// RegisterTieringRoutesForHandler registers tiering routes for any handler implementing TieringRouteHandlers.
+func RegisterTieringRoutesForHandler(r chi.Router, h TieringRouteHandlers, policyPrefix string) {
+	// Tiering Policies
+	r.Get(policyPrefix, h.ListTieringPolicies)
+	r.Post(policyPrefix, h.CreateTieringPolicy)
+	r.Get(policyPrefix+"/{id}", h.GetTieringPolicy)
+	r.Put(policyPrefix+"/{id}", h.UpdateTieringPolicy)
+	r.Delete(policyPrefix+"/{id}", h.DeleteTieringPolicy)
+	r.Post(policyPrefix+"/{id}/enable", h.EnableTieringPolicy)
+	r.Post(policyPrefix+"/{id}/disable", h.DisableTieringPolicy)
+	r.Get(policyPrefix+"/{id}/stats", h.GetTieringPolicyStats)
 
 	// Access Stats
 	r.Get("/tiering/access-stats/{bucket}", h.GetBucketAccessStats)
@@ -51,7 +65,7 @@ func (h *TieringHandler) RegisterTieringRoutes(r chi.Router) {
 	r.Get("/tiering/status", h.GetTieringStatus)
 	r.Get("/tiering/metrics", h.GetTieringMetrics)
 
-	// Predictive Tiering (ML-based)
+	// Predictive Tiering
 	r.Get("/tiering/predictions/{bucket}/*", h.GetAccessPrediction)
 	r.Get("/tiering/predictions/recommendations", h.GetTierRecommendations)
 	r.Get("/tiering/predictions/hot-objects", h.GetHotObjectsPrediction)
@@ -59,17 +73,34 @@ func (h *TieringHandler) RegisterTieringRoutes(r chi.Router) {
 	r.Get("/tiering/anomalies", h.GetAccessAnomalies)
 }
 
+// TieringHandler handles tiering policy API requests.
+type TieringHandler struct {
+	service tiering.AdvancedServiceInterface
+}
+
+// NewTieringHandler creates a new tiering policy handler.
+func NewTieringHandler(service tiering.AdvancedServiceInterface) *TieringHandler {
+	return &TieringHandler{
+		service: service,
+	}
+}
+
+// RegisterTieringRoutes registers tiering policy routes.
+func (h *TieringHandler) RegisterTieringRoutes(r chi.Router) {
+	RegisterTieringRoutesForHandler(r, h, "/tiering-policies")
+}
+
 // ====================
 // Policy CRUD Handlers
 // ====================
 
-// TieringPolicyListResponse represents the list response
+// TieringPolicyListResponse represents the list response.
 type TieringPolicyListResponse struct {
 	Policies   []*tiering.AdvancedPolicy `json:"policies"`
 	TotalCount int                       `json:"total_count"`
 }
 
-// ListTieringPolicies lists all tiering policies
+// ListTieringPolicies lists all tiering policies.
 func (h *TieringHandler) ListTieringPolicies(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -78,8 +109,10 @@ func (h *TieringHandler) ListTieringPolicies(w http.ResponseWriter, r *http.Requ
 	scope := r.URL.Query().Get("scope")
 	enabled := r.URL.Query().Get("enabled")
 
-	var policies []*tiering.AdvancedPolicy
-	var err error
+	var (
+		policies []*tiering.AdvancedPolicy
+		err      error
+	)
 
 	if policyType != "" {
 		policies, err = h.service.ListPoliciesByType(ctx, tiering.PolicyType(policyType))
@@ -98,11 +131,13 @@ func (h *TieringHandler) ListTieringPolicies(w http.ResponseWriter, r *http.Requ
 	if enabled != "" {
 		enabledBool := enabled == "true"
 		filtered := make([]*tiering.AdvancedPolicy, 0)
+
 		for _, p := range policies {
 			if p.Enabled == enabledBool {
 				filtered = append(filtered, p)
 			}
 		}
+
 		policies = filtered
 	}
 
@@ -114,7 +149,7 @@ func (h *TieringHandler) ListTieringPolicies(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, response)
 }
 
-// SimpleTieringTrigger is the simplified trigger format from the frontend
+// SimpleTieringTrigger is the simplified trigger format from the frontend.
 type SimpleTieringTrigger struct {
 	Type            string `json:"type"`
 	AgeDays         int    `json:"age_days,omitempty"`
@@ -123,44 +158,44 @@ type SimpleTieringTrigger struct {
 	CapacityPercent int    `json:"capacity_percent,omitempty"`
 }
 
-// SimpleTieringAction is the simplified action format from the frontend
+// SimpleTieringAction is the simplified action format from the frontend.
 type SimpleTieringAction struct {
 	Type       string `json:"type"`
 	TargetTier string `json:"target_tier,omitempty"`
 	NotifyURL  string `json:"notify_url,omitempty"`
 }
 
-// SimpleTieringSchedule is the simplified schedule format from the frontend
+// SimpleTieringSchedule is the simplified schedule format from the frontend.
 type SimpleTieringSchedule struct {
 	MaintenanceWindows []string `json:"maintenance_windows,omitempty"`
 	BlackoutWindows    []string `json:"blackout_windows,omitempty"`
 }
 
-// SimpleTieringAdvancedOptions is the simplified advanced options from the frontend
+// SimpleTieringAdvancedOptions is the simplified advanced options from the frontend.
 type SimpleTieringAdvancedOptions struct {
-	RateLimit             int  `json:"rate_limit,omitempty"`
-	AntiThrashHours       int  `json:"anti_thrash_hours,omitempty"`
-	DistributedExecution  bool `json:"distributed_execution,omitempty"`
+	RateLimit            int  `json:"rate_limit,omitempty"`
+	AntiThrashHours      int  `json:"anti_thrash_hours,omitempty"`
+	DistributedExecution bool `json:"distributed_execution,omitempty"`
 }
 
-// CreateTieringPolicyRequest represents the create request (frontend format)
+// CreateTieringPolicyRequest represents the create request (frontend format).
 type CreateTieringPolicyRequest struct {
-	ID              string                        `json:"id"`
-	Name            string                        `json:"name"`
-	Description     string                        `json:"description"`
+	Schedule        *SimpleTieringSchedule        `json:"schedule,omitempty"`
+	AdvancedOptions *SimpleTieringAdvancedOptions `json:"advanced_options,omitempty"`
+	PrefixPattern   string                        `json:"prefix_pattern,omitempty"`
 	Type            tiering.PolicyType            `json:"type"`
 	Scope           tiering.PolicyScope           `json:"scope"`
 	BucketPattern   string                        `json:"bucket_pattern,omitempty"`
-	PrefixPattern   string                        `json:"prefix_pattern,omitempty"`
-	Enabled         bool                          `json:"enabled"`
+	ID              string                        `json:"id"`
 	CronExpression  string                        `json:"cron_expression,omitempty"`
+	Description     string                        `json:"description"`
+	Name            string                        `json:"name"`
 	Triggers        []SimpleTieringTrigger        `json:"triggers"`
 	Actions         []SimpleTieringAction         `json:"actions"`
-	Schedule        *SimpleTieringSchedule        `json:"schedule,omitempty"`
-	AdvancedOptions *SimpleTieringAdvancedOptions `json:"advanced_options,omitempty"`
+	Enabled         bool                          `json:"enabled"`
 }
 
-// convertSimpleTriggers converts the simple frontend trigger format to the internal format
+// convertSimpleTriggers converts the simple frontend trigger format to the internal format.
 func convertSimpleTriggers(simpleTriggers []SimpleTieringTrigger) []tiering.PolicyTrigger {
 	triggers := make([]tiering.PolicyTrigger, len(simpleTriggers))
 	for i, st := range simpleTriggers {
@@ -182,12 +217,14 @@ func convertSimpleTriggers(simpleTriggers []SimpleTieringTrigger) []tiering.Poli
 				HighWatermark: float64(st.CapacityPercent),
 			}
 		}
+
 		triggers[i] = trigger
 	}
+
 	return triggers
 }
 
-// convertSimpleActions converts the simple frontend action format to the internal format
+// convertSimpleActions converts the simple frontend action format to the internal format.
 func convertSimpleActions(simpleActions []SimpleTieringAction) []tiering.PolicyAction {
 	actions := make([]tiering.PolicyAction, len(simpleActions))
 	for i, sa := range simpleActions {
@@ -199,22 +236,26 @@ func convertSimpleActions(simpleActions []SimpleTieringAction) []tiering.PolicyA
 				TargetTier: tiering.TierType(sa.TargetTier),
 			}
 		}
+
 		if sa.NotifyURL != "" {
 			action.Notify = &tiering.NotifyActionConfig{
 				Endpoint: sa.NotifyURL,
 			}
 		}
+
 		actions[i] = action
 	}
+
 	return actions
 }
 
-// CreateTieringPolicy creates a new tiering policy
+// CreateTieringPolicy creates a new tiering policy.
 func (h *TieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req CreateTieringPolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -234,12 +275,14 @@ func (h *TieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.Requ
 	if req.BucketPattern != "" {
 		selector.Buckets = []string{req.BucketPattern}
 	}
+
 	if req.PrefixPattern != "" {
 		selector.Prefixes = []string{req.PrefixPattern}
 	}
 
 	// Build schedule config
 	var schedule tiering.ScheduleConfig
+
 	schedule.Enabled = req.CronExpression != ""
 	// MaintenanceWindows and BlackoutWindows need to be MaintenanceWindow type
 	// For now, we'll leave them empty as conversion would be complex
@@ -287,27 +330,32 @@ func (h *TieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.Requ
 	if policy.Type == "" {
 		policy.Type = tiering.PolicyTypeScheduled
 	}
+
 	if policy.Scope == "" {
 		policy.Scope = tiering.PolicyScopeGlobal
 	}
 
-	if err := h.service.CreatePolicy(ctx, policy); err != nil {
+	err = h.service.CreatePolicy(ctx, policy)
+	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
 			writeError(w, err.Error(), http.StatusConflict)
 			return
 		}
+
 		if strings.Contains(err.Error(), "invalid") {
 			writeError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, policy)
 }
 
-// GetTieringPolicy gets a tiering policy by ID
+// GetTieringPolicy gets a tiering policy by ID.
 func (h *TieringHandler) GetTieringPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
@@ -321,7 +369,7 @@ func (h *TieringHandler) GetTieringPolicy(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, policy)
 }
 
-// UpdateTieringPolicy updates a tiering policy
+// UpdateTieringPolicy updates a tiering policy.
 func (h *TieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
@@ -348,12 +396,14 @@ func (h *TieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.Requ
 	if req.BucketPattern != "" {
 		selector.Buckets = []string{req.BucketPattern}
 	}
+
 	if req.PrefixPattern != "" {
 		selector.Prefixes = []string{req.PrefixPattern}
 	}
 
 	// Build schedule config
 	var schedule tiering.ScheduleConfig
+
 	schedule.Enabled = req.CronExpression != ""
 
 	// Build anti-thrash config from advanced options
@@ -396,35 +446,41 @@ func (h *TieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.Requ
 			writeError(w, err.Error(), http.StatusConflict)
 			return
 		}
+
 		if strings.Contains(err.Error(), "invalid") {
 			writeError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	writeJSON(w, http.StatusOK, existing)
 }
 
-// DeleteTieringPolicy deletes a tiering policy
+// DeleteTieringPolicy deletes a tiering policy.
 func (h *TieringHandler) DeleteTieringPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 
-	if err := h.service.DeletePolicy(ctx, id); err != nil {
+	err := h.service.DeletePolicy(ctx, id)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// EnableTieringPolicy enables a tiering policy
+// EnableTieringPolicy enables a tiering policy.
 func (h *TieringHandler) EnableTieringPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
@@ -450,7 +506,7 @@ func (h *TieringHandler) EnableTieringPolicy(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// DisableTieringPolicy disables a tiering policy
+// DisableTieringPolicy disables a tiering policy.
 func (h *TieringHandler) DisableTieringPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
@@ -476,7 +532,7 @@ func (h *TieringHandler) DisableTieringPolicy(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// GetTieringPolicyStats gets statistics for a tiering policy
+// GetTieringPolicyStats gets statistics for a tiering policy.
 func (h *TieringHandler) GetTieringPolicyStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
@@ -499,6 +555,7 @@ func (h *TieringHandler) GetTieringPolicyStats(w http.ResponseWriter, r *http.Re
 			"last_run_at": policy.LastRunAt,
 		}
 		writeJSON(w, http.StatusOK, stats)
+
 		return
 	}
 
@@ -524,50 +581,39 @@ func (h *TieringHandler) GetTieringPolicyStats(w http.ResponseWriter, r *http.Re
 // Access Stats Handlers
 // ====================
 
-// GetBucketAccessStats gets access stats for all objects in a bucket
-func (h *TieringHandler) GetBucketAccessStats(w http.ResponseWriter, r *http.Request) {
-	bucket := chi.URLParam(r, "bucket")
-
-	// Parse pagination parameters
-	limit := 100
-	offset := 0
+// ParsePaginationParams parses limit and offset query parameters with validation.
+// Returns (limit, offset) with defaults of (100, 0) if not provided or invalid.
+func ParsePaginationParams(r *http.Request) (limit int, offset int) {
+	limit = 100
+	offset = 0
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 1000 {
 			limit = int(l)
 		}
 	}
+
 	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
 		if o, err := json.Number(offsetStr).Int64(); err == nil && o >= 0 {
 			offset = int(o)
 		}
 	}
 
-	// Get all tracked keys for bucket (this is a simplified implementation)
-	// In production, you'd query the access tracker directly
-	response := map[string]interface{}{
-		"bucket": bucket,
-		"limit":  limit,
-		"offset": offset,
-		"stats":  []interface{}{},
-	}
-
-	writeJSON(w, http.StatusOK, response)
+	return limit, offset
 }
 
-// GetObjectAccessStats gets access stats for a specific object
-func (h *TieringHandler) GetObjectAccessStats(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	bucket := chi.URLParam(r, "bucket")
+// GetObjectKeyFromRequest extracts the object key from request, checking URL params and query string.
+func GetObjectKeyFromRequest(r *http.Request) string {
 	key := chi.URLParam(r, "*") // Catch-all for paths with slashes
-
-	// URL decode the key if needed
-	if r.URL.Query().Get("key") != "" {
-		key = r.URL.Query().Get("key")
+	if queryKey := r.URL.Query().Get("key"); queryKey != "" {
+		key = queryKey
 	}
+	return key
+}
 
-	stats, err := h.service.GetAccessStats(ctx, bucket, key)
-	if err != nil || stats == nil {
+// WriteObjectAccessStatsResponse writes the access stats response for an object.
+func WriteObjectAccessStatsResponse(w http.ResponseWriter, bucket, key string, stats *tiering.ObjectAccessStats) {
+	if stats == nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"bucket":  bucket,
 			"key":     key,
@@ -591,19 +637,122 @@ func (h *TieringHandler) GetObjectAccessStats(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// WriteManualTransitionResponse writes the success response for a manual transition.
+func WriteManualTransitionResponse(w http.ResponseWriter, bucket, key string, targetTier tiering.TierType) {
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"bucket":      bucket,
+		"key":         key,
+		"target_tier": targetTier,
+		"message":     "Object transition initiated successfully",
+	})
+}
+
+// ValidateTierType checks if a tier type is valid and returns an error if not.
+func ValidateTierType(tier tiering.TierType) bool {
+	validTiers := map[tiering.TierType]bool{
+		tiering.TierHot:     true,
+		tiering.TierWarm:    true,
+		tiering.TierCold:    true,
+		tiering.TierArchive: true,
+	}
+	return validTiers[tier]
+}
+
+// ParseLimitParam parses the limit query parameter with a given default and max.
+func ParseLimitParam(r *http.Request, defaultLimit, maxLimit int) int {
+	limit := defaultLimit
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= int64(maxLimit) {
+			limit = int(l)
+		}
+	}
+	return limit
+}
+
+// ParseInactiveDaysParam parses the inactive_days query parameter.
+func ParseInactiveDaysParam(r *http.Request, defaultDays int) int {
+	inactiveDays := defaultDays
+	if daysStr := r.URL.Query().Get("inactive_days"); daysStr != "" {
+		if d, err := json.Number(daysStr).Int64(); err == nil && d > 0 && d <= 365 {
+			inactiveDays = int(d)
+		}
+	}
+	return inactiveDays
+}
+
+// WriteColdObjectsResponse writes the cold objects prediction response.
+func WriteColdObjectsResponse(w http.ResponseWriter, coldObjects interface{}, count, inactiveDays int) {
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"cold_objects":  coldObjects,
+		"count":         count,
+		"inactive_days": inactiveDays,
+	})
+}
+
+// GetBucketAccessStats gets access stats for all objects in a bucket.
+func (h *TieringHandler) GetBucketAccessStats(w http.ResponseWriter, r *http.Request) {
+	bucket := chi.URLParam(r, "bucket")
+	limit, offset := ParsePaginationParams(r)
+
+	// Get all tracked keys for bucket (this is a simplified implementation)
+	// In production, you'd query the access tracker directly
+	response := map[string]interface{}{
+		"bucket": bucket,
+		"limit":  limit,
+		"offset": offset,
+		"stats":  []interface{}{},
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// GetObjectAccessStats gets access stats for a specific object.
+func (h *TieringHandler) GetObjectAccessStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	bucket := chi.URLParam(r, "bucket")
+	key := GetObjectKeyFromRequest(r)
+
+	stats, err := h.service.GetAccessStats(ctx, bucket, key)
+	if err != nil {
+		stats = nil
+	}
+	WriteObjectAccessStatsResponse(w, bucket, key, stats)
+}
+
 // ====================
 // Manual Transition Handler
 // ====================
 
-// ManualTransitionRequest represents a manual transition request
+// ManualTransitionRequest represents a manual transition request.
 type ManualTransitionRequest struct {
-	Bucket     string            `json:"bucket"`
-	Key        string            `json:"key"`
-	TargetTier tiering.TierType  `json:"target_tier"`
-	Force      bool              `json:"force"` // Skip anti-thrash checks
+	Bucket     string           `json:"bucket"`
+	Key        string           `json:"key"`
+	TargetTier tiering.TierType `json:"target_tier"`
+	Force      bool             `json:"force"` // Skip anti-thrash checks
 }
 
-// ManualTransition manually transitions an object to a different tier
+// ValidateManualTransitionRequest validates the manual transition request fields.
+func ValidateManualTransitionRequest(w http.ResponseWriter, req *ManualTransitionRequest) bool {
+	if req.Bucket == "" {
+		writeError(w, "bucket is required", http.StatusBadRequest)
+		return false
+	}
+	if req.Key == "" {
+		writeError(w, "key is required", http.StatusBadRequest)
+		return false
+	}
+	if req.TargetTier == "" {
+		writeError(w, "target_tier is required", http.StatusBadRequest)
+		return false
+	}
+	if !ValidateTierType(req.TargetTier) {
+		writeError(w, "invalid target_tier: must be hot, warm, cold, or archive", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// ManualTransition manually transitions an object to a different tier.
 func (h *TieringHandler) ManualTransition(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -613,28 +762,7 @@ func (h *TieringHandler) ManualTransition(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if req.Bucket == "" {
-		writeError(w, "bucket is required", http.StatusBadRequest)
-		return
-	}
-	if req.Key == "" {
-		writeError(w, "key is required", http.StatusBadRequest)
-		return
-	}
-	if req.TargetTier == "" {
-		writeError(w, "target_tier is required", http.StatusBadRequest)
-		return
-	}
-
-	// Validate tier
-	validTiers := map[tiering.TierType]bool{
-		tiering.TierHot:     true,
-		tiering.TierWarm:    true,
-		tiering.TierCold:    true,
-		tiering.TierArchive: true,
-	}
-	if !validTiers[req.TargetTier] {
-		writeError(w, "invalid target_tier: must be hot, warm, cold, or archive", http.StatusBadRequest)
+	if !ValidateManualTransitionRequest(w, &req) {
 		return
 	}
 
@@ -643,19 +771,14 @@ func (h *TieringHandler) ManualTransition(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"bucket":      req.Bucket,
-		"key":         req.Key,
-		"target_tier": req.TargetTier,
-		"message":     "Object transition initiated successfully",
-	})
+	WriteManualTransitionResponse(w, req.Bucket, req.Key, req.TargetTier)
 }
 
 // ====================
 // S3 Lifecycle Compatibility Handlers
 // ====================
 
-// GetS3Lifecycle gets S3-compatible lifecycle configuration for a bucket
+// GetS3Lifecycle gets S3-compatible lifecycle configuration for a bucket.
 func (h *TieringHandler) GetS3Lifecycle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucket := chi.URLParam(r, "bucket")
@@ -674,24 +797,28 @@ func (h *TieringHandler) GetS3Lifecycle(w http.ResponseWriter, r *http.Request) 
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
 		w.Write(xmlData)
+
 		return
 	}
 
 	writeJSON(w, http.StatusOK, config)
 }
 
-// PutS3Lifecycle sets S3-compatible lifecycle configuration for a bucket
+// PutS3Lifecycle sets S3-compatible lifecycle configuration for a bucket.
 func (h *TieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucket := chi.URLParam(r, "bucket")
 
 	contentType := r.Header.Get("Content-Type")
 
-	var config *tiering.S3LifecycleConfiguration
-	var err error
+	var (
+		config *tiering.S3LifecycleConfiguration
+		err    error
+	)
 
 	if strings.Contains(contentType, "application/xml") || strings.Contains(contentType, "text/xml") {
 		// Parse XML body
@@ -700,6 +827,7 @@ func (h *TieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Request) 
 			writeError(w, "Failed to read request body", http.StatusBadRequest)
 			return
 		}
+
 		config, err = tiering.ParseS3LifecycleXML(xmlData)
 		if err != nil {
 			writeError(w, "Invalid XML: "+err.Error(), http.StatusBadRequest)
@@ -707,7 +835,8 @@ func (h *TieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Request) 
 		}
 	} else {
 		// Parse JSON body
-		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+		err := json.NewDecoder(r.Body).Decode(&config)
+		if err != nil {
 			writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -725,13 +854,14 @@ func (h *TieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// DeleteS3Lifecycle deletes S3-compatible lifecycle configuration for a bucket
+// DeleteS3Lifecycle deletes S3-compatible lifecycle configuration for a bucket.
 func (h *TieringHandler) DeleteS3Lifecycle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucket := chi.URLParam(r, "bucket")
 
 	// Delete by setting empty configuration
-	if err := h.service.SetS3LifecycleConfiguration(ctx, bucket, &tiering.S3LifecycleConfiguration{}); err != nil {
+	err := h.service.SetS3LifecycleConfiguration(ctx, bucket, &tiering.S3LifecycleConfiguration{})
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -743,7 +873,7 @@ func (h *TieringHandler) DeleteS3Lifecycle(w http.ResponseWriter, r *http.Reques
 // Status and Metrics Handlers
 // ====================
 
-// GetTieringStatus gets the overall tiering system status
+// GetTieringStatus gets the overall tiering system status.
 func (h *TieringHandler) GetTieringStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -760,6 +890,7 @@ func (h *TieringHandler) GetTieringStatus(w http.ResponseWriter, r *http.Request
 
 	for _, p := range policies {
 		byType[string(p.Type)]++
+
 		byScope[string(p.Scope)]++
 		if p.Enabled {
 			enabledCount++
@@ -767,17 +898,17 @@ func (h *TieringHandler) GetTieringStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	status := map[string]interface{}{
-		"status":          "running",
-		"total_policies":  len(policies),
-		"enabled_policies": enabledCount,
-		"policies_by_type": byType,
+		"status":            "running",
+		"total_policies":    len(policies),
+		"enabled_policies":  enabledCount,
+		"policies_by_type":  byType,
 		"policies_by_scope": byScope,
 	}
 
 	writeJSON(w, http.StatusOK, status)
 }
 
-// GetTieringMetrics gets tiering metrics
+// GetTieringMetrics gets tiering metrics.
 func (h *TieringHandler) GetTieringMetrics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -795,6 +926,7 @@ func (h *TieringHandler) GetTieringMetrics(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			continue
 		}
+
 		totalExecutions += stats.TotalExecutions
 		totalObjectsTransitioned += stats.ObjectsTransitioned
 		totalBytesTransitioned += stats.BytesTransitioned
@@ -802,11 +934,11 @@ func (h *TieringHandler) GetTieringMetrics(w http.ResponseWriter, r *http.Reques
 	}
 
 	metrics := map[string]interface{}{
-		"total_executions":          totalExecutions,
+		"total_executions":           totalExecutions,
 		"total_objects_transitioned": totalObjectsTransitioned,
-		"total_bytes_transitioned":  totalBytesTransitioned,
-		"total_errors":              totalErrors,
-		"policy_count":              len(policies),
+		"total_bytes_transitioned":   totalBytesTransitioned,
+		"total_errors":               totalErrors,
+		"policy_count":               len(policies),
 	}
 
 	writeJSON(w, http.StatusOK, metrics)
@@ -816,7 +948,7 @@ func (h *TieringHandler) GetTieringMetrics(w http.ResponseWriter, r *http.Reques
 // Predictive Tiering Handlers
 // ====================
 
-// GetAccessPrediction gets ML-based access prediction for an object
+// GetAccessPrediction gets ML-based access prediction for an object.
 func (h *TieringHandler) GetAccessPrediction(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucket := chi.URLParam(r, "bucket")
@@ -839,18 +971,20 @@ func (h *TieringHandler) GetAccessPrediction(w http.ResponseWriter, r *http.Requ
 			"key":     key,
 			"message": "Insufficient data for prediction",
 		})
+
 		return
 	}
 
 	writeJSON(w, http.StatusOK, prediction)
 }
 
-// GetTierRecommendations gets ML-based tier recommendations
+// GetTierRecommendations gets ML-based tier recommendations.
 func (h *TieringHandler) GetTierRecommendations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Parse limit parameter
 	limit := 100
+
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 1000 {
 			limit = int(l)
@@ -869,11 +1003,12 @@ func (h *TieringHandler) GetTierRecommendations(w http.ResponseWriter, r *http.R
 	})
 }
 
-// GetHotObjectsPrediction gets objects predicted to become hot
+// GetHotObjectsPrediction gets objects predicted to become hot.
 func (h *TieringHandler) GetHotObjectsPrediction(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	limit := 50
+
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
 			limit = int(l)
@@ -888,38 +1023,22 @@ func (h *TieringHandler) GetHotObjectsPrediction(w http.ResponseWriter, r *http.
 	})
 }
 
-// GetColdObjectsPrediction gets objects predicted to become cold
+// GetColdObjectsPrediction gets objects predicted to become cold.
 func (h *TieringHandler) GetColdObjectsPrediction(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	limit := 50
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
-			limit = int(l)
-		}
-	}
-
-	inactiveDays := 30
-	if daysStr := r.URL.Query().Get("inactive_days"); daysStr != "" {
-		if d, err := json.Number(daysStr).Int64(); err == nil && d > 0 && d <= 365 {
-			inactiveDays = int(d)
-		}
-	}
+	limit := ParseLimitParam(r, 50, 500)
+	inactiveDays := ParseInactiveDaysParam(r, 30)
 
 	coldObjects := h.service.GetColdObjects(ctx, inactiveDays, limit)
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"cold_objects":  coldObjects,
-		"count":         len(coldObjects),
-		"inactive_days": inactiveDays,
-	})
+	WriteColdObjectsResponse(w, coldObjects, len(coldObjects), inactiveDays)
 }
 
-// GetAccessAnomalies gets detected access anomalies
+// GetAccessAnomalies gets detected access anomalies.
 func (h *TieringHandler) GetAccessAnomalies(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	limit := 50
+
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
 			limit = int(l)

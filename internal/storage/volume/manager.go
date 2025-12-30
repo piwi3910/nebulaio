@@ -12,21 +12,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Manager manages multiple volumes and routes object operations
+// Manager manages multiple volumes and routes object operations.
 type Manager struct {
-	dataDir     string
-	volumes     map[string]*Volume // volumeID -> Volume
-	volumeList  []*Volume          // sorted by free space (descending)
-	objectIndex map[string]string  // fullKey -> volumeID (for lookups)
-	mu          sync.RWMutex
-
-	// Configuration
-	maxVolumeSize uint64
-	autoCreate    bool
+	volumes       map[string]*Volume
+	objectIndex   map[string]string
+	dataDir       string
+	volumeList    []*Volume
 	directIO      DirectIOConfig
+	maxVolumeSize uint64
+	mu            sync.RWMutex
+	autoCreate    bool
 }
 
-// ManagerConfig holds configuration for the volume manager
+// ManagerConfig holds configuration for the volume manager.
 type ManagerConfig struct {
 	DataDir       string         // Directory for volume files
 	MaxVolumeSize uint64         // Maximum size of each volume (default: 32GB)
@@ -34,7 +32,7 @@ type ManagerConfig struct {
 	DirectIO      DirectIOConfig // Direct I/O configuration
 }
 
-// DefaultManagerConfig returns the default manager configuration
+// DefaultManagerConfig returns the default manager configuration.
 func DefaultManagerConfig(dataDir string) ManagerConfig {
 	return ManagerConfig{
 		DataDir:       dataDir,
@@ -44,11 +42,12 @@ func DefaultManagerConfig(dataDir string) ManagerConfig {
 	}
 }
 
-// NewManager creates a new volume manager
+// NewManager creates a new volume manager.
 func NewManager(cfg ManagerConfig) (*Manager, error) {
 	// Ensure data directory exists
 	volumeDir := filepath.Join(cfg.DataDir, "volumes")
-	if err := os.MkdirAll(volumeDir, 0755); err != nil {
+	err := os.MkdirAll(volumeDir, 0750)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create volume directory: %w", err)
 	}
 
@@ -63,7 +62,8 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 	}
 
 	// Load existing volumes
-	if err := m.loadExistingVolumes(); err != nil {
+	err = m.loadExistingVolumes()
+	if err != nil {
 		return nil, err
 	}
 
@@ -75,7 +75,7 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 	return m, nil
 }
 
-// loadExistingVolumes loads all existing volume files
+// loadExistingVolumes loads all existing volume files.
 func (m *Manager) loadExistingVolumes() error {
 	entries, err := os.ReadDir(m.dataDir)
 	if err != nil {
@@ -86,17 +86,20 @@ func (m *Manager) loadExistingVolumes() error {
 		if entry.IsDir() {
 			continue
 		}
+
 		if !strings.HasSuffix(entry.Name(), ".neb") {
 			continue
 		}
 
 		path := filepath.Join(m.dataDir, entry.Name())
+
 		vol, err := OpenVolumeWithConfig(path, m.directIO)
 		if err != nil {
 			log.Warn().
 				Str("path", path).
 				Err(err).
 				Msg("Failed to open volume, skipping")
+
 			continue
 		}
 
@@ -115,21 +118,23 @@ func (m *Manager) loadExistingVolumes() error {
 	return nil
 }
 
-// sortVolumesByFreeSpace sorts volumes with most free space first
+// sortVolumesByFreeSpace sorts volumes with most free space first.
 func (m *Manager) sortVolumesByFreeSpace() {
 	sort.Slice(m.volumeList, func(i, j int) bool {
 		return m.volumeList[i].FreeSpace() > m.volumeList[j].FreeSpace()
 	})
 }
 
-// Close closes all volumes
+// Close closes all volumes.
 func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	var lastErr error
+
 	for _, vol := range m.volumes {
-		if err := vol.Close(); err != nil {
+		err := vol.Close()
+		if err != nil {
 			lastErr = err
 			log.Error().
 				Str("volume_id", vol.ID()).
@@ -145,14 +150,15 @@ func (m *Manager) Close() error {
 	return lastErr
 }
 
-// CreateVolume creates a new volume
+// CreateVolume creates a new volume.
 func (m *Manager) CreateVolume() (*Volume, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.createVolumeLocked()
 }
 
-// createVolumeLocked creates a new volume (caller must hold lock)
+// createVolumeLocked creates a new volume (caller must hold lock).
 func (m *Manager) createVolumeLocked() (*Volume, error) {
 	// Generate unique filename
 	filename := fmt.Sprintf("vol-%04d.neb", len(m.volumes)+1)
@@ -182,7 +188,7 @@ func (m *Manager) createVolumeLocked() (*Volume, error) {
 }
 
 // selectVolumeForWrite selects a volume for writing an object of given size
-// NOTE: This is called with lock already held
+// NOTE: This is called with lock already held.
 func (m *Manager) selectVolumeForWrite(size int64) (*Volume, error) {
 	// First, try to find an existing volume with enough space
 	for _, vol := range m.volumeList {
@@ -199,17 +205,19 @@ func (m *Manager) selectVolumeForWrite(size int64) (*Volume, error) {
 	return nil, ErrVolumeFull
 }
 
-// findObjectVolume finds which volume contains an object
+// findObjectVolume finds which volume contains an object.
 func (m *Manager) findObjectVolume(bucket, key string) *Volume {
 	fullKey := FullKey(bucket, key)
+
 	volumeID, exists := m.objectIndex[fullKey]
 	if !exists {
 		return nil
 	}
+
 	return m.volumes[volumeID]
 }
 
-// Put stores an object
+// Put stores an object.
 func (m *Manager) Put(bucket, key string, data []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -220,10 +228,12 @@ func (m *Manager) Put(bucket, key string, data []byte) error {
 	if existingVolID, exists := m.objectIndex[fullKey]; exists {
 		if vol := m.volumes[existingVolID]; vol != nil {
 			// Delete from existing volume
-			if err := vol.Delete(bucket, key); err != nil && err != ErrObjectNotFound {
+			err := vol.Delete(bucket, key)
+			if err != nil && err != ErrObjectNotFound {
 				return err
 			}
 		}
+
 		delete(m.objectIndex, fullKey)
 	}
 
@@ -247,7 +257,7 @@ func (m *Manager) Put(bucket, key string, data []byte) error {
 	return nil
 }
 
-// Get retrieves an object
+// Get retrieves an object.
 func (m *Manager) Get(bucket, key string) ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -260,26 +270,29 @@ func (m *Manager) Get(bucket, key string) ([]byte, error) {
 	return vol.Get(bucket, key)
 }
 
-// Delete removes an object
+// Delete removes an object.
 func (m *Manager) Delete(bucket, key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	fullKey := FullKey(bucket, key)
+
 	vol := m.findObjectVolume(bucket, key)
 	if vol == nil {
 		return ErrObjectNotFound
 	}
 
-	if err := vol.Delete(bucket, key); err != nil {
+	err := vol.Delete(bucket, key)
+	if err != nil {
 		return err
 	}
 
 	delete(m.objectIndex, fullKey)
+
 	return nil
 }
 
-// Exists checks if an object exists
+// Exists checks if an object exists.
 func (m *Manager) Exists(bucket, key string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -288,10 +301,11 @@ func (m *Manager) Exists(bucket, key string) bool {
 	if vol == nil {
 		return false
 	}
+
 	return vol.Exists(bucket, key)
 }
 
-// List returns objects matching a prefix
+// List returns objects matching a prefix.
 func (m *Manager) List(bucket, prefix string, maxKeys int) ([]ObjectInfo, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -304,6 +318,7 @@ func (m *Manager) List(bucket, prefix string, maxKeys int) ([]ObjectInfo, error)
 		if err != nil {
 			continue
 		}
+
 		result = append(result, objects...)
 		if len(result) >= maxKeys {
 			break
@@ -322,21 +337,24 @@ func (m *Manager) List(bucket, prefix string, maxKeys int) ([]ObjectInfo, error)
 	return result, nil
 }
 
-// Sync flushes all pending writes to disk
+// Sync flushes all pending writes to disk.
 func (m *Manager) Sync() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	var lastErr error
+
 	for _, vol := range m.volumes {
-		if err := vol.Sync(); err != nil {
+		err := vol.Sync()
+		if err != nil {
 			lastErr = err
 		}
 	}
+
 	return lastErr
 }
 
-// Stats returns manager statistics
+// Stats returns manager statistics.
 func (m *Manager) Stats() ManagerStats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -358,34 +376,36 @@ func (m *Manager) Stats() ManagerStats {
 	return stats
 }
 
-// ManagerStats contains manager statistics
+// ManagerStats contains manager statistics.
 type ManagerStats struct {
+	Volumes     []VolumeStats
 	VolumeCount int
 	ObjectCount int
 	TotalSize   uint64
 	UsedSize    uint64
 	FreeSize    uint64
-	Volumes     []VolumeStats
 }
 
-// VolumeCount returns the number of volumes
+// VolumeCount returns the number of volumes.
 func (m *Manager) VolumeCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return len(m.volumes)
 }
 
-// Volumes returns a list of all volumes (for admin operations)
+// Volumes returns a list of all volumes (for admin operations).
 func (m *Manager) Volumes() []*Volume {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	result := make([]*Volume, len(m.volumeList))
 	copy(result, m.volumeList)
+
 	return result
 }
 
-// Helper: bytes.Reader wrapper for io.Reader interface
+// Helper: bytes.Reader wrapper for io.Reader interface.
 type bytesReader struct {
 	data []byte
 	pos  int
@@ -399,7 +419,9 @@ func (r *bytesReader) Read(p []byte) (n int, err error) {
 	if r.pos >= len(r.data) {
 		return 0, io.EOF
 	}
+
 	n = copy(p, r.data[r.pos:])
 	r.pos += n
+
 	return n, nil
 }

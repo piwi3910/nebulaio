@@ -135,6 +135,7 @@ func TestHybridPolicyStore(t *testing.T) {
 		SyncInterval:  1 * time.Second,
 	})
 	require.NoError(t, err)
+
 	defer store.Close()
 
 	// Create policy
@@ -191,6 +192,7 @@ func TestPolicyStoreVersionConflict(t *testing.T) {
 		MetadataStore: NewInMemoryMetadataStore(),
 	})
 	require.NoError(t, err)
+
 	defer store.Close()
 
 	policy := &AdvancedPolicy{
@@ -244,6 +246,7 @@ func TestAccessTracker(t *testing.T) {
 func TestAccessTrackerTrends(t *testing.T) {
 	cfg := DefaultAccessTrackerConfig()
 	cfg.MaxHistorySize = 100
+
 	tracker := NewAccessTracker(cfg)
 	defer tracker.Close()
 
@@ -253,22 +256,24 @@ func TestAccessTrackerTrends(t *testing.T) {
 	now := time.Now()
 
 	// Add old accesses (7-14 days ago) - fewer
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		tracker.RecordAccess(ctx, "bucket", "trending", "GET", 1024)
 	}
 
 	// Manually adjust timestamps for testing
 	tracker.statsMu.Lock()
+
 	stats := tracker.stats["bucket/trending"]
 	if stats != nil {
-		for i := 0; i < len(stats.AccessHistory); i++ {
+		for i := range len(stats.AccessHistory) {
 			stats.AccessHistory[i].Timestamp = now.Add(-10 * 24 * time.Hour)
 		}
 	}
+
 	tracker.statsMu.Unlock()
 
 	// Add recent accesses (last 7 days) - more
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		tracker.RecordAccess(ctx, "bucket", "trending", "GET", 1024)
 	}
 
@@ -315,7 +320,7 @@ func TestRateLimiter(t *testing.T) {
 	})
 
 	// Should allow burst
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		assert.True(t, limiter.Allow("policy-1"))
 	}
 
@@ -414,10 +419,10 @@ func TestS3LifecycleXMLParsing(t *testing.T) {
 
 func TestPolicySelectorMatching(t *testing.T) {
 	tests := []struct {
-		name     string
-		selector PolicySelector
 		obj      ObjectMetadata
 		stats    *ObjectAccessStats
+		name     string
+		selector PolicySelector
 		matches  bool
 	}{
 		{
@@ -543,6 +548,7 @@ func TestPolicySelectorMatching(t *testing.T) {
 			if stats == nil {
 				stats = &ObjectAccessStats{}
 			}
+
 			result := engine.matchesSelector(tt.obj, stats, tt.selector)
 			assert.Equal(t, tt.matches, result)
 		})
@@ -680,12 +686,13 @@ func TestPolicyJSON(t *testing.T) {
 
 	// Deserialize
 	var parsed AdvancedPolicy
+
 	err = parsed.FromJSON(data)
 	require.NoError(t, err)
 
 	assert.Equal(t, policy.ID, parsed.ID)
 	assert.Equal(t, policy.Name, parsed.Name)
 	assert.Equal(t, policy.Enabled, parsed.Enabled)
-	assert.Equal(t, len(policy.Triggers), len(parsed.Triggers))
-	assert.Equal(t, len(policy.Actions), len(parsed.Actions))
+	assert.Len(t, parsed.Triggers, len(policy.Triggers))
+	assert.Len(t, parsed.Actions, len(policy.Actions))
 }

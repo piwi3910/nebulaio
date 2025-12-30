@@ -75,7 +75,7 @@ func TestDeviceSignature(t *testing.T) {
 	assert.Equal(t, "test-device-001", string(sig.DeviceID[:15]))
 	assert.Equal(t, uint64(1024*1024*1024), sig.DeviceSize)
 	assert.Equal(t, TierHot, StorageTier(sig.Tier[:3]))
-	assert.True(t, sig.CreatedAt > 0)
+	assert.Positive(t, sig.CreatedAt)
 
 	// Validate signature
 	assert.True(t, sig.IsValid())
@@ -86,7 +86,7 @@ func TestDeviceSignatureSerialize(t *testing.T) {
 
 	// Serialize
 	data := sig.Serialize()
-	assert.Equal(t, DeviceSignatureSize, len(data))
+	assert.Len(t, data, DeviceSignatureSize)
 
 	// Deserialize
 	sig2, err := ParseDeviceSignature(data)
@@ -133,6 +133,7 @@ func TestRawDeviceVolumeWithFile(t *testing.T) {
 	// Create raw device volume
 	vol, err := NewRawDeviceVolume(devicePath, cfg, TierHot)
 	require.NoError(t, err)
+
 	defer vol.Close()
 
 	// Verify signature was written
@@ -191,6 +192,7 @@ func TestRawDeviceVolumeBlockAlignment(t *testing.T) {
 
 	vol, err := NewRawDeviceVolume(devicePath, cfg, TierWarm)
 	require.NoError(t, err)
+
 	defer vol.Close()
 
 	// Test various data sizes to verify alignment handling
@@ -237,7 +239,7 @@ func TestTieredDeviceManager(t *testing.T) {
 	for _, path := range devices {
 		file, err := os.Create(path)
 		require.NoError(t, err)
-		require.NoError(t, file.Truncate(64 * 1024 * 1024))
+		require.NoError(t, file.Truncate(64*1024*1024))
 		file.Close()
 	}
 
@@ -261,6 +263,7 @@ func TestTieredDeviceManager(t *testing.T) {
 
 	mgr, err := NewTieredDeviceManager(cfg)
 	require.NoError(t, err)
+
 	defer mgr.Close()
 
 	// Verify all tiers are available
@@ -305,7 +308,7 @@ func TestTierTransition(t *testing.T) {
 	for _, path := range []string{hotPath, coldPath} {
 		file, err := os.Create(path)
 		require.NoError(t, err)
-		require.NoError(t, file.Truncate(64 * 1024 * 1024))
+		require.NoError(t, file.Truncate(64*1024*1024))
 		file.Close()
 	}
 
@@ -327,6 +330,7 @@ func TestTierTransition(t *testing.T) {
 
 	mgr, err := NewTieredDeviceManager(cfg)
 	require.NoError(t, err)
+
 	defer mgr.Close()
 
 	// Write to hot tier
@@ -380,6 +384,7 @@ func TestDeviceFreeSpaceTracking(t *testing.T) {
 
 	vol, err := NewRawDeviceVolume(devicePath, cfg, TierHot)
 	require.NoError(t, err)
+
 	defer vol.Close()
 
 	// Get initial free space
@@ -430,6 +435,7 @@ func BenchmarkRawDeviceWrite(b *testing.B) {
 
 	vol, err := NewRawDeviceVolume(devicePath, cfg, TierHot)
 	require.NoError(b, err)
+
 	defer vol.Close()
 
 	data := make([]byte, 4096) // 4KB writes
@@ -440,8 +446,9 @@ func BenchmarkRawDeviceWrite(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(4096)
 
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		key := "bench-key-" + string(rune(i%10000))
+
 		err := vol.Put("bench", key, data)
 		if err != nil {
 			b.Fatal(err)
@@ -473,11 +480,13 @@ func BenchmarkRawDeviceRead(b *testing.B) {
 
 	vol, err := NewRawDeviceVolume(devicePath, cfg, TierHot)
 	require.NoError(b, err)
+
 	defer vol.Close()
 
 	// Pre-populate data
 	data := make([]byte, 4096)
-	for i := 0; i < 1000; i++ {
+
+	for i := range 1000 {
 		key := "bench-key-" + string(rune(i))
 		err := vol.Put("bench", key, data)
 		require.NoError(b, err)
@@ -486,8 +495,9 @@ func BenchmarkRawDeviceRead(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(4096)
 
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		key := "bench-key-" + string(rune(i%1000))
+
 		_, err := vol.Get("bench", key)
 		if err != nil {
 			b.Fatal(err)

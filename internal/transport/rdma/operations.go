@@ -6,16 +6,18 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"net/http"
+	"strconv"
 	"time"
 )
 
-// S3Operations provides S3 API operations over RDMA transport
+// S3Operations provides S3 API operations over RDMA transport.
 type S3Operations struct {
 	transport *Transport
 	conn      *Connection
 }
 
-// NewS3Operations creates a new S3 operations handler for an RDMA connection
+// NewS3Operations creates a new S3 operations handler for an RDMA connection.
 func NewS3Operations(transport *Transport, conn *Connection) *S3Operations {
 	return &S3Operations{
 		transport: transport,
@@ -23,7 +25,7 @@ func NewS3Operations(transport *Transport, conn *Connection) *S3Operations {
 	}
 }
 
-// GetObject retrieves an object over RDMA
+// GetObject retrieves an object over RDMA.
 func (s *S3Operations) GetObject(ctx context.Context, bucket, key string, opts *GetObjectOptions) (*GetObjectOutput, error) {
 	if opts == nil {
 		opts = &GetObjectOptions{}
@@ -46,7 +48,7 @@ func (s *S3Operations) GetObject(ctx context.Context, bucket, key string, opts *
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GetObject failed with status %d", resp.StatusCode)
 	}
 
@@ -60,20 +62,20 @@ func (s *S3Operations) GetObject(ctx context.Context, bucket, key string, opts *
 	}, nil
 }
 
-// GetObjectOptions contains options for GetObject
+// GetObjectOptions contains options for GetObject.
 type GetObjectOptions struct {
-	VersionID string
 	Range     *ByteRange
-	Buffer    *MemoryRegion // Pre-allocated buffer for zero-copy
+	Buffer    *MemoryRegion
+	VersionID string
 }
 
-// ByteRange represents a byte range for partial object reads
+// ByteRange represents a byte range for partial object reads.
 type ByteRange struct {
 	Start int64
 	End   int64
 }
 
-// GetObjectOutput contains the response from GetObject
+// GetObjectOutput contains the response from GetObject.
 type GetObjectOutput struct {
 	Body        io.Reader
 	ContentType string
@@ -83,7 +85,7 @@ type GetObjectOutput struct {
 	Latency     time.Duration
 }
 
-// PutObject uploads an object over RDMA
+// PutObject uploads an object over RDMA.
 func (s *S3Operations) PutObject(ctx context.Context, bucket, key string, body io.Reader, opts *PutObjectOptions) (*PutObjectOutput, error) {
 	if opts == nil {
 		opts = &PutObjectOptions{}
@@ -117,7 +119,7 @@ func (s *S3Operations) PutObject(ctx context.Context, bucket, key string, body i
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("PutObject failed with status %d", resp.StatusCode)
 	}
 
@@ -127,21 +129,21 @@ func (s *S3Operations) PutObject(ctx context.Context, bucket, key string, body i
 	}, nil
 }
 
-// PutObjectOptions contains options for PutObject
+// PutObjectOptions contains options for PutObject.
 type PutObjectOptions struct {
+	Metadata      map[string]string
+	Buffer        *MemoryRegion
 	ContentType   string
 	ContentLength int64
-	Metadata      map[string]string
-	Buffer        *MemoryRegion // Pre-allocated buffer for zero-copy
 }
 
-// PutObjectOutput contains the response from PutObject
+// PutObjectOutput contains the response from PutObject.
 type PutObjectOutput struct {
 	ETag    string
 	Latency time.Duration
 }
 
-// DeleteObject deletes an object over RDMA
+// DeleteObject deletes an object over RDMA.
 func (s *S3Operations) DeleteObject(ctx context.Context, bucket, key string, opts *DeleteObjectOptions) (*DeleteObjectOutput, error) {
 	if opts == nil {
 		opts = &DeleteObjectOptions{}
@@ -159,7 +161,7 @@ func (s *S3Operations) DeleteObject(ctx context.Context, bucket, key string, opt
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return nil, fmt.Errorf("DeleteObject failed with status %d", resp.StatusCode)
 	}
 
@@ -168,17 +170,17 @@ func (s *S3Operations) DeleteObject(ctx context.Context, bucket, key string, opt
 	}, nil
 }
 
-// DeleteObjectOptions contains options for DeleteObject
+// DeleteObjectOptions contains options for DeleteObject.
 type DeleteObjectOptions struct {
 	VersionID string
 }
 
-// DeleteObjectOutput contains the response from DeleteObject
+// DeleteObjectOutput contains the response from DeleteObject.
 type DeleteObjectOutput struct {
 	Latency time.Duration
 }
 
-// HeadObject gets object metadata over RDMA
+// HeadObject gets object metadata over RDMA.
 func (s *S3Operations) HeadObject(ctx context.Context, bucket, key string, opts *HeadObjectOptions) (*HeadObjectOutput, error) {
 	if opts == nil {
 		opts = &HeadObjectOptions{}
@@ -196,7 +198,7 @@ func (s *S3Operations) HeadObject(ctx context.Context, bucket, key string, opts 
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HeadObject failed with status %d", resp.StatusCode)
 	}
 
@@ -209,12 +211,12 @@ func (s *S3Operations) HeadObject(ctx context.Context, bucket, key string, opts 
 	}, nil
 }
 
-// HeadObjectOptions contains options for HeadObject
+// HeadObjectOptions contains options for HeadObject.
 type HeadObjectOptions struct {
 	VersionID string
 }
 
-// HeadObjectOutput contains the response from HeadObject
+// HeadObjectOutput contains the response from HeadObject.
 type HeadObjectOutput struct {
 	ContentType string
 	Metadata    map[string]string
@@ -223,7 +225,7 @@ type HeadObjectOutput struct {
 	Latency     time.Duration
 }
 
-// ListObjects lists objects over RDMA
+// ListObjects lists objects over RDMA.
 func (s *S3Operations) ListObjects(ctx context.Context, bucket string, opts *ListObjectsOptions) (*ListObjectsOutput, error) {
 	if opts == nil {
 		opts = &ListObjectsOptions{}
@@ -234,12 +236,15 @@ func (s *S3Operations) ListObjects(ctx context.Context, bucket string, opts *Lis
 	if opts.Prefix != "" {
 		metadata["prefix"] = opts.Prefix
 	}
+
 	if opts.Delimiter != "" {
 		metadata["delimiter"] = opts.Delimiter
 	}
+
 	if opts.MaxKeys > 0 {
-		metadata["max-keys"] = fmt.Sprintf("%d", opts.MaxKeys)
+		metadata["max-keys"] = strconv.Itoa(opts.MaxKeys)
 	}
+
 	if opts.ContinuationToken != "" {
 		metadata["continuation-token"] = opts.ContinuationToken
 	}
@@ -255,7 +260,7 @@ func (s *S3Operations) ListObjects(ctx context.Context, bucket string, opts *Lis
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("ListObjects failed with status %d", resp.StatusCode)
 	}
 
@@ -270,48 +275,49 @@ func (s *S3Operations) ListObjects(ctx context.Context, bucket string, opts *Lis
 		if err != nil {
 			return nil, err
 		}
+
 		output.Objects, output.CommonPrefixes, output.NextContinuationToken, output.IsTruncated = parseListResponse(data)
 	}
 
 	return output, nil
 }
 
-// ListObjectsOptions contains options for ListObjects
+// ListObjectsOptions contains options for ListObjects.
 type ListObjectsOptions struct {
 	Prefix            string
 	Delimiter         string
-	MaxKeys           int
 	ContinuationToken string
+	MaxKeys           int
 }
 
-// ListObjectsOutput contains the response from ListObjects
+// ListObjectsOutput contains the response from ListObjects.
 type ListObjectsOutput struct {
+	NextContinuationToken string
 	Objects               []ObjectInfo
 	CommonPrefixes        []string
-	NextContinuationToken string
-	IsTruncated           bool
 	Latency               time.Duration
+	IsTruncated           bool
 }
 
-// ObjectInfo contains information about an object
+// ObjectInfo contains information about an object.
 type ObjectInfo struct {
-	Key          string
-	Size         int64
-	ETag         string
 	LastModified time.Time
+	Key          string
+	ETag         string
 	StorageClass string
+	Size         int64
 }
 
 func parseListResponse(data []byte) ([]ObjectInfo, []string, string, bool) {
 	// Simple binary format for list response
 	// [Count:4][IsTruncated:1][NextTokenLen:2][NextToken][Objects...]
 	// Each object: [KeyLen:2][Key][Size:8][ETagLen:2][ETag][Timestamp:8]
-
 	if len(data) < 7 {
 		return nil, nil, "", false
 	}
 
 	r := bytes.NewReader(data)
+
 	var count uint32
 	binary.Read(r, binary.BigEndian, &count)
 
@@ -319,23 +325,28 @@ func parseListResponse(data []byte) ([]ObjectInfo, []string, string, bool) {
 	binary.Read(r, binary.BigEndian, &isTruncated)
 
 	var nextTokenLen uint16
+
 	_ = binary.Read(r, binary.BigEndian, &nextTokenLen)
 	nextToken := make([]byte, nextTokenLen)
 	_, _ = r.Read(nextToken)
 
 	objects := make([]ObjectInfo, 0, count)
-	for i := uint32(0); i < count; i++ {
+	for range count {
 		var keyLen uint16
-		if err := binary.Read(r, binary.BigEndian, &keyLen); err != nil {
+		err := binary.Read(r, binary.BigEndian, &keyLen)
+		if err != nil {
 			break
 		}
+
 		key := make([]byte, keyLen)
 		_, _ = r.Read(key)
 
 		var size int64
+
 		_ = binary.Read(r, binary.BigEndian, &size)
 
 		var etagLen uint16
+
 		_ = binary.Read(r, binary.BigEndian, &etagLen)
 		etag := make([]byte, etagLen)
 		_, _ = r.Read(etag)
@@ -354,7 +365,7 @@ func parseListResponse(data []byte) ([]ObjectInfo, []string, string, bool) {
 	return objects, nil, string(nextToken), isTruncated == 1
 }
 
-// CreateMultipartUpload initiates a multipart upload over RDMA
+// CreateMultipartUpload initiates a multipart upload over RDMA.
 func (s *S3Operations) CreateMultipartUpload(ctx context.Context, bucket, key string, opts *CreateMultipartUploadOptions) (*CreateMultipartUploadOutput, error) {
 	if opts == nil {
 		opts = &CreateMultipartUploadOptions{}
@@ -373,12 +384,13 @@ func (s *S3Operations) CreateMultipartUpload(ctx context.Context, bucket, key st
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("CreateMultipartUpload failed with status %d", resp.StatusCode)
 	}
 
 	// Extract upload ID from response
 	var uploadID string
+
 	if resp.Body != nil {
 		data, _ := io.ReadAll(resp.Body)
 		uploadID = string(data)
@@ -390,19 +402,19 @@ func (s *S3Operations) CreateMultipartUpload(ctx context.Context, bucket, key st
 	}, nil
 }
 
-// CreateMultipartUploadOptions contains options for CreateMultipartUpload
+// CreateMultipartUploadOptions contains options for CreateMultipartUpload.
 type CreateMultipartUploadOptions struct {
-	ContentType string
 	Metadata    map[string]string
+	ContentType string
 }
 
-// CreateMultipartUploadOutput contains the response from CreateMultipartUpload
+// CreateMultipartUploadOutput contains the response from CreateMultipartUpload.
 type CreateMultipartUploadOutput struct {
 	UploadID string
 	Latency  time.Duration
 }
 
-// UploadPart uploads a part over RDMA
+// UploadPart uploads a part over RDMA.
 func (s *S3Operations) UploadPart(ctx context.Context, bucket, key, uploadID string, partNumber int, body io.Reader, opts *UploadPartOptions) (*UploadPartOutput, error) {
 	if opts == nil {
 		opts = &UploadPartOptions{}
@@ -417,7 +429,7 @@ func (s *S3Operations) UploadPart(ctx context.Context, bucket, key, uploadID str
 	// Encode upload metadata
 	metadata := map[string]string{
 		"upload-id":   uploadID,
-		"part-number": fmt.Sprintf("%d", partNumber),
+		"part-number": strconv.Itoa(partNumber),
 	}
 
 	req := &S3Request{
@@ -434,7 +446,7 @@ func (s *S3Operations) UploadPart(ctx context.Context, bucket, key, uploadID str
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("UploadPart failed with status %d", resp.StatusCode)
 	}
 
@@ -444,25 +456,27 @@ func (s *S3Operations) UploadPart(ctx context.Context, bucket, key, uploadID str
 	}, nil
 }
 
-// UploadPartOptions contains options for UploadPart
+// UploadPartOptions contains options for UploadPart.
 type UploadPartOptions struct {
+	Buffer        *MemoryRegion
 	ContentLength int64
-	Buffer        *MemoryRegion // Pre-allocated buffer for zero-copy
 }
 
-// UploadPartOutput contains the response from UploadPart
+// UploadPartOutput contains the response from UploadPart.
 type UploadPartOutput struct {
 	ETag    string
 	Latency time.Duration
 }
 
-// CompleteMultipartUpload completes a multipart upload over RDMA
+// CompleteMultipartUpload completes a multipart upload over RDMA.
 func (s *S3Operations) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string, parts []CompletedPart) (*CompleteMultipartUploadOutput, error) {
 	// Encode parts in body
 	var buf bytes.Buffer
 	for _, part := range parts {
+		//nolint:gosec // G115: part.PartNumber is bounded by S3 multipart limits
 		binary.Write(&buf, binary.BigEndian, int32(part.PartNumber))
 		etagBytes := []byte(part.ETag)
+		//nolint:gosec // G115: ETag length is bounded by S3 spec
 		binary.Write(&buf, binary.BigEndian, uint16(len(etagBytes)))
 		buf.Write(etagBytes)
 	}
@@ -485,7 +499,7 @@ func (s *S3Operations) CompleteMultipartUpload(ctx context.Context, bucket, key,
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("CompleteMultipartUpload failed with status %d", resp.StatusCode)
 	}
 
@@ -495,19 +509,19 @@ func (s *S3Operations) CompleteMultipartUpload(ctx context.Context, bucket, key,
 	}, nil
 }
 
-// CompletedPart represents a completed part in a multipart upload
+// CompletedPart represents a completed part in a multipart upload.
 type CompletedPart struct {
-	PartNumber int
 	ETag       string
+	PartNumber int
 }
 
-// CompleteMultipartUploadOutput contains the response from CompleteMultipartUpload
+// CompleteMultipartUploadOutput contains the response from CompleteMultipartUpload.
 type CompleteMultipartUploadOutput struct {
 	ETag    string
 	Latency time.Duration
 }
 
-// AbortMultipartUpload aborts a multipart upload over RDMA
+// AbortMultipartUpload aborts a multipart upload over RDMA.
 func (s *S3Operations) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*AbortMultipartUploadOutput, error) {
 	metadata := map[string]string{
 		"upload-id": uploadID,
@@ -525,7 +539,7 @@ func (s *S3Operations) AbortMultipartUpload(ctx context.Context, bucket, key, up
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return nil, fmt.Errorf("AbortMultipartUpload failed with status %d", resp.StatusCode)
 	}
 
@@ -534,12 +548,12 @@ func (s *S3Operations) AbortMultipartUpload(ctx context.Context, bucket, key, up
 	}, nil
 }
 
-// AbortMultipartUploadOutput contains the response from AbortMultipartUpload
+// AbortMultipartUploadOutput contains the response from AbortMultipartUpload.
 type AbortMultipartUploadOutput struct {
 	Latency time.Duration
 }
 
-// ZeroCopyGetObject performs a zero-copy GetObject using RDMA READ
+// ZeroCopyGetObject performs a zero-copy GetObject using RDMA READ.
 func (s *S3Operations) ZeroCopyGetObject(ctx context.Context, bucket, key string, buffer *MemoryRegion) (*GetObjectOutput, error) {
 	if buffer == nil {
 		return nil, ErrBufferTooSmall
@@ -573,7 +587,7 @@ func (s *S3Operations) ZeroCopyGetObject(ctx context.Context, bucket, key string
 	}, nil
 }
 
-// ZeroCopyPutObject performs a zero-copy PutObject using RDMA READ
+// ZeroCopyPutObject performs a zero-copy PutObject using RDMA READ.
 func (s *S3Operations) ZeroCopyPutObject(ctx context.Context, bucket, key string, buffer *MemoryRegion, size int64, opts *PutObjectOptions) (*PutObjectOutput, error) {
 	if buffer == nil {
 		return nil, ErrBufferTooSmall
@@ -607,7 +621,7 @@ func (s *S3Operations) ZeroCopyPutObject(ctx context.Context, bucket, key string
 	}, nil
 }
 
-// BatchGetObjects performs batch GetObject operations for improved throughput
+// BatchGetObjects performs batch GetObject operations for improved throughput.
 func (s *S3Operations) BatchGetObjects(ctx context.Context, bucket string, keys []string) ([]*GetObjectOutput, error) {
 	results := make([]*GetObjectOutput, len(keys))
 	errors := make([]error, len(keys))
@@ -634,7 +648,7 @@ func (s *S3Operations) BatchGetObjects(ctx context.Context, bucket string, keys 
 	return results, nil
 }
 
-// StreamGetObject streams an object with prefetching for sequential access
+// StreamGetObject streams an object with prefetching for sequential access.
 func (s *S3Operations) StreamGetObject(ctx context.Context, bucket, key string, chunkSize int) (<-chan []byte, <-chan error) {
 	dataChan := make(chan []byte, 4) // Buffer a few chunks
 	errChan := make(chan error, 1)
@@ -651,6 +665,7 @@ func (s *S3Operations) StreamGetObject(ctx context.Context, bucket, key string, 
 		}
 
 		totalSize := head.Size
+
 		if chunkSize <= 0 {
 			chunkSize = 1 << 20 // 1MB default chunks
 		}

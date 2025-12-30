@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-// Transport type constants
+// Transport type constants.
 const (
 	TransportInfiniBand = "infiniband"
 	TransportRoCEv2     = "roce"
@@ -26,14 +26,14 @@ const (
 	TransportAuto       = "auto" // Auto-detect best available
 )
 
-// Connection type constants
+// Connection type constants.
 const (
 	ConnTypeRC = "RC" // Reliable Connection
 	ConnTypeUD = "UD" // Unreliable Datagram
 	ConnTypeUC = "UC" // Unreliable Connection
 )
 
-// Operation codes for S3 over RDMA
+// Operation codes for S3 over RDMA.
 const (
 	OpGetObject uint8 = iota + 1
 	OpPutObject
@@ -57,52 +57,31 @@ var (
 	ErrNotConnected       = errors.New("not connected to remote endpoint")
 )
 
-// Config holds RDMA transport configuration
+// Config holds RDMA transport configuration.
 type Config struct {
-	// Transport type: infiniband, roce, iwarp, or auto
-	Transport string
-
-	// Device name (e.g., "mlx5_0") or empty for auto-detect
-	DeviceName string
-
-	// Port number on the device (usually 1)
-	Port int
-
-	// Connection type: RC (Reliable Connection), UD, UC
-	ConnectionType string
-
-	// Maximum message size for inline data
-	MaxInlineData int
-
-	// Number of send/receive work requests
-	SendQueueDepth int
-	RecvQueueDepth int
-
-	// Completion queue size
+	Transport           string
+	DeviceName          string
+	HTTPSecretKey       string
+	ConnectionType      string
+	HTTPAccessKey       string
+	HTTPEndpoint        string
+	PreAllocateRegions  int
+	SendQueueDepth      int
+	MemoryPoolSize      int64
+	MemoryRegionSize    int
+	RecvQueueDepth      int
+	ConnectionTimeout   time.Duration
+	OperationTimeout    time.Duration
 	CompletionQueueSize int
-
-	// Memory pool configuration
-	MemoryPoolSize     int64 // Total pool size in bytes
-	MemoryRegionSize   int   // Individual region size
-	PreAllocateRegions int   // Number of pre-allocated regions
-
-	// Timeouts
-	ConnectionTimeout time.Duration
-	OperationTimeout  time.Duration
-
-	// Enable features
-	EnableZeroCopy    bool
-	EnablePrefetch    bool
-	EnableCompression bool
-
-	// Fallback to HTTP if RDMA unavailable
-	FallbackHTTP    bool
-	HTTPEndpoint    string
-	HTTPAccessKey   string
-	HTTPSecretKey   string
+	Port                int
+	MaxInlineData       int
+	EnableZeroCopy      bool
+	FallbackHTTP        bool
+	EnableCompression   bool
+	EnablePrefetch      bool
 }
 
-// DefaultConfig returns a default RDMA configuration
+// DefaultConfig returns a default RDMA configuration.
 func DefaultConfig() *Config {
 	return &Config{
 		Transport:           TransportAuto,
@@ -123,141 +102,141 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Transport represents an RDMA transport instance
+// Transport represents an RDMA transport instance.
 type Transport struct {
 	config      *Config
 	device      *Device
 	protDomain  *ProtectionDomain
 	memPool     *MemoryPool
-	connections sync.Map // map[string]*Connection
 	listener    *Listener
 	metrics     *Metrics
-	closed      atomic.Bool
+	connections sync.Map
 	mu          sync.RWMutex
+	closed      atomic.Bool
 }
 
-// Device represents an RDMA-capable network device
+// Device represents an RDMA-capable network device.
 type Device struct {
-	Name           string
-	GUID           uint64
-	NodeType       string // CA, Switch, Router
-	Transport      string
-	VendorID       uint32
-	DeviceID       uint32
-	FirmwareVer    string
-	MaxQP          int
-	MaxCQ          int
-	MaxMR          int
-	MaxPD          int
-	MaxSGE         int
-	MaxInlineData  int
-	AtomicCapable  bool
-	Ports          []PortInfo
-	_handle        interface{} // Underlying device handle (reserved for RDMA implementation)
+	_handle       interface{}
+	FirmwareVer   string
+	NodeType      string
+	Transport     string
+	Name          string
+	Ports         []PortInfo
+	MaxInlineData int
+	MaxQP         int
+	MaxCQ         int
+	MaxMR         int
+	MaxPD         int
+	MaxSGE        int
+	GUID          uint64
+	DeviceID      uint32
+	VendorID      uint32
+	AtomicCapable bool
 }
 
-// PortInfo represents information about a device port
+// PortInfo represents information about a device port.
 type PortInfo struct {
-	Number     int
-	State      string // Active, Down, Init
-	MTU        int
-	LinkLayer  string // Ethernet, InfiniBand
-	Speed      string // e.g., "100 Gbps"
-	GID        []byte
-	LID        uint16 // Local ID (InfiniBand)
+	State     string
+	LinkLayer string
+	Speed     string
+	GID       []byte
+	Number    int
+	MTU       int
+	LID       uint16
 }
 
-// ProtectionDomain isolates RDMA resources
+// ProtectionDomain isolates RDMA resources.
 type ProtectionDomain struct {
 	device  *Device
 	_handle interface{} // Reserved for RDMA implementation
 }
 
-// MemoryRegion represents registered memory for RDMA operations
+// MemoryRegion represents registered memory for RDMA operations.
 type MemoryRegion struct {
+	pool      *MemoryPool
 	Buffer    []byte
-	LocalKey  uint32
-	RemoteKey uint32
 	Address   uint64
 	Length    uint64
-	pool      *MemoryPool
+	LocalKey  uint32
+	RemoteKey uint32
 	inUse     atomic.Bool
 }
 
-// MemoryPool manages pre-registered memory regions
+// MemoryPool manages pre-registered memory regions.
 type MemoryPool struct {
-	mu         sync.Mutex
-	regions    []*MemoryRegion
 	freeList   chan *MemoryRegion
+	pd         *ProtectionDomain
+	regions    []*MemoryRegion
 	totalSize  int64
 	usedSize   int64
 	allocCount int64
 	freeCount  int64
-	pd         *ProtectionDomain
+	mu         sync.Mutex
 }
 
-// QueuePair represents an RDMA queue pair for communication
+// QueuePair represents an RDMA queue pair for communication.
 type QueuePair struct {
-	Number     uint32
-	State      string
+	_handle    interface{}
 	SendCQ     *CompletionQueue
 	RecvCQ     *CompletionQueue
+	State      string
 	MaxSend    int
 	MaxRecv    int
 	MaxSendSGE int
 	MaxRecvSGE int
-	_handle    interface{} // Reserved for RDMA implementation
+	Number     uint32
 }
 
-// CompletionQueue handles work request completions
+// CompletionQueue handles work request completions.
 type CompletionQueue struct {
-	Size     int
-	Count    int64
-	Errors   int64
-	channel  chan *WorkCompletion
-	_handle  interface{} // Reserved for RDMA implementation
+	_handle interface{}
+	channel chan *WorkCompletion
+	Size    int
+	Count   int64
+	Errors  int64
 }
 
-// WorkCompletion represents a completed work request
+// WorkCompletion represents a completed work request.
 type WorkCompletion struct {
-	ID         uint64
-	Status     int
-	OpCode     uint8
-	ByteLen    uint32
-	ImmData    uint32
-	QueuePair  uint32
-	Error      error
-	Timestamp  time.Time
+	Timestamp time.Time
+	Error     error
+	ID        uint64
+	Status    int
+	ByteLen   uint32
+	ImmData   uint32
+	QueuePair uint32
+	OpCode    uint8
 }
 
-// Connection represents an RDMA connection to a remote endpoint
+// Connection represents an RDMA connection to a remote endpoint.
 type Connection struct {
-	mu           sync.Mutex
-	RemoteAddr   string
-	RemoteGID    []byte
-	RemoteLID    uint16
+	LastActivity time.Time
+	RecvMR       *MemoryRegion
 	QueuePair    *QueuePair
 	SendMR       *MemoryRegion
-	RecvMR       *MemoryRegion
+	transport    *Transport
 	State        string
-	Connected    bool
-	LastActivity time.Time
+	RemoteAddr   string
+	RemoteGID    []byte
 	BytesSent    int64
 	BytesRecv    int64
 	Latency      time.Duration
-	transport    *Transport
+	mu           sync.Mutex
+	RemoteLID    uint16
+	Connected    bool
 }
 
-// Listener accepts incoming RDMA connections
+// Listener accepts incoming RDMA connections.
 type Listener struct {
-	transport  *Transport
-	port       int
-	accepting  atomic.Bool
-	connChan   chan *Connection
-	closeChan  chan struct{}
+	transport *Transport
+	connChan  chan *Connection
+	closeChan chan struct{}
+	port      int
+	accepting atomic.Bool
 }
 
-// Metrics tracks RDMA performance metrics
+// Metrics tracks RDMA performance metrics.
 type Metrics struct {
 	mu                sync.RWMutex
 	ConnectionsTotal  int64
@@ -275,7 +254,7 @@ type Metrics struct {
 	CacheMisses       int64
 }
 
-// NewTransport creates a new RDMA transport
+// NewTransport creates a new RDMA transport.
 func NewTransport(config *Config) (*Transport, error) {
 	if config == nil {
 		config = DefaultConfig()
@@ -287,18 +266,20 @@ func NewTransport(config *Config) (*Transport, error) {
 	}
 
 	// Try to initialize RDMA
-	if err := t.initRDMA(); err != nil {
+	err := t.initRDMA()
+	if err != nil {
 		if config.FallbackHTTP {
 			// RDMA not available, will fall back to HTTP
 			return t, nil
 		}
+
 		return nil, fmt.Errorf("%w: %v", ErrRDMANotAvailable, err)
 	}
 
 	return t, nil
 }
 
-// initRDMA initializes the RDMA subsystem
+// initRDMA initializes the RDMA subsystem.
 func (t *Transport) initRDMA() error {
 	// Detect available RDMA devices
 	devices, err := t.detectDevices()
@@ -315,6 +296,7 @@ func (t *Transport) initRDMA() error {
 	if device == nil {
 		return ErrRDMANotAvailable
 	}
+
 	t.device = device
 
 	// Create protection domain
@@ -322,6 +304,7 @@ func (t *Transport) initRDMA() error {
 	if err != nil {
 		return err
 	}
+
 	t.protDomain = pd
 
 	// Create memory pool
@@ -329,16 +312,16 @@ func (t *Transport) initRDMA() error {
 	if err != nil {
 		return err
 	}
+
 	t.memPool = pool
 
 	return nil
 }
 
-// detectDevices discovers available RDMA devices
+// detectDevices discovers available RDMA devices.
 func (t *Transport) detectDevices() ([]*Device, error) {
 	// In a real implementation, this would use libibverbs to enumerate devices
 	// For now, return simulated devices for development/testing
-
 	devices := []*Device{}
 
 	// Check if we're in simulation mode or have actual hardware
@@ -377,7 +360,7 @@ func (t *Transport) detectDevices() ([]*Device, error) {
 	return devices, nil
 }
 
-// selectDevice chooses the best available device
+// selectDevice chooses the best available device.
 func (t *Transport) selectDevice(devices []*Device) *Device {
 	if len(devices) == 0 {
 		return nil
@@ -390,6 +373,7 @@ func (t *Transport) selectDevice(devices []*Device) *Device {
 				return d
 			}
 		}
+
 		return nil
 	}
 
@@ -423,6 +407,7 @@ func (t *Transport) selectDevice(devices []*Device) *Device {
 	}
 
 	var best *Device
+
 	bestPriority := 0
 	for _, d := range devices {
 		if p := priority[d.Transport]; p > bestPriority {
@@ -434,7 +419,7 @@ func (t *Transport) selectDevice(devices []*Device) *Device {
 	return best
 }
 
-// createProtectionDomain creates an RDMA protection domain
+// createProtectionDomain creates an RDMA protection domain.
 func (t *Transport) createProtectionDomain() (*ProtectionDomain, error) {
 	if t.device == nil {
 		return nil, ErrRDMANotAvailable
@@ -447,7 +432,7 @@ func (t *Transport) createProtectionDomain() (*ProtectionDomain, error) {
 	}, nil
 }
 
-// createMemoryPool creates the pre-registered memory pool
+// createMemoryPool creates the pre-registered memory pool.
 func (t *Transport) createMemoryPool() (*MemoryPool, error) {
 	if t.protDomain == nil {
 		return nil, ErrRDMANotAvailable
@@ -460,11 +445,12 @@ func (t *Transport) createMemoryPool() (*MemoryPool, error) {
 	}
 
 	// Pre-allocate memory regions
-	for i := 0; i < t.config.PreAllocateRegions; i++ {
+	for range t.config.PreAllocateRegions {
 		mr, err := pool.allocateRegion(t.config.MemoryRegionSize)
 		if err != nil {
 			return nil, err
 		}
+
 		pool.regions = append(pool.regions, mr)
 		pool.freeList <- mr
 	}
@@ -474,7 +460,7 @@ func (t *Transport) createMemoryPool() (*MemoryPool, error) {
 	return pool, nil
 }
 
-// allocateRegion allocates and registers a memory region
+// allocateRegion allocates and registers a memory region.
 func (p *MemoryPool) allocateRegion(size int) (*MemoryRegion, error) {
 	// Allocate aligned memory for DMA
 	buffer := make([]byte, size)
@@ -484,11 +470,12 @@ func (p *MemoryPool) allocateRegion(size int) (*MemoryRegion, error) {
 	// 2. Call ibv_reg_mr() to register with RDMA NIC
 	// 3. Get local/remote keys for RDMA operations
 
+	//nolint:gosec // G115: Region count and size are within safe bounds for simulated values
 	mr := &MemoryRegion{
 		Buffer:    buffer,
 		LocalKey:  uint32(len(p.regions)), // Simulated
 		RemoteKey: uint32(len(p.regions)), // Simulated
-		Address:   0,                       // Would be real address
+		Address:   0,                      // Would be real address
 		Length:    uint64(size),
 		pool:      p,
 	}
@@ -496,20 +483,21 @@ func (p *MemoryPool) allocateRegion(size int) (*MemoryRegion, error) {
 	return mr, nil
 }
 
-// GetRegion gets a memory region from the pool
+// GetRegion gets a memory region from the pool.
 func (p *MemoryPool) GetRegion(ctx context.Context) (*MemoryRegion, error) {
 	select {
 	case mr := <-p.freeList:
 		mr.inUse.Store(true)
 		atomic.AddInt64(&p.usedSize, int64(len(mr.Buffer)))
 		atomic.AddInt64(&p.allocCount, 1)
+
 		return mr, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 }
 
-// ReleaseRegion returns a memory region to the pool
+// ReleaseRegion returns a memory region to the pool.
 func (p *MemoryPool) ReleaseRegion(mr *MemoryRegion) {
 	if mr == nil || !mr.inUse.Load() {
 		return
@@ -531,12 +519,12 @@ func (p *MemoryPool) ReleaseRegion(mr *MemoryRegion) {
 	}
 }
 
-// IsAvailable checks if RDMA is available
+// IsAvailable checks if RDMA is available.
 func (t *Transport) IsAvailable() bool {
 	return t.device != nil && t.protDomain != nil
 }
 
-// Connect establishes an RDMA connection to a remote endpoint
+// Connect establishes an RDMA connection to a remote endpoint.
 func (t *Transport) Connect(ctx context.Context, addr string) (*Connection, error) {
 	if !t.IsAvailable() {
 		return nil, ErrRDMANotAvailable
@@ -561,6 +549,7 @@ func (t *Transport) Connect(ctx context.Context, addr string) (*Connection, erro
 	if err != nil {
 		return nil, err
 	}
+
 	conn.QueuePair = qp
 
 	// Allocate send/receive buffers
@@ -568,6 +557,7 @@ func (t *Transport) Connect(ctx context.Context, addr string) (*Connection, erro
 	if err != nil {
 		return nil, err
 	}
+
 	conn.SendMR = sendMR
 
 	recvMR, err := t.memPool.GetRegion(ctx)
@@ -575,6 +565,7 @@ func (t *Transport) Connect(ctx context.Context, addr string) (*Connection, erro
 		t.memPool.ReleaseRegion(sendMR)
 		return nil, err
 	}
+
 	conn.RecvMR = recvMR
 
 	// Exchange connection info with remote (simulated)
@@ -582,6 +573,7 @@ func (t *Transport) Connect(ctx context.Context, addr string) (*Connection, erro
 	if err := t.exchangeConnectionInfo(ctx, conn); err != nil {
 		t.memPool.ReleaseRegion(sendMR)
 		t.memPool.ReleaseRegion(recvMR)
+
 		return nil, err
 	}
 
@@ -589,6 +581,7 @@ func (t *Transport) Connect(ctx context.Context, addr string) (*Connection, erro
 	if err := t.transitionQPToRTS(conn.QueuePair); err != nil {
 		t.memPool.ReleaseRegion(sendMR)
 		t.memPool.ReleaseRegion(recvMR)
+
 		return nil, err
 	}
 
@@ -603,7 +596,7 @@ func (t *Transport) Connect(ctx context.Context, addr string) (*Connection, erro
 	return conn, nil
 }
 
-// createQueuePair creates an RDMA queue pair
+// createQueuePair creates an RDMA queue pair.
 func (t *Transport) createQueuePair() (*QueuePair, error) {
 	// Create completion queues
 	sendCQ := &CompletionQueue{
@@ -633,7 +626,7 @@ func (t *Transport) createQueuePair() (*QueuePair, error) {
 	return qp, nil
 }
 
-// exchangeConnectionInfo exchanges RDMA connection info with remote
+// exchangeConnectionInfo exchanges RDMA connection info with remote.
 func (t *Transport) exchangeConnectionInfo(ctx context.Context, conn *Connection) error {
 	// In a real implementation, this would:
 	// 1. Get local GID/LID from the port
@@ -648,10 +641,9 @@ func (t *Transport) exchangeConnectionInfo(ctx context.Context, conn *Connection
 	return nil
 }
 
-// transitionQPToRTS transitions QP through RESET -> INIT -> RTR -> RTS
+// transitionQPToRTS transitions QP through RESET -> INIT -> RTR -> RTS.
 func (t *Transport) transitionQPToRTS(qp *QueuePair) error {
 	// TODO: Real implementation would call ibv_modify_qp() for each transition
-
 	states := []string{"INIT", "RTR", "RTS"}
 	for _, state := range states {
 		qp.State = state
@@ -660,7 +652,7 @@ func (t *Transport) transitionQPToRTS(qp *QueuePair) error {
 	return nil
 }
 
-// Disconnect closes an RDMA connection
+// Disconnect closes an RDMA connection.
 func (t *Transport) Disconnect(addr string) error {
 	conn, ok := t.connections.LoadAndDelete(addr)
 	if !ok {
@@ -668,6 +660,7 @@ func (t *Transport) Disconnect(addr string) error {
 	}
 
 	c := conn.(*Connection)
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -678,6 +671,7 @@ func (t *Transport) Disconnect(addr string) error {
 	if c.SendMR != nil {
 		t.memPool.ReleaseRegion(c.SendMR)
 	}
+
 	if c.RecvMR != nil {
 		t.memPool.ReleaseRegion(c.RecvMR)
 	}
@@ -689,7 +683,7 @@ func (t *Transport) Disconnect(addr string) error {
 	return nil
 }
 
-// Listen starts accepting incoming RDMA connections
+// Listen starts accepting incoming RDMA connections.
 func (t *Transport) Listen(port int) (*Listener, error) {
 	if !t.IsAvailable() {
 		return nil, ErrRDMANotAvailable
@@ -710,7 +704,7 @@ func (t *Transport) Listen(port int) (*Listener, error) {
 	return l, nil
 }
 
-// Accept accepts an incoming connection
+// Accept accepts an incoming connection.
 func (l *Listener) Accept(ctx context.Context) (*Connection, error) {
 	if !l.accepting.Load() {
 		return nil, errors.New("listener closed")
@@ -726,15 +720,16 @@ func (l *Listener) Accept(ctx context.Context) (*Connection, error) {
 	}
 }
 
-// Close closes the listener
+// Close closes the listener.
 func (l *Listener) Close() error {
 	if l.accepting.CompareAndSwap(true, false) {
 		close(l.closeChan)
 	}
+
 	return nil
 }
 
-// Close closes the transport and releases all resources
+// Close closes the transport and releases all resources.
 func (t *Transport) Close() error {
 	if !t.closed.CompareAndSwap(false, true) {
 		return nil
@@ -771,7 +766,7 @@ func (t *Transport) Close() error {
 	return nil
 }
 
-// GetMetrics returns current RDMA metrics
+// GetMetrics returns current RDMA metrics.
 func (t *Transport) GetMetrics() *Metrics {
 	t.metrics.mu.RLock()
 	defer t.metrics.mu.RUnlock()
@@ -800,7 +795,7 @@ func (t *Transport) GetMetrics() *Metrics {
 	return m
 }
 
-// AverageLatency returns the average operation latency
+// AverageLatency returns the average operation latency.
 func (m *Metrics) AverageLatency() time.Duration {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -808,47 +803,45 @@ func (m *Metrics) AverageLatency() time.Duration {
 	if m.LatencyCount == 0 {
 		return 0
 	}
+
 	return m.LatencySum / time.Duration(m.LatencyCount)
 }
 
-// S3Request represents an S3 operation request over RDMA
+// S3Request represents an S3 operation request over RDMA.
 type S3Request struct {
-	OpCode      uint8
+	Body        io.Reader
+	Metadata    map[string]string
+	LocalBuffer *MemoryRegion
 	Bucket      string
 	Key         string
 	VersionID   string
 	ContentType string
-	Metadata    map[string]string
-	Body        io.Reader
 	BodySize    int64
-
-	// For RDMA operations
-	LocalBuffer  *MemoryRegion
-	RemoteAddr   uint64
-	RemoteKey    uint32
+	RemoteAddr  uint64
+	RemoteKey   uint32
+	OpCode      uint8
 }
 
-// S3Response represents an S3 operation response over RDMA
+// S3Response represents an S3 operation response over RDMA.
 type S3Response struct {
-	StatusCode  int
-	ContentType string
-	Metadata    map[string]string
-	Body        io.Reader
-	BodySize    int64
-	ETag        string
-
-	// RDMA transfer info
+	Body             io.Reader
+	Metadata         map[string]string
+	ContentType      string
+	ETag             string
+	StatusCode       int
+	BodySize         int64
 	BytesTransferred int64
 	Latency          time.Duration
 }
 
-// Execute executes an S3 request over RDMA
+// Execute executes an S3 request over RDMA.
 func (c *Connection) Execute(ctx context.Context, req *S3Request) (*S3Response, error) {
 	if !c.Connected {
 		return nil, ErrNotConnected
 	}
 
 	start := time.Now()
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -865,6 +858,7 @@ func (c *Connection) Execute(ctx context.Context, req *S3Request) (*S3Response, 
 	if len(reqData) > len(c.SendMR.Buffer) {
 		return nil, ErrBufferTooSmall
 	}
+
 	copy(c.SendMR.Buffer, reqData)
 
 	// Post send work request
@@ -915,11 +909,10 @@ func (c *Connection) Execute(ctx context.Context, req *S3Request) (*S3Response, 
 	return resp, nil
 }
 
-// serializeRequest serializes an S3 request for RDMA transmission
+// serializeRequest serializes an S3 request for RDMA transmission.
 func (c *Connection) serializeRequest(req *S3Request) ([]byte, error) {
 	// Simple binary format:
 	// [OpCode:1][BucketLen:2][KeyLen:2][BodyLen:8][Bucket][Key][Body]
-
 	bucketBytes := []byte(req.Bucket)
 	keyBytes := []byte(req.Key)
 
@@ -953,6 +946,7 @@ func (c *Connection) serializeRequest(req *S3Request) ([]byte, error) {
 	for i := 7; i >= 0; i-- {
 		buf[offset+i] = byte(req.BodySize >> (8 * (7 - i)))
 	}
+
 	offset += 8
 
 	// Body data
@@ -966,7 +960,7 @@ func (c *Connection) serializeRequest(req *S3Request) ([]byte, error) {
 	return buf, nil
 }
 
-// deserializeResponse deserializes an S3 response from RDMA buffer
+// deserializeResponse deserializes an S3 response from RDMA buffer.
 func (c *Connection) deserializeResponse(data []byte) (*S3Response, error) {
 	if len(data) < 3 {
 		return nil, errors.New("response too short")
@@ -980,9 +974,10 @@ func (c *Connection) deserializeResponse(data []byte) (*S3Response, error) {
 	// Body length (8 bytes)
 	if len(data) >= 10 {
 		var bodyLen int64
-		for i := 0; i < 8; i++ {
+		for i := range 8 {
 			bodyLen = bodyLen<<8 | int64(data[2+i])
 		}
+
 		resp.BodySize = bodyLen
 
 		// Body data
@@ -1000,7 +995,7 @@ func (c *Connection) deserializeResponse(data []byte) (*S3Response, error) {
 	return resp, nil
 }
 
-// bytesReaderAt implements io.ReaderAt for a byte slice
+// bytesReaderAt implements io.ReaderAt for a byte slice.
 type bytesReaderAt struct {
 	data []byte
 }
@@ -1009,26 +1004,28 @@ func (r *bytesReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 	if off >= int64(len(r.data)) {
 		return 0, io.EOF
 	}
+
 	n = copy(p, r.data[off:])
 	if n < len(p) {
 		err = io.EOF
 	}
+
 	return
 }
 
-// postSend posts a send work request
+// postSend posts a send work request.
 func (c *Connection) postSend(ctx context.Context, length int) error {
 	// TODO: Real implementation would call ibv_post_send()
 	return nil
 }
 
-// postReceive posts a receive work request
+// postReceive posts a receive work request.
 func (c *Connection) postReceive(ctx context.Context) error {
 	// TODO: Real implementation would call ibv_post_recv()
 	return nil
 }
 
-// waitCompletion waits for a work completion
+// waitCompletion waits for a work completion.
 func (c *Connection) waitCompletion(ctx context.Context, cq *CompletionQueue) error {
 	// TODO: Real implementation would poll/wait on CQ
 	select {
@@ -1042,7 +1039,7 @@ func (c *Connection) waitCompletion(ctx context.Context, cq *CompletionQueue) er
 	}
 }
 
-// waitReceive waits for a receive completion
+// waitReceive waits for a receive completion.
 func (c *Connection) waitReceive(ctx context.Context) (*WorkCompletion, error) {
 	// TODO: Real implementation would poll receive CQ
 	select {

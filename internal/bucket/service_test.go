@@ -28,14 +28,14 @@ import (
 // These local mocks are retained for backward compatibility with existing tests
 // that directly access internal fields like m.objects[bucket][key].
 
-// MockMetadataStore implements metadata.Store interface for testing
+// MockMetadataStore implements metadata.Store interface for testing.
 type MockMetadataStore struct {
-	mu        sync.RWMutex
-	buckets   map[string]*metadata.Bucket
-	objects   map[string]map[string]*metadata.ObjectMeta
 	createErr error
 	updateErr error
 	deleteErr error
+	buckets   map[string]*metadata.Bucket
+	objects   map[string]map[string]*metadata.ObjectMeta
+	mu        sync.RWMutex
 }
 
 func NewMockMetadataStore() *MockMetadataStore {
@@ -48,60 +48,75 @@ func NewMockMetadataStore() *MockMetadataStore {
 func (m *MockMetadataStore) GetBucket(ctx context.Context, name string) (*metadata.Bucket, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if bucket, ok := m.buckets[name]; ok {
 		return bucket, nil
 	}
+
 	return nil, s3errors.ErrNoSuchBucket
 }
 
 func (m *MockMetadataStore) CreateBucket(ctx context.Context, bucket *metadata.Bucket) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.createErr != nil {
 		return m.createErr
 	}
+
 	m.buckets[bucket.Name] = bucket
 	m.objects[bucket.Name] = make(map[string]*metadata.ObjectMeta)
+
 	return nil
 }
 
 func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.Bucket) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.updateErr != nil {
 		return m.updateErr
 	}
+
 	m.buckets[bucket.Name] = bucket
+
 	return nil
 }
 
 func (m *MockMetadataStore) DeleteBucket(ctx context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.deleteErr != nil {
 		return m.deleteErr
 	}
+
 	delete(m.buckets, name)
 	delete(m.objects, name)
+
 	return nil
 }
 
 func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*metadata.Bucket, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	buckets := make([]*metadata.Bucket, 0)
 	for _, b := range m.buckets {
 		if owner == "" || b.Owner == owner {
 			buckets = append(buckets, b)
 		}
 	}
+
 	return buckets, nil
 }
 
 func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*metadata.ObjectListing, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	objs := m.objects[bucket]
+
 	listing := &metadata.ObjectListing{
 		Objects: make([]*metadata.ObjectMeta, 0),
 	}
@@ -111,10 +126,11 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 			break
 		}
 	}
+
 	return listing, nil
 }
 
-// Implement remaining interface methods as no-ops
+// Implement remaining interface methods as no-ops.
 func (m *MockMetadataStore) GetObject(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) {
 	return nil, nil
 }
@@ -223,7 +239,7 @@ func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before tim
 }
 func (m *MockMetadataStore) Close() error { return nil }
 
-// MockStorageBackend implements object.StorageBackend interface for testing
+// MockStorageBackend implements object.StorageBackend interface for testing.
 type MockStorageBackend struct {
 	buckets   map[string]bool
 	createErr error
@@ -240,7 +256,9 @@ func (m *MockStorageBackend) CreateBucket(ctx context.Context, name string) erro
 	if m.createErr != nil {
 		return m.createErr
 	}
+
 	m.buckets[name] = true
+
 	return nil
 }
 
@@ -248,7 +266,9 @@ func (m *MockStorageBackend) DeleteBucket(ctx context.Context, name string) erro
 	if m.deleteErr != nil {
 		return m.deleteErr
 	}
+
 	delete(m.buckets, name)
+
 	return nil
 }
 
@@ -304,24 +324,24 @@ func TestValidateBucketName(t *testing.T) {
 	tests := []struct {
 		name        string
 		bucketName  string
-		expectError bool
 		errorMsg    string
+		expectError bool
 	}{
-		{"valid simple name", "my-bucket", false, ""},
-		{"valid with numbers", "bucket123", false, ""},
-		{"valid with dots", "my.bucket.name", false, ""},
-		{"valid exact 3 chars", "abc", false, ""},
-		{"valid exact 63 chars", "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0", false, ""},
-		{"too short", "ab", true, "between 3 and 63"},
-		{"too long", "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz01", true, "between 3 and 63"},
-		{"starts with dot", ".bucket", true, "cannot start or end with a period"},
-		{"ends with dot", "bucket.", true, "cannot start or end with a period"},
-		{"starts with hyphen", "-bucket", true, "cannot start or end with a hyphen"},
-		{"ends with hyphen", "bucket-", true, "cannot start or end with a hyphen"},
-		{"uppercase letters", "MyBucket", true, "lowercase letters"},
-		{"IP address format", "192.168.1.1", true, "cannot be formatted as an IP address"},
-		{"underscore not allowed", "my_bucket", true, "lowercase letters"},
-		{"space not allowed", "my bucket", true, "lowercase letters"},
+		{"valid simple name", "my-bucket", "", false},
+		{"valid with numbers", "bucket123", "", false},
+		{"valid with dots", "my.bucket.name", "", false},
+		{"valid exact 3 chars", "abc", "", false},
+		{"valid exact 63 chars", "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0", "", false},
+		{"too short", "ab", "between 3 and 63", true},
+		{"too long", "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz01", "between 3 and 63", true},
+		{"starts with dot", ".bucket", "cannot start or end with a period", true},
+		{"ends with dot", "bucket.", "cannot start or end with a period", true},
+		{"starts with hyphen", "-bucket", "cannot start or end with a hyphen", true},
+		{"ends with hyphen", "bucket-", "cannot start or end with a hyphen", true},
+		{"uppercase letters", "MyBucket", "lowercase letters", true},
+		{"IP address format", "192.168.1.1", "cannot be formatted as an IP address", true},
+		{"underscore not allowed", "my_bucket", "lowercase letters", true},
+		{"space not allowed", "my bucket", "lowercase letters", true},
 	}
 
 	for _, tt := range tests {
@@ -329,6 +349,7 @@ func TestValidateBucketName(t *testing.T) {
 			err := validateBucketName(tt.bucketName)
 			if tt.expectError {
 				assert.Error(t, err)
+
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
@@ -341,10 +362,10 @@ func TestValidateBucketName(t *testing.T) {
 
 func TestValidateBucketTags(t *testing.T) {
 	tests := []struct {
-		name        string
 		tags        map[string]string
-		expectError bool
+		name        string
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name:        "valid tags",
@@ -381,6 +402,7 @@ func TestValidateBucketTags(t *testing.T) {
 				for i := 0; i <= MaxTagsPerBucket; i++ {
 					tags[string(rune('a'+i%26))+string(rune(i))] = "value"
 				}
+
 				return tags
 			}(),
 			expectError: true,
@@ -393,6 +415,7 @@ func TestValidateBucketTags(t *testing.T) {
 			err := validateBucketTags(tt.tags)
 			if tt.expectError {
 				assert.Error(t, err)
+
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
@@ -742,23 +765,24 @@ func TestCORS(t *testing.T) {
 func TestMatchCORSOrigin(t *testing.T) {
 	tests := []struct {
 		name           string
-		allowedOrigins []string
 		origin         string
-		expectMatch    bool
 		expectedReturn string
+		allowedOrigins []string
+		expectMatch    bool
 	}{
-		{"wildcard", []string{"*"}, "https://example.com", true, "*"},
-		{"exact match", []string{"https://example.com"}, "https://example.com", true, "https://example.com"},
-		{"no match", []string{"https://other.com"}, "https://example.com", false, ""},
-		{"wildcard subdomain", []string{"*.example.com"}, "https://sub.example.com", true, "https://sub.example.com"},
-		{"wildcard subdomain no match", []string{"*.example.com"}, "https://other.com", false, ""},
-		{"multiple origins", []string{"https://one.com", "https://two.com"}, "https://two.com", true, "https://two.com"},
+		{"wildcard", "https://example.com", "*", []string{"*"}, true},
+		{"exact match", "https://example.com", "https://example.com", []string{"https://example.com"}, true},
+		{"no match", "https://example.com", "", []string{"https://other.com"}, false},
+		{"wildcard subdomain", "https://sub.example.com", "https://sub.example.com", []string{"*.example.com"}, true},
+		{"wildcard subdomain no match", "https://other.com", "", []string{"*.example.com"}, false},
+		{"multiple origins", "https://two.com", "https://two.com", []string{"https://one.com", "https://two.com"}, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, matched := MatchCORSOrigin(tt.allowedOrigins, tt.origin)
 			assert.Equal(t, tt.expectMatch, matched)
+
 			if matched {
 				assert.Equal(t, tt.expectedReturn, result)
 			}

@@ -9,7 +9,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/events"
 )
 
-// KafkaConfig configures a Kafka target
+// KafkaConfig configures a Kafka target.
 type KafkaConfig struct {
 	events.TargetConfig `yaml:",inline"`
 
@@ -20,27 +20,27 @@ type KafkaConfig struct {
 	Topic string `json:"topic" yaml:"topic"`
 
 	// SASL authentication
-	SASLUsername string `json:"-" yaml:"saslUsername,omitempty"`
-	SASLPassword string `json:"-" yaml:"saslPassword,omitempty"`
+	SASLUsername  string `json:"-"                       yaml:"saslUsername,omitempty"`
+	SASLPassword  string `json:"-"                       yaml:"saslPassword,omitempty"`
 	SASLMechanism string `json:"saslMechanism,omitempty" yaml:"saslMechanism,omitempty"`
 
 	// TLS configuration
-	TLSEnabled    bool   `json:"tlsEnabled,omitempty" yaml:"tlsEnabled,omitempty"`
-	TLSCACert     string `json:"tlsCaCert,omitempty" yaml:"tlsCaCert,omitempty"`
+	TLSEnabled    bool   `json:"tlsEnabled,omitempty"    yaml:"tlsEnabled,omitempty"`
+	TLSCACert     string `json:"tlsCaCert,omitempty"     yaml:"tlsCaCert,omitempty"`
 	TLSClientCert string `json:"tlsClientCert,omitempty" yaml:"tlsClientCert,omitempty"`
-	TLSClientKey  string `json:"-" yaml:"tlsClientKey,omitempty"`
+	TLSClientKey  string `json:"-"                       yaml:"tlsClientKey,omitempty"`
 	TLSSkipVerify bool   `json:"tlsSkipVerify,omitempty" yaml:"tlsSkipVerify,omitempty"`
 
 	// Producer settings
-	BatchSize    int           `json:"batchSize,omitempty" yaml:"batchSize,omitempty"`
+	BatchSize    int           `json:"batchSize,omitempty"    yaml:"batchSize,omitempty"`
 	BatchTimeout time.Duration `json:"batchTimeout,omitempty" yaml:"batchTimeout,omitempty"`
-	MaxRetries   int           `json:"maxRetries,omitempty" yaml:"maxRetries,omitempty"`
+	MaxRetries   int           `json:"maxRetries,omitempty"   yaml:"maxRetries,omitempty"`
 
 	// Compression type (none, gzip, snappy, lz4, zstd)
 	Compression string `json:"compression,omitempty" yaml:"compression,omitempty"`
 }
 
-// DefaultKafkaConfig returns a default Kafka configuration
+// DefaultKafkaConfig returns a default Kafka configuration.
 func DefaultKafkaConfig() KafkaConfig {
 	return KafkaConfig{
 		TargetConfig: events.TargetConfig{
@@ -58,7 +58,7 @@ func DefaultKafkaConfig() KafkaConfig {
 
 // KafkaTarget publishes events to Kafka
 // Note: This is a placeholder implementation. In production, you would use
-// a Kafka client library like segmentio/kafka-go or Shopify/sarama
+// a Kafka client library like segmentio/kafka-go or Shopify/sarama.
 type KafkaTarget struct {
 	config    KafkaConfig
 	mu        sync.RWMutex
@@ -67,11 +67,12 @@ type KafkaTarget struct {
 	// In production: writer *kafka.Writer
 }
 
-// NewKafkaTarget creates a new Kafka target
+// NewKafkaTarget creates a new Kafka target.
 func NewKafkaTarget(config KafkaConfig) (*KafkaTarget, error) {
 	if len(config.Brokers) == 0 {
 		return nil, fmt.Errorf("%w: brokers are required", events.ErrInvalidConfig)
 	}
+
 	if config.Topic == "" {
 		return nil, fmt.Errorf("%w: topic is required", events.ErrInvalidConfig)
 	}
@@ -90,26 +91,29 @@ func NewKafkaTarget(config KafkaConfig) (*KafkaTarget, error) {
 	// }
 
 	t.connected = true
+
 	return t, nil
 }
 
-// Name returns the target name
+// Name returns the target name.
 func (t *KafkaTarget) Name() string {
 	return t.config.Name
 }
 
-// Type returns the target type
+// Type returns the target type.
 func (t *KafkaTarget) Type() string {
 	return "kafka"
 }
 
-// Publish sends an event to Kafka
+// Publish sends an event to Kafka.
 func (t *KafkaTarget) Publish(ctx context.Context, event *events.S3Event) error {
 	t.mu.RLock()
+
 	if t.closed {
 		t.mu.RUnlock()
 		return events.ErrTargetClosed
 	}
+
 	t.mu.RUnlock()
 
 	body, err := event.ToJSON()
@@ -127,14 +131,15 @@ func (t *KafkaTarget) Publish(ctx context.Context, event *events.S3Event) error 
 	return nil
 }
 
-// IsHealthy checks if the Kafka connection is healthy
+// IsHealthy checks if the Kafka connection is healthy.
 func (t *KafkaTarget) IsHealthy(ctx context.Context) bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
 	return !t.closed && t.connected
 }
 
-// Close closes the Kafka target
+// Close closes the Kafka target.
 func (t *KafkaTarget) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -149,7 +154,7 @@ func (t *KafkaTarget) Close() error {
 	return nil
 }
 
-// Ensure KafkaTarget implements Target
+// Ensure KafkaTarget implements Target.
 var _ events.Target = (*KafkaTarget)(nil)
 
 func init() {
@@ -159,6 +164,7 @@ func init() {
 		if name, ok := config["name"].(string); ok {
 			cfg.Name = name
 		}
+
 		if brokers, ok := config["brokers"].([]interface{}); ok {
 			cfg.Brokers = make([]string, len(brokers))
 			for i, b := range brokers {
@@ -167,12 +173,15 @@ func init() {
 				}
 			}
 		}
+
 		if topic, ok := config["topic"].(string); ok {
 			cfg.Topic = topic
 		}
+
 		if username, ok := config["saslUsername"].(string); ok {
 			cfg.SASLUsername = username
 		}
+
 		if password, ok := config["saslPassword"].(string); ok {
 			cfg.SASLPassword = password
 		}

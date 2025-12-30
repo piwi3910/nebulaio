@@ -9,7 +9,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/events"
 )
 
-// AMQPConfig configures an AMQP (RabbitMQ) target
+// AMQPConfig configures an AMQP (RabbitMQ) target.
 type AMQPConfig struct {
 	events.TargetConfig `yaml:",inline"`
 
@@ -41,17 +41,17 @@ type AMQPConfig struct {
 	Immediate bool `json:"immediate,omitempty" yaml:"immediate,omitempty"`
 
 	// TLS configuration
-	TLSEnabled    bool   `json:"tlsEnabled,omitempty" yaml:"tlsEnabled,omitempty"`
-	TLSCACert     string `json:"tlsCaCert,omitempty" yaml:"tlsCaCert,omitempty"`
+	TLSEnabled    bool   `json:"tlsEnabled,omitempty"    yaml:"tlsEnabled,omitempty"`
+	TLSCACert     string `json:"tlsCaCert,omitempty"     yaml:"tlsCaCert,omitempty"`
 	TLSClientCert string `json:"tlsClientCert,omitempty" yaml:"tlsClientCert,omitempty"`
-	TLSClientKey  string `json:"-" yaml:"tlsClientKey,omitempty"`
+	TLSClientKey  string `json:"-"                       yaml:"tlsClientKey,omitempty"`
 	TLSSkipVerify bool   `json:"tlsSkipVerify,omitempty" yaml:"tlsSkipVerify,omitempty"`
 
 	// ReconnectDelay is the delay between reconnection attempts
 	ReconnectDelay time.Duration `json:"reconnectDelay,omitempty" yaml:"reconnectDelay,omitempty"`
 }
 
-// DefaultAMQPConfig returns a default AMQP configuration
+// DefaultAMQPConfig returns a default AMQP configuration.
 func DefaultAMQPConfig() AMQPConfig {
 	return AMQPConfig{
 		TargetConfig: events.TargetConfig{
@@ -69,7 +69,7 @@ func DefaultAMQPConfig() AMQPConfig {
 
 // AMQPTarget publishes events to AMQP (RabbitMQ)
 // Note: This is a placeholder implementation. In production, you would use
-// a library like github.com/rabbitmq/amqp091-go
+// a library like github.com/rabbitmq/amqp091-go.
 type AMQPTarget struct {
 	config    AMQPConfig
 	mu        sync.RWMutex
@@ -78,11 +78,12 @@ type AMQPTarget struct {
 	// In production: conn *amqp.Connection, channel *amqp.Channel
 }
 
-// NewAMQPTarget creates a new AMQP target
+// NewAMQPTarget creates a new AMQP target.
 func NewAMQPTarget(config AMQPConfig) (*AMQPTarget, error) {
 	if config.URL == "" {
 		return nil, fmt.Errorf("%w: URL is required", events.ErrInvalidConfig)
 	}
+
 	if config.Exchange == "" && config.Queue == "" {
 		return nil, fmt.Errorf("%w: exchange or queue is required", events.ErrInvalidConfig)
 	}
@@ -96,26 +97,29 @@ func NewAMQPTarget(config AMQPConfig) (*AMQPTarget, error) {
 	// ...
 
 	t.connected = true
+
 	return t, nil
 }
 
-// Name returns the target name
+// Name returns the target name.
 func (t *AMQPTarget) Name() string {
 	return t.config.Name
 }
 
-// Type returns the target type
+// Type returns the target type.
 func (t *AMQPTarget) Type() string {
 	return "amqp"
 }
 
-// Publish sends an event to AMQP
+// Publish sends an event to AMQP.
 func (t *AMQPTarget) Publish(ctx context.Context, event *events.S3Event) error {
 	t.mu.RLock()
+
 	if t.closed {
 		t.mu.RUnlock()
 		return events.ErrTargetClosed
 	}
+
 	t.mu.RUnlock()
 
 	body, err := event.ToJSON()
@@ -139,14 +143,15 @@ func (t *AMQPTarget) Publish(ctx context.Context, event *events.S3Event) error {
 	return nil
 }
 
-// IsHealthy checks if the AMQP connection is healthy
+// IsHealthy checks if the AMQP connection is healthy.
 func (t *AMQPTarget) IsHealthy(ctx context.Context) bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
 	return !t.closed && t.connected
 }
 
-// Close closes the AMQP target
+// Close closes the AMQP target.
 func (t *AMQPTarget) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -161,7 +166,7 @@ func (t *AMQPTarget) Close() error {
 	return nil
 }
 
-// Ensure AMQPTarget implements Target
+// Ensure AMQPTarget implements Target.
 var _ events.Target = (*AMQPTarget)(nil)
 
 func init() {
@@ -171,21 +176,27 @@ func init() {
 		if name, ok := config["name"].(string); ok {
 			cfg.Name = name
 		}
+
 		if url, ok := config["url"].(string); ok {
 			cfg.URL = url
 		}
+
 		if exchange, ok := config["exchange"].(string); ok {
 			cfg.Exchange = exchange
 		}
+
 		if exchangeType, ok := config["exchangeType"].(string); ok {
 			cfg.ExchangeType = exchangeType
 		}
+
 		if routingKey, ok := config["routingKey"].(string); ok {
 			cfg.RoutingKey = routingKey
 		}
+
 		if queue, ok := config["queue"].(string); ok {
 			cfg.Queue = queue
 		}
+
 		if durable, ok := config["durable"].(bool); ok {
 			cfg.Durable = durable
 		}

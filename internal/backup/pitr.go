@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -25,8 +26,8 @@ import (
 type BackupType string
 
 const (
-	BackupTypeFull        BackupType = "full"
-	BackupTypeIncremental BackupType = "incremental"
+	BackupTypeFull         BackupType = "full"
+	BackupTypeIncremental  BackupType = "incremental"
 	BackupTypeDifferential BackupType = "differential"
 )
 
@@ -54,92 +55,81 @@ const (
 
 // BackupMetadata contains metadata about a backup.
 type BackupMetadata struct {
+	StartTime       time.Time         `json:"startTime"`
+	PointInTime     time.Time         `json:"pointInTime"`
+	EndTime         time.Time         `json:"endTime,omitempty"`
+	Tags            map[string]string `json:"tags,omitempty"`
+	Error           string            `json:"error,omitempty"`
+	ParentBackupID  string            `json:"parentBackupId,omitempty"`
+	Status          BackupStatus      `json:"status"`
+	Checksum        string            `json:"checksum"`
 	ID              string            `json:"id"`
 	Type            BackupType        `json:"type"`
-	Status          BackupStatus      `json:"status"`
+	EncryptionKeyID string            `json:"encryptionKeyId,omitempty"`
+	Location        string            `json:"location"`
 	Buckets         []string          `json:"buckets"`
-	ParentBackupID  string            `json:"parentBackupId,omitempty"`
-	StartTime       time.Time         `json:"startTime"`
-	EndTime         time.Time         `json:"endTime,omitempty"`
-	PointInTime     time.Time         `json:"pointInTime"`
 	ObjectCount     int64             `json:"objectCount"`
 	TotalSize       int64             `json:"totalSize"`
 	CompressedSize  int64             `json:"compressedSize"`
-	Checksum        string            `json:"checksum"`
-	Error           string            `json:"error,omitempty"`
-	Tags            map[string]string `json:"tags,omitempty"`
 	RetentionDays   int               `json:"retentionDays"`
-	EncryptionKeyID string            `json:"encryptionKeyId,omitempty"`
-	Location        string            `json:"location"`
 }
 
 // RestoreMetadata contains metadata about a restore operation.
 type RestoreMetadata struct {
-	ID              string        `json:"id"`
-	BackupID        string        `json:"backupId"`
-	Status          RestoreStatus `json:"status"`
-	TargetBuckets   []string      `json:"targetBuckets"`
 	PointInTime     time.Time     `json:"pointInTime,omitempty"`
 	StartTime       time.Time     `json:"startTime"`
 	EndTime         time.Time     `json:"endTime,omitempty"`
+	ID              string        `json:"id"`
+	BackupID        string        `json:"backupId"`
+	Status          RestoreStatus `json:"status"`
+	Error           string        `json:"error,omitempty"`
+	TargetBuckets   []string      `json:"targetBuckets"`
 	ObjectsRestored int64         `json:"objectsRestored"`
 	BytesRestored   int64         `json:"bytesRestored"`
-	Error           string        `json:"error,omitempty"`
 	Overwrite       bool          `json:"overwrite"`
 }
 
 // WALEntry represents a write-ahead log entry for point-in-time recovery.
 type WALEntry struct {
-	ID          string    `json:"id"`
-	Timestamp   time.Time `json:"timestamp"`
-	Operation   string    `json:"operation"` // PUT, DELETE, COPY
-	Bucket      string    `json:"bucket"`
-	Key         string    `json:"key"`
-	VersionID   string    `json:"versionId,omitempty"`
-	Size        int64     `json:"size,omitempty"`
-	ETag        string    `json:"etag,omitempty"`
-	ContentType string    `json:"contentType,omitempty"`
+	Timestamp   time.Time         `json:"timestamp"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
-	DataPath    string    `json:"dataPath,omitempty"`
+	ID          string            `json:"id"`
+	Operation   string            `json:"operation"`
+	Bucket      string            `json:"bucket"`
+	Key         string            `json:"key"`
+	VersionID   string            `json:"versionId,omitempty"`
+	ETag        string            `json:"etag,omitempty"`
+	ContentType string            `json:"contentType,omitempty"`
+	DataPath    string            `json:"dataPath,omitempty"`
+	Size        int64             `json:"size,omitempty"`
 }
 
 // BackupConfig contains backup configuration.
 type BackupConfig struct {
-	// Backup destination
-	DestinationPath string
-
-	// Compression settings
-	EnableCompression bool
+	DestinationPath   string
+	EncryptionKeyID   string
+	WALPath           string
 	CompressionLevel  int
-
-	// Encryption settings
-	EnableEncryption bool
-	EncryptionKeyID  string
-
-	// Retention settings
-	RetentionDays int
-	MaxBackups    int
-
-	// Performance settings
-	Concurrency   int
-	ChunkSize     int64
-
-	// WAL settings
-	WALPath       string
-	WALSyncInterval time.Duration
-	WALRetention  time.Duration
+	RetentionDays     int
+	MaxBackups        int
+	Concurrency       int
+	ChunkSize         int64
+	WALSyncInterval   time.Duration
+	WALRetention      time.Duration
+	EnableCompression bool
+	EnableEncryption  bool
 }
 
 // BackupManager manages backup and restore operations.
 type BackupManager struct {
-	mu            sync.RWMutex
-	config        *BackupConfig
 	storage       BackupStorage
+	config        *BackupConfig
 	wal           *WALManager
 	backups       map[string]*BackupMetadata
 	restores      map[string]*RestoreMetadata
 	activeBackup  *BackupJob
 	activeRestore *RestoreJob
+	mu            sync.RWMutex
 }
 
 // BackupStorage interface for storage operations.
@@ -156,61 +146,61 @@ type BackupStorage interface {
 
 // ObjectInfo contains object metadata.
 type ObjectInfo struct {
+	LastModified time.Time
+	Metadata     map[string]string
 	Key          string
-	Size         int64
 	ETag         string
 	ContentType  string
-	LastModified time.Time
 	VersionID    string
-	Metadata     map[string]string
+	Size         int64
 	IsLatest     bool
 	DeleteMarker bool
 }
 
 // PutObjectOptions contains options for PutObject.
 type PutObjectOptions struct {
-	ContentType string
 	Metadata    map[string]string
+	ContentType string
 }
 
 // WALManager manages write-ahead log for PITR.
 type WALManager struct {
-	mu          sync.Mutex
-	path        string
-	entries     []*WALEntry
-	file        *os.File
-	encoder     *json.Encoder
-	syncTicker  *time.Ticker
-	retention   time.Duration
-	lastSync    time.Time
+	lastSync   time.Time
+	file       *os.File
+	encoder    *json.Encoder
+	syncTicker *time.Ticker
+	path       string
+	entries    []*WALEntry
+	retention  time.Duration
+	mu         sync.Mutex
 }
 
 // BackupJob represents an active backup operation.
 type BackupJob struct {
-	metadata       *BackupMetadata
-	ctx            context.Context
-	cancel         context.CancelFunc
-	_progress      int64
-	_totalObjects  int64
-	_errors        []error
-	_mu            sync.Mutex
+	ctx           context.Context
+	metadata      *BackupMetadata
+	cancel        context.CancelFunc
+	_errors       []error
+	_progress     int64
+	_totalObjects int64
+	_mu           sync.Mutex
 }
 
 // RestoreJob represents an active restore operation.
 type RestoreJob struct {
-	metadata       *RestoreMetadata
-	ctx            context.Context
-	cancel         context.CancelFunc
-	_progress      int64
-	_totalObjects  int64
-	_errors        []error
-	_mu            sync.Mutex
+	ctx           context.Context
+	metadata      *RestoreMetadata
+	cancel        context.CancelFunc
+	_errors       []error
+	_progress     int64
+	_totalObjects int64
+	_mu           sync.Mutex
 }
 
 // NewBackupManager creates a new backup manager.
 func NewBackupManager(config *BackupConfig, storage BackupStorage) (*BackupManager, error) {
 	// Create destination directory
-	if err := os.MkdirAll(config.DestinationPath, 0755); err != nil {
+	if err := os.MkdirAll(config.DestinationPath, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -238,12 +228,14 @@ func NewBackupManager(config *BackupConfig, storage BackupStorage) (*BackupManag
 
 // NewWALManager creates a new WAL manager.
 func NewWALManager(path string, syncInterval, retention time.Duration) (*WALManager, error) {
-	if err := os.MkdirAll(path, 0755); err != nil {
+	if err := os.MkdirAll(path, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 
 	walFile := filepath.Join(path, "wal.log")
-	file, err := os.OpenFile(walFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+	//nolint:gosec // G304: walFile is constructed from trusted config
+	file, err := os.OpenFile(walFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open WAL file: %w", err)
 	}
@@ -271,11 +263,13 @@ func (wm *WALManager) WriteEntry(entry *WALEntry) error {
 	entry.ID = uuid.New().String()
 	entry.Timestamp = time.Now()
 
-	if err := wm.encoder.Encode(entry); err != nil {
+	err := wm.encoder.Encode(entry)
+	if err != nil {
 		return fmt.Errorf("failed to write WAL entry: %w", err)
 	}
 
 	wm.entries = append(wm.entries, entry)
+
 	return nil
 }
 
@@ -285,11 +279,13 @@ func (wm *WALManager) GetEntriesSince(t time.Time) ([]*WALEntry, error) {
 	defer wm.mu.Unlock()
 
 	var result []*WALEntry
+
 	for _, entry := range wm.entries {
 		if entry.Timestamp.After(t) || entry.Timestamp.Equal(t) {
 			result = append(result, entry)
 		}
 	}
+
 	return result, nil
 }
 
@@ -299,11 +295,13 @@ func (wm *WALManager) GetEntriesUntil(t time.Time) ([]*WALEntry, error) {
 	defer wm.mu.Unlock()
 
 	var result []*WALEntry
+
 	for _, entry := range wm.entries {
 		if entry.Timestamp.Before(t) || entry.Timestamp.Equal(t) {
 			result = append(result, entry)
 		}
 	}
+
 	return result, nil
 }
 
@@ -311,21 +309,26 @@ func (wm *WALManager) GetEntriesUntil(t time.Time) ([]*WALEntry, error) {
 func (wm *WALManager) syncLoop() {
 	for range wm.syncTicker.C {
 		wm.mu.Lock()
-		if err := wm.file.Sync(); err != nil {
+		err := wm.file.Sync()
+
+		if err != nil {
 			log.Error().
 				Err(err).
 				Msg("failed to sync WAL file - data durability may be compromised; check disk health, available space, and filesystem mount options (consider enabling sync mount option)")
 		}
+
 		wm.lastSync = time.Now()
 
 		// Cleanup old entries
 		cutoff := time.Now().Add(-wm.retention)
 		newEntries := make([]*WALEntry, 0)
+
 		for _, entry := range wm.entries {
 			if entry.Timestamp.After(cutoff) {
 				newEntries = append(newEntries, entry)
 			}
 		}
+
 		wm.entries = newEntries
 		wm.mu.Unlock()
 	}
@@ -334,8 +337,10 @@ func (wm *WALManager) syncLoop() {
 // Close closes the WAL manager.
 func (wm *WALManager) Close() error {
 	wm.syncTicker.Stop()
+
 	wm.mu.Lock()
 	defer wm.mu.Unlock()
+
 	return wm.file.Close()
 }
 
@@ -343,11 +348,13 @@ func (wm *WALManager) Close() error {
 func (bm *BackupManager) loadMetadata() error {
 	metadataPath := filepath.Join(bm.config.DestinationPath, "metadata.json")
 
+	//nolint:gosec // G304: metadataPath is from trusted config
 	data, err := os.ReadFile(metadataPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
+
 		return err
 	}
 
@@ -366,10 +373,12 @@ func (bm *BackupManager) loadMetadata() error {
 // saveMetadata saves backup metadata.
 func (bm *BackupManager) saveMetadata() error {
 	bm.mu.RLock()
+
 	backups := make([]*BackupMetadata, 0, len(bm.backups))
 	for _, b := range bm.backups {
 		backups = append(backups, b)
 	}
+
 	bm.mu.RUnlock()
 
 	data, err := json.MarshalIndent(backups, "", "  ")
@@ -378,15 +387,17 @@ func (bm *BackupManager) saveMetadata() error {
 	}
 
 	metadataPath := filepath.Join(bm.config.DestinationPath, "metadata.json")
+
 	return os.WriteFile(metadataPath, data, 0644)
 }
 
 // CreateBackup creates a new backup.
 func (bm *BackupManager) CreateBackup(ctx context.Context, backupType BackupType, buckets []string, tags map[string]string) (*BackupMetadata, error) {
 	bm.mu.Lock()
+
 	if bm.activeBackup != nil {
 		bm.mu.Unlock()
-		return nil, fmt.Errorf("backup already in progress")
+		return nil, errors.New("backup already in progress")
 	}
 
 	metadata := &BackupMetadata{
@@ -398,7 +409,7 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, backupType BackupType
 		PointInTime:   time.Now(),
 		Tags:          tags,
 		RetentionDays: bm.config.RetentionDays,
-		Location:      filepath.Join(bm.config.DestinationPath, fmt.Sprintf("backup-%s", time.Now().Format("20060102-150405"))),
+		Location:      filepath.Join(bm.config.DestinationPath, "backup-"+time.Now().Format("20060102-150405")),
 	}
 
 	// For incremental backup, find parent
@@ -431,17 +442,21 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, backupType BackupType
 // findLatestFullBackup finds the latest completed full backup for the given buckets.
 func (bm *BackupManager) findLatestFullBackup(buckets []string) *BackupMetadata {
 	var latest *BackupMetadata
+
 	for _, b := range bm.backups {
 		if b.Type != BackupTypeFull || b.Status != BackupStatusCompleted {
 			continue
 		}
+
 		if !bm.bucketsMatch(b.Buckets, buckets) {
 			continue
 		}
+
 		if latest == nil || b.StartTime.After(latest.StartTime) {
 			latest = b
 		}
 	}
+
 	return latest
 }
 
@@ -450,13 +465,16 @@ func (bm *BackupManager) bucketsMatch(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
+
 	sort.Strings(a)
 	sort.Strings(b)
+
 	for i := range a {
 		if a[i] != b[i] {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -472,26 +490,34 @@ func (bm *BackupManager) runBackup(job *BackupJob) {
 	job.metadata.Status = BackupStatusInProgress
 
 	// Create backup directory
-	if err := os.MkdirAll(job.metadata.Location, 0755); err != nil {
+	err := os.MkdirAll(job.metadata.Location, 0750)
+	if err != nil {
 		job.metadata.Status = BackupStatusFailed
 		job.metadata.Error = err.Error()
+
 		return
 	}
 
-	var totalSize int64
-	var objectCount int64
-	var compressedSize int64
+	var (
+		totalSize      int64
+		objectCount    int64
+		compressedSize int64
+	)
+
 	hasher := sha256.New()
 
 	// Backup each bucket
 	for _, bucket := range job.metadata.Buckets {
-		if err := bm.backupBucket(job, bucket, &objectCount, &totalSize, &compressedSize, hasher); err != nil {
+		err := bm.backupBucket(job, bucket, &objectCount, &totalSize, &compressedSize, hasher)
+		if err != nil {
 			if job.ctx.Err() != nil {
 				job.metadata.Status = BackupStatusCancelled
 				return
 			}
+
 			job.metadata.Status = BackupStatusFailed
 			job.metadata.Error = err.Error()
+
 			return
 		}
 	}
@@ -517,15 +543,18 @@ func (bm *BackupManager) backupBucket(job *BackupJob, bucket string, objectCount
 
 	// Create bucket directory in backup
 	bucketPath := filepath.Join(job.metadata.Location, bucket)
-	if err := os.MkdirAll(bucketPath, 0755); err != nil {
+	if err := os.MkdirAll(bucketPath, 0750); err != nil {
 		return fmt.Errorf("failed to create bucket directory: %w", err)
 	}
 
 	// Use semaphore for concurrency control
 	sem := make(chan struct{}, bm.config.Concurrency)
-	var wg sync.WaitGroup
-	var backupErr error
-	var errMu sync.Mutex
+
+	var (
+		wg        sync.WaitGroup
+		backupErr error
+		errMu     sync.Mutex
+	)
 
 	for _, obj := range objects {
 		select {
@@ -543,17 +572,24 @@ func (bm *BackupManager) backupBucket(job *BackupJob, bucket string, objectCount
 		}
 
 		wg.Add(1)
+
 		go func(o *ObjectInfo) {
 			defer wg.Done()
+
 			sem <- struct{}{}
+
 			defer func() { <-sem }()
 
-			if err := bm.backupObject(job, bucket, o, hasher); err != nil {
+			err := bm.backupObject(job, bucket, o, hasher)
+			if err != nil {
 				errMu.Lock()
+
 				if backupErr == nil {
 					backupErr = err
 				}
+
 				errMu.Unlock()
+
 				return
 			}
 
@@ -563,6 +599,7 @@ func (bm *BackupManager) backupBucket(job *BackupJob, bucket string, objectCount
 	}
 
 	wg.Wait()
+
 	return backupErr
 }
 
@@ -572,39 +609,50 @@ func (bm *BackupManager) backupObject(job *BackupJob, bucket string, obj *Object
 	if err != nil {
 		return fmt.Errorf("failed to get object %s/%s: %w", bucket, obj.Key, err)
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Create object path
 	objectPath := filepath.Join(job.metadata.Location, bucket, obj.Key)
+
 	objectDir := filepath.Dir(objectPath)
-	if err := os.MkdirAll(objectDir, 0755); err != nil {
+	if err := os.MkdirAll(objectDir, 0750); err != nil {
 		return fmt.Errorf("failed to create object directory: %w", err)
 	}
 
 	// Create output file
-	var file *os.File
-	var writer io.Writer
+	var (
+		file   *os.File
+		writer io.Writer
+	)
 
 	if bm.config.EnableCompression {
 		objectPath += ".gz"
+
+		//nolint:gosec // G304: objectPath is from trusted backup config
 		file, err = os.Create(objectPath)
 		if err != nil {
 			return fmt.Errorf("failed to create backup file: %w", err)
 		}
+
 		defer func() { _ = file.Close() }()
 
 		gzWriter, err := gzip.NewWriterLevel(file, bm.config.CompressionLevel)
 		if err != nil {
 			return fmt.Errorf("failed to create gzip writer: %w", err)
 		}
+
 		defer func() { _ = gzWriter.Close() }()
+
 		writer = io.MultiWriter(gzWriter, hasher)
 	} else {
 		file, err = os.Create(objectPath)
 		if err != nil {
 			return fmt.Errorf("failed to create backup file: %w", err)
 		}
+
 		defer func() { _ = file.Close() }()
+
 		writer = io.MultiWriter(file, hasher)
 	}
 
@@ -615,10 +663,12 @@ func (bm *BackupManager) backupObject(job *BackupJob, bucket string, obj *Object
 
 	// Save object metadata
 	metadataPath := objectPath + ".meta"
+
 	metadataData, err := json.MarshalIndent(obj, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
+
 	if err := os.WriteFile(metadataPath, metadataData, 0644); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
@@ -632,10 +682,11 @@ func (bm *BackupManager) CancelBackup() error {
 	defer bm.mu.Unlock()
 
 	if bm.activeBackup == nil {
-		return fmt.Errorf("no active backup")
+		return errors.New("no active backup")
 	}
 
 	bm.activeBackup.cancel()
+
 	return nil
 }
 
@@ -648,6 +699,7 @@ func (bm *BackupManager) GetBackup(id string) (*BackupMetadata, error) {
 	if !exists {
 		return nil, fmt.Errorf("backup not found: %s", id)
 	}
+
 	return backup, nil
 }
 
@@ -687,20 +739,23 @@ func (bm *BackupManager) DeleteBackup(id string) error {
 	}
 
 	// Delete backup files
-	if err := os.RemoveAll(backup.Location); err != nil {
+	err := os.RemoveAll(backup.Location)
+	if err != nil {
 		return fmt.Errorf("failed to delete backup files: %w", err)
 	}
 
 	delete(bm.backups, id)
+
 	return bm.saveMetadata()
 }
 
 // Restore restores from a backup.
 func (bm *BackupManager) Restore(ctx context.Context, backupID string, targetBuckets []string, overwrite bool) (*RestoreMetadata, error) {
 	bm.mu.Lock()
+
 	if bm.activeRestore != nil {
 		bm.mu.Unlock()
-		return nil, fmt.Errorf("restore already in progress")
+		return nil, errors.New("restore already in progress")
 	}
 
 	backup, exists := bm.backups[backupID]
@@ -711,7 +766,7 @@ func (bm *BackupManager) Restore(ctx context.Context, backupID string, targetBuc
 
 	if backup.Status != BackupStatusCompleted {
 		bm.mu.Unlock()
-		return nil, fmt.Errorf("backup is not completed")
+		return nil, errors.New("backup is not completed")
 	}
 
 	metadata := &RestoreMetadata{
@@ -743,16 +798,20 @@ func (bm *BackupManager) Restore(ctx context.Context, backupID string, targetBuc
 func (bm *BackupManager) RestorePointInTime(ctx context.Context, targetTime time.Time, buckets []string, targetBuckets []string) (*RestoreMetadata, error) {
 	// Find the latest backup before target time
 	var baseBackup *BackupMetadata
+
 	for _, b := range bm.backups {
 		if b.Status != BackupStatusCompleted {
 			continue
 		}
+
 		if b.PointInTime.After(targetTime) {
 			continue
 		}
+
 		if !bm.bucketsMatch(b.Buckets, buckets) {
 			continue
 		}
+
 		if baseBackup == nil || b.PointInTime.After(baseBackup.PointInTime) {
 			baseBackup = b
 		}
@@ -773,9 +832,10 @@ func (bm *BackupManager) RestorePointInTime(ctx context.Context, targetTime time
 	}
 
 	bm.mu.Lock()
+
 	if bm.activeRestore != nil {
 		bm.mu.Unlock()
-		return nil, fmt.Errorf("restore already in progress")
+		return nil, errors.New("restore already in progress")
 	}
 
 	jobCtx, cancel := context.WithCancel(ctx)
@@ -813,12 +873,16 @@ func (bm *BackupManager) runRestore(job *RestoreJob, backup *BackupMetadata) {
 		if err != nil {
 			job.metadata.Status = RestoreStatusFailed
 			job.metadata.Error = err.Error()
+
 			return
 		}
+
 		if !exists {
-			if err := bm.storage.CreateBucket(job.ctx, bucket); err != nil {
+			err := bm.storage.CreateBucket(job.ctx, bucket)
+			if err != nil {
 				job.metadata.Status = RestoreStatusFailed
 				job.metadata.Error = err.Error()
+
 				return
 			}
 		}
@@ -826,13 +890,16 @@ func (bm *BackupManager) runRestore(job *RestoreJob, backup *BackupMetadata) {
 
 	// Restore from each backup in chain
 	for _, b := range backupChain {
-		if err := bm.restoreFromBackup(job, b); err != nil {
+		err := bm.restoreFromBackup(job, b)
+		if err != nil {
 			if job.ctx.Err() != nil {
 				job.metadata.Status = RestoreStatusCancelled
 				return
 			}
+
 			job.metadata.Status = RestoreStatusFailed
 			job.metadata.Error = err.Error()
+
 			return
 		}
 	}
@@ -855,6 +922,7 @@ func (bm *BackupManager) runPITRRestore(job *RestoreJob, baseBackup *BackupMetad
 	if err := bm.restoreFromBackup(job, baseBackup); err != nil {
 		job.metadata.Status = RestoreStatusFailed
 		job.metadata.Error = err.Error()
+
 		return
 	}
 
@@ -863,6 +931,7 @@ func (bm *BackupManager) runPITRRestore(job *RestoreJob, baseBackup *BackupMetad
 	if err != nil {
 		job.metadata.Status = RestoreStatusFailed
 		job.metadata.Error = err.Error()
+
 		return
 	}
 
@@ -877,9 +946,11 @@ func (bm *BackupManager) runPITRRestore(job *RestoreJob, baseBackup *BackupMetad
 			continue
 		}
 
-		if err := bm.applyWALEntry(job.ctx, entry, targetBucket); err != nil {
+		err := bm.applyWALEntry(job.ctx, entry, targetBucket)
+		if err != nil {
 			job.metadata.Status = RestoreStatusFailed
 			job.metadata.Error = err.Error()
+
 			return
 		}
 
@@ -900,6 +971,7 @@ func (bm *BackupManager) buildBackupChain(backup *BackupMetadata) []*BackupMetad
 		if !exists {
 			break
 		}
+
 		chain = append([]*BackupMetadata{parent}, chain...)
 		current = parent
 	}
@@ -916,10 +988,12 @@ func (bm *BackupManager) restoreFromBackup(job *RestoreJob, backup *BackupMetada
 		}
 
 		bucketPath := filepath.Join(backup.Location, bucket)
-		if err := bm.restoreBucket(job, bucketPath, targetBucket); err != nil {
+		err := bm.restoreBucket(job, bucketPath, targetBucket)
+		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -958,6 +1032,7 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 		}
 
 		var objMeta ObjectInfo
+
 		metaData, err := os.ReadFile(metaPath)
 		if err == nil {
 			_ = json.Unmarshal(metaData, &objMeta)
@@ -968,9 +1043,11 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 		if err != nil {
 			return fmt.Errorf("failed to open backup file: %w", err)
 		}
+
 		defer func() { _ = file.Close() }()
 
 		var reader io.Reader = file
+
 		size := info.Size()
 
 		// Decompress if needed
@@ -979,7 +1056,9 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 			if err != nil {
 				return fmt.Errorf("failed to create gzip reader: %w", err)
 			}
+
 			defer func() { _ = gzReader.Close() }()
+
 			reader = gzReader
 			size = objMeta.Size
 		}
@@ -1009,10 +1088,12 @@ func (bm *BackupManager) applyWALEntry(ctx context.Context, entry *WALEntry, tar
 		if entry.DataPath == "" {
 			return nil // Skip if no data path
 		}
+
 		file, err := os.Open(entry.DataPath)
 		if err != nil {
 			return fmt.Errorf("failed to open WAL data: %w", err)
 		}
+
 		defer func() { _ = file.Close() }()
 
 		opts := &PutObjectOptions{
@@ -1037,6 +1118,7 @@ func (bm *BackupManager) getTargetBucket(sourceBucket string, sourceBuckets, tar
 			return targetBuckets[i]
 		}
 	}
+
 	return ""
 }
 
@@ -1046,10 +1128,11 @@ func (bm *BackupManager) CancelRestore() error {
 	defer bm.mu.Unlock()
 
 	if bm.activeRestore == nil {
-		return fmt.Errorf("no active restore")
+		return errors.New("no active restore")
 	}
 
 	bm.activeRestore.cancel()
+
 	return nil
 }
 
@@ -1062,6 +1145,7 @@ func (bm *BackupManager) GetRestore(id string) (*RestoreMetadata, error) {
 	if !exists {
 		return nil, fmt.Errorf("restore not found: %s", id)
 	}
+
 	return restore, nil
 }
 
@@ -1073,19 +1157,23 @@ func (bm *BackupManager) applyRetentionPolicy() {
 	cutoff := time.Now().AddDate(0, 0, -bm.config.RetentionDays)
 
 	var toDelete []string
+
 	for id, backup := range bm.backups {
 		if backup.Status != BackupStatusCompleted {
 			continue
 		}
+
 		if backup.StartTime.Before(cutoff) {
 			// Check if this is a parent of another backup
 			isParent := false
+
 			for _, b := range bm.backups {
 				if b.ParentBackupID == id {
 					isParent = true
 					break
 				}
 			}
+
 			if !isParent {
 				toDelete = append(toDelete, id)
 			}
@@ -1099,6 +1187,7 @@ func (bm *BackupManager) applyRetentionPolicy() {
 		for _, b := range bm.backups {
 			backups = append(backups, b)
 		}
+
 		sort.Slice(backups, func(i, j int) bool {
 			return backups[i].StartTime.Before(backups[j].StartTime)
 		})
@@ -1107,27 +1196,33 @@ func (bm *BackupManager) applyRetentionPolicy() {
 			if len(bm.backups)-len(toDelete) <= bm.config.MaxBackups {
 				break
 			}
+
 			if b.Status != BackupStatusCompleted {
 				continue
 			}
 			// Check if already marked or is parent
 			found := false
+
 			for _, id := range toDelete {
 				if id == b.ID {
 					found = true
 					break
 				}
 			}
+
 			if found {
 				continue
 			}
+
 			isParent := false
+
 			for _, other := range bm.backups {
 				if other.ParentBackupID == b.ID {
 					isParent = true
 					break
 				}
 			}
+
 			if !isParent {
 				toDelete = append(toDelete, b.ID)
 			}
@@ -1138,6 +1233,7 @@ func (bm *BackupManager) applyRetentionPolicy() {
 	for _, id := range toDelete {
 		backup := bm.backups[id]
 		_ = os.RemoveAll(backup.Location)
+
 		delete(bm.backups, id)
 	}
 }

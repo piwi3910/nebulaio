@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -55,8 +56,8 @@ func TestCreateAccessPointValidation(t *testing.T) {
 	svc := NewObjectLambdaService()
 
 	tests := []struct {
-		name    string
 		cfg     *AccessPointConfig
+		name    string
 		wantErr bool
 	}{
 		{
@@ -104,7 +105,7 @@ func TestListAccessPoints(t *testing.T) {
 	svc := NewObjectLambdaService()
 
 	// Create multiple access points
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		cfg := &AccessPointConfig{
 			Name:                  "test-ap-" + string(rune('a'+i)),
 			SupportingAccessPoint: "supporting",
@@ -112,7 +113,8 @@ func TestListAccessPoints(t *testing.T) {
 				{Actions: []string{"GetObject"}, ContentTransformation: ContentTransformation{Type: TransformBuiltIn}},
 			},
 		}
-		if err := svc.CreateAccessPoint(cfg); err != nil {
+		err := svc.CreateAccessPoint(cfg)
+		if err != nil {
 			t.Fatalf("CreateAccessPoint failed: %v", err)
 		}
 	}
@@ -213,6 +215,7 @@ func TestPIIMaskTransformer(t *testing.T) {
 	}
 
 	data, _ := io.ReadAll(output)
+
 	var result map[string]interface{}
 	if err := json.Unmarshal(data, &result); err != nil {
 		t.Fatalf("Failed to unmarshal result: %v", err)
@@ -247,9 +250,9 @@ func TestFilterFieldsTransformer(t *testing.T) {
 	}`
 
 	tests := []struct {
-		name   string
 		params map[string]interface{}
 		check  func(map[string]interface{}) bool
+		name   string
 	}{
 		{
 			name: "include fields",
@@ -281,6 +284,7 @@ func TestFilterFieldsTransformer(t *testing.T) {
 			}
 
 			data, _ := io.ReadAll(output)
+
 			var result map[string]interface{}
 			if err := json.Unmarshal(data, &result); err != nil {
 				t.Fatalf("Failed to unmarshal result: %v", err)
@@ -310,6 +314,7 @@ Jane,25,LA`
 	}
 
 	data, _ := io.ReadAll(output)
+
 	var result []map[string]string
 	if err := json.Unmarshal(data, &result); err != nil {
 		t.Fatalf("Failed to parse output JSON: %v", err)
@@ -351,6 +356,7 @@ func TestBuiltInTransformWithAccessPoint(t *testing.T) {
 	}
 
 	input := "Contact email: user@example.com"
+
 	output, _, err := svc.TransformObject(
 		context.Background(),
 		"redact-ap",
@@ -359,7 +365,6 @@ func TestBuiltInTransformWithAccessPoint(t *testing.T) {
 		map[string]string{},
 		UserIdentity{},
 	)
-
 	if err != nil {
 		t.Fatalf("TransformObject failed: %v", err)
 	}
@@ -368,6 +373,7 @@ func TestBuiltInTransformWithAccessPoint(t *testing.T) {
 	if strings.Contains(string(data), "user@example.com") {
 		t.Error("Email should be redacted")
 	}
+
 	if !strings.Contains(string(data), "[REDACTED]") {
 		t.Error("Output should contain redacted marker")
 	}
@@ -392,6 +398,7 @@ func TestNoTransformationPassThrough(t *testing.T) {
 	svc.CreateAccessPoint(cfg)
 
 	input := "Original content"
+
 	output, _, err := svc.TransformObject(
 		context.Background(),
 		"passthrough-ap",
@@ -400,7 +407,6 @@ func TestNoTransformationPassThrough(t *testing.T) {
 		map[string]string{},
 		UserIdentity{},
 	)
-
 	if err != nil {
 		t.Fatalf("TransformObject failed: %v", err)
 	}
@@ -418,6 +424,7 @@ func TestWriteGetObjectResponse(t *testing.T) {
 
 	// Create pending response channel
 	responseChan := make(chan *WriteGetObjectResponseInput, 1)
+
 	svc.pendingMu.Lock()
 	svc.pendingResponses[token] = responseChan
 	svc.pendingMu.Unlock()
@@ -439,7 +446,7 @@ func TestWriteGetObjectResponse(t *testing.T) {
 	// Verify response was sent
 	select {
 	case resp := <-responseChan:
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected status 200, got %d", resp.StatusCode)
 		}
 	default:
@@ -483,6 +490,7 @@ func TestS3APICompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAccessPointConfigurationForObjectLambda failed: %v", err)
 	}
+
 	if retrieved.Name != "api-test-ap" {
 		t.Errorf("Expected name 'api-test-ap', got '%s'", retrieved.Name)
 	}
@@ -533,6 +541,7 @@ func TestNestedPIIMasking(t *testing.T) {
 	if strings.Contains(string(data), "john@example.com") {
 		t.Error("Nested email should be masked")
 	}
+
 	if strings.Contains(string(data), "contact1@example.com") {
 		t.Error("Array email should be masked")
 	}
@@ -594,14 +603,17 @@ func TestCompressTransformer(t *testing.T) {
 
 			// Decompress and verify
 			var decompressed []byte
+
 			switch tt.algorithm {
 			case "gzip":
 				reader, err := gzip.NewReader(bytes.NewReader(compressed))
 				if err != nil {
 					t.Fatalf("Failed to create gzip reader: %v", err)
 				}
+
 				decompressed, err = io.ReadAll(reader)
 				reader.Close()
+
 				if err != nil {
 					t.Fatalf("Failed to decompress gzip: %v", err)
 				}
@@ -610,8 +622,10 @@ func TestCompressTransformer(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to create zstd decoder: %v", err)
 				}
+
 				decompressed, err = io.ReadAll(decoder)
 				decoder.Close()
+
 				if err != nil {
 					t.Fatalf("Failed to decompress zstd: %v", err)
 				}
@@ -632,6 +646,7 @@ func TestCompressTransformerUnsupportedAlgorithm(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for unsupported algorithm")
 	}
+
 	if !strings.Contains(err.Error(), "unsupported compression algorithm") {
 		t.Errorf("Unexpected error message: %v", err)
 	}
@@ -642,17 +657,19 @@ func TestDecompressTransformer(t *testing.T) {
 	testData := "Hello, World! This is test data for decompression."
 
 	tests := []struct {
-		name      string
-		compress  func([]byte) []byte
-		params    map[string]interface{}
+		compress func([]byte) []byte
+		params   map[string]interface{}
+		name     string
 	}{
 		{
 			name: "gzip auto-detect",
 			compress: func(data []byte) []byte {
 				var buf bytes.Buffer
+
 				writer := gzip.NewWriter(&buf)
 				writer.Write(data)
 				writer.Close()
+
 				return buf.Bytes()
 			},
 			params: nil,
@@ -661,9 +678,11 @@ func TestDecompressTransformer(t *testing.T) {
 			name: "gzip explicit",
 			compress: func(data []byte) []byte {
 				var buf bytes.Buffer
+
 				writer := gzip.NewWriter(&buf)
 				writer.Write(data)
 				writer.Close()
+
 				return buf.Bytes()
 			},
 			params: map[string]interface{}{"algorithm": "gzip"},
@@ -727,16 +746,18 @@ func TestDecompressTransformerUnsupportedAlgorithm(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for unsupported algorithm")
 	}
+
 	if !strings.Contains(err.Error(), "unsupported decompression algorithm") {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }
 
 // TestDecompressionBombProtection verifies that the transformer rejects
-// compressed data that would expand beyond the maximum transform size
+// compressed data that would expand beyond the maximum transform size.
 func TestDecompressionBombProtection(t *testing.T) {
 	// Save original max size and set a small limit for testing
 	originalMaxSize := GetMaxTransformSize()
+
 	SetMaxTransformSize(1024) // 1KB limit for testing
 	defer SetMaxTransformSize(originalMaxSize)
 
@@ -810,10 +831,11 @@ func TestDecompressionBombProtection(t *testing.T) {
 	}
 }
 
-// TestCompressionSizeLimit verifies that the compressor rejects oversized inputs
+// TestCompressionSizeLimit verifies that the compressor rejects oversized inputs.
 func TestCompressionSizeLimit(t *testing.T) {
 	// Save original max size and set a small limit for testing
 	originalMaxSize := GetMaxTransformSize()
+
 	SetMaxTransformSize(1024) // 1KB limit for testing
 	defer SetMaxTransformSize(originalMaxSize)
 
@@ -868,7 +890,7 @@ func TestCompressionSizeLimit(t *testing.T) {
 	}
 }
 
-// TestMaxTransformSizeConfiguration verifies the configurable max transform size
+// TestMaxTransformSizeConfiguration verifies the configurable max transform size.
 func TestMaxTransformSizeConfiguration(t *testing.T) {
 	// Save original max size
 	originalMaxSize := GetMaxTransformSize()
@@ -876,63 +898,77 @@ func TestMaxTransformSizeConfiguration(t *testing.T) {
 
 	// Test setting a custom size
 	SetMaxTransformSize(50 * 1024 * 1024) // 50MB
+
 	if GetMaxTransformSize() != 50*1024*1024 {
 		t.Errorf("Expected max transform size to be 50MB, got %d", GetMaxTransformSize())
 	}
 
 	// Test that invalid sizes are rejected
 	SetMaxTransformSize(0)
+
 	if GetMaxTransformSize() != 50*1024*1024 {
 		t.Error("Setting size to 0 should not change the value")
 	}
 
 	SetMaxTransformSize(-1)
+
 	if GetMaxTransformSize() != 50*1024*1024 {
 		t.Error("Setting negative size should not change the value")
 	}
 
 	// Reset and verify default
 	SetMaxTransformSize(DefaultMaxTransformSize)
+
 	if GetMaxTransformSize() != DefaultMaxTransformSize {
 		t.Errorf("Expected default max transform size, got %d", GetMaxTransformSize())
 	}
 }
 
-// Helper function to compress data with gzip
+// Helper function to compress data with gzip.
 func compressWithGzip(data []byte) []byte {
 	var buf bytes.Buffer
+
 	writer := gzip.NewWriter(&buf)
 	_, _ = writer.Write(data)
 	_ = writer.Close()
+
 	return buf.Bytes()
 }
 
-// Helper function to compress data with zstd
+// Helper function to compress data with zstd.
 func compressWithZstd(data []byte) []byte {
 	var buf bytes.Buffer
+
 	writer, _ := zstd.NewWriter(&buf)
 	_, _ = writer.Write(data)
 	_ = writer.Close()
+
 	return buf.Bytes()
 }
 
 // TestSetMaxTransformSizeConcurrency verifies thread safety of SetMaxTransformSize/GetMaxTransformSize
-// Run with: go test -race -run TestSetMaxTransformSizeConcurrency
+// Run with: go test -race -run TestSetMaxTransformSizeConcurrency.
 func TestSetMaxTransformSizeConcurrency(t *testing.T) {
 	// Save original max size
 	originalMaxSize := GetMaxTransformSize()
 	defer SetMaxTransformSize(originalMaxSize)
 
 	var wg sync.WaitGroup
-	const goroutines = 100
-	const iterations = 100
+
+	const (
+		goroutines = 100
+		iterations = 100
+	)
 
 	// Concurrent writes
-	for i := 0; i < goroutines; i++ {
+
+	for i := range goroutines {
 		wg.Add(1)
+
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+
+			for j := range iterations {
 				size := int64((id*iterations + j + 1) * 1024) // Varying sizes
 				SetMaxTransformSize(size)
 			}
@@ -940,11 +976,13 @@ func TestSetMaxTransformSizeConcurrency(t *testing.T) {
 	}
 
 	// Concurrent reads
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+
+			for range iterations {
 				size := GetMaxTransformSize()
 				// Verify the size is always positive (valid)
 				if size <= 0 {

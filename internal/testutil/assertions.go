@@ -53,11 +53,13 @@ func AssertUserEqual(t *testing.T, expected, actual *metadata.User) {
 // AssertErrorType asserts that an error is of a specific type.
 func AssertErrorType(t *testing.T, expected, actual error) {
 	t.Helper()
+
 	if expected == nil {
-		assert.Nil(t, actual, "expected no error")
+		assert.NoError(t, actual, "expected no error")
 		return
 	}
-	require.NotNil(t, actual, "expected an error")
+
+	require.Error(t, actual, "expected an error")
 	assert.ErrorIs(t, actual, expected, "error type should match")
 }
 
@@ -65,15 +67,19 @@ func AssertErrorType(t *testing.T, expected, actual error) {
 // Useful for testing async operations.
 func AssertEventually(t *testing.T, condition func() bool, timeout, tick time.Duration, msgAndArgs ...interface{}) {
 	t.Helper()
+
 	deadline := time.Now().Add(timeout)
+
 	for {
 		if condition() {
 			return
 		}
+
 		if time.Now().After(deadline) {
 			assert.Fail(t, "condition not met within timeout", msgAndArgs...)
 			return
 		}
+
 		time.Sleep(tick)
 	}
 }
@@ -82,15 +88,19 @@ func AssertEventually(t *testing.T, condition func() bool, timeout, tick time.Du
 // Fails the test immediately if the condition is not met.
 func RequireEventually(t *testing.T, condition func() bool, timeout, tick time.Duration, msgAndArgs ...interface{}) {
 	t.Helper()
+
 	deadline := time.Now().Add(timeout)
+
 	for {
 		if condition() {
 			return
 		}
+
 		if time.Now().After(deadline) {
 			require.Fail(t, "condition not met within timeout", msgAndArgs...)
 			return
 		}
+
 		time.Sleep(tick)
 	}
 }
@@ -99,15 +109,19 @@ func RequireEventually(t *testing.T, condition func() bool, timeout, tick time.D
 // Useful for testing that something doesn't happen.
 func AssertNever(t *testing.T, condition func() bool, duration, tick time.Duration, msgAndArgs ...interface{}) {
 	t.Helper()
+
 	deadline := time.Now().Add(duration)
+
 	for {
 		if condition() {
 			assert.Fail(t, "condition became true unexpectedly", msgAndArgs...)
 			return
 		}
+
 		if time.Now().After(deadline) {
 			return // Success - condition never became true
 		}
+
 		time.Sleep(tick)
 	}
 }
@@ -115,14 +129,17 @@ func AssertNever(t *testing.T, condition func() bool, duration, tick time.Durati
 // AssertSliceContains asserts that a slice contains all expected elements.
 func AssertSliceContains[T comparable](t *testing.T, slice []T, expected ...T) {
 	t.Helper()
+
 	for _, e := range expected {
 		found := false
+
 		for _, s := range slice {
 			if s == e {
 				found = true
 				break
 			}
 		}
+
 		assert.True(t, found, "slice should contain %v", e)
 	}
 }
@@ -130,6 +147,7 @@ func AssertSliceContains[T comparable](t *testing.T, slice []T, expected ...T) {
 // AssertSliceNotContains asserts that a slice does not contain any of the excluded elements.
 func AssertSliceNotContains[T comparable](t *testing.T, slice []T, excluded ...T) {
 	t.Helper()
+
 	for _, e := range excluded {
 		for _, s := range slice {
 			if s == e {
@@ -143,6 +161,7 @@ func AssertSliceNotContains[T comparable](t *testing.T, slice []T, excluded ...T
 // AssertMapContainsKey asserts that a map contains a specific key.
 func AssertMapContainsKey[K comparable, V any](t *testing.T, m map[K]V, key K) {
 	t.Helper()
+
 	_, exists := m[key]
 	assert.True(t, exists, "map should contain key %v", key)
 }
@@ -150,6 +169,7 @@ func AssertMapContainsKey[K comparable, V any](t *testing.T, m map[K]V, key K) {
 // AssertMapNotContainsKey asserts that a map does not contain a specific key.
 func AssertMapNotContainsKey[K comparable, V any](t *testing.T, m map[K]V, key K) {
 	t.Helper()
+
 	_, exists := m[key]
 	assert.False(t, exists, "map should not contain key %v", key)
 }

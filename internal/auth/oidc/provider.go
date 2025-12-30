@@ -30,6 +30,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -42,19 +43,19 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// Provider implements auth.Provider for OpenID Connect
+// Provider implements auth.Provider for OpenID Connect.
 type Provider struct {
-	config       Config
-	oidcProvider *oidc.Provider
-	verifier     *oidc.IDTokenVerifier
 	oauth2Config oauth2.Config
 	stateStore   StateStore
+	oidcProvider *oidc.Provider
+	verifier     *oidc.IDTokenVerifier
 	httpClient   *http.Client
+	config       Config
 	mu           sync.RWMutex
 	closed       bool
 }
 
-// NewProvider creates a new OIDC provider
+// NewProvider creates a new OIDC provider.
 func NewProvider(cfg Config) (*Provider, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
@@ -74,6 +75,8 @@ func NewProvider(cfg Config) (*Provider, error) {
 		log.Warn().
 			Str("issuer", cfg.IssuerURL).
 			Msg("WARNING: TLS certificate verification disabled for OIDC provider - this should only be used in development/testing")
+
+		//nolint:gosec // G402: InsecureSkipVerify is user-configurable for dev/test environments
 		httpClient.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
@@ -83,6 +86,7 @@ func NewProvider(cfg Config) (*Provider, error) {
 
 	// Create OIDC provider
 	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
+
 	oidcProvider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
@@ -127,33 +131,36 @@ func NewProvider(cfg Config) (*Provider, error) {
 	return provider, nil
 }
 
-// SetStateStore sets a custom state store
+// SetStateStore sets a custom state store.
 func (p *Provider) SetStateStore(store StateStore) {
 	p.stateStore = store
 }
 
-// Name returns the provider name
+// Name returns the provider name.
 func (p *Provider) Name() string {
 	if p.config.Name != "" {
 		return p.config.Name
 	}
+
 	return "oidc"
 }
 
-// Authenticate is not directly supported for OIDC (use OAuth flow instead)
+// Authenticate is not directly supported for OIDC (use OAuth flow instead).
 func (p *Provider) Authenticate(_ context.Context, _, _ string) (*auth.User, error) {
 	return nil, &auth.ErrAuthenticationFailed{
 		Message: "OIDC requires OAuth2 flow, use GetAuthorizationURL and HandleCallback",
 	}
 }
 
-// GetUser retrieves user information using an access token
+// GetUser retrieves user information using an access token.
 func (p *Provider) GetUser(ctx context.Context, accessToken string) (*auth.User, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, &auth.ErrProviderUnavailable{Provider: p.Name()}
 	}
+
 	p.mu.RUnlock()
 
 	// Use the userinfo endpoint
@@ -173,22 +180,25 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string) (*auth.User,
 	return p.claimsToUser(claims), nil
 }
 
-// GetGroups retrieves groups for a user (from access token claims)
+// GetGroups retrieves groups for a user (from access token claims).
 func (p *Provider) GetGroups(ctx context.Context, accessToken string) ([]string, error) {
 	user, err := p.GetUser(ctx, accessToken)
 	if err != nil {
 		return nil, err
 	}
+
 	return user.Groups, nil
 }
 
-// ValidateToken validates an ID token and returns user info
+// ValidateToken validates an ID token and returns user info.
 func (p *Provider) ValidateToken(ctx context.Context, idToken string) (*auth.User, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, &auth.ErrProviderUnavailable{Provider: p.Name()}
 	}
+
 	p.mu.RUnlock()
 
 	// Verify the ID token
@@ -206,13 +216,15 @@ func (p *Provider) ValidateToken(ctx context.Context, idToken string) (*auth.Use
 	return p.claimsToUser(claims), nil
 }
 
-// Refresh refreshes tokens using a refresh token
+// Refresh refreshes tokens using a refresh token.
 func (p *Provider) Refresh(ctx context.Context, refreshToken string) (*auth.ExternalTokenPair, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, &auth.ErrProviderUnavailable{Provider: p.Name()}
 	}
+
 	p.mu.RUnlock()
 
 	// Create a token source with the refresh token
@@ -221,6 +233,7 @@ func (p *Provider) Refresh(ctx context.Context, refreshToken string) (*auth.Exte
 	}
 
 	tokenSource := p.oauth2Config.TokenSource(ctx, token)
+
 	newToken, err := tokenSource.Token()
 	if err != nil {
 		return nil, &auth.ErrInvalidToken{Reason: err.Error()}
@@ -234,15 +247,17 @@ func (p *Provider) Refresh(ctx context.Context, refreshToken string) (*auth.Exte
 	}, nil
 }
 
-// Close closes the provider
+// Close closes the provider.
 func (p *Provider) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
 	p.closed = true
+
 	return nil
 }
 
-// GetAuthorizationURL generates an authorization URL for the OAuth flow
+// GetAuthorizationURL generates an authorization URL for the OAuth flow.
 func (p *Provider) GetAuthorizationURL(redirectURI string) (string, *AuthorizationState, error) {
 	state, err := generateRandomString(32)
 	if err != nil {
@@ -272,6 +287,7 @@ func (p *Provider) GetAuthorizationURL(redirectURI string) (string, *Authorizati
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to generate PKCE verifier: %w", err)
 		}
+
 		authState.CodeVerifier = verifier
 
 		// Generate code challenge
@@ -298,7 +314,7 @@ func (p *Provider) GetAuthorizationURL(redirectURI string) (string, *Authorizati
 	return authURL, authState, nil
 }
 
-// HandleCallback handles the OAuth callback and returns tokens
+// HandleCallback handles the OAuth callback and returns tokens.
 func (p *Provider) HandleCallback(ctx context.Context, code, stateValue string) (*TokenResponse, error) {
 	// Retrieve and validate state
 	authState, err := p.stateStore.GetState(stateValue)
@@ -333,7 +349,7 @@ func (p *Provider) HandleCallback(ctx context.Context, code, stateValue string) 
 	// Extract ID token
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
-		return nil, fmt.Errorf("no id_token in response")
+		return nil, errors.New("no id_token in response")
 	}
 
 	// Verify ID token
@@ -374,17 +390,17 @@ func (p *Provider) HandleCallback(ctx context.Context, code, stateValue string) 
 	}, nil
 }
 
-// TokenResponse represents the response from token exchange
+// TokenResponse represents the response from token exchange.
 type TokenResponse struct {
+	User         *auth.User `json:"user"`
 	AccessToken  string     `json:"accessToken"`
 	RefreshToken string     `json:"refreshToken,omitempty"`
 	IDToken      string     `json:"idToken"`
 	TokenType    string     `json:"tokenType"`
 	ExpiresIn    int64      `json:"expiresIn"`
-	User         *auth.User `json:"user"`
 }
 
-// claimsToUser converts OIDC claims to an auth.User
+// claimsToUser converts OIDC claims to an auth.User.
 func (p *Provider) claimsToUser(claims map[string]interface{}) *auth.User {
 	mapping := p.config.ClaimsMapping
 	user := &auth.User{
@@ -443,6 +459,7 @@ func (p *Provider) claimsToUser(claims map[string]interface{}) *auth.User {
 						strs = append(strs, s)
 					}
 				}
+
 				user.Attributes[key] = strs
 			}
 		}
@@ -451,7 +468,7 @@ func (p *Provider) claimsToUser(claims map[string]interface{}) *auth.User {
 	return user
 }
 
-// extractGroups extracts groups from claims
+// extractGroups extracts groups from claims.
 func extractGroups(claims map[string]interface{}, groupsClaim string) []string {
 	var groups []string
 
@@ -477,7 +494,7 @@ func extractGroups(claims map[string]interface{}, groupsClaim string) []string {
 	return groups
 }
 
-// isEmailDomainAllowed checks if the email domain is in the allowed list
+// isEmailDomainAllowed checks if the email domain is in the allowed list.
 func (p *Provider) isEmailDomainAllowed(email string) bool {
 	if len(p.config.AllowedDomains) == 0 {
 		return true
@@ -498,22 +515,23 @@ func (p *Provider) isEmailDomainAllowed(email string) bool {
 	return false
 }
 
-// generateRandomString generates a random string of specified length
+// generateRandomString generates a random string of specified length.
 func generateRandomString(length int) (string, error) {
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
+
 	return base64.RawURLEncoding.EncodeToString(bytes)[:length], nil
 }
 
-// generateCodeChallenge generates a PKCE code challenge
+// generateCodeChallenge generates a PKCE code challenge.
 func generateCodeChallenge(verifier string) string {
 	hash := sha256.Sum256([]byte(verifier))
 	return base64.RawURLEncoding.EncodeToString(hash[:])
 }
 
-// IsAdminGroup checks if any of the user's groups are admin groups
+// IsAdminGroup checks if any of the user's groups are admin groups.
 func (p *Provider) IsAdminGroup(groups []string) bool {
 	if len(p.config.AdminGroups) == 0 {
 		return false
@@ -526,5 +544,6 @@ func (p *Provider) IsAdminGroup(groups []string) bool {
 			}
 		}
 	}
+
 	return false
 }

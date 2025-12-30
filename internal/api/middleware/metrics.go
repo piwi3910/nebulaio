@@ -11,7 +11,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metrics"
 )
 
-// MetricsMiddleware records request metrics
+// MetricsMiddleware records request metrics.
 func MetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -61,7 +61,7 @@ func MetricsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// extractS3Operation extracts the S3 operation name from the request
+// extractS3Operation extracts the S3 operation name from the request.
 func extractS3Operation(r *http.Request) string {
 	method := r.Method
 	path := r.URL.Path
@@ -91,27 +91,35 @@ func extractS3Operation(r *http.Request) string {
 			if _, ok := query["versioning"]; ok {
 				return "GetBucketVersioning"
 			}
+
 			if _, ok := query["policy"]; ok {
 				return "GetBucketPolicy"
 			}
+
 			if _, ok := query["tagging"]; ok {
 				return "GetBucketTagging"
 			}
+
 			if _, ok := query["cors"]; ok {
 				return "GetBucketCORS"
 			}
+
 			if _, ok := query["lifecycle"]; ok {
 				return "GetBucketLifecycle"
 			}
+
 			if _, ok := query["uploads"]; ok {
 				return "ListMultipartUploads"
 			}
+
 			if _, ok := query["location"]; ok {
 				return "GetBucketLocation"
 			}
+
 			if _, ok := query["acl"]; ok {
 				return "GetBucketAcl"
 			}
+
 			return "ListObjectsV2"
 		}
 	}
@@ -123,25 +131,31 @@ func extractS3Operation(r *http.Request) string {
 			if _, ok := query["partNumber"]; ok {
 				return "UploadPart"
 			}
+
 			if r.Header.Get("X-Amz-Copy-Source") != "" {
 				return "CopyObject"
 			}
+
 			return "PutObject"
 		case "GET":
 			if _, ok := query["uploadId"]; ok {
 				return "ListParts"
 			}
+
 			if _, ok := query["acl"]; ok {
 				return "GetObjectAcl"
 			}
+
 			if _, ok := query["tagging"]; ok {
 				return "GetObjectTagging"
 			}
+
 			return "GetObject"
 		case "DELETE":
 			if _, ok := query["uploadId"]; ok {
 				return "AbortMultipartUpload"
 			}
+
 			return "DeleteObject"
 		case "HEAD":
 			return "HeadObject"
@@ -149,12 +163,15 @@ func extractS3Operation(r *http.Request) string {
 			if _, ok := query["uploads"]; ok {
 				return "CreateMultipartUpload"
 			}
+
 			if _, ok := query["uploadId"]; ok {
 				return "CompleteMultipartUpload"
 			}
+
 			if _, ok := query["delete"]; ok {
 				return "DeleteObjects"
 			}
+
 			return "PostObject"
 		}
 	}
@@ -162,7 +179,7 @@ func extractS3Operation(r *http.Request) string {
 	return "Unknown"
 }
 
-// getErrorType returns an error type string based on HTTP status code
+// getErrorType returns an error type string based on HTTP status code.
 func getErrorType(status int) string {
 	switch {
 	case status == 400:
@@ -192,14 +209,14 @@ func getErrorType(status int) string {
 	}
 }
 
-// ByteCountingResponseWriter wraps http.ResponseWriter to count bytes written
+// ByteCountingResponseWriter wraps http.ResponseWriter to count bytes written.
 type ByteCountingResponseWriter struct {
 	http.ResponseWriter
 	bytesWritten int64
 	statusCode   int
 }
 
-// NewByteCountingResponseWriter creates a new ByteCountingResponseWriter
+// NewByteCountingResponseWriter creates a new ByteCountingResponseWriter.
 func NewByteCountingResponseWriter(w http.ResponseWriter) *ByteCountingResponseWriter {
 	return &ByteCountingResponseWriter{
 		ResponseWriter: w,
@@ -207,35 +224,37 @@ func NewByteCountingResponseWriter(w http.ResponseWriter) *ByteCountingResponseW
 	}
 }
 
-// Write writes data and counts bytes
+// Write writes data and counts bytes.
 func (w *ByteCountingResponseWriter) Write(b []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(b)
 	w.bytesWritten += int64(n)
+
 	return n, err
 }
 
-// WriteHeader captures the status code
+// WriteHeader captures the status code.
 func (w *ByteCountingResponseWriter) WriteHeader(code int) {
 	w.statusCode = code
 	w.ResponseWriter.WriteHeader(code)
 }
 
-// BytesWritten returns the number of bytes written
+// BytesWritten returns the number of bytes written.
 func (w *ByteCountingResponseWriter) BytesWritten() int64 {
 	return w.bytesWritten
 }
 
-// StatusCode returns the HTTP status code
+// StatusCode returns the HTTP status code.
 func (w *ByteCountingResponseWriter) StatusCode() int {
 	return w.statusCode
 }
 
-// ContentLengthFromHeader extracts content length from request header
+// ContentLengthFromHeader extracts content length from request header.
 func ContentLengthFromHeader(r *http.Request) int64 {
 	if cl := r.Header.Get("Content-Length"); cl != "" {
 		if length, err := strconv.ParseInt(cl, 10, 64); err == nil {
 			return length
 		}
 	}
+
 	return 0
 }
