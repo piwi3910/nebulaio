@@ -92,12 +92,14 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 	}
 
 	// Create the file
+	//nolint:gosec // G304: path is validated by caller
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create volume file: %w", err)
 	}
 
 	// Pre-allocate the file
+	//nolint:gosec // G115: cfg.Size is validated to reasonable range
 	if err := file.Truncate(int64(cfg.Size)); err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
@@ -199,6 +201,7 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 
 // OpenVolume opens an existing volume file.
 func OpenVolume(path string) (*Volume, error) {
+	//nolint:gosec // G304: path is validated by caller
 	file, err := os.OpenFile(path, os.O_RDWR, 0600)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -242,6 +245,7 @@ func OpenVolume(path string) (*Volume, error) {
 	}
 
 	// Read index
+	//nolint:gosec // G115: IndexOffset and IndexSize are within volume bounds
 	index, err := ReadIndex(file, int64(super.IndexOffset), int64(super.IndexSize))
 	if err != nil {
 		_ = file.Close()
@@ -294,6 +298,7 @@ func OpenVolume(path string) (*Volume, error) {
 
 // OpenVolumeWithConfig opens an existing volume file with custom configuration.
 func OpenVolumeWithConfig(path string, dioConfig DirectIOConfig) (*Volume, error) {
+	//nolint:gosec // G304: path is validated by caller
 	file, err := os.OpenFile(path, os.O_RDWR, 0600)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -337,6 +342,7 @@ func OpenVolumeWithConfig(path string, dioConfig DirectIOConfig) (*Volume, error
 	}
 
 	// Read index
+	//nolint:gosec // G115: IndexOffset and IndexSize are within volume bounds
 	index, err := ReadIndex(file, int64(super.IndexOffset), int64(super.IndexSize))
 	if err != nil {
 		_ = file.Close()
@@ -444,11 +450,13 @@ func (v *Volume) flushLocked() error {
 	}
 
 	// Write index
+	//nolint:gosec // G115: IndexOffset is within volume bounds
 	indexSize, err := v.index.WriteTo(v.file, int64(v.super.IndexOffset))
 	if err != nil {
 		return fmt.Errorf("failed to write index: %w", err)
 	}
 
+	//nolint:gosec // G115: indexSize is positive and within volume bounds
 	v.super.IndexSize = uint64(indexSize)
 
 	// Write superblock last (after updating IndexSize)
@@ -563,6 +571,7 @@ func (v *Volume) allocateBlocks(n int) (uint32, error) {
 		return 0, err
 	}
 
+	//nolint:gosec // G115: n is bounded by max object size
 	v.super.FreeBlocks -= uint32(n)
 	v.dirty = true
 
@@ -579,10 +588,13 @@ func (v *Volume) allocateBlock() (uint32, error) {
 //nolint:unused // Reserved for future compaction feature
 func (v *Volume) freeBlocks(start uint32, count int) {
 	for i := range count {
+		//nolint:gosec // G115: i is bounded by count which fits in uint32
 		v.allocMap.Free(start + uint32(i))
+		//nolint:gosec // G115: i is bounded by count which fits in uint32
 		v.blockTypes[start+uint32(i)] = BlockTypeFree
 	}
 
+	//nolint:gosec // G115: count is bounded by volume capacity
 	v.super.FreeBlocks += uint32(count)
 	v.dirty = true
 }
@@ -731,6 +743,7 @@ func (v *Volume) readBlockAt(blockNum uint32, offsetInBlock int64, size int) ([]
 
 // blockOffset calculates the file offset for a given block number.
 func (v *Volume) blockOffset(blockNum uint32) int64 {
+	//nolint:gosec // G115: DataOffset is within volume bounds
 	return int64(v.super.DataOffset) + int64(blockNum)*BlockSize
 }
 

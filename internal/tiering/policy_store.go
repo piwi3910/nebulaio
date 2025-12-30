@@ -212,7 +212,7 @@ func (s *HybridPolicyStore) saveToConfig() error {
 	}
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(s.configPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.configPath), 0750); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 

@@ -227,7 +227,9 @@ func (b *RawDeviceBackend) GetStorageInfo(ctx context.Context) (*backend.Storage
 
 	var totalBytes, usedBytes, objectCount int64
 	for _, s := range stats {
+		//nolint:gosec // G115: Storage sizes within int64 range (< 8 EB)
 		totalBytes += int64(s.TotalSpace)
+		//nolint:gosec // G115: Storage sizes within int64 range (< 8 EB)
 		usedBytes += int64(s.UsedSpace)
 		objectCount += int64(s.ObjectCount)
 	}

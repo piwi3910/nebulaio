@@ -138,6 +138,7 @@ func (p *Provider) initMasterKey() error {
 
 	// Option 3: Generate new master key and save it
 	masterKeyPath := filepath.Join(p.config.KeyStorePath, ".master.key")
+	//nolint:gosec // G304: masterKeyPath is constructed from trusted config
 	if data, err := os.ReadFile(masterKeyPath); err == nil {
 		p.masterKey = data
 		return nil
@@ -172,6 +173,7 @@ func (p *Provider) loadKeys() error {
 
 		keyPath := filepath.Join(p.config.KeyStorePath, entry.Name())
 
+		//nolint:gosec // G304: keyPath is constructed from trusted config
 		data, err := os.ReadFile(keyPath)
 		if err != nil {
 			continue

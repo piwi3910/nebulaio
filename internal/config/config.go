@@ -809,13 +809,14 @@ func setDefaults(v *viper.Viper) {
 
 func (c *Config) validate() error {
 	// Ensure data directory exists
-	if err := os.MkdirAll(c.DataDir, 0755); err != nil {
+	if err := os.MkdirAll(c.DataDir, 0750); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	// Generate node ID if not set
 	if c.NodeID == "" {
 		nodeIDPath := filepath.Join(c.DataDir, "node-id")
+		//nolint:gosec // G304: nodeIDPath is constructed from trusted config
 		if data, err := os.ReadFile(nodeIDPath); err == nil {
 			c.NodeID = string(data)
 		} else {
@@ -829,6 +830,7 @@ func (c *Config) validate() error {
 	// Generate JWT secret if not set
 	if c.Auth.JWTSecret == "" {
 		jwtSecretPath := filepath.Join(c.DataDir, "jwt-secret")
+		//nolint:gosec // G304: jwtSecretPath is constructed from trusted config
 		if data, err := os.ReadFile(jwtSecretPath); err == nil {
 			c.Auth.JWTSecret = string(data)
 		} else {
@@ -848,6 +850,7 @@ func (c *Config) validate() error {
 	// Generate or load replica ID if not set
 	if c.Cluster.ReplicaID == 0 {
 		replicaIDPath := filepath.Join(c.DataDir, "replica-id")
+		//nolint:gosec // G304: replicaIDPath is constructed from trusted config
 		if data, err := os.ReadFile(replicaIDPath); err == nil {
 			// Parse stored replica ID
 			var replicaID uint64
@@ -870,7 +873,7 @@ func (c *Config) validate() error {
 	}
 
 	// Ensure WAL directory exists
-	if err := os.MkdirAll(c.Cluster.WALDir, 0755); err != nil {
+	if err := os.MkdirAll(c.Cluster.WALDir, 0750); err != nil {
 		return fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 

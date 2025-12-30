@@ -172,6 +172,7 @@ func newPolicySetCmd() *cobra.Command {
 			bucket := args[0]
 			policyFile := args[1]
 
+			//nolint:gosec // G304: policyFile is user-provided CLI argument
 			policyData, err := os.ReadFile(policyFile)
 			if err != nil {
 				return fmt.Errorf("failed to read policy file: %w", err)
@@ -264,6 +265,7 @@ func newPolicyDeleteCmd() *cobra.Command {
 
 // readConfigFile reads and returns the contents of a configuration file.
 func readConfigFile(path string) ([]byte, error) {
+	//nolint:gosec // G304: path is user-provided CLI argument
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)

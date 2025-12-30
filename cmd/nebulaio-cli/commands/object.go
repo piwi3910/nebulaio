@@ -63,6 +63,7 @@ func newObjectPutCmd() *cobra.Command {
 				return err
 			}
 
+			//nolint:gosec // G304: localFile is user-provided CLI argument
 			file, err := os.Open(localFile)
 			if err != nil {
 				return fmt.Errorf("failed to open file: %w", err)
@@ -163,6 +164,7 @@ func newObjectGetCmd() *cobra.Command {
 
 			defer func() { _ = result.Body.Close() }()
 
+			//nolint:gosec // G304: localFile is user-provided CLI argument
 			file, err := os.Create(localFile)
 			if err != nil {
 				return fmt.Errorf("failed to create file: %w", err)
@@ -652,6 +654,7 @@ func uploadFile(ctx context.Context, client *s3.Client, localPath, bucket, key s
 }
 
 func uploadSingleFile(ctx context.Context, client *s3.Client, localPath, bucket, key string) error {
+	//nolint:gosec // G304: localPath is user-provided CLI argument
 	file, err := os.Open(localPath)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
@@ -722,10 +725,11 @@ func downloadSingleFile(ctx context.Context, client *s3.Client, bucket, key, loc
 	defer func() { _ = result.Body.Close() }()
 
 	// Create directory if needed
-	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(localPath), 0750); err != nil {
 		return err
 	}
 
+	//nolint:gosec // G304: localPath is user-provided CLI argument
 	file, err := os.Create(localPath)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)

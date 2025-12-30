@@ -15,11 +15,13 @@ func directIOSupported() bool {
 // OpenFileDirect opens a file with O_DIRECT flag for direct I/O.
 func OpenFileDirect(path string, flag int, perm os.FileMode) (*os.File, error) {
 	// Add O_DIRECT to the flags
+	//nolint:gosec // G304: path is validated by caller
 	return os.OpenFile(path, flag|syscall.O_DIRECT, perm)
 }
 
 // CreateFileDirect creates a file with O_DIRECT flag for direct I/O.
 func CreateFileDirect(path string, perm os.FileMode) (*os.File, error) {
+	//nolint:gosec // G304: path is validated by caller
 	return os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL|syscall.O_DIRECT, perm)
 }
 

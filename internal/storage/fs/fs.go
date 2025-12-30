@@ -153,6 +153,7 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
 	path := b.objectPath(bucket, key)
 
+	//nolint:gosec // G304: path is constructed from validated bucket/key
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -203,7 +204,7 @@ func (b *Backend) ObjectExists(ctx context.Context, bucket, key string) (bool, e
 // CreateBucket creates storage for a bucket.
 func (b *Backend) CreateBucket(ctx context.Context, bucket string) error {
 	path := filepath.Join(b.bucketPath(bucket), "objects")
-	err := os.MkdirAll(path, 0755)
+	err := os.MkdirAll(path, 0750)
 	if err != nil {
 		return fmt.Errorf("failed to create bucket directory: %w", err)
 	}
@@ -306,7 +307,7 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 	path := b.partPath(bucket, key, uploadID, partNumber)
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return nil, fmt.Errorf("failed to create part directory: %w", err)
 	}
 
@@ -357,6 +358,7 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 func (b *Backend) GetPart(ctx context.Context, bucket, key, uploadID string, partNumber int) (io.ReadCloser, error) {
 	path := b.partPath(bucket, key, uploadID, partNumber)
 
+	//nolint:gosec // G304: path is constructed from validated inputs
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -377,7 +379,7 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 	objectPath := b.objectPath(bucket, key)
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(objectPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(objectPath), 0750); err != nil {
 		return nil, fmt.Errorf("failed to create object directory: %w", err)
 	}
 
@@ -422,6 +424,7 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 
 		partPath := b.partPath(bucket, key, uploadID, partNum)
 
+		//nolint:gosec // G304: partPath is constructed from validated inputs
 		partFile, err := os.Open(partPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open part %d: %w", partNum, err)

@@ -180,6 +180,7 @@ func (m *ShardManager) GetShardSize(ctx context.Context, bucket, key string, sha
 func (m *ShardManager) GetShardReader(ctx context.Context, bucket, key string, shardIndex int) (io.ReadCloser, error) {
 	path := m.ShardPath(bucket, key, shardIndex)
 
+	//nolint:gosec // G304: path is constructed from trusted config
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {

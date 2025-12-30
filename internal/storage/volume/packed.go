@@ -156,6 +156,7 @@ func (pb *PackedBlock) ReadObject(offset uint32) (key string, data []byte, flags
 	keyStart := offset + ObjectEntrySize
 
 	keyEnd := keyStart + uint32(entry.KeyLen)
+	//nolint:gosec // G115: len(pb.data) is bounded by block size
 	if keyEnd > uint32(len(pb.data)) {
 		return "", nil, 0, ErrInvalidObjectEntry
 	}
@@ -166,6 +167,7 @@ func (pb *PackedBlock) ReadObject(offset uint32) (key string, data []byte, flags
 	dataStart := keyEnd
 
 	dataEnd := dataStart + entry.DataSize
+	//nolint:gosec // G115: len(pb.data) is bounded by block size
 	if dataEnd > uint32(len(pb.data)) {
 		return "", nil, 0, ErrInvalidObjectEntry
 	}
@@ -183,6 +185,7 @@ func (pb *PackedBlock) ReadObject(offset uint32) (key string, data []byte, flags
 
 // MarkDeleted marks an object as deleted in the packed block.
 func (pb *PackedBlock) MarkDeleted(offset uint32) error {
+	//nolint:gosec // G115: len(pb.data) is bounded by block size
 	if offset+ObjectEntrySize > uint32(len(pb.data)) {
 		return ErrInvalidObjectEntry
 	}
@@ -279,6 +282,7 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 
 		// Mark blocks as spanning
 		for i := range blocksNeeded {
+			//nolint:gosec // G115: i is bounded by blocksNeeded which fits in uint32
 			v.blockTypes[blockNum+uint32(i)] = BlockTypeSpanning
 		}
 
@@ -291,6 +295,7 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 				writeSize = len(remaining)
 			}
 
+			//nolint:gosec // G115: i is bounded by blocksNeeded which fits in uint32
 			err := v.writeBlock(blockNum+uint32(i), remaining[:writeSize])
 			if err != nil {
 				return err
@@ -312,7 +317,7 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 			Size:          uint64(size), //nolint:gosec // G115: size is validated positive
 			Created:       time.Now().UnixNano(),
 			Flags:         0,
-			KeyLen:        uint16(len(fullKey)),
+			KeyLen:        uint16(len(fullKey)), //nolint:gosec // G115: key length bounded by S3 limits
 		},
 		Key: fullKey,
 	}

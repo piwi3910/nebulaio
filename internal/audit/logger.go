@@ -234,7 +234,8 @@ func NewAuditLogger(config Config) (*AuditLogger, error) {
 
 	// Open file for logging if path is specified
 	if config.FilePath != "" {
-		f, err := os.OpenFile(config.FilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		//nolint:gosec // G302: Log files may need to be readable by other processes
+		f, err := os.OpenFile(config.FilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0640)
 		if err != nil {
 			cancel()
 			return nil, err

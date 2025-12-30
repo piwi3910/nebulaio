@@ -209,6 +209,7 @@ func NewMigrationManager(destStorage DestinationStorage, stateDir string) (*Migr
 
 	failedLogPath := filepath.Join(stateDir, "failed.log")
 
+	//nolint:gosec // G304: failedLogPath is constructed from trusted config
 	failedLog, err := os.OpenFile(failedLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open failed log: %w", err)
@@ -233,6 +234,7 @@ func NewMigrationManager(destStorage DestinationStorage, stateDir string) (*Migr
 func (mm *MigrationManager) loadJobs() error {
 	jobsPath := filepath.Join(mm.stateDir, "jobs.json")
 
+	//nolint:gosec // G304: jobsPath is constructed from trusted config
 	data, err := os.ReadFile(jobsPath)
 	if err != nil {
 		if os.IsNotExist(err) {

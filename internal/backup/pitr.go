@@ -646,6 +646,7 @@ func (bm *BackupManager) backupObject(job *BackupJob, bucket string, obj *Object
 
 		writer = io.MultiWriter(gzWriter, hasher)
 	} else {
+		//nolint:gosec // G304: objectPath is constructed from trusted config
 		file, err = os.Create(objectPath)
 		if err != nil {
 			return fmt.Errorf("failed to create backup file: %w", err)
@@ -1033,12 +1034,14 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 
 		var objMeta ObjectInfo
 
+		//nolint:gosec // G304: metaPath is constructed from trusted config
 		metaData, err := os.ReadFile(metaPath)
 		if err == nil {
 			_ = json.Unmarshal(metaData, &objMeta)
 		}
 
 		// Open backup file
+		//nolint:gosec // G304: path is from filepath.Walk within trusted directory
 		file, err := os.Open(path)
 		if err != nil {
 			return fmt.Errorf("failed to open backup file: %w", err)

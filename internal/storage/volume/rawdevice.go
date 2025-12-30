@@ -150,6 +150,7 @@ func (s *DeviceSignature) Serialize() []byte {
 	copy(buf[85:101], s.Tier[:])
 
 	// CreatedAt (8 bytes)
+	//nolint:gosec // G115: CreatedAt is Unix timestamp, positive values fit in uint64
 	binary.LittleEndian.PutUint64(buf[101:109], uint64(s.CreatedAt))
 
 	// Reserved (403 bytes) - already zero
@@ -184,6 +185,7 @@ func ParseDeviceSignature(data []byte) (*DeviceSignature, error) {
 	copy(sig.Tier[:], data[85:101])
 
 	// CreatedAt
+	//nolint:gosec // G115: Unix timestamp fits in int64 range
 	sig.CreatedAt = int64(binary.LittleEndian.Uint64(data[101:109]))
 
 	return sig, nil
@@ -222,6 +224,7 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 		flags |= os.O_EXCL
 	}
 
+	//nolint:gosec // G304: path is validated by caller
 	file, err := os.OpenFile(path, flags, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open device: %w", err)
@@ -234,7 +237,7 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 		return nil, fmt.Errorf("failed to stat device: %w", err)
 	}
 
-	deviceSize := uint64(fi.Size())
+	deviceSize := uint64(fi.Size()) //nolint:gosec // G115: file size is non-negative
 	if deviceSize == 0 {
 		// For block devices, try to get size differently
 		deviceSize, err = getBlockDeviceSize(file)
@@ -408,12 +411,12 @@ func (v *RawDeviceVolume) Put(bucket, key string, data []byte) error {
 		IndexEntry: IndexEntry{
 			KeyHash:       keyHash,
 			BlockNum:      blockNum,
-			BlockCount:    uint16(blocksNeeded),
+			BlockCount:    uint16(blocksNeeded), //nolint:gosec // G115: blocksNeeded bounded by max object size
 			OffsetInBlock: 0,
 			Size:          uint64(dataSize),
 			Created:       time.Now().Unix(),
 			Flags:         0,
-			KeyLen:        uint16(len(fullKey)),
+			KeyLen:        uint16(len(fullKey)), //nolint:gosec // G115: key length bounded by S3 limits
 		},
 		Key: fullKey,
 	}
@@ -712,7 +715,7 @@ func getBlockDeviceSize(file *os.File) (uint64, error) {
 	}
 
 	if fi.Mode().IsRegular() {
-		return uint64(fi.Size()), nil
+		return uint64(fi.Size()), nil //nolint:gosec // G115: file size is non-negative
 	}
 
 	// For block devices on Linux, use ioctl
@@ -761,10 +764,12 @@ func (a *BlockAllocator) Allocate(n int) (uint32, error) {
 			consecutive++
 			if consecutive >= n {
 				// Found enough blocks, mark them allocated
+				//nolint:gosec // G115: n is bounded by device capacity
 				for i := range uint32(n) {
 					a.setBlockUsed(startBlock + i)
 				}
 
+				//nolint:gosec // G115: n is bounded by device capacity
 				a.freeBlocks -= uint32(n)
 
 				return startBlock, nil

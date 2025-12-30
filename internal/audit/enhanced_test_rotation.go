@@ -166,6 +166,7 @@ func TestFileOutputRotation_NoCompressionCleanupRuns(t *testing.T) {
 	}
 
 	// Create initial log file
+	//nolint:gosec // G304: Test file with controlled path
 	f, err := os.Create(logPath)
 	require.NoError(t, err)
 
@@ -185,6 +186,7 @@ func TestFileOutputRotation_NoCompressionCleanupRuns(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 
 		if i < 3 {
+			//nolint:gosec // G304: Test file with controlled path
 			f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0600)
 			require.NoError(t, err)
 
@@ -239,6 +241,7 @@ func TestCompressFile_Success(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "Original file should be deleted after compression")
 
 	// Verify compressed data is valid and matches original
+	//nolint:gosec // G304: Test file with controlled path
 	gzFile, err := os.Open(compressedFile)
 	require.NoError(t, err)
 
@@ -283,9 +286,11 @@ func TestCompressFile_ReadOnlyDestination(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make directory read-only to prevent creating .gz file
+	//nolint:gosec // G302: Test intentionally sets restrictive permissions
 	err = os.Chmod(tmpDir, 0500)
 	require.NoError(t, err)
 
+	//nolint:gosec // G302: Test restores permissions for cleanup
 	defer func() { _ = os.Chmod(tmpDir, 0750) }() // Restore permissions for cleanup
 
 	output := &FileOutput{
@@ -318,6 +323,7 @@ func TestFileOutputRotation_CompressionFailurePreventsCleanup(t *testing.T) {
 	}
 
 	// Create and rotate first file
+	//nolint:gosec // G304: Test file with controlled path
 	f, err := os.Create(logPath)
 	require.NoError(t, err)
 
@@ -333,6 +339,7 @@ func TestFileOutputRotation_CompressionFailurePreventsCleanup(t *testing.T) {
 	time.Sleep(600 * time.Millisecond) // Wait for compression to complete
 
 	// Create and rotate second file - this will trigger cleanup if compression succeeds
+	//nolint:gosec // G304: Test file with controlled path
 	f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0600)
 	require.NoError(t, err)
 
@@ -345,9 +352,11 @@ func TestFileOutputRotation_CompressionFailurePreventsCleanup(t *testing.T) {
 
 	// Make the directory read-only BEFORE rotation to cause compression to fail
 	// This simulates a disk space issue or permission problem during compression
+	//nolint:gosec // G302: Test intentionally sets restrictive permissions
 	err = os.Chmod(tmpDir, 0500)
 	require.NoError(t, err)
 
+	//nolint:gosec // G302: Test restores permissions for cleanup
 	defer func() { _ = os.Chmod(tmpDir, 0700) }()
 
 	// Trigger rotation - compression will fail due to read-only directory
@@ -359,6 +368,7 @@ func TestFileOutputRotation_CompressionFailurePreventsCleanup(t *testing.T) {
 	time.Sleep(600 * time.Millisecond)
 
 	// Restore permissions so we can read the directory
+	//nolint:gosec // G302: Test restores permissions for reading directory
 	err = os.Chmod(tmpDir, 0755)
 	require.NoError(t, err)
 
