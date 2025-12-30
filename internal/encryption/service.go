@@ -206,8 +206,10 @@ func (s *Service) encryptAESGCM(key, plaintext []byte) ([]byte, error) {
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
+
+	_, readErr := io.ReadFull(rand.Reader, nonce)
+	if readErr != nil {
+		return nil, readErr
 	}
 
 	return gcm.Seal(nonce, nonce, plaintext, nil), nil
@@ -243,8 +245,10 @@ func (s *Service) encryptChaCha20(key, plaintext []byte) ([]byte, error) {
 	}
 
 	nonce := make([]byte, aead.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
+
+	_, readErr := io.ReadFull(rand.Reader, nonce)
+	if readErr != nil {
+		return nil, readErr
 	}
 
 	return aead.Seal(nonce, nonce, plaintext, nil), nil

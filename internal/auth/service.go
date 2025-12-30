@@ -100,8 +100,9 @@ func (s *Service) EnsureRootUser(ctx context.Context) (bool, error) {
 	}
 
 	// Validate root password strength
-	if err := ValidatePasswordStrength(s.config.RootPassword); err != nil {
-		return false, fmt.Errorf("root password does not meet security requirements: %w", err)
+	validateErr := ValidatePasswordStrength(s.config.RootPassword)
+	if validateErr != nil {
+		return false, fmt.Errorf("root password does not meet security requirements: %w", validateErr)
 	}
 
 	// Hash the password
@@ -167,7 +168,8 @@ func (s *Service) Login(ctx context.Context, username, password string) (*TokenP
 		return nil, errors.New("user is disabled")
 	}
 
-	if err := VerifyPassword(user.PasswordHash, password); err != nil {
+	verifyErr := VerifyPassword(user.PasswordHash, password)
+	if verifyErr != nil {
 		return nil, errors.New("invalid credentials")
 	}
 
@@ -268,8 +270,9 @@ func (s *Service) generateTokenPair(user *metadata.User) (*TokenPair, error) {
 // CreateUser creates a new user with full validation.
 func (s *Service) CreateUser(ctx context.Context, username, password, email string, role metadata.UserRole) (*metadata.User, error) {
 	// Validate username format
-	if err := ValidateUsername(username); err != nil {
-		return nil, fmt.Errorf("invalid username: %w", err)
+	usernameErr := ValidateUsername(username)
+	if usernameErr != nil {
+		return nil, fmt.Errorf("invalid username: %w", usernameErr)
 	}
 
 	// Validate password strength

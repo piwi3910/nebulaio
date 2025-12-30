@@ -1,7 +1,6 @@
 package hardware
 
 import (
-	"os"
 	"os/exec"
 	"testing"
 
@@ -11,12 +10,9 @@ import (
 
 // TestDetectGPUs_NvidiaSMINotFound tests graceful handling when nvidia-smi is not available.
 func TestDetectGPUs_NvidiaSMINotFound(t *testing.T) {
-	// Temporarily modify PATH to ensure nvidia-smi is not found
-	originalPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", originalPath)
-
-	// Set PATH to empty to ensure nvidia-smi is not found
-	os.Setenv("PATH", "/nonexistent")
+	// Set PATH to nonexistent to ensure nvidia-smi is not found
+	// t.Setenv automatically restores original value after test
+	t.Setenv("PATH", "/nonexistent")
 
 	detector := &Detector{}
 	gpus := detector.detectGPUs()
@@ -27,10 +23,7 @@ func TestDetectGPUs_NvidiaSMINotFound(t *testing.T) {
 
 // TestCheckP2PSupport_NvidiaSMINotFound tests graceful handling when nvidia-smi is not available.
 func TestCheckP2PSupport_NvidiaSMINotFound(t *testing.T) {
-	originalPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", originalPath)
-
-	os.Setenv("PATH", "/nonexistent")
+	t.Setenv("PATH", "/nonexistent")
 
 	detector := &Detector{}
 	supported := detector.checkP2PSupport(0)
@@ -41,10 +34,7 @@ func TestCheckP2PSupport_NvidiaSMINotFound(t *testing.T) {
 
 // TestGetBlueFieldFirmware_CommandNotFound tests graceful handling when mlxfwmanager is not available.
 func TestGetBlueFieldFirmware_CommandNotFound(t *testing.T) {
-	originalPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", originalPath)
-
-	os.Setenv("PATH", "/nonexistent")
+	t.Setenv("PATH", "/nonexistent")
 
 	detector := &Detector{}
 	version := detector.getBlueFieldFirmware(0)
@@ -55,10 +45,7 @@ func TestGetBlueFieldFirmware_CommandNotFound(t *testing.T) {
 
 // TestDetectDPUs_MSTNotFound tests graceful handling when mst command is not available.
 func TestDetectDPUs_MSTNotFound(t *testing.T) {
-	originalPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", originalPath)
-
-	os.Setenv("PATH", "/nonexistent")
+	t.Setenv("PATH", "/nonexistent")
 
 	detector := &Detector{}
 	dpus := detector.detectDPUs()
@@ -73,10 +60,7 @@ func TestCommandValidation_NoInjection(t *testing.T) {
 	// by checking that the detector doesn't panic or crash when commands are missing
 
 	// Clear PATH to ensure all external commands fail LookPath check
-	originalPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", originalPath)
-
-	os.Setenv("PATH", "")
+	t.Setenv("PATH", "")
 
 	detector := NewDetector()
 

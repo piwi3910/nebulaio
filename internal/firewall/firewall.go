@@ -669,7 +669,8 @@ func (fw *Firewall) matchRule(rule *Rule, req *Request) bool {
 func (fw *Firewall) matchTimeWindow(window *TimeWindow, t time.Time) bool {
 	loc := time.UTC
 	if window.Timezone != "" {
-		if l, err := time.LoadLocation(window.Timezone); err == nil {
+		l, loadErr := time.LoadLocation(window.Timezone)
+		if loadErr == nil {
 			loc = l
 		}
 	}

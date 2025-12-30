@@ -287,7 +287,9 @@ func (h *ClusterHandler) TransferLeadership(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req TransferLeadershipRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+
+	decodeErr := json.NewDecoder(r.Body).Decode(&req)
+	if decodeErr != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -318,8 +320,9 @@ func (h *ClusterHandler) TransferLeadership(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.store.TransferLeadership(req.TargetID, targetAddr); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+	transferErr := h.store.TransferLeadership(req.TargetID, targetAddr)
+	if transferErr != nil {
+		writeError(w, transferErr.Error(), http.StatusInternalServerError)
 		return
 	}
 

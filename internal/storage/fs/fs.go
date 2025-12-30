@@ -105,8 +105,9 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 	path := b.objectPath(bucket, key)
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
-		return nil, fmt.Errorf("failed to create object directory: %w", err)
+	mkdirErr := os.MkdirAll(filepath.Dir(path), dirPermissions)
+	if mkdirErr != nil {
+		return nil, fmt.Errorf("failed to create object directory: %w", mkdirErr)
 	}
 
 	// Create temporary file for atomic write
@@ -129,18 +130,21 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		return nil, fmt.Errorf("failed to write object: %w", err)
 	}
 
-	if err := tmpFile.Sync(); err != nil {
+	syncErr := tmpFile.Sync()
+	if syncErr != nil {
 		_ = tmpFile.Close()
-		return nil, fmt.Errorf("failed to sync object: %w", err)
+		return nil, fmt.Errorf("failed to sync object: %w", syncErr)
 	}
 
-	if err := tmpFile.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close temp file: %w", err)
+	closeErr := tmpFile.Close()
+	if closeErr != nil {
+		return nil, fmt.Errorf("failed to close temp file: %w", closeErr)
 	}
 
 	// Atomic rename
-	if err := os.Rename(tmpPath, path); err != nil {
-		return nil, fmt.Errorf("failed to rename object: %w", err)
+	renameErr := os.Rename(tmpPath, path)
+	if renameErr != nil {
+		return nil, fmt.Errorf("failed to rename object: %w", renameErr)
 	}
 
 	etag := hex.EncodeToString(hash.Sum(nil))
@@ -232,8 +236,9 @@ func (b *Backend) DeleteBucket(ctx context.Context, bucket string) error {
 		return errors.New("bucket not empty")
 	}
 
-	if err := os.RemoveAll(path); err != nil {
-		return fmt.Errorf("failed to delete bucket directory: %w", err)
+	removeErr := os.RemoveAll(path)
+	if removeErr != nil {
+		return fmt.Errorf("failed to delete bucket directory: %w", removeErr)
 	}
 
 	return nil
@@ -314,8 +319,9 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 	path := b.partPath(bucket, key, uploadID, partNumber)
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
-		return nil, fmt.Errorf("failed to create part directory: %w", err)
+	mkdirErr := os.MkdirAll(filepath.Dir(path), 0750)
+	if mkdirErr != nil {
+		return nil, fmt.Errorf("failed to create part directory: %w", mkdirErr)
 	}
 
 	// Create temporary file

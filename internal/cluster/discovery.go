@@ -533,8 +533,10 @@ func (d *Discovery) addRaftVoter(nodeID, raftAddr string) {
 
 	// Add the replica
 	replicaID := hashNodeID(nodeID)
-	if err := nodeHost.SyncRequestAddReplica(ctx, shardID, replicaID, raftAddr, membership.ConfigChangeID); err != nil {
-		log.Error().Err(err).
+
+	addErr := nodeHost.SyncRequestAddReplica(ctx, shardID, replicaID, raftAddr, membership.ConfigChangeID)
+	if addErr != nil {
+		log.Error().Err(addErr).
 			Str("node_id", nodeID).
 			Uint64("replica_id", replicaID).
 			Msg("Failed to add Dragonboat replica")
@@ -569,8 +571,10 @@ func (d *Discovery) removeRaftVoter(nodeID string) {
 
 	// Remove the replica
 	replicaID := hashNodeID(nodeID)
-	if err := nodeHost.SyncRequestDeleteReplica(ctx, shardID, replicaID, membership.ConfigChangeID); err != nil {
-		log.Error().Err(err).
+
+	deleteErr := nodeHost.SyncRequestDeleteReplica(ctx, shardID, replicaID, membership.ConfigChangeID)
+	if deleteErr != nil {
+		log.Error().Err(deleteErr).
 			Str("node_id", nodeID).
 			Uint64("replica_id", replicaID).
 			Msg("Failed to remove Dragonboat replica")
@@ -603,8 +607,10 @@ func (d *Discovery) AddVoter(nodeID, raftAddr string) error {
 
 	// Add the replica
 	replicaID := hashNodeID(nodeID)
-	if err := nodeHost.SyncRequestAddReplica(ctx, shardID, replicaID, raftAddr, membership.ConfigChangeID); err != nil {
-		return fmt.Errorf("failed to add replica: %w", err)
+
+	addErr := nodeHost.SyncRequestAddReplica(ctx, shardID, replicaID, raftAddr, membership.ConfigChangeID)
+	if addErr != nil {
+		return fmt.Errorf("failed to add replica: %w", addErr)
 	}
 
 	return nil

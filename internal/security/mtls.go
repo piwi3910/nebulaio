@@ -191,9 +191,10 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 	caCertPath := filepath.Join(m.config.CertDir, "ca.crt")
 	caKeyPath := filepath.Join(m.config.CertDir, "ca.key")
 
-	if _, err := os.Stat(caCertPath); err == nil {
-		ca, err := m.loadCertificateFromDisk(caCertPath, caKeyPath)
-		if err == nil {
+	_, statErr := os.Stat(caCertPath)
+	if statErr == nil {
+		ca, loadErr := m.loadCertificateFromDisk(caCertPath, caKeyPath)
+		if loadErr == nil {
 			m.caCert = ca
 			m.certPool.AddCert(ca.Certificate)
 
@@ -267,12 +268,14 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 	m.certPool.AddCert(cert)
 
 	// Save to disk
-	if err := os.WriteFile(caCertPath, certPEM, certFilePermissions); err != nil {
-		return nil, err
+	certWriteErr := os.WriteFile(caCertPath, certPEM, certFilePermissions)
+	if certWriteErr != nil {
+		return nil, certWriteErr
 	}
 
-	if err := os.WriteFile(caKeyPath, keyPEM, keyFilePermissions); err != nil {
-		return nil, err
+	keyWriteErr := os.WriteFile(caKeyPath, keyPEM, keyFilePermissions)
+	if keyWriteErr != nil {
+		return nil, keyWriteErr
 	}
 
 	// Save to storage

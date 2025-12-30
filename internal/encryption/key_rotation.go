@@ -1164,8 +1164,10 @@ func (krm *KeyRotationManager) ExportKey(ctx context.Context, keyID string) (str
 // ImportKey imports a previously exported key.
 func (krm *KeyRotationManager) ImportKey(ctx context.Context, exportedKey string) (*EncryptionKey, error) {
 	var importData map[string]interface{}
-	if err := json.Unmarshal([]byte(exportedKey), &importData); err != nil {
-		return nil, err
+
+	unmarshalErr := json.Unmarshal([]byte(exportedKey), &importData)
+	if unmarshalErr != nil {
+		return nil, unmarshalErr
 	}
 
 	wrappedKeyB64, ok := importData["wrapped_key"].(string)

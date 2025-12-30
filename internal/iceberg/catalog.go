@@ -454,8 +454,9 @@ func (c *Catalog) UpdateNamespace(ctx context.Context, namespace []string, remov
 
 	ns.UpdatedAt = time.Now()
 
-	if err := c.store.PutNamespace(ctx, ns); err != nil {
-		return nil, err
+	putErr := c.store.PutNamespace(ctx, ns)
+	if putErr != nil {
+		return nil, putErr
 	}
 
 	c.namespaces.Store(ns.NamespaceName(), ns)
@@ -468,13 +469,14 @@ func (c *Catalog) DropNamespace(ctx context.Context, namespace []string) error {
 	name := strings.Join(namespace, ".")
 
 	// Check for tables in namespace
-	tables, err := c.store.ListTables(ctx, name)
-	if err == nil && len(tables) > 0 {
+	tables, listErr := c.store.ListTables(ctx, name)
+	if listErr == nil && len(tables) > 0 {
 		return errors.New("namespace is not empty")
 	}
 
-	if err := c.store.DeleteNamespace(ctx, name); err != nil {
-		return err
+	deleteErr := c.store.DeleteNamespace(ctx, name)
+	if deleteErr != nil {
+		return deleteErr
 	}
 
 	c.namespaces.Delete(name)
@@ -489,8 +491,9 @@ func (c *Catalog) CreateTable(ctx context.Context, namespace []string, name stri
 	tableKey := nsName + "." + name
 
 	// Check namespace exists
-	if _, err := c.GetNamespace(ctx, namespace); err != nil {
-		return nil, err
+	_, nsErr := c.GetNamespace(ctx, namespace)
+	if nsErr != nil {
+		return nil, nsErr
 	}
 
 	// Check table doesn't exist

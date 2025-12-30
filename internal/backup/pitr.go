@@ -362,8 +362,10 @@ func (bm *BackupManager) loadMetadata() error {
 	}
 
 	var backups []*BackupMetadata
-	if err := json.Unmarshal(data, &backups); err != nil {
-		return err
+
+	unmarshalErr := json.Unmarshal(data, &backups)
+	if unmarshalErr != nil {
+		return unmarshalErr
 	}
 
 	for _, b := range backups {
@@ -546,8 +548,10 @@ func (bm *BackupManager) backupBucket(job *BackupJob, bucket string, objectCount
 
 	// Create bucket directory in backup
 	bucketPath := filepath.Join(job.metadata.Location, bucket)
-	if err := os.MkdirAll(bucketPath, 0750); err != nil {
-		return fmt.Errorf("failed to create bucket directory: %w", err)
+
+	mkdirErr := os.MkdirAll(bucketPath, 0750)
+	if mkdirErr != nil {
+		return fmt.Errorf("failed to create bucket directory: %w", mkdirErr)
 	}
 
 	// Use semaphore for concurrency control
@@ -619,8 +623,10 @@ func (bm *BackupManager) backupObject(job *BackupJob, bucket string, obj *Object
 	objectPath := filepath.Join(job.metadata.Location, bucket, obj.Key)
 
 	objectDir := filepath.Dir(objectPath)
-	if err := os.MkdirAll(objectDir, 0750); err != nil {
-		return fmt.Errorf("failed to create object directory: %w", err)
+
+	mkdirErr := os.MkdirAll(objectDir, 0750)
+	if mkdirErr != nil {
+		return fmt.Errorf("failed to create object directory: %w", mkdirErr)
 	}
 
 	// Create output file

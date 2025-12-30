@@ -245,8 +245,9 @@ func (m *MultipartCopyManager) CopyObject(ctx context.Context, opts *MultipartCo
 	}
 
 	// Check copy conditions
-	if err := m.checkCopyConditions(metadata, opts); err != nil {
-		return nil, err
+	conditionsErr := m.checkCopyConditions(metadata, opts)
+	if conditionsErr != nil {
+		return nil, conditionsErr
 	}
 
 	// For small objects, use simple copy
@@ -774,13 +775,15 @@ func (h *MultipartCopyHandler) HandleUploadPartCopy(w http.ResponseWriter, r *ht
 	}
 
 	if h := r.Header.Get("X-Amz-Copy-Source-If-Modified-Since"); h != "" {
-		if t, err := time.Parse(time.RFC1123, h); err == nil {
+		t, parseErr := time.Parse(time.RFC1123, h)
+		if parseErr == nil {
 			params.CopySourceIfModifiedSince = &t
 		}
 	}
 
 	if h := r.Header.Get("X-Amz-Copy-Source-If-Unmodified-Since"); h != "" {
-		if t, err := time.Parse(time.RFC1123, h); err == nil {
+		t, parseErr := time.Parse(time.RFC1123, h)
+		if parseErr == nil {
 			params.CopySourceIfUnmodifiedSince = &t
 		}
 	}
@@ -878,13 +881,15 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 	}
 
 	if h := r.Header.Get("X-Amz-Copy-Source-If-Modified-Since"); h != "" {
-		if t, err := time.Parse(time.RFC1123, h); err == nil {
+		t, parseErr := time.Parse(time.RFC1123, h)
+		if parseErr == nil {
 			opts.CopySourceIfModifiedSince = &t
 		}
 	}
 
 	if h := r.Header.Get("X-Amz-Copy-Source-If-Unmodified-Since"); h != "" {
-		if t, err := time.Parse(time.RFC1123, h); err == nil {
+		t, parseErr := time.Parse(time.RFC1123, h)
+		if parseErr == nil {
 			opts.CopySourceIfUnmodifiedSince = &t
 		}
 	}
@@ -892,7 +897,8 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 	// Parse object lock headers
 	opts.ObjectLockMode = r.Header.Get("X-Amz-Object-Lock-Mode")
 	if h := r.Header.Get("X-Amz-Object-Lock-Retain-Until-Date"); h != "" {
-		if t, err := time.Parse(time.RFC3339, h); err == nil {
+		t, parseErr := time.Parse(time.RFC3339, h)
+		if parseErr == nil {
 			opts.ObjectLockRetainUntil = &t
 		}
 	}

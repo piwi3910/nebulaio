@@ -60,8 +60,9 @@ type connPool struct {
 
 // NewProvider creates a new LDAP provider.
 func NewProvider(cfg Config) (*Provider, error) {
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
+	validateErr := cfg.Validate()
+	if validateErr != nil {
+		return nil, fmt.Errorf("invalid config: %w", validateErr)
 	}
 
 	// Set defaults
@@ -159,9 +160,10 @@ func (p *Provider) Authenticate(ctx context.Context, username, password string) 
 	}
 
 	// Re-bind as service account for subsequent operations
-	if err := conn.Bind(p.config.BindDN, p.config.BindPassword); err != nil {
+	rebindErr := conn.Bind(p.config.BindDN, p.config.BindPassword)
+	if rebindErr != nil {
 		p.pool.discard(conn)
-		return nil, &auth.ErrProviderUnavailable{Provider: p.Name(), Cause: err}
+		return nil, &auth.ErrProviderUnavailable{Provider: p.Name(), Cause: rebindErr}
 	}
 
 	// Get groups if configured
@@ -515,9 +517,10 @@ func (p *connPool) create(ctx context.Context) (*ldap.Conn, error) {
 	}
 
 	// Bind as service account
-	if err := conn.Bind(p.config.BindDN, p.config.BindPassword); err != nil {
+	bindErr := conn.Bind(p.config.BindDN, p.config.BindPassword)
+	if bindErr != nil {
 		_ = conn.Close()
-		return nil, fmt.Errorf("failed to bind: %w", err)
+		return nil, fmt.Errorf("failed to bind: %w", bindErr)
 	}
 
 	return conn, nil

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"os"
 	"testing"
 )
 
@@ -314,12 +313,7 @@ func TestPlacement(t *testing.T) {
 }
 
 func TestShardManager(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "shard-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	mgr, err := NewShardManager(tmpDir)
 	if err != nil {
@@ -373,12 +367,7 @@ func TestShardManager(t *testing.T) {
 }
 
 func TestBackend(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "erasure-backend-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	cfg := Config{
 		DataShards:   4,

@@ -298,8 +298,9 @@ func newBucketConfigSetCmd(use, short, configType string, setter bucketConfigSet
 				return err
 			}
 
-			if err := setter(ctx, client, bucket, configData); err != nil {
-				return err
+			setterErr := setter(ctx, client, bucket, configData)
+			if setterErr != nil {
+				return setterErr
 			}
 
 			fmt.Printf("%s configuration set for bucket '%s'\n", configType, bucket)
@@ -331,8 +332,10 @@ func newReplicationSetCmd() *cobra.Command {
 		"Replication",
 		func(ctx context.Context, client *s3.Client, bucket string, configData []byte) error {
 			var config types.ReplicationConfiguration
-			if err := json.Unmarshal(configData, &config); err != nil {
-				return fmt.Errorf("failed to parse replication config: %w", err)
+
+			unmarshalErr := json.Unmarshal(configData, &config)
+			if unmarshalErr != nil {
+				return fmt.Errorf("failed to parse replication config: %w", unmarshalErr)
 			}
 
 			_, err := client.PutBucketReplication(ctx, &s3.PutBucketReplicationInput{
@@ -432,8 +435,10 @@ func newLifecycleSetCmd() *cobra.Command {
 		"Lifecycle",
 		func(ctx context.Context, client *s3.Client, bucket string, configData []byte) error {
 			var lifecycleConfig types.BucketLifecycleConfiguration
-			if err := json.Unmarshal(configData, &lifecycleConfig); err != nil {
-				return fmt.Errorf("failed to parse lifecycle config: %w", err)
+
+			unmarshalErr := json.Unmarshal(configData, &lifecycleConfig)
+			if unmarshalErr != nil {
+				return fmt.Errorf("failed to parse lifecycle config: %w", unmarshalErr)
 			}
 
 			_, err := client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{

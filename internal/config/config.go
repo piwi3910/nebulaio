@@ -813,20 +813,24 @@ func setDefaults(v *viper.Viper) {
 
 func (c *Config) validate() error {
 	// Ensure data directory exists
-	if err := os.MkdirAll(c.DataDir, 0750); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
+	mkdirErr := os.MkdirAll(c.DataDir, 0750)
+	if mkdirErr != nil {
+		return fmt.Errorf("failed to create data directory: %w", mkdirErr)
 	}
 
 	// Generate node ID if not set
 	if c.NodeID == "" {
 		nodeIDPath := filepath.Join(c.DataDir, "node-id")
 		//nolint:gosec // G304: nodeIDPath is constructed from trusted config
-		if data, err := os.ReadFile(nodeIDPath); err == nil {
+		data, readErr := os.ReadFile(nodeIDPath)
+		if readErr == nil {
 			c.NodeID = string(data)
 		} else {
 			c.NodeID = generateNodeID()
-			if err := os.WriteFile(nodeIDPath, []byte(c.NodeID), 0644); err != nil {
-				return fmt.Errorf("failed to write node ID: %w", err)
+
+			writeErr := os.WriteFile(nodeIDPath, []byte(c.NodeID), 0644)
+			if writeErr != nil {
+				return fmt.Errorf("failed to write node ID: %w", writeErr)
 			}
 		}
 	}

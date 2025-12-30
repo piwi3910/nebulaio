@@ -446,8 +446,10 @@ func (c *S3Client) ListObjects(ctx context.Context, bucket, prefix, marker strin
 	}
 
 	var result ListBucketResult
-	if err := xml.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+
+	decodeErr := xml.NewDecoder(resp.Body).Decode(&result)
+	if decodeErr != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", decodeErr)
 	}
 
 	return &result, nil
@@ -960,8 +962,9 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 		opts.Metadata = info.Metadata
 	}
 
-	if err := mm.destStorage.PutObject(activeJob.ctx, destBucket, destKey, limitedReader, info.Size, opts); err != nil {
-		return fmt.Errorf("failed to put object: %w", err)
+	putErr := mm.destStorage.PutObject(activeJob.ctx, destBucket, destKey, limitedReader, info.Size, opts)
+	if putErr != nil {
+		return fmt.Errorf("failed to put object: %w", putErr)
 	}
 
 	// Verify checksum if enabled
@@ -1001,7 +1004,8 @@ func (mm *MigrationManager) logFailedObject(jobID, bucket, key string, err error
 		return
 	}
 
-	if _, writeErr := mm.failedLog.Write(append(data, '\n')); writeErr != nil {
+	_, writeErr := mm.failedLog.Write(append(data, '\n'))
+	if writeErr != nil {
 		log.Error().
 			Err(writeErr).
 			Str("job_id", jobID).

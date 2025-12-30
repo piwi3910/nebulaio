@@ -230,8 +230,9 @@ func (s *Service) ExtendRetention(ctx context.Context, bucket, key, versionID st
 	}
 
 	// Validate mode
-	if err := ValidateRetentionMode(mode); err != nil {
-		return err
+	validationErr := ValidateRetentionMode(mode)
+	if validationErr != nil {
+		return validationErr
 	}
 
 	// Check if extension is valid

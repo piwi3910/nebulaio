@@ -15,12 +15,7 @@ import (
 
 func TestLocalProvider(t *testing.T) {
 	// Create temp directory for keys
-	tmpDir, err := os.MkdirTemp("", "kms-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	config := local.Config{
 		ProviderConfig: kms.ProviderConfig{
@@ -434,12 +429,7 @@ func TestVaultProvider(t *testing.T) {
 
 func TestEncryptionService(t *testing.T) {
 	// Create temp directory for keys
-	tmpDir, err := os.MkdirTemp("", "encryption-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	// Create local KMS provider
 	kmsConfig := local.Config{
@@ -689,12 +679,7 @@ func TestEncryptionService(t *testing.T) {
 
 func TestProviderErrors(t *testing.T) {
 	// Create temp directory
-	tmpDir, err := os.MkdirTemp("", "kms-error-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	config := local.Config{
 		ProviderConfig: kms.ProviderConfig{
@@ -748,12 +733,7 @@ func TestProviderErrors(t *testing.T) {
 
 func TestKeyFileStorage(t *testing.T) {
 	t.Run("WithPassword", func(t *testing.T) {
-		tmpDir, err := os.MkdirTemp("", "kms-storage-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp dir: %v", err)
-		}
-
-		defer func() { _ = os.RemoveAll(tmpDir) }()
+		tmpDir := t.TempDir()
 
 		config := local.Config{
 			ProviderConfig: kms.ProviderConfig{
@@ -786,24 +766,23 @@ func TestKeyFileStorage(t *testing.T) {
 
 		// Verify key file exists
 		keyPath := filepath.Join(tmpDir, keyInfo.KeyID+".key")
-		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+
+		_, statErr := os.Stat(keyPath)
+		if os.IsNotExist(statErr) {
 			t.Error("Key file should exist")
 		}
 
 		// When password is provided, master key file should NOT exist
 		masterPath := filepath.Join(tmpDir, ".master.key")
-		if _, err := os.Stat(masterPath); !os.IsNotExist(err) {
+
+		_, masterStatErr := os.Stat(masterPath)
+		if !os.IsNotExist(masterStatErr) {
 			t.Error("Master key file should NOT exist when password is provided")
 		}
 	})
 
 	t.Run("WithoutPassword", func(t *testing.T) {
-		tmpDir, err := os.MkdirTemp("", "kms-storage-nopass-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp dir: %v", err)
-		}
-
-		defer func() { _ = os.RemoveAll(tmpDir) }()
+		tmpDir := t.TempDir()
 
 		config := local.Config{
 			ProviderConfig: kms.ProviderConfig{

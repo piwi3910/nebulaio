@@ -73,8 +73,9 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 	etag := hex.EncodeToString(hash[:])
 
 	// Store in volume manager
-	if err := b.manager.Put(bucket, key, data); err != nil {
-		return nil, fmt.Errorf("failed to store object: %w", err)
+	putErr := b.manager.Put(bucket, key, data)
+	if putErr != nil {
+		return nil, fmt.Errorf("failed to store object: %w", putErr)
 	}
 
 	return &backend.PutResult{

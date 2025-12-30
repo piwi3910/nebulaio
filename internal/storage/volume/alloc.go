@@ -36,8 +36,9 @@ func ReadAllocationMap(file *os.File, offset int64, totalBlocks uint32) (*Alloca
 	numBytes := (totalBlocks + byteAlignmentMask) / bitsPerByte
 	bits := make([]byte, numBytes)
 
-	if _, err := file.ReadAt(bits, offset); err != nil {
-		return nil, err
+	_, readErr := file.ReadAt(bits, offset)
+	if readErr != nil {
+		return nil, readErr
 	}
 
 	// Count free blocks

@@ -829,9 +829,11 @@ func (s *Server) collectMetrics(ctx context.Context) {
 	// Update multipart uploads count (approximate - count for all buckets)
 	var multipartCount int
 
-	if buckets, err := s.metaStore.ListBuckets(ctx, ""); err == nil {
-		for _, bucket := range buckets {
-			if uploads, err := s.metaStore.ListMultipartUploads(ctx, bucket.Name); err == nil {
+	multipartBuckets, multipartErr := s.metaStore.ListBuckets(ctx, "")
+	if multipartErr == nil {
+		for _, bucket := range multipartBuckets {
+			uploads, uploadsErr := s.metaStore.ListMultipartUploads(ctx, bucket.Name)
+			if uploadsErr == nil {
 				multipartCount += len(uploads)
 			}
 		}

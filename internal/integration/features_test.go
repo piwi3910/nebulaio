@@ -106,11 +106,7 @@ func TestDRAMCacheWithFirewall(t *testing.T) {
 // TestS3SelectWithAudit tests that S3 Select queries are properly audited.
 func TestS3SelectWithAudit(t *testing.T) {
 	// Create temp directory for audit logs
-	tmpDir, err := os.MkdirTemp("", "audit-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	auditPath := filepath.Join(tmpDir, "audit.log")
 
@@ -292,11 +288,7 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 	defer c.Close()
 
 	// Create temp directory for audit
-	tmpDir, err := os.MkdirTemp("", "audit-concurrent-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	auditLogger, err := audit.NewEnhancedAuditLogger(audit.EnhancedConfig{
 		Enabled:        true,
@@ -390,11 +382,7 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 
 // TestAuditIntegrityChain tests the cryptographic integrity chain.
 func TestAuditIntegrityChain(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "audit-integrity-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create audit logger with integrity
 	auditLogger, err := audit.NewEnhancedAuditLogger(audit.EnhancedConfig{
@@ -468,12 +456,6 @@ func TestWebhookAuditOutput(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
-
-	tmpDir, err := os.MkdirTemp("", "audit-webhook-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
 
 	// Create audit logger with webhook output
 	auditLogger, err := audit.NewEnhancedAuditLogger(audit.EnhancedConfig{
@@ -723,11 +705,7 @@ func TestAdvancedFeatureIntegration(t *testing.T) {
 	})
 	defer cache.Close()
 
-	tmpDir, err := os.MkdirTemp("", "integration-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	auditLogger, err := audit.NewEnhancedAuditLogger(audit.EnhancedConfig{
 		Enabled:          true,

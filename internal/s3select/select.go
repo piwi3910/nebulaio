@@ -761,12 +761,18 @@ func parseWhereClause(where string) (*Condition, error) {
 					rightVal = right[1 : len(right)-1]
 				} else if strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\"") {
 					rightVal = right[1 : len(right)-1]
-				} else if f, err := strconv.ParseFloat(right, 64); err == nil {
-					rightVal = f
-				} else if b, err := strconv.ParseBool(right); err == nil {
-					rightVal = b
 				} else {
-					rightVal = right
+					f, floatErr := strconv.ParseFloat(right, 64)
+					if floatErr == nil {
+						rightVal = f
+					} else {
+						b, boolErr := strconv.ParseBool(right)
+						if boolErr == nil {
+							rightVal = b
+						} else {
+							rightVal = right
+						}
+					}
 				}
 
 				return &Condition{
@@ -842,7 +848,8 @@ func parseValue(s string) interface{} {
 		return nil
 	}
 
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
+	f, floatErr := strconv.ParseFloat(s, 64)
+	if floatErr == nil {
 		if strings.Contains(s, ".") {
 			return f
 		}
@@ -850,7 +857,8 @@ func parseValue(s string) interface{} {
 		return int64(f)
 	}
 
-	if b, err := strconv.ParseBool(s); err == nil {
+	b, boolErr := strconv.ParseBool(s)
+	if boolErr == nil {
 		return b
 	}
 

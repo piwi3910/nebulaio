@@ -593,8 +593,9 @@ func (p *OpenAIProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 		} `json:"usage"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+	decodeErr := json.NewDecoder(resp.Body).Decode(&result)
+	if decodeErr != nil {
+		return nil, decodeErr
 	}
 
 	if len(result.Choices) == 0 {
@@ -678,8 +679,9 @@ func (p *OpenAIProvider) Embed(ctx context.Context, content string) ([]float64, 
 		} `json:"data"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+	decodeErr := json.NewDecoder(resp.Body).Decode(&result)
+	if decodeErr != nil {
+		return nil, decodeErr
 	}
 
 	if len(result.Data) == 0 {
@@ -780,8 +782,9 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 		} `json:"usage"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+	decodeErr := json.NewDecoder(resp.Body).Decode(&result)
+	if decodeErr != nil {
+		return nil, decodeErr
 	}
 
 	var responseText string

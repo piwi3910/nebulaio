@@ -226,8 +226,10 @@ func (s *Service) SetVersioning(ctx context.Context, name string, status metadat
 	}
 
 	bucket.Versioning = status
-	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
-		return s3errors.ErrInternalError.WithMessage("failed to update versioning: " + err.Error())
+
+	updateErr := s.store.UpdateBucket(ctx, bucket)
+	if updateErr != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to update versioning: " + updateErr.Error())
 	}
 
 	return nil
@@ -257,13 +259,16 @@ func (s *Service) SetBucketPolicy(ctx context.Context, name, policyJSON string) 
 	}
 
 	// Validate the policy structure and content
-	if err := parsedPolicy.Validate(); err != nil {
-		return s3errors.ErrMalformedPolicy.WithMessage("policy validation failed: " + err.Error())
+	validateErr := parsedPolicy.Validate()
+	if validateErr != nil {
+		return s3errors.ErrMalformedPolicy.WithMessage("policy validation failed: " + validateErr.Error())
 	}
 
 	bucket.Policy = policyJSON
-	if err := s.store.UpdateBucket(ctx, bucket); err != nil {
-		return s3errors.ErrInternalError.WithMessage("failed to set bucket policy: " + err.Error())
+
+	updateErr := s.store.UpdateBucket(ctx, bucket)
+	if updateErr != nil {
+		return s3errors.ErrInternalError.WithMessage("failed to set bucket policy: " + updateErr.Error())
 	}
 
 	return nil

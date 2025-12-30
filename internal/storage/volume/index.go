@@ -42,8 +42,10 @@ func ReadIndex(file *os.File, offset int64, size int64) (*Index, error) {
 	}
 
 	buf := make([]byte, size)
-	if _, err := file.ReadAt(buf, offset); err != nil {
-		return nil, err
+
+	_, readErr := file.ReadAt(buf, offset)
+	if readErr != nil {
+		return nil, readErr
 	}
 
 	return unmarshalIndex(buf)
