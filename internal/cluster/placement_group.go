@@ -762,7 +762,9 @@ func (m *PlacementGroupManager) safeCallbackWithTimeout(fn func()) {
 	}
 }
 
-// safeCallback executes a callback function with panic recovery (deprecated, use safeCallbackWithTimeout)
+// safeCallback executes a callback function with panic recovery (deprecated, use safeCallbackWithTimeout).
+//
+//nolint:unused // Kept for backward compatibility.
 func (m *PlacementGroupManager) safeCallback(fn func()) {
 	m.safeCallbackWithTimeout(fn)
 }

@@ -545,7 +545,9 @@ func TestMockServerSuite(t *testing.T) {
 	suite.Run(t, new(MockServerTestSuite))
 }
 
-// _createTestFile is a helper function for creating test files (reserved for future use)
+// _createTestFile is a helper function for creating test files (reserved for future use).
+//
+//nolint:unused // Reserved for future test implementation.
 func _createTestFile(t *testing.T, dir, name, content string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
