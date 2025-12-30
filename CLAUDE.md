@@ -164,6 +164,615 @@ React 19 + TypeScript + Mantine UI + TanStack Query:
 - Use `make lint` before committing Go changes
 - Frontend uses strict TypeScript (`npm run type-check`)
 
+## Go Linting Rules - Write Compliant Code First Time
+
+**CRITICAL**: ALL linters are enabled in `.golangci.yml`. Write code that complies with these rules from the start to avoid rework.
+
+### HTTP Headers (canonicalheader)
+
+**ALWAYS use canonical HTTP header format (Title-Case):**
+
+```go
+// ✅ CORRECT - Canonical format
+req.Header.Set("Content-Type", "application/json")
+req.Header.Set("X-User-Id", userID)              // "Id" not "ID"
+req.Header.Set("X-Request-Id", requestID)        // "Id" not "ID"
+req.Header.Set("X-Api-Key", apiKey)              // "Api" not "API"
+req.Header.Set("X-Amz-Version-Id", versionID)    // AWS headers
+req.Header.Get("Authorization")
+
+// ❌ WRONG - Non-canonical
+req.Header.Set("content-type", "application/json")     // lowercase
+req.Header.Set("x-user-id", userID)                    // lowercase
+req.Header.Set("X-User-ID", userID)                    // "ID" should be "Id"
+req.Header.Set("X-API-Key", apiKey)                    // "API" should be "Api"
+req.Header.Set("x-amz-version-id", versionID)          // lowercase
+```
+
+**Common patterns:**
+
+- Content-Type, Content-Length, Content-Encoding, Content-Disposition
+- Authorization, Accept, User-Agent, Referer
+- X-User-Id, X-Request-Id, X-Api-Key (use "Id", "Api" not "ID", "API")
+- X-Amz-* headers: X-Amz-Version-Id, X-Amz-Request-Id, X-Amz-Delete-Marker
+
+### Line Length (lll)
+
+Max line length: 120 characters
+
+```go
+// ✅ CORRECT
+func CreateBucket(ctx context.Context, name string,
+    region string, opts *Options) error {
+    return bucketService.Create(ctx, name, region, opts)
+}
+
+// ❌ WRONG - line too long
+func CreateBucket(ctx context.Context, name string, region string, opts *Options) error { return bucketService.Create(ctx, name, region, opts) }
+```
+
+### Variable Naming (varnamelen)
+
+**Variable names must match their scope (min 2 chars, context-aware):**
+
+```go
+// ✅ CORRECT - standard short names allowed
+for i := 0; i < len(items); i++ { }
+for _, v := range items { }
+ctx := context.Background()
+mu := &sync.Mutex{}
+wg := &sync.WaitGroup{}
+
+// ✅ CORRECT - longer scope needs descriptive names
+func ProcessUserData(ctx context.Context) {
+    userID := getUserID(ctx)           // descriptive
+    requestData := parseRequest()     // descriptive
+}
+
+// ❌ WRONG - single letter for long scope
+func ProcessData(ctx context.Context) {
+    u := getUserID(ctx)      // too short for this scope
+    d := parseRequest()      // too short for this scope
+}
+```
+
+### Struct Tag Format (tagliatelle)
+
+Use correct case for struct tags:
+
+- `json`: snake_case
+- `yaml`: snake_case
+- `xml`: camelCase
+- `bson`: camelCase
+
+```go
+// ✅ CORRECT
+type User struct {
+    UserID   string `json:"user_id" yaml:"user_id" xml:"userId" bson:"userId"`
+    FullName string `json:"full_name" yaml:"full_name"`
+    Email    string `json:"email"`
+}
+
+// ❌ WRONG - wrong case
+type User struct {
+    UserID   string `json:"userId"`      // should be snake_case
+    FullName string `json:"FullName"`    // should be snake_case
+}
+```
+
+### Error Wrapping (wrapcheck)
+
+**Wrap errors from external packages:**
+
+```go
+// ✅ CORRECT - wrap external errors
+import "github.com/external/pkg"
+
+func DoWork() error {
+    if err := pkg.Execute(); err != nil {
+        return fmt.Errorf("failed to execute: %w", err)
+    }
+    return nil
+}
+
+// ✅ CORRECT - internal package errors can be returned directly
+import "github.com/piwi3910/nebulaio/internal/storage"
+
+func DoWork() error {
+    return storage.Save(data)  // internal, no wrap needed
+}
+
+// ❌ WRONG - returning external error unwrapped
+func DoWork() error {
+    return pkg.Execute()  // external package, should wrap
+}
+```
+
+### Exhaustive Switch (exhaustive)
+
+**Handle all enum cases in switch statements:**
+
+```go
+type Status int
+const (
+    StatusPending Status = iota
+    StatusActive
+    StatusInactive
+)
+
+// ✅ CORRECT - all cases handled
+func ProcessStatus(s Status) string {
+    switch s {
+    case StatusPending:
+        return "pending"
+    case StatusActive:
+        return "active"
+    case StatusInactive:
+        return "inactive"
+    default:
+        return "unknown"  // default signifies exhaustive
+    }
+}
+
+// ❌ WRONG - missing case
+func ProcessStatus(s Status) string {
+    switch s {
+    case StatusPending:
+        return "pending"
+    case StatusActive:
+        return "active"
+    // missing StatusInactive case
+    }
+    return ""
+}
+```
+
+### Struct Initialization (exhaustruct)
+
+**Initialize important struct fields explicitly (excluded in tests):**
+
+```go
+// ✅ CORRECT - critical fields initialized
+user := &User{
+    ID:        uuid.New(),
+    Email:     email,
+    CreatedAt: time.Now(),
+    UpdatedAt: time.Now(),
+    Active:    true,
+}
+
+// ✅ CORRECT - partial init OK for simple structs
+opts := &Options{
+    Timeout: 30 * time.Second,
+    // other fields have sensible defaults
+}
+
+// Note: exhaustruct is excluded in test files
+```
+
+### Whitespace and Formatting (wsl_v5, nlreturn)
+
+**Consistent whitespace and newlines:**
+
+```go
+// ✅ CORRECT - newline before return/branch
+func Process() error {
+    if err := validate(); err != nil {
+        return err
+    }
+
+    result := compute()
+
+    return save(result)
+}
+
+// ✅ CORRECT - logical grouping
+func CreateUser(name, email string) error {
+    user := &User{Name: name}
+    user.Email = email
+
+    if err := validate(user); err != nil {
+        return err
+    }
+
+    return save(user)
+}
+
+// ❌ WRONG - no separation
+func Process() error {
+    if err := validate(); err != nil {
+        return err
+    }
+    result := compute()
+    return save(result)  // missing newline before return
+}
+```
+
+### No Forbidden Functions (forbidigo)
+
+**Use zerolog for logging, return errors instead of panic:**
+
+```go
+// ✅ CORRECT - use zerolog
+import "github.com/rs/zerolog/log"
+
+func Process() error {
+    log.Info().Msg("Processing started")
+    log.Error().Err(err).Msg("Processing failed")
+    return err
+}
+
+// ✅ CORRECT - return errors
+func Process() error {
+    if invalid {
+        return errors.New("invalid input")
+    }
+    return nil
+}
+
+// ❌ WRONG - fmt.Print
+func Process() {
+    fmt.Println("Processing...")  // use zerolog
+}
+
+// ❌ WRONG - panic
+func Process() {
+    panic("something went wrong")  // return error instead
+}
+```
+
+### Function/Method Order (funcorder)
+
+**Order functions logically:**
+
+```go
+// ✅ CORRECT order:
+// 1. Exported functions
+// 2. Unexported functions
+// 3. Receivers grouped together
+// 4. Helper functions at bottom
+
+// Exported constructor
+func NewService() *Service { }
+
+// Exported methods
+func (s *Service) Start() error { }
+func (s *Service) Stop() error { }
+
+// Unexported methods
+func (s *Service) process() error { }
+
+// Helper functions
+func validate(data []byte) error { }
+func compute(x int) int { }
+```
+
+### Magic Numbers (mnd)
+
+**Define constants for magic numbers:**
+
+```go
+// ✅ CORRECT - constants
+const (
+    DefaultTimeout = 30 * time.Second
+    MaxRetries     = 3
+    BufferSize     = 1024
+)
+
+func Process() {
+    timeout := DefaultTimeout
+    retries := MaxRetries
+}
+
+// ❌ WRONG - magic numbers
+func Process() {
+    timeout := 30 * time.Second  // what's 30?
+    retries := 3                 // what's 3?
+    buffer := make([]byte, 1024) // what's 1024?
+}
+```
+
+### Test Parallelization (paralleltest, tparallel)
+
+**Use t.Parallel() appropriately (excluded in test files, but good practice):**
+
+```go
+// ✅ CORRECT - parallel tests where safe
+func TestUserCreation(t *testing.T) {
+    t.Parallel()
+
+    // test logic
+}
+
+// ✅ CORRECT - don't parallelize when sharing state
+func TestDatabaseOperations(t *testing.T) {
+    // NOT parallel - shares database connection
+
+    // test logic
+}
+```
+
+### Test Package Separation (testpackage)
+
+**Use separate test package for black-box testing:**
+
+```go
+// ✅ CORRECT - black-box test
+// file: bucket_test.go
+package bucket_test  // separate package
+
+import (
+    "testing"
+    "github.com/piwi3910/nebulaio/internal/bucket"
+)
+
+func TestCreateBucket(t *testing.T) {
+    // test using public API only
+}
+
+// ✅ ALSO CORRECT - white-box test when needed
+// file: bucket_internal_test.go
+package bucket  // same package
+
+func TestInternalLogic(t *testing.T) {
+    // test internal/private functions
+}
+```
+
+### Global Variables (gochecknoglobals)
+
+**Avoid global variables except where necessary:**
+
+```go
+// ✅ CORRECT - metrics, loggers allowed
+var (
+    requestsTotal = prometheus.NewCounterVec(...)
+    log           = zerolog.New(os.Stderr)
+)
+
+// ✅ CORRECT - config package
+package config
+var globalConfig *Config  // allowed in config package
+
+// ✅ CORRECT - CLI flags in cmd
+package main
+var (
+    flagPort = flag.Int("port", 9000, "port")
+    flagHost = flag.String("host", "localhost", "host")
+)
+
+// ❌ WRONG - global state in business logic
+package service
+var cache = make(map[string]string)  // use struct field instead
+```
+
+### Init Functions (gochecknoinits)
+
+**Minimize use of init(), use explicit initialization:**
+
+```go
+// ✅ CORRECT - explicit initialization
+func NewService() *Service {
+    s := &Service{}
+    s.initialize()
+    return s
+}
+
+// ✅ ALLOWED - registration patterns
+func init() {
+    prometheus.MustRegister(requestsTotal)  // metrics registration
+    sql.Register("postgres", &driver{})      // driver registration
+}
+
+// ❌ WRONG - complex logic in init
+func init() {
+    config = loadConfig()      // do this in main() or New()
+    db = connectDatabase()     // do this in main() or New()
+}
+```
+
+### Nested If Statements (nestif)
+
+Max nesting: 4 levels
+
+```go
+// ✅ CORRECT - early returns reduce nesting
+func Process(data []byte) error {
+    if data == nil {
+        return errors.New("nil data")
+    }
+
+    user, err := parseUser(data)
+    if err != nil {
+        return err
+    }
+
+    if !user.Valid {
+        return errors.New("invalid user")
+    }
+
+    return save(user)
+}
+
+// ❌ WRONG - deep nesting
+func Process(data []byte) error {
+    if data != nil {
+        if user, err := parseUser(data); err == nil {
+            if user.Valid {
+                if err := save(user); err == nil {
+                    return nil  // 4 levels deep
+                }
+            }
+        }
+    }
+    return errors.New("failed")
+}
+```
+
+### Cyclomatic Complexity (cyclop, gocyclo, gocognit)
+
+Keep functions simple:
+
+- Max cyclomatic complexity: 15
+- Max cognitive complexity: 20
+
+```go
+// ✅ CORRECT - extract complex logic
+func ProcessRequest(ctx context.Context, req *Request) error {
+    if err := validateRequest(req); err != nil {
+        return err
+    }
+
+    result, err := performOperation(ctx, req)
+    if err != nil {
+        return err
+    }
+
+    return saveResult(ctx, result)
+}
+
+func validateRequest(req *Request) error {
+    // validation logic
+}
+
+func performOperation(ctx context.Context, req *Request) (*Result, error) {
+    // operation logic
+}
+
+// ❌ WRONG - too complex
+func ProcessRequest(ctx context.Context, req *Request) error {
+    // 20+ if statements, switches, loops all in one function
+}
+```
+
+### Context in Structs (containedctx)
+
+**Don't store context in structs:**
+
+```go
+// ✅ CORRECT - pass context as parameter
+type Worker struct {
+    db *sql.DB
+}
+
+func (w *Worker) Process(ctx context.Context) error {
+    return w.db.QueryContext(ctx, "...")
+}
+
+// ❌ WRONG - context in struct
+type Worker struct {
+    ctx context.Context  // DON'T DO THIS
+    db  *sql.DB
+}
+```
+
+### Context Propagation (contextcheck)
+
+**Always pass context through call chains:**
+
+```go
+// ✅ CORRECT - context passed through
+func ProcessRequest(ctx context.Context, data []byte) error {
+    return processData(ctx, data)
+}
+
+func processData(ctx context.Context, data []byte) error {
+    return saveToDatabase(ctx, data)
+}
+
+// ❌ WRONG - breaking context chain
+func ProcessRequest(ctx context.Context, data []byte) error {
+    return processData(data)  // missing ctx
+}
+```
+
+### Unused Parameters (unparam)
+
+**Remove or acknowledge unused parameters:**
+
+```go
+// ✅ CORRECT - all params used
+func Process(ctx context.Context, data []byte) error {
+    return db.QueryContext(ctx, string(data))
+}
+
+// ✅ CORRECT - use _ for intentionally unused
+func Handler(w http.ResponseWriter, r *http.Request, _ context.Context) {
+    // ctx not needed in this handler
+}
+
+// ❌ WRONG - unused parameter
+func Process(ctx context.Context, data []byte) error {
+    return db.Query(string(data))  // ctx never used
+}
+```
+
+### Struct Tag Alignment (tagalign)
+
+**Align struct tags for readability:**
+
+```go
+// ✅ CORRECT - aligned tags
+type User struct {
+    ID        string    `json:"id"         db:"id"`
+    Name      string    `json:"name"       db:"name"`
+    Email     string    `json:"email"      db:"email"`
+    CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+// ❌ WRONG - misaligned tags
+type User struct {
+    ID string `json:"id" db:"id"`
+    Name string `json:"name" db:"name"`
+    Email string `json:"email" db:"email"`
+}
+```
+
+### Dependencies (depguard)
+
+**Follow dependency rules (if configured):**
+
+```go
+// ✅ CORRECT - use allowed packages
+import (
+    "context"
+    "github.com/rs/zerolog/log"
+    "github.com/piwi3910/nebulaio/internal/storage"
+)
+
+// ❌ WRONG - if blocked by depguard
+import "some/blocked/package"
+```
+
+### Pre-Commit Checklist
+
+**Before writing ANY Go code, ensure you:**
+
+1. ✅ Use canonical HTTP header format (Title-Case)
+2. ✅ Keep lines under 120 characters
+3. ✅ Use descriptive variable names (min 2 chars, scope-appropriate)
+4. ✅ Use correct struct tag format (json: snake_case)
+5. ✅ Wrap errors from external packages
+6. ✅ Handle all enum cases in switches
+7. ✅ Use zerolog for logging, not fmt.Print
+8. ✅ Return errors, don't panic
+9. ✅ Pass context through call chains
+10. ✅ Keep function complexity low (max 15 cyclomatic)
+11. ✅ Don't store context in structs
+12. ✅ Define constants for magic numbers
+13. ✅ Avoid global variables (except metrics, config, flags)
+14. ✅ Remove unused parameters
+15. ✅ Run `make lint` and fix all issues before committing
+
+### Quick Reference
+
+```bash
+# Run linter
+make lint
+
+# All linters are enabled - write compliant code from the start!
+```
+
 ## Testing Standards
 
 ### Go Testing
