@@ -256,7 +256,7 @@ func NewEnhancedAuditLogger(config EnhancedConfig, store AuditStore, geoLookup G
 			continue
 		}
 
-		output, err := createOutput(outputCfg)
+		output, err := CreateOutput(outputCfg)
 		if err != nil {
 			cancel()
 			return nil, fmt.Errorf("failed to create output %s: %w", outputCfg.Name, err)
@@ -1229,8 +1229,8 @@ func (o *WebhookOutput) Name() string {
 	return o.name
 }
 
-// createOutput creates an output based on configuration.
-func createOutput(cfg OutputConfig) (AuditOutput, error) {
+// CreateOutput creates an output based on configuration.
+func CreateOutput(cfg OutputConfig) (AuditOutput, error) {
 	switch cfg.Type {
 	case OutputFile:
 		return newFileOutput(cfg, RotationConfig{

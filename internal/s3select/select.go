@@ -755,13 +755,14 @@ func parseWhereClause(where string) (*Condition, error) {
 				var rightVal interface{}
 
 				rightLower := strings.ToLower(right)
-				if strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(op), "null") {
+				switch {
+				case strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(op), "null"):
 					rightVal = nil
-				} else if strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'") {
+				case strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'"):
 					rightVal = right[1 : len(right)-1]
-				} else if strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\"") {
+				case strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\""):
 					rightVal = right[1 : len(right)-1]
-				} else {
+				default:
 					f, floatErr := strconv.ParseFloat(right, 64)
 					if floatErr == nil {
 						rightVal = f
