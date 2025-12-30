@@ -88,10 +88,84 @@ linters:
       asserts: true
       comparison: true
 
+    lll:
+      line-length: 120
+      tab-width: 4
+
+    varnamelen:
+      max-distance: 10
+      min-name-length: 2
+      check-receiver: false
+      check-return: false
+      check-type-param: false
+      ignore-type-assert-ok: true
+      ignore-map-index-ok: true
+      ignore-chan-recv-ok: true
+      ignore-decls:
+        - ctx context.Context
+        - wg sync.WaitGroup
+        - mu sync.Mutex
+        - rw sync.RWMutex
+        - id string
+        - db *sql.DB
+        - w http.ResponseWriter
+        - r *http.Request
+        - t *testing.T
+        - b *testing.B
+        - i int
+        - j int
+        - k int
+        - v interface{}
+        - ok bool
+        - err error
+
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          yaml: snake
+          xml: camel
+          bson: camel
+          avro: snake
+          mapstructure: kebab
+
+    wrapcheck:
+      ignorePackageGlobs:
+        - github.com/piwi3910/nebulaio/*
+        - encoding/*
+        - github.com/pkg/errors
+
+    exhaustive:
+      check:
+        - switch
+      default-signifies-exhaustive: true
+
+    forbidigo:
+      forbid:
+        - p: ^fmt\.Print.*$
+          msg: "Use zerolog for logging, not fmt.Print"
+        - p: ^log\.Print.*$
+          msg: "Use zerolog for logging, not log.Print"
+        - p: ^panic$
+          msg: "Avoid panic, return errors instead"
+
+    wsl_v5:
+      allow-assign-and-anything: false
+      allow-assign-and-call: true
+      allow-cuddle-declarations: false
+      allow-multiline-assign: true
+      allow-separated-leading-comment: false
+      allow-trailing-comment: false
+      force-case-trailing-whitespace: 0
+      force-err-cuddling: false
+      force-short-decl-cuddling: false
+      strict-append: true
+
   enable:
     # Security & Bug Detection (High Priority)
     - gosec          # Security issues
     - govet          # Go vet
+    - errcheck       # Unchecked errors
     - staticcheck    # Comprehensive static analysis
 
     # Common Mistakes
@@ -102,6 +176,7 @@ linters:
     - gocyclo        # Cyclomatic complexity
     - gocognit       # Cognitive complexity
     - nestif         # Deep nesting
+    - funlen         # Function length
 
     # Best Practices
     - errorlint      # Error handling
@@ -119,33 +194,7 @@ linters:
     - godot          # Comment periods
 
   disable:
-    # Disabled for now - enable incrementally
-    - gochecknoglobals  # Too strict - globals needed for config
-    - gochecknoinits    # Too strict - init() used in registration
-    - wrapcheck         # Too strict - error wrapping is situational
-    - exhaustive        # Too strict - not all cases need handling
-    - exhaustruct       # Too strict - partial struct init is common
-    - nlreturn          # Style preference
-    - wsl               # Style preference
-    - lll               # Line length - not enforced
-    - forbidigo         # Bans specific identifiers - not needed
-    - varnamelen        # Variable name length - too strict
-    - tagliatelle       # Tag format - JSON compatibility
-    - paralleltest      # Test parallelization - not always desired
-    - tparallel         # Test parallelization - not always desired
-    - testpackage       # Test package naming - internal tests needed
-    - godox             # TODO comments - tracked separately in issues
-    - depguard          # Dependency restrictions - not configured for this project
-    - err113            # Dynamic errors - static errors add unnecessary boilerplate for internal errors
-    - dogsled           # Blank identifiers - sometimes necessary for ignored return values
-    - embeddedstructfieldcheck # Embedded field ordering - style preference
-    - errchkjson        # JSON marshal error checking - interface{} marshaling is safe
-    - errcheck          # Unchecked errors - too many false positives for cleanup operations
-    - errorlint         # Error comparison - errors.Is() not always appropriate for internal errors
-    - errname           # Error naming convention - project uses ErrXxx style consistently
-    - funcorder         # Function ordering - style preference, not enforced
-    - forcetypeassert   # Type assertion checking - sometimes appropriate for known types
-    - funlen            # Function length - some complex functions legitimately exceed limits
+    - wsl  # Deprecated - replaced by wsl_v5
 
   exclusions:
     paths:
@@ -159,11 +208,16 @@ linters:
       # Exclude test files from certain checks
       - path: _test\.go
         linters:
-          - funlen      # Test functions can be long
-          - gocyclo     # Test complexity is acceptable
-          - gocognit    # Test complexity is acceptable
-          - errcheck    # Tests often intentionally ignore errors
-          - gosec       # Tests may use insecure operations
+          - funlen         # Test functions can be long
+          - gocyclo        # Test complexity is acceptable
+          - gocognit       # Test complexity is acceptable
+          - errcheck       # Tests often intentionally ignore errors
+          - gosec          # Tests may use insecure operations
+          - exhaustruct    # Tests don't need full struct initialization
+          - varnamelen     # Short variable names acceptable in tests
+          - wrapcheck      # Tests don't need to wrap all errors
+          - paralleltest   # Not all tests should be parallel
+          - tparallel      # Not all tests should be parallel
 
       # Exclude benchmark files
       - path: _bench_test\.go
@@ -172,6 +226,8 @@ linters:
           - gocyclo
           - gocognit
           - errcheck
+          - exhaustruct
+          - varnamelen
 
       # Exclude integration test files
       - path: internal/integration/
@@ -230,90 +286,11 @@ linters:
         linters:
           - gocyclo
           - gocognit
-          - cyclop
 
       - path: internal/api/s3/
         text: "cyclomatic complexity"
         linters:
           - gocyclo      # S3 API handlers have complex routing
-          - cyclop
-
-      # Complex routing and business logic in API handlers
-      - path: internal/api/(admin|console)/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      - path: internal/api/middleware/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # Complex business logic requiring extensive conditional checks
-      - path: internal/(analytics|audit|auth|dlp|iam|lifecycle|policy|replication|tiering)/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # Storage and transport layer with complex device/protocol handling
-      - path: internal/(storage|transport)/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # Format parsing and evaluation (Parquet, etc.)
-      - path: internal/select/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # Security operations with multiple validation steps
-      - path: internal/security/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # Complex test scenarios
-      - path: internal/.*/.*_test\.go
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # CLI commands with multiple options
-      - path: cmd/nebulaio-cli/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # Express One Zone has complex object listing logic
-      - path: internal/express/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # KMS providers have complex initialization sequences
-      - path: internal/kms/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # Cluster management with complex state handling
-      - path: internal/cluster/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # Additional paths with complex business logic
-      - path: internal/(backup|catalog|config|firewall|hardware|iceberg|lambda|migration|object|s3select|tenant)/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
-
-      # Metadata store with complex FSM processing
-      - path: internal/metadata/
-        text: "cyclomatic complexity"
-        linters:
-          - cyclop
 
       # Allow InsecureSkipVerify in test helpers
       - path: internal/.*test.*\.go
@@ -327,90 +304,31 @@ linters:
         linters:
           - gosec
 
-      # Context in struct is acceptable for lifecycle management in background workers
-      # These structs use context.WithCancel for coordinating goroutine shutdown
-      - path: internal/audit/(enhanced|logger)\.go
-        text: "found a struct that contains a context.Context field"
+      # Allow init() for registration patterns
+      - path: internal/.*/.*\.go
+        text: "don't use `init` function"
         linters:
-          - containedctx
+          - gochecknoinits
 
-      # Test suites and background workers legitimately store context for lifecycle management
-      - path: internal/(integration|backup|cluster|events|migration|replication|cache|dpu|storage)/.*\.go
-        text: "found a struct that contains a context.Context field"
+      # Allow global variables for metrics, loggers, and config
+      - path: internal/metrics/.*\.go
         linters:
-          - containedctx
+          - gochecknoglobals
 
-      # Shutdown contexts should be independent from parent context with own timeout
-      - path: internal/server/server\.go
-        text: "Non-inherited new context"
+      - path: internal/config/.*\.go
         linters:
-          - contextcheck
+          - gochecknoglobals
 
-      # Multipart copy operations may need independent contexts for sub-operations
-      - path: internal/s3/multipart_copy\.go
-        text: "(Non-inherited new context|cyclomatic complexity)"
+      # Allow globals in main package for CLI flags
+      - path: cmd/.*\.go
         linters:
-          - contextcheck
-          - cyclop
+          - gochecknoglobals
+          - gochecknoinits
 
-      # Discovery and metadata methods are synchronous and don't need context
-      - path: internal/api/admin/(cluster|handler)\.go
-        text: "Function .* should pass the context parameter"
-        linters:
-          - contextcheck
-
-      - path: internal/metadata/dragonboat_store\.go
-        text: "Function .* should pass the context parameter"
-        linters:
-          - contextcheck
-
-      # Replication filter methods are pure functions
-      - path: internal/replication/cross_region\.go
-        text: "Function `matchesFilter` should pass the context parameter"
-        linters:
-          - contextcheck
-
-      # Tiering storage lookups are synchronous
-      - path: internal/tiering/.*\.go
-        text: "Function `GetByTier` should pass the context parameter"
-        linters:
-          - contextcheck
-
-      # Test helper methods
-      - path: internal/tiering/tiering_test\.go
-        text: "should pass the context parameter"
-        linters:
-          - contextcheck
-
-      # Express One Zone - ignore specific error checks for response writing
-      - path: internal/express/express\.go
-        text: "Error return value.*is not checked"
-        linters:
-          - errcheck
-
-      # Key rotation - ignore error checks for cleanup operations
-      - path: internal/encryption/key_rotation\.go
-        text: "Error return value.*is not checked"
-        linters:
-          - errcheck
-
-      # MCP server - ignore error checks for cleanup operations
-      - path: internal/mcp/server\.go
-        text: "Error return value.*is not checked"
-        linters:
-          - errcheck
-
-      # Security operations - type assertions and CRL creation
-      - path: internal/security/mtls\.go
-        text: "Error return value.*is not checked"
-        linters:
-          - errcheck
-
-      # Direct I/O storage - low-level operations
-      - path: internal/storage/volume/directio\.go
-        text: "Error return value.*is not checked"
-        linters:
-          - errcheck
+      # Allow TODO/FIXME comments - we track them in GitHub issues
+      - linters:
+          - godox
+        text: "Line contains TODO/BUG/FIXME"
 
 run:
   go: '1.24'
