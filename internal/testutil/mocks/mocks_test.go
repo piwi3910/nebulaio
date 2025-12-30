@@ -1,4 +1,3 @@
-// Package mocks provides mock implementations for testing NebulaIO components.
 package mocks
 
 import (

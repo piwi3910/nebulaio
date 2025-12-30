@@ -165,6 +165,20 @@ linters:
           - errcheck    # Tests often intentionally ignore errors
           - gosec       # Tests may use insecure operations
 
+      # Exclude testutil package - test utilities have different requirements
+      - path: internal/testutil/
+        linters:
+          - mnd         # Magic numbers acceptable in test fixtures
+          - govet       # Field alignment not critical for test mocks
+          - unparam     # Unused params acceptable in test helpers
+          - nilnil      # Nil returns acceptable in mock implementations
+          - testifylint # Test utilities use various assertion patterns
+          - noinlineerr # Inline error handling acceptable in test code
+          - intrange    # Go 1.22 range syntax optional in test code
+          - wsl         # Whitespace style not enforced in test utilities
+          - wsl_v5      # Whitespace style v5 not enforced in test utilities
+          - nolintlint  # Nolint directives may become stale when rules change
+
       # Exclude benchmark files
       - path: _bench_test\.go
         linters:

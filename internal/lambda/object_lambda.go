@@ -24,7 +24,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// TransformationType defines the type of transformation
+// TransformationType defines the type of transformation.
 type TransformationType string
 
 const (
@@ -34,7 +34,7 @@ const (
 	TransformJavaScript TransformationType = "javascript"
 )
 
-// BuiltInTransform defines built-in transformation functions
+// BuiltInTransform defines built-in transformation functions.
 type BuiltInTransform string
 
 const (
@@ -52,7 +52,7 @@ const (
 	BuiltInDecrypt      BuiltInTransform = "decrypt"       // Client-side decryption
 )
 
-// AccessPointConfig defines an Object Lambda access point configuration
+// AccessPointConfig defines an Object Lambda access point configuration.
 type AccessPointConfig struct {
 	// Name is the access point name
 	Name string `json:"name"`
@@ -73,7 +73,7 @@ type AccessPointConfig struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// TransformationConfig defines a single transformation
+// TransformationConfig defines a single transformation.
 type TransformationConfig struct {
 	// Actions specifies which S3 actions trigger this transformation
 	// Currently only GetObject is supported
@@ -83,7 +83,7 @@ type TransformationConfig struct {
 	ContentTransformation ContentTransformation `json:"content_transformation"`
 }
 
-// ContentTransformation specifies how to transform content
+// ContentTransformation specifies how to transform content.
 type ContentTransformation struct {
 	// Type is the transformation type
 	Type TransformationType `json:"type"`
@@ -98,7 +98,7 @@ type ContentTransformation struct {
 	WASMConfig *WASMConfig `json:"wasm_config,omitempty"`
 }
 
-// WebhookConfig defines webhook-based transformation settings
+// WebhookConfig defines webhook-based transformation settings.
 type WebhookConfig struct {
 	// URL is the webhook endpoint
 	URL string `json:"url"`
@@ -778,21 +778,21 @@ func (t *ConvertJSONTransformer) Transform(ctx context.Context, input io.Reader,
 	return bytes.NewReader(result), map[string]string{"Content-Type": "application/json"}, nil
 }
 
-// CompressTransformer compresses content
+// CompressTransformer compresses content.
 type CompressTransformer struct{}
 
-// DefaultMaxTransformSize is the default maximum size of data that can be transformed in memory (100MB)
+// DefaultMaxTransformSize is the default maximum size of data that can be transformed in memory (100MB).
 const DefaultMaxTransformSize = 100 * 1024 * 1024
 
-// DefaultStreamingThreshold is the default size threshold above which streaming mode is used (10MB)
+// DefaultStreamingThreshold is the default size threshold above which streaming mode is used (10MB).
 const DefaultStreamingThreshold = 10 * 1024 * 1024
 
-// maxTransformSize is the configurable maximum transform size (defaults to DefaultMaxTransformSize)
-// Uses atomic operations for thread-safe access
+// maxTransformSize is the configurable maximum transform size (defaults to DefaultMaxTransformSize).
+// Uses atomic operations for thread-safe access.
 var maxTransformSize atomic.Int64
 
-// streamingThreshold is the configurable size threshold for using streaming mode
-// Uses atomic operations for thread-safe access
+// streamingThreshold is the configurable size threshold for using streaming mode.
+// Uses atomic operations for thread-safe access.
 var streamingThreshold atomic.Int64
 
 func init() {
@@ -800,9 +800,9 @@ func init() {
 	streamingThreshold.Store(DefaultStreamingThreshold)
 }
 
-// SetMaxTransformSize sets the maximum size of data that can be transformed in memory
-// This function is thread-safe and can be called at any time
-// Warning: Setting this too high may cause memory exhaustion during transformation operations
+// SetMaxTransformSize sets the maximum size of data that can be transformed in memory.
+// This function is thread-safe and can be called at any time.
+// Warning: Setting this too high may cause memory exhaustion during transformation operations.
 func SetMaxTransformSize(size int64) {
 	if size > 0 {
 		maxTransformSize.Store(size)
@@ -814,15 +814,15 @@ func SetMaxTransformSize(size int64) {
 	}
 }
 
-// GetMaxTransformSize returns the current maximum transform size
-// This function is thread-safe
+// GetMaxTransformSize returns the current maximum transform size.
+// This function is thread-safe.
 func GetMaxTransformSize() int64 {
 	return maxTransformSize.Load()
 }
 
 // SetStreamingThreshold sets the size threshold above which streaming mode is used
-// for compression/decompression operations instead of buffering in memory
-// This function is thread-safe and can be called at any time
+// for compression/decompression operations instead of buffering in memory.
+// This function is thread-safe and can be called at any time.
 func SetStreamingThreshold(size int64) {
 	if size > 0 {
 		streamingThreshold.Store(size)
@@ -834,10 +834,33 @@ func SetStreamingThreshold(size int64) {
 	}
 }
 
-// GetStreamingThreshold returns the current streaming threshold
-// This function is thread-safe
+// GetStreamingThreshold returns the current streaming threshold.
+// This function is thread-safe.
 func GetStreamingThreshold() int64 {
 	return streamingThreshold.Load()
+}
+
+// Compression magic bytes for auto-detection.
+const (
+	gzipMagic1 = 0x1f
+	gzipMagic2 = 0x8b
+	zstdMagic1 = 0x28
+	zstdMagic2 = 0xb5
+	zstdMagic3 = 0x2f
+	zstdMagic4 = 0xfd
+)
+
+// detectCompressionAlgorithm attempts to detect the compression algorithm from magic bytes.
+// Returns empty string if no known compression format is detected.
+func detectCompressionAlgorithm(data []byte) string {
+	switch {
+	case len(data) >= 2 && data[0] == gzipMagic1 && data[1] == gzipMagic2:
+		return "gzip"
+	case len(data) >= 4 && data[0] == zstdMagic1 && data[1] == zstdMagic2 && data[2] == zstdMagic3 && data[3] == zstdMagic4:
+		return "zstd"
+	default:
+		return ""
+	}
 }
 
 func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
@@ -1092,11 +1115,8 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 
 	// Auto-detect compression based on magic bytes if algorithm not specified
 	if algorithm == "" {
-		if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
-			algorithm = "gzip"
-		} else if len(data) >= 4 && data[0] == 0x28 && data[1] == 0xb5 && data[2] == 0x2f && data[3] == 0xfd {
-			algorithm = "zstd"
-		} else {
+		algorithm = detectCompressionAlgorithm(data)
+		if algorithm == "" {
 			// Data doesn't appear to be compressed, return as-is
 			return bytes.NewReader(data), nil, nil
 		}

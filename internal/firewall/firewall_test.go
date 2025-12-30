@@ -864,7 +864,7 @@ func BenchmarkBandwidthTracker(b *testing.B) {
 }
 
 // TestFirewallInvalidCIDR verifies that invalid CIDR entries are handled gracefully
-// and don't cause the firewall to fail initialization
+// and don't cause the firewall to fail initialization.
 func TestFirewallInvalidCIDR(t *testing.T) {
 	tests := []struct {
 		name        string

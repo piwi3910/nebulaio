@@ -1,5 +1,3 @@
-// Package testutil provides testing utilities and mock implementations
-// for NebulaIO unit and integration tests.
 package testutil
 
 import (
@@ -49,7 +47,7 @@ func AssertUserEqual(t *testing.T, expected, actual *metadata.User) {
 	assert.Equal(t, expected.Username, actual.Username, "usernames should match")
 	assert.Equal(t, expected.Email, actual.Email, "user emails should match")
 	assert.Equal(t, expected.Role, actual.Role, "user roles should match")
-	assert.Equal(t, expected.Status, actual.Status, "user statuses should match")
+	assert.Equal(t, expected.Enabled, actual.Enabled, "user enabled status should match")
 }
 
 // AssertErrorType asserts that an error is of a specific type.

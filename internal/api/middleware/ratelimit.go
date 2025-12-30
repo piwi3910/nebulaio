@@ -1,4 +1,3 @@
-// Package middleware provides HTTP middleware for the NebulaIO API.
 package middleware
 
 import (

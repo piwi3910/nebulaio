@@ -1,5 +1,3 @@
-// Package testutil provides testing utilities and mock implementations
-// for NebulaIO unit and integration tests.
 package testutil
 
 import (
@@ -8,19 +6,19 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metadata"
 )
 
-// Test fixture constants
+// Test fixture constants.
 const (
-	// DefaultTestBucketName is the default bucket name for tests
+	// DefaultTestBucketName is the default bucket name for tests.
 	DefaultTestBucketName = "test-bucket"
-	// DefaultTestObjectKey is the default object key for tests
+	// DefaultTestObjectKey is the default object key for tests.
 	DefaultTestObjectKey = "test-key"
-	// DefaultTestRegion is the default region for tests
+	// DefaultTestRegion is the default region for tests.
 	DefaultTestRegion = "us-east-1"
-	// DefaultTestOwner is the default owner ID for tests
+	// DefaultTestOwner is the default owner ID for tests.
 	DefaultTestOwner = "test-owner"
-	// DefaultTestETag is a sample ETag for tests
+	// DefaultTestETag is a sample ETag for tests.
 	DefaultTestETag = "d41d8cd98f00b204e9800998ecf8427e"
-	// DefaultTestContentType is the default content type for tests
+	// DefaultTestContentType is the default content type for tests.
 	DefaultTestContentType = "application/octet-stream"
 )
 
@@ -35,10 +33,8 @@ func NewTestBucket(name string) *metadata.Bucket {
 		Name:       name,
 		Owner:      DefaultTestOwner,
 		Region:     DefaultTestRegion,
-		Created:    now,
-		Updated:    now,
-		ACL:        "private",
-		Versioning: "Suspended",
+		CreatedAt:  now,
+		Versioning: metadata.VersioningSuspended,
 	}
 }
 
@@ -58,7 +54,8 @@ func NewTestObjectMeta(bucket, key string, size int64) *metadata.ObjectMeta {
 		Size:         size,
 		ContentType:  DefaultTestContentType,
 		ETag:         DefaultTestETag,
-		LastModified: now,
+		CreatedAt:    now,
+		ModifiedAt:   now,
 		Owner:        DefaultTestOwner,
 		StorageClass: "STANDARD",
 	}
@@ -74,8 +71,8 @@ func NewTestUser(username string) *metadata.User {
 		ID:        username,
 		Username:  username,
 		Email:     username + "@example.com",
-		Role:      "user",
-		Status:    "active",
+		Role:      metadata.RoleUser,
+		Enabled:   true,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -97,7 +94,7 @@ func NewTestAccessKey(userID, accessKeyID, secretKey string) *metadata.AccessKey
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secretKey,
 		UserID:          userID,
-		Status:          "active",
+		Enabled:         true,
 		CreatedAt:       now,
 	}
 }
@@ -110,18 +107,10 @@ func NewTestPolicy(name string) *metadata.Policy {
 	now := time.Now()
 	return &metadata.Policy{
 		Name:        name,
-		Version:     "2012-10-17",
 		Description: "Test policy",
+		Document:    `{"Version":"2012-10-17","Statement":[{"Sid":"AllowAll","Effect":"Allow","Action":["s3:*"],"Resource":["*"]}]}`,
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		Statements: []metadata.Statement{
-			{
-				Sid:       "AllowAll",
-				Effect:    "Allow",
-				Actions:   []string{"s3:*"},
-				Resources: []string{"*"},
-			},
-		},
 	}
 }
 
@@ -141,18 +130,18 @@ func NewTestMultipartUpload(bucket, key, uploadID string) *metadata.MultipartUpl
 		UploadID:  uploadID,
 		Bucket:    bucket,
 		Key:       key,
-		Initiated: now,
-		Owner:     DefaultTestOwner,
+		CreatedAt: now,
+		Initiator: DefaultTestOwner,
 	}
 }
 
 // TestData provides common test data slices.
 var TestData = struct {
-	// SmallData is a small byte slice for testing (16 bytes)
+	// SmallData is a small byte slice for testing (16 bytes).
 	SmallData []byte
-	// MediumData is a medium byte slice for testing (1KB)
+	// MediumData is a medium byte slice for testing (1KB).
 	MediumData []byte
-	// LargeData is a large byte slice for testing (1MB)
+	// LargeData is a large byte slice for testing (1MB).
 	LargeData []byte
 }{
 	SmallData:  make([]byte, 16),
@@ -161,7 +150,7 @@ var TestData = struct {
 }
 
 func init() {
-	// Fill test data with pattern
+	// Fill test data with pattern.
 	for i := range TestData.SmallData {
 		TestData.SmallData[i] = byte(i % 256)
 	}
