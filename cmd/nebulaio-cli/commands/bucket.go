@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewBucketCmd creates the bucket command group
+// NewBucketCmd creates the bucket command group.
 func NewBucketCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bucket",
@@ -28,8 +28,10 @@ func NewBucketCmd() *cobra.Command {
 }
 
 func newBucketCreateCmd() *cobra.Command {
-	var region string
-	var objectLock bool
+	var (
+		region     string
+		objectLock bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "create <bucket-name>",
@@ -37,6 +39,7 @@ func newBucketCreateCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -58,6 +61,7 @@ func newBucketCreateCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Bucket '%s' created successfully\n", bucketName)
+
 			return nil
 		},
 	}
@@ -77,6 +81,7 @@ func newBucketDeleteCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -86,7 +91,8 @@ func newBucketDeleteCmd() *cobra.Command {
 
 			if force {
 				// Delete all objects first
-				if err := deleteAllObjects(ctx, client, bucketName); err != nil {
+				err := deleteAllObjects(ctx, client, bucketName)
+				if err != nil {
 					return fmt.Errorf("failed to delete objects: %w", err)
 				}
 			}
@@ -99,6 +105,7 @@ func newBucketDeleteCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Bucket '%s' deleted successfully\n", bucketName)
+
 			return nil
 		},
 	}
@@ -110,11 +117,12 @@ func newBucketDeleteCmd() *cobra.Command {
 
 func newBucketListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List all buckets",
+		Use:     "list",
+		Short:   "List all buckets",
 		Aliases: []string{"ls"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -131,14 +139,17 @@ func newBucketListCmd() *cobra.Command {
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+
 			_, _ = fmt.Fprintln(w, "NAME\tCREATED")
 			for _, bucket := range result.Buckets {
 				created := ""
 				if bucket.CreationDate != nil {
 					created = bucket.CreationDate.Format(time.RFC3339)
 				}
+
 				_, _ = fmt.Fprintf(w, "%s\t%s\n", *bucket.Name, created)
 			}
+
 			return w.Flush()
 		},
 	}
@@ -151,6 +162,7 @@ func newBucketInfoCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -169,6 +181,7 @@ func newBucketInfoCmd() *cobra.Command {
 				if versioning.Status != "" {
 					status = string(versioning.Status)
 				}
+
 				fmt.Printf("Versioning: %s\n", status)
 			}
 
@@ -181,17 +194,25 @@ func newBucketInfoCmd() *cobra.Command {
 			}
 
 			// Get object count and total size
-			var objectCount int64
-			var totalSize int64
+			var (
+				objectCount int64
+				totalSize   int64
+			)
+
 			paginator := s3.NewListObjectsV2Paginator(client, &s3.ListObjectsV2Input{
 				Bucket: &bucketName,
 			})
 
+			var paginationErr error
+
 			for paginator.HasMorePages() {
 				page, err := paginator.NextPage(ctx)
 				if err != nil {
+					paginationErr = err
+
 					break
 				}
+
 				objectCount += int64(len(page.Contents))
 				for _, obj := range page.Contents {
 					if obj.Size != nil {
@@ -203,12 +224,12 @@ func newBucketInfoCmd() *cobra.Command {
 			fmt.Printf("Objects: %d\n", objectCount)
 			fmt.Printf("Total Size: %s\n", FormatSize(totalSize))
 
-			return nil
+			return paginationErr
 		},
 	}
 }
 
-// NewMakeBucketCmd creates the mb alias command
+// NewMakeBucketCmd creates the mb alias command.
 func NewMakeBucketCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mb <s3://bucket-name>",
@@ -221,6 +242,7 @@ func NewMakeBucketCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -234,13 +256,15 @@ func NewMakeBucketCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Bucket '%s' created successfully\n", bucket)
+
 			return nil
 		},
 	}
+
 	return cmd
 }
 
-// NewRemoveBucketCmd creates the rb alias command
+// NewRemoveBucketCmd creates the rb alias command.
 func NewRemoveBucketCmd() *cobra.Command {
 	var force bool
 
@@ -255,13 +279,15 @@ func NewRemoveBucketCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
 			if force {
-				if err := deleteAllObjects(ctx, client, bucket); err != nil {
+				err := deleteAllObjects(ctx, client, bucket)
+				if err != nil {
 					return fmt.Errorf("failed to delete objects: %w", err)
 				}
 			}
@@ -274,15 +300,17 @@ func NewRemoveBucketCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Bucket '%s' deleted successfully\n", bucket)
+
 			return nil
 		},
 	}
 
 	cmd.Flags().BoolVar(&force, "force", false, "Delete all objects before deleting bucket")
+
 	return cmd
 }
 
-// deleteAllObjects deletes all objects in a bucket
+// deleteAllObjects deletes all objects in a bucket.
 func deleteAllObjects(ctx context.Context, client *s3.Client, bucket string) error {
 	paginator := s3.NewListObjectsV2Paginator(client, &s3.ListObjectsV2Input{
 		Bucket: &bucket,

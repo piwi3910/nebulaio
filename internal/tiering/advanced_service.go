@@ -2,6 +2,7 @@ package tiering
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -42,71 +43,43 @@ type AdvancedServiceInterface interface {
 	GetAccessAnomalies(ctx context.Context, limit int) ([]*AccessAnomaly, error)
 }
 
-// Verify AdvancedService implements AdvancedServiceInterface
+// Verify AdvancedService implements AdvancedServiceInterface.
 var _ AdvancedServiceInterface = (*AdvancedService)(nil)
 
-// AdvancedService provides comprehensive tiered storage with policy management
+// AdvancedService provides comprehensive tiered storage with policy management.
 type AdvancedService struct {
-	// Core components
-	config       AdvancedServiceConfig
-	policyStore  PolicyStore
-	policyEngine *PolicyEngine
-	accessStats  *AccessTracker
-
-	// Storage tiers
-	hotStorage    backend.Backend
-	warmStorage   backend.Backend
-	coldManager   *ColdStorageManager
-	tierManager   *DefaultTierManager
-	cache         *Cache
-
-	// S3 compatibility
-	s3Adapter *S3LifecycleAdapter
-
-	// Predictive tiering
+	hotStorage       backend.Backend
+	policyStore      PolicyStore
+	warmStorage      backend.Backend
+	cache            *Cache
+	accessStats      *AccessTracker
+	policyEngine     *PolicyEngine
+	coldManager      *ColdStorageManager
+	tierManager      *DefaultTierManager
+	s3Adapter        *S3LifecycleAdapter
 	predictiveEngine *PredictiveEngine
 	anomalyDetector  *AnomalyDetector
-
-	// Background workers
-	stopChan chan struct{}
-	wg       sync.WaitGroup
-
-	// State
-	mu      sync.RWMutex
-	running bool
+	stopChan         chan struct{}
+	config           AdvancedServiceConfig
+	wg               sync.WaitGroup
+	mu               sync.RWMutex
+	running          bool
 }
 
-// AdvancedServiceConfig configures the advanced tiering service
+// AdvancedServiceConfig configures the advanced tiering service.
 type AdvancedServiceConfig struct {
-	// NodeID for distributed execution
-	NodeID string
-
-	// ClusterNodes for distributed policies
-	ClusterNodes []string
-
-	// Policy configuration
-	PolicyConfigPath string
-
-	// Cache configuration
-	Cache CacheConfig
-
-	// Access tracking configuration
-	AccessTracking AccessTrackerConfig
-
-	// Enable real-time policies
-	EnableRealtime bool
-
-	// Enable scheduled policies
-	EnableScheduled bool
-
-	// Enable threshold policies
-	EnableThreshold bool
-
-	// Threshold check interval
+	AccessTracking         AccessTrackerConfig
+	NodeID                 string
+	PolicyConfigPath       string
+	ClusterNodes           []string
+	Cache                  CacheConfig
 	ThresholdCheckInterval time.Duration
+	EnableRealtime         bool
+	EnableScheduled        bool
+	EnableThreshold        bool
 }
 
-// DefaultAdvancedServiceConfig returns default configuration
+// DefaultAdvancedServiceConfig returns default configuration.
 func DefaultAdvancedServiceConfig() AdvancedServiceConfig {
 	return AdvancedServiceConfig{
 		NodeID:                 "node-1",
@@ -120,7 +93,7 @@ func DefaultAdvancedServiceConfig() AdvancedServiceConfig {
 	}
 }
 
-// NewAdvancedService creates a new advanced tiering service
+// NewAdvancedService creates a new advanced tiering service.
 func NewAdvancedService(
 	config AdvancedServiceConfig,
 	hotStorage, warmStorage backend.Backend,
@@ -148,10 +121,10 @@ func NewAdvancedService(
 
 	// Create tier manager
 	tierManager := &DefaultTierManager{
-		hot:    hotStorage,
-		warm:   warmStorage,
-		cold:   coldManager,
-		cache:  cache,
+		hot:   hotStorage,
+		warm:  warmStorage,
+		cold:  coldManager,
+		cache: cache,
 	}
 
 	// Create policy engine
@@ -191,33 +164,38 @@ func NewAdvancedService(
 	return service, nil
 }
 
-// Start starts the advanced tiering service
+// Start starts the advanced tiering service.
 func (s *AdvancedService) Start() error {
 	s.mu.Lock()
+
 	if s.running {
 		s.mu.Unlock()
 		return nil
 	}
+
 	s.running = true
 	s.mu.Unlock()
 
 	log.Info().Msg("Starting advanced tiering service")
 
 	// Start policy engine
-	if err := s.policyEngine.Start(); err != nil {
+	err := s.policyEngine.Start()
+	if err != nil {
 		return fmt.Errorf("failed to start policy engine: %w", err)
 	}
 
 	return nil
 }
 
-// Stop stops the advanced tiering service
+// Stop stops the advanced tiering service.
 func (s *AdvancedService) Stop() error {
 	s.mu.Lock()
+
 	if !s.running {
 		s.mu.Unlock()
 		return nil
 	}
+
 	s.running = false
 	s.mu.Unlock()
 
@@ -227,16 +205,19 @@ func (s *AdvancedService) Stop() error {
 	s.wg.Wait()
 
 	// Stop components
-	if err := s.policyEngine.Stop(); err != nil {
+	err := s.policyEngine.Stop()
+	if err != nil {
 		return err
 	}
 
-	if err := s.accessStats.Close(); err != nil {
+	err = s.accessStats.Close()
+	if err != nil {
 		return err
 	}
 
 	if s.cache != nil {
-		if err := s.cache.Close(); err != nil {
+		err = s.cache.Close()
+		if err != nil {
 			return err
 		}
 	}
@@ -244,7 +225,7 @@ func (s *AdvancedService) Stop() error {
 	return nil
 }
 
-// GetObject retrieves an object with policy-aware tiering
+// GetObject retrieves an object with policy-aware tiering.
 func (s *AdvancedService) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
 	// Record access for policies
 	s.policyEngine.RecordAccess(bucket, key, "GET", 0)
@@ -265,12 +246,15 @@ func (s *AdvancedService) GetObject(ctx context.Context, bucket, key string) (io
 			if s.cache != nil {
 				data, readErr := io.ReadAll(reader)
 				_ = reader.Close()
+
 				if readErr == nil {
 					cacheKey := bucket + "/" + key
 					_ = s.cache.Put(ctx, cacheKey, data, "", "")
+
 					return io.NopCloser(&bytesReader{data: data}), nil
 				}
 			}
+
 			return reader, nil
 		}
 	}
@@ -296,7 +280,7 @@ func (s *AdvancedService) GetObject(ctx context.Context, bucket, key string) (io
 	return nil, backend.ErrObjectNotFound
 }
 
-// PutObject stores an object with policy-aware placement
+// PutObject stores an object with policy-aware placement.
 func (s *AdvancedService) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
 	// Evaluate policies to determine placement
 	obj := ObjectMetadata{
@@ -316,6 +300,7 @@ func (s *AdvancedService) PutObject(ctx context.Context, bucket, key string, rea
 
 	// Determine target tier from policy or use default
 	targetTier := TierHot
+
 	if result != nil && len(result.MatchingPolicies) > 0 {
 		match := result.MatchingPolicies[0]
 		for _, action := range match.Policy.Actions {
@@ -372,7 +357,7 @@ func (s *AdvancedService) PutObject(ctx context.Context, bucket, key string, rea
 	return nil, fmt.Errorf("no storage available for tier %s", targetTier)
 }
 
-// DeleteObject removes an object from all tiers
+// DeleteObject removes an object from all tiers.
 func (s *AdvancedService) DeleteObject(ctx context.Context, bucket, key string) error {
 	// Delete from cache
 	if s.cache != nil {
@@ -384,14 +369,16 @@ func (s *AdvancedService) DeleteObject(ctx context.Context, bucket, key string) 
 
 	// Delete from hot storage
 	if s.hotStorage != nil {
-		if err := s.hotStorage.DeleteObject(ctx, bucket, key); err != nil && err != backend.ErrObjectNotFound {
+		err := s.hotStorage.DeleteObject(ctx, bucket, key)
+		if err != nil && err != backend.ErrObjectNotFound {
 			lastErr = err
 		}
 	}
 
 	// Delete from warm storage
 	if s.warmStorage != nil {
-		if err := s.warmStorage.DeleteObject(ctx, bucket, key); err != nil && err != backend.ErrObjectNotFound {
+		err := s.warmStorage.DeleteObject(ctx, bucket, key)
+		if err != nil && err != backend.ErrObjectNotFound {
 			lastErr = err
 		}
 	}
@@ -399,7 +386,8 @@ func (s *AdvancedService) DeleteObject(ctx context.Context, bucket, key string) 
 	// Delete from cold storage
 	if s.coldManager != nil {
 		for _, cold := range s.coldManager.List() {
-			if err := cold.DeleteObject(ctx, bucket, key); err != nil && err != backend.ErrObjectNotFound {
+			err := cold.DeleteObject(ctx, bucket, key)
+			if err != nil && err != backend.ErrObjectNotFound {
 				lastErr = err
 			}
 		}
@@ -408,7 +396,7 @@ func (s *AdvancedService) DeleteObject(ctx context.Context, bucket, key string) 
 	return lastErr
 }
 
-// ObjectExists checks if an object exists in any tier
+// ObjectExists checks if an object exists in any tier.
 func (s *AdvancedService) ObjectExists(ctx context.Context, bucket, key string) (bool, error) {
 	// Check cache
 	if s.cache != nil {
@@ -447,37 +435,37 @@ func (s *AdvancedService) ObjectExists(ctx context.Context, bucket, key string) 
 	return false, nil
 }
 
-// CreatePolicy creates a new policy
+// CreatePolicy creates a new policy.
 func (s *AdvancedService) CreatePolicy(ctx context.Context, policy *AdvancedPolicy) error {
 	return s.policyStore.Create(ctx, policy)
 }
 
-// GetPolicy retrieves a policy
+// GetPolicy retrieves a policy.
 func (s *AdvancedService) GetPolicy(ctx context.Context, id string) (*AdvancedPolicy, error) {
 	return s.policyStore.Get(ctx, id)
 }
 
-// UpdatePolicy updates a policy
+// UpdatePolicy updates a policy.
 func (s *AdvancedService) UpdatePolicy(ctx context.Context, policy *AdvancedPolicy) error {
 	return s.policyStore.Update(ctx, policy)
 }
 
-// DeletePolicy removes a policy
+// DeletePolicy removes a policy.
 func (s *AdvancedService) DeletePolicy(ctx context.Context, id string) error {
 	return s.policyStore.Delete(ctx, id)
 }
 
-// ListPolicies returns all policies
+// ListPolicies returns all policies.
 func (s *AdvancedService) ListPolicies(ctx context.Context) ([]*AdvancedPolicy, error) {
 	return s.policyStore.List(ctx)
 }
 
-// ListPoliciesByType returns policies of a specific type
+// ListPoliciesByType returns policies of a specific type.
 func (s *AdvancedService) ListPoliciesByType(ctx context.Context, policyType PolicyType) ([]*AdvancedPolicy, error) {
 	return s.policyStore.ListByType(ctx, policyType)
 }
 
-// ListPoliciesByScope returns policies of a specific scope
+// ListPoliciesByScope returns policies of a specific scope.
 func (s *AdvancedService) ListPoliciesByScope(ctx context.Context, scope PolicyScope) ([]*AdvancedPolicy, error) {
 	all, err := s.policyStore.List(ctx)
 	if err != nil {
@@ -485,20 +473,22 @@ func (s *AdvancedService) ListPoliciesByScope(ctx context.Context, scope PolicyS
 	}
 
 	var result []*AdvancedPolicy
+
 	for _, p := range all {
 		if p.Scope == scope {
 			result = append(result, p)
 		}
 	}
+
 	return result, nil
 }
 
-// GetPolicyStats returns statistics for a policy
+// GetPolicyStats returns statistics for a policy.
 func (s *AdvancedService) GetPolicyStats(ctx context.Context, id string) (*PolicyStats, error) {
 	return s.policyStore.GetStats(ctx, id)
 }
 
-// SetS3LifecycleConfiguration sets S3 lifecycle rules for a bucket
+// SetS3LifecycleConfiguration sets S3 lifecycle rules for a bucket.
 func (s *AdvancedService) SetS3LifecycleConfiguration(ctx context.Context, bucket string, config *S3LifecycleConfiguration) error {
 	// Convert to NebulaIO policies
 	policies, err := s.s3Adapter.ConvertFromS3(bucket, config)
@@ -514,7 +504,8 @@ func (s *AdvancedService) SetS3LifecycleConfiguration(ctx context.Context, bucke
 
 	for _, policy := range existing {
 		if policy.Type == PolicyTypeS3Lifecycle {
-			if err := s.policyStore.Delete(ctx, policy.ID); err != nil {
+			err := s.policyStore.Delete(ctx, policy.ID)
+			if err != nil {
 				return err
 			}
 		}
@@ -522,7 +513,8 @@ func (s *AdvancedService) SetS3LifecycleConfiguration(ctx context.Context, bucke
 
 	// Create new policies
 	for _, policy := range policies {
-		if err := s.policyStore.Create(ctx, policy); err != nil {
+		err := s.policyStore.Create(ctx, policy)
+		if err != nil {
 			return err
 		}
 	}
@@ -530,7 +522,7 @@ func (s *AdvancedService) SetS3LifecycleConfiguration(ctx context.Context, bucke
 	return nil
 }
 
-// GetS3LifecycleConfiguration gets S3 lifecycle rules for a bucket
+// GetS3LifecycleConfiguration gets S3 lifecycle rules for a bucket.
 func (s *AdvancedService) GetS3LifecycleConfiguration(ctx context.Context, bucket string) (*S3LifecycleConfiguration, error) {
 	policies, err := s.policyStore.ListByScope(ctx, PolicyScopeBucket, bucket)
 	if err != nil {
@@ -540,59 +532,62 @@ func (s *AdvancedService) GetS3LifecycleConfiguration(ctx context.Context, bucke
 	return s.s3Adapter.ConvertToS3(bucket, policies)
 }
 
-// GetAccessStats returns access statistics for an object
+// GetAccessStats returns access statistics for an object.
 func (s *AdvancedService) GetAccessStats(ctx context.Context, bucket, key string) (*ObjectAccessStats, error) {
 	return s.accessStats.GetStats(ctx, bucket, key)
 }
 
-// GetHotObjects returns the most accessed objects
+// GetHotObjects returns the most accessed objects.
 func (s *AdvancedService) GetHotObjects(ctx context.Context, limit int) []*ObjectAccessStats {
 	return s.accessStats.GetHotObjects(ctx, limit)
 }
 
-// GetColdObjects returns objects not accessed recently
+// GetColdObjects returns objects not accessed recently.
 func (s *AdvancedService) GetColdObjects(ctx context.Context, inactiveDays, limit int) []*ObjectAccessStats {
 	return s.accessStats.GetColdObjects(ctx, inactiveDays, limit)
 }
 
-// GetPrediction returns ML-based access prediction for an object
+// GetPrediction returns ML-based access prediction for an object.
 func (s *AdvancedService) GetPrediction(ctx context.Context, bucket, key string) (*AccessPrediction, error) {
 	if s.predictiveEngine == nil {
-		return nil, fmt.Errorf("predictive engine not initialized")
+		return nil, errors.New("predictive engine not initialized")
 	}
+
 	return s.predictiveEngine.Predict(ctx, bucket, key)
 }
 
-// GetTierRecommendations returns ML-based tier change recommendations
+// GetTierRecommendations returns ML-based tier change recommendations.
 func (s *AdvancedService) GetTierRecommendations(ctx context.Context, limit int) ([]*TierRecommendation, error) {
 	if s.predictiveEngine == nil {
-		return nil, fmt.Errorf("predictive engine not initialized")
+		return nil, errors.New("predictive engine not initialized")
 	}
+
 	return s.predictiveEngine.GetTierRecommendations(ctx, limit)
 }
 
-// GetAccessAnomalies returns detected access pattern anomalies
+// GetAccessAnomalies returns detected access pattern anomalies.
 func (s *AdvancedService) GetAccessAnomalies(ctx context.Context, limit int) ([]*AccessAnomaly, error) {
 	if s.anomalyDetector == nil {
-		return nil, fmt.Errorf("anomaly detector not initialized")
+		return nil, errors.New("anomaly detector not initialized")
 	}
+
 	return s.anomalyDetector.GetAnomalies(limit)
 }
 
-// TransitionObject manually transitions an object to a different tier
+// TransitionObject manually transitions an object to a different tier.
 func (s *AdvancedService) TransitionObject(ctx context.Context, bucket, key string, targetTier TierType) error {
 	return s.tierManager.TransitionObject(ctx, bucket, key, targetTier)
 }
 
-// Stats returns service statistics
+// Stats returns service statistics.
 type AdvancedServiceStats struct {
-	CacheStats        *CacheStats        `json:"cacheStats,omitempty"`
+	CacheStats         *CacheStats        `json:"cacheStats,omitempty"`
 	AccessTrackerStats AccessTrackerStats `json:"accessTrackerStats"`
-	PolicyCount       int                `json:"policyCount"`
-	ActivePolicies    int                `json:"activePolicies"`
+	PolicyCount        int                `json:"policyCount"`
+	ActivePolicies     int                `json:"activePolicies"`
 }
 
-// Stats returns service statistics
+// Stats returns service statistics.
 func (s *AdvancedService) Stats(ctx context.Context) (*AdvancedServiceStats, error) {
 	policies, err := s.policyStore.List(ctx)
 	if err != nil {
@@ -600,6 +595,7 @@ func (s *AdvancedService) Stats(ctx context.Context) (*AdvancedServiceStats, err
 	}
 
 	activePolicies := 0
+
 	for _, p := range policies {
 		if p.Enabled {
 			activePolicies++
@@ -620,7 +616,7 @@ func (s *AdvancedService) Stats(ctx context.Context) (*AdvancedServiceStats, err
 	return stats, nil
 }
 
-// DefaultTierManager implements TierManager
+// DefaultTierManager implements TierManager.
 type DefaultTierManager struct {
 	hot   backend.Backend
 	warm  backend.Backend
@@ -628,7 +624,7 @@ type DefaultTierManager struct {
 	cache *Cache
 }
 
-// GetObject retrieves an object
+// GetObject retrieves an object.
 func (m *DefaultTierManager) GetObject(ctx context.Context, bucket, key string) ([]byte, error) {
 	// Try hot
 	if m.hot != nil {
@@ -636,6 +632,7 @@ func (m *DefaultTierManager) GetObject(ctx context.Context, bucket, key string) 
 		if err == nil {
 			data, err := io.ReadAll(reader)
 			_ = reader.Close()
+
 			return data, err
 		}
 	}
@@ -646,6 +643,7 @@ func (m *DefaultTierManager) GetObject(ctx context.Context, bucket, key string) 
 		if err == nil {
 			data, err := io.ReadAll(reader)
 			_ = reader.Close()
+
 			return data, err
 		}
 	}
@@ -657,6 +655,7 @@ func (m *DefaultTierManager) GetObject(ctx context.Context, bucket, key string) 
 			if err == nil {
 				data, err := io.ReadAll(reader)
 				_ = reader.Close()
+
 				return data, err
 			}
 		}
@@ -665,7 +664,7 @@ func (m *DefaultTierManager) GetObject(ctx context.Context, bucket, key string) 
 	return nil, backend.ErrObjectNotFound
 }
 
-// TransitionObject moves an object between tiers
+// TransitionObject moves an object between tiers.
 func (m *DefaultTierManager) TransitionObject(ctx context.Context, bucket, key string, targetTier TierType) error {
 	// Get object data
 	data, err := m.GetObject(ctx, bucket, key)
@@ -710,23 +709,26 @@ func (m *DefaultTierManager) TransitionObject(ctx context.Context, bucket, key s
 	return m.deleteFromOtherTiers(ctx, bucket, key, targetTier)
 }
 
-// deleteFromOtherTiers removes object from all tiers except target
+// deleteFromOtherTiers removes object from all tiers except target.
 func (m *DefaultTierManager) deleteFromOtherTiers(ctx context.Context, bucket, key string, exceptTier TierType) error {
 	if exceptTier != TierHot && m.hot != nil {
 		_ = m.hot.DeleteObject(ctx, bucket, key)
 	}
+
 	if exceptTier != TierWarm && m.warm != nil {
 		_ = m.warm.DeleteObject(ctx, bucket, key)
 	}
+
 	if exceptTier != TierCold && exceptTier != TierArchive && m.cold != nil {
 		for _, cold := range m.cold.List() {
 			_ = cold.DeleteObject(ctx, bucket, key)
 		}
 	}
+
 	return nil
 }
 
-// GetTierInfo returns information about a tier
+// GetTierInfo returns information about a tier.
 func (m *DefaultTierManager) GetTierInfo(ctx context.Context, tier TierType) (*TierInfo, error) {
 	var backend backend.Backend
 
@@ -763,7 +765,7 @@ func (m *DefaultTierManager) GetTierInfo(ctx context.Context, tier TierType) (*T
 	}, nil
 }
 
-// GetObjectTier returns the current tier of an object
+// GetObjectTier returns the current tier of an object.
 func (m *DefaultTierManager) GetObjectTier(ctx context.Context, bucket, key string) (TierType, error) {
 	// Check hot
 	if m.hot != nil {
@@ -794,32 +796,35 @@ func (m *DefaultTierManager) GetObjectTier(ctx context.Context, bucket, key stri
 	return "", backend.ErrObjectNotFound
 }
 
-// ListObjects lists objects in a bucket
+// ListObjects lists objects in a bucket.
 func (m *DefaultTierManager) ListObjects(ctx context.Context, bucket, prefix string, limit int) ([]ObjectMetadata, error) {
 	// This would need to be implemented with a proper listing mechanism
 	// For now, return empty
 	return []ObjectMetadata{}, nil
 }
 
-// DeleteObject removes an object
+// DeleteObject removes an object.
 func (m *DefaultTierManager) DeleteObject(ctx context.Context, bucket, key string) error {
 	var lastErr error
 
 	if m.hot != nil {
-		if err := m.hot.DeleteObject(ctx, bucket, key); err != nil && err != backend.ErrObjectNotFound {
+		err := m.hot.DeleteObject(ctx, bucket, key)
+		if err != nil && err != backend.ErrObjectNotFound {
 			lastErr = err
 		}
 	}
 
 	if m.warm != nil {
-		if err := m.warm.DeleteObject(ctx, bucket, key); err != nil && err != backend.ErrObjectNotFound {
+		err := m.warm.DeleteObject(ctx, bucket, key)
+		if err != nil && err != backend.ErrObjectNotFound {
 			lastErr = err
 		}
 	}
 
 	if m.cold != nil {
 		for _, cold := range m.cold.List() {
-			if err := cold.DeleteObject(ctx, bucket, key); err != nil && err != backend.ErrObjectNotFound {
+			err := cold.DeleteObject(ctx, bucket, key)
+			if err != nil && err != backend.ErrObjectNotFound {
 				lastErr = err
 			}
 		}

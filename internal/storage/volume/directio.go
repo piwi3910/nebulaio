@@ -8,33 +8,23 @@ import (
 	"unsafe"
 )
 
-// DirectIO errors
+// DirectIO errors.
 var (
-	ErrNotAligned     = errors.New("buffer not aligned for direct I/O")
-	ErrOffsetNotAligned = errors.New("offset not aligned for direct I/O")
+	ErrNotAligned           = errors.New("buffer not aligned for direct I/O")
+	ErrOffsetNotAligned     = errors.New("offset not aligned for direct I/O")
 	ErrDirectIONotSupported = errors.New("direct I/O not supported on this platform")
 )
 
-// DirectIOConfig configures direct I/O behavior
+// DirectIOConfig configures direct I/O behavior.
 type DirectIOConfig struct {
-	// Enabled enables direct I/O (O_DIRECT on Linux)
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// BlockAlignment is the alignment requirement for buffers and offsets
-	// Must be a power of 2, typically 512 or 4096 bytes
-	BlockAlignment int `json:"blockAlignment" yaml:"blockAlignment"`
-
-	// UseMemoryPool enables pooling of aligned buffers
-	UseMemoryPool bool `json:"useMemoryPool" yaml:"useMemoryPool"`
-
-	// PoolBlockSize is the size of pooled buffers (should match volume block size)
-	PoolBlockSize int `json:"poolBlockSize" yaml:"poolBlockSize"`
-
-	// FallbackOnError falls back to buffered I/O on direct I/O errors
+	BlockAlignment  int  `json:"blockAlignment" yaml:"blockAlignment"`
+	PoolBlockSize   int  `json:"poolBlockSize" yaml:"poolBlockSize"`
+	Enabled         bool `json:"enabled" yaml:"enabled"`
+	UseMemoryPool   bool `json:"useMemoryPool" yaml:"useMemoryPool"`
 	FallbackOnError bool `json:"fallbackOnError" yaml:"fallbackOnError"`
 }
 
-// DefaultDirectIOConfig returns the default direct I/O configuration
+// DefaultDirectIOConfig returns the default direct I/O configuration.
 func DefaultDirectIOConfig() DirectIOConfig {
 	return DirectIOConfig{
 		Enabled:         true,
@@ -45,37 +35,35 @@ func DefaultDirectIOConfig() DirectIOConfig {
 	}
 }
 
-// DirectIOFile wraps a file with direct I/O capabilities
+// DirectIOFile wraps a file with direct I/O capabilities.
 type DirectIOFile struct {
-	file     *os.File
-	config   DirectIOConfig
-	pool     *AlignedBufferPool
-	mu       sync.RWMutex
-
-	// Stats
-	directReads   uint64
-	directWrites  uint64
-	bufferedReads uint64
+	file           *os.File
+	pool           *AlignedBufferPool
+	config         DirectIOConfig
+	directReads    uint64
+	directWrites   uint64
+	bufferedReads  uint64
 	bufferedWrites uint64
+	mu             sync.RWMutex
 }
 
-// DirectIOStats contains direct I/O statistics
+// DirectIOStats contains direct I/O statistics.
 type DirectIOStats struct {
-	DirectReads    uint64 `json:"directReads"`
-	DirectWrites   uint64 `json:"directWrites"`
-	BufferedReads  uint64 `json:"bufferedReads"`
-	BufferedWrites uint64 `json:"bufferedWrites"`
-	DirectIOEnabled bool  `json:"directIOEnabled"`
+	DirectReads     uint64 `json:"directReads"`
+	DirectWrites    uint64 `json:"directWrites"`
+	BufferedReads   uint64 `json:"bufferedReads"`
+	BufferedWrites  uint64 `json:"bufferedWrites"`
+	DirectIOEnabled bool   `json:"directIOEnabled"`
 }
 
-// AlignedBufferPool provides a pool of aligned buffers for direct I/O
+// AlignedBufferPool provides a pool of aligned buffers for direct I/O.
 type AlignedBufferPool struct {
 	pool      sync.Pool
 	alignment int
 	blockSize int
 }
 
-// NewAlignedBufferPool creates a new aligned buffer pool
+// NewAlignedBufferPool creates a new aligned buffer pool.
 func NewAlignedBufferPool(alignment, blockSize int) *AlignedBufferPool {
 	return &AlignedBufferPool{
 		pool: sync.Pool{
@@ -88,12 +76,12 @@ func NewAlignedBufferPool(alignment, blockSize int) *AlignedBufferPool {
 	}
 }
 
-// Get retrieves an aligned buffer from the pool
+// Get retrieves an aligned buffer from the pool.
 func (p *AlignedBufferPool) Get() []byte {
 	return p.pool.Get().([]byte)
 }
 
-// Put returns an aligned buffer to the pool
+// Put returns an aligned buffer to the pool.
 func (p *AlignedBufferPool) Put(buf []byte) {
 	// Only return buffers of the correct size
 	if len(buf) == p.blockSize {
@@ -107,12 +95,13 @@ func (p *AlignedBufferPool) Put(buf []byte) {
 }
 
 // AllocateAligned allocates a buffer aligned to the specified boundary
-// This is critical for O_DIRECT which requires aligned memory
+// This is critical for O_DIRECT which requires aligned memory.
 func AllocateAligned(size, alignment int) []byte {
 	// Allocate extra space for alignment
 	buf := make([]byte, size+alignment)
 
 	// Find the aligned offset
+	//nolint:gosec // G103: unsafe.Pointer required for memory alignment in O_DIRECT
 	ptr := uintptr(unsafe.Pointer(&buf[0]))
 	alignedPtr := (ptr + uintptr(alignment-1)) &^ uintptr(alignment-1)
 	offset := alignedPtr - ptr
@@ -121,21 +110,24 @@ func AllocateAligned(size, alignment int) []byte {
 	return buf[offset : offset+uintptr(size)]
 }
 
-// IsAligned checks if a buffer is properly aligned for direct I/O
+// IsAligned checks if a buffer is properly aligned for direct I/O.
 func IsAligned(buf []byte, alignment int) bool {
 	if len(buf) == 0 {
 		return true
 	}
+
+	//nolint:gosec // G103: unsafe.Pointer required for alignment check
 	ptr := uintptr(unsafe.Pointer(&buf[0]))
+
 	return ptr%uintptr(alignment) == 0
 }
 
-// IsOffsetAligned checks if an offset is properly aligned
+// IsOffsetAligned checks if an offset is properly aligned.
 func IsOffsetAligned(offset int64, alignment int) bool {
 	return offset%int64(alignment) == 0
 }
 
-// NewDirectIOFile wraps a file with direct I/O support
+// NewDirectIOFile wraps a file with direct I/O support.
 func NewDirectIOFile(file *os.File, config DirectIOConfig) *DirectIOFile {
 	dio := &DirectIOFile{
 		file:   file,
@@ -149,20 +141,21 @@ func NewDirectIOFile(file *os.File, config DirectIOConfig) *DirectIOFile {
 	return dio
 }
 
-// File returns the underlying os.File
+// File returns the underlying os.File.
 func (d *DirectIOFile) File() *os.File {
 	return d.file
 }
 
-// GetAlignedBuffer gets an aligned buffer from the pool or allocates one
+// GetAlignedBuffer gets an aligned buffer from the pool or allocates one.
 func (d *DirectIOFile) GetAlignedBuffer(size int) []byte {
 	if d.pool != nil && size == d.config.PoolBlockSize {
 		return d.pool.Get()
 	}
+
 	return AllocateAligned(size, d.config.BlockAlignment)
 }
 
-// PutAlignedBuffer returns a buffer to the pool
+// PutAlignedBuffer returns a buffer to the pool.
 func (d *DirectIOFile) PutAlignedBuffer(buf []byte) {
 	if d.pool != nil && len(buf) == d.config.PoolBlockSize {
 		d.pool.Put(buf)
@@ -170,7 +163,7 @@ func (d *DirectIOFile) PutAlignedBuffer(buf []byte) {
 }
 
 // ReadAt reads from the file at the specified offset
-// Uses direct I/O if enabled and requirements are met
+// Uses direct I/O if enabled and requirements are met.
 func (d *DirectIOFile) ReadAt(buf []byte, offset int64) (int, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -179,8 +172,8 @@ func (d *DirectIOFile) ReadAt(buf []byte, offset int64) (int, error) {
 	if d.config.Enabled && directIOSupported() {
 		// Check alignment requirements
 		if IsAligned(buf, d.config.BlockAlignment) &&
-		   IsOffsetAligned(offset, d.config.BlockAlignment) &&
-		   len(buf)%d.config.BlockAlignment == 0 {
+			IsOffsetAligned(offset, d.config.BlockAlignment) &&
+			len(buf)%d.config.BlockAlignment == 0 {
 			n, err := d.file.ReadAt(buf, offset)
 			if err == nil {
 				d.directReads++
@@ -195,11 +188,12 @@ func (d *DirectIOFile) ReadAt(buf []byte, offset int64) (int, error) {
 
 	// Use buffered I/O
 	d.bufferedReads++
+
 	return d.file.ReadAt(buf, offset)
 }
 
 // WriteAt writes to the file at the specified offset
-// Uses direct I/O if enabled and requirements are met
+// Uses direct I/O if enabled and requirements are met.
 func (d *DirectIOFile) WriteAt(buf []byte, offset int64) (int, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -208,8 +202,8 @@ func (d *DirectIOFile) WriteAt(buf []byte, offset int64) (int, error) {
 	if d.config.Enabled && directIOSupported() {
 		// Check alignment requirements
 		if IsAligned(buf, d.config.BlockAlignment) &&
-		   IsOffsetAligned(offset, d.config.BlockAlignment) &&
-		   len(buf)%d.config.BlockAlignment == 0 {
+			IsOffsetAligned(offset, d.config.BlockAlignment) &&
+			len(buf)%d.config.BlockAlignment == 0 {
 			n, err := d.file.WriteAt(buf, offset)
 			if err == nil {
 				d.directWrites++
@@ -224,11 +218,12 @@ func (d *DirectIOFile) WriteAt(buf []byte, offset int64) (int, error) {
 
 	// Use buffered I/O
 	d.bufferedWrites++
+
 	return d.file.WriteAt(buf, offset)
 }
 
 // ReadAtAligned reads using an aligned buffer (for direct I/O)
-// This method handles the alignment requirements internally
+// This method handles the alignment requirements internally.
 func (d *DirectIOFile) ReadAtAligned(size int, offset int64) ([]byte, error) {
 	// Calculate aligned offset and size
 	alignment := int64(d.config.BlockAlignment)
@@ -264,7 +259,7 @@ func (d *DirectIOFile) ReadAtAligned(size int, offset int64) ([]byte, error) {
 }
 
 // WriteAtAligned writes using aligned buffers for direct I/O
-// This method handles the alignment requirements internally
+// This method handles the alignment requirements internally.
 func (d *DirectIOFile) WriteAtAligned(data []byte, offset int64) error {
 	// Calculate aligned offset and size
 	alignment := int64(d.config.BlockAlignment)
@@ -296,29 +291,30 @@ func (d *DirectIOFile) WriteAtAligned(data []byte, offset int64) error {
 
 	// Write aligned data
 	_, err := d.WriteAt(buf[:alignedSize], alignedOffset)
+
 	return err
 }
 
-// Sync flushes file data to disk
+// Sync flushes file data to disk.
 func (d *DirectIOFile) Sync() error {
 	return d.file.Sync()
 }
 
-// Close closes the file
+// Close closes the file.
 func (d *DirectIOFile) Close() error {
 	return d.file.Close()
 }
 
-// Stats returns direct I/O statistics
+// Stats returns direct I/O statistics.
 func (d *DirectIOFile) Stats() DirectIOStats {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
 	return DirectIOStats{
-		DirectReads:    d.directReads,
-		DirectWrites:   d.directWrites,
-		BufferedReads:  d.bufferedReads,
-		BufferedWrites: d.bufferedWrites,
+		DirectReads:     d.directReads,
+		DirectWrites:    d.directWrites,
+		BufferedReads:   d.bufferedReads,
+		BufferedWrites:  d.bufferedWrites,
 		DirectIOEnabled: d.config.Enabled && directIOSupported(),
 	}
 }

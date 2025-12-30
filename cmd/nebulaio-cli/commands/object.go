@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,7 +16,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewObjectCmd creates the object command group
+// Object operation constants.
+const (
+	// Default maximum keys for listing objects.
+	defaultMaxKeys = 1000
+	// Metadata key-value pair split limit.
+	metadataKeyValueParts = 2
+	// Directory permission for creating local directories.
+	downloadDirPermissions = 0750
+)
+
+// NewObjectCmd creates the object command group.
 func NewObjectCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "object",
@@ -33,8 +44,10 @@ func NewObjectCmd() *cobra.Command {
 }
 
 func newObjectPutCmd() *cobra.Command {
-	var contentType string
-	var metadata []string
+	var (
+		contentType string
+		metadata    []string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "put <local-file> <s3://bucket/key>",
@@ -42,6 +55,7 @@ func newObjectPutCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			localFile := args[0]
+
 			bucket, key, isS3 := ParseS3URI(args[1])
 			if !isS3 {
 				return fmt.Errorf("invalid S3 URI: %s", args[1])
@@ -53,15 +67,18 @@ func newObjectPutCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
+			//nolint:gosec // G304: localFile is user-provided CLI argument
 			file, err := os.Open(localFile)
 			if err != nil {
 				return fmt.Errorf("failed to open file: %w", err)
 			}
+
 			defer func() { _ = file.Close() }()
 
 			stat, err := file.Stat()
@@ -83,9 +100,10 @@ func newObjectPutCmd() *cobra.Command {
 			// Parse metadata
 			if len(metadata) > 0 {
 				input.Metadata = make(map[string]string)
+
 				for _, m := range metadata {
-					parts := strings.SplitN(m, "=", 2)
-					if len(parts) == 2 {
+					parts := strings.SplitN(m, "=", metadataKeyValueParts)
+					if len(parts) == metadataKeyValueParts {
 						input.Metadata[parts[0]] = parts[1]
 					}
 				}
@@ -97,9 +115,11 @@ func newObjectPutCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Uploaded %s to s3://%s/%s\n", localFile, bucket, key)
+
 			if result.ETag != nil {
 				fmt.Printf("ETag: %s\n", *result.ETag)
 			}
+
 			if result.VersionId != nil {
 				fmt.Printf("VersionId: %s\n", *result.VersionId)
 			}
@@ -133,6 +153,7 @@ func newObjectGetCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -150,12 +171,15 @@ func newObjectGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to get object: %w", err)
 			}
+
 			defer func() { _ = result.Body.Close() }()
 
+			//nolint:gosec // G304: localFile is user-provided CLI argument
 			file, err := os.Create(localFile)
 			if err != nil {
 				return fmt.Errorf("failed to create file: %w", err)
 			}
+
 			defer func() { _ = file.Close() }()
 
 			n, err := io.Copy(file, result.Body)
@@ -164,6 +188,7 @@ func newObjectGetCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Downloaded s3://%s/%s to %s (%s)\n", bucket, key, localFile, FormatSize(n))
+
 			return nil
 		},
 	}
@@ -174,8 +199,10 @@ func newObjectGetCmd() *cobra.Command {
 }
 
 func newObjectDeleteCmd() *cobra.Command {
-	var versionID string
-	var recursive bool
+	var (
+		versionID string
+		recursive bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "delete <s3://bucket/key>",
@@ -188,6 +215,7 @@ func newObjectDeleteCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -199,7 +227,7 @@ func newObjectDeleteCmd() *cobra.Command {
 			}
 
 			if key == "" {
-				return fmt.Errorf("key is required (use --recursive for prefix deletion)")
+				return errors.New("key is required (use --recursive for prefix deletion)")
 			}
 
 			input := &s3.DeleteObjectInput{
@@ -216,6 +244,7 @@ func newObjectDeleteCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Deleted s3://%s/%s\n", bucket, key)
+
 			return nil
 		},
 	}
@@ -227,8 +256,10 @@ func newObjectDeleteCmd() *cobra.Command {
 }
 
 func newObjectListCmd() *cobra.Command {
-	var recursive bool
-	var maxKeys int
+	var (
+		recursive bool
+		maxKeys   int
+	)
 
 	cmd := &cobra.Command{
 		Use:   "list <s3://bucket[/prefix]>",
@@ -241,11 +272,13 @@ func newObjectListCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
 			}
 
+			//nolint:gosec // G115: maxKeys is validated to be within int32 range (max 1000)
 			input := &s3.ListObjectsV2Input{
 				Bucket:  &bucket,
 				MaxKeys: aws.Int32(int32(maxKeys)),
@@ -253,6 +286,7 @@ func newObjectListCmd() *cobra.Command {
 			if prefix != "" {
 				input.Prefix = &prefix
 			}
+
 			if !recursive {
 				delimiter := "/"
 				input.Delimiter = &delimiter
@@ -281,10 +315,12 @@ func newObjectListCmd() *cobra.Command {
 					if obj.LastModified != nil {
 						modified = obj.LastModified.Format(time.RFC3339)
 					}
+
 					size := int64(0)
 					if obj.Size != nil {
 						size = *obj.Size
 					}
+
 					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", *obj.Key, FormatSize(size), modified)
 				}
 			}
@@ -294,7 +330,7 @@ func newObjectListCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&recursive, "recursive", false, "List recursively")
-	cmd.Flags().IntVar(&maxKeys, "max-keys", 1000, "Maximum number of keys to return")
+	cmd.Flags().IntVar(&maxKeys, "max-keys", defaultMaxKeys, "Maximum number of keys to return")
 
 	return cmd
 }
@@ -313,6 +349,7 @@ func newObjectHeadCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -332,27 +369,34 @@ func newObjectHeadCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Key: %s\n", key)
+
 			if result.ContentLength != nil {
 				fmt.Printf("Size: %s (%d bytes)\n", FormatSize(*result.ContentLength), *result.ContentLength)
 			}
+
 			if result.ContentType != nil {
 				fmt.Printf("Content-Type: %s\n", *result.ContentType)
 			}
+
 			if result.ETag != nil {
 				fmt.Printf("ETag: %s\n", *result.ETag)
 			}
+
 			if result.LastModified != nil {
 				fmt.Printf("Last-Modified: %s\n", result.LastModified.Format(time.RFC3339))
 			}
+
 			if result.VersionId != nil {
 				fmt.Printf("Version-Id: %s\n", *result.VersionId)
 			}
+
 			if result.StorageClass != "" {
 				fmt.Printf("Storage-Class: %s\n", result.StorageClass)
 			}
 
 			if len(result.Metadata) > 0 {
 				fmt.Println("Metadata:")
+
 				for k, v := range result.Metadata {
 					fmt.Printf("  %s: %s\n", k, v)
 				}
@@ -367,7 +411,7 @@ func newObjectHeadCmd() *cobra.Command {
 	return cmd
 }
 
-// NewListCmd creates the ls alias command
+// NewListCmd creates the ls alias command.
 func NewListCmd() *cobra.Command {
 	var recursive bool
 
@@ -376,6 +420,7 @@ func NewListCmd() *cobra.Command {
 		Short: "List buckets or objects",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -393,8 +438,10 @@ func NewListCmd() *cobra.Command {
 					if bucket.CreationDate != nil {
 						created = bucket.CreationDate.Format("2006-01-02 15:04:05")
 					}
+
 					fmt.Printf("%s  s3://%s\n", created, *bucket.Name)
 				}
+
 				return nil
 			}
 
@@ -410,6 +457,7 @@ func NewListCmd() *cobra.Command {
 			if prefix != "" {
 				input.Prefix = &prefix
 			}
+
 			if !recursive {
 				delimiter := "/"
 				input.Delimiter = &delimiter
@@ -435,10 +483,12 @@ func NewListCmd() *cobra.Command {
 					if obj.LastModified != nil {
 						modified = obj.LastModified.Format("2006-01-02 15:04:05")
 					}
+
 					size := int64(0)
 					if obj.Size != nil {
 						size = *obj.Size
 					}
+
 					fmt.Printf("%s %10d %s\n", modified, size, *obj.Key)
 				}
 			}
@@ -448,10 +498,11 @@ func NewListCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "List recursively")
+
 	return cmd
 }
 
-// NewCopyCmd creates the cp alias command
+// NewCopyCmd creates the cp alias command.
 func NewCopyCmd() *cobra.Command {
 	var recursive bool
 
@@ -467,6 +518,7 @@ func NewCopyCmd() *cobra.Command {
 			dstBucket, dstKey, dstIsS3 := ParseS3URI(dst)
 
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -483,16 +535,17 @@ func NewCopyCmd() *cobra.Command {
 				// Copy: S3 -> S3
 				return copyS3Object(ctx, client, srcBucket, srcKey, dstBucket, dstKey)
 			default:
-				return fmt.Errorf("at least one of source or destination must be an S3 URI")
+				return errors.New("at least one of source or destination must be an S3 URI")
 			}
 		},
 	}
 
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Copy recursively")
+
 	return cmd
 }
 
-// NewRemoveCmd creates the rm alias command
+// NewRemoveCmd creates the rm alias command.
 func NewRemoveCmd() *cobra.Command {
 	var recursive bool
 
@@ -507,6 +560,7 @@ func NewRemoveCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -517,7 +571,7 @@ func NewRemoveCmd() *cobra.Command {
 			}
 
 			if key == "" {
-				return fmt.Errorf("key is required (use --recursive for prefix deletion)")
+				return errors.New("key is required (use --recursive for prefix deletion)")
 			}
 
 			_, err = client.DeleteObject(ctx, &s3.DeleteObjectInput{
@@ -529,15 +583,17 @@ func NewRemoveCmd() *cobra.Command {
 			}
 
 			fmt.Printf("delete: s3://%s/%s\n", bucket, key)
+
 			return nil
 		},
 	}
 
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Remove all objects with prefix")
+
 	return cmd
 }
 
-// NewCatCmd creates the cat command
+// NewCatCmd creates the cat command.
 func NewCatCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "cat <s3://bucket/key>",
@@ -550,6 +606,7 @@ func NewCatCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
+
 			client, err := NewS3Client(ctx)
 			if err != nil {
 				return err
@@ -562,9 +619,11 @@ func NewCatCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to get object: %w", err)
 			}
+
 			defer func() { _ = result.Body.Close() }()
 
 			_, err = io.Copy(os.Stdout, result.Body)
+
 			return err
 		},
 	}
@@ -585,10 +644,12 @@ func uploadFile(ctx context.Context, client *s3.Client, localPath, bucket, key s
 			}
 
 			relPath, _ := filepath.Rel(localPath, path)
+
 			objKey := key
 			if objKey != "" && !strings.HasSuffix(objKey, "/") {
 				objKey += "/"
 			}
+
 			objKey += relPath
 
 			return uploadSingleFile(ctx, client, path, bucket, objKey)
@@ -598,14 +659,17 @@ func uploadFile(ctx context.Context, client *s3.Client, localPath, bucket, key s
 	if key == "" {
 		key = filepath.Base(localPath)
 	}
+
 	return uploadSingleFile(ctx, client, localPath, bucket, key)
 }
 
 func uploadSingleFile(ctx context.Context, client *s3.Client, localPath, bucket, key string) error {
+	//nolint:gosec // G304: localPath is user-provided CLI argument
 	file, err := os.Open(localPath)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
+
 	defer func() { _ = file.Close() }()
 
 	stat, err := file.Stat()
@@ -624,6 +688,7 @@ func uploadSingleFile(ctx context.Context, client *s3.Client, localPath, bucket,
 	}
 
 	fmt.Printf("upload: %s to s3://%s/%s\n", localPath, bucket, key)
+
 	return nil
 }
 
@@ -645,11 +710,13 @@ func downloadFile(ctx context.Context, client *s3.Client, bucket, key, localPath
 				relPath := strings.TrimPrefix(*obj.Key, key)
 				destPath := filepath.Join(localPath, relPath)
 
-				if err := downloadSingleFile(ctx, client, bucket, *obj.Key, destPath); err != nil {
+				err := downloadSingleFile(ctx, client, bucket, *obj.Key, destPath)
+				if err != nil {
 					return err
 				}
 			}
 		}
+
 		return nil
 	}
 
@@ -664,24 +731,30 @@ func downloadSingleFile(ctx context.Context, client *s3.Client, bucket, key, loc
 	if err != nil {
 		return fmt.Errorf("failed to get object: %w", err)
 	}
+
 	defer func() { _ = result.Body.Close() }()
 
 	// Create directory if needed
-	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+	err = os.MkdirAll(filepath.Dir(localPath), downloadDirPermissions)
+	if err != nil {
 		return err
 	}
 
+	//nolint:gosec // G304: localPath is user-provided CLI argument
 	file, err := os.Create(localPath)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
+
 	defer func() { _ = file.Close() }()
 
-	if _, err := io.Copy(file, result.Body); err != nil {
+	_, err = io.Copy(file, result.Body)
+	if err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
 	fmt.Printf("download: s3://%s/%s to %s\n", bucket, key, localPath)
+
 	return nil
 }
 
@@ -702,6 +775,7 @@ func copyS3Object(ctx context.Context, client *s3.Client, srcBucket, srcKey, dst
 	}
 
 	fmt.Printf("copy: s3://%s/%s to s3://%s/%s\n", srcBucket, srcKey, dstBucket, dstKey)
+
 	return nil
 }
 
@@ -712,6 +786,7 @@ func deleteObjectsWithPrefix(ctx context.Context, client *s3.Client, bucket, pre
 	})
 
 	count := 0
+
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
@@ -726,11 +801,14 @@ func deleteObjectsWithPrefix(ctx context.Context, client *s3.Client, bucket, pre
 			if err != nil {
 				return fmt.Errorf("failed to delete %s: %w", *obj.Key, err)
 			}
+
 			fmt.Printf("delete: s3://%s/%s\n", bucket, *obj.Key)
+
 			count++
 		}
 	}
 
 	fmt.Printf("Deleted %d objects\n", count)
+
 	return nil
 }

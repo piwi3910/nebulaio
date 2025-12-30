@@ -15,7 +15,8 @@ func TestSiteValidation(t *testing.T) {
 			SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 		}
 
-		if err := site.Validate(); err != nil {
+		err := site.Validate()
+		if err != nil {
 			t.Errorf("valid site should not error: %v", err)
 		}
 	})
@@ -27,7 +28,8 @@ func TestSiteValidation(t *testing.T) {
 			SecretKey: "secret",
 		}
 
-		if err := site.Validate(); err == nil {
+		err := site.Validate()
+		if err == nil {
 			t.Error("expected error for missing site name")
 		}
 	})
@@ -39,7 +41,8 @@ func TestSiteValidation(t *testing.T) {
 			SecretKey: "secret",
 		}
 
-		if err := site.Validate(); err == nil {
+		err := site.Validate()
+		if err == nil {
 			t.Error("expected error for missing endpoint")
 		}
 	})
@@ -50,7 +53,8 @@ func TestSiteValidation(t *testing.T) {
 			Endpoint: "s3.site1.example.com",
 		}
 
-		if err := site.Validate(); err == nil {
+		err := site.Validate()
+		if err == nil {
 			t.Error("expected error for missing credentials")
 		}
 	})
@@ -78,7 +82,8 @@ func TestConfigValidation(t *testing.T) {
 			SyncInterval:        5 * time.Minute,
 		}
 
-		if err := cfg.Validate(); err != nil {
+		err := cfg.Validate()
+		if err != nil {
 			t.Errorf("valid config should not error: %v", err)
 		}
 	})
@@ -88,7 +93,8 @@ func TestConfigValidation(t *testing.T) {
 			Sites: []Site{},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for no sites")
 		}
 	})
@@ -112,7 +118,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for duplicate site names")
 		}
 	})
@@ -137,7 +144,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for multiple local sites")
 		}
 	})
@@ -173,6 +181,7 @@ func TestConfigHelpers(t *testing.T) {
 		if local == nil {
 			t.Fatal("should return local site")
 		}
+
 		if local.Name != "local" {
 			t.Errorf("expected local site name 'local', got %s", local.Name)
 		}
@@ -190,6 +199,7 @@ func TestConfigHelpers(t *testing.T) {
 		if site == nil {
 			t.Fatal("should find site remote1")
 		}
+
 		if site.Name != "remote1" {
 			t.Errorf("expected site name 'remote1', got %s", site.Name)
 		}
@@ -211,6 +221,7 @@ func TestVectorClock(t *testing.T) {
 		}
 
 		vc.Increment("node1")
+
 		if vc.Get("node1") != 2 {
 			t.Errorf("expected clock value 2, got %d", vc.Get("node1"))
 		}
@@ -231,6 +242,7 @@ func TestVectorClock(t *testing.T) {
 		if vc1.Get("node1") != 2 {
 			t.Errorf("expected node1 clock value 2, got %d", vc1.Get("node1"))
 		}
+
 		if vc1.Get("node2") != 3 {
 			t.Errorf("expected node2 clock value 3, got %d", vc1.Get("node2"))
 		}
@@ -504,6 +516,7 @@ func TestManagerOperations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get sync state: %v", err)
 		}
+
 		if state == nil {
 			t.Error("sync state should not be nil")
 		}

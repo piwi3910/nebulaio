@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +19,19 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+)
+
+// Cross-region replication configuration constants.
+const (
+	taskChannelBufferSize   = 10000
+	arnBucketPartsCount     = 2
+	arnRegionPartsCount     = 4
+	replicationTaskTimeout  = 5 * time.Minute
+	maxReplicationRetries   = 3
+	latencyHistorySize      = 1000
+	latencyHistoryTrimStart = 500
+	replicationHTTPTimeout  = 30 * time.Minute
+	httpErrorStatusThreshold = 400
 )
 
 // S3ReplicationStatus represents the status of replication for S3 API responses.
@@ -32,108 +46,108 @@ const (
 
 // ReplicationRule defines a replication rule.
 type ReplicationRule struct {
-	ID                      string                   `xml:"ID" json:"id"`
-	Priority                int                      `xml:"Priority" json:"priority"`
-	Status                  string                   `xml:"Status" json:"status"` // Enabled or Disabled
-	Filter                  *ReplicationFilter       `xml:"Filter,omitempty" json:"filter,omitempty"`
-	Destination             ReplicationDestination   `xml:"Destination" json:"destination"`
-	DeleteMarkerReplication *S3DeleteMarkerReplication `xml:"DeleteMarkerReplication,omitempty" json:"deleteMarkerReplication,omitempty"`
-	SourceSelectionCriteria *SourceSelectionCriteria `xml:"SourceSelectionCriteria,omitempty" json:"sourceSelectionCriteria,omitempty"`
-	ExistingObjectReplication *S3ExistingObjectReplication `xml:"ExistingObjectReplication,omitempty" json:"existingObjectReplication,omitempty"`
+	ID                        string                       `json:"id"                                  xml:"ID"`
+	Priority                  int                          `json:"priority"                            xml:"Priority"`
+	Status                    string                       `json:"status"                              xml:"Status"` // Enabled or Disabled
+	Filter                    *ReplicationFilter           `json:"filter,omitempty"                    xml:"Filter,omitempty"`
+	Destination               ReplicationDestination       `json:"destination"                         xml:"Destination"`
+	DeleteMarkerReplication   *S3DeleteMarkerReplication   `json:"deleteMarkerReplication,omitempty"   xml:"DeleteMarkerReplication,omitempty"`
+	SourceSelectionCriteria   *SourceSelectionCriteria     `json:"sourceSelectionCriteria,omitempty"   xml:"SourceSelectionCriteria,omitempty"`
+	ExistingObjectReplication *S3ExistingObjectReplication `json:"existingObjectReplication,omitempty" xml:"ExistingObjectReplication,omitempty"`
 }
 
 // ReplicationFilter defines which objects to replicate.
 type ReplicationFilter struct {
-	Prefix string         `xml:"Prefix,omitempty" json:"prefix,omitempty"`
-	Tag    *ReplicationTag `xml:"Tag,omitempty" json:"tag,omitempty"`
-	And    *ReplicationAnd `xml:"And,omitempty" json:"and,omitempty"`
+	Prefix string          `json:"prefix,omitempty" xml:"Prefix,omitempty"`
+	Tag    *ReplicationTag `json:"tag,omitempty"    xml:"Tag,omitempty"`
+	And    *ReplicationAnd `json:"and,omitempty"    xml:"And,omitempty"`
 }
 
 // ReplicationTag defines a tag filter.
 type ReplicationTag struct {
-	Key   string `xml:"Key" json:"key"`
-	Value string `xml:"Value" json:"value"`
+	Key   string `json:"key"   xml:"Key"`
+	Value string `json:"value" xml:"Value"`
 }
 
 // ReplicationAnd combines multiple filter conditions.
 type ReplicationAnd struct {
-	Prefix string           `xml:"Prefix,omitempty" json:"prefix,omitempty"`
-	Tags   []ReplicationTag `xml:"Tag,omitempty" json:"tags,omitempty"`
+	Prefix string           `json:"prefix,omitempty" xml:"Prefix,omitempty"`
+	Tags   []ReplicationTag `json:"tags,omitempty"   xml:"Tag,omitempty"`
 }
 
 // ReplicationDestination defines where to replicate.
 type ReplicationDestination struct {
-	Bucket              string              `xml:"Bucket" json:"bucket"`
-	Account             string              `xml:"Account,omitempty" json:"account,omitempty"`
-	StorageClass        string              `xml:"StorageClass,omitempty" json:"storageClass,omitempty"`
-	AccessControlTranslation *AccessControlTranslation `xml:"AccessControlTranslation,omitempty" json:"accessControlTranslation,omitempty"`
-	EncryptionConfiguration *EncryptionConfiguration `xml:"EncryptionConfiguration,omitempty" json:"encryptionConfiguration,omitempty"`
-	Metrics             *S3ReplicationMetrics `xml:"Metrics,omitempty" json:"metrics,omitempty"`
-	ReplicationTime     *ReplicationTime    `xml:"ReplicationTime,omitempty" json:"replicationTime,omitempty"`
+	Bucket                   string                    `json:"bucket"                             xml:"Bucket"`
+	Account                  string                    `json:"account,omitempty"                  xml:"Account,omitempty"`
+	StorageClass             string                    `json:"storageClass,omitempty"             xml:"StorageClass,omitempty"`
+	AccessControlTranslation *AccessControlTranslation `json:"accessControlTranslation,omitempty" xml:"AccessControlTranslation,omitempty"`
+	EncryptionConfiguration  *EncryptionConfiguration  `json:"encryptionConfiguration,omitempty"  xml:"EncryptionConfiguration,omitempty"`
+	Metrics                  *S3ReplicationMetrics     `json:"metrics,omitempty"                  xml:"Metrics,omitempty"`
+	ReplicationTime          *ReplicationTime          `json:"replicationTime,omitempty"          xml:"ReplicationTime,omitempty"`
 }
 
 // AccessControlTranslation controls ACL translation.
 type AccessControlTranslation struct {
-	Owner string `xml:"Owner" json:"owner"` // Destination
+	Owner string `json:"owner" xml:"Owner"` // Destination
 }
 
 // EncryptionConfiguration specifies encryption for replicated objects.
 type EncryptionConfiguration struct {
-	ReplicaKmsKeyID string `xml:"ReplicaKmsKeyID,omitempty" json:"replicaKmsKeyId,omitempty"`
+	ReplicaKmsKeyID string `json:"replicaKmsKeyId,omitempty" xml:"ReplicaKmsKeyID,omitempty"`
 }
 
 // S3ReplicationMetrics controls replication metrics for S3 API.
 type S3ReplicationMetrics struct {
-	Status        string                   `xml:"Status" json:"status"` // Enabled or Disabled
-	EventThreshold *ReplicationEventThreshold `xml:"EventThreshold,omitempty" json:"eventThreshold,omitempty"`
+	Status         string                     `json:"status"                   xml:"Status"` // Enabled or Disabled
+	EventThreshold *ReplicationEventThreshold `json:"eventThreshold,omitempty" xml:"EventThreshold,omitempty"`
 }
 
 // ReplicationEventThreshold defines replication event thresholds.
 type ReplicationEventThreshold struct {
-	Minutes int `xml:"Minutes" json:"minutes"`
+	Minutes int `json:"minutes" xml:"Minutes"`
 }
 
 // ReplicationTime controls replication time.
 type ReplicationTime struct {
-	Status string           `xml:"Status" json:"status"` // Enabled or Disabled
-	Time   *ReplicationTimeValue `xml:"Time,omitempty" json:"time,omitempty"`
+	Status string                `json:"status"         xml:"Status"` // Enabled or Disabled
+	Time   *ReplicationTimeValue `json:"time,omitempty" xml:"Time,omitempty"`
 }
 
 // ReplicationTimeValue defines replication time constraints.
 type ReplicationTimeValue struct {
-	Minutes int `xml:"Minutes" json:"minutes"`
+	Minutes int `json:"minutes" xml:"Minutes"`
 }
 
 // S3DeleteMarkerReplication controls delete marker replication for S3 API.
 type S3DeleteMarkerReplication struct {
-	Status string `xml:"Status" json:"status"` // Enabled or Disabled
+	Status string `json:"status" xml:"Status"` // Enabled or Disabled
 }
 
 // SourceSelectionCriteria specifies source selection criteria.
 type SourceSelectionCriteria struct {
-	SseKmsEncryptedObjects *SseKmsEncryptedObjects `xml:"SseKmsEncryptedObjects,omitempty" json:"sseKmsEncryptedObjects,omitempty"`
-	ReplicaModifications   *ReplicaModifications   `xml:"ReplicaModifications,omitempty" json:"replicaModifications,omitempty"`
+	SseKmsEncryptedObjects *SseKmsEncryptedObjects `json:"sseKmsEncryptedObjects,omitempty" xml:"SseKmsEncryptedObjects,omitempty"`
+	ReplicaModifications   *ReplicaModifications   `json:"replicaModifications,omitempty"   xml:"ReplicaModifications,omitempty"`
 }
 
 // SseKmsEncryptedObjects controls replication of KMS-encrypted objects.
 type SseKmsEncryptedObjects struct {
-	Status string `xml:"Status" json:"status"` // Enabled or Disabled
+	Status string `json:"status" xml:"Status"` // Enabled or Disabled
 }
 
 // ReplicaModifications controls replication of replica modifications.
 type ReplicaModifications struct {
-	Status string `xml:"Status" json:"status"` // Enabled or Disabled
+	Status string `json:"status" xml:"Status"` // Enabled or Disabled
 }
 
 // S3ExistingObjectReplication controls replication of existing objects for S3 API.
 type S3ExistingObjectReplication struct {
-	Status string `xml:"Status" json:"status"` // Enabled or Disabled
+	Status string `json:"status" xml:"Status"` // Enabled or Disabled
 }
 
 // ReplicationConfiguration represents the complete replication configuration.
 type ReplicationConfiguration struct {
-	Role  string            `xml:"Role" json:"role"`
-	Rules []ReplicationRule `xml:"Rule" json:"rules"`
+	Role  string            `json:"role"  xml:"Role"`
+	Rules []ReplicationRule `json:"rules" xml:"Rule"`
 }
 
 // ReplicationTask represents a pending replication task.
@@ -157,17 +171,17 @@ type ReplicationTask struct {
 
 // ReplicationManager manages cross-region replication.
 type ReplicationManager struct {
-	mu              sync.RWMutex
-	configs         map[string]*ReplicationConfiguration // bucket -> config
-	tasks           chan *ReplicationTask
-	activeWorkers   int32
-	maxWorkers      int
-	endpoints       map[string]*RegionEndpoint // region -> endpoint
-	storage         ReplicationStorage
-	metrics         *ReplicationMetricsCollector
-	ctx             context.Context
-	cancel          context.CancelFunc
-	wg              sync.WaitGroup
+	mu            sync.RWMutex
+	configs       map[string]*ReplicationConfiguration // bucket -> config
+	tasks         chan *ReplicationTask
+	activeWorkers int32
+	maxWorkers    int
+	endpoints     map[string]*RegionEndpoint // region -> endpoint
+	storage       ReplicationStorage
+	metrics       *ReplicationMetricsCollector
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
 }
 
 // RegionEndpoint represents a remote region endpoint.
@@ -226,7 +240,7 @@ func NewReplicationManager(storage ReplicationStorage, maxWorkers int) *Replicat
 
 	rm := &ReplicationManager{
 		configs:    make(map[string]*ReplicationConfiguration),
-		tasks:      make(chan *ReplicationTask, 10000),
+		tasks:      make(chan *ReplicationTask, taskChannelBufferSize),
 		maxWorkers: maxWorkers,
 		endpoints:  make(map[string]*RegionEndpoint),
 		storage:    storage,
@@ -236,8 +250,9 @@ func NewReplicationManager(storage ReplicationStorage, maxWorkers int) *Replicat
 	}
 
 	// Start worker pool
-	for i := 0; i < maxWorkers; i++ {
+	for range maxWorkers {
 		rm.wg.Add(1)
+
 		go rm.worker()
 	}
 
@@ -246,7 +261,8 @@ func NewReplicationManager(storage ReplicationStorage, maxWorkers int) *Replicat
 
 // SetReplicationConfiguration sets replication configuration for a bucket.
 func (rm *ReplicationManager) SetReplicationConfiguration(bucket string, config *ReplicationConfiguration) error {
-	if err := rm.validateConfiguration(config); err != nil {
+	err := rm.validateConfiguration(config)
+	if err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
@@ -276,6 +292,7 @@ func (rm *ReplicationManager) DeleteReplicationConfiguration(bucket string) erro
 	defer rm.mu.Unlock()
 
 	delete(rm.configs, bucket)
+
 	return nil
 }
 
@@ -289,11 +306,11 @@ func (rm *ReplicationManager) RegisterEndpoint(endpoint *RegionEndpoint) {
 // validateConfiguration validates a replication configuration.
 func (rm *ReplicationManager) validateConfiguration(config *ReplicationConfiguration) error {
 	if config == nil {
-		return fmt.Errorf("configuration is nil")
+		return errors.New("configuration is nil")
 	}
 
 	if len(config.Rules) == 0 {
-		return fmt.Errorf("at least one rule is required")
+		return errors.New("at least one rule is required")
 	}
 
 	// Check for unique IDs and priorities
@@ -302,24 +319,27 @@ func (rm *ReplicationManager) validateConfiguration(config *ReplicationConfigura
 
 	for _, rule := range config.Rules {
 		if rule.ID == "" {
-			return fmt.Errorf("rule ID is required")
+			return errors.New("rule ID is required")
 		}
+
 		if ids[rule.ID] {
 			return fmt.Errorf("duplicate rule ID: %s", rule.ID)
 		}
+
 		ids[rule.ID] = true
 
 		if priorities[rule.Priority] {
 			return fmt.Errorf("duplicate priority: %d", rule.Priority)
 		}
+
 		priorities[rule.Priority] = true
 
-		if rule.Status != "Enabled" && rule.Status != "Disabled" {
+		if rule.Status != string(RuleStatusEnabled) && rule.Status != string(RuleStatusDisabled) {
 			return fmt.Errorf("invalid rule status: %s", rule.Status)
 		}
 
 		if rule.Destination.Bucket == "" {
-			return fmt.Errorf("destination bucket is required")
+			return errors.New("destination bucket is required")
 		}
 	}
 
@@ -338,7 +358,7 @@ func (rm *ReplicationManager) OnObjectCreated(ctx context.Context, bucket, key s
 
 	// Find matching rules
 	for _, rule := range config.Rules {
-		if rule.Status != "Enabled" {
+		if rule.Status != string(RuleStatusEnabled) {
 			continue
 		}
 
@@ -362,7 +382,7 @@ func (rm *ReplicationManager) OnObjectCreated(ctx context.Context, bucket, key s
 			case rm.tasks <- task:
 				atomic.AddInt64(&rm.metrics.pendingCount, 1)
 			default:
-				return fmt.Errorf("replication queue is full")
+				return errors.New("replication queue is full")
 			}
 		}
 	}
@@ -381,12 +401,12 @@ func (rm *ReplicationManager) OnObjectDeleted(ctx context.Context, bucket, key, 
 	}
 
 	for _, rule := range config.Rules {
-		if rule.Status != "Enabled" {
+		if rule.Status != string(RuleStatusEnabled) {
 			continue
 		}
 
 		// Check if delete marker replication is enabled
-		if rule.DeleteMarkerReplication != nil && rule.DeleteMarkerReplication.Status == "Enabled" {
+		if rule.DeleteMarkerReplication != nil && rule.DeleteMarkerReplication.Status == string(RuleStatusEnabled) {
 			if rm.matchesPrefixFilter(&rule, key) {
 				// Queue delete replication
 				task := &ReplicationTask{
@@ -405,7 +425,7 @@ func (rm *ReplicationManager) OnObjectDeleted(ctx context.Context, bucket, key, 
 				select {
 				case rm.tasks <- task:
 				default:
-					return fmt.Errorf("replication queue is full")
+					return errors.New("replication queue is full")
 				}
 			}
 		}
@@ -431,6 +451,7 @@ func (rm *ReplicationManager) matchesFilter(rule *ReplicationRule, key string, i
 		if err != nil {
 			return false
 		}
+
 		if tags[rule.Filter.Tag.Key] != rule.Filter.Tag.Value {
 			return false
 		}
@@ -441,11 +462,13 @@ func (rm *ReplicationManager) matchesFilter(rule *ReplicationRule, key string, i
 		if rule.Filter.And.Prefix != "" && !strings.HasPrefix(key, rule.Filter.And.Prefix) {
 			return false
 		}
+
 		if len(rule.Filter.And.Tags) > 0 {
 			tags, err := rm.storage.GetObjectTags(context.Background(), info.Key, key)
 			if err != nil {
 				return false
 			}
+
 			for _, tag := range rule.Filter.And.Tags {
 				if tags[tag.Key] != tag.Value {
 					return false
@@ -462,14 +485,17 @@ func (rm *ReplicationManager) matchesPrefixFilter(rule *ReplicationRule, key str
 	if rule.Filter == nil {
 		return true
 	}
+
 	if rule.Filter.Prefix != "" && !strings.HasPrefix(key, rule.Filter.Prefix) {
 		return false
 	}
+
 	if rule.Filter.And != nil && rule.Filter.And.Prefix != "" {
 		if !strings.HasPrefix(key, rule.Filter.And.Prefix) {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -477,9 +503,10 @@ func (rm *ReplicationManager) matchesPrefixFilter(rule *ReplicationRule, key str
 func (rm *ReplicationManager) extractBucketName(arn string) string {
 	// Format: arn:aws:s3:::bucket-name
 	parts := strings.Split(arn, ":::")
-	if len(parts) == 2 {
+	if len(parts) == arnBucketPartsCount {
 		return parts[1]
 	}
+
 	return arn
 }
 
@@ -487,9 +514,10 @@ func (rm *ReplicationManager) extractBucketName(arn string) string {
 func (rm *ReplicationManager) extractRegion(arn string) string {
 	// Format: arn:aws:s3:region:account:bucket
 	parts := strings.Split(arn, ":")
-	if len(parts) >= 4 {
+	if len(parts) >= arnRegionPartsCount {
 		return parts[3]
 	}
+
 	return "us-east-1"
 }
 
@@ -516,18 +544,20 @@ func (rm *ReplicationManager) processTask(task *ReplicationTask) {
 	task.Attempts++
 	task.LastAttempt = time.Now()
 
-	ctx, cancel := context.WithTimeout(rm.ctx, 5*time.Minute)
+	ctx, cancel := context.WithTimeout(rm.ctx, replicationTaskTimeout)
 	defer cancel()
 
 	err := rm.replicateObject(ctx, task)
 	if err != nil {
 		task.Status = S3ReplicationStatusFailed
 		task.Error = err.Error()
+
 		atomic.AddInt64(&rm.metrics.objectsFailed, 1)
 
 		// Retry logic
-		if task.Attempts < 3 {
+		if task.Attempts < maxReplicationRetries {
 			time.Sleep(time.Duration(task.Attempts) * time.Second)
+
 			select {
 			case rm.tasks <- task:
 				atomic.AddInt64(&rm.metrics.pendingCount, 1)
@@ -537,14 +567,17 @@ func (rm *ReplicationManager) processTask(task *ReplicationTask) {
 		}
 	} else {
 		task.Status = S3ReplicationStatusCompleted
+
 		atomic.AddInt64(&rm.metrics.objectsReplicated, 1)
 		atomic.AddInt64(&rm.metrics.bytesReplicated, task.Size)
 
 		rm.metrics.mu.Lock()
+
 		rm.metrics.replicationLatency = append(rm.metrics.replicationLatency, time.Since(start))
-		if len(rm.metrics.replicationLatency) > 1000 {
-			rm.metrics.replicationLatency = rm.metrics.replicationLatency[500:]
+		if len(rm.metrics.replicationLatency) > latencyHistorySize {
+			rm.metrics.replicationLatency = rm.metrics.replicationLatency[latencyHistoryTrimStart:]
 		}
+
 		rm.metrics.lastReplicationTime = time.Now()
 		rm.metrics.mu.Unlock()
 	}
@@ -553,18 +586,22 @@ func (rm *ReplicationManager) processTask(task *ReplicationTask) {
 // replicateObject replicates a single object to the destination.
 func (rm *ReplicationManager) replicateObject(ctx context.Context, task *ReplicationTask) error {
 	// Get source object
-	var reader io.ReadCloser
-	var info *S3ObjectInfo
-	var err error
+	var (
+		reader io.ReadCloser
+		info   *S3ObjectInfo
+		err    error
+	)
 
 	if task.SourceVersionID != "" {
 		reader, info, err = rm.storage.GetObjectVersion(ctx, task.SourceBucket, task.SourceKey, task.SourceVersionID)
 	} else {
 		reader, info, err = rm.storage.GetObject(ctx, task.SourceBucket, task.SourceKey)
 	}
+
 	if err != nil {
 		return fmt.Errorf("failed to get source object: %w", err)
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Get destination endpoint
@@ -603,10 +640,11 @@ func (rm *ReplicationManager) putObjectRemote(ctx context.Context, endpoint *Reg
 	if endpoint.Secure {
 		scheme = "https"
 	}
+
 	url := fmt.Sprintf("%s://%s/%s/%s", scheme, endpoint.Endpoint, bucket, key)
 
 	// Create request
-	req, err := http.NewRequestWithContext(ctx, "PUT", url, reader)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, reader)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -630,14 +668,16 @@ func (rm *ReplicationManager) putObjectRemote(ctx context.Context, endpoint *Reg
 	rm.signRequest(req, endpoint)
 
 	// Execute request
-	client := &http.Client{Timeout: 30 * time.Minute}
+	client := &http.Client{Timeout: replicationHTTPTimeout}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= httpErrorStatusThreshold {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("put failed: %s - %s", resp.Status, string(body))
 	}
@@ -696,6 +736,7 @@ func (rm *ReplicationManager) signRequest(req *http.Request, endpoint *RegionEnd
 
 func (rm *ReplicationManager) getCanonicalHeaders(req *http.Request) string {
 	headers := make(map[string]string)
+
 	for k := range req.Header {
 		lowerKey := strings.ToLower(k)
 		if strings.HasPrefix(lowerKey, "x-amz-") || lowerKey == "host" || lowerKey == "content-type" {
@@ -703,10 +744,11 @@ func (rm *ReplicationManager) getCanonicalHeaders(req *http.Request) string {
 		}
 	}
 
-	var keys []string
+	keys := make([]string, 0, len(headers))
 	for k := range headers {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
 
 	var canonical strings.Builder
@@ -722,13 +764,16 @@ func (rm *ReplicationManager) getCanonicalHeaders(req *http.Request) string {
 
 func (rm *ReplicationManager) getSignedHeaders(req *http.Request) string {
 	var headers []string
+
 	for k := range req.Header {
 		lowerKey := strings.ToLower(k)
 		if strings.HasPrefix(lowerKey, "x-amz-") || lowerKey == "host" || lowerKey == "content-type" {
 			headers = append(headers, lowerKey)
 		}
 	}
+
 	sort.Strings(headers)
+
 	return strings.Join(headers, ";")
 }
 
@@ -740,6 +785,7 @@ func (rm *ReplicationManager) sha256Hash(data []byte) string {
 func (rm *ReplicationManager) hmacSHA256(key, data []byte) []byte {
 	h := hmac.New(sha256.New, key)
 	h.Write(data)
+
 	return h.Sum(nil)
 }
 
@@ -748,6 +794,7 @@ func (rm *ReplicationManager) getSignatureKey(secretKey, dateStamp, region, serv
 	kRegion := rm.hmacSHA256(kDate, []byte(region))
 	kService := rm.hmacSHA256(kRegion, []byte(service))
 	kSigning := rm.hmacSHA256(kService, []byte("aws4_request"))
+
 	return kSigning
 }
 
@@ -762,29 +809,30 @@ func (rm *ReplicationManager) GetMetrics() *ReplicationMetricsSnapshot {
 		for _, l := range rm.metrics.replicationLatency {
 			total += l
 		}
+
 		avgLatency = total / time.Duration(len(rm.metrics.replicationLatency))
 	}
 
 	return &ReplicationMetricsSnapshot{
-		ObjectsReplicated:  rm.metrics.objectsReplicated,
-		BytesReplicated:    rm.metrics.bytesReplicated,
-		ObjectsFailed:      rm.metrics.objectsFailed,
-		PendingCount:       rm.metrics.pendingCount,
-		AverageLatency:     avgLatency,
-		LastReplication:    rm.metrics.lastReplicationTime,
-		ActiveWorkers:      int(atomic.LoadInt32(&rm.activeWorkers)),
+		ObjectsReplicated: rm.metrics.objectsReplicated,
+		BytesReplicated:   rm.metrics.bytesReplicated,
+		ObjectsFailed:     rm.metrics.objectsFailed,
+		PendingCount:      rm.metrics.pendingCount,
+		AverageLatency:    avgLatency,
+		LastReplication:   rm.metrics.lastReplicationTime,
+		ActiveWorkers:     int(atomic.LoadInt32(&rm.activeWorkers)),
 	}
 }
 
 // ReplicationMetricsSnapshot contains a snapshot of replication metrics.
 type ReplicationMetricsSnapshot struct {
-	ObjectsReplicated int64
-	BytesReplicated   int64
-	ObjectsFailed     int64
-	PendingCount      int64
-	AverageLatency    time.Duration
-	LastReplication   time.Time
-	ActiveWorkers     int
+	ObjectsReplicated int64         `json:"objectsReplicated"`
+	BytesReplicated   int64         `json:"bytesReplicated"`
+	ObjectsFailed     int64         `json:"objectsFailed"`
+	PendingCount      int64         `json:"pendingCount"`
+	AverageLatency    time.Duration `json:"averageLatency"`
+	LastReplication   time.Time     `json:"lastReplication"`
+	ActiveWorkers     int           `json:"activeWorkers"`
 }
 
 // Stop stops the replication manager.
@@ -814,6 +862,7 @@ func (h *ReplicationHandler) HandleGetReplication(w http.ResponseWriter, r *http
 			"Code":    "ReplicationConfigurationNotFoundError",
 			"Message": "The replication configuration was not found",
 		})
+
 		return
 	}
 
@@ -826,21 +875,26 @@ func (h *ReplicationHandler) HandlePutReplication(w http.ResponseWriter, r *http
 	bucket := r.PathValue("bucket")
 
 	var config ReplicationConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&config); err != nil {
+
+	err := xml.NewDecoder(r.Body).Decode(&config)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		_ = xml.NewEncoder(w).Encode(map[string]string{
 			"Code":    "MalformedXML",
 			"Message": "The XML you provided was not well-formed",
 		})
+
 		return
 	}
 
-	if err := h.manager.SetReplicationConfiguration(bucket, &config); err != nil {
+	err = h.manager.SetReplicationConfiguration(bucket, &config)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		_ = xml.NewEncoder(w).Encode(map[string]string{
 			"Code":    "InvalidRequest",
 			"Message": err.Error(),
 		})
+
 		return
 	}
 
@@ -851,7 +905,8 @@ func (h *ReplicationHandler) HandlePutReplication(w http.ResponseWriter, r *http
 func (h *ReplicationHandler) HandleDeleteReplication(w http.ResponseWriter, r *http.Request) {
 	bucket := r.PathValue("bucket")
 
-	if err := h.manager.DeleteReplicationConfiguration(bucket); err != nil {
+	err := h.manager.DeleteReplicationConfiguration(bucket)
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -878,7 +933,8 @@ func (rm *ReplicationManager) ReplicateBatch(ctx context.Context, bucket string,
 	}
 
 	for _, info := range objects {
-		if err := rm.OnObjectCreated(ctx, bucket, info.Key, info); err != nil {
+		err := rm.OnObjectCreated(ctx, bucket, info.Key, info)
+		if err != nil {
 			return err
 		}
 	}

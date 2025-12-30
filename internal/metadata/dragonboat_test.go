@@ -20,22 +20,27 @@ import (
 // and immediately releasing it. This avoids hardcoded port conflicts.
 func getFreePort(t *testing.T) int {
 	t.Helper()
-	listener, err := net.Listen("tcp", "localhost:0")
+
+	var lc net.ListenConfig
+
+	listener, err := lc.Listen(context.Background(), "tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to get free port: %v", err)
 	}
+
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
+
 	return port
 }
 
-// getRaftAddress returns a localhost address with a free port
+// getRaftAddress returns a localhost address with a free port.
 func getRaftAddress(t *testing.T) string {
 	t.Helper()
 	return fmt.Sprintf("localhost:%d", getFreePort(t))
 }
 
-// TestDragonboatStoreCreation tests the creation and initialization of DragonboatStore
+// TestDragonboatStoreCreation tests the creation and initialization of DragonboatStore.
 func TestDragonboatStoreCreation(t *testing.T) {
 	t.Run("SuccessfulCreation", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -61,6 +66,7 @@ func TestDragonboatStoreCreation(t *testing.T) {
 		if store.nodeID != cfg.NodeID {
 			t.Errorf("Expected nodeID %d, got %d", cfg.NodeID, store.nodeID)
 		}
+
 		if store.shardID != cfg.ShardID {
 			t.Errorf("Expected shardID %d, got %d", cfg.ShardID, store.shardID)
 		}
@@ -95,20 +101,22 @@ func TestDragonboatStoreCreation(t *testing.T) {
 		}
 
 		for _, dir := range expectedDirs {
-			if _, err := os.Stat(dir); os.IsNotExist(err) {
+			_, statErr := os.Stat(dir)
+			if os.IsNotExist(statErr) {
 				t.Errorf("Expected directory %s to exist", dir)
 			}
 		}
 	})
 }
 
-// TestStateMachineOperations tests the state machine's core operations
+// TestStateMachineOperations tests the state machine's core operations.
 func TestStateMachineOperations(t *testing.T) {
 	t.Run("OpenAndClose", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		opts := badger.DefaultOptions(tmpDir)
 		opts.Logger = nil
+
 		db, err := badger.Open(opts)
 		if err != nil {
 			t.Fatalf("Failed to open badger: %v", err)
@@ -122,12 +130,14 @@ func TestStateMachineOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Open failed: %v", err)
 		}
+
 		if index != 0 {
 			t.Errorf("Expected initial index 0, got %d", index)
 		}
 
 		// Close should succeed
-		if err := sm.Close(); err != nil {
+		err = sm.Close()
+		if err != nil {
 			t.Errorf("Close failed: %v", err)
 		}
 	})
@@ -137,6 +147,7 @@ func TestStateMachineOperations(t *testing.T) {
 
 		opts := badger.DefaultOptions(tmpDir)
 		opts.Logger = nil
+
 		db, err := badger.Open(opts)
 		if err != nil {
 			t.Fatalf("Failed to open badger: %v", err)
@@ -144,7 +155,8 @@ func TestStateMachineOperations(t *testing.T) {
 		defer db.Close()
 
 		sm := newStateMachine(db)
-		if _, err := sm.Open(make(chan struct{})); err != nil {
+		_, err = sm.Open(make(chan struct{}))
+		if err != nil {
 			t.Fatalf("Failed to open state machine: %v", err)
 		}
 
@@ -180,17 +192,20 @@ func TestStateMachineOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Update failed: %v", err)
 		}
+
 		if result.Value != 0 {
 			t.Errorf("Expected success result (0), got %d", result.Value)
 		}
 
 		// Verify bucket was created
 		var storedBucket Bucket
+
 		err = db.View(func(txn *badger.Txn) error {
 			item, err := txn.Get([]byte(prefixBucket + bucket.Name))
 			if err != nil {
 				return err
 			}
+
 			return item.Value(func(val []byte) error {
 				return json.Unmarshal(val, &storedBucket)
 			})
@@ -198,6 +213,7 @@ func TestStateMachineOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to retrieve bucket: %v", err)
 		}
+
 		if storedBucket.Name != bucket.Name {
 			t.Errorf("Expected bucket name %s, got %s", bucket.Name, storedBucket.Name)
 		}
@@ -208,6 +224,7 @@ func TestStateMachineOperations(t *testing.T) {
 
 		opts := badger.DefaultOptions(tmpDir)
 		opts.Logger = nil
+
 		db, err := badger.Open(opts)
 		if err != nil {
 			t.Fatalf("Failed to open badger: %v", err)
@@ -216,24 +233,26 @@ func TestStateMachineOperations(t *testing.T) {
 
 		sm := newStateMachine(db)
 
-		// Lookup is not used in our implementation, should return nil
+		// Lookup is not used in our implementation, should return ErrLookupNotSupported
 		result, err := sm.Lookup(nil)
-		if err != nil {
-			t.Errorf("Lookup failed: %v", err)
+		if err != ErrLookupNotSupported {
+			t.Errorf("Expected ErrLookupNotSupported, got %v", err)
 		}
+
 		if result != nil {
 			t.Errorf("Expected nil result from Lookup, got %v", result)
 		}
 	})
 }
 
-// TestStateMachineSnapshot tests snapshot operations
+// TestStateMachineSnapshot tests snapshot operations.
 func TestStateMachineSnapshot(t *testing.T) {
 	t.Run("SaveAndRecoverSnapshot", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		opts := badger.DefaultOptions(tmpDir)
 		opts.Logger = nil
+
 		db, err := badger.Open(opts)
 		if err != nil {
 			t.Fatalf("Failed to open badger: %v", err)
@@ -241,7 +260,8 @@ func TestStateMachineSnapshot(t *testing.T) {
 		defer db.Close()
 
 		sm := newStateMachine(db)
-		if _, err := sm.Open(make(chan struct{})); err != nil {
+		_, err = sm.Open(make(chan struct{}))
+		if err != nil {
 			t.Fatalf("Failed to open state machine: %v", err)
 		}
 
@@ -254,10 +274,12 @@ func TestStateMachineSnapshot(t *testing.T) {
 
 		err = db.Update(func(txn *badger.Txn) error {
 			for k, v := range testData {
-				if err := txn.Set([]byte(k), []byte(v)); err != nil {
+				err := txn.Set([]byte(k), []byte(v))
+				if err != nil {
 					return err
 				}
 			}
+
 			return nil
 		})
 		if err != nil {
@@ -266,6 +288,7 @@ func TestStateMachineSnapshot(t *testing.T) {
 
 		// Save snapshot
 		var buf strings.Builder
+
 		done := make(chan struct{})
 
 		err = sm.SaveSnapshot(&buf, nil, done)
@@ -277,6 +300,7 @@ func TestStateMachineSnapshot(t *testing.T) {
 		tmpDir2 := t.TempDir()
 		opts2 := badger.DefaultOptions(tmpDir2)
 		opts2.Logger = nil
+
 		db2, err := badger.Open(opts2)
 		if err != nil {
 			t.Fatalf("Failed to open second badger: %v", err)
@@ -284,13 +308,15 @@ func TestStateMachineSnapshot(t *testing.T) {
 		defer db2.Close()
 
 		sm2 := newStateMachine(db2)
-		if _, err := sm2.Open(make(chan struct{})); err != nil {
+		_, err = sm2.Open(make(chan struct{}))
+		if err != nil {
 			t.Fatalf("Failed to open second state machine: %v", err)
 		}
 
 		// Recover snapshot
 		reader := strings.NewReader(buf.String())
 		done2 := make(chan struct{})
+
 		err = sm2.RecoverFromSnapshot(reader, nil, done2)
 		if err != nil {
 			t.Fatalf("Failed to recover snapshot: %v", err)
@@ -303,7 +329,9 @@ func TestStateMachineSnapshot(t *testing.T) {
 				if err != nil {
 					return err
 				}
+
 				var actualV string
+
 				err = item.Value(func(val []byte) error {
 					actualV = string(val)
 					return nil
@@ -311,10 +339,12 @@ func TestStateMachineSnapshot(t *testing.T) {
 				if err != nil {
 					return err
 				}
+
 				if actualV != expectedV {
 					t.Errorf("Expected value %s for key %s, got %s", expectedV, k, actualV)
 				}
 			}
+
 			return nil
 		})
 		if err != nil {
@@ -327,6 +357,7 @@ func TestStateMachineSnapshot(t *testing.T) {
 
 		opts := badger.DefaultOptions(tmpDir)
 		opts.Logger = nil
+
 		db, err := badger.Open(opts)
 		if err != nil {
 			t.Fatalf("Failed to open badger: %v", err)
@@ -334,7 +365,8 @@ func TestStateMachineSnapshot(t *testing.T) {
 		defer db.Close()
 
 		sm := newStateMachine(db)
-		if _, err := sm.Open(make(chan struct{})); err != nil {
+		_, err = sm.Open(make(chan struct{}))
+		if err != nil {
 			t.Fatalf("Failed to open state machine: %v", err)
 		}
 
@@ -343,6 +375,7 @@ func TestStateMachineSnapshot(t *testing.T) {
 		close(done)
 
 		var buf strings.Builder
+
 		err = sm.SaveSnapshot(&buf, nil, done)
 		// Should not error when stopped immediately
 		if err != nil && err != statemachine.ErrSnapshotStopped {
@@ -351,7 +384,7 @@ func TestStateMachineSnapshot(t *testing.T) {
 	})
 }
 
-// TestBucketOperations tests bucket CRUD operations
+// TestBucketOperations tests bucket CRUD operations.
 func TestBucketOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
@@ -390,6 +423,7 @@ func TestBucketOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to create bucket: %v", err)
 		}
@@ -400,12 +434,15 @@ func TestBucketOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get bucket: %v", err)
 		}
+
 		if bucket == nil {
 			t.Fatal("Expected bucket, got nil")
 		}
+
 		if bucket.Name != "test-bucket" {
 			t.Errorf("Expected bucket name 'test-bucket', got '%s'", bucket.Name)
 		}
+
 		if bucket.Owner != "test-user" {
 			t.Errorf("Expected owner 'test-user', got '%s'", bucket.Owner)
 		}
@@ -416,17 +453,20 @@ func TestBucketOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to list buckets: %v", err)
 		}
+
 		if len(buckets) == 0 {
 			t.Error("Expected at least one bucket")
 		}
 
 		found := false
+
 		for _, b := range buckets {
 			if b.Name == "test-bucket" {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			t.Error("Expected to find 'test-bucket' in list")
 		}
@@ -439,10 +479,12 @@ func TestBucketOperations(t *testing.T) {
 		}
 
 		bucket.Region = "us-west-2"
+
 		err = store.UpdateBucket(ctx, bucket)
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to update bucket: %v", err)
 		}
@@ -452,6 +494,7 @@ func TestBucketOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get updated bucket: %v", err)
 		}
+
 		if updatedBucket.Region != "us-west-2" {
 			t.Errorf("Expected region 'us-west-2', got '%s'", updatedBucket.Region)
 		}
@@ -462,6 +505,7 @@ func TestBucketOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to delete bucket: %v", err)
 		}
@@ -474,7 +518,7 @@ func TestBucketOperations(t *testing.T) {
 	})
 }
 
-// TestObjectMetadataOperations tests object metadata CRUD operations
+// TestObjectMetadataOperations tests object metadata CRUD operations.
 func TestObjectMetadataOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
@@ -508,7 +552,8 @@ func TestObjectMetadataOperations(t *testing.T) {
 		CreatedAt: time.Now(),
 		Region:    "us-east-1",
 	}
-	if err := store.CreateBucket(ctx, bucket); err != nil && store.IsLeader() {
+	err = store.CreateBucket(ctx, bucket)
+	if err != nil && store.IsLeader() {
 		t.Fatalf("Failed to create test bucket: %v", err)
 	}
 
@@ -527,6 +572,7 @@ func TestObjectMetadataOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to put object metadata: %v", err)
 		}
@@ -537,12 +583,15 @@ func TestObjectMetadataOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get object metadata: %v", err)
 		}
+
 		if meta == nil {
 			t.Fatal("Expected metadata, got nil")
 		}
+
 		if meta.Key != "test-key" {
 			t.Errorf("Expected key 'test-key', got '%s'", meta.Key)
 		}
+
 		if meta.Size != 1024 {
 			t.Errorf("Expected size 1024, got %d", meta.Size)
 		}
@@ -553,6 +602,7 @@ func TestObjectMetadataOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to list objects: %v", err)
 		}
+
 		if len(listing.Objects) == 0 {
 			t.Error("Expected at least one object")
 		}
@@ -563,6 +613,7 @@ func TestObjectMetadataOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to delete object metadata: %v", err)
 		}
@@ -575,7 +626,7 @@ func TestObjectMetadataOperations(t *testing.T) {
 	})
 }
 
-// TestUserOperations tests user CRUD operations
+// TestUserOperations tests user CRUD operations.
 func TestUserOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
@@ -616,6 +667,7 @@ func TestUserOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to create user: %v", err)
 		}
@@ -626,9 +678,11 @@ func TestUserOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get user: %v", err)
 		}
+
 		if user == nil {
 			t.Fatal("Expected user, got nil")
 		}
+
 		if user.Username != "testuser" {
 			t.Errorf("Expected username 'testuser', got '%s'", user.Username)
 		}
@@ -639,9 +693,11 @@ func TestUserOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get user by username: %v", err)
 		}
+
 		if user == nil {
 			t.Fatal("Expected user, got nil")
 		}
+
 		if user.ID != "user-123" {
 			t.Errorf("Expected ID 'user-123', got '%s'", user.ID)
 		}
@@ -652,6 +708,7 @@ func TestUserOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to list users: %v", err)
 		}
+
 		if len(users) == 0 {
 			t.Error("Expected at least one user")
 		}
@@ -664,10 +721,12 @@ func TestUserOperations(t *testing.T) {
 		}
 
 		user.Email = "newemail@example.com"
+
 		err = store.UpdateUser(ctx, user)
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to update user: %v", err)
 		}
@@ -677,6 +736,7 @@ func TestUserOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get updated user: %v", err)
 		}
+
 		if updatedUser.Email != "newemail@example.com" {
 			t.Errorf("Expected email 'newemail@example.com', got '%s'", updatedUser.Email)
 		}
@@ -687,6 +747,7 @@ func TestUserOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to delete user: %v", err)
 		}
@@ -699,7 +760,7 @@ func TestUserOperations(t *testing.T) {
 	})
 }
 
-// TestAccessKeyOperations tests access key CRUD operations
+// TestAccessKeyOperations tests access key CRUD operations.
 func TestAccessKeyOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
@@ -739,6 +800,7 @@ func TestAccessKeyOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to create access key: %v", err)
 		}
@@ -749,9 +811,11 @@ func TestAccessKeyOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get access key: %v", err)
 		}
+
 		if key == nil {
 			t.Fatal("Expected access key, got nil")
 		}
+
 		if key.UserID != "user-123" {
 			t.Errorf("Expected UserID 'user-123', got '%s'", key.UserID)
 		}
@@ -762,6 +826,7 @@ func TestAccessKeyOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to list access keys: %v", err)
 		}
+
 		if len(keys) == 0 {
 			t.Error("Expected at least one access key")
 		}
@@ -772,6 +837,7 @@ func TestAccessKeyOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to delete access key: %v", err)
 		}
@@ -784,7 +850,7 @@ func TestAccessKeyOperations(t *testing.T) {
 	})
 }
 
-// TestPolicyOperations tests policy CRUD operations
+// TestPolicyOperations tests policy CRUD operations.
 func TestPolicyOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
@@ -822,6 +888,7 @@ func TestPolicyOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to create policy: %v", err)
 		}
@@ -832,9 +899,11 @@ func TestPolicyOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get policy: %v", err)
 		}
+
 		if policy == nil {
 			t.Fatal("Expected policy, got nil")
 		}
+
 		if policy.Name != "test-policy" {
 			t.Errorf("Expected name 'test-policy', got '%s'", policy.Name)
 		}
@@ -845,6 +914,7 @@ func TestPolicyOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to list policies: %v", err)
 		}
+
 		if len(policies) == 0 {
 			t.Error("Expected at least one policy")
 		}
@@ -857,10 +927,12 @@ func TestPolicyOperations(t *testing.T) {
 		}
 
 		policy.Document = `{"Version":"2012-10-17","Statement":[{"Effect":"Allow"}]}`
+
 		err = store.UpdatePolicy(ctx, policy)
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to update policy: %v", err)
 		}
@@ -870,6 +942,7 @@ func TestPolicyOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get updated policy: %v", err)
 		}
+
 		if !strings.Contains(updatedPolicy.Document, "Allow") {
 			t.Error("Expected updated policy document to contain 'Allow'")
 		}
@@ -880,6 +953,7 @@ func TestPolicyOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to delete policy: %v", err)
 		}
@@ -892,7 +966,7 @@ func TestPolicyOperations(t *testing.T) {
 	})
 }
 
-// TestLeaderElectionHelpers tests leader-related helper functions
+// TestLeaderElectionHelpers tests leader-related helper functions.
 func TestLeaderElectionHelpers(t *testing.T) {
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
@@ -937,12 +1011,15 @@ func TestLeaderElectionHelpers(t *testing.T) {
 		if stats == nil {
 			t.Fatal("Expected stats, got nil")
 		}
+
 		if stats["shard_id"] == "" {
 			t.Error("Expected shard_id in stats")
 		}
+
 		if stats["node_id"] == "" {
 			t.Error("Expected node_id in stats")
 		}
+
 		if stats["state"] == "" {
 			t.Error("Expected state in stats")
 		}
@@ -965,7 +1042,7 @@ func TestLeaderElectionHelpers(t *testing.T) {
 	})
 }
 
-// TestClusterMembershipOperations tests cluster membership management
+// TestClusterMembershipOperations tests cluster membership management.
 func TestClusterMembershipOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
@@ -1006,6 +1083,7 @@ func TestClusterMembershipOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to add node: %v", err)
 		}
@@ -1027,9 +1105,11 @@ func TestClusterMembershipOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get cluster info: %v", err)
 		}
+
 		if info == nil {
 			t.Fatal("Expected cluster info, got nil")
 		}
+
 		if info.ClusterID == "" {
 			t.Error("Expected non-empty cluster ID")
 		}
@@ -1040,6 +1120,7 @@ func TestClusterMembershipOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to remove node: %v", err)
 		}
@@ -1050,6 +1131,7 @@ func TestClusterMembershipOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get configuration: %v", err)
 		}
+
 		if membership == nil {
 			t.Fatal("Expected membership, got nil")
 		}
@@ -1060,13 +1142,14 @@ func TestClusterMembershipOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get servers: %v", err)
 		}
+
 		if len(servers) == 0 {
 			t.Error("Expected at least one server")
 		}
 	})
 }
 
-// TestAuditOperations tests audit event operations
+// TestAuditOperations tests audit event operations.
 func TestAuditOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
@@ -1114,6 +1197,7 @@ func TestAuditOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to store audit event: %v", err)
 		}
@@ -1128,6 +1212,7 @@ func TestAuditOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to list audit events: %v", err)
 		}
+
 		if result == nil {
 			t.Fatal("Expected result, got nil")
 		}
@@ -1142,20 +1227,23 @@ func TestAuditOperations(t *testing.T) {
 	t.Run("DeleteOldAuditEvents", func(t *testing.T) {
 		// Delete events older than 1 hour from now (should delete all test events)
 		before := time.Now().Add(1 * time.Hour)
+
 		count, err := store.DeleteOldAuditEvents(ctx, before)
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to delete old audit events: %v", err)
 		}
+
 		if count < 0 {
 			t.Errorf("Expected non-negative count, got %d", count)
 		}
 	})
 }
 
-// TestMultipartUploadOperations tests multipart upload operations
+// TestMultipartUploadOperations tests multipart upload operations.
 func TestMultipartUploadOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
@@ -1198,6 +1286,7 @@ func TestMultipartUploadOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to create multipart upload: %v", err)
 		}
@@ -1208,9 +1297,11 @@ func TestMultipartUploadOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get multipart upload: %v", err)
 		}
+
 		if upload == nil {
 			t.Fatal("Expected upload, got nil")
 		}
+
 		if upload.UploadID != uploadID {
 			t.Errorf("Expected upload ID '%s', got '%s'", uploadID, upload.UploadID)
 		}
@@ -1228,6 +1319,7 @@ func TestMultipartUploadOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to add upload part: %v", err)
 		}
@@ -1237,6 +1329,7 @@ func TestMultipartUploadOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get multipart upload: %v", err)
 		}
+
 		if len(upload.Parts) != 1 {
 			t.Errorf("Expected 1 part, got %d", len(upload.Parts))
 		}
@@ -1247,6 +1340,7 @@ func TestMultipartUploadOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to list multipart uploads: %v", err)
 		}
+
 		if len(uploads) == 0 {
 			t.Error("Expected at least one upload")
 		}
@@ -1257,6 +1351,7 @@ func TestMultipartUploadOperations(t *testing.T) {
 		if err != nil && !store.IsLeader() {
 			t.Skip("Not leader, skipping test")
 		}
+
 		if err != nil {
 			t.Errorf("Failed to abort multipart upload: %v", err)
 		}
@@ -1269,7 +1364,7 @@ func TestMultipartUploadOperations(t *testing.T) {
 	})
 }
 
-// TestSnapshotOperations tests snapshot-related operations
+// TestSnapshotOperations tests snapshot-related operations.
 func TestSnapshotOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
@@ -1306,12 +1401,13 @@ func TestSnapshotOperations(t *testing.T) {
 	})
 }
 
-// TestGetAndScanOperations tests low-level get and scan operations
+// TestGetAndScanOperations tests low-level get and scan operations.
 func TestGetAndScanOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	opts := badger.DefaultOptions(tmpDir)
 	opts.Logger = nil
+
 	db, err := badger.Open(opts)
 	if err != nil {
 		t.Fatalf("Failed to open badger: %v", err)
@@ -1332,10 +1428,12 @@ func TestGetAndScanOperations(t *testing.T) {
 
 	err = db.Update(func(txn *badger.Txn) error {
 		for k, v := range testData {
-			if err := txn.Set([]byte(k), []byte(v)); err != nil {
+			err := txn.Set([]byte(k), []byte(v))
+			if err != nil {
 				return err
 			}
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -1347,6 +1445,7 @@ func TestGetAndScanOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get value: %v", err)
 		}
+
 		if string(val) != "value1" {
 			t.Errorf("Expected value 'value1', got '%s'", string(val))
 		}
@@ -1364,6 +1463,7 @@ func TestGetAndScanOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to scan: %v", err)
 		}
+
 		if len(results) != 3 {
 			t.Errorf("Expected 3 results, got %d", len(results))
 		}
@@ -1374,19 +1474,21 @@ func TestGetAndScanOperations(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to scan: %v", err)
 		}
+
 		if len(results) != 1 {
 			t.Errorf("Expected 1 result, got %d", len(results))
 		}
 	})
 }
 
-// TestErrorHandling tests error handling in various scenarios
+// TestErrorHandling tests error handling in various scenarios.
 func TestErrorHandling(t *testing.T) {
 	t.Run("InvalidCommand", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		opts := badger.DefaultOptions(tmpDir)
 		opts.Logger = nil
+
 		db, err := badger.Open(opts)
 		if err != nil {
 			t.Fatalf("Failed to open badger: %v", err)
@@ -1394,7 +1496,8 @@ func TestErrorHandling(t *testing.T) {
 		defer db.Close()
 
 		sm := newStateMachine(db)
-		if _, err := sm.Open(make(chan struct{})); err != nil {
+		_, err = sm.Open(make(chan struct{}))
+		if err != nil {
 			t.Fatalf("Failed to open state machine: %v", err)
 		}
 
@@ -1450,12 +1553,13 @@ func TestErrorHandling(t *testing.T) {
 	})
 }
 
-// BenchmarkStateMachineUpdate benchmarks state machine updates
+// BenchmarkStateMachineUpdate benchmarks state machine updates.
 func BenchmarkStateMachineUpdate(b *testing.B) {
 	tmpDir := b.TempDir()
 
 	opts := badger.DefaultOptions(tmpDir)
 	opts.Logger = nil
+
 	db, err := badger.Open(opts)
 	if err != nil {
 		b.Fatalf("Failed to open badger: %v", err)
@@ -1463,7 +1567,8 @@ func BenchmarkStateMachineUpdate(b *testing.B) {
 	defer db.Close()
 
 	sm := newStateMachine(db)
-	if _, err := sm.Open(make(chan struct{})); err != nil {
+	_, err = sm.Open(make(chan struct{}))
+	if err != nil {
 		b.Fatalf("Failed to open state machine: %v", err)
 	}
 
@@ -1482,7 +1587,8 @@ func BenchmarkStateMachineUpdate(b *testing.B) {
 	cmdData, _ := json.Marshal(cmd)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		entry := statemachine.Entry{
 			Index: uint64(i + 1),
 			Cmd:   cmdData,
@@ -1491,12 +1597,13 @@ func BenchmarkStateMachineUpdate(b *testing.B) {
 	}
 }
 
-// BenchmarkSnapshotSave benchmarks snapshot saving
+// BenchmarkSnapshotSave benchmarks snapshot saving.
 func BenchmarkSnapshotSave(b *testing.B) {
 	tmpDir := b.TempDir()
 
 	opts := badger.DefaultOptions(tmpDir)
 	opts.Logger = nil
+
 	db, err := badger.Open(opts)
 	if err != nil {
 		b.Fatalf("Failed to open badger: %v", err)
@@ -1504,19 +1611,24 @@ func BenchmarkSnapshotSave(b *testing.B) {
 	defer db.Close()
 
 	sm := newStateMachine(db)
-	if _, err := sm.Open(make(chan struct{})); err != nil {
+	_, err = sm.Open(make(chan struct{}))
+	if err != nil {
 		b.Fatalf("Failed to open state machine: %v", err)
 	}
 
 	// Create test data
 	err = db.Update(func(txn *badger.Txn) error {
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			key := []byte(string(rune('k')) + string(rune(i)))
+
 			val := []byte(string(rune('v')) + string(rune(i)))
-			if err := txn.Set(key, val); err != nil {
+
+			err := txn.Set(key, val)
+			if err != nil {
 				return err
 			}
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -1527,7 +1639,8 @@ func BenchmarkSnapshotSave(b *testing.B) {
 	close(done)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		var buf strings.Builder
 		sm.SaveSnapshot(&buf, nil, done)
 	}

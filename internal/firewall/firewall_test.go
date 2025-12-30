@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// Test constants.
+const actionDeny = "deny"
+
 func TestNewFirewall(t *testing.T) {
 	config := DefaultConfig()
 	config.Enabled = true
@@ -58,8 +61,8 @@ func TestIPBlocklist(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		ip        string
+		name       string
+		ip         string
 		expectDeny bool
 	}{
 		{"Blocked IP", "192.168.1.100", true},
@@ -73,10 +76,12 @@ func TestIPBlocklist(t *testing.T) {
 				SourceIP:  tc.ip,
 				Operation: "GetObject",
 			}
+
 			decision := fw.Evaluate(context.Background(), req)
 			if tc.expectDeny && decision.Allowed {
 				t.Errorf("Expected request from %s to be denied", tc.ip)
 			}
+
 			if !tc.expectDeny && !decision.Allowed {
 				t.Errorf("Expected request from %s to be allowed", tc.ip)
 			}
@@ -110,12 +115,147 @@ func TestIPAllowlist(t *testing.T) {
 				SourceIP:  tc.ip,
 				Operation: "GetObject",
 			}
+
 			decision := fw.Evaluate(context.Background(), req)
 			if tc.expectDeny && decision.Allowed {
 				t.Errorf("Expected request from %s to be denied", tc.ip)
 			}
+
 			if !tc.expectDeny && !decision.Allowed {
 				t.Errorf("Expected request from %s to be allowed, reason: %s", tc.ip, decision.Reason)
+			}
+		})
+	}
+}
+
+func TestIPv6Blocklist(t *testing.T) {
+	config := DefaultConfig()
+	config.Enabled = true
+	config.IPBlocklist = []string{"2001:db8::/32", "fd00::1"}
+
+	fw, err := New(config)
+	if err != nil {
+		t.Fatalf("Failed to create firewall: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		ip         string
+		expectDeny bool
+	}{
+		{"Blocked IPv6 CIDR", "2001:db8::1", true},
+		{"Blocked IPv6 single", "fd00::1", true},
+		{"Allowed IPv6", "2001:db9::1", false},
+		{"Allowed IPv4", "192.168.1.1", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &Request{
+				SourceIP:  tc.ip,
+				Operation: "GetObject",
+			}
+
+			decision := fw.Evaluate(context.Background(), req)
+			if tc.expectDeny && decision.Allowed {
+				t.Errorf("Expected request from %s to be denied", tc.ip)
+			}
+
+			if !tc.expectDeny && !decision.Allowed {
+				t.Errorf("Expected request from %s to be allowed", tc.ip)
+			}
+		})
+	}
+}
+
+func TestIPv6Allowlist(t *testing.T) {
+	config := DefaultConfig()
+	config.Enabled = true
+	config.IPAllowlist = []string{"2001:db8::/32", "::1"}
+
+	fw, err := New(config)
+	if err != nil {
+		t.Fatalf("Failed to create firewall: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		ip         string
+		expectDeny bool
+	}{
+		{"Allowed IPv6 CIDR", "2001:db8::100", false},
+		{"Allowed IPv6 loopback", "::1", false},
+		{"Denied IPv6 outside allowlist", "2001:db9::1", true},
+		{"Denied IPv4", "192.168.1.1", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &Request{
+				SourceIP:  tc.ip,
+				Operation: "GetObject",
+			}
+
+			decision := fw.Evaluate(context.Background(), req)
+			if tc.expectDeny && decision.Allowed {
+				t.Errorf("Expected request from %s to be denied", tc.ip)
+			}
+
+			if !tc.expectDeny && !decision.Allowed {
+				t.Errorf("Expected request from %s to be allowed, reason: %s", tc.ip, decision.Reason)
+			}
+		})
+	}
+}
+
+func TestIPv6MixedRules(t *testing.T) {
+	config := DefaultConfig()
+	config.Enabled = true
+	config.Rules = []Rule{
+		{
+			ID:       "deny-ipv6-uploads",
+			Name:     "Deny IPv6 Uploads",
+			Priority: 1,
+			Enabled:  true,
+			Action:   actionDeny,
+			Match: RuleMatch{
+				SourceIPs:  []string{"2001:db8::/32"},
+				Operations: []string{"PutObject"},
+			},
+		},
+	}
+
+	fw, err := New(config)
+	if err != nil {
+		t.Fatalf("Failed to create firewall: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		ip         string
+		operation  string
+		expectDeny bool
+	}{
+		{"Deny IPv6 PutObject", "2001:db8::1", "PutObject", true},
+		{"Allow IPv6 GetObject", "2001:db8::1", "GetObject", false},
+		{"Allow other IPv6 PutObject", "2001:db9::1", "PutObject", false},
+		{"Allow IPv4 PutObject", "192.168.1.1", "PutObject", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &Request{
+				SourceIP:  tc.ip,
+				Operation: tc.operation,
+			}
+
+			decision := fw.Evaluate(context.Background(), req)
+			if tc.expectDeny && decision.Allowed {
+				t.Errorf("Expected request from %s with operation %s to be denied", tc.ip, tc.operation)
+			}
+
+			if !tc.expectDeny && !decision.Allowed {
+				t.Errorf("Expected request from %s with operation %s to be allowed", tc.ip, tc.operation)
 			}
 		})
 	}
@@ -130,7 +270,7 @@ func TestRuleMatching(t *testing.T) {
 			Name:     "Deny Uploads to Logs",
 			Priority: 1,
 			Enabled:  true,
-			Action:   "deny",
+			Action:   actionDeny,
 			Match: RuleMatch{
 				Buckets:    []string{"logs*"},
 				Operations: []string{"PutObject"},
@@ -154,8 +294,8 @@ func TestRuleMatching(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
 		req        *Request
+		name       string
 		expectDeny bool
 	}{
 		{
@@ -196,6 +336,7 @@ func TestRuleMatching(t *testing.T) {
 			if tc.expectDeny && decision.Allowed {
 				t.Error("Expected request to be denied")
 			}
+
 			if !tc.expectDeny && !decision.Allowed {
 				t.Errorf("Expected request to be allowed, reason: %s", decision.Reason)
 			}
@@ -212,7 +353,7 @@ func TestTimeWindowRule(t *testing.T) {
 			Name:     "Allow During Business Hours",
 			Priority: 1,
 			Enabled:  true,
-			Action:   "deny",
+			Action:   actionDeny,
 			Match: RuleMatch{
 				TimeWindow: &TimeWindow{
 					StartHour: 18, // 6 PM
@@ -254,7 +395,7 @@ func TestTimeWindowRule(t *testing.T) {
 func TestDefaultPolicyDeny(t *testing.T) {
 	config := DefaultConfig()
 	config.Enabled = true
-	config.DefaultPolicy = "deny"
+	config.DefaultPolicy = actionDeny
 
 	fw, err := New(config)
 	if err != nil {
@@ -277,7 +418,7 @@ func TestTokenBucket(t *testing.T) {
 	tb := NewTokenBucket(10, 5)
 
 	// Should be able to make 5 requests immediately (burst)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if !tb.Allow() {
 			t.Errorf("Request %d should be allowed (within burst)", i+1)
 		}
@@ -368,7 +509,7 @@ func TestRateLimiting(t *testing.T) {
 	}
 
 	// First 3 requests should succeed (burst)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		decision := fw.Evaluate(context.Background(), req)
 		if !decision.Allowed {
 			t.Errorf("Request %d should be allowed (within burst)", i+1)
@@ -410,6 +551,7 @@ func TestConnectionTracking(t *testing.T) {
 		User:      "user1",
 		Operation: "GetObject",
 	}
+
 	decision := fw.Evaluate(context.Background(), req)
 	if decision.Allowed {
 		t.Error("Should deny - connection limit exceeded")
@@ -480,6 +622,7 @@ func TestUpdateConfig(t *testing.T) {
 		SourceIP:  "192.168.1.100",
 		Operation: "GetObject",
 	}
+
 	decision := fw.Evaluate(context.Background(), req)
 	if decision.Allowed {
 		t.Error("Blocked IP should be denied after config update")
@@ -489,7 +632,7 @@ func TestUpdateConfig(t *testing.T) {
 func TestResetStats(t *testing.T) {
 	config := DefaultConfig()
 	config.Enabled = true
-	config.DefaultPolicy = "deny"
+	config.DefaultPolicy = actionDeny
 
 	fw, err := New(config)
 	if err != nil {
@@ -508,6 +651,7 @@ func TestResetStats(t *testing.T) {
 
 	// Reset and verify
 	fw.ResetStats()
+
 	stats = fw.Stats()
 	if stats.RequestsDenied != 0 {
 		t.Error("Stats should be reset to 0")
@@ -528,14 +672,17 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
+
 	numGoroutines := 10
 	requestsPerGoroutine := 50
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
+
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < requestsPerGoroutine; j++ {
+
+			for range requestsPerGoroutine {
 				req := &Request{
 					SourceIP:  "192.168.1.1",
 					User:      "testuser",
@@ -585,6 +732,7 @@ func TestSizeFiltering(t *testing.T) {
 		Operation: "GetObject",
 		Size:      1024 * 1024, // 1MB
 	}
+
 	decision := fw.Evaluate(context.Background(), smallReq)
 	if decision.BandwidthLimit != 0 {
 		t.Error("Small file should not have bandwidth limit")
@@ -596,10 +744,12 @@ func TestSizeFiltering(t *testing.T) {
 		Operation: "GetObject",
 		Size:      200 * 1024 * 1024, // 200MB
 	}
+
 	decision = fw.Evaluate(context.Background(), largeReq)
 	if decision.BandwidthLimit == 0 {
 		t.Error("Large file should have bandwidth limit")
 	}
+
 	if decision.BandwidthLimit != 10*1024*1024 {
 		t.Errorf("Expected 10MB/s limit, got %d", decision.BandwidthLimit)
 	}
@@ -614,7 +764,7 @@ func TestKeyPrefixMatching(t *testing.T) {
 			Name:     "Block Access to Secrets",
 			Priority: 1,
 			Enabled:  true,
-			Action:   "deny",
+			Action:   actionDeny,
 			Match: RuleMatch{
 				KeyPrefixes: []string{"secrets/", ".hidden/"},
 			},
@@ -643,10 +793,12 @@ func TestKeyPrefixMatching(t *testing.T) {
 				Key:       tc.key,
 				Operation: "GetObject",
 			}
+
 			decision := fw.Evaluate(context.Background(), req)
 			if tc.expectDeny && decision.Allowed {
 				t.Errorf("Access to %s should be denied", tc.key)
 			}
+
 			if !tc.expectDeny && !decision.Allowed {
 				t.Errorf("Access to %s should be allowed", tc.key)
 			}
@@ -663,7 +815,7 @@ func TestContentTypeFiltering(t *testing.T) {
 			Name:     "Block Executables",
 			Priority: 1,
 			Enabled:  true,
-			Action:   "deny",
+			Action:   actionDeny,
 			Match: RuleMatch{
 				ContentTypes: []string{"application/x-executable", "application/x-msdownload"},
 				Operations:   []string{"PutObject"},
@@ -682,6 +834,7 @@ func TestContentTypeFiltering(t *testing.T) {
 		Operation:   "PutObject",
 		ContentType: "application/x-executable",
 	}
+
 	decision := fw.Evaluate(context.Background(), req)
 	if decision.Allowed {
 		t.Error("Executable upload should be denied")
@@ -689,6 +842,7 @@ func TestContentTypeFiltering(t *testing.T) {
 
 	// Should allow document upload
 	req.ContentType = "application/pdf"
+
 	decision = fw.Evaluate(context.Background(), req)
 	if !decision.Allowed {
 		t.Error("PDF upload should be allowed")
@@ -713,7 +867,8 @@ func BenchmarkFirewallEvaluate(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		fw.Evaluate(context.Background(), req)
 	}
 }
@@ -722,7 +877,8 @@ func BenchmarkTokenBucket(b *testing.B) {
 	tb := NewTokenBucket(1000000, 100000)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		tb.Allow()
 	}
 }
@@ -731,13 +887,14 @@ func BenchmarkBandwidthTracker(b *testing.B) {
 	bt := NewBandwidthTracker(1024 * 1024 * 1024) // 1 GB/s
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		bt.TryConsume(1024)
 	}
 }
 
 // TestFirewallInvalidCIDR verifies that invalid CIDR entries are handled gracefully
-// and don't cause the firewall to fail initialization
+// and don't cause the firewall to fail initialization.
 func TestFirewallInvalidCIDR(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -790,6 +947,7 @@ func TestFirewallInvalidCIDR(t *testing.T) {
 				if err == nil {
 					t.Error("Expected error but got none")
 				}
+
 				return
 			}
 
@@ -811,10 +969,12 @@ func TestFirewallInvalidCIDR(t *testing.T) {
 							SourceIP:  "10.0.0.50",
 							Operation: "GetObject",
 						}
+
 						decision := fw.Evaluate(context.Background(), req)
 						if decision.Allowed {
 							t.Error("Expected IP in blocklist to be denied")
 						}
+
 						break
 					}
 				}
@@ -828,25 +988,118 @@ func TestFirewallInvalidCIDR(t *testing.T) {
 							SourceIP:  "192.168.1.100",
 							Operation: "GetObject",
 						}
+
 						decision := fw.Evaluate(context.Background(), req)
 						if !decision.Allowed {
 							t.Error("Expected IP in allowlist to be allowed")
 						}
+
 						break
 					}
+
 					if entry == "192.168.1.100" {
 						req := &Request{
 							SourceIP:  "192.168.1.100",
 							Operation: "GetObject",
 						}
+
 						decision := fw.Evaluate(context.Background(), req)
 						if !decision.Allowed {
 							t.Error("Expected exact IP in allowlist to be allowed")
 						}
+
 						break
 					}
 				}
 			}
 		})
+	}
+}
+
+func TestObjectCreationRateLimit(t *testing.T) {
+	config := DefaultConfig()
+	config.Enabled = true
+	config.RateLimiting.Enabled = true
+	config.RateLimiting.ObjectCreationLimit = 5
+	config.RateLimiting.ObjectCreationBurstSize = 2
+
+	fw, err := New(config)
+	if err != nil {
+		t.Fatalf("Failed to create firewall: %v", err)
+	}
+
+	// Test that object creation operations are rate limited
+	operations := []string{"PutObject", "CopyObject", "CompleteMultipartUpload", "UploadPart"}
+	for _, op := range operations {
+		t.Run(op, func(t *testing.T) {
+			// Make requests up to burst limit - should be allowed
+			for i := range 2 {
+				req := &Request{
+					SourceIP:  "192.168.1.1",
+					Operation: op,
+					Bucket:    "test-bucket",
+					Key:       "test-key",
+				}
+
+				decision := fw.Evaluate(context.Background(), req)
+				if !decision.Allowed {
+					t.Errorf("Request %d for %s should be allowed within burst limit", i+1, op)
+				}
+			}
+		})
+	}
+}
+
+func TestIsObjectCreationOperation(t *testing.T) {
+	tests := []struct {
+		operation  string
+		isCreation bool
+	}{
+		{"PutObject", true},
+		{"CopyObject", true},
+		{"CompleteMultipartUpload", true},
+		{"UploadPart", true},
+		{"GetObject", false},
+		{"DeleteObject", false},
+		{"HeadObject", false},
+		{"ListObjects", false},
+		{"CreateBucket", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.operation, func(t *testing.T) {
+			result := isObjectCreationOperation(tc.operation)
+			if result != tc.isCreation {
+				t.Errorf("isObjectCreationOperation(%s) = %v, want %v", tc.operation, result, tc.isCreation)
+			}
+		})
+	}
+}
+
+func TestObjectCreationRateLimitVsRegularOperations(t *testing.T) {
+	config := DefaultConfig()
+	config.Enabled = true
+	config.RateLimiting.Enabled = true
+	config.RateLimiting.ObjectCreationLimit = 3
+	config.RateLimiting.ObjectCreationBurstSize = 2
+
+	fw, err := New(config)
+	if err != nil {
+		t.Fatalf("Failed to create firewall: %v", err)
+	}
+
+	// GetObject should not be affected by object creation rate limit
+	for i := range 10 {
+		req := &Request{
+			SourceIP:  "192.168.1.1",
+			Operation: "GetObject",
+			Bucket:    "test-bucket",
+			Key:       "test-key",
+		}
+
+		decision := fw.Evaluate(context.Background(), req)
+		if !decision.Allowed {
+			t.Errorf("GetObject request %d should not be affected by object creation limit", i+1)
+		}
 	}
 }

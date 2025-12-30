@@ -10,6 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test constants.
+const testBucketName = "test-bucket"
+
 // TestMultiNodePlacementGroupSimulation simulates a multi-node cluster
 // with placement groups and verifies correct behavior under various scenarios.
 func TestMultiNodePlacementGroupSimulation(t *testing.T) {
@@ -71,6 +74,7 @@ func TestMultiNodePlacementGroupSimulation(t *testing.T) {
 		for i, t := range targets {
 			targetIDs[i] = t.ID
 		}
+
 		assert.Contains(t, targetIDs, PlacementGroupID("pg-dc2"))
 		assert.Contains(t, targetIDs, PlacementGroupID("pg-dc3"))
 	})
@@ -131,29 +135,37 @@ func TestPlacementGroupNodeMembershipEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	// Track events
-	var joinEvents, leaveEvents, statusEvents int32
-	var lastJoinedNode, lastLeftNode string
-	var lastStatus PlacementGroupStatus
-	var eventMu sync.Mutex
+	var (
+		joinEvents, leaveEvents, statusEvents int32
+		lastJoinedNode, lastLeftNode          string
+		lastStatus                            PlacementGroupStatus
+		eventMu                               sync.Mutex
+	)
 
 	mgr.SetOnNodeJoinedGroup(func(groupID PlacementGroupID, nodeID string) {
 		atomic.AddInt32(&joinEvents, 1)
 		eventMu.Lock()
+
 		lastJoinedNode = nodeID
+
 		eventMu.Unlock()
 	})
 
 	mgr.SetOnNodeLeftGroup(func(groupID PlacementGroupID, nodeID string) {
 		atomic.AddInt32(&leaveEvents, 1)
 		eventMu.Lock()
+
 		lastLeftNode = nodeID
+
 		eventMu.Unlock()
 	})
 
 	mgr.SetOnGroupStatusChange(func(groupID PlacementGroupID, status PlacementGroupStatus) {
 		atomic.AddInt32(&statusEvents, 1)
 		eventMu.Lock()
+
 		lastStatus = status
+
 		eventMu.Unlock()
 	})
 
@@ -213,7 +225,7 @@ func TestPlacementGroupShardDistribution(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("deterministic shard placement", func(t *testing.T) {
-		bucket := "test-bucket"
+		bucket := testBucketName
 		key := "test-object"
 		numShards := 3
 
@@ -232,8 +244,8 @@ func TestPlacementGroupShardDistribution(t *testing.T) {
 		numObjects := 10000
 		numShards := 3
 
-		for i := 0; i < numObjects; i++ {
-			bucket := "test-bucket"
+		for i := range numObjects {
+			bucket := testBucketName
 			key := "object-" + string(rune(i))
 
 			nodes, err := mgr.GetShardPlacementNodesForObject(bucket, key, numShards)
@@ -257,6 +269,7 @@ func TestPlacementGroupShardDistribution(t *testing.T) {
 			if diff < 0 {
 				diff = -diff
 			}
+
 			assert.LessOrEqual(t, diff, tolerance,
 				"Node %s has %d shards, expected ~%d (tolerance: %.0f)",
 				node, count, expectedPerNode, tolerance)
@@ -264,7 +277,7 @@ func TestPlacementGroupShardDistribution(t *testing.T) {
 	})
 
 	t.Run("shard placement after node changes", func(t *testing.T) {
-		bucket := "test-bucket"
+		bucket := testBucketName
 		key := "stable-object"
 		numShards := 3
 
@@ -415,7 +428,7 @@ func TestPlacementGroupCacheEfficiency(t *testing.T) {
 		require.Len(t, nodes1, 5)
 
 		// Subsequent calls should return same data
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			nodes := mgr.LocalGroupNodes()
 			assert.Equal(t, nodes1, nodes)
 		}
@@ -447,14 +460,17 @@ func TestPlacementGroupCacheEfficiency(t *testing.T) {
 
 	t.Run("concurrent cache access is safe", func(t *testing.T) {
 		var wg sync.WaitGroup
+
 		errors := make(chan error, 100)
 
 		// Concurrent readers
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			wg.Add(1)
+
 			go func() {
 				defer wg.Done()
-				for j := 0; j < 100; j++ {
+
+				for range 100 {
 					nodes := mgr.LocalGroupNodes()
 					if len(nodes) < 3 || len(nodes) > 10 {
 						errors <- assert.AnError
@@ -464,12 +480,14 @@ func TestPlacementGroupCacheEfficiency(t *testing.T) {
 		}
 
 		// Concurrent writers
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			wg.Add(1)
+
 			go func(id int) {
 				defer wg.Done()
+
 				nodeID := "concurrent-node-" + string(rune('A'+id))
-				for j := 0; j < 10; j++ {
+				for range 10 {
 					_ = mgr.AddNodeToGroup("pg-main", nodeID)
 					_ = mgr.RemoveNodeFromGroup("pg-main", nodeID)
 				}
@@ -507,14 +525,18 @@ func TestPlacementGroupContextCancellation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Track callback executions
-	var callbackCount int32
-	var callbackMu sync.Mutex
+	var (
+		callbackCount int32
+		callbackMu    sync.Mutex
+	)
 
 	mgr.SetOnNodeJoinedGroup(func(groupID PlacementGroupID, nodeID string) {
 		// Simulate a slow callback
 		time.Sleep(100 * time.Millisecond)
 		callbackMu.Lock()
+
 		callbackCount++
+
 		callbackMu.Unlock()
 	})
 
@@ -526,7 +548,9 @@ func TestPlacementGroupContextCancellation(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 
 		callbackMu.Lock()
+
 		count := callbackCount
+
 		callbackMu.Unlock()
 		assert.Equal(t, int32(1), count, "Callback should have been executed")
 	})
@@ -538,7 +562,9 @@ func TestPlacementGroupContextCancellation(t *testing.T) {
 
 		// Reset counter
 		callbackMu.Lock()
+
 		callbackCount = 0
+
 		callbackMu.Unlock()
 
 		// Try to add another node - callback should be skipped
@@ -549,29 +575,32 @@ func TestPlacementGroupContextCancellation(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 
 		callbackMu.Lock()
+
 		count := callbackCount
+
 		callbackMu.Unlock()
 		assert.Equal(t, int32(0), count, "Callback should have been skipped after close")
 	})
 }
 
-// mockAuditLogger implements PlacementGroupAuditLogger for testing
+// mockAuditLogger implements PlacementGroupAuditLogger for testing.
 type mockAuditLogger struct {
-	mu                 sync.Mutex
-	nodeJoinedCount    int
-	nodeLeftCount      int
-	statusChangedCount int
 	lastGroupID        string
 	lastNodeID         string
 	lastDatacenter     string
 	lastRegion         string
 	lastOldStatus      string
 	lastNewStatus      string
+	nodeJoinedCount    int
+	nodeLeftCount      int
+	statusChangedCount int
+	mu                 sync.Mutex
 }
 
 func (m *mockAuditLogger) LogNodeJoined(groupID, nodeID, datacenter, region string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.nodeJoinedCount++
 	m.lastGroupID = groupID
 	m.lastNodeID = nodeID
@@ -582,6 +611,7 @@ func (m *mockAuditLogger) LogNodeJoined(groupID, nodeID, datacenter, region stri
 func (m *mockAuditLogger) LogNodeLeft(groupID, nodeID, reason string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.nodeLeftCount++
 	m.lastGroupID = groupID
 	m.lastNodeID = nodeID
@@ -590,6 +620,7 @@ func (m *mockAuditLogger) LogNodeLeft(groupID, nodeID, reason string) {
 func (m *mockAuditLogger) LogStatusChanged(groupID, oldStatus, newStatus string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.statusChangedCount++
 	m.lastGroupID = groupID
 	m.lastOldStatus = oldStatus
@@ -599,6 +630,7 @@ func (m *mockAuditLogger) LogStatusChanged(groupID, oldStatus, newStatus string)
 func (m *mockAuditLogger) reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.nodeJoinedCount = 0
 	m.nodeLeftCount = 0
 	m.statusChangedCount = 0

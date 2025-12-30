@@ -17,6 +17,7 @@ func TestNewSimulatedBackend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListModels failed: %v", err)
 	}
+
 	if len(models) == 0 {
 		t.Error("No models initialized")
 	}
@@ -47,6 +48,7 @@ func TestClientWithConfig(t *testing.T) {
 	}
 
 	backend := NewSimulatedBackend()
+
 	client, err := NewClient(config, backend)
 	if err != nil {
 		t.Fatalf("NewClient with config failed: %v", err)
@@ -60,6 +62,7 @@ func TestClientWithConfig(t *testing.T) {
 
 func TestListModels(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -84,9 +87,11 @@ func TestListModels(t *testing.T) {
 	if modelTypes[ModelTypeLLM] == 0 {
 		t.Error("Expected LLM models")
 	}
+
 	if modelTypes[ModelTypeEmbedding] == 0 {
 		t.Error("Expected embedding models")
 	}
+
 	if modelTypes[ModelTypeVision] == 0 {
 		t.Error("Expected vision models")
 	}
@@ -94,6 +99,7 @@ func TestListModels(t *testing.T) {
 
 func TestGetModel(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -108,9 +114,11 @@ func TestGetModel(t *testing.T) {
 	if model.ID != "meta/llama-3.1-70b-instruct" {
 		t.Errorf("Expected model ID 'meta/llama-3.1-70b-instruct', got '%s'", model.ID)
 	}
+
 	if model.Type != ModelTypeLLM {
 		t.Errorf("Expected LLM type, got %s", model.Type)
 	}
+
 	if model.Status != "ready" {
 		t.Errorf("Expected 'ready' status, got '%s'", model.Status)
 	}
@@ -118,6 +126,7 @@ func TestGetModel(t *testing.T) {
 
 func TestGetModelNotFound(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -133,6 +142,7 @@ func TestGetModelNotFound(t *testing.T) {
 func TestChat(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10) // Speed up test
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -156,15 +166,19 @@ func TestChat(t *testing.T) {
 	if resp.ID == "" {
 		t.Error("Response ID is empty")
 	}
+
 	if len(resp.Choices) == 0 {
 		t.Error("No choices in response")
 	}
+
 	if resp.Choices[0].Message.Role != "assistant" {
 		t.Error("Expected assistant role")
 	}
+
 	if resp.Choices[0].Message.Content == "" {
 		t.Error("Empty response content")
 	}
+
 	if resp.Usage.TotalTokens == 0 {
 		t.Error("Expected non-zero token usage")
 	}
@@ -173,6 +187,7 @@ func TestChat(t *testing.T) {
 func TestChatWithSystemMessage(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -200,6 +215,7 @@ func TestChatWithSystemMessage(t *testing.T) {
 func TestChatStream(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(5)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -223,9 +239,12 @@ func TestChatStream(t *testing.T) {
 	}
 
 	chunks := 0
+
 	var lastChunk *ChatResponse
+
 	for chunk := range stream {
 		chunks++
+
 		lastChunk = chunk
 		if chunk.Object != "chat.completion.chunk" {
 			t.Errorf("Expected chunk object type, got %s", chunk.Object)
@@ -235,6 +254,7 @@ func TestChatStream(t *testing.T) {
 	if chunks == 0 {
 		t.Error("Expected streaming chunks, got none")
 	}
+
 	if lastChunk != nil && lastChunk.Choices[0].FinishReason != "stop" {
 		t.Error("Expected 'stop' finish reason on last chunk")
 	}
@@ -243,6 +263,7 @@ func TestChatStream(t *testing.T) {
 func TestEmbed(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -267,6 +288,7 @@ func TestEmbed(t *testing.T) {
 		if len(data.Embedding) != 1024 {
 			t.Errorf("Expected 1024-dimensional embedding, got %d for input %d", len(data.Embedding), i)
 		}
+
 		if data.Index != i {
 			t.Errorf("Expected index %d, got %d", i, data.Index)
 		}
@@ -276,6 +298,7 @@ func TestEmbed(t *testing.T) {
 func TestEmbedDeterministic(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(5)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -309,6 +332,7 @@ func TestEmbedDeterministic(t *testing.T) {
 func TestVision(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -329,9 +353,11 @@ func TestVision(t *testing.T) {
 	if len(resp.Results) == 0 {
 		t.Error("Expected detection results")
 	}
+
 	if resp.Results[0].Label == "" {
 		t.Error("Expected label in results")
 	}
+
 	if resp.Results[0].BoundingBox == nil {
 		t.Error("Expected bounding box for detection")
 	}
@@ -340,6 +366,7 @@ func TestVision(t *testing.T) {
 func TestVisionClassification(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -364,6 +391,7 @@ func TestVisionClassification(t *testing.T) {
 func TestVisionSegmentation(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -383,6 +411,7 @@ func TestVisionSegmentation(t *testing.T) {
 	if len(resp.Results) == 0 {
 		t.Error("Expected segmentation results")
 	}
+
 	if resp.Results[0].Mask == nil {
 		t.Error("Expected mask for segmentation")
 	}
@@ -391,6 +420,7 @@ func TestVisionSegmentation(t *testing.T) {
 func TestInfer(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -410,9 +440,11 @@ func TestInfer(t *testing.T) {
 	if resp.ID == "" {
 		t.Error("Response ID is empty")
 	}
+
 	if resp.Model != req.Model {
 		t.Errorf("Expected model %s, got %s", req.Model, resp.Model)
 	}
+
 	if resp.Output == nil {
 		t.Error("Output is nil")
 	}
@@ -425,6 +457,7 @@ func TestInferWithCache(t *testing.T) {
 
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(50)
+
 	client, err := NewClient(config, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -438,18 +471,22 @@ func TestInferWithCache(t *testing.T) {
 
 	// First request (cache miss)
 	start := time.Now()
+
 	_, err = client.Infer(context.Background(), req)
 	if err != nil {
 		t.Fatalf("First Infer failed: %v", err)
 	}
+
 	firstDuration := time.Since(start)
 
 	// Second request (cache hit)
 	start = time.Now()
+
 	_, err = client.Infer(context.Background(), req)
 	if err != nil {
 		t.Fatalf("Second Infer failed: %v", err)
 	}
+
 	secondDuration := time.Since(start)
 
 	// Cached request should be faster
@@ -461,6 +498,7 @@ func TestInferWithCache(t *testing.T) {
 	if metrics.CacheHits != 1 {
 		t.Errorf("Expected 1 cache hit, got %d", metrics.CacheHits)
 	}
+
 	if metrics.CacheMisses != 1 {
 		t.Errorf("Expected 1 cache miss, got %d", metrics.CacheMisses)
 	}
@@ -469,6 +507,7 @@ func TestInferWithCache(t *testing.T) {
 func TestBatch(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -493,9 +532,11 @@ func TestBatch(t *testing.T) {
 	if len(resp.Responses) != 3 {
 		t.Errorf("Expected 3 responses, got %d", len(resp.Responses))
 	}
+
 	if resp.SuccessCount != 3 {
 		t.Errorf("Expected 3 successes, got %d", resp.SuccessCount)
 	}
+
 	if resp.FailureCount != 0 {
 		t.Errorf("Expected 0 failures, got %d", resp.FailureCount)
 	}
@@ -506,6 +547,7 @@ func TestBatchTooLarge(t *testing.T) {
 	config.MaxBatchSize = 5
 
 	backend := NewSimulatedBackend()
+
 	client, err := NewClient(config, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -530,6 +572,7 @@ func TestBatchTooLarge(t *testing.T) {
 
 func TestHealthCheck(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -545,6 +588,7 @@ func TestHealthCheck(t *testing.T) {
 func TestMetrics(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -559,7 +603,7 @@ func TestMetrics(t *testing.T) {
 		},
 	}
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_, _ = client.Chat(context.Background(), req)
 	}
 
@@ -567,12 +611,15 @@ func TestMetrics(t *testing.T) {
 	if metrics.RequestsTotal != 5 {
 		t.Errorf("Expected 5 total requests, got %d", metrics.RequestsTotal)
 	}
+
 	if metrics.RequestsSuccess != 5 {
 		t.Errorf("Expected 5 successful requests, got %d", metrics.RequestsSuccess)
 	}
+
 	if metrics.TotalLatencyMs == 0 {
 		t.Error("Expected non-zero total latency")
 	}
+
 	if metrics.TokensUsed == 0 {
 		t.Error("Expected non-zero token usage")
 	}
@@ -580,6 +627,7 @@ func TestMetrics(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	backend := NewSimulatedBackend()
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -612,6 +660,7 @@ func TestClose(t *testing.T) {
 func TestObjectInference(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -625,6 +674,7 @@ func TestObjectInference(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InferFromObject failed: %v", err)
 	}
+
 	if resp.ID == "" {
 		t.Error("Response ID is empty")
 	}
@@ -633,6 +683,7 @@ func TestObjectInference(t *testing.T) {
 func TestObjectInferenceDescribeImage(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -646,6 +697,7 @@ func TestObjectInferenceDescribeImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DescribeImage failed: %v", err)
 	}
+
 	if len(resp.Choices) == 0 {
 		t.Error("No choices in response")
 	}
@@ -654,6 +706,7 @@ func TestObjectInferenceDescribeImage(t *testing.T) {
 func TestObjectInferenceEmbedDocument(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -667,6 +720,7 @@ func TestObjectInferenceEmbedDocument(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EmbedDocument failed: %v", err)
 	}
+
 	if len(resp.Data) == 0 {
 		t.Error("No embeddings returned")
 	}
@@ -675,6 +729,7 @@ func TestObjectInferenceEmbedDocument(t *testing.T) {
 func TestS3Integration(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(10)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -709,6 +764,7 @@ func TestSimulatedBackendAddModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetModel failed: %v", err)
 	}
+
 	if model.Name != "Test Model" {
 		t.Errorf("Expected 'Test Model', got '%s'", model.Name)
 	}
@@ -717,6 +773,7 @@ func TestSimulatedBackendAddModel(t *testing.T) {
 func TestContextCancellation(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(1000) // 1 second latency
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -748,24 +805,31 @@ func TestDefaultConfig(t *testing.T) {
 	if len(config.Endpoints) == 0 {
 		t.Error("Expected default endpoints")
 	}
+
 	if config.Timeout == 0 {
 		t.Error("Expected non-zero timeout")
 	}
+
 	if config.MaxRetries == 0 {
 		t.Error("Expected non-zero max retries")
 	}
+
 	if config.MaxBatchSize == 0 {
 		t.Error("Expected non-zero max batch size")
 	}
+
 	if !config.EnableStreaming {
 		t.Error("Expected streaming to be enabled by default")
 	}
+
 	if !config.CacheResults {
 		t.Error("Expected caching to be enabled by default")
 	}
+
 	if config.CacheTTL == 0 {
 		t.Error("Expected non-zero cache TTL")
 	}
+
 	if !config.EnableMetrics {
 		t.Error("Expected metrics to be enabled by default")
 	}
@@ -806,6 +870,7 @@ func TestErrors(t *testing.T) {
 		if err == nil {
 			t.Errorf("Error constant %d is nil", i)
 		}
+
 		if err.Error() == "" {
 			t.Errorf("Error constant %d has empty message", i)
 		}
@@ -851,6 +916,7 @@ func TestChatResponseWordByWord(t *testing.T) {
 func TestStreamingMetrics(t *testing.T) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(5)
+
 	client, err := NewClient(nil, backend)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
@@ -866,6 +932,7 @@ func TestStreamingMetrics(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
 	stream, err := client.ChatStream(ctx, req)
 	if err != nil {
 		t.Fatalf("ChatStream failed: %v", err)
@@ -885,6 +952,7 @@ func TestStreamingMetrics(t *testing.T) {
 func BenchmarkChat(b *testing.B) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(0) // No artificial latency for benchmarks
+
 	client, _ := NewClient(nil, backend)
 	defer client.Close()
 
@@ -896,7 +964,8 @@ func BenchmarkChat(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = client.Chat(context.Background(), req)
 	}
 }
@@ -904,6 +973,7 @@ func BenchmarkChat(b *testing.B) {
 func BenchmarkEmbed(b *testing.B) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(0)
+
 	client, _ := NewClient(nil, backend)
 	defer client.Close()
 
@@ -913,7 +983,8 @@ func BenchmarkEmbed(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = client.Embed(context.Background(), req)
 	}
 }
@@ -921,6 +992,7 @@ func BenchmarkEmbed(b *testing.B) {
 func BenchmarkBatch(b *testing.B) {
 	backend := NewSimulatedBackend()
 	backend.SetSimulatedLatency(0)
+
 	client, _ := NewClient(nil, backend)
 	defer client.Close()
 
@@ -934,7 +1006,8 @@ func BenchmarkBatch(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = client.Batch(context.Background(), req)
 	}
 }

@@ -26,21 +26,21 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metadata"
 )
 
-// Service handles versioning operations
+// Service handles versioning operations.
 type Service struct {
-	mu      sync.Mutex
 	lastGen time.Time
+	mu      sync.Mutex
 	entropy uint16
 }
 
-// NewService creates a new versioning service
+// NewService creates a new versioning service.
 func NewService() *Service {
 	return &Service{}
 }
 
 // GenerateVersionID generates a ULID-based version ID for sortable versioning
 // ULIDs are 26 characters, lexicographically sortable, and encode time
-// Format: 10 chars timestamp + 16 chars randomness (Crockford Base32)
+// Format: 10 chars timestamp + 16 chars randomness (Crockford Base32).
 func (s *Service) GenerateVersionID() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -62,27 +62,27 @@ func (s *Service) GenerateVersionID() string {
 	return encodeULID(now, s.entropy)
 }
 
-// IsVersioningEnabled returns true if versioning is enabled for the bucket
+// IsVersioningEnabled returns true if versioning is enabled for the bucket.
 func IsVersioningEnabled(bucket *metadata.Bucket) bool {
 	return bucket.Versioning == metadata.VersioningEnabled
 }
 
-// IsVersioningSuspended returns true if versioning is suspended for the bucket
+// IsVersioningSuspended returns true if versioning is suspended for the bucket.
 func IsVersioningSuspended(bucket *metadata.Bucket) bool {
 	return bucket.Versioning == metadata.VersioningSuspended
 }
 
-// NullVersionID is used for objects created when versioning is suspended
+// NullVersionID is used for objects created when versioning is suspended.
 const NullVersionID = "null"
 
-// Crockford's Base32 alphabet (excludes I, L, O, U to avoid confusion)
+// Crockford's Base32 alphabet (excludes I, L, O, U to avoid confusion).
 const crockfordAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
-// encodeULID encodes a timestamp and entropy into a ULID string
+// encodeULID encodes a timestamp and entropy into a ULID string.
 func encodeULID(t time.Time, entropy uint16) string {
 	// ULID is 26 characters: 10 for timestamp (48 bits) + 16 for randomness (80 bits)
 	// We use 48 bits of millisecond timestamp + 80 bits of randomness
-
+	//nolint:gosec // G115: UnixMilli is always positive for current time
 	ms := uint64(t.UnixMilli())
 
 	// Generate 80 bits of randomness
@@ -130,15 +130,17 @@ func encodeULID(t time.Time, entropy uint16) string {
 
 // CompareVersionIDs compares two version IDs
 // Returns -1 if a < b, 0 if a == b, 1 if a > b
-// Newer versions have lexicographically greater IDs
+// Newer versions have lexicographically greater IDs.
 func CompareVersionIDs(a, b string) int {
 	// Handle null version specially - it's always "oldest"
 	if a == NullVersionID && b == NullVersionID {
 		return 0
 	}
+
 	if a == NullVersionID {
 		return -1
 	}
+
 	if b == NullVersionID {
 		return 1
 	}
@@ -147,8 +149,10 @@ func CompareVersionIDs(a, b string) int {
 	if a < b {
 		return -1
 	}
+
 	if a > b {
 		return 1
 	}
+
 	return 0
 }

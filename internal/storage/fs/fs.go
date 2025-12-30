@@ -20,8 +20,9 @@ package fs
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // G501: MD5 required for S3 ETag compatibility
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -32,19 +33,22 @@ import (
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 )
 
-// Config holds filesystem backend configuration
+// Directory permission constant.
+const dirPermissions = 0750
+
+// Config holds filesystem backend configuration.
 type Config struct {
 	DataDir string
 }
 
-// Backend implements the storage backend using the local filesystem
+// Backend implements the storage backend using the local filesystem.
 type Backend struct {
 	config     Config
 	bucketsDir string
 	uploadsDir string
 }
 
-// New creates a new filesystem backend
+// New creates a new filesystem backend.
 func New(config Config) (*Backend, error) {
 	b := &Backend{
 		config:     config,
@@ -53,53 +57,57 @@ func New(config Config) (*Backend, error) {
 	}
 
 	// Create directories
-	if err := os.MkdirAll(b.bucketsDir, 0755); err != nil {
+	err := os.MkdirAll(b.bucketsDir, dirPermissions)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create buckets directory: %w", err)
 	}
-	if err := os.MkdirAll(b.uploadsDir, 0755); err != nil {
+
+	err = os.MkdirAll(b.uploadsDir, dirPermissions)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create uploads directory: %w", err)
 	}
 
 	return b, nil
 }
 
-// Init initializes the storage backend
+// Init initializes the storage backend.
 func (b *Backend) Init(ctx context.Context) error {
 	return nil
 }
 
-// Close closes the storage backend
+// Close closes the storage backend.
 func (b *Backend) Close() error {
 	return nil
 }
 
-// objectPath returns the filesystem path for an object
+// objectPath returns the filesystem path for an object.
 func (b *Backend) objectPath(bucket, key string) string {
 	return filepath.Join(b.bucketsDir, bucket, "objects", key)
 }
 
-// bucketPath returns the filesystem path for a bucket
+// bucketPath returns the filesystem path for a bucket.
 func (b *Backend) bucketPath(bucket string) string {
 	return filepath.Join(b.bucketsDir, bucket)
 }
 
-// uploadPath returns the filesystem path for a multipart upload
+// uploadPath returns the filesystem path for a multipart upload.
 func (b *Backend) uploadPath(bucket, key, uploadID string) string {
 	return filepath.Join(b.uploadsDir, bucket, key, uploadID)
 }
 
-// partPath returns the filesystem path for a multipart upload part
+// partPath returns the filesystem path for a multipart upload part.
 func (b *Backend) partPath(bucket, key, uploadID string, partNumber int) string {
 	return filepath.Join(b.uploadPath(bucket, key, uploadID), fmt.Sprintf("part.%d", partNumber))
 }
 
-// PutObject stores an object
+// PutObject stores an object.
 func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
 	path := b.objectPath(bucket, key)
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return nil, fmt.Errorf("failed to create object directory: %w", err)
+	mkdirErr := os.MkdirAll(filepath.Dir(path), dirPermissions)
+	if mkdirErr != nil {
+		return nil, fmt.Errorf("failed to create object directory: %w", mkdirErr)
 	}
 
 	// Create temporary file for atomic write
@@ -107,11 +115,13 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
+
 	tmpPath := tmpFile.Name()
+
 	defer func() { _ = os.Remove(tmpPath) }() // Clean up on error
 
 	// Write data and calculate MD5
-	hash := md5.New()
+	hash := md5.New() //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	writer := io.MultiWriter(tmpFile, hash)
 
 	written, err := io.Copy(writer, reader)
@@ -120,18 +130,21 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		return nil, fmt.Errorf("failed to write object: %w", err)
 	}
 
-	if err := tmpFile.Sync(); err != nil {
+	syncErr := tmpFile.Sync()
+	if syncErr != nil {
 		_ = tmpFile.Close()
-		return nil, fmt.Errorf("failed to sync object: %w", err)
+		return nil, fmt.Errorf("failed to sync object: %w", syncErr)
 	}
 
-	if err := tmpFile.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close temp file: %w", err)
+	closeErr := tmpFile.Close()
+	if closeErr != nil {
+		return nil, fmt.Errorf("failed to close temp file: %w", closeErr)
 	}
 
 	// Atomic rename
-	if err := os.Rename(tmpPath, path); err != nil {
-		return nil, fmt.Errorf("failed to rename object: %w", err)
+	renameErr := os.Rename(tmpPath, path)
+	if renameErr != nil {
+		return nil, fmt.Errorf("failed to rename object: %w", renameErr)
 	}
 
 	etag := hex.EncodeToString(hash.Sum(nil))
@@ -143,29 +156,33 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 	}, nil
 }
 
-// GetObject retrieves an object
+// GetObject retrieves an object.
 func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
 	path := b.objectPath(bucket, key)
 
+	//nolint:gosec // G304: path is constructed from validated bucket/key
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("object not found: %s/%s", bucket, key)
 		}
+
 		return nil, fmt.Errorf("failed to open object: %w", err)
 	}
 
 	return file, nil
 }
 
-// DeleteObject deletes an object
+// DeleteObject deletes an object.
 func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 	path := b.objectPath(bucket, key)
 
-	if err := os.Remove(path); err != nil {
+	err := os.Remove(path)
+	if err != nil {
 		if os.IsNotExist(err) {
 			return nil // Already deleted
 		}
+
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
 
@@ -175,109 +192,136 @@ func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 	return nil
 }
 
-// ObjectExists checks if an object exists
+// ObjectExists checks if an object exists.
 func (b *Backend) ObjectExists(ctx context.Context, bucket, key string) (bool, error) {
 	path := b.objectPath(bucket, key)
+
 	_, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
+
 		return false, err
 	}
+
 	return true, nil
 }
 
-// CreateBucket creates storage for a bucket
+// CreateBucket creates storage for a bucket.
 func (b *Backend) CreateBucket(ctx context.Context, bucket string) error {
 	path := filepath.Join(b.bucketPath(bucket), "objects")
-	if err := os.MkdirAll(path, 0755); err != nil {
+
+	err := os.MkdirAll(path, 0750)
+	if err != nil {
 		return fmt.Errorf("failed to create bucket directory: %w", err)
 	}
+
 	return nil
 }
 
-// DeleteBucket deletes storage for a bucket
+// DeleteBucket deletes storage for a bucket.
 func (b *Backend) DeleteBucket(ctx context.Context, bucket string) error {
 	path := b.bucketPath(bucket)
 
 	// Check if bucket is empty (has objects)
 	objectsPath := filepath.Join(path, "objects")
+
 	entries, err := os.ReadDir(objectsPath)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to check bucket contents: %w", err)
 	}
+
 	if len(entries) > 0 {
-		return fmt.Errorf("bucket not empty")
+		return errors.New("bucket not empty")
 	}
 
-	if err := os.RemoveAll(path); err != nil {
-		return fmt.Errorf("failed to delete bucket directory: %w", err)
+	removeErr := os.RemoveAll(path)
+	if removeErr != nil {
+		return fmt.Errorf("failed to delete bucket directory: %w", removeErr)
 	}
 
 	return nil
 }
 
-// BucketExists checks if bucket storage exists
+// BucketExists checks if bucket storage exists.
 func (b *Backend) BucketExists(ctx context.Context, bucket string) (bool, error) {
 	path := b.bucketPath(bucket)
+
 	_, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
+
 		return false, err
 	}
+
 	return true, nil
 }
 
-// GetStorageInfo returns storage statistics
+// GetStorageInfo returns storage statistics.
 func (b *Backend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, error) {
 	var stat syscall.Statfs_t
-	if err := syscall.Statfs(b.config.DataDir, &stat); err != nil {
+
+	err := syscall.Statfs(b.config.DataDir, &stat)
+	if err != nil {
 		return nil, fmt.Errorf("failed to get filesystem stats: %w", err)
 	}
 
+	//nolint:gosec // G115: filesystem stats are always positive
 	total := stat.Blocks * uint64(stat.Bsize)
+	//nolint:gosec // G115: filesystem stats are always positive
 	free := stat.Bfree * uint64(stat.Bsize)
 	used := total - free
 
 	// Count objects
 	var objectCount int64
+
 	_ = filepath.Walk(b.bucketsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			//nolint:nilerr // Skip files with access errors during walk, continue to next file
 			return nil
 		}
+
 		if !info.IsDir() {
 			objectCount++
 		}
+
 		return nil
 	})
 
 	return &backend.StorageInfo{
-		TotalBytes:     int64(total),
-		UsedBytes:      int64(used),
+		//nolint:gosec // G115: filesystem stats fit in int64
+		TotalBytes: int64(total),
+		//nolint:gosec // G115: filesystem stats fit in int64
+		UsedBytes: int64(used),
+		//nolint:gosec // G115: filesystem stats fit in int64
 		AvailableBytes: int64(free),
 		ObjectCount:    objectCount,
 	}, nil
 }
 
-// CreateMultipartUpload creates storage for a multipart upload
+// CreateMultipartUpload creates storage for a multipart upload.
 func (b *Backend) CreateMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	path := b.uploadPath(bucket, key, uploadID)
-	if err := os.MkdirAll(path, 0755); err != nil {
+
+	err := os.MkdirAll(path, 0750)
+	if err != nil {
 		return fmt.Errorf("failed to create upload directory: %w", err)
 	}
+
 	return nil
 }
 
-// PutPart stores a part of a multipart upload
+// PutPart stores a part of a multipart upload.
 func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, partNumber int, reader io.Reader, size int64) (*backend.PutResult, error) {
 	path := b.partPath(bucket, key, uploadID, partNumber)
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return nil, fmt.Errorf("failed to create part directory: %w", err)
+	mkdirErr := os.MkdirAll(filepath.Dir(path), 0750)
+	if mkdirErr != nil {
+		return nil, fmt.Errorf("failed to create part directory: %w", mkdirErr)
 	}
 
 	// Create temporary file
@@ -285,11 +329,13 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
+
 	tmpPath := tmpFile.Name()
+
 	defer func() { _ = os.Remove(tmpPath) }()
 
 	// Write data and calculate MD5
-	hash := md5.New()
+	hash := md5.New() //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	writer := io.MultiWriter(tmpFile, hash)
 
 	written, err := io.Copy(writer, reader)
@@ -298,17 +344,20 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 		return nil, fmt.Errorf("failed to write part: %w", err)
 	}
 
-	if err := tmpFile.Sync(); err != nil {
+	err = tmpFile.Sync()
+	if err != nil {
 		_ = tmpFile.Close()
 		return nil, fmt.Errorf("failed to sync part: %w", err)
 	}
 
-	if err := tmpFile.Close(); err != nil {
+	err = tmpFile.Close()
+	if err != nil {
 		return nil, fmt.Errorf("failed to close temp file: %w", err)
 	}
 
 	// Atomic rename
-	if err := os.Rename(tmpPath, path); err != nil {
+	err = os.Rename(tmpPath, path)
+	if err != nil {
 		return nil, fmt.Errorf("failed to rename part: %w", err)
 	}
 
@@ -321,30 +370,33 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 	}, nil
 }
 
-// GetPart retrieves a part of a multipart upload
+// GetPart retrieves a part of a multipart upload.
 func (b *Backend) GetPart(ctx context.Context, bucket, key, uploadID string, partNumber int) (io.ReadCloser, error) {
 	path := b.partPath(bucket, key, uploadID, partNumber)
 
+	//nolint:gosec // G304: path is constructed from validated inputs
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("part not found: %d", partNumber)
 		}
+
 		return nil, fmt.Errorf("failed to open part: %w", err)
 	}
 
 	return file, nil
 }
 
-// streamingBufferSize is the buffer size for streaming large files (8MB)
+// streamingBufferSize is the buffer size for streaming large files (8MB).
 const streamingBufferSize = 8 * 1024 * 1024
 
-// CompleteParts combines parts into the final object using streaming to handle large files efficiently
+// CompleteParts combines parts into the final object using streaming to handle large files efficiently.
 func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID string, parts []int) (*backend.PutResult, error) {
 	objectPath := b.objectPath(bucket, key)
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(objectPath), 0755); err != nil {
+	err := os.MkdirAll(filepath.Dir(objectPath), 0750)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create object directory: %w", err)
 	}
 
@@ -353,10 +405,12 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
+
 	tmpPath := tmpFile.Name()
 
 	// Ensure cleanup on error
 	success := false
+
 	defer func() {
 		if !success {
 			_ = tmpFile.Close()
@@ -369,8 +423,9 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 
 	// Use a buffered writer for better performance with large files
 	bufWriter := io.Writer(tmpFile)
-	hash := md5.New()
+	hash := md5.New() //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	writer := io.MultiWriter(bufWriter, hash)
+
 	var totalSize int64
 
 	// Allocate buffer once for reuse across all parts
@@ -385,6 +440,8 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 		}
 
 		partPath := b.partPath(bucket, key, uploadID, partNum)
+
+		//nolint:gosec // G304: partPath is constructed from validated inputs
 		partFile, err := os.Open(partPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open part %d: %w", partNum, err)
@@ -393,22 +450,27 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 		// Stream the part using the preallocated buffer
 		written, err := io.CopyBuffer(writer, partFile, buffer)
 		_ = partFile.Close()
+
 		if err != nil {
 			return nil, fmt.Errorf("failed to copy part %d: %w", partNum, err)
 		}
+
 		totalSize += written
 	}
 
-	if err := tmpFile.Sync(); err != nil {
+	err = tmpFile.Sync()
+	if err != nil {
 		return nil, fmt.Errorf("failed to sync object: %w", err)
 	}
 
-	if err := tmpFile.Close(); err != nil {
+	err = tmpFile.Close()
+	if err != nil {
 		return nil, fmt.Errorf("failed to close temp file: %w", err)
 	}
 
 	// Atomic rename
-	if err := os.Rename(tmpPath, objectPath); err != nil {
+	err = os.Rename(tmpPath, objectPath)
+	if err != nil {
 		return nil, fmt.Errorf("failed to rename object: %w", err)
 	}
 
@@ -431,18 +493,20 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 	}, nil
 }
 
-// AbortMultipartUpload cleans up a multipart upload and all its parts
+// AbortMultipartUpload cleans up a multipart upload and all its parts.
 func (b *Backend) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	uploadPath := b.uploadPath(bucket, key, uploadID)
 
 	// Check if upload directory exists
-	if _, err := os.Stat(uploadPath); os.IsNotExist(err) {
+	_, err := os.Stat(uploadPath)
+	if os.IsNotExist(err) {
 		// Already cleaned up or never existed - not an error
 		return nil
 	}
 
 	// Remove all parts and the upload directory
-	if err := os.RemoveAll(uploadPath); err != nil {
+	err = os.RemoveAll(uploadPath)
+	if err != nil {
 		return fmt.Errorf("failed to remove upload directory: %w", err)
 	}
 
@@ -452,7 +516,7 @@ func (b *Backend) AbortMultipartUpload(ctx context.Context, bucket, key, uploadI
 	return nil
 }
 
-// ListParts returns the paths of all parts for a multipart upload
+// ListParts returns the paths of all parts for a multipart upload.
 func (b *Backend) ListParts(ctx context.Context, bucket, key, uploadID string) ([]string, error) {
 	uploadPath := b.uploadPath(bucket, key, uploadID)
 
@@ -461,10 +525,12 @@ func (b *Backend) ListParts(ctx context.Context, bucket, key, uploadID string) (
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("upload not found: %s", uploadID)
 		}
+
 		return nil, fmt.Errorf("failed to read upload directory: %w", err)
 	}
 
 	var parts []string
+
 	for _, entry := range entries {
 		if !entry.IsDir() && filepath.Ext(entry.Name()) == "" {
 			parts = append(parts, filepath.Join(uploadPath, entry.Name()))
@@ -474,16 +540,19 @@ func (b *Backend) ListParts(ctx context.Context, bucket, key, uploadID string) (
 	return parts, nil
 }
 
-// cleanEmptyDirs removes empty directories up to the stop directory
+// cleanEmptyDirs removes empty directories up to the stop directory.
 func (b *Backend) cleanEmptyDirs(dir, stopDir string) {
 	for dir != stopDir && dir != "." && dir != "/" {
 		entries, err := os.ReadDir(dir)
 		if err != nil || len(entries) > 0 {
 			break
 		}
-		if err := os.Remove(dir); err != nil {
+
+		err = os.Remove(dir)
+		if err != nil {
 			break
 		}
+
 		dir = filepath.Dir(dir)
 	}
 }

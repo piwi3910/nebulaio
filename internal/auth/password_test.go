@@ -7,12 +7,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test constants.
+const testValidPassword = "ValidPassword123"
+
 func TestValidatePasswordStrength(t *testing.T) {
 	tests := []struct {
+		errorType   error
 		name        string
 		password    string
 		expectError bool
-		errorType   error
 	}{
 		{
 			name:        "empty password",
@@ -121,7 +124,7 @@ func TestHashPassword(t *testing.T) {
 		},
 		{
 			name:     "unicode password",
-			password: "Pässwörd123日本語",
+			password: "Pässwörd123ΩΨΣΦ",
 		},
 	}
 
@@ -162,11 +165,11 @@ func TestVerifyPassword(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
+		errorType   error
 		name        string
 		hash        string
 		password    string
 		expectError bool
-		errorType   error
 	}{
 		{
 			name:        "correct password",
@@ -212,10 +215,10 @@ func TestVerifyPassword(t *testing.T) {
 
 func TestValidateUsername(t *testing.T) {
 	tests := []struct {
+		errorType   error
 		name        string
 		username    string
 		expectError bool
-		errorType   error
 	}{
 		{
 			name:        "too short - 2 chars",
@@ -300,10 +303,10 @@ func TestValidateUsername(t *testing.T) {
 
 func TestValidateEmail(t *testing.T) {
 	tests := []struct {
+		errorType   error
 		name        string
 		email       string
 		expectError bool
-		errorType   error
 	}{
 		{
 			name:        "empty email - allowed",
@@ -375,26 +378,28 @@ func TestValidateEmail(t *testing.T) {
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkValidatePasswordStrength(b *testing.B) {
-	password := "ValidPassword123"
-	for i := 0; i < b.N; i++ {
+	password := testValidPassword
+	for range b.N {
 		_ = ValidatePasswordStrength(password)
 	}
 }
 
 func BenchmarkHashPassword(b *testing.B) {
-	password := "ValidPassword123"
-	for i := 0; i < b.N; i++ {
+	password := testValidPassword
+	for range b.N {
 		_, _ = HashPassword(password)
 	}
 }
 
 func BenchmarkVerifyPassword(b *testing.B) {
-	password := "ValidPassword123"
+	password := testValidPassword
 	hash, _ := HashPassword(password)
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = VerifyPassword(hash, password)
 	}
 }

@@ -45,6 +45,7 @@ func TestRawDeviceBackendWithCachingPattern(t *testing.T) {
 
 	be, err := NewRawDeviceBackend(cfg)
 	require.NoError(t, err)
+
 	defer be.Close()
 
 	ctx := context.Background()
@@ -73,7 +74,7 @@ func TestRawDeviceBackendWithCachingPattern(t *testing.T) {
 	assert.Equal(t, testData, data)
 
 	// Step 3: Multiple reads (simulating what cache would do for validation)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		reader, err = be.GetObject(ctx, bucket, key)
 		require.NoError(t, err)
 		data, err = io.ReadAll(reader)
@@ -93,7 +94,7 @@ func TestRawDeviceBackendWithCachingPattern(t *testing.T) {
 }
 
 // TestRawDeviceBackendStorageInfo tests that storage info is correctly reported
-// This is used by the tiering service to make decisions about tier transitions
+// This is used by the tiering service to make decisions about tier transitions.
 func TestRawDeviceBackendStorageInfo(t *testing.T) {
 	dir := t.TempDir()
 	hotPath := filepath.Join(dir, "hot.raw")
@@ -125,6 +126,7 @@ func TestRawDeviceBackendStorageInfo(t *testing.T) {
 
 	be, err := NewRawDeviceBackend(cfg)
 	require.NoError(t, err)
+
 	defer be.Close()
 
 	ctx := context.Background()
@@ -137,11 +139,12 @@ func TestRawDeviceBackendStorageInfo(t *testing.T) {
 	// We have 2 x 64MB = 128MB total
 	assert.Greater(t, info.TotalBytes, int64(100*1024*1024))
 	assert.Equal(t, int64(0), info.ObjectCount)
-	assert.Greater(t, info.AvailableBytes, int64(0))
+	assert.Positive(t, info.AvailableBytes)
 
 	// Add some objects
 	data := make([]byte, 1024*1024) // 1MB
-	for i := 0; i < 5; i++ {
+
+	for i := range 5 {
 		key := "test-object-" + string(rune('0'+i))
 		_, err = be.PutObject(ctx, "bucket", key, bytes.NewReader(data), int64(len(data)))
 		require.NoError(t, err)
@@ -151,12 +154,12 @@ func TestRawDeviceBackendStorageInfo(t *testing.T) {
 	info2, err := be.GetStorageInfo(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), info2.ObjectCount)
-	assert.Greater(t, info2.UsedBytes, int64(0))
+	assert.Positive(t, info2.UsedBytes)
 	assert.Less(t, info2.AvailableBytes, info.AvailableBytes)
 }
 
 // TestRawDeviceBackendTierAwareness tests the tier-aware capabilities
-// which the tiering service uses to manage data placement
+// which the tiering service uses to manage data placement.
 func TestRawDeviceBackendTierAwareness(t *testing.T) {
 	dir := t.TempDir()
 	hotPath := filepath.Join(dir, "hot.raw")
@@ -188,6 +191,7 @@ func TestRawDeviceBackendTierAwareness(t *testing.T) {
 
 	be, err := NewRawDeviceBackend(cfg)
 	require.NoError(t, err)
+
 	defer be.Close()
 
 	ctx := context.Background()

@@ -21,7 +21,7 @@ package erasure
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // G501: MD5 required for S3 ETag compatibility
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -36,38 +36,39 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// objectMetadata stores metadata for an erasure-coded object
+// File permission constants.
+const (
+	dirPermissions      = 0750 // Directory permissions for shards and uploads
+	metadataPermissions = 0600 // Metadata file permissions (more restrictive)
+	defaultVirtualNodes = 100  // Default virtual nodes for consistent hash placement
+)
+
+// objectMetadata stores metadata for an erasure-coded object.
 type objectMetadata struct {
-	OriginalSize     int64  `json:"original_size"`
 	OriginalChecksum string `json:"original_checksum"`
+	OriginalSize     int64  `json:"original_size"`
 	DataShards       int    `json:"data_shards"`
 	ParityShards     int    `json:"parity_shards"`
 }
 
-// Backend implements the storage backend using erasure coding
+// Backend implements the storage backend using erasure coding.
 type Backend struct {
-	config       Config
-	encoder      *Encoder
-	decoder      *Decoder
-	shardManager *ShardManager
-	placement    PlacementStrategy
-	nodes        []NodeInfo
-	mu           sync.RWMutex
-
-	// For multipart uploads
-	uploadsDir string
-
-	// Local node info
-	localNodeID string
-
-	// Placement group manager for distributed shard placement (optional)
-	// When set, uses cluster placement groups for node selection
+	config            Config
+	placement         PlacementStrategy
+	encoder           *Encoder
+	decoder           *Decoder
+	shardManager      *ShardManager
 	placementGroupMgr *cluster.PlacementGroupManager
+	uploadsDir        string
+	localNodeID       string
+	nodes             []NodeInfo
+	mu                sync.RWMutex
 }
 
-// New creates a new erasure coding backend
+// New creates a new erasure coding backend.
 func New(config Config, localNodeID string) (*Backend, error) {
-	if err := config.Validate(); err != nil {
+	err := config.Validate()
+	if err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
@@ -87,7 +88,9 @@ func New(config Config, localNodeID string) (*Backend, error) {
 	}
 
 	uploadsDir := filepath.Join(config.DataDir, "uploads")
-	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+
+	err = os.MkdirAll(uploadsDir, dirPermissions)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create uploads directory: %w", err)
 	}
 
@@ -96,7 +99,7 @@ func New(config Config, localNodeID string) (*Backend, error) {
 		encoder:           encoder,
 		decoder:           decoder,
 		shardManager:      shardManager,
-		placement:         NewConsistentHashPlacement(100),
+		placement:         NewConsistentHashPlacement(defaultVirtualNodes),
 		nodes:             make([]NodeInfo, 0),
 		uploadsDir:        uploadsDir,
 		localNodeID:       localNodeID,
@@ -117,7 +120,7 @@ func New(config Config, localNodeID string) (*Backend, error) {
 	return b, nil
 }
 
-// Init initializes the storage backend
+// Init initializes the storage backend.
 func (b *Backend) Init(ctx context.Context) error {
 	log.Info().
 		Int("data_shards", b.config.DataShards).
@@ -128,22 +131,24 @@ func (b *Backend) Init(ctx context.Context) error {
 	return nil
 }
 
-// Close closes the storage backend
+// Close closes the storage backend.
 func (b *Backend) Close() error {
 	return nil
 }
 
-// SetNodes updates the list of available storage nodes
+// SetNodes updates the list of available storage nodes.
 func (b *Backend) SetNodes(nodes []NodeInfo) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	b.nodes = nodes
 }
 
-// GetNodes returns the current list of storage nodes
+// GetNodes returns the current list of storage nodes.
 func (b *Backend) GetNodes() []NodeInfo {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
+
 	return b.nodes
 }
 
@@ -159,35 +164,39 @@ func (b *Backend) GetPlacementNodesForObject(bucket, key string) ([]string, erro
 	return nil, nil
 }
 
-// HasPlacementGroup returns true if this backend is configured with a placement group manager
+// HasPlacementGroup returns true if this backend is configured with a placement group manager.
 func (b *Backend) HasPlacementGroup() bool {
 	return b.placementGroupMgr != nil
 }
 
-// GetPlacementGroupID returns the local placement group ID if configured
+// GetPlacementGroupID returns the local placement group ID if configured.
 func (b *Backend) GetPlacementGroupID() string {
 	if b.placementGroupMgr == nil {
 		return ""
 	}
+
 	localGroup := b.placementGroupMgr.LocalGroup()
 	if localGroup == nil {
 		return ""
 	}
+
 	return string(localGroup.ID)
 }
 
-// metadataPath returns the filesystem path for object metadata
+// metadataPath returns the filesystem path for object metadata.
 func (b *Backend) metadataPath(bucket, key string) string {
-	hash := md5.Sum([]byte(fmt.Sprintf("%s/%s", bucket, key)))
+	hash := md5.Sum([]byte(fmt.Sprintf("%s/%s", bucket, key))) //nolint:gosec // G401: MD5 for path distribution only
 	hashHex := hex.EncodeToString(hash[:])
 	dir := filepath.Join(b.config.DataDir, "metadata", hashHex[:2], hashHex[2:4])
+
 	return filepath.Join(dir, fmt.Sprintf("%s_%s.meta", bucket, sanitizeKey(key)))
 }
 
-// writeObjectMetadata stores object metadata to a file
+// writeObjectMetadata stores object metadata to a file.
 func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) error {
 	path := b.metadataPath(bucket, key)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	err := os.MkdirAll(filepath.Dir(path), dirPermissions)
+	if err != nil {
 		return fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
@@ -197,12 +206,14 @@ func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) 
 	}
 
 	tmpPath := path + ".tmp"
-	// Use 0600 permissions to protect metadata from unauthorized access
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+	// Use metadataPermissions to protect metadata from unauthorized access
+	err = os.WriteFile(tmpPath, data, metadataPermissions)
+	if err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, path); err != nil {
+	err = os.Rename(tmpPath, path)
+	if err != nil {
 		_ = os.Remove(tmpPath) // Best effort cleanup
 		return fmt.Errorf("failed to rename metadata: %w", err)
 	}
@@ -210,35 +221,42 @@ func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) 
 	return nil
 }
 
-// readObjectMetadata reads object metadata from a file
+// readObjectMetadata reads object metadata from a file.
 func (b *Backend) readObjectMetadata(bucket, key string) (*objectMetadata, error) {
 	path := b.metadataPath(bucket, key)
+
+	//nolint:gosec // G304: Path constructed from internal metadata path function
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("metadata not found for %s/%s", bucket, key)
 		}
+
 		return nil, fmt.Errorf("failed to read metadata: %w", err)
 	}
 
 	var meta objectMetadata
-	if err := json.Unmarshal(data, &meta); err != nil {
+	err = json.Unmarshal(data, &meta)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
 
 	return &meta, nil
 }
 
-// deleteObjectMetadata deletes object metadata
+// deleteObjectMetadata deletes object metadata.
 func (b *Backend) deleteObjectMetadata(bucket, key string) error {
 	path := b.metadataPath(bucket, key)
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+
+	err := os.Remove(path)
+	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete metadata: %w", err)
 	}
+
 	return nil
 }
 
-// PutObject stores an object with erasure coding
+// PutObject stores an object with erasure coding.
 func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
 	// Check for context cancellation before starting expensive operation
 	select {
@@ -282,17 +300,20 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 	// Store shards concurrently
 	// Use a struct to track results for proper cleanup on failure
 	type shardResult struct {
-		index int
-		path  string
 		err   error
+		path  string
+		index int
 	}
 
 	var wg sync.WaitGroup
+
 	results := make([]shardResult, len(encoded.Shards))
+
 	var resultsMu sync.Mutex
 
 	for i, shard := range encoded.Shards {
 		wg.Add(1)
+
 		go func(index int, data []byte, assignment NodeAssignment) {
 			defer wg.Done()
 
@@ -300,8 +321,11 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 			select {
 			case <-ctx.Done():
 				resultsMu.Lock()
+
 				results[index] = shardResult{index: index, err: ctx.Err()}
+
 				resultsMu.Unlock()
+
 				return
 			default:
 			}
@@ -310,11 +334,13 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 			path, writeErr := b.shardManager.WriteShard(ctx, bucket, key, index, data)
 
 			resultsMu.Lock()
+
 			if writeErr != nil {
 				results[index] = shardResult{index: index, err: fmt.Errorf("failed to write shard %d: %w", index, writeErr)}
 			} else {
 				results[index] = shardResult{index: index, path: path}
 			}
+
 			resultsMu.Unlock()
 		}(i, shard, assignments[i])
 	}
@@ -322,8 +348,11 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 	wg.Wait()
 
 	// Count errors and collect successful paths for potential cleanup
-	var errs []error
-	var successPaths []string
+	var (
+		errs         []error
+		successPaths []string
+	)
+
 	for _, result := range results {
 		if result.err != nil {
 			errs = append(errs, result.err)
@@ -338,6 +367,7 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		for _, path := range successPaths {
 			_ = b.shardManager.DeleteShardByPath(ctx, path)
 		}
+
 		return nil, fmt.Errorf("too many shard write failures (%d): %v", len(errs), errs[0])
 	}
 
@@ -348,7 +378,8 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		DataShards:       b.config.DataShards,
 		ParityShards:     b.config.ParityShards,
 	}
-	if err := b.writeObjectMetadata(bucket, key, objMeta); err != nil {
+	err = b.writeObjectMetadata(bucket, key, objMeta)
+	if err != nil {
 		log.Warn().
 			Err(err).
 			Str("bucket", bucket).
@@ -363,7 +394,7 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 	}, nil
 }
 
-// GetObject retrieves an object using erasure coding
+// GetObject retrieves an object using erasure coding.
 func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
 	// Read object metadata for original size - this is required for correct data reconstruction
 	objMeta, err := b.readObjectMetadata(bucket, key)
@@ -378,7 +409,7 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 	shards := make([][]byte, totalShards)
 	available := 0
 
-	for i := 0; i < totalShards; i++ {
+	for i := range totalShards {
 		data, err := b.shardManager.ReadShard(ctx, bucket, key, i)
 		if err != nil {
 			log.Debug().
@@ -386,8 +417,10 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 				Str("bucket", bucket).
 				Str("key", key).
 				Msg("Shard not available")
+
 			continue
 		}
+
 		shards[i] = data
 		available++
 	}
@@ -417,18 +450,22 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 	return io.NopCloser(bytes.NewReader(result.Data)), nil
 }
 
-// DeleteObject deletes an object and all its shards
+// DeleteObject deletes an object and all its shards.
 func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 	totalShards := b.config.TotalShards()
 
 	var wg sync.WaitGroup
+
 	errChan := make(chan error, totalShards)
 
-	for i := 0; i < totalShards; i++ {
+	for i := range totalShards {
 		wg.Add(1)
+
 		go func(shardIndex int) {
 			defer wg.Done()
-			if err := b.shardManager.DeleteShard(ctx, bucket, key, shardIndex); err != nil {
+
+			err := b.shardManager.DeleteShard(ctx, bucket, key, shardIndex)
+			if err != nil {
 				errChan <- err
 			}
 		}(i)
@@ -438,7 +475,7 @@ func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 	close(errChan)
 
 	// Collect errors
-	var errs []error
+	errs := make([]error, 0, totalShards)
 	for err := range errChan {
 		errs = append(errs, err)
 	}
@@ -453,7 +490,8 @@ func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 	}
 
 	// Delete object metadata
-	if err := b.deleteObjectMetadata(bucket, key); err != nil {
+	err := b.deleteObjectMetadata(bucket, key)
+	if err != nil {
 		log.Warn().
 			Err(err).
 			Str("bucket", bucket).
@@ -464,10 +502,11 @@ func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 	return nil
 }
 
-// ObjectExists checks if an object exists (at least minimum shards)
+// ObjectExists checks if an object exists (at least minimum shards).
 func (b *Backend) ObjectExists(ctx context.Context, bucket, key string) (bool, error) {
 	available := 0
-	for i := 0; i < b.config.TotalShards(); i++ {
+
+	for i := range b.config.TotalShards() {
 		if b.shardManager.ShardExists(ctx, bucket, key, i) {
 			available++
 			if available >= b.config.DataShards {
@@ -475,16 +514,17 @@ func (b *Backend) ObjectExists(ctx context.Context, bucket, key string) (bool, e
 			}
 		}
 	}
+
 	return false, nil
 }
 
-// CreateBucket creates storage for a bucket (no-op for erasure coding)
+// CreateBucket creates storage for a bucket (no-op for erasure coding).
 func (b *Backend) CreateBucket(ctx context.Context, bucket string) error {
 	// Shards are stored in a flat structure, no bucket directories needed
 	return nil
 }
 
-// DeleteBucket deletes storage for a bucket
+// DeleteBucket deletes storage for a bucket.
 func (b *Backend) DeleteBucket(ctx context.Context, bucket string) error {
 	// Delete all shards for this bucket
 	shards, err := b.shardManager.ListShards(ctx, bucket)
@@ -493,7 +533,8 @@ func (b *Backend) DeleteBucket(ctx context.Context, bucket string) error {
 	}
 
 	for _, path := range shards {
-		if err := b.shardManager.DeleteShardByPath(ctx, path); err != nil {
+		err := b.shardManager.DeleteShardByPath(ctx, path)
+		if err != nil {
 			log.Warn().Err(err).Str("path", path).Msg("Failed to delete shard")
 		}
 	}
@@ -501,12 +542,12 @@ func (b *Backend) DeleteBucket(ctx context.Context, bucket string) error {
 	return nil
 }
 
-// BucketExists checks if bucket storage exists (always true for erasure coding)
+// BucketExists checks if bucket storage exists (always true for erasure coding).
 func (b *Backend) BucketExists(ctx context.Context, bucket string) (bool, error) {
 	return true, nil
 }
 
-// GetStorageInfo returns storage statistics
+// GetStorageInfo returns storage statistics.
 func (b *Backend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, error) {
 	_, usedBytes, shardCount, err := b.shardManager.GetStorageInfo(ctx)
 	if err != nil {
@@ -521,40 +562,45 @@ func (b *Backend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, err
 
 // Multipart upload operations
 
-// uploadPath returns the path for a multipart upload
+// uploadPath returns the path for a multipart upload.
 func (b *Backend) uploadPath(bucket, key, uploadID string) string {
 	return filepath.Join(b.uploadsDir, bucket, key, uploadID)
 }
 
-// partPath returns the path for a part
+// partPath returns the path for a part.
 func (b *Backend) partPath(bucket, key, uploadID string, partNumber int) string {
 	return filepath.Join(b.uploadPath(bucket, key, uploadID), fmt.Sprintf("part.%d", partNumber))
 }
 
-// CreateMultipartUpload creates storage for a multipart upload
+// CreateMultipartUpload creates storage for a multipart upload.
 func (b *Backend) CreateMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	path := b.uploadPath(bucket, key, uploadID)
-	return os.MkdirAll(path, 0755)
+
+	return os.MkdirAll(path, dirPermissions)
 }
 
-// PutPart stores a part (temporarily stored as regular file, encoded on completion)
+// PutPart stores a part (temporarily stored as regular file, encoded on completion).
 func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, partNumber int, reader io.Reader, size int64) (*backend.PutResult, error) {
 	path := b.partPath(bucket, key, uploadID, partNumber)
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	err := os.MkdirAll(filepath.Dir(path), dirPermissions)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create part directory: %w", err)
 	}
 
 	// Write to temp file first
 	tmpPath := path + ".tmp"
+
+	//nolint:gosec // G304: Path constructed from internal part path function
 	tmpFile, err := os.Create(tmpPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
+
 	defer func() { _ = os.Remove(tmpPath) }()
 
-	hash := md5.New()
+	hash := md5.New() //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	writer := io.MultiWriter(tmpFile, hash)
 
 	written, err := io.Copy(writer, reader)
@@ -563,17 +609,20 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 		return nil, fmt.Errorf("failed to write part: %w", err)
 	}
 
-	if err := tmpFile.Sync(); err != nil {
+	err = tmpFile.Sync()
+	if err != nil {
 		_ = tmpFile.Close()
 		return nil, fmt.Errorf("failed to sync part: %w", err)
 	}
 
-	if err := tmpFile.Close(); err != nil {
+	err = tmpFile.Close()
+	if err != nil {
 		return nil, fmt.Errorf("failed to close part: %w", err)
 	}
 
 	// Atomic rename
-	if err := os.Rename(tmpPath, path); err != nil {
+	err = os.Rename(tmpPath, path)
+	if err != nil {
 		return nil, fmt.Errorf("failed to rename part: %w", err)
 	}
 
@@ -586,39 +635,48 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 	}, nil
 }
 
-// GetPart retrieves a part
+// GetPart retrieves a part.
 func (b *Backend) GetPart(ctx context.Context, bucket, key, uploadID string, partNumber int) (io.ReadCloser, error) {
 	path := b.partPath(bucket, key, uploadID, partNumber)
+
+	//nolint:gosec // G304: Path constructed from internal part path function
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("part not found: %d", partNumber)
 		}
+
 		return nil, fmt.Errorf("failed to open part: %w", err)
 	}
+
 	return file, nil
 }
 
-// CompleteParts combines parts and encodes with erasure coding
+// CompleteParts combines parts and encodes with erasure coding.
 func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID string, parts []int) (*backend.PutResult, error) {
 	sort.Ints(parts)
 
 	// First, combine all parts into a single buffer
 	var combined bytes.Buffer
-	originalHash := md5.New()
+
+	originalHash := md5.New() //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	writer := io.MultiWriter(&combined, originalHash)
 
 	for _, partNum := range parts {
 		path := b.partPath(bucket, key, uploadID, partNum)
+
+		//nolint:gosec // G304: path is constructed from trusted config
 		file, err := os.Open(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open part %d: %w", partNum, err)
 		}
 
-		if _, err := io.Copy(writer, file); err != nil {
+		_, err = io.Copy(writer, file)
+		if err != nil {
 			_ = file.Close()
 			return nil, fmt.Errorf("failed to read part %d: %w", partNum, err)
 		}
+
 		_ = file.Close()
 	}
 
@@ -643,47 +701,54 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 	}, nil
 }
 
-// AbortMultipartUpload cleans up a multipart upload
+// AbortMultipartUpload cleans up a multipart upload.
 func (b *Backend) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	uploadPath := b.uploadPath(bucket, key, uploadID)
 
-	if _, err := os.Stat(uploadPath); os.IsNotExist(err) {
+	_, err := os.Stat(uploadPath)
+	if os.IsNotExist(err) {
 		return nil
 	}
 
-	if err := os.RemoveAll(uploadPath); err != nil {
+	err = os.RemoveAll(uploadPath)
+	if err != nil {
 		return fmt.Errorf("failed to remove upload: %w", err)
 	}
 
 	b.cleanEmptyDirs(filepath.Dir(uploadPath))
+
 	return nil
 }
 
-// cleanEmptyDirs removes empty directories
+// cleanEmptyDirs removes empty directories.
 func (b *Backend) cleanEmptyDirs(dir string) {
 	for dir != b.uploadsDir && dir != "." && dir != "/" {
 		entries, err := os.ReadDir(dir)
 		if err != nil || len(entries) > 0 {
 			break
 		}
-		if err := os.Remove(dir); err != nil {
+
+		err = os.Remove(dir)
+		if err != nil {
 			break
 		}
+
 		dir = filepath.Dir(dir)
 	}
 }
 
-// RepairObject checks and repairs an object's shards
+// RepairObject checks and repairs an object's shards.
 func (b *Backend) RepairObject(ctx context.Context, bucket, key string, checksums []string) ([]int, error) {
 	totalShards := b.config.TotalShards()
 	shards := make([][]byte, totalShards)
 
 	// Read available shards
-	for i := 0; i < totalShards; i++ {
+	for i := range totalShards {
 		data, err := b.shardManager.ReadShard(ctx, bucket, key, i)
 		if err != nil {
 			continue
 		}
+
 		shards[i] = data
 	}
 
@@ -711,17 +776,18 @@ func (b *Backend) RepairObject(ctx context.Context, bucket, key string, checksum
 	return repaired, nil
 }
 
-// GetShardInfo returns information about shards for an object
+// GetShardInfo returns information about shards for an object.
 func (b *Backend) GetShardInfo(ctx context.Context, bucket, key string) ([]ShardStatus, error) {
 	totalShards := b.config.TotalShards()
 	status := make([]ShardStatus, totalShards)
 
-	for i := 0; i < totalShards; i++ {
+	for i := range totalShards {
 		status[i].Index = i
 		status[i].IsData = i < b.config.DataShards
 
 		if b.shardManager.ShardExists(ctx, bucket, key, i) {
 			status[i].Exists = true
+
 			size, err := b.shardManager.GetShardSize(ctx, bucket, key, i)
 			if err == nil {
 				status[i].Size = size
@@ -732,12 +798,12 @@ func (b *Backend) GetShardInfo(ctx context.Context, bucket, key string) ([]Shard
 	return status, nil
 }
 
-// ShardStatus represents the status of a single shard
+// ShardStatus represents the status of a single shard.
 type ShardStatus struct {
-	Index    int
-	IsData   bool
-	Exists   bool
-	Size     int64
 	NodeID   string
 	Checksum string
+	Index    int
+	Size     int64
+	IsData   bool
+	Exists   bool
 }

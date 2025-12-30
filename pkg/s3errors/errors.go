@@ -12,9 +12,9 @@ import (
 type S3Error struct {
 	Code       string
 	Message    string
-	StatusCode int
 	Resource   string
 	RequestID  string
+	StatusCode int
 }
 
 // Error implements the error interface.
@@ -22,6 +22,7 @@ func (e S3Error) Error() string {
 	if e.Resource != "" {
 		return fmt.Sprintf("%s: %s (Resource: %s)", e.Code, e.Message, e.Resource)
 	}
+
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
@@ -48,6 +49,7 @@ func (e S3Error) Is(target error) bool {
 	if t, ok := target.(S3Error); ok {
 		return e.Code == t.Code
 	}
+
 	return false
 }
 
@@ -71,9 +73,11 @@ func WriteS3Error(w http.ResponseWriter, err S3Error) {
 	}
 
 	w.Header().Set("Content-Type", "application/xml")
+
 	if err.RequestID != "" {
 		w.Header().Set("x-amz-request-id", err.RequestID)
 	}
+
 	w.WriteHeader(err.StatusCode)
 	w.Write([]byte(xml.Header))
 	xml.NewEncoder(w).Encode(response)
@@ -87,7 +91,7 @@ func WriteS3ErrorWithContext(w http.ResponseWriter, err S3Error, resource, reque
 // Standard S3 Error Definitions
 // Reference: https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
 
-// Access and Authentication Errors
+// Access and Authentication Errors.
 var (
 	// ErrAccessDenied is returned when access to the resource is denied.
 	ErrAccessDenied = S3Error{
@@ -153,7 +157,7 @@ var (
 	}
 )
 
-// Bucket Errors
+// Bucket Errors.
 var (
 	// ErrNoSuchBucket is returned when the specified bucket does not exist.
 	ErrNoSuchBucket = S3Error{
@@ -240,7 +244,7 @@ var (
 	}
 )
 
-// Object Errors
+// Object Errors.
 var (
 	// ErrNoSuchKey is returned when the specified key does not exist.
 	ErrNoSuchKey = S3Error{
@@ -278,7 +282,7 @@ var (
 	}
 )
 
-// Multipart Upload Errors
+// Multipart Upload Errors.
 var (
 	// ErrNoSuchUpload is returned when the specified multipart upload does not exist.
 	ErrNoSuchUpload = S3Error{
@@ -323,7 +327,7 @@ var (
 	}
 )
 
-// Request Errors
+// Request Errors.
 var (
 	// ErrInvalidArgument is returned when an argument is invalid.
 	ErrInvalidArgument = S3Error{
@@ -515,7 +519,7 @@ var (
 	}
 )
 
-// Server Errors
+// Server Errors.
 var (
 	// ErrInternalError is returned when an internal error occurred.
 	ErrInternalError = S3Error{
@@ -553,7 +557,7 @@ var (
 	}
 )
 
-// Copy Errors
+// Copy Errors.
 var (
 	// ErrInvalidCopyDest is returned when the copy destination is not valid.
 	ErrInvalidCopyDest = S3Error{
@@ -570,7 +574,7 @@ var (
 	}
 )
 
-// Replication Errors
+// Replication Errors.
 var (
 	// ErrReplicationConfigurationNotFoundError is returned when the replication configuration was not found.
 	ErrReplicationConfigurationNotFoundError = S3Error{
@@ -580,7 +584,7 @@ var (
 	}
 )
 
-// Cross-Origin Errors
+// Cross-Origin Errors.
 var (
 	// ErrCrossOriginAccessDenied is returned when cross-origin access is denied.
 	ErrCrossOriginAccessDenied = S3Error{
@@ -590,7 +594,7 @@ var (
 	}
 )
 
-// Restore Errors
+// Restore Errors.
 var (
 	// ErrRestoreAlreadyInProgress is returned when object restore is already in progress.
 	ErrRestoreAlreadyInProgress = S3Error{
@@ -600,7 +604,7 @@ var (
 	}
 )
 
-// Object Lock Errors
+// Object Lock Errors.
 var (
 	// ErrObjectLockConfigurationNotFoundError is returned when the object lock configuration was not found.
 	ErrObjectLockConfigurationNotFoundError = S3Error{
@@ -631,7 +635,7 @@ var (
 	}
 )
 
-// Encryption Errors
+// Encryption Errors.
 var (
 	// ErrServerSideEncryptionConfigurationNotFoundError is returned when the encryption configuration was not found.
 	ErrServerSideEncryptionConfigurationNotFoundError = S3Error{
@@ -641,7 +645,7 @@ var (
 	}
 )
 
-// Logging Errors
+// Logging Errors.
 var (
 	// ErrNoLoggingConfiguration is returned when the logging configuration does not exist.
 	ErrNoLoggingConfiguration = S3Error{
@@ -651,7 +655,7 @@ var (
 	}
 )
 
-// Notification Errors
+// Notification Errors.
 var (
 	// ErrNoSuchNotificationConfiguration is returned when the notification configuration does not exist.
 	ErrNoSuchNotificationConfiguration = S3Error{
@@ -661,7 +665,7 @@ var (
 	}
 )
 
-// Public Access Block Errors
+// Public Access Block Errors.
 var (
 	// ErrNoSuchPublicAccessBlockConfiguration is returned when the public access block configuration does not exist.
 	ErrNoSuchPublicAccessBlockConfiguration = S3Error{
@@ -671,7 +675,7 @@ var (
 	}
 )
 
-// Ownership Controls Errors
+// Ownership Controls Errors.
 var (
 	// ErrOwnershipControlsNotFoundError is returned when ownership controls do not exist.
 	ErrOwnershipControlsNotFoundError = S3Error{
@@ -681,7 +685,7 @@ var (
 	}
 )
 
-// Analytics/Inventory/Metrics Errors
+// Analytics/Inventory/Metrics Errors.
 var (
 	// ErrNoSuchAnalyticsConfiguration is returned when the analytics configuration does not exist.
 	ErrNoSuchAnalyticsConfiguration = S3Error{
@@ -705,7 +709,7 @@ var (
 	}
 )
 
-// Intelligent Tiering Errors
+// Intelligent Tiering Errors.
 var (
 	// ErrNoSuchIntelligentTieringConfiguration is returned when the intelligent tiering configuration does not exist.
 	ErrNoSuchIntelligentTieringConfiguration = S3Error{
@@ -715,7 +719,7 @@ var (
 	}
 )
 
-// Select Errors
+// Select Errors.
 var (
 	// ErrBusy is returned when the service is busy.
 	ErrBusy = S3Error{
@@ -737,6 +741,7 @@ func IsS3Error(err error, code string) bool {
 	if s3err, ok := err.(S3Error); ok {
 		return s3err.Code == code
 	}
+
 	return false
 }
 
@@ -746,6 +751,7 @@ func GetS3Error(err error) S3Error {
 	if s3err, ok := err.(S3Error); ok {
 		return s3err
 	}
+
 	return ErrInternalError.WithMessage(err.Error())
 }
 

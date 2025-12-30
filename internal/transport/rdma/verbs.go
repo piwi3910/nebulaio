@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-// Verbs errors
+// Verbs errors.
 var (
 	ErrVerbsNotInitialized = errors.New("verbs not initialized")
 	ErrDeviceNotFound      = errors.New("RDMA device not found")
@@ -84,14 +84,14 @@ type VerbsBackend interface {
 	GetMetrics() map[string]interface{}
 }
 
-// Handle types for verbs objects
+// Handle types for verbs objects.
 type VerbsContext uintptr
 type VerbsPD uintptr
 type VerbsCQ uintptr
 type VerbsQP uintptr
 type VerbsMR uintptr
 
-// QPType represents queue pair types
+// QPType represents queue pair types.
 type QPType int
 
 const (
@@ -101,15 +101,15 @@ const (
 	QPTypeXRC               // Extended Reliable Connection
 )
 
-// Memory region access flags
+// Memory region access flags.
 const (
-	MRAccessLocalWrite  = 1 << 0
-	MRAccessRemoteWrite = 1 << 1
-	MRAccessRemoteRead  = 1 << 2
+	MRAccessLocalWrite   = 1 << 0
+	MRAccessRemoteWrite  = 1 << 1
+	MRAccessRemoteRead   = 1 << 2
 	MRAccessRemoteAtomic = 1 << 3
 )
 
-// Work completion status
+// Work completion status.
 type WCStatus int
 
 const (
@@ -137,7 +137,7 @@ const (
 	WCGeneralErr
 )
 
-// Work completion opcode
+// Work completion opcode.
 type WCOpcode int
 
 const (
@@ -152,82 +152,82 @@ const (
 	WCOpRecvRDMAWithImm
 )
 
-// VerbsDeviceInfo contains RDMA device information
+// VerbsDeviceInfo contains RDMA device information.
 type VerbsDeviceInfo struct {
 	Name         string
+	FWVer        string
 	GUID         uint64
 	NodeType     int
 	Transport    int
+	PhysPortCnt  int
 	VendorID     uint32
 	VendorPartID uint32
 	HWVer        uint32
-	FWVer        string
-	PhysPortCnt  int
 }
 
-// VerbsWorkCompletion represents a work completion entry
+// VerbsWorkCompletion represents a work completion entry.
 type VerbsWorkCompletion struct {
-	WRID       uint64
-	Status     WCStatus
-	Opcode     WCOpcode
-	VendorErr  uint32
-	ByteLen    uint32
-	ImmData    uint32
-	QPN        uint32
-	SrcQP      uint32
-	WCFlags    int
-	PkeyIndex  uint16
-	SLID       uint16
-	SL         uint8
-	DLIDPath   uint8
+	WRID      uint64
+	Status    WCStatus
+	Opcode    WCOpcode
+	VendorErr uint32
+	ByteLen   uint32
+	ImmData   uint32
+	QPN       uint32
+	SrcQP     uint32
+	WCFlags   int
+	PkeyIndex uint16
+	SLID      uint16
+	SL        uint8
+	DLIDPath  uint8
 }
 
-// VerbsQPAttr contains queue pair attributes
+// VerbsQPAttr contains queue pair attributes.
 type VerbsQPAttr struct {
-	State         int
-	CurState      int
-	Path          VerbsAHAttr
-	AltPath       VerbsAHAttr
-	QPN           uint32
-	DestQPN       uint32
-	QKey          uint32
-	RQPsn         uint32
-	SQPsn         uint32
-	DestQKey      uint32
-	QPAccessFlags int
-	Cap           VerbsQPCap
-	MaxRdAtomic   uint8
+	State           int
+	CurState        int
+	Path            VerbsAHAttr
+	AltPath         VerbsAHAttr
+	QPN             uint32
+	DestQPN         uint32
+	QKey            uint32
+	RQPsn           uint32
+	SQPsn           uint32
+	DestQKey        uint32
+	QPAccessFlags   int
+	Cap             VerbsQPCap
+	MaxRdAtomic     uint8
 	MaxDestRdAtomic uint8
-	MinRnrTimer   uint8
-	PortNum       uint8
-	Timeout       uint8
-	RetryCnt      uint8
-	RnrRetry      uint8
-	AltPortNum    uint8
-	AltTimeout    uint8
+	MinRnrTimer     uint8
+	PortNum         uint8
+	Timeout         uint8
+	RetryCnt        uint8
+	RnrRetry        uint8
+	AltPortNum      uint8
+	AltTimeout      uint8
 }
 
-// VerbsAHAttr contains address handle attributes
+// VerbsAHAttr contains address handle attributes.
 type VerbsAHAttr struct {
-	GRH        VerbsGlobalRoute
-	DLID       uint16
-	SL         uint8
+	GRH         VerbsGlobalRoute
+	DLID        uint16
+	SL          uint8
 	SrcPathBits uint8
-	StaticRate uint8
-	IsGlobal   uint8
-	PortNum    uint8
+	StaticRate  uint8
+	IsGlobal    uint8
+	PortNum     uint8
 }
 
-// VerbsGlobalRoute contains global routing info
+// VerbsGlobalRoute contains global routing info.
 type VerbsGlobalRoute struct {
-	DGID       [16]byte
-	FlowLabel  uint32
-	SGIDIX     uint8
-	HopLimit   uint8
+	DGID         [16]byte
+	FlowLabel    uint32
+	SGIDIX       uint8
+	HopLimit     uint8
 	TrafficClass uint8
 }
 
-// VerbsQPCap contains queue pair capabilities
+// VerbsQPCap contains queue pair capabilities.
 type VerbsQPCap struct {
 	MaxSendWR     uint32
 	MaxRecvWR     uint32
@@ -236,45 +236,45 @@ type VerbsQPCap struct {
 	MaxInlineData uint32
 }
 
-// VerbsSendWR represents a send work request
+// VerbsSendWR represents a send work request.
 type VerbsSendWR struct {
-	WRID       uint64
 	Next       *VerbsSendWR
 	SGList     []VerbsSGE
+	WRID       uint64
 	Opcode     int
 	SendFlags  int
-	ImmData    uint32
 	RemoteAddr uint64
+	ImmData    uint32
 	RKey       uint32
 }
 
-// VerbsRecvWR represents a receive work request
+// VerbsRecvWR represents a receive work request.
 type VerbsRecvWR struct {
-	WRID   uint64
 	Next   *VerbsRecvWR
 	SGList []VerbsSGE
+	WRID   uint64
 }
 
-// VerbsSGE represents a scatter/gather entry
+// VerbsSGE represents a scatter/gather entry.
 type VerbsSGE struct {
 	Addr   uint64
 	Length uint32
 	LKey   uint32
 }
 
-// SimulatedVerbsBackend provides a simulated libibverbs implementation for testing
+// SimulatedVerbsBackend provides a simulated libibverbs implementation for testing.
 type SimulatedVerbsBackend struct {
-	mu           sync.RWMutex
-	initialized  bool
-	devices      []VerbsDeviceInfo
-	nextHandle   uintptr
-	contexts     map[VerbsContext]*simulatedContext
-	pds          map[VerbsPD]*simulatedPD
-	cqs          map[VerbsCQ]*simulatedCQ
-	qps          map[VerbsQP]*simulatedQP
-	mrs          map[VerbsMR]*simulatedMR
-	completions  chan VerbsWorkCompletion
-	metrics      *verbsMetrics
+	contexts    map[VerbsContext]*simulatedContext
+	pds         map[VerbsPD]*simulatedPD
+	cqs         map[VerbsCQ]*simulatedCQ
+	qps         map[VerbsQP]*simulatedQP
+	mrs         map[VerbsMR]*simulatedMR
+	completions chan VerbsWorkCompletion
+	metrics     *verbsMetrics
+	devices     []VerbsDeviceInfo
+	nextHandle  uintptr
+	mu          sync.RWMutex
+	initialized bool
 }
 
 type simulatedContext struct {
@@ -286,47 +286,47 @@ type simulatedPD struct {
 }
 
 type simulatedCQ struct {
+	completions []VerbsWorkCompletion
 	ctx         VerbsContext
 	size        int
-	completions []VerbsWorkCompletion
 }
 
 type simulatedQP struct {
-	pd       VerbsPD
-	sendCQ   VerbsCQ
-	recvCQ   VerbsCQ
-	qpType   QPType
-	qpNum    uint32
-	state    int
-	maxSend  int
-	maxRecv  int
-	maxSge   int
+	pd      VerbsPD
+	sendCQ  VerbsCQ
+	recvCQ  VerbsCQ
+	qpType  QPType
+	qpNum   uint32
+	state   int
+	maxSend int
+	maxRecv int
+	maxSge  int
 }
 
 type simulatedMR struct {
-	pd      VerbsPD
-	addr    uintptr
-	length  int
-	access  int
-	lkey    uint32
-	rkey    uint32
+	pd     VerbsPD
+	addr   uintptr
+	length int
+	access int
+	lkey   uint32
+	rkey   uint32
 }
 
 type verbsMetrics struct {
-	DevicesOpened   int64
-	PDsCreated      int64
-	CQsCreated      int64
-	QPsCreated      int64
-	MRsRegistered   int64
-	SendsPosted     int64
-	RecvsPosted     int64
-	RDMAReads       int64
-	RDMAWrites      int64
-	Completions     int64
-	Errors          int64
+	DevicesOpened int64
+	PDsCreated    int64
+	CQsCreated    int64
+	QPsCreated    int64
+	MRsRegistered int64
+	SendsPosted   int64
+	RecvsPosted   int64
+	RDMAReads     int64
+	RDMAWrites    int64
+	Completions   int64
+	Errors        int64
 }
 
-// NewSimulatedVerbsBackend creates a new simulated verbs backend
+// NewSimulatedVerbsBackend creates a new simulated verbs backend.
 func NewSimulatedVerbsBackend() *SimulatedVerbsBackend {
 	return &SimulatedVerbsBackend{
 		contexts:    make(map[VerbsContext]*simulatedContext),
@@ -352,8 +352,8 @@ func (b *SimulatedVerbsBackend) Init() error {
 		{
 			Name:         "mlx5_0",
 			GUID:         0xDEADBEEF00000001,
-			NodeType:     1, // CA
-			Transport:    1, // InfiniBand
+			NodeType:     1,      // CA
+			Transport:    1,      // InfiniBand
 			VendorID:     0x15b3, // Mellanox
 			VendorPartID: 0x1017, // ConnectX-6
 			HWVer:        0,
@@ -374,6 +374,7 @@ func (b *SimulatedVerbsBackend) Init() error {
 	}
 
 	b.initialized = true
+
 	return nil
 }
 
@@ -387,6 +388,7 @@ func (b *SimulatedVerbsBackend) Close() error {
 	b.qps = make(map[VerbsQP]*simulatedQP)
 	b.mrs = make(map[VerbsMR]*simulatedMR)
 	b.initialized = false
+
 	return nil
 }
 
@@ -400,6 +402,7 @@ func (b *SimulatedVerbsBackend) GetDeviceList() ([]VerbsDeviceInfo, error) {
 
 	result := make([]VerbsDeviceInfo, len(b.devices))
 	copy(result, b.devices)
+
 	return result, nil
 }
 
@@ -412,12 +415,14 @@ func (b *SimulatedVerbsBackend) OpenDevice(name string) (VerbsContext, error) {
 	}
 
 	var device *VerbsDeviceInfo
+
 	for i := range b.devices {
 		if b.devices[i].Name == name {
 			device = &b.devices[i]
 			break
 		}
 	}
+
 	if device == nil {
 		return 0, ErrDeviceNotFound
 	}
@@ -435,6 +440,7 @@ func (b *SimulatedVerbsBackend) CloseDevice(ctx VerbsContext) error {
 	defer b.mu.Unlock()
 
 	delete(b.contexts, ctx)
+
 	return nil
 }
 
@@ -459,6 +465,7 @@ func (b *SimulatedVerbsBackend) DeallocPD(pd VerbsPD) error {
 	defer b.mu.Unlock()
 
 	delete(b.pds, pd)
+
 	return nil
 }
 
@@ -487,6 +494,7 @@ func (b *SimulatedVerbsBackend) DestroyCQ(cq VerbsCQ) error {
 	defer b.mu.Unlock()
 
 	delete(b.cqs, cq)
+
 	return nil
 }
 
@@ -509,6 +517,7 @@ func (b *SimulatedVerbsBackend) PollCQ(cq VerbsCQ, numEntries int) ([]VerbsWorkC
 	simCQ.completions = simCQ.completions[count:]
 
 	atomic.AddInt64(&b.metrics.Completions, int64(len(result)))
+
 	return result, nil
 }
 
@@ -543,6 +552,7 @@ func (b *SimulatedVerbsBackend) DestroyQP(qp VerbsQP) error {
 	defer b.mu.Unlock()
 
 	delete(b.qps, qp)
+
 	return nil
 }
 
@@ -556,6 +566,7 @@ func (b *SimulatedVerbsBackend) ModifyQPToInit(qp VerbsQP, port int) error {
 	}
 
 	simQP.state = 1 // INIT
+
 	return nil
 }
 
@@ -569,6 +580,7 @@ func (b *SimulatedVerbsBackend) ModifyQPToRTR(qp VerbsQP, destQPN uint32, destLI
 	}
 
 	simQP.state = 2 // RTR
+
 	return nil
 }
 
@@ -582,6 +594,7 @@ func (b *SimulatedVerbsBackend) ModifyQPToRTS(qp VerbsQP) error {
 	}
 
 	simQP.state = 3 // RTS
+
 	return nil
 }
 
@@ -598,10 +611,10 @@ func (b *SimulatedVerbsBackend) QueryQP(qp VerbsQP) (*VerbsQPAttr, error) {
 		State: simQP.state,
 		QPN:   simQP.qpNum,
 		Cap: VerbsQPCap{
-			MaxSendWR:  uint32(simQP.maxSend),
-			MaxRecvWR:  uint32(simQP.maxRecv),
-			MaxSendSge: uint32(simQP.maxSge),
-			MaxRecvSge: uint32(simQP.maxSge),
+			MaxSendWR:  uint32(simQP.maxSend),  //nolint:gosec // G115: maxSend bounded by QP config
+			MaxRecvWR:  uint32(simQP.maxRecv),  //nolint:gosec // G115: maxRecv bounded by QP config
+			MaxSendSge: uint32(simQP.maxSge),   //nolint:gosec // G115: maxSge bounded by QP config
+			MaxRecvSge: uint32(simQP.maxSge),   //nolint:gosec // G115: maxSge bounded by QP config
 		},
 	}, nil
 }
@@ -634,6 +647,7 @@ func (b *SimulatedVerbsBackend) DeregMR(mr VerbsMR) error {
 	defer b.mu.Unlock()
 
 	delete(b.mrs, mr)
+
 	return nil
 }
 
@@ -658,6 +672,7 @@ func (b *SimulatedVerbsBackend) PostSend(qp VerbsQP, wr *VerbsSendWR) error {
 	}
 
 	atomic.AddInt64(&b.metrics.SendsPosted, 1)
+
 	return nil
 }
 
@@ -671,6 +686,7 @@ func (b *SimulatedVerbsBackend) PostRecv(qp VerbsQP, wr *VerbsRecvWR) error {
 	}
 
 	atomic.AddInt64(&b.metrics.RecvsPosted, 1)
+
 	return nil
 }
 
@@ -687,14 +703,16 @@ func (b *SimulatedVerbsBackend) PostRDMARead(qp VerbsQP, localAddr, remoteAddr u
 	simCQ, ok := b.cqs[simQP.sendCQ]
 	if ok {
 		simCQ.completions = append(simCQ.completions, VerbsWorkCompletion{
+			//nolint:gosec // G115: UnixNano returns positive values for current timestamps
 			WRID:    uint64(time.Now().UnixNano()),
 			Status:  WCSuccess,
 			Opcode:  WCOpRDMARead,
-			ByteLen: uint32(length),
+			ByteLen: uint32(length), //nolint:gosec // G115: length is bounded by RDMA hardware limits
 		})
 	}
 
 	atomic.AddInt64(&b.metrics.RDMAReads, 1)
+
 	return nil
 }
 
@@ -711,58 +729,60 @@ func (b *SimulatedVerbsBackend) PostRDMAWrite(qp VerbsQP, localAddr, remoteAddr 
 	simCQ, ok := b.cqs[simQP.sendCQ]
 	if ok {
 		simCQ.completions = append(simCQ.completions, VerbsWorkCompletion{
+			//nolint:gosec // G115: UnixNano returns positive values for current timestamps
 			WRID:    uint64(time.Now().UnixNano()),
 			Status:  WCSuccess,
 			Opcode:  WCOpRDMAWrite,
-			ByteLen: uint32(length),
+			ByteLen: uint32(length), //nolint:gosec // G115: length is bounded by RDMA hardware limits
 		})
 	}
 
 	atomic.AddInt64(&b.metrics.RDMAWrites, 1)
+
 	return nil
 }
 
 func (b *SimulatedVerbsBackend) GetMetrics() map[string]interface{} {
 	return map[string]interface{}{
-		"simulated":       true,
-		"devices_opened":  atomic.LoadInt64(&b.metrics.DevicesOpened),
-		"pds_created":     atomic.LoadInt64(&b.metrics.PDsCreated),
-		"cqs_created":     atomic.LoadInt64(&b.metrics.CQsCreated),
-		"qps_created":     atomic.LoadInt64(&b.metrics.QPsCreated),
-		"mrs_registered":  atomic.LoadInt64(&b.metrics.MRsRegistered),
-		"sends_posted":    atomic.LoadInt64(&b.metrics.SendsPosted),
-		"recvs_posted":    atomic.LoadInt64(&b.metrics.RecvsPosted),
-		"rdma_reads":      atomic.LoadInt64(&b.metrics.RDMAReads),
-		"rdma_writes":     atomic.LoadInt64(&b.metrics.RDMAWrites),
-		"completions":     atomic.LoadInt64(&b.metrics.Completions),
-		"errors":          atomic.LoadInt64(&b.metrics.Errors),
+		"simulated":      true,
+		"devices_opened": atomic.LoadInt64(&b.metrics.DevicesOpened),
+		"pds_created":    atomic.LoadInt64(&b.metrics.PDsCreated),
+		"cqs_created":    atomic.LoadInt64(&b.metrics.CQsCreated),
+		"qps_created":    atomic.LoadInt64(&b.metrics.QPsCreated),
+		"mrs_registered": atomic.LoadInt64(&b.metrics.MRsRegistered),
+		"sends_posted":   atomic.LoadInt64(&b.metrics.SendsPosted),
+		"recvs_posted":   atomic.LoadInt64(&b.metrics.RecvsPosted),
+		"rdma_reads":     atomic.LoadInt64(&b.metrics.RDMAReads),
+		"rdma_writes":    atomic.LoadInt64(&b.metrics.RDMAWrites),
+		"completions":    atomic.LoadInt64(&b.metrics.Completions),
+		"errors":         atomic.LoadInt64(&b.metrics.Errors),
 	}
 }
 
-// VerbsTransport wraps VerbsBackend with higher-level operations
+// VerbsTransport wraps VerbsBackend with higher-level operations.
 type VerbsTransport struct {
 	backend VerbsBackend
+	config  *VerbsConfig
 	ctx     VerbsContext
 	pd      VerbsPD
 	sendCQ  VerbsCQ
 	recvCQ  VerbsCQ
 	qp      VerbsQP
 	mu      sync.RWMutex
-	config  *VerbsConfig
 }
 
-// VerbsConfig holds configuration for the verbs transport
+// VerbsConfig holds configuration for the verbs transport.
 type VerbsConfig struct {
-	DeviceName    string
-	Port          int
-	CQSize        int
-	MaxSendWR     int
-	MaxRecvWR     int
-	MaxSGE        int
-	QPType        QPType
+	DeviceName string
+	Port       int
+	CQSize     int
+	MaxSendWR  int
+	MaxRecvWR  int
+	MaxSGE     int
+	QPType     QPType
 }
 
-// DefaultVerbsConfig returns default configuration
+// DefaultVerbsConfig returns default configuration.
 func DefaultVerbsConfig() *VerbsConfig {
 	return &VerbsConfig{
 		DeviceName: "mlx5_0",
@@ -775,16 +795,18 @@ func DefaultVerbsConfig() *VerbsConfig {
 	}
 }
 
-// NewVerbsTransport creates a new verbs transport
+// NewVerbsTransport creates a new verbs transport.
 func NewVerbsTransport(backend VerbsBackend, config *VerbsConfig) (*VerbsTransport, error) {
 	if backend == nil {
 		backend = NewSimulatedVerbsBackend()
 	}
+
 	if config == nil {
 		config = DefaultVerbsConfig()
 	}
 
-	if err := backend.Init(); err != nil {
+	err := backend.Init()
+	if err != nil {
 		return nil, fmt.Errorf("failed to initialize verbs backend: %w", err)
 	}
 
@@ -794,7 +816,7 @@ func NewVerbsTransport(backend VerbsBackend, config *VerbsConfig) (*VerbsTranspo
 	}, nil
 }
 
-// Connect establishes an RDMA connection to a remote endpoint
+// Connect establishes an RDMA connection to a remote endpoint.
 func (t *VerbsTransport) Connect(ctx context.Context, remoteQPN uint32, remoteLID uint16, remoteGID []byte) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -804,6 +826,7 @@ func (t *VerbsTransport) Connect(ctx context.Context, remoteQPN uint32, remoteLI
 	if err != nil {
 		return fmt.Errorf("failed to open device: %w", err)
 	}
+
 	t.ctx = deviceCtx
 
 	// Create protection domain
@@ -811,6 +834,7 @@ func (t *VerbsTransport) Connect(ctx context.Context, remoteQPN uint32, remoteLI
 	if err != nil {
 		return fmt.Errorf("failed to allocate PD: %w", err)
 	}
+
 	t.pd = pd
 
 	// Create completion queues
@@ -818,12 +842,14 @@ func (t *VerbsTransport) Connect(ctx context.Context, remoteQPN uint32, remoteLI
 	if err != nil {
 		return fmt.Errorf("failed to create send CQ: %w", err)
 	}
+
 	t.sendCQ = sendCQ
 
 	recvCQ, err := t.backend.CreateCQ(deviceCtx, t.config.CQSize)
 	if err != nil {
 		return fmt.Errorf("failed to create recv CQ: %w", err)
 	}
+
 	t.recvCQ = recvCQ
 
 	// Create queue pair
@@ -832,27 +858,31 @@ func (t *VerbsTransport) Connect(ctx context.Context, remoteQPN uint32, remoteLI
 	if err != nil {
 		return fmt.Errorf("failed to create QP: %w", err)
 	}
+
 	t.qp = qp
 
 	// Transition QP to Init
-	if err := t.backend.ModifyQPToInit(qp, t.config.Port); err != nil {
+	err = t.backend.ModifyQPToInit(qp, t.config.Port)
+	if err != nil {
 		return fmt.Errorf("failed to modify QP to Init: %w", err)
 	}
 
 	// Transition QP to RTR
-	if err := t.backend.ModifyQPToRTR(qp, remoteQPN, remoteLID, remoteGID, t.config.Port); err != nil {
+	err = t.backend.ModifyQPToRTR(qp, remoteQPN, remoteLID, remoteGID, t.config.Port)
+	if err != nil {
 		return fmt.Errorf("failed to modify QP to RTR: %w", err)
 	}
 
 	// Transition QP to RTS
-	if err := t.backend.ModifyQPToRTS(qp); err != nil {
+	err = t.backend.ModifyQPToRTS(qp)
+	if err != nil {
 		return fmt.Errorf("failed to modify QP to RTS: %w", err)
 	}
 
 	return nil
 }
 
-// Close shuts down the transport
+// Close shuts down the transport.
 func (t *VerbsTransport) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -860,15 +890,19 @@ func (t *VerbsTransport) Close() error {
 	if t.qp != 0 {
 		_ = t.backend.DestroyQP(t.qp)
 	}
+
 	if t.sendCQ != 0 {
 		_ = t.backend.DestroyCQ(t.sendCQ)
 	}
+
 	if t.recvCQ != 0 {
 		_ = t.backend.DestroyCQ(t.recvCQ)
 	}
+
 	if t.pd != 0 {
 		_ = t.backend.DeallocPD(t.pd)
 	}
+
 	if t.ctx != 0 {
 		_ = t.backend.CloseDevice(t.ctx)
 	}
@@ -876,7 +910,7 @@ func (t *VerbsTransport) Close() error {
 	return t.backend.Close()
 }
 
-// GetQPN returns the local queue pair number
+// GetQPN returns the local queue pair number.
 func (t *VerbsTransport) GetQPN() (uint32, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -893,7 +927,7 @@ func (t *VerbsTransport) GetQPN() (uint32, error) {
 	return attr.QPN, nil
 }
 
-// RegisterMemory registers a memory region for RDMA operations
+// RegisterMemory registers a memory region for RDMA operations.
 func (t *VerbsTransport) RegisterMemory(addr uintptr, length int, access int) (VerbsMR, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -905,12 +939,12 @@ func (t *VerbsTransport) RegisterMemory(addr uintptr, length int, access int) (V
 	return t.backend.RegMR(t.pd, addr, length, access)
 }
 
-// DeregisterMemory deregisters a memory region
+// DeregisterMemory deregisters a memory region.
 func (t *VerbsTransport) DeregisterMemory(mr VerbsMR) error {
 	return t.backend.DeregMR(mr)
 }
 
-// RDMARead performs an RDMA read operation
+// RDMARead performs an RDMA read operation.
 func (t *VerbsTransport) RDMARead(localAddr, remoteAddr uintptr, length int, lkey, rkey uint32) error {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -922,7 +956,7 @@ func (t *VerbsTransport) RDMARead(localAddr, remoteAddr uintptr, length int, lke
 	return t.backend.PostRDMARead(t.qp, localAddr, remoteAddr, length, lkey, rkey)
 }
 
-// RDMAWrite performs an RDMA write operation
+// RDMAWrite performs an RDMA write operation.
 func (t *VerbsTransport) RDMAWrite(localAddr, remoteAddr uintptr, length int, lkey, rkey uint32) error {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -934,7 +968,7 @@ func (t *VerbsTransport) RDMAWrite(localAddr, remoteAddr uintptr, length int, lk
 	return t.backend.PostRDMAWrite(t.qp, localAddr, remoteAddr, length, lkey, rkey)
 }
 
-// PollCompletions polls for work completions
+// PollCompletions polls for work completions.
 func (t *VerbsTransport) PollCompletions(numEntries int) ([]VerbsWorkCompletion, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -946,7 +980,7 @@ func (t *VerbsTransport) PollCompletions(numEntries int) ([]VerbsWorkCompletion,
 	return t.backend.PollCQ(t.sendCQ, numEntries)
 }
 
-// GetMetrics returns transport metrics
+// GetMetrics returns transport metrics.
 func (t *VerbsTransport) GetMetrics() map[string]interface{} {
 	return t.backend.GetMetrics()
 }

@@ -12,7 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestVolumeBackendWithDRAMCache tests the volume backend with DRAM cache layer
+// Integration test constants - uses same values as unit tests.
+const (
+	intTestBucket = "test-bucket"
+	intTestKey    = "test-key"
+)
+
+// TestVolumeBackendWithDRAMCache tests the volume backend with DRAM cache layer.
 func TestVolumeBackendWithDRAMCache(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
@@ -20,6 +26,7 @@ func TestVolumeBackendWithDRAMCache(t *testing.T) {
 	// Create volume backend
 	volumeBackend, err := NewBackend(dir)
 	require.NoError(t, err)
+
 	defer volumeBackend.Close()
 
 	err = volumeBackend.Init(ctx)
@@ -33,12 +40,13 @@ func TestVolumeBackendWithDRAMCache(t *testing.T) {
 		TTL:            time.Hour,
 		EvictionPolicy: "lru",
 	}
+
 	cache := dram.New(cacheConfig)
 	defer cache.Close()
 
 	// Store object in volume backend
-	bucket := "test-bucket"
-	key := "test-key"
+	bucket := intTestBucket
+	key := intTestKey
 	data := []byte("Hello, Volume Backend with DRAM Cache!")
 
 	err = volumeBackend.CreateBucket(ctx, bucket)
@@ -66,15 +74,17 @@ func TestVolumeBackendWithDRAMCache(t *testing.T) {
 	// Read from volume backend directly
 	reader, err := volumeBackend.GetObject(ctx, bucket, key)
 	require.NoError(t, err)
+
 	defer reader.Close()
 
 	var buf bytes.Buffer
+
 	_, err = buf.ReadFrom(reader)
 	require.NoError(t, err)
 	assert.Equal(t, data, buf.Bytes())
 }
 
-// TestVolumeBackendWithTieringService tests the volume backend with tiering service
+// TestVolumeBackendWithTieringService tests the volume backend with tiering service.
 func TestVolumeBackendWithTieringService(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
@@ -82,6 +92,7 @@ func TestVolumeBackendWithTieringService(t *testing.T) {
 	// Create volume backend as primary storage
 	volumeBackend, err := NewBackend(dir)
 	require.NoError(t, err)
+
 	defer volumeBackend.Close()
 
 	err = volumeBackend.Init(ctx)
@@ -107,6 +118,7 @@ func TestVolumeBackendWithTieringService(t *testing.T) {
 	tieringService := tiering.NewService(tieringConfig, volumeBackend, nil)
 	err = tieringService.Start()
 	require.NoError(t, err)
+
 	defer tieringService.Stop()
 
 	bucket := "tiered-bucket"
@@ -130,9 +142,11 @@ func TestVolumeBackendWithTieringService(t *testing.T) {
 	// Read through tiering service
 	reader, err := tieringService.GetObject(ctx, bucket, key)
 	require.NoError(t, err)
+
 	defer reader.Close()
 
 	var buf bytes.Buffer
+
 	_, err = buf.ReadFrom(reader)
 	require.NoError(t, err)
 	assert.Equal(t, data, buf.Bytes())
@@ -151,7 +165,7 @@ func TestVolumeBackendWithTieringService(t *testing.T) {
 	assert.False(t, exists)
 }
 
-// TestVolumeBackendCacheIntegration tests cache behavior with volume backend
+// TestVolumeBackendCacheIntegration tests cache behavior with volume backend.
 func TestVolumeBackendCacheIntegration(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
@@ -159,6 +173,7 @@ func TestVolumeBackendCacheIntegration(t *testing.T) {
 	// Create volume backend
 	volumeBackend, err := NewBackend(dir)
 	require.NoError(t, err)
+
 	defer volumeBackend.Close()
 
 	err = volumeBackend.Init(ctx)
@@ -171,6 +186,7 @@ func TestVolumeBackendCacheIntegration(t *testing.T) {
 		TTL:            time.Second * 10, // Longer TTL to avoid race conditions in CI
 		EvictionPolicy: "lru",
 	}
+
 	cache := tiering.NewCache(cacheConfig, nil)
 	defer cache.Close()
 
@@ -180,7 +196,7 @@ func TestVolumeBackendCacheIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Store multiple objects
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		key := bytes.Buffer{}
 		key.WriteString("object-")
 		key.WriteByte('0' + byte(i))
@@ -199,7 +215,7 @@ func TestVolumeBackendCacheIntegration(t *testing.T) {
 	}
 
 	// Verify all are cached
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		key := bytes.Buffer{}
 		key.WriteString("object-")
 		key.WriteByte('0' + byte(i))
@@ -211,10 +227,10 @@ func TestVolumeBackendCacheIntegration(t *testing.T) {
 	// Check cache stats
 	stats := cache.Stats()
 	assert.Equal(t, 10, stats.Objects)
-	assert.Greater(t, stats.Size, int64(0))
+	assert.Positive(t, stats.Size)
 
 	// Verify volume backend still has the data (independent of cache)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		key := bytes.Buffer{}
 		key.WriteString("object-")
 		key.WriteByte('0' + byte(i))
@@ -226,7 +242,7 @@ func TestVolumeBackendCacheIntegration(t *testing.T) {
 	}
 }
 
-// TestVolumeBackendLargeObjectsWithCache tests large objects with caching
+// TestVolumeBackendLargeObjectsWithCache tests large objects with caching.
 func TestVolumeBackendLargeObjectsWithCache(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
@@ -234,6 +250,7 @@ func TestVolumeBackendLargeObjectsWithCache(t *testing.T) {
 	// Create volume backend
 	volumeBackend, err := NewBackend(dir)
 	require.NoError(t, err)
+
 	defer volumeBackend.Close()
 
 	err = volumeBackend.Init(ctx)
@@ -247,6 +264,7 @@ func TestVolumeBackendLargeObjectsWithCache(t *testing.T) {
 		TTL:            time.Hour,
 		EvictionPolicy: "lru",
 	}
+
 	cache := dram.New(cacheConfig)
 	defer cache.Close()
 
@@ -294,16 +312,18 @@ func TestVolumeBackendLargeObjectsWithCache(t *testing.T) {
 		// But should still be in volume backend
 		reader, err := volumeBackend.GetObject(ctx, bucket, "large")
 		require.NoError(t, err)
+
 		defer reader.Close()
 
 		var buf bytes.Buffer
+
 		_, err = buf.ReadFrom(reader)
 		require.NoError(t, err)
 		assert.Equal(t, data, buf.Bytes())
 	})
 }
 
-// TestVolumeBackendStorageInfo tests that GetStorageInfo works correctly with tiering
+// TestVolumeBackendStorageInfo tests that GetStorageInfo works correctly with tiering.
 func TestVolumeBackendStorageInfo(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
@@ -311,6 +331,7 @@ func TestVolumeBackendStorageInfo(t *testing.T) {
 	// Create volume backend
 	volumeBackend, err := NewBackend(dir)
 	require.NoError(t, err)
+
 	defer volumeBackend.Close()
 
 	err = volumeBackend.Init(ctx)
@@ -319,7 +340,7 @@ func TestVolumeBackendStorageInfo(t *testing.T) {
 	// Get initial storage info
 	info1, err := volumeBackend.GetStorageInfo(ctx)
 	require.NoError(t, err)
-	assert.Greater(t, info1.TotalBytes, int64(0))
+	assert.Positive(t, info1.TotalBytes)
 	assert.Equal(t, int64(0), info1.ObjectCount)
 
 	// Add some objects
@@ -327,7 +348,7 @@ func TestVolumeBackendStorageInfo(t *testing.T) {
 	err = volumeBackend.CreateBucket(ctx, bucket)
 	require.NoError(t, err)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		data := make([]byte, 10*1024) // 10KB each
 		key := bytes.Buffer{}
 		key.WriteString("obj-")
@@ -341,5 +362,5 @@ func TestVolumeBackendStorageInfo(t *testing.T) {
 	info2, err := volumeBackend.GetStorageInfo(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), info2.ObjectCount)
-	assert.Greater(t, info2.UsedBytes, int64(0))
+	assert.Positive(t, info2.UsedBytes)
 }

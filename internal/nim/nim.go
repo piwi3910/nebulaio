@@ -33,6 +33,7 @@ package nim
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,20 +44,29 @@ import (
 	"time"
 )
 
-// Common errors
+// Common errors.
 var (
-	ErrNIMNotAvailable     = errors.New("nim service not available")
-	ErrModelNotFound       = errors.New("model not found")
-	ErrInferenceTimeout    = errors.New("inference timeout")
-	ErrInvalidInput        = errors.New("invalid input for model")
-	ErrQuotaExceeded       = errors.New("inference quota exceeded")
-	ErrModelLoading        = errors.New("model is still loading")
-	ErrServiceUnavailable  = errors.New("nim service unavailable")
-	ErrAlreadyClosed       = errors.New("nim client already closed")
-	ErrBatchTooLarge       = errors.New("batch size exceeds limit")
+	ErrNIMNotAvailable    = errors.New("nim service not available")
+	ErrModelNotFound      = errors.New("model not found")
+	ErrInferenceTimeout   = errors.New("inference timeout")
+	ErrInvalidInput       = errors.New("invalid input for model")
+	ErrQuotaExceeded      = errors.New("inference quota exceeded")
+	ErrModelLoading       = errors.New("model is still loading")
+	ErrServiceUnavailable = errors.New("nim service unavailable")
+	ErrAlreadyClosed      = errors.New("nim client already closed")
+	ErrBatchTooLarge      = errors.New("batch size exceeds limit")
 )
 
-// ModelType represents the type of AI model
+// Default configuration values.
+const (
+	defaultTimeoutSeconds    = 60
+	defaultMaxRetries        = 3
+	defaultMaxBatchSize      = 100
+	modelLoadTimeoutSeconds  = 10
+	defaultVisionMaxTokens   = 1024
+)
+
+// ModelType represents the type of AI model.
 type ModelType string
 
 const (
@@ -67,7 +77,7 @@ const (
 	ModelTypeEmbedding  ModelType = "embedding"
 )
 
-// Config holds NIM client configuration
+// Config holds NIM client configuration.
 type Config struct {
 	// Endpoints are NIM server endpoints (supports multiple for HA)
 	Endpoints []string `json:"endpoints" yaml:"endpoints"`
@@ -103,13 +113,13 @@ type Config struct {
 	EnableMetrics bool `json:"enable_metrics" yaml:"enable_metrics"`
 }
 
-// DefaultConfig returns default NIM configuration
+// DefaultConfig returns default NIM configuration.
 func DefaultConfig() *Config {
 	return &Config{
 		Endpoints:       []string{"https://integrate.api.nvidia.com/v1"},
-		Timeout:         60 * time.Second,
-		MaxRetries:      3,
-		MaxBatchSize:    100,
+		Timeout:         defaultTimeoutSeconds * time.Second,
+		MaxRetries:      defaultMaxRetries,
+		MaxBatchSize:    defaultMaxBatchSize,
 		EnableStreaming: true,
 		CacheResults:    true,
 		CacheTTL:        1 * time.Hour,
@@ -117,7 +127,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// ModelInfo contains information about a NIM model
+// ModelInfo contains information about a NIM model.
 type ModelInfo struct {
 	// ID is the model identifier
 	ID string `json:"id"`
@@ -150,7 +160,7 @@ type ModelInfo struct {
 	AvgLatencyMs int `json:"avg_latency_ms"`
 }
 
-// InferenceRequest represents an inference request
+// InferenceRequest represents an inference request.
 type InferenceRequest struct {
 	// Model is the model ID to use
 	Model string `json:"model"`
@@ -174,13 +184,13 @@ type InferenceRequest struct {
 	TopP float64 `json:"top_p,omitempty"`
 }
 
-// ChatMessage represents a chat message for LLM inference
+// ChatMessage represents a chat message for LLM inference.
 type ChatMessage struct {
-	Role    string `json:"role"`    // "system", "user", "assistant"
+	Role    string `json:"role"` // "system", "user", "assistant"
 	Content string `json:"content"`
 }
 
-// ChatRequest represents a chat completion request
+// ChatRequest represents a chat completion request.
 type ChatRequest struct {
 	Model       string        `json:"model"`
 	Messages    []ChatMessage `json:"messages"`
@@ -191,7 +201,7 @@ type ChatRequest struct {
 	Stop        []string      `json:"stop,omitempty"`
 }
 
-// ChatResponse represents a chat completion response
+// ChatResponse represents a chat completion response.
 type ChatResponse struct {
 	ID      string `json:"id"`
 	Object  string `json:"object"`
@@ -212,14 +222,14 @@ type ChatResponse struct {
 	} `json:"usage"`
 }
 
-// EmbeddingRequest represents an embedding generation request
+// EmbeddingRequest represents an embedding generation request.
 type EmbeddingRequest struct {
 	Model          string   `json:"model"`
 	Input          []string `json:"input"`
 	EncodingFormat string   `json:"encoding_format,omitempty"` // "float" or "base64"
 }
 
-// EmbeddingResponse represents an embedding response
+// EmbeddingResponse represents an embedding response.
 type EmbeddingResponse struct {
 	Object string `json:"object"`
 	Data   []struct {
@@ -234,21 +244,21 @@ type EmbeddingResponse struct {
 	} `json:"usage"`
 }
 
-// VisionRequest represents a vision inference request
+// VisionRequest represents a vision inference request.
 type VisionRequest struct {
-	Model      string `json:"model"`
-	ImageURL   string `json:"image_url,omitempty"`
-	ImageBytes []byte `json:"image_bytes,omitempty"`
-	Task       string `json:"task"` // "classification", "detection", "segmentation"
+	Model      string                 `json:"model"`
+	ImageURL   string                 `json:"image_url,omitempty"`
+	ImageBytes []byte                 `json:"image_bytes,omitempty"`
+	Task       string                 `json:"task"` // "classification", "detection", "segmentation"
 	Parameters map[string]interface{} `json:"parameters,omitempty"`
 }
 
-// VisionResponse represents a vision inference response
+// VisionResponse represents a vision inference response.
 type VisionResponse struct {
 	Model   string `json:"model"`
 	Results []struct {
-		Label      string  `json:"label,omitempty"`
-		Confidence float64 `json:"confidence,omitempty"`
+		Label       string  `json:"label,omitempty"`
+		Confidence  float64 `json:"confidence,omitempty"`
 		BoundingBox *struct {
 			X1 float64 `json:"x1"`
 			Y1 float64 `json:"y1"`
@@ -260,7 +270,7 @@ type VisionResponse struct {
 	Latency int `json:"latency_ms"`
 }
 
-// InferenceResponse represents a generic inference response
+// InferenceResponse represents a generic inference response.
 type InferenceResponse struct {
 	// ID is the response ID
 	ID string `json:"id"`
@@ -281,7 +291,7 @@ type InferenceResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
-// BatchRequest represents a batch inference request
+// BatchRequest represents a batch inference request.
 type BatchRequest struct {
 	// Model is the model to use
 	Model string `json:"model"`
@@ -293,7 +303,7 @@ type BatchRequest struct {
 	Parallel bool `json:"parallel"`
 }
 
-// BatchResponse represents a batch inference response
+// BatchResponse represents a batch inference response.
 type BatchResponse struct {
 	// Responses are individual inference responses
 	Responses []InferenceResponse `json:"responses"`
@@ -308,20 +318,20 @@ type BatchResponse struct {
 	FailureCount int `json:"failure_count"`
 }
 
-// Metrics holds NIM client metrics
+// Metrics holds NIM client metrics.
 type Metrics struct {
-	RequestsTotal    int64 `json:"requests_total"`
-	RequestsSuccess  int64 `json:"requests_success"`
-	RequestsFailed   int64 `json:"requests_failed"`
-	TokensUsed       int64 `json:"tokens_used"`
-	TotalLatencyMs   int64 `json:"total_latency_ms"`
-	AvgLatencyMs     int64 `json:"avg_latency_ms"`
-	CacheHits        int64 `json:"cache_hits"`
-	CacheMisses      int64 `json:"cache_misses"`
+	RequestsTotal     int64 `json:"requests_total"`
+	RequestsSuccess   int64 `json:"requests_success"`
+	RequestsFailed    int64 `json:"requests_failed"`
+	TokensUsed        int64 `json:"tokens_used"`
+	TotalLatencyMs    int64 `json:"total_latency_ms"`
+	AvgLatencyMs      int64 `json:"avg_latency_ms"`
+	CacheHits         int64 `json:"cache_hits"`
+	CacheMisses       int64 `json:"cache_misses"`
 	StreamingRequests int64 `json:"streaming_requests"`
 }
 
-// Client provides NIM inference capabilities
+// Client provides NIM inference capabilities.
 type Client struct {
 	config     *Config
 	httpClient *http.Client
@@ -339,7 +349,7 @@ type cachedResult struct {
 }
 
 // NIMBackend defines the interface for NIM operations
-// This allows for actual API calls or simulation for testing
+// This allows for actual API calls or simulation for testing.
 type NIMBackend interface {
 	// ListModels returns available models
 	ListModels(ctx context.Context) ([]*ModelInfo, error)
@@ -372,11 +382,12 @@ type NIMBackend interface {
 	Close() error
 }
 
-// NewClient creates a new NIM client
+// NewClient creates a new NIM client.
 func NewClient(config *Config, backend NIMBackend) (*Client, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
+
 	if backend == nil {
 		backend = NewSimulatedBackend()
 	}
@@ -393,7 +404,7 @@ func NewClient(config *Config, backend NIMBackend) (*Client, error) {
 	}
 
 	// Load available models
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), modelLoadTimeoutSeconds*time.Second)
 	defer cancel()
 
 	models, err := backend.ListModels(ctx)
@@ -408,7 +419,7 @@ func NewClient(config *Config, backend NIMBackend) (*Client, error) {
 	return c, nil
 }
 
-// ListModels returns available NIM models
+// ListModels returns available NIM models.
 func (c *Client) ListModels(ctx context.Context) ([]*ModelInfo, error) {
 	if c.closed.Load() {
 		return nil, ErrAlreadyClosed
@@ -417,29 +428,32 @@ func (c *Client) ListModels(ctx context.Context) ([]*ModelInfo, error) {
 	return c.backend.ListModels(ctx)
 }
 
-// GetModel returns information about a specific model
+// GetModel returns information about a specific model.
 func (c *Client) GetModel(ctx context.Context, modelID string) (*ModelInfo, error) {
 	if c.closed.Load() {
 		return nil, ErrAlreadyClosed
 	}
 
 	c.mu.RLock()
+
 	if m, ok := c.models[modelID]; ok {
 		c.mu.RUnlock()
 		return m, nil
 	}
+
 	c.mu.RUnlock()
 
 	return c.backend.GetModel(ctx, modelID)
 }
 
-// Chat performs a chat completion request
+// Chat performs a chat completion request.
 func (c *Client) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
 	if c.closed.Load() {
 		return nil, ErrAlreadyClosed
 	}
 
 	start := time.Now()
+
 	atomic.AddInt64(&c.metrics.RequestsTotal, 1)
 
 	resp, err := c.backend.Chat(ctx, req)
@@ -449,8 +463,10 @@ func (c *Client) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, err
 	}
 
 	atomic.AddInt64(&c.metrics.RequestsSuccess, 1)
+
 	latency := time.Since(start).Milliseconds()
 	atomic.AddInt64(&c.metrics.TotalLatencyMs, latency)
+
 	if resp.Usage.TotalTokens > 0 {
 		atomic.AddInt64(&c.metrics.TokensUsed, int64(resp.Usage.TotalTokens))
 	}
@@ -458,7 +474,7 @@ func (c *Client) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, err
 	return resp, nil
 }
 
-// ChatStream performs a streaming chat completion
+// ChatStream performs a streaming chat completion.
 func (c *Client) ChatStream(ctx context.Context, req *ChatRequest) (<-chan *ChatResponse, error) {
 	if c.closed.Load() {
 		return nil, ErrAlreadyClosed
@@ -470,7 +486,7 @@ func (c *Client) ChatStream(ctx context.Context, req *ChatRequest) (<-chan *Chat
 	return c.backend.ChatStream(ctx, req)
 }
 
-// Embed generates embeddings for the given input
+// Embed generates embeddings for the given input.
 func (c *Client) Embed(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error) {
 	if c.closed.Load() {
 		return nil, ErrAlreadyClosed
@@ -485,10 +501,11 @@ func (c *Client) Embed(ctx context.Context, req *EmbeddingRequest) (*EmbeddingRe
 	}
 
 	atomic.AddInt64(&c.metrics.RequestsSuccess, 1)
+
 	return resp, nil
 }
 
-// Vision performs vision inference
+// Vision performs vision inference.
 func (c *Client) Vision(ctx context.Context, req *VisionRequest) (*VisionResponse, error) {
 	if c.closed.Load() {
 		return nil, ErrAlreadyClosed
@@ -503,10 +520,11 @@ func (c *Client) Vision(ctx context.Context, req *VisionRequest) (*VisionRespons
 	}
 
 	atomic.AddInt64(&c.metrics.RequestsSuccess, 1)
+
 	return resp, nil
 }
 
-// Infer performs generic inference
+// Infer performs generic inference.
 func (c *Client) Infer(ctx context.Context, req *InferenceRequest) (*InferenceResponse, error) {
 	if c.closed.Load() {
 		return nil, ErrAlreadyClosed
@@ -516,11 +534,14 @@ func (c *Client) Infer(ctx context.Context, req *InferenceRequest) (*InferenceRe
 	if c.config.CacheResults {
 		cacheKey := c.getCacheKey(req)
 		c.mu.RLock()
+
 		if cached, ok := c.cache[cacheKey]; ok && time.Now().Before(cached.expiresAt) {
 			c.mu.RUnlock()
 			atomic.AddInt64(&c.metrics.CacheHits, 1)
+
 			return cached.response, nil
 		}
+
 		c.mu.RUnlock()
 		atomic.AddInt64(&c.metrics.CacheMisses, 1)
 	}
@@ -549,7 +570,7 @@ func (c *Client) Infer(ctx context.Context, req *InferenceRequest) (*InferenceRe
 	return resp, nil
 }
 
-// Batch performs batch inference
+// Batch performs batch inference.
 func (c *Client) Batch(ctx context.Context, req *BatchRequest) (*BatchResponse, error) {
 	if c.closed.Load() {
 		return nil, ErrAlreadyClosed
@@ -573,35 +594,36 @@ func (c *Client) Batch(ctx context.Context, req *BatchRequest) (*BatchResponse, 
 	return resp, nil
 }
 
-// getCacheKey generates a cache key for a request
+// getCacheKey generates a cache key for a request.
 func (c *Client) getCacheKey(req *InferenceRequest) string {
 	data, _ := json.Marshal(req)
-	return fmt.Sprintf("%x", data)
+	return hex.EncodeToString(data)
 }
 
-// GetMetrics returns client metrics
+// GetMetrics returns client metrics.
 func (c *Client) GetMetrics() *Metrics {
 	total := atomic.LoadInt64(&c.metrics.RequestsTotal)
 	totalLatency := atomic.LoadInt64(&c.metrics.TotalLatencyMs)
+
 	avgLatency := int64(0)
 	if total > 0 {
 		avgLatency = totalLatency / total
 	}
 
 	return &Metrics{
-		RequestsTotal:    total,
-		RequestsSuccess:  atomic.LoadInt64(&c.metrics.RequestsSuccess),
-		RequestsFailed:   atomic.LoadInt64(&c.metrics.RequestsFailed),
-		TokensUsed:       atomic.LoadInt64(&c.metrics.TokensUsed),
-		TotalLatencyMs:   totalLatency,
-		AvgLatencyMs:     avgLatency,
-		CacheHits:        atomic.LoadInt64(&c.metrics.CacheHits),
-		CacheMisses:      atomic.LoadInt64(&c.metrics.CacheMisses),
+		RequestsTotal:     total,
+		RequestsSuccess:   atomic.LoadInt64(&c.metrics.RequestsSuccess),
+		RequestsFailed:    atomic.LoadInt64(&c.metrics.RequestsFailed),
+		TokensUsed:        atomic.LoadInt64(&c.metrics.TokensUsed),
+		TotalLatencyMs:    totalLatency,
+		AvgLatencyMs:      avgLatency,
+		CacheHits:         atomic.LoadInt64(&c.metrics.CacheHits),
+		CacheMisses:       atomic.LoadInt64(&c.metrics.CacheMisses),
 		StreamingRequests: atomic.LoadInt64(&c.metrics.StreamingRequests),
 	}
 }
 
-// HealthCheck checks if NIM service is available
+// HealthCheck checks if NIM service is available.
 func (c *Client) HealthCheck(ctx context.Context) error {
 	if c.closed.Load() {
 		return ErrAlreadyClosed
@@ -610,7 +632,7 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 	return c.backend.HealthCheck(ctx)
 }
 
-// Close shuts down the client
+// Close shuts down the client.
 func (c *Client) Close() error {
 	if c.closed.Swap(true) {
 		return ErrAlreadyClosed
@@ -624,17 +646,17 @@ func (c *Client) Close() error {
 	return c.backend.Close()
 }
 
-// ObjectInference performs inference on an object stored in NebulaIO
+// ObjectInference performs inference on an object stored in NebulaIO.
 type ObjectInference struct {
 	client *Client
 }
 
-// NewObjectInference creates an object inference helper
+// NewObjectInference creates an object inference helper.
 func NewObjectInference(client *Client) *ObjectInference {
 	return &ObjectInference{client: client}
 }
 
-// InferFromObject performs inference using an S3 object as input
+// InferFromObject performs inference using an S3 object as input.
 func (o *ObjectInference) InferFromObject(ctx context.Context, bucket, key string, model string, params map[string]interface{}) (*InferenceResponse, error) {
 	req := &InferenceRequest{
 		Model: model,
@@ -647,7 +669,7 @@ func (o *ObjectInference) InferFromObject(ctx context.Context, bucket, key strin
 	return o.client.Infer(ctx, req)
 }
 
-// DescribeImage uses a vision-language model to describe an image object
+// DescribeImage uses a vision-language model to describe an image object.
 func (o *ObjectInference) DescribeImage(ctx context.Context, bucket, key, prompt string) (*ChatResponse, error) {
 	req := &ChatRequest{
 		Model: "nvidia/llama-3.2-neva-72b-preview", // Example VLM model
@@ -657,13 +679,13 @@ func (o *ObjectInference) DescribeImage(ctx context.Context, bucket, key, prompt
 				Content: fmt.Sprintf("<image s3://%s/%s> %s", bucket, key, prompt),
 			},
 		},
-		MaxTokens: 1024,
+		MaxTokens: defaultVisionMaxTokens,
 	}
 
 	return o.client.Chat(ctx, req)
 }
 
-// EmbedDocument generates embeddings for a document object
+// EmbedDocument generates embeddings for a document object.
 func (o *ObjectInference) EmbedDocument(ctx context.Context, bucket, key string) (*EmbeddingResponse, error) {
 	req := &EmbeddingRequest{
 		Model: "nvidia/nv-embedqa-e5-v5",
@@ -673,18 +695,18 @@ func (o *ObjectInference) EmbedDocument(ctx context.Context, bucket, key string)
 	return o.client.Embed(ctx, req)
 }
 
-// S3Integration provides NIM integration with S3 operations
+// S3Integration provides NIM integration with S3 operations.
 type S3Integration struct {
 	client *Client
 	mu     sync.RWMutex
 }
 
-// NewS3Integration creates a new S3 integration
+// NewS3Integration creates a new S3 integration.
 func NewS3Integration(client *Client) *S3Integration {
 	return &S3Integration{client: client}
 }
 
-// ProcessOnUpload triggers inference when an object is uploaded
+// ProcessOnUpload triggers inference when an object is uploaded.
 func (s *S3Integration) ProcessOnUpload(ctx context.Context, bucket, key, contentType string, body io.Reader) (*InferenceResponse, error) {
 	// Read body for inference
 	data, err := io.ReadAll(body)
@@ -715,18 +737,18 @@ func (s *S3Integration) ProcessOnUpload(ctx context.Context, bucket, key, conten
 	return s.client.Infer(ctx, req)
 }
 
-// GetStatus returns NIM integration status
+// GetStatus returns NIM integration status.
 func (s *S3Integration) GetStatus() map[string]interface{} {
 	metrics := s.client.GetMetrics()
 
 	return map[string]interface{}{
-		"available":         true,
-		"requests_total":    metrics.RequestsTotal,
-		"requests_success":  metrics.RequestsSuccess,
-		"requests_failed":   metrics.RequestsFailed,
-		"tokens_used":       metrics.TokensUsed,
-		"avg_latency_ms":    metrics.AvgLatencyMs,
-		"cache_hit_rate":    s.calculateCacheHitRate(metrics),
+		"available":        true,
+		"requests_total":   metrics.RequestsTotal,
+		"requests_success": metrics.RequestsSuccess,
+		"requests_failed":  metrics.RequestsFailed,
+		"tokens_used":      metrics.TokensUsed,
+		"avg_latency_ms":   metrics.AvgLatencyMs,
+		"cache_hit_rate":   s.calculateCacheHitRate(metrics),
 	}
 }
 
@@ -735,32 +757,37 @@ func (s *S3Integration) calculateCacheHitRate(m *Metrics) float64 {
 	if total == 0 {
 		return 0
 	}
+
 	return float64(m.CacheHits) / float64(total)
 }
 
-// Close shuts down the integration
+// Close shuts down the integration.
 func (s *S3Integration) Close() error {
 	return nil
 }
 
-// _doRequest is a helper for making HTTP requests to NIM API (reserved for future use)
+// _doRequest is a helper for making HTTP requests to NIM API (reserved for future use).
 func (c *Client) _doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
 	var bodyReader io.Reader
+
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
+
 		bodyReader = bytes.NewReader(data)
 	}
 
 	endpoint := c.config.Endpoints[0]
+
 	req, err := http.NewRequestWithContext(ctx, method, endpoint+path, bodyReader)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
 	if c.config.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
 	}
@@ -769,9 +796,10 @@ func (c *Client) _doRequest(ctx context.Context, method, path string, body inter
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		return nil, fmt.Errorf("NIM API error: %s", resp.Status)
 	}
 

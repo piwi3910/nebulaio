@@ -3,11 +3,17 @@ package erasure
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sort"
 )
 
-// NodeInfo represents a storage node in the cluster
+// Placement configuration constants.
+const (
+	defaultPlacementVirtualNodes = 100 // Default virtual nodes per physical node for consistent hashing
+)
+
+// NodeInfo represents a storage node in the cluster.
 type NodeInfo struct {
 	ID       string
 	Address  string
@@ -16,7 +22,7 @@ type NodeInfo struct {
 	Used     int64  // Used storage in bytes
 }
 
-// PlacementStrategy determines how shards are distributed across nodes
+// PlacementStrategy determines how shards are distributed across nodes.
 type PlacementStrategy interface {
 	// PlaceShards returns node assignments for each shard index
 	PlaceShards(objectKey string, numShards int, nodes []NodeInfo) ([]NodeAssignment, error)
@@ -25,44 +31,45 @@ type PlacementStrategy interface {
 	GetShardLocation(objectKey string, shardIndex int, nodes []NodeInfo) (*NodeAssignment, error)
 }
 
-// NodeAssignment represents a shard-to-node assignment
+// NodeAssignment represents a shard-to-node assignment.
 type NodeAssignment struct {
-	ShardIndex int
 	NodeID     string
 	NodeAddr   string
+	ShardIndex int
 }
 
-// ConsistentHashPlacement uses consistent hashing for shard placement
+// ConsistentHashPlacement uses consistent hashing for shard placement.
 type ConsistentHashPlacement struct {
 	virtualNodes int
 }
 
-// NewConsistentHashPlacement creates a new consistent hash placement strategy
+// NewConsistentHashPlacement creates a new consistent hash placement strategy.
 func NewConsistentHashPlacement(virtualNodes int) *ConsistentHashPlacement {
 	if virtualNodes <= 0 {
-		virtualNodes = 100 // Default virtual nodes per physical node
+		virtualNodes = defaultPlacementVirtualNodes
 	}
+
 	return &ConsistentHashPlacement{
 		virtualNodes: virtualNodes,
 	}
 }
 
-// PlaceShards distributes shards across nodes using consistent hashing
+// PlaceShards distributes shards across nodes using consistent hashing.
 func (p *ConsistentHashPlacement) PlaceShards(objectKey string, numShards int, nodes []NodeInfo) ([]NodeAssignment, error) {
 	if len(nodes) == 0 {
-		return nil, fmt.Errorf("no nodes available for shard placement")
+		return nil, errors.New("no nodes available for shard placement")
 	}
 
 	// Filter to alive nodes only
 	aliveNodes := filterAliveNodes(nodes)
 	if len(aliveNodes) == 0 {
-		return nil, fmt.Errorf("no alive nodes available")
+		return nil, errors.New("no alive nodes available")
 	}
 
 	assignments := make([]NodeAssignment, numShards)
 	usedNodes := make(map[string]int) // Track how many shards each node has
 
-	for i := 0; i < numShards; i++ {
+	for i := range numShards {
 		// Create a unique key for this shard
 		shardKey := fmt.Sprintf("%s/shard/%d", objectKey, i)
 
@@ -80,17 +87,18 @@ func (p *ConsistentHashPlacement) PlaceShards(objectKey string, numShards int, n
 	return assignments, nil
 }
 
-// GetShardLocation returns the node assignment for a specific shard
+// GetShardLocation returns the node assignment for a specific shard.
 func (p *ConsistentHashPlacement) GetShardLocation(objectKey string, shardIndex int, nodes []NodeInfo) (*NodeAssignment, error) {
 	assignments, err := p.PlaceShards(objectKey, shardIndex+1, nodes)
 	if err != nil {
 		return nil, err
 	}
+
 	return &assignments[shardIndex], nil
 }
 
 // findBestNode finds the best node for a shard using consistent hashing
-// while trying to spread shards across different nodes
+// while trying to spread shards across different nodes.
 func (p *ConsistentHashPlacement) findBestNode(shardKey string, nodes []NodeInfo, usedNodes map[string]int) NodeInfo {
 	if len(nodes) == 1 {
 		return nodes[0]
@@ -98,15 +106,15 @@ func (p *ConsistentHashPlacement) findBestNode(shardKey string, nodes []NodeInfo
 
 	// Create a ring with virtual nodes
 	type ringEntry struct {
-		hash   uint64
 		nodeID string
 		node   NodeInfo
+		hash   uint64
 	}
 
 	ring := make([]ringEntry, 0, len(nodes)*p.virtualNodes)
 
 	for _, node := range nodes {
-		for v := 0; v < p.virtualNodes; v++ {
+		for v := range p.virtualNodes {
 			vNodeKey := fmt.Sprintf("%s:%d", node.ID, v)
 			hash := hashKey(vNodeKey)
 			ring = append(ring, ringEntry{
@@ -142,7 +150,7 @@ func (p *ConsistentHashPlacement) findBestNode(shardKey string, nodes []NodeInfo
 		return ring[i].hash >= shardHash
 	})
 
-	for i := 0; i < len(ring); i++ {
+	for i := range ring {
 		idx := (startIdx + i) % len(ring)
 		entry := ring[idx]
 
@@ -156,13 +164,13 @@ func (p *ConsistentHashPlacement) findBestNode(shardKey string, nodes []NodeInfo
 	return ring[startIdx%len(ring)].node
 }
 
-// hashKey produces a consistent hash for a key
+// hashKey produces a consistent hash for a key.
 func hashKey(key string) uint64 {
 	h := sha256.Sum256([]byte(key))
 	return binary.BigEndian.Uint64(h[:8])
 }
 
-// filterAliveNodes returns only nodes that are alive
+// filterAliveNodes returns only nodes that are alive.
 func filterAliveNodes(nodes []NodeInfo) []NodeInfo {
 	alive := make([]NodeInfo, 0, len(nodes))
 	for _, n := range nodes {
@@ -170,31 +178,32 @@ func filterAliveNodes(nodes []NodeInfo) []NodeInfo {
 			alive = append(alive, n)
 		}
 	}
+
 	return alive
 }
 
-// RoundRobinPlacement distributes shards in round-robin fashion
+// RoundRobinPlacement distributes shards in round-robin fashion.
 type RoundRobinPlacement struct{}
 
-// NewRoundRobinPlacement creates a new round-robin placement strategy
+// NewRoundRobinPlacement creates a new round-robin placement strategy.
 func NewRoundRobinPlacement() *RoundRobinPlacement {
 	return &RoundRobinPlacement{}
 }
 
-// PlaceShards distributes shards across nodes in round-robin order
+// PlaceShards distributes shards across nodes in round-robin order.
 func (p *RoundRobinPlacement) PlaceShards(objectKey string, numShards int, nodes []NodeInfo) ([]NodeAssignment, error) {
 	if len(nodes) == 0 {
-		return nil, fmt.Errorf("no nodes available for shard placement")
+		return nil, errors.New("no nodes available for shard placement")
 	}
 
 	aliveNodes := filterAliveNodes(nodes)
 	if len(aliveNodes) == 0 {
-		return nil, fmt.Errorf("no alive nodes available")
+		return nil, errors.New("no alive nodes available")
 	}
 
 	assignments := make([]NodeAssignment, numShards)
 
-	for i := 0; i < numShards; i++ {
+	for i := range numShards {
 		node := aliveNodes[i%len(aliveNodes)]
 		assignments[i] = NodeAssignment{
 			ShardIndex: i,
@@ -206,31 +215,32 @@ func (p *RoundRobinPlacement) PlaceShards(objectKey string, numShards int, nodes
 	return assignments, nil
 }
 
-// GetShardLocation returns the node assignment for a specific shard
+// GetShardLocation returns the node assignment for a specific shard.
 func (p *RoundRobinPlacement) GetShardLocation(objectKey string, shardIndex int, nodes []NodeInfo) (*NodeAssignment, error) {
 	assignments, err := p.PlaceShards(objectKey, shardIndex+1, nodes)
 	if err != nil {
 		return nil, err
 	}
+
 	return &assignments[shardIndex], nil
 }
 
-// CapacityAwarePlacement considers node capacity for placement
+// CapacityAwarePlacement considers node capacity for placement.
 type CapacityAwarePlacement struct {
 	base PlacementStrategy
 }
 
-// NewCapacityAwarePlacement creates a capacity-aware placement strategy
+// NewCapacityAwarePlacement creates a capacity-aware placement strategy.
 func NewCapacityAwarePlacement() *CapacityAwarePlacement {
 	return &CapacityAwarePlacement{
-		base: NewConsistentHashPlacement(100),
+		base: NewConsistentHashPlacement(defaultPlacementVirtualNodes),
 	}
 }
 
-// PlaceShards distributes shards considering node capacity
+// PlaceShards distributes shards considering node capacity.
 func (p *CapacityAwarePlacement) PlaceShards(objectKey string, numShards int, nodes []NodeInfo) ([]NodeAssignment, error) {
 	if len(nodes) == 0 {
-		return nil, fmt.Errorf("no nodes available for shard placement")
+		return nil, errors.New("no nodes available for shard placement")
 	}
 
 	// Filter nodes with capacity
@@ -244,24 +254,26 @@ func (p *CapacityAwarePlacement) PlaceShards(objectKey string, numShards int, no
 	}
 
 	if len(available) == 0 {
-		return nil, fmt.Errorf("no nodes with available capacity")
+		return nil, errors.New("no nodes with available capacity")
 	}
 
 	// Sort by available capacity (descending)
 	sort.Slice(available, func(i, j int) bool {
 		availI := available[i].Capacity - available[i].Used
 		availJ := available[j].Capacity - available[j].Used
+
 		return availI > availJ
 	})
 
 	return p.base.PlaceShards(objectKey, numShards, available)
 }
 
-// GetShardLocation returns the node assignment for a specific shard
+// GetShardLocation returns the node assignment for a specific shard.
 func (p *CapacityAwarePlacement) GetShardLocation(objectKey string, shardIndex int, nodes []NodeInfo) (*NodeAssignment, error) {
 	assignments, err := p.PlaceShards(objectKey, shardIndex+1, nodes)
 	if err != nil {
 		return nil, err
 	}
+
 	return &assignments[shardIndex], nil
 }

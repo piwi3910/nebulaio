@@ -34,9 +34,9 @@ func TestPolicyFilter(t *testing.T) {
 	})
 
 	tests := []struct {
-		name           string
-		obj            ObjectInfo
-		shouldMatch    bool
+		name             string
+		obj              ObjectInfo
+		shouldMatch      bool
 		shouldTransition bool
 	}{
 		{
@@ -125,6 +125,7 @@ func TestPolicyFilter(t *testing.T) {
 			if tt.shouldTransition && !result.ShouldTransition {
 				t.Error("expected transition but got none")
 			}
+
 			if !tt.shouldTransition && result.ShouldTransition {
 				t.Error("expected no transition but got one")
 			}
@@ -182,9 +183,11 @@ func TestPolicyPriority(t *testing.T) {
 	if !result.ShouldTransition {
 		t.Fatal("expected transition")
 	}
+
 	if result.TargetTier != TierArchive {
 		t.Errorf("expected archive tier, got %s", result.TargetTier)
 	}
+
 	if result.Policy.Name != "high-priority" {
 		t.Errorf("expected high-priority policy, got %s", result.Policy.Name)
 	}
@@ -252,6 +255,7 @@ func TestCache(t *testing.T) {
 	}
 
 	cache := NewCache(config, nil)
+
 	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
@@ -259,6 +263,7 @@ func TestCache(t *testing.T) {
 	// Test Put and Get
 	t.Run("PutAndGet", func(t *testing.T) {
 		data := []byte("test data")
+
 		err := cache.Put(ctx, "key1", data, "text/plain", "etag1")
 		if err != nil {
 			t.Fatalf("Put failed: %v", err)
@@ -268,9 +273,11 @@ func TestCache(t *testing.T) {
 		if !ok {
 			t.Fatal("Get returned not found")
 		}
+
 		if string(entry.Data) != "test data" {
 			t.Errorf("unexpected data: %s", string(entry.Data))
 		}
+
 		if entry.ContentType != "text/plain" {
 			t.Errorf("unexpected content type: %s", entry.ContentType)
 		}
@@ -281,6 +288,7 @@ func TestCache(t *testing.T) {
 		if !cache.Has(ctx, "key1") {
 			t.Error("Has returned false for existing key")
 		}
+
 		if cache.Has(ctx, "nonexistent") {
 			t.Error("Has returned true for non-existing key")
 		}
@@ -309,10 +317,11 @@ func TestCache(t *testing.T) {
 			MaxSize:    100,
 			MaxObjects: 3,
 		}, nil)
+
 		defer func() { _ = smallCache.Close() }()
 
 		// Add 3 objects
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			key := string(rune('a' + i))
 			_ = smallCache.Put(ctx, key, []byte("data"), "text/plain", "")
 		}
@@ -332,6 +341,7 @@ func TestCache(t *testing.T) {
 		if stats.Objects == 0 {
 			t.Error("expected some objects in cache")
 		}
+
 		if stats.Hits == 0 {
 			t.Error("expected some hits")
 		}
@@ -340,6 +350,7 @@ func TestCache(t *testing.T) {
 	// Test Clear
 	t.Run("Clear", func(t *testing.T) {
 		cache.Clear()
+
 		if cache.Count() != 0 {
 			t.Errorf("expected 0 objects after clear, got %d", cache.Count())
 		}
@@ -354,6 +365,7 @@ func TestCacheTTL(t *testing.T) {
 	}
 
 	cache := NewCache(config, nil)
+
 	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
@@ -396,6 +408,7 @@ func TestDefaultPolicies(t *testing.T) {
 		if policy.Name == "" {
 			t.Error("policy has empty name")
 		}
+
 		if len(policy.Rules) == 0 {
 			t.Errorf("policy %s has no rules", policy.Name)
 		}

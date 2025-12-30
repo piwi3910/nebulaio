@@ -27,56 +27,42 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/piwi3910/nebulaio/internal/kms"
 )
 
-// Config holds Vault KMS provider configuration
+// Vault key type constants.
+const (
+	keyTypeAES256GCM96 = "aes256-gcm96"
+)
+
+// Config holds Vault KMS provider configuration.
 type Config struct {
+	Address            string `json:"address" yaml:"address"`
+	Token              string `json:"-" yaml:"token"`
+	Namespace          string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
+	MountPath          string `json:"mountPath" yaml:"mountPath"`
+	TLSCACert          string `json:"tlsCaCert,omitempty" yaml:"tlsCaCert,omitempty"`
+	TLSClientCert      string `json:"tlsClientCert,omitempty" yaml:"tlsClientCert,omitempty"`
+	TLSClientKey       string `json:"tlsClientKey,omitempty" yaml:"tlsClientKey,omitempty"`
 	kms.ProviderConfig `yaml:",inline"`
-
-	// Address is the Vault server address
-	Address string `json:"address" yaml:"address"`
-
-	// Token is the Vault authentication token
-	Token string `json:"-" yaml:"token"`
-
-	// Namespace is the Vault namespace (for Vault Enterprise)
-	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
-
-	// MountPath is the mount path for the transit secrets engine
-	MountPath string `json:"mountPath" yaml:"mountPath"`
-
-	// TLSCACert is the path to the CA certificate for TLS verification
-	TLSCACert string `json:"tlsCaCert,omitempty" yaml:"tlsCaCert,omitempty"`
-
-	// TLSClientCert is the path to the client certificate for mTLS
-	TLSClientCert string `json:"tlsClientCert,omitempty" yaml:"tlsClientCert,omitempty"`
-
-	// TLSClientKey is the path to the client key for mTLS
-	TLSClientKey string `json:"tlsClientKey,omitempty" yaml:"tlsClientKey,omitempty"`
-
-	// TLSSkipVerify disables TLS certificate verification (not recommended)
-	TLSSkipVerify bool `json:"tlsSkipVerify,omitempty" yaml:"tlsSkipVerify,omitempty"`
-
-	// Timeout is the HTTP client timeout
-	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
-
-	// MaxRetries is the maximum number of retries for failed requests
-	MaxRetries int `json:"maxRetries,omitempty" yaml:"maxRetries,omitempty"`
+	Timeout            time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	MaxRetries         int           `json:"maxRetries,omitempty" yaml:"maxRetries,omitempty"`
+	TLSSkipVerify      bool          `json:"tlsSkipVerify,omitempty" yaml:"tlsSkipVerify,omitempty"`
 }
 
-// DefaultConfig returns a default Vault KMS configuration
+// DefaultConfig returns a default Vault KMS configuration.
 func DefaultConfig() Config {
 	// Use VAULT_ADDR environment variable if set, otherwise use default
 	vaultAddr := os.Getenv("VAULT_ADDR")
 	if vaultAddr == "" {
 		vaultAddr = "http://127.0.0.1:8200"
 	}
+
 	return Config{
 		ProviderConfig: kms.ProviderConfig{
 			Type:        "vault",
@@ -91,7 +77,7 @@ func DefaultConfig() Config {
 }
 
 // VaultClient is the interface for Vault API operations
-// This allows for mocking in tests
+// This allows for mocking in tests.
 type VaultClient interface {
 	// Transit engine operations
 	CreateKey(ctx context.Context, name string, keyType string) error
@@ -105,8 +91,9 @@ type VaultClient interface {
 	DecryptDataKey(ctx context.Context, name string, ciphertext []byte) ([]byte, error)
 }
 
-// KeyMetadata holds Vault transit key metadata
+// KeyMetadata holds Vault transit key metadata.
 type KeyMetadata struct {
+	Keys                 map[string]int64
 	Name                 string
 	Type                 string
 	LatestVersion        int
@@ -116,32 +103,33 @@ type KeyMetadata struct {
 	Derived              bool
 	Exportable           bool
 	AllowPlaintextBackup bool
-	Keys                 map[string]int64 // version -> creation time
 }
 
-// Provider implements the KMS Provider interface using HashiCorp Vault Transit
+// Provider implements the KMS Provider interface using HashiCorp Vault Transit.
 type Provider struct {
-	config Config
 	client VaultClient
 	cache  map[string]*cachedKey
+	config Config
 	mu     sync.RWMutex
 	closed bool
 }
 
-// cachedKey holds cached key information
+// cachedKey holds cached key information.
 type cachedKey struct {
 	info      kms.KeyInfo
 	expiresAt time.Time
 }
 
-// NewProvider creates a new Vault KMS provider
+// NewProvider creates a new Vault KMS provider.
 func NewProvider(config Config, client VaultClient) (*Provider, error) {
 	if config.Address == "" {
 		return nil, errors.New("vault address is required")
 	}
+
 	if config.MountPath == "" {
 		return nil, errors.New("vault mount path is required")
 	}
+
 	if client == nil {
 		return nil, errors.New("vault client is required")
 	}
@@ -153,22 +141,25 @@ func NewProvider(config Config, client VaultClient) (*Provider, error) {
 	}, nil
 }
 
-// Name returns the provider name
+// Name returns the provider name.
 func (p *Provider) Name() string {
 	return "vault"
 }
 
-// GenerateDataKey generates a new data encryption key
+// GenerateDataKey generates a new data encryption key.
 func (p *Provider) GenerateDataKey(ctx context.Context, keyID string, keySpec kms.KeySpec) (*kms.DataKey, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
 	}
+
 	p.mu.RUnlock()
 
 	// Determine bits based on algorithm
 	bits := 256
+
 	switch keySpec.Algorithm {
 	case kms.AlgorithmAES128:
 		bits = 128
@@ -189,13 +180,15 @@ func (p *Provider) GenerateDataKey(ctx context.Context, keyID string, keySpec km
 	}, nil
 }
 
-// DecryptDataKey decrypts a previously encrypted data key
+// DecryptDataKey decrypts a previously encrypted data key.
 func (p *Provider) DecryptDataKey(ctx context.Context, keyID string, encryptedKey []byte) ([]byte, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
 	}
+
 	p.mu.RUnlock()
 
 	plaintext, err := p.client.DecryptDataKey(ctx, keyID, encryptedKey)
@@ -206,13 +199,15 @@ func (p *Provider) DecryptDataKey(ctx context.Context, keyID string, encryptedKe
 	return plaintext, nil
 }
 
-// Encrypt encrypts data using the specified key
+// Encrypt encrypts data using the specified key.
 func (p *Provider) Encrypt(ctx context.Context, keyID string, plaintext []byte) ([]byte, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
 	}
+
 	p.mu.RUnlock()
 
 	ciphertext, err := p.client.Encrypt(ctx, keyID, plaintext)
@@ -223,13 +218,15 @@ func (p *Provider) Encrypt(ctx context.Context, keyID string, plaintext []byte) 
 	return []byte(ciphertext), nil
 }
 
-// Decrypt decrypts data using the specified key
+// Decrypt decrypts data using the specified key.
 func (p *Provider) Decrypt(ctx context.Context, keyID string, ciphertext []byte) ([]byte, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
 	}
+
 	p.mu.RUnlock()
 
 	plaintext, err := p.client.Decrypt(ctx, keyID, string(ciphertext))
@@ -240,13 +237,15 @@ func (p *Provider) Decrypt(ctx context.Context, keyID string, ciphertext []byte)
 	return plaintext, nil
 }
 
-// ListKeys returns available encryption keys
+// ListKeys returns available encryption keys.
 func (p *Provider) ListKeys(ctx context.Context) ([]kms.KeyInfo, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
 	}
+
 	p.mu.RUnlock()
 
 	keyNames, err := p.client.ListKeys(ctx)
@@ -260,15 +259,17 @@ func (p *Provider) ListKeys(ctx context.Context) ([]kms.KeyInfo, error) {
 		if err != nil {
 			continue // Skip keys we can't read
 		}
+
 		keys = append(keys, *info)
 	}
 
 	return keys, nil
 }
 
-// GetKeyInfo returns information about a specific key
+// GetKeyInfo returns information about a specific key.
 func (p *Provider) GetKeyInfo(ctx context.Context, keyID string) (*kms.KeyInfo, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
@@ -277,9 +278,12 @@ func (p *Provider) GetKeyInfo(ctx context.Context, keyID string) (*kms.KeyInfo, 
 	// Check cache
 	if cached, ok := p.cache[keyID]; ok && time.Now().Before(cached.expiresAt) {
 		p.mu.RUnlock()
+
 		info := cached.info
+
 		return &info, nil
 	}
+
 	p.mu.RUnlock()
 
 	// Fetch from Vault
@@ -301,19 +305,22 @@ func (p *Provider) GetKeyInfo(ctx context.Context, keyID string) (*kms.KeyInfo, 
 	return info, nil
 }
 
-// CreateKey creates a new encryption key
+// CreateKey creates a new encryption key.
 func (p *Provider) CreateKey(ctx context.Context, spec kms.KeySpec) (*kms.KeyInfo, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
 	}
+
 	p.mu.RUnlock()
 
 	// Map algorithm to Vault key type
 	vaultKeyType := algorithmToVaultType(spec.Algorithm)
 
-	if err := p.client.CreateKey(ctx, spec.Name, vaultKeyType); err != nil {
+	err := p.client.CreateKey(ctx, spec.Name, vaultKeyType)
+	if err != nil {
 		return nil, &kms.WrapError{Op: "CreateKey", Err: err}
 	}
 
@@ -321,16 +328,19 @@ func (p *Provider) CreateKey(ctx context.Context, spec kms.KeySpec) (*kms.KeyInf
 	return p.GetKeyInfo(ctx, spec.Name)
 }
 
-// RotateKey rotates an encryption key
+// RotateKey rotates an encryption key.
 func (p *Provider) RotateKey(ctx context.Context, keyID string) (*kms.KeyInfo, error) {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return nil, kms.ErrProviderClosed
 	}
+
 	p.mu.RUnlock()
 
-	if err := p.client.RotateKey(ctx, keyID); err != nil {
+	err := p.client.RotateKey(ctx, keyID)
+	if err != nil {
 		return nil, &kms.WrapError{Op: "RotateKey", KeyID: keyID, Err: err}
 	}
 
@@ -343,16 +353,19 @@ func (p *Provider) RotateKey(ctx context.Context, keyID string) (*kms.KeyInfo, e
 	return p.GetKeyInfo(ctx, keyID)
 }
 
-// DeleteKey schedules a key for deletion
+// DeleteKey schedules a key for deletion.
 func (p *Provider) DeleteKey(ctx context.Context, keyID string) error {
 	p.mu.RLock()
+
 	if p.closed {
 		p.mu.RUnlock()
 		return kms.ErrProviderClosed
 	}
+
 	p.mu.RUnlock()
 
-	if err := p.client.DeleteKey(ctx, keyID); err != nil {
+	err := p.client.DeleteKey(ctx, keyID)
+	if err != nil {
 		return &kms.WrapError{Op: "DeleteKey", KeyID: keyID, Err: err}
 	}
 
@@ -364,7 +377,7 @@ func (p *Provider) DeleteKey(ctx context.Context, keyID string) error {
 	return nil
 }
 
-// Close closes the provider
+// Close closes the provider.
 func (p *Provider) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -375,9 +388,10 @@ func (p *Provider) Close() error {
 	return nil
 }
 
-// metadataToKeyInfo converts Vault key metadata to kms.KeyInfo
+// metadataToKeyInfo converts Vault key metadata to kms.KeyInfo.
 func (p *Provider) metadataToKeyInfo(keyID string, meta *KeyMetadata) *kms.KeyInfo {
 	var createdAt time.Time
+
 	if len(meta.Keys) > 0 {
 		// Get the earliest key version timestamp
 		for _, ts := range meta.Keys {
@@ -389,9 +403,10 @@ func (p *Provider) metadataToKeyInfo(keyID string, meta *KeyMetadata) *kms.KeyIn
 	}
 
 	var rotatedAt *time.Time
+
 	if meta.LatestVersion > 1 && len(meta.Keys) > 0 {
 		// Get the latest key version timestamp
-		latestKey := fmt.Sprintf("%d", meta.LatestVersion)
+		latestKey := strconv.Itoa(meta.LatestVersion)
 		if ts, ok := meta.Keys[latestKey]; ok {
 			t := time.Unix(ts, 0)
 			rotatedAt = &t
@@ -409,13 +424,13 @@ func (p *Provider) metadataToKeyInfo(keyID string, meta *KeyMetadata) *kms.KeyIn
 	}
 }
 
-// algorithmToVaultType maps kms.Algorithm to Vault key type
+// algorithmToVaultType maps kms.Algorithm to Vault key type.
 func algorithmToVaultType(algo kms.Algorithm) string {
 	switch algo {
 	case kms.AlgorithmAES128:
 		return "aes128-gcm96"
 	case kms.AlgorithmAES256, kms.AlgorithmAES256GCM:
-		return "aes256-gcm96"
+		return keyTypeAES256GCM96
 	case kms.AlgorithmChaCha20:
 		return "chacha20-poly1305"
 	case kms.AlgorithmRSA2048:
@@ -429,16 +444,16 @@ func algorithmToVaultType(algo kms.Algorithm) string {
 	case kms.AlgorithmECDSAP384:
 		return "ecdsa-p384"
 	default:
-		return "aes256-gcm96"
+		return keyTypeAES256GCM96
 	}
 }
 
-// vaultTypeToAlgorithm maps Vault key type to kms.Algorithm
+// vaultTypeToAlgorithm maps Vault key type to kms.Algorithm.
 func vaultTypeToAlgorithm(vaultType string) kms.Algorithm {
 	switch vaultType {
 	case "aes128-gcm96":
 		return kms.AlgorithmAES128
-	case "aes256-gcm96":
+	case keyTypeAES256GCM96:
 		return kms.AlgorithmAES256GCM
 	case "chacha20-poly1305":
 		return kms.AlgorithmChaCha20
@@ -457,17 +472,17 @@ func vaultTypeToAlgorithm(vaultType string) kms.Algorithm {
 	}
 }
 
-// Ensure Provider implements kms.Provider
+// Ensure Provider implements kms.Provider.
 var _ kms.Provider = (*Provider)(nil)
 
-// MockVaultClient is a mock implementation for testing
+// MockVaultClient is a mock implementation for testing.
 type MockVaultClient struct {
 	keys map[string]*KeyMetadata
 	data map[string]map[string][]byte // keyName -> ciphertext -> plaintext
 	mu   sync.RWMutex
 }
 
-// NewMockVaultClient creates a new mock Vault client
+// NewMockVaultClient creates a new mock Vault client.
 func NewMockVaultClient() *MockVaultClient {
 	return &MockVaultClient{
 		keys: make(map[string]*KeyMetadata),
@@ -475,7 +490,7 @@ func NewMockVaultClient() *MockVaultClient {
 	}
 }
 
-// CreateKey creates a new key in the mock
+// CreateKey creates a new key in the mock.
 func (m *MockVaultClient) CreateKey(ctx context.Context, name string, keyType string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -487,10 +502,11 @@ func (m *MockVaultClient) CreateKey(ctx context.Context, name string, keyType st
 		Keys:          map[string]int64{"1": time.Now().Unix()},
 	}
 	m.data[name] = make(map[string][]byte)
+
 	return nil
 }
 
-// ReadKey reads key metadata from the mock
+// ReadKey reads key metadata from the mock.
 func (m *MockVaultClient) ReadKey(ctx context.Context, name string) (*KeyMetadata, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -499,10 +515,11 @@ func (m *MockVaultClient) ReadKey(ctx context.Context, name string) (*KeyMetadat
 	if !ok {
 		return nil, errors.New("key not found")
 	}
+
 	return meta, nil
 }
 
-// ListKeys lists all keys in the mock
+// ListKeys lists all keys in the mock.
 func (m *MockVaultClient) ListKeys(ctx context.Context) ([]string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -511,20 +528,22 @@ func (m *MockVaultClient) ListKeys(ctx context.Context) ([]string, error) {
 	for name := range m.keys {
 		names = append(names, name)
 	}
+
 	return names, nil
 }
 
-// DeleteKey deletes a key from the mock
+// DeleteKey deletes a key from the mock.
 func (m *MockVaultClient) DeleteKey(ctx context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.keys, name)
 	delete(m.data, name)
+
 	return nil
 }
 
-// RotateKey rotates a key in the mock
+// RotateKey rotates a key in the mock.
 func (m *MockVaultClient) RotateKey(ctx context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -535,11 +554,12 @@ func (m *MockVaultClient) RotateKey(ctx context.Context, name string) error {
 	}
 
 	meta.LatestVersion++
-	meta.Keys[fmt.Sprintf("%d", meta.LatestVersion)] = time.Now().Unix()
+	meta.Keys[strconv.Itoa(meta.LatestVersion)] = time.Now().Unix()
+
 	return nil
 }
 
-// Encrypt encrypts data in the mock
+// Encrypt encrypts data in the mock.
 func (m *MockVaultClient) Encrypt(ctx context.Context, name string, plaintext []byte) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -550,15 +570,17 @@ func (m *MockVaultClient) Encrypt(ctx context.Context, name string, plaintext []
 
 	// Simple mock encryption: base64 encode
 	ciphertext := "vault:v1:" + base64.StdEncoding.EncodeToString(plaintext)
+
 	if m.data[name] == nil {
 		m.data[name] = make(map[string][]byte)
 	}
+
 	m.data[name][ciphertext] = plaintext
 
 	return ciphertext, nil
 }
 
-// Decrypt decrypts data in the mock
+// Decrypt decrypts data in the mock.
 func (m *MockVaultClient) Decrypt(ctx context.Context, name string, ciphertext string) ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -575,7 +597,7 @@ func (m *MockVaultClient) Decrypt(ctx context.Context, name string, ciphertext s
 	return plaintext, nil
 }
 
-// GenerateDataKey generates a data key in the mock
+// GenerateDataKey generates a data key in the mock.
 func (m *MockVaultClient) GenerateDataKey(ctx context.Context, name string, bits int) (plaintext, ciphertext []byte, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -596,15 +618,16 @@ func (m *MockVaultClient) GenerateDataKey(ctx context.Context, name string, bits
 	if m.data[name] == nil {
 		m.data[name] = make(map[string][]byte)
 	}
+
 	m.data[name][string(ciphertext)] = plaintext
 
 	return plaintext, ciphertext, nil
 }
 
-// DecryptDataKey decrypts a data key in the mock
+// DecryptDataKey decrypts a data key in the mock.
 func (m *MockVaultClient) DecryptDataKey(ctx context.Context, name string, ciphertext []byte) ([]byte, error) {
 	return m.Decrypt(ctx, name, string(ciphertext))
 }
 
-// Ensure MockVaultClient implements VaultClient
+// Ensure MockVaultClient implements VaultClient.
 var _ VaultClient = (*MockVaultClient)(nil)

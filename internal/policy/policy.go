@@ -28,35 +28,39 @@ package policy
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 )
 
-// Policy represents an S3 bucket policy document
+// Boolean string constant.
+const boolTrue = "true"
+
+// Policy represents an S3 bucket policy document.
 type Policy struct {
 	Version   string      `json:"Version"`
 	Id        string      `json:"Id,omitempty"`
 	Statement []Statement `json:"Statement"`
 }
 
-// Statement represents a single policy statement
+// Statement represents a single policy statement.
 type Statement struct {
-	Sid       string                            `json:"Sid,omitempty"`
-	Effect    string                            `json:"Effect"` // Allow or Deny
 	Principal interface{}                       `json:"Principal"`
 	Action    interface{}                       `json:"Action"`
 	Resource  interface{}                       `json:"Resource"`
 	Condition map[string]map[string]interface{} `json:"Condition,omitempty"`
+	Sid       string                            `json:"Sid,omitempty"`
+	Effect    string                            `json:"Effect"`
 }
 
-// Effect constants
+// Effect constants.
 const (
 	EffectAllow = "Allow"
 	EffectDeny  = "Deny"
 )
 
-// Common S3 actions
+// Common S3 actions.
 const (
 	ActionGetObject           = "s3:GetObject"
 	ActionPutObject           = "s3:PutObject"
@@ -74,46 +78,48 @@ const (
 	ActionAll                 = "s3:*"
 )
 
-// EvalContext contains information needed to evaluate a policy
+// EvalContext contains information needed to evaluate a policy.
 type EvalContext struct {
-	Principal  string            // The user/role making the request
-	Action     string            // The S3 action being performed
-	Resource   string            // The resource ARN being accessed
-	BucketName string            // The bucket name
-	ObjectKey  string            // The object key (if applicable)
-	Conditions map[string]string // Additional condition variables
+	Conditions map[string]string
+	Principal  string
+	Action     string
+	Resource   string
+	BucketName string
+	ObjectKey  string
 }
 
-// EvalResult represents the result of a policy evaluation
+// EvalResult represents the result of a policy evaluation.
 type EvalResult int
 
 const (
-	// EvalDefault means no explicit allow or deny
+	// EvalDefault means no explicit allow or deny.
 	EvalDefault EvalResult = iota
-	// EvalAllow means explicitly allowed
+	// EvalAllow means explicitly allowed.
 	EvalAllow
-	// EvalDeny means explicitly denied
+	// EvalDeny means explicitly denied.
 	EvalDeny
 )
 
-// ParsePolicy parses a JSON policy document
+// ParsePolicy parses a JSON policy document.
 func ParsePolicy(jsonData string) (*Policy, error) {
 	if jsonData == "" {
-		return nil, fmt.Errorf("empty policy document")
+		return nil, errors.New("empty policy document")
 	}
 
 	var p Policy
-	if err := json.Unmarshal([]byte(jsonData), &p); err != nil {
+
+	err := json.Unmarshal([]byte(jsonData), &p)
+	if err != nil {
 		return nil, fmt.Errorf("invalid policy JSON: %w", err)
 	}
 
 	return &p, nil
 }
 
-// Validate validates the policy structure and content
+// Validate validates the policy structure and content.
 func (p *Policy) Validate() error {
 	if p == nil {
-		return fmt.Errorf("policy is nil")
+		return errors.New("policy is nil")
 	}
 
 	// Validate version
@@ -122,11 +128,12 @@ func (p *Policy) Validate() error {
 	}
 
 	if len(p.Statement) == 0 {
-		return fmt.Errorf("policy must have at least one statement")
+		return errors.New("policy must have at least one statement")
 	}
 
 	for i, stmt := range p.Statement {
-		if err := validateStatement(&stmt, i); err != nil {
+		err := validateStatement(&stmt, i)
+		if err != nil {
 			return err
 		}
 	}
@@ -134,7 +141,7 @@ func (p *Policy) Validate() error {
 	return nil
 }
 
-// validateStatement validates a single policy statement
+// validateStatement validates a single policy statement.
 func validateStatement(stmt *Statement, index int) error {
 	// Validate Effect
 	if stmt.Effect != EffectAllow && stmt.Effect != EffectDeny {
@@ -142,24 +149,27 @@ func validateStatement(stmt *Statement, index int) error {
 	}
 
 	// Validate Principal
-	if err := validatePrincipal(stmt.Principal, index); err != nil {
+	err := validatePrincipal(stmt.Principal, index)
+	if err != nil {
 		return err
 	}
 
 	// Validate Action
-	if err := validateAction(stmt.Action, index); err != nil {
+	err = validateAction(stmt.Action, index)
+	if err != nil {
 		return err
 	}
 
 	// Validate Resource
-	if err := validateResource(stmt.Resource, index); err != nil {
+	err = validateResource(stmt.Resource, index)
+	if err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// validatePrincipal validates the Principal field
+// validatePrincipal validates the Principal field.
 func validatePrincipal(principal interface{}, index int) error {
 	if principal == nil {
 		return fmt.Errorf("statement %d: Principal is required", index)
@@ -183,7 +193,7 @@ func validatePrincipal(principal interface{}, index int) error {
 	return nil
 }
 
-// validateAction validates the Action field
+// validateAction validates the Action field.
 func validateAction(action interface{}, index int) error {
 	if action == nil {
 		return fmt.Errorf("statement %d: Action is required", index)
@@ -200,6 +210,7 @@ func validateAction(action interface{}, index int) error {
 			if !ok {
 				return fmt.Errorf("statement %d: action must be a string", index)
 			}
+
 			if !isValidAction(actStr) {
 				return fmt.Errorf("statement %d: invalid action '%s'", index, actStr)
 			}
@@ -211,7 +222,7 @@ func validateAction(action interface{}, index int) error {
 	return nil
 }
 
-// isValidAction checks if an action is a valid S3 action
+// isValidAction checks if an action is a valid S3 action.
 func isValidAction(action string) bool {
 	// Allow wildcard actions
 	if action == "*" || action == "s3:*" {
@@ -227,7 +238,7 @@ func isValidAction(action string) bool {
 	return true
 }
 
-// validateResource validates the Resource field
+// validateResource validates the Resource field.
 func validateResource(resource interface{}, index int) error {
 	if resource == nil {
 		return fmt.Errorf("statement %d: Resource is required", index)
@@ -244,6 +255,7 @@ func validateResource(resource interface{}, index int) error {
 			if !ok {
 				return fmt.Errorf("statement %d: resource must be a string", index)
 			}
+
 			if !isValidResource(resStr) {
 				return fmt.Errorf("statement %d: invalid resource '%s'", index, resStr)
 			}
@@ -255,7 +267,7 @@ func validateResource(resource interface{}, index int) error {
 	return nil
 }
 
-// isValidResource checks if a resource ARN is valid
+// isValidResource checks if a resource ARN is valid.
 func isValidResource(resource string) bool {
 	// Allow wildcard
 	if resource == "*" {
@@ -271,7 +283,7 @@ func isValidResource(resource string) bool {
 }
 
 // Evaluate evaluates the policy against the given context
-// Returns Allow if explicitly allowed, Deny if explicitly denied, Default otherwise
+// Returns Allow if explicitly allowed, Deny if explicitly denied, Default otherwise.
 func (p *Policy) Evaluate(ctx EvalContext) (EvalResult, error) {
 	if p == nil || len(p.Statement) == 0 {
 		return EvalDefault, nil
@@ -283,7 +295,7 @@ func (p *Policy) Evaluate(ctx EvalContext) (EvalResult, error) {
 		if ctx.ObjectKey != "" {
 			resource = fmt.Sprintf("arn:aws:s3:::%s/%s", ctx.BucketName, ctx.ObjectKey)
 		} else {
-			resource = fmt.Sprintf("arn:aws:s3:::%s", ctx.BucketName)
+			resource = "arn:aws:s3:::" + ctx.BucketName
 		}
 	}
 
@@ -294,6 +306,7 @@ func (p *Policy) Evaluate(ctx EvalContext) (EvalResult, error) {
 			if err != nil {
 				return EvalDefault, fmt.Errorf("error evaluating statement: %w", err)
 			}
+
 			if matches {
 				return EvalDeny, nil
 			}
@@ -307,6 +320,7 @@ func (p *Policy) Evaluate(ctx EvalContext) (EvalResult, error) {
 			if err != nil {
 				return EvalDefault, fmt.Errorf("error evaluating statement: %w", err)
 			}
+
 			if matches {
 				return EvalAllow, nil
 			}
@@ -316,7 +330,7 @@ func (p *Policy) Evaluate(ctx EvalContext) (EvalResult, error) {
 	return EvalDefault, nil
 }
 
-// matchStatement checks if a statement matches the given parameters
+// matchStatement checks if a statement matches the given parameters.
 func matchStatement(stmt *Statement, principal, action, resource string, conditions map[string]string) (bool, error) {
 	// Match principal
 	if !matchPrincipal(stmt.Principal, principal) {
@@ -343,13 +357,14 @@ func matchStatement(stmt *Statement, principal, action, resource string, conditi
 	return true, nil
 }
 
-// matchPrincipal checks if the principal matches the statement's Principal
+// matchPrincipal checks if the principal matches the statement's Principal.
 func matchPrincipal(stmtPrincipal interface{}, principal string) bool {
 	switch p := stmtPrincipal.(type) {
 	case string:
 		if p == "*" {
 			return true
 		}
+
 		return p == principal
 	case map[string]interface{}:
 		if aws, ok := p["AWS"]; ok {
@@ -360,20 +375,21 @@ func matchPrincipal(stmtPrincipal interface{}, principal string) bool {
 			return matchStringOrArray(service, principal)
 		}
 	}
+
 	return false
 }
 
-// matchAction checks if the action matches the statement's Action
+// matchAction checks if the action matches the statement's Action.
 func matchAction(stmtAction interface{}, action string) bool {
 	return matchStringOrArrayWithWildcard(stmtAction, action)
 }
 
-// matchResource checks if the resource matches the statement's Resource
+// matchResource checks if the resource matches the statement's Resource.
 func matchResource(stmtResource interface{}, resource string) bool {
 	return matchStringOrArrayWithWildcard(stmtResource, resource)
 }
 
-// matchStringOrArray matches a value against a string or array of strings
+// matchStringOrArray matches a value against a string or array of strings.
 func matchStringOrArray(value interface{}, target string) bool {
 	switch v := value.(type) {
 	case string:
@@ -387,10 +403,11 @@ func matchStringOrArray(value interface{}, target string) bool {
 			}
 		}
 	}
+
 	return false
 }
 
-// matchStringOrArrayWithWildcard matches with wildcard pattern support
+// matchStringOrArrayWithWildcard matches with wildcard pattern support.
 func matchStringOrArrayWithWildcard(value interface{}, target string) bool {
 	switch v := value.(type) {
 	case string:
@@ -404,10 +421,11 @@ func matchStringOrArrayWithWildcard(value interface{}, target string) bool {
 			}
 		}
 	}
+
 	return false
 }
 
-// matchWildcard matches a pattern with wildcards against a target
+// matchWildcard matches a pattern with wildcards against a target.
 func matchWildcard(pattern, target string) bool {
 	if pattern == "*" {
 		return true
@@ -427,10 +445,11 @@ func matchWildcard(pattern, target string) bool {
 	if err != nil {
 		return false
 	}
+
 	return matched
 }
 
-// matchConditions checks if conditions match
+// matchConditions checks if conditions match.
 func matchConditions(stmtConditions map[string]map[string]interface{}, conditions map[string]string) bool {
 	for operator, conditionMap := range stmtConditions {
 		for key, expectedValue := range conditionMap {
@@ -465,16 +484,19 @@ func matchConditions(stmtConditions map[string]map[string]interface{}, condition
 				if !exists {
 					return false
 				}
-				expectedBool := fmt.Sprintf("%v", expectedValue) == "true"
-				actualBool := actualValue == "true"
+
+				expectedBool := fmt.Sprintf("%v", expectedValue) == boolTrue
+
+				actualBool := actualValue == boolTrue
 				if expectedBool != actualBool {
 					return false
 				}
 			case "Null":
-				expectedNull := fmt.Sprintf("%v", expectedValue) == "true"
+				expectedNull := fmt.Sprintf("%v", expectedValue) == boolTrue
 				if expectedNull && exists {
 					return false
 				}
+
 				if !expectedNull && !exists {
 					return false
 				}
@@ -484,10 +506,11 @@ func matchConditions(stmtConditions map[string]map[string]interface{}, condition
 			}
 		}
 	}
+
 	return true
 }
 
-// matchConditionValue matches a condition value which can be a string or array
+// matchConditionValue matches a condition value which can be a string or array.
 func matchConditionValue(expected interface{}, actual string, matcher func(string, string) bool) bool {
 	switch v := expected.(type) {
 	case string:
@@ -501,10 +524,11 @@ func matchConditionValue(expected interface{}, actual string, matcher func(strin
 			}
 		}
 	}
+
 	return false
 }
 
-// matchIPAddress checks if an IP matches a CIDR pattern
+// matchIPAddress checks if an IP matches a CIDR pattern.
 func matchIPAddress(pattern, ip string) bool {
 	// Simple implementation - for full support, use net package
 	// This handles exact IP matches and basic CIDR notation
@@ -527,16 +551,17 @@ func matchIPAddress(pattern, ip string) bool {
 	return false
 }
 
-// ToJSON converts the policy back to JSON
+// ToJSON converts the policy back to JSON.
 func (p *Policy) ToJSON() (string, error) {
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal policy: %w", err)
 	}
+
 	return string(data), nil
 }
 
-// MapActionToS3Action maps an HTTP method and path to an S3 action
+// MapActionToS3Action maps an HTTP method and path to an S3 action.
 func MapActionToS3Action(method, path string, isBucket bool) string {
 	method = strings.ToUpper(method)
 
@@ -546,31 +571,39 @@ func MapActionToS3Action(method, path string, isBucket bool) string {
 			if strings.Contains(path, "?policy") {
 				return ActionGetBucketPolicy
 			}
+
 			if strings.Contains(path, "?cors") {
 				return ActionGetBucketCORS
 			}
+
 			if strings.Contains(path, "?versioning") {
 				return ActionGetBucketVersioning
 			}
+
 			return ActionListBucket
 		case "PUT":
 			if strings.Contains(path, "?policy") {
 				return ActionPutBucketPolicy
 			}
+
 			if strings.Contains(path, "?cors") {
 				return ActionPutBucketCORS
 			}
+
 			if strings.Contains(path, "?versioning") {
 				return ActionPutBucketVersioning
 			}
+
 			return "s3:CreateBucket"
 		case "DELETE":
 			if strings.Contains(path, "?policy") {
 				return ActionDeleteBucketPolicy
 			}
+
 			if strings.Contains(path, "?cors") {
 				return ActionDeleteBucketCORS
 			}
+
 			return "s3:DeleteBucket"
 		case "HEAD":
 			return "s3:HeadBucket"

@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	// Version is set at build time
+	// Version is set at build time.
 	Version = "dev"
-	// Commit is set at build time
+	// Commit is set at build time.
 	Commit = "none"
 )
 
@@ -50,7 +50,8 @@ Or use environment variables:
 	rootCmd.AddCommand(commands.NewRemoveCmd())
 	rootCmd.AddCommand(commands.NewCatCmd())
 
-	if err := rootCmd.Execute(); err != nil {
+	err := rootCmd.Execute()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

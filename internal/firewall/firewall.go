@@ -12,99 +12,58 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Config configures the data firewall
+// Default configuration constants.
+const (
+	defaultRequestsPerSecond        = 1000
+	defaultRateLimitBurstSize       = 100
+	defaultMaxBytesPerSecond        = 1024 * 1024 * 1024  // 1 GB/s
+	defaultMaxBytesPerSecondPerUser = 100 * 1024 * 1024   // 100 MB/s
+	defaultMaxBytesPerSecondBucket  = 500 * 1024 * 1024   // 500 MB/s
+	defaultMaxConnections           = 10000
+	defaultMaxConnectionsPerIP      = 100
+	defaultMaxConnectionsPerUser    = 500
+	defaultIdleTimeoutSeconds       = 60
+)
+
+// Config configures the data firewall.
 type Config struct {
-	// Enabled enables the firewall
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// DefaultPolicy is the default action: allow, deny
-	DefaultPolicy string `json:"defaultPolicy" yaml:"default_policy"`
-
-	// RateLimiting configures request rate limiting
-	RateLimiting RateLimitConfig `json:"rateLimiting" yaml:"rate_limiting"`
-
-	// Bandwidth configures bandwidth throttling
-	Bandwidth BandwidthConfig `json:"bandwidth" yaml:"bandwidth"`
-
-	// Connections configures connection limits
-	Connections ConnectionConfig `json:"connections" yaml:"connections"`
-
-	// Rules are firewall rules evaluated in order
-	Rules []Rule `json:"rules" yaml:"rules"`
-
-	// IPAllowlist is a list of allowed IP addresses/CIDRs
-	IPAllowlist []string `json:"ipAllowlist" yaml:"ip_allowlist"`
-
-	// IPBlocklist is a list of blocked IP addresses/CIDRs
-	IPBlocklist []string `json:"ipBlocklist" yaml:"ip_blocklist"`
-
-	// AuditEnabled enables firewall audit logging
-	AuditEnabled bool `json:"auditEnabled" yaml:"audit_enabled"`
+	Bandwidth     BandwidthConfig  `json:"bandwidth" yaml:"bandwidth"`
+	DefaultPolicy string           `json:"defaultPolicy" yaml:"default_policy"`
+	RateLimiting  RateLimitConfig  `json:"rateLimiting" yaml:"rate_limiting"`
+	Rules         []Rule           `json:"rules" yaml:"rules"`
+	IPAllowlist   []string         `json:"ipAllowlist" yaml:"ip_allowlist"`
+	IPBlocklist   []string         `json:"ipBlocklist" yaml:"ip_blocklist"`
+	Connections   ConnectionConfig `json:"connections" yaml:"connections"`
+	Enabled       bool             `json:"enabled" yaml:"enabled"`
+	AuditEnabled  bool             `json:"auditEnabled" yaml:"audit_enabled"`
 }
 
-// RateLimitConfig configures rate limiting
+// RateLimitConfig configures rate limiting.
 type RateLimitConfig struct {
-	// Enabled enables rate limiting
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// RequestsPerSecond is the default requests per second limit
-	RequestsPerSecond int `json:"requestsPerSecond" yaml:"requests_per_second"`
-
-	// BurstSize is the maximum burst size
-	BurstSize int `json:"burstSize" yaml:"burst_size"`
-
-	// PerUser enables per-user rate limiting
-	PerUser bool `json:"perUser" yaml:"per_user"`
-
-	// PerIP enables per-IP rate limiting
-	PerIP bool `json:"perIP" yaml:"per_ip"`
-
-	// PerBucket enables per-bucket rate limiting
-	PerBucket bool `json:"perBucket" yaml:"per_bucket"`
-
-	// UserLimits are per-user rate limit overrides
-	UserLimits map[string]int `json:"userLimits" yaml:"user_limits"`
-
-	// BucketLimits are per-bucket rate limit overrides
-	BucketLimits map[string]int `json:"bucketLimits" yaml:"bucket_limits"`
-
-	// OperationLimits are per-operation rate limit overrides
-	// Keys are operation names like "PutObject", "GetObject", etc.
-	// This is useful for protecting against hash DoS attacks on object creation
-	OperationLimits map[string]int `json:"operationLimits" yaml:"operation_limits"`
-
-	// ObjectCreationLimit is a specific rate limit for object creation operations
-	// This helps mitigate hash DoS attacks that target object key distribution
-	// Set to 0 to disable (uses default rate limit)
-	ObjectCreationLimit int `json:"objectCreationLimit" yaml:"object_creation_limit"`
-
-	// ObjectCreationBurstSize is the burst size for object creation operations
-	// Set to 0 to use the default burst size
-	ObjectCreationBurstSize int `json:"objectCreationBurstSize" yaml:"object_creation_burst_size"`
+	UserLimits              map[string]int `json:"userLimits" yaml:"user_limits"`
+	BucketLimits            map[string]int `json:"bucketLimits" yaml:"bucket_limits"`
+	OperationLimits         map[string]int `json:"operationLimits" yaml:"operation_limits"`
+	RequestsPerSecond       int            `json:"requestsPerSecond" yaml:"requests_per_second"`
+	BurstSize               int            `json:"burstSize" yaml:"burst_size"`
+	ObjectCreationLimit     int            `json:"objectCreationLimit" yaml:"object_creation_limit"`
+	ObjectCreationBurstSize int            `json:"objectCreationBurstSize" yaml:"object_creation_burst_size"`
+	Enabled                 bool           `json:"enabled" yaml:"enabled"`
+	PerUser                 bool           `json:"perUser" yaml:"per_user"`
+	PerIP                   bool           `json:"perIP" yaml:"per_ip"`
+	PerBucket               bool           `json:"perBucket" yaml:"per_bucket"`
 }
 
-// BandwidthConfig configures bandwidth throttling
+// BandwidthConfig configures bandwidth throttling.
 type BandwidthConfig struct {
-	// Enabled enables bandwidth throttling
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// MaxBytesPerSecond is the global max bandwidth in bytes/second
-	MaxBytesPerSecond int64 `json:"maxBytesPerSecond" yaml:"max_bytes_per_second"`
-
-	// MaxBytesPerSecondPerUser is per-user bandwidth limit
-	MaxBytesPerSecondPerUser int64 `json:"maxBytesPerSecondPerUser" yaml:"max_bytes_per_second_per_user"`
-
-	// MaxBytesPerSecondPerBucket is per-bucket bandwidth limit
-	MaxBytesPerSecondPerBucket int64 `json:"maxBytesPerSecondPerBucket" yaml:"max_bytes_per_second_per_bucket"`
-
-	// UserLimits are per-user bandwidth overrides
-	UserLimits map[string]int64 `json:"userLimits" yaml:"user_limits"`
-
-	// BucketLimits are per-bucket bandwidth overrides
-	BucketLimits map[string]int64 `json:"bucketLimits" yaml:"bucket_limits"`
+	UserLimits                 map[string]int64 `json:"userLimits" yaml:"user_limits"`
+	BucketLimits               map[string]int64 `json:"bucketLimits" yaml:"bucket_limits"`
+	MaxBytesPerSecond          int64            `json:"maxBytesPerSecond" yaml:"max_bytes_per_second"`
+	MaxBytesPerSecondPerUser   int64            `json:"maxBytesPerSecondPerUser" yaml:"max_bytes_per_second_per_user"`
+	MaxBytesPerSecondPerBucket int64            `json:"maxBytesPerSecondPerBucket" yaml:"max_bytes_per_second_per_bucket"`
+	Enabled                    bool             `json:"enabled" yaml:"enabled"`
 }
 
-// ConnectionConfig configures connection limits
+// ConnectionConfig configures connection limits.
 type ConnectionConfig struct {
 	// Enabled enables connection limiting
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -122,80 +81,42 @@ type ConnectionConfig struct {
 	IdleTimeout time.Duration `json:"idleTimeout" yaml:"idle_timeout"`
 }
 
-// Rule represents a firewall rule
+// Rule represents a firewall rule.
 type Rule struct {
-	// ID is the unique rule identifier
-	ID string `json:"id" yaml:"id"`
-
-	// Name is a human-readable rule name
-	Name string `json:"name" yaml:"name"`
-
-	// Priority determines rule evaluation order (lower = higher priority)
-	Priority int `json:"priority" yaml:"priority"`
-
-	// Enabled enables/disables the rule
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// Action is the rule action: allow, deny, throttle
-	Action string `json:"action" yaml:"action"`
-
-	// Match contains matching criteria
-	Match RuleMatch `json:"match" yaml:"match"`
-
-	// RateLimit is the rate limit to apply when action is "throttle"
-	RateLimit *int `json:"rateLimit,omitempty" yaml:"rate_limit,omitempty"`
-
-	// BandwidthLimit is the bandwidth limit in bytes/second
-	BandwidthLimit *int64 `json:"bandwidthLimit,omitempty" yaml:"bandwidth_limit,omitempty"`
+	Match          RuleMatch `json:"match" yaml:"match"`
+	RateLimit      *int      `json:"rateLimit,omitempty" yaml:"rate_limit,omitempty"`
+	BandwidthLimit *int64    `json:"bandwidthLimit,omitempty" yaml:"bandwidth_limit,omitempty"`
+	ID             string    `json:"id" yaml:"id"`
+	Name           string    `json:"name" yaml:"name"`
+	Action         string    `json:"action" yaml:"action"`
+	Priority       int       `json:"priority" yaml:"priority"`
+	Enabled        bool      `json:"enabled" yaml:"enabled"`
 }
 
-// RuleMatch contains criteria for matching requests
+// RuleMatch contains criteria for matching requests.
 type RuleMatch struct {
-	// SourceIPs are source IP addresses/CIDRs to match
-	SourceIPs []string `json:"sourceIPs,omitempty" yaml:"source_ips,omitempty"`
-
-	// Users are user names to match
-	Users []string `json:"users,omitempty" yaml:"users,omitempty"`
-
-	// Buckets are bucket names to match (supports wildcards)
-	Buckets []string `json:"buckets,omitempty" yaml:"buckets,omitempty"`
-
-	// Operations are S3 operations to match (GetObject, PutObject, etc.)
-	Operations []string `json:"operations,omitempty" yaml:"operations,omitempty"`
-
-	// KeyPrefixes are object key prefixes to match
-	KeyPrefixes []string `json:"keyPrefixes,omitempty" yaml:"key_prefixes,omitempty"`
-
-	// ContentTypes are content types to match
-	ContentTypes []string `json:"contentTypes,omitempty" yaml:"content_types,omitempty"`
-
-	// MinSize is the minimum object size to match
-	MinSize int64 `json:"minSize,omitempty" yaml:"min_size,omitempty"`
-
-	// MaxSize is the maximum object size to match
-	MaxSize int64 `json:"maxSize,omitempty" yaml:"max_size,omitempty"`
-
-	// TimeWindow restricts the rule to certain hours
-	TimeWindow *TimeWindow `json:"timeWindow,omitempty" yaml:"time_window,omitempty"`
+	TimeWindow   *TimeWindow `json:"timeWindow,omitempty" yaml:"time_window,omitempty"`
+	SourceIPs    []string    `json:"sourceIPs,omitempty" yaml:"source_ips,omitempty"`
+	Users        []string    `json:"users,omitempty" yaml:"users,omitempty"`
+	Buckets      []string    `json:"buckets,omitempty" yaml:"buckets,omitempty"`
+	Operations   []string    `json:"operations,omitempty" yaml:"operations,omitempty"`
+	KeyPrefixes  []string    `json:"keyPrefixes,omitempty" yaml:"key_prefixes,omitempty"`
+	ContentTypes []string    `json:"contentTypes,omitempty" yaml:"content_types,omitempty"`
+	MinSize      int64       `json:"minSize,omitempty" yaml:"min_size,omitempty"`
+	MaxSize      int64       `json:"maxSize,omitempty" yaml:"max_size,omitempty"`
 }
 
-// TimeWindow defines time-based rule matching
+// TimeWindow defines time-based rule matching.
 type TimeWindow struct {
-	// StartHour is the start hour (0-23)
-	StartHour int `json:"startHour" yaml:"start_hour"`
-
-	// EndHour is the end hour (0-23)
-	EndHour int `json:"endHour" yaml:"end_hour"`
-
-	// DaysOfWeek are days when rule applies (0=Sunday, 6=Saturday)
-	DaysOfWeek []int `json:"daysOfWeek,omitempty" yaml:"days_of_week,omitempty"`
-
-	// Timezone is the timezone for time matching
-	Timezone string `json:"timezone" yaml:"timezone"`
+	Timezone   string `json:"timezone" yaml:"timezone"`
+	DaysOfWeek []int  `json:"daysOfWeek,omitempty" yaml:"days_of_week,omitempty"`
+	StartHour  int    `json:"startHour" yaml:"start_hour"`
+	EndHour    int    `json:"endHour" yaml:"end_hour"`
 }
 
-// Request represents an incoming S3 request for firewall evaluation
+// Request represents an incoming S3 request for firewall evaluation.
 type Request struct {
+	Timestamp   time.Time
 	SourceIP    string
 	User        string
 	Bucket      string
@@ -203,93 +124,82 @@ type Request struct {
 	Operation   string
 	ContentType string
 	Size        int64
-	Timestamp   time.Time
 }
 
-// Decision represents a firewall decision
+// Decision represents a firewall decision.
 type Decision struct {
-	Allowed        bool
 	Rule           *Rule
-	RateLimit      int     // Requests per second (0 = no limit)
-	BandwidthLimit int64   // Bytes per second (0 = no limit)
 	Reason         string
+	RateLimit      int
+	BandwidthLimit int64
+	Allowed        bool
 }
 
-// Firewall is the main data firewall
+// Firewall is the main data firewall.
 type Firewall struct {
-	config Config
-	mu     sync.RWMutex
-
-	// Rate limiters
-	globalLimiter      *TokenBucket
-	userLimiters       map[string]*TokenBucket
-	ipLimiters         map[string]*TokenBucket
-	bucketLimiters     map[string]*TokenBucket
-	operationLimiters  map[string]*TokenBucket // Per-operation rate limiters for hash DoS mitigation
-	limiterMu          sync.RWMutex
-
-	// Bandwidth trackers
-	globalBandwidth  *BandwidthTracker
-	userBandwidth    map[string]*BandwidthTracker
-	bucketBandwidth  map[string]*BandwidthTracker
-	bandwidthMu      sync.RWMutex
-
-	// Connection counters
-	globalConnections int64
-	ipConnections     map[string]int64
+	globalBandwidth   *BandwidthTracker
+	bucketBandwidth   map[string]*BandwidthTracker
+	globalLimiter     *TokenBucket
+	userBandwidth     map[string]*BandwidthTracker
+	ipLimiters        map[string]*TokenBucket
+	bucketLimiters    map[string]*TokenBucket
+	operationLimiters map[string]*TokenBucket
 	userConnections   map[string]int64
+	ipConnections     map[string]int64
+	userLimiters      map[string]*TokenBucket
+	allowedNets       []*net.IPNet
+	blockedNets       []*net.IPNet
+	config            Config
+	stats             FirewallStats
+	globalConnections int64
+	bandwidthMu       sync.RWMutex
+	mu                sync.RWMutex
+	limiterMu         sync.RWMutex
 	connectionMu      sync.RWMutex
-
-	// IP networks (parsed allowlist/blocklist)
-	allowedNets []*net.IPNet
-	blockedNets []*net.IPNet
-
-	// Statistics
-	stats FirewallStats
 }
 
-// FirewallStats contains firewall statistics
+// FirewallStats contains firewall statistics.
 type FirewallStats struct {
-	RequestsAllowed  int64 `json:"requestsAllowed"`
-	RequestsDenied   int64 `json:"requestsDenied"`
-	RequestsThrottled int64 `json:"requestsThrottled"`
-	RateLimitHits    int64 `json:"rateLimitHits"`
-	BandwidthLimitHits int64 `json:"bandwidthLimitHits"`
+	RequestsAllowed     int64 `json:"requestsAllowed"`
+	RequestsDenied      int64 `json:"requestsDenied"`
+	RequestsThrottled   int64 `json:"requestsThrottled"`
+	RateLimitHits       int64 `json:"rateLimitHits"`
+	BandwidthLimitHits  int64 `json:"bandwidthLimitHits"`
 	ConnectionLimitHits int64 `json:"connectionLimitHits"`
-	RulesEvaluated   int64 `json:"rulesEvaluated"`
+	RulesEvaluated      int64 `json:"rulesEvaluated"`
 }
 
-// DefaultConfig returns sensible firewall defaults
+// DefaultConfig returns sensible firewall defaults.
 func DefaultConfig() Config {
 	return Config{
 		Enabled:       false,
 		DefaultPolicy: "allow",
 		RateLimiting: RateLimitConfig{
 			Enabled:           false,
-			RequestsPerSecond: 1000,
-			BurstSize:         100,
+			RequestsPerSecond: defaultRequestsPerSecond,
+			BurstSize:         defaultRateLimitBurstSize,
 			PerUser:           true,
 			PerIP:             true,
 			PerBucket:         false,
 		},
 		Bandwidth: BandwidthConfig{
 			Enabled:                    false,
-			MaxBytesPerSecond:          1024 * 1024 * 1024, // 1 GB/s
-			MaxBytesPerSecondPerUser:   100 * 1024 * 1024,  // 100 MB/s
-			MaxBytesPerSecondPerBucket: 500 * 1024 * 1024,  // 500 MB/s
+			MaxBytesPerSecond:          defaultMaxBytesPerSecond,        // 1 GB/s
+			MaxBytesPerSecondPerUser:   defaultMaxBytesPerSecondPerUser, // 100 MB/s
+			MaxBytesPerSecondPerBucket: defaultMaxBytesPerSecondBucket,  // 500 MB/s
 		},
 		Connections: ConnectionConfig{
 			Enabled:               false,
-			MaxConnections:        10000,
-			MaxConnectionsPerIP:   100,
-			MaxConnectionsPerUser: 500,
-			IdleTimeout:           60 * time.Second,
+			MaxConnections:        defaultMaxConnections,
+			MaxConnectionsPerIP:   defaultMaxConnectionsPerIP,
+			MaxConnectionsPerUser: defaultMaxConnectionsPerUser,
+			IdleTimeout:           defaultIdleTimeoutSeconds * time.Second,
 		},
 		AuditEnabled: true,
 	}
 }
 
-// New creates a new firewall
+// New creates a new firewall.
 func New(config Config) (*Firewall, error) {
 	fw := &Firewall{
 		config:            config,
@@ -305,6 +215,7 @@ func New(config Config) (*Firewall, error) {
 
 	// Parse IP allowlist - collect invalid entries for summary logging
 	var invalidAllowlistEntries []string
+
 	for _, cidr := range config.IPAllowlist {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
@@ -313,21 +224,25 @@ func New(config Config) (*Firewall, error) {
 				invalidAllowlistEntries = append(invalidAllowlistEntries, cidr)
 				continue
 			}
+
 			var parseErr error
 			if ip.To4() != nil {
 				_, network, parseErr = net.ParseCIDR(cidr + "/32")
 			} else {
 				_, network, parseErr = net.ParseCIDR(cidr + "/128")
 			}
+
 			if parseErr != nil {
 				invalidAllowlistEntries = append(invalidAllowlistEntries, cidr)
 				continue
 			}
 		}
+
 		if network != nil {
 			fw.allowedNets = append(fw.allowedNets, network)
 		}
 	}
+
 	if len(invalidAllowlistEntries) > 0 {
 		log.Warn().
 			Int("count", len(invalidAllowlistEntries)).
@@ -337,6 +252,7 @@ func New(config Config) (*Firewall, error) {
 
 	// Parse IP blocklist - collect invalid entries for summary logging
 	var invalidBlocklistEntries []string
+
 	for _, cidr := range config.IPBlocklist {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
@@ -345,21 +261,25 @@ func New(config Config) (*Firewall, error) {
 				invalidBlocklistEntries = append(invalidBlocklistEntries, cidr)
 				continue
 			}
+
 			var parseErr error
 			if ip.To4() != nil {
 				_, network, parseErr = net.ParseCIDR(cidr + "/32")
 			} else {
 				_, network, parseErr = net.ParseCIDR(cidr + "/128")
 			}
+
 			if parseErr != nil {
 				invalidBlocklistEntries = append(invalidBlocklistEntries, cidr)
 				continue
 			}
 		}
+
 		if network != nil {
 			fw.blockedNets = append(fw.blockedNets, network)
 		}
 	}
+
 	if len(invalidBlocklistEntries) > 0 {
 		log.Warn().
 			Int("count", len(invalidBlocklistEntries)).
@@ -383,7 +303,7 @@ func New(config Config) (*Firewall, error) {
 	return fw, nil
 }
 
-// Evaluate evaluates a request against the firewall
+// Evaluate evaluates a request against the firewall.
 func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 	if !fw.config.Enabled {
 		return &Decision{Allowed: true}
@@ -394,6 +314,7 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 	// Check IP blocklist first
 	if fw.isIPBlocked(req.SourceIP) {
 		atomic.AddInt64(&fw.stats.RequestsDenied, 1)
+
 		return &Decision{
 			Allowed: false,
 			Reason:  "IP address is blocked",
@@ -403,6 +324,7 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 	// Check IP allowlist
 	if len(fw.allowedNets) > 0 && !fw.isIPAllowed(req.SourceIP) {
 		atomic.AddInt64(&fw.stats.RequestsDenied, 1)
+
 		return &Decision{
 			Allowed: false,
 			Reason:  "IP address is not in allowlist",
@@ -414,6 +336,7 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 		if !fw.checkConnectionLimits(req) {
 			atomic.AddInt64(&fw.stats.ConnectionLimitHits, 1)
 			atomic.AddInt64(&fw.stats.RequestsDenied, 1)
+
 			return &Decision{
 				Allowed: false,
 				Reason:  "Connection limit exceeded",
@@ -431,6 +354,7 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			switch rule.Action {
 			case "deny":
 				atomic.AddInt64(&fw.stats.RequestsDenied, 1)
+
 				return &Decision{
 					Allowed: false,
 					Rule:    &rule,
@@ -438,12 +362,14 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 				}
 			case "allow":
 				atomic.AddInt64(&fw.stats.RequestsAllowed, 1)
+
 				return &Decision{
 					Allowed: true,
 					Rule:    &rule,
 				}
 			case "throttle":
 				atomic.AddInt64(&fw.stats.RequestsThrottled, 1)
+
 				decision := &Decision{
 					Allowed: true,
 					Rule:    &rule,
@@ -451,9 +377,11 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 				if rule.RateLimit != nil {
 					decision.RateLimit = *rule.RateLimit
 				}
+
 				if rule.BandwidthLimit != nil {
 					decision.BandwidthLimit = *rule.BandwidthLimit
 				}
+
 				return decision
 			}
 		}
@@ -464,6 +392,7 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 		if !fw.checkRateLimits(req) {
 			atomic.AddInt64(&fw.stats.RateLimitHits, 1)
 			atomic.AddInt64(&fw.stats.RequestsDenied, 1)
+
 			return &Decision{
 				Allowed: false,
 				Reason:  "Rate limit exceeded",
@@ -474,6 +403,7 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 	// Apply default policy
 	if fw.config.DefaultPolicy == "deny" {
 		atomic.AddInt64(&fw.stats.RequestsDenied, 1)
+
 		return &Decision{
 			Allowed: false,
 			Reason:  "Default policy is deny",
@@ -481,10 +411,11 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 	}
 
 	atomic.AddInt64(&fw.stats.RequestsAllowed, 1)
+
 	return &Decision{Allowed: true}
 }
 
-// CheckBandwidth checks and consumes bandwidth
+// CheckBandwidth checks and consumes bandwidth.
 func (fw *Firewall) CheckBandwidth(user, bucket string, bytes int64) bool {
 	if !fw.config.Bandwidth.Enabled {
 		return true
@@ -517,16 +448,16 @@ func (fw *Firewall) CheckBandwidth(user, bucket string, bytes int64) bool {
 	return true
 }
 
-// Stats returns firewall statistics
+// Stats returns firewall statistics.
 func (fw *Firewall) Stats() FirewallStats {
 	return FirewallStats{
-		RequestsAllowed:    atomic.LoadInt64(&fw.stats.RequestsAllowed),
-		RequestsDenied:     atomic.LoadInt64(&fw.stats.RequestsDenied),
-		RequestsThrottled:  atomic.LoadInt64(&fw.stats.RequestsThrottled),
-		RateLimitHits:      atomic.LoadInt64(&fw.stats.RateLimitHits),
-		BandwidthLimitHits: atomic.LoadInt64(&fw.stats.BandwidthLimitHits),
+		RequestsAllowed:     atomic.LoadInt64(&fw.stats.RequestsAllowed),
+		RequestsDenied:      atomic.LoadInt64(&fw.stats.RequestsDenied),
+		RequestsThrottled:   atomic.LoadInt64(&fw.stats.RequestsThrottled),
+		RateLimitHits:       atomic.LoadInt64(&fw.stats.RateLimitHits),
+		BandwidthLimitHits:  atomic.LoadInt64(&fw.stats.BandwidthLimitHits),
 		ConnectionLimitHits: atomic.LoadInt64(&fw.stats.ConnectionLimitHits),
-		RulesEvaluated:     atomic.LoadInt64(&fw.stats.RulesEvaluated),
+		RulesEvaluated:      atomic.LoadInt64(&fw.stats.RulesEvaluated),
 	}
 }
 
@@ -537,11 +468,13 @@ func (fw *Firewall) isIPBlocked(ip string) bool {
 	if parsedIP == nil {
 		return false
 	}
+
 	for _, network := range fw.blockedNets {
 		if network.Contains(parsedIP) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -549,15 +482,18 @@ func (fw *Firewall) isIPAllowed(ip string) bool {
 	if len(fw.allowedNets) == 0 {
 		return true
 	}
+
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return false
 	}
+
 	for _, network := range fw.allowedNets {
 		if network.Contains(parsedIP) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -637,7 +573,7 @@ func (fw *Firewall) checkRateLimits(req *Request) bool {
 	return true
 }
 
-// isObjectCreationOperation checks if the operation creates objects (vulnerable to hash DoS)
+// isObjectCreationOperation checks if the operation creates objects (vulnerable to hash DoS).
 func isObjectCreationOperation(operation string) bool {
 	switch operation {
 	case "PutObject", "CopyObject", "CompleteMultipartUpload", "UploadPart":
@@ -653,6 +589,7 @@ func (fw *Firewall) matchRule(rule *Rule, req *Request) bool {
 	// Check source IPs
 	if len(match.SourceIPs) > 0 {
 		found := false
+
 		reqIP := net.ParseIP(req.SourceIP)
 		for _, cidr := range match.SourceIPs {
 			_, network, err := net.ParseCIDR(cidr)
@@ -661,13 +598,16 @@ func (fw *Firewall) matchRule(rule *Rule, req *Request) bool {
 					found = true
 					break
 				}
+
 				continue
 			}
+
 			if network.Contains(reqIP) {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			return false
 		}
@@ -691,12 +631,14 @@ func (fw *Firewall) matchRule(rule *Rule, req *Request) bool {
 	// Check key prefixes
 	if len(match.KeyPrefixes) > 0 {
 		found := false
+
 		for _, prefix := range match.KeyPrefixes {
 			if len(req.Key) >= len(prefix) && req.Key[:len(prefix)] == prefix {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			return false
 		}
@@ -711,6 +653,7 @@ func (fw *Firewall) matchRule(rule *Rule, req *Request) bool {
 	if match.MinSize > 0 && req.Size < match.MinSize {
 		return false
 	}
+
 	if match.MaxSize > 0 && req.Size > match.MaxSize {
 		return false
 	}
@@ -726,7 +669,8 @@ func (fw *Firewall) matchRule(rule *Rule, req *Request) bool {
 func (fw *Firewall) matchTimeWindow(window *TimeWindow, t time.Time) bool {
 	loc := time.UTC
 	if window.Timezone != "" {
-		if l, err := time.LoadLocation(window.Timezone); err == nil {
+		l, loadErr := time.LoadLocation(window.Timezone)
+		if loadErr == nil {
 			loc = l
 		}
 	}
@@ -750,12 +694,14 @@ func (fw *Firewall) matchTimeWindow(window *TimeWindow, t time.Time) bool {
 	if len(window.DaysOfWeek) > 0 {
 		day := int(t.Weekday())
 		found := false
+
 		for _, d := range window.DaysOfWeek {
 			if d == day {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			return false
 		}
@@ -788,6 +734,7 @@ func (fw *Firewall) getOrCreateUserLimiter(user string) *TokenBucket {
 
 	limiter = NewTokenBucket(rps, fw.config.RateLimiting.BurstSize)
 	fw.userLimiters[user] = limiter
+
 	return limiter
 }
 
@@ -812,6 +759,7 @@ func (fw *Firewall) getOrCreateIPLimiter(ip string) *TokenBucket {
 		fw.config.RateLimiting.BurstSize,
 	)
 	fw.ipLimiters[ip] = limiter
+
 	return limiter
 }
 
@@ -838,6 +786,7 @@ func (fw *Firewall) getOrCreateBucketLimiter(bucket string) *TokenBucket {
 
 	limiter = NewTokenBucket(rps, fw.config.RateLimiting.BurstSize)
 	fw.bucketLimiters[bucket] = limiter
+
 	return limiter
 }
 
@@ -873,6 +822,7 @@ func (fw *Firewall) getOrCreateOperationLimiter(operation string) *TokenBucket {
 
 	limiter = NewTokenBucket(rps, burstSize)
 	fw.operationLimiters[operation] = limiter
+
 	return limiter
 }
 
@@ -899,6 +849,7 @@ func (fw *Firewall) getOrCreateUserBandwidth(user string) *BandwidthTracker {
 
 	tracker = NewBandwidthTracker(limit)
 	fw.userBandwidth[user] = tracker
+
 	return tracker
 }
 
@@ -925,6 +876,7 @@ func (fw *Firewall) getOrCreateBucketBandwidth(bucket string) *BandwidthTracker 
 
 	tracker = NewBandwidthTracker(limit)
 	fw.bucketBandwidth[bucket] = tracker
+
 	return tracker
 }
 
@@ -936,6 +888,7 @@ func contains(slice []string, item string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -952,19 +905,20 @@ func matchWildcard(patterns []string, value string) bool {
 			}
 		}
 	}
+
 	return false
 }
 
-// TokenBucket implements the token bucket rate limiting algorithm
+// TokenBucket implements the token bucket rate limiting algorithm.
 type TokenBucket struct {
-	mu           sync.Mutex
-	tokens       float64
-	maxTokens    float64
-	refillRate   float64 // tokens per second
-	lastRefill   time.Time
+	lastRefill time.Time
+	tokens     float64
+	maxTokens  float64
+	refillRate float64
+	mu         sync.Mutex
 }
 
-// NewTokenBucket creates a new token bucket rate limiter
+// NewTokenBucket creates a new token bucket rate limiter.
 func NewTokenBucket(requestsPerSecond, burstSize int) *TokenBucket {
 	return &TokenBucket{
 		tokens:     float64(burstSize),
@@ -974,7 +928,7 @@ func NewTokenBucket(requestsPerSecond, burstSize int) *TokenBucket {
 	}
 }
 
-// Allow checks if a request is allowed and consumes a token if so
+// Allow checks if a request is allowed and consumes a token if so.
 func (tb *TokenBucket) Allow() bool {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
@@ -985,10 +939,11 @@ func (tb *TokenBucket) Allow() bool {
 		tb.tokens--
 		return true
 	}
+
 	return false
 }
 
-// AllowN checks if n tokens are available and consumes them if so
+// AllowN checks if n tokens are available and consumes them if so.
 func (tb *TokenBucket) AllowN(n int) bool {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
@@ -1000,10 +955,11 @@ func (tb *TokenBucket) AllowN(n int) bool {
 		tb.tokens -= needed
 		return true
 	}
+
 	return false
 }
 
-// refill adds tokens based on elapsed time (must be called with lock held)
+// refill adds tokens based on elapsed time (must be called with lock held).
 func (tb *TokenBucket) refill() {
 	now := time.Now()
 	elapsed := now.Sub(tb.lastRefill).Seconds()
@@ -1015,30 +971,32 @@ func (tb *TokenBucket) refill() {
 	}
 }
 
-// Tokens returns current token count (for monitoring)
+// Tokens returns current token count (for monitoring).
 func (tb *TokenBucket) Tokens() float64 {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
+
 	tb.refill()
+
 	return tb.tokens
 }
 
-// BandwidthTracker tracks bandwidth usage with a sliding window
+// BandwidthTracker tracks bandwidth usage with a sliding window.
 type BandwidthTracker struct {
-	mu            sync.Mutex
+	buckets        []bandwidthBucket
 	maxBytesPerSec int64
-	windowSize    time.Duration
-	buckets       []bandwidthBucket
+	windowSize     time.Duration
 	bucketDuration time.Duration
-	numBuckets    int
+	numBuckets     int
+	mu             sync.Mutex
 }
 
 type bandwidthBucket struct {
-	bytes     int64
 	timestamp time.Time
+	bytes     int64
 }
 
-// NewBandwidthTracker creates a new bandwidth tracker
+// NewBandwidthTracker creates a new bandwidth tracker.
 func NewBandwidthTracker(maxBytesPerSecond int64) *BandwidthTracker {
 	numBuckets := 10 // 10 buckets for 1 second = 100ms granularity
 	windowSize := time.Second
@@ -1053,7 +1011,7 @@ func NewBandwidthTracker(maxBytesPerSecond int64) *BandwidthTracker {
 	}
 }
 
-// TryConsume attempts to consume bytes and returns true if allowed
+// TryConsume attempts to consume bytes and returns true if allowed.
 func (bt *BandwidthTracker) TryConsume(bytes int64) bool {
 	bt.mu.Lock()
 	defer bt.mu.Unlock()
@@ -1063,6 +1021,7 @@ func (bt *BandwidthTracker) TryConsume(bytes int64) bool {
 
 	// Calculate current usage in the window
 	var currentUsage int64
+
 	for _, bucket := range bt.buckets {
 		if !bucket.timestamp.IsZero() && now.Sub(bucket.timestamp) < bt.windowSize {
 			currentUsage += bucket.bytes
@@ -1089,7 +1048,7 @@ func (bt *BandwidthTracker) TryConsume(bytes int64) bool {
 	return true
 }
 
-// CurrentUsage returns current bandwidth usage in bytes per second
+// CurrentUsage returns current bandwidth usage in bytes per second.
 func (bt *BandwidthTracker) CurrentUsage() int64 {
 	bt.mu.Lock()
 	defer bt.mu.Unlock()
@@ -1098,15 +1057,17 @@ func (bt *BandwidthTracker) CurrentUsage() int64 {
 	bt.cleanOldBuckets(now)
 
 	var total int64
+
 	for _, bucket := range bt.buckets {
 		if !bucket.timestamp.IsZero() && now.Sub(bucket.timestamp) < bt.windowSize {
 			total += bucket.bytes
 		}
 	}
+
 	return total
 }
 
-// cleanOldBuckets removes stale buckets (must be called with lock held)
+// cleanOldBuckets removes stale buckets (must be called with lock held).
 func (bt *BandwidthTracker) cleanOldBuckets(now time.Time) {
 	for i := range bt.buckets {
 		if !bt.buckets[i].timestamp.IsZero() && now.Sub(bt.buckets[i].timestamp) >= bt.windowSize {
@@ -1115,38 +1076,42 @@ func (bt *BandwidthTracker) cleanOldBuckets(now time.Time) {
 	}
 }
 
-// getBucketIndex returns the bucket index for a given time
+// getBucketIndex returns the bucket index for a given time.
 func (bt *BandwidthTracker) getBucketIndex(t time.Time) int {
 	return int(t.UnixNano()/int64(bt.bucketDuration)) % bt.numBuckets
 }
 
 // Connection tracking methods
 
-// TrackConnection increments connection counts
+// TrackConnection increments connection counts.
 func (fw *Firewall) TrackConnection(ip, user string) {
 	fw.connectionMu.Lock()
 	defer fw.connectionMu.Unlock()
 
 	atomic.AddInt64(&fw.globalConnections, 1)
+
 	if ip != "" {
 		fw.ipConnections[ip]++
 	}
+
 	if user != "" {
 		fw.userConnections[user]++
 	}
 }
 
-// ReleaseConnection decrements connection counts
+// ReleaseConnection decrements connection counts.
 func (fw *Firewall) ReleaseConnection(ip, user string) {
 	fw.connectionMu.Lock()
 	defer fw.connectionMu.Unlock()
 
 	atomic.AddInt64(&fw.globalConnections, -1)
+
 	if ip != "" {
 		if fw.ipConnections[ip] > 0 {
 			fw.ipConnections[ip]--
 		}
 	}
+
 	if user != "" {
 		if fw.userConnections[user] > 0 {
 			fw.userConnections[user]--
@@ -1154,7 +1119,7 @@ func (fw *Firewall) ReleaseConnection(ip, user string) {
 	}
 }
 
-// UpdateConfig updates the firewall configuration dynamically
+// UpdateConfig updates the firewall configuration dynamically.
 func (fw *Firewall) UpdateConfig(config Config) error {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1172,12 +1137,14 @@ func (fw *Firewall) UpdateConfig(config Config) error {
 			if ip == nil {
 				continue
 			}
+
 			if ip.To4() != nil {
 				_, network, _ = net.ParseCIDR(cidr + "/32")
 			} else {
 				_, network, _ = net.ParseCIDR(cidr + "/128")
 			}
 		}
+
 		if network != nil {
 			fw.allowedNets = append(fw.allowedNets, network)
 		}
@@ -1190,12 +1157,14 @@ func (fw *Firewall) UpdateConfig(config Config) error {
 			if ip == nil {
 				continue
 			}
+
 			if ip.To4() != nil {
 				_, network, _ = net.ParseCIDR(cidr + "/32")
 			} else {
 				_, network, _ = net.ParseCIDR(cidr + "/128")
 			}
 		}
+
 		if network != nil {
 			fw.blockedNets = append(fw.blockedNets, network)
 		}
@@ -1216,14 +1185,15 @@ func (fw *Firewall) UpdateConfig(config Config) error {
 	return nil
 }
 
-// GetConfig returns the current firewall configuration
+// GetConfig returns the current firewall configuration.
 func (fw *Firewall) GetConfig() Config {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
+
 	return fw.config
 }
 
-// ResetStats resets firewall statistics
+// ResetStats resets firewall statistics.
 func (fw *Firewall) ResetStats() {
 	atomic.StoreInt64(&fw.stats.RequestsAllowed, 0)
 	atomic.StoreInt64(&fw.stats.RequestsDenied, 0)

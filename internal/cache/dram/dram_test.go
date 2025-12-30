@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// Test constants.
+const (
+	testCacheKey       = "test-bucket/test-key"
+	testContentTypeVal = "text/plain"
+)
+
 func TestNewCache(t *testing.T) {
 	config := DefaultConfig()
 	config.MaxSize = 1024 * 1024 * 100 // 100MB for testing
@@ -34,9 +40,9 @@ func TestPutAndGet(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
-	key := "test-bucket/test-key"
+	key := testCacheKey
 	data := []byte("test data content")
-	contentType := "text/plain"
+	contentType := testContentTypeVal
 	etag := "abc123"
 
 	// Put entry
@@ -72,7 +78,7 @@ func TestHas(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
-	key := "test-bucket/test-key"
+	key := testCacheKey
 
 	// Should not exist initially
 	if cache.Has(ctx, key) {
@@ -95,7 +101,7 @@ func TestDelete(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
-	key := "test-bucket/test-key"
+	key := testCacheKey
 
 	// Put entry
 	cache.Put(ctx, key, []byte("data"), "", "")
@@ -126,7 +132,7 @@ func TestExpiration(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
-	key := "test-bucket/test-key"
+	key := testCacheKey
 
 	// Put entry
 	cache.Put(ctx, key, []byte("data"), "", "")
@@ -157,7 +163,7 @@ func TestEviction(t *testing.T) {
 	ctx := context.Background()
 
 	// Put entries that exceed cache size
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		key := fmt.Sprintf("bucket/key-%d", i)
 		data := make([]byte, 200) // 200 bytes each
 		cache.Put(ctx, key, data, "", "")
@@ -186,13 +192,13 @@ func TestMetrics(t *testing.T) {
 	ctx := context.Background()
 
 	// Put some entries
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		key := fmt.Sprintf("bucket/key-%d", i)
 		cache.Put(ctx, key, []byte("test data"), "", "")
 	}
 
 	// Get some entries (hits)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		key := fmt.Sprintf("bucket/key-%d", i)
 		cache.Get(ctx, key)
 	}
@@ -232,34 +238,42 @@ func TestConcurrentAccess(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
+
 	var wg sync.WaitGroup
+
 	numGoroutines := 100
 	opsPerGoroutine := 100
 
 	// Concurrent puts
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
+
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < opsPerGoroutine; j++ {
+
+			for j := range opsPerGoroutine {
 				key := fmt.Sprintf("bucket/key-%d-%d", id, j)
 				cache.Put(ctx, key, []byte("test data"), "", "")
 			}
 		}(i)
 	}
+
 	wg.Wait()
 
 	// Concurrent gets
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
+
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < opsPerGoroutine; j++ {
+
+			for j := range opsPerGoroutine {
 				key := fmt.Sprintf("bucket/key-%d-%d", id, j)
 				cache.Get(ctx, key)
 			}
 		}(i)
 	}
+
 	wg.Wait()
 
 	// Should complete without race conditions
@@ -277,7 +291,7 @@ func TestClear(t *testing.T) {
 	ctx := context.Background()
 
 	// Put some entries
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		key := fmt.Sprintf("bucket/key-%d", i)
 		cache.Put(ctx, key, []byte("test data"), "", "")
 	}
@@ -304,22 +318,23 @@ func TestGetReader(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
-	key := "test-bucket/test-key"
+	key := testCacheKey
 	data := []byte("test data for streaming")
 
-	cache.Put(ctx, key, data, "text/plain", "abc123")
+	cache.Put(ctx, key, data, testContentTypeVal, "abc123")
 
 	reader, entry, ok := cache.GetReader(ctx, key)
 	if !ok {
 		t.Fatal("expected entry to be found")
 	}
 
-	if entry.ContentType != "text/plain" {
-		t.Errorf("expected content type text/plain, got %s", entry.ContentType)
+	if entry.ContentType != testContentTypeVal {
+		t.Errorf("expected content type %s, got %s", testContentTypeVal, entry.ContentType)
 	}
 
 	// Read data from reader
 	buf := make([]byte, len(data))
+
 	n, err := reader.Read(buf)
 	if err != nil {
 		t.Fatalf("read failed: %v", err)
@@ -346,10 +361,11 @@ func TestWarmCache(t *testing.T) {
 
 	// Define warmup source
 	source := func(ctx context.Context, key string) ([]byte, string, string, error) {
-		return []byte("warmed data for " + key), "text/plain", "etag-" + key, nil
+		return []byte("warmed data for " + key), testContentTypeVal, "etag-" + key, nil
 	}
 
 	keys := []string{"bucket/warm-1", "bucket/warm-2", "bucket/warm-3"}
+
 	err := cache.WarmCache(ctx, keys, source)
 	if err != nil {
 		t.Fatalf("WarmCache failed: %v", err)
@@ -365,10 +381,10 @@ func TestWarmCache(t *testing.T) {
 
 func TestEntryMarshalUnmarshal(t *testing.T) {
 	entry := &Entry{
-		Key:         "test-bucket/test-key",
+		Key:         testCacheKey,
 		Data:        []byte("test data content"),
 		Size:        17,
-		ContentType: "text/plain",
+		ContentType: testContentTypeVal,
 		ETag:        "abc123",
 		Checksum:    12345,
 	}
@@ -420,6 +436,7 @@ func TestExtractBucketPrefix(t *testing.T) {
 		if bucket != tt.expectedBucket {
 			t.Errorf("extractBucketPrefix(%s): expected bucket %s, got %s", tt.key, tt.expectedBucket, bucket)
 		}
+
 		if prefix != tt.expectedPrefix {
 			t.Errorf("extractBucketPrefix(%s): expected prefix %s, got %s", tt.key, tt.expectedPrefix, prefix)
 		}
@@ -466,6 +483,7 @@ func TestSharding(t *testing.T) {
 	}
 
 	shardIndices := make(map[int]bool)
+
 	for _, key := range keys {
 		shard := cache.getShard(key)
 		for i, s := range cache.shards {
@@ -516,7 +534,7 @@ func TestAccessCountIncrement(t *testing.T) {
 	cache.Put(ctx, key, []byte("data"), "", "")
 
 	// Access multiple times
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		cache.Get(ctx, key)
 	}
 
@@ -548,6 +566,7 @@ func BenchmarkPut(b *testing.B) {
 		for pb.Next() {
 			key := fmt.Sprintf("bucket/key-%d", i)
 			cache.Put(ctx, key, data, "", "")
+
 			i++
 		}
 	})
@@ -565,7 +584,7 @@ func BenchmarkGet(b *testing.B) {
 	data := make([]byte, 1024) // 1KB entries
 
 	// Pre-populate cache
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		key := fmt.Sprintf("bucket/key-%d", i)
 		cache.Put(ctx, key, data, "", "")
 	}
@@ -576,6 +595,7 @@ func BenchmarkGet(b *testing.B) {
 		for pb.Next() {
 			key := fmt.Sprintf("bucket/key-%d", i%10000)
 			cache.Get(ctx, key)
+
 			i++
 		}
 	})
@@ -604,6 +624,7 @@ func BenchmarkMixed(b *testing.B) {
 				// 90% reads
 				cache.Get(ctx, key)
 			}
+
 			i++
 		}
 	})

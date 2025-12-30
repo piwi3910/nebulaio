@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +22,7 @@ import (
 // Mock Implementation for Testing
 // ====================
 
-// MockPolicyStore implements tiering.PolicyStore for testing
+// MockPolicyStore implements tiering.PolicyStore for testing.
 type MockPolicyStore struct {
 	policies    map[string]*tiering.AdvancedPolicy
 	policyStats map[string]*tiering.PolicyStats
@@ -40,16 +41,20 @@ func (m *MockPolicyStore) Create(ctx context.Context, policy *tiering.AdvancedPo
 	defer m.mu.Unlock()
 
 	if _, exists := m.policies[policy.ID]; exists {
-		return fmt.Errorf("policy already exists")
+		return errors.New("policy already exists")
 	}
-	if err := policy.Validate(); err != nil {
+
+	err := policy.Validate()
+	if err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
+
 	policy.Version = 1
 	policy.CreatedAt = time.Now()
 	policy.UpdatedAt = time.Now()
 	m.policies[policy.ID] = policy
 	m.policyStats[policy.ID] = &tiering.PolicyStats{PolicyID: policy.ID}
+
 	return nil
 }
 
@@ -59,8 +64,9 @@ func (m *MockPolicyStore) Get(ctx context.Context, id string) (*tiering.Advanced
 
 	policy, exists := m.policies[id]
 	if !exists {
-		return nil, fmt.Errorf("policy not found")
+		return nil, errors.New("policy not found")
 	}
+
 	return policy, nil
 }
 
@@ -70,14 +76,17 @@ func (m *MockPolicyStore) Update(ctx context.Context, policy *tiering.AdvancedPo
 
 	existing, exists := m.policies[policy.ID]
 	if !exists {
-		return fmt.Errorf("policy not found")
+		return errors.New("policy not found")
 	}
+
 	if policy.Version != 0 && policy.Version != existing.Version {
-		return fmt.Errorf("version conflict")
+		return errors.New("version conflict")
 	}
+
 	policy.Version = existing.Version + 1
 	policy.UpdatedAt = time.Now()
 	m.policies[policy.ID] = policy
+
 	return nil
 }
 
@@ -86,10 +95,12 @@ func (m *MockPolicyStore) Delete(ctx context.Context, id string) error {
 	defer m.mu.Unlock()
 
 	if _, exists := m.policies[id]; !exists {
-		return fmt.Errorf("policy not found")
+		return errors.New("policy not found")
 	}
+
 	delete(m.policies, id)
 	delete(m.policyStats, id)
+
 	return nil
 }
 
@@ -101,6 +112,7 @@ func (m *MockPolicyStore) List(ctx context.Context) ([]*tiering.AdvancedPolicy, 
 	for _, p := range m.policies {
 		policies = append(policies, p)
 	}
+
 	return policies, nil
 }
 
@@ -114,6 +126,7 @@ func (m *MockPolicyStore) ListByType(ctx context.Context, policyType tiering.Pol
 			policies = append(policies, p)
 		}
 	}
+
 	return policies, nil
 }
 
@@ -127,6 +140,7 @@ func (m *MockPolicyStore) ListByScope(ctx context.Context, scope tiering.PolicyS
 			policies = append(policies, p)
 		}
 	}
+
 	return policies, nil
 }
 
@@ -136,25 +150,29 @@ func (m *MockPolicyStore) GetStats(ctx context.Context, id string) (*tiering.Pol
 
 	stats, exists := m.policyStats[id]
 	if !exists {
-		return nil, fmt.Errorf("stats not found")
+		return nil, errors.New("stats not found")
 	}
+
 	return stats, nil
 }
 
 func (m *MockPolicyStore) UpdateStats(ctx context.Context, stats *tiering.PolicyStats) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.policyStats[stats.PolicyID] = stats
+
 	return nil
 }
 
 func (m *MockPolicyStore) SetStats(id string, stats *tiering.PolicyStats) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.policyStats[id] = stats
 }
 
-// MockAccessTracker implements access tracking for testing
+// MockAccessTracker implements access tracking for testing.
 type MockAccessTracker struct {
 	stats       map[string]*tiering.ObjectAccessStats
 	hotObjects  []*tiering.ObjectAccessStats
@@ -173,50 +191,60 @@ func NewMockAccessTracker() *MockAccessTracker {
 func (m *MockAccessTracker) GetStats(ctx context.Context, bucket, key string) (*tiering.ObjectAccessStats, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	stats, exists := m.stats[bucket+"/"+key]
 	if !exists {
+		//nolint:nilnil // mock returns nil,nil for not-found case
 		return nil, nil
 	}
+
 	return stats, nil
 }
 
 func (m *MockAccessTracker) GetHotObjects(ctx context.Context, limit int) []*tiering.ObjectAccessStats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if len(m.hotObjects) > limit {
 		return m.hotObjects[:limit]
 	}
+
 	return m.hotObjects
 }
 
 func (m *MockAccessTracker) GetColdObjects(ctx context.Context, inactiveDays, limit int) []*tiering.ObjectAccessStats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if len(m.coldObjects) > limit {
 		return m.coldObjects[:limit]
 	}
+
 	return m.coldObjects
 }
 
 func (m *MockAccessTracker) SetStats(bucket, key string, stats *tiering.ObjectAccessStats) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.stats[bucket+"/"+key] = stats
 }
 
 func (m *MockAccessTracker) SetHotObjects(objects []*tiering.ObjectAccessStats) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.hotObjects = objects
 }
 
 func (m *MockAccessTracker) SetColdObjects(objects []*tiering.ObjectAccessStats) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.coldObjects = objects
 }
 
-// MockPredictiveEngine for testing predictions
+// MockPredictiveEngine for testing predictions.
 type MockPredictiveEngine struct {
 	predictions     map[string]*tiering.AccessPrediction
 	recommendations []*tiering.TierRecommendation
@@ -233,31 +261,36 @@ func NewMockPredictiveEngine() *MockPredictiveEngine {
 func (m *MockPredictiveEngine) GetPrediction(bucket, key string) *tiering.AccessPrediction {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.predictions[bucket+"/"+key]
 }
 
 func (m *MockPredictiveEngine) GetRecommendations(limit int) []*tiering.TierRecommendation {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if len(m.recommendations) > limit {
 		return m.recommendations[:limit]
 	}
+
 	return m.recommendations
 }
 
 func (m *MockPredictiveEngine) SetPrediction(bucket, key string, prediction *tiering.AccessPrediction) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.predictions[bucket+"/"+key] = prediction
 }
 
 func (m *MockPredictiveEngine) SetRecommendations(recs []*tiering.TierRecommendation) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.recommendations = recs
 }
 
-// MockAnomalyDetector for testing anomalies
+// MockAnomalyDetector for testing anomalies.
 type MockAnomalyDetector struct {
 	anomalies []*tiering.AccessAnomaly
 	mu        sync.RWMutex
@@ -272,19 +305,22 @@ func NewMockAnomalyDetector() *MockAnomalyDetector {
 func (m *MockAnomalyDetector) GetAnomalies(limit int) []*tiering.AccessAnomaly {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if len(m.anomalies) > limit {
 		return m.anomalies[:limit]
 	}
+
 	return m.anomalies
 }
 
 func (m *MockAnomalyDetector) SetAnomalies(anomalies []*tiering.AccessAnomaly) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.anomalies = anomalies
 }
 
-// MockTierManager for testing tier transitions
+// MockTierManager for testing tier transitions.
 type MockTierManager struct {
 	transitionErr error
 	s3Configs     map[string]*tiering.S3LifecycleConfiguration
@@ -301,6 +337,7 @@ func (m *MockTierManager) TransitionObject(ctx context.Context, bucket, key stri
 	if m.transitionErr != nil {
 		return m.transitionErr
 	}
+
 	return nil
 }
 
@@ -311,16 +348,19 @@ func (m *MockTierManager) SetTransitionError(err error) {
 func (m *MockTierManager) GetS3LifecycleConfiguration(bucket string) *tiering.S3LifecycleConfiguration {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	config, exists := m.s3Configs[bucket]
 	if !exists {
 		return &tiering.S3LifecycleConfiguration{Rules: []tiering.S3LifecycleRule{}}
 	}
+
 	return config
 }
 
 func (m *MockTierManager) SetS3LifecycleConfiguration(bucket string, config *tiering.S3LifecycleConfiguration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.s3Configs[bucket] = config
 }
 
@@ -328,7 +368,7 @@ func (m *MockTierManager) SetS3LifecycleConfiguration(bucket string, config *tie
 // Test Handler Wrapper
 // ====================
 
-// TestTieringHandler is a test-friendly version of TieringHandler
+// TestTieringHandler is a test-friendly version of TieringHandler.
 type TestTieringHandler struct {
 	policyStore      *MockPolicyStore
 	accessTracker    *MockAccessTracker
@@ -347,51 +387,22 @@ func NewTestTieringHandler() *TestTieringHandler {
 	}
 }
 
-// RegisterTieringRoutes registers test routes
+// RegisterTieringRoutes registers test routes using the shared registration function.
 func (h *TestTieringHandler) RegisterTieringRoutes(r chi.Router) {
-	// Tiering Policies
-	r.Get("/tiering/policies", h.ListTieringPolicies)
-	r.Post("/tiering/policies", h.CreateTieringPolicy)
-	r.Get("/tiering/policies/{id}", h.GetTieringPolicy)
-	r.Put("/tiering/policies/{id}", h.UpdateTieringPolicy)
-	r.Delete("/tiering/policies/{id}", h.DeleteTieringPolicy)
-	r.Post("/tiering/policies/{id}/enable", h.EnableTieringPolicy)
-	r.Post("/tiering/policies/{id}/disable", h.DisableTieringPolicy)
-	r.Get("/tiering/policies/{id}/stats", h.GetTieringPolicyStats)
-
-	// Access Stats
-	r.Get("/tiering/access-stats/{bucket}", h.GetBucketAccessStats)
-	r.Get("/tiering/access-stats/{bucket}/*", h.GetObjectAccessStats)
-
-	// Manual Transitions
-	r.Post("/tiering/transition", h.ManualTransition)
-
-	// S3 Lifecycle Compatibility
-	r.Get("/tiering/s3-lifecycle/{bucket}", h.GetS3Lifecycle)
-	r.Put("/tiering/s3-lifecycle/{bucket}", h.PutS3Lifecycle)
-	r.Delete("/tiering/s3-lifecycle/{bucket}", h.DeleteS3Lifecycle)
-
-	// Tiering Status
-	r.Get("/tiering/status", h.GetTieringStatus)
-	r.Get("/tiering/metrics", h.GetTieringMetrics)
-
-	// Predictive Tiering
-	r.Get("/tiering/predictions/{bucket}/*", h.GetAccessPrediction)
-	r.Get("/tiering/predictions/recommendations", h.GetTierRecommendations)
-	r.Get("/tiering/predictions/hot-objects", h.GetHotObjectsPrediction)
-	r.Get("/tiering/predictions/cold-objects", h.GetColdObjectsPrediction)
-	r.Get("/tiering/anomalies", h.GetAccessAnomalies)
+	RegisterTieringRoutesForHandler(r, h, "/tiering/policies")
 }
 
-// Policy handlers
+// Policy handlers.
 func (h *TestTieringHandler) ListTieringPolicies(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	policyType := r.URL.Query().Get("type")
 	enabled := r.URL.Query().Get("enabled")
 
-	var policies []*tiering.AdvancedPolicy
-	var err error
+	var (
+		policies []*tiering.AdvancedPolicy
+		err      error
+	)
 
 	if policyType != "" {
 		policies, err = h.policyStore.ListByType(ctx, tiering.PolicyType(policyType))
@@ -408,11 +419,13 @@ func (h *TestTieringHandler) ListTieringPolicies(w http.ResponseWriter, r *http.
 	if enabled != "" {
 		enabledBool := enabled == "true"
 		filtered := make([]*tiering.AdvancedPolicy, 0)
+
 		for _, p := range policies {
 			if p.Enabled == enabledBool {
 				filtered = append(filtered, p)
 			}
 		}
+
 		policies = filtered
 	}
 
@@ -432,7 +445,9 @@ func (h *TestTieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.
 	ctx := r.Context()
 
 	var req CreateTieringPolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -452,12 +467,14 @@ func (h *TestTieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.
 	if req.BucketPattern != "" {
 		selector.Buckets = []string{req.BucketPattern}
 	}
+
 	if req.PrefixPattern != "" {
 		selector.Prefixes = []string{req.PrefixPattern}
 	}
 
 	// Build schedule config
 	var schedule tiering.ScheduleConfig
+
 	schedule.Enabled = req.CronExpression != ""
 
 	// Build anti-thrash config from advanced options
@@ -502,20 +519,25 @@ func (h *TestTieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.
 	if policy.Type == "" {
 		policy.Type = tiering.PolicyTypeScheduled
 	}
+
 	if policy.Scope == "" {
 		policy.Scope = tiering.PolicyScopeGlobal
 	}
 
-	if err := h.policyStore.Create(ctx, policy); err != nil {
+	err = h.policyStore.Create(ctx, policy)
+	if err != nil {
 		if containsString(err.Error(), "already exists") {
 			writeError(w, err.Error(), http.StatusConflict)
 			return
 		}
+
 		if containsString(err.Error(), "validation") {
 			writeError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -546,7 +568,8 @@ func (h *TestTieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.
 	}
 
 	var req CreateTieringPolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -560,12 +583,14 @@ func (h *TestTieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.
 	if req.BucketPattern != "" {
 		selector.Buckets = []string{req.BucketPattern}
 	}
+
 	if req.PrefixPattern != "" {
 		selector.Prefixes = []string{req.PrefixPattern}
 	}
 
 	// Build schedule config
 	var schedule tiering.ScheduleConfig
+
 	schedule.Enabled = req.CronExpression != ""
 
 	// Build anti-thrash config from advanced options
@@ -602,12 +627,15 @@ func (h *TestTieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.
 	existing.Distributed = distributed
 	existing.UpdatedAt = time.Now()
 
-	if err := h.policyStore.Update(ctx, existing); err != nil {
+	err = h.policyStore.Update(ctx, existing)
+	if err != nil {
 		if containsString(err.Error(), "version conflict") {
 			writeError(w, err.Error(), http.StatusConflict)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -618,12 +646,15 @@ func (h *TestTieringHandler) DeleteTieringPolicy(w http.ResponseWriter, r *http.
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 
-	if err := h.policyStore.Delete(ctx, id); err != nil {
+	err := h.policyStore.Delete(ctx, id)
+	if err != nil {
 		if containsString(err.Error(), "not found") {
 			writeError(w, err.Error(), http.StatusNotFound)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -643,7 +674,8 @@ func (h *TestTieringHandler) EnableTieringPolicy(w http.ResponseWriter, r *http.
 	policy.Enabled = true
 	policy.UpdatedAt = time.Now()
 
-	if err := h.policyStore.Update(ctx, policy); err != nil {
+	err = h.policyStore.Update(ctx, policy)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -668,7 +700,8 @@ func (h *TestTieringHandler) DisableTieringPolicy(w http.ResponseWriter, r *http
 	policy.Enabled = false
 	policy.UpdatedAt = time.Now()
 
-	if err := h.policyStore.Update(ctx, policy); err != nil {
+	err = h.policyStore.Update(ctx, policy)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -699,6 +732,7 @@ func (h *TestTieringHandler) GetTieringPolicyStats(w http.ResponseWriter, r *htt
 			"type":        policy.Type,
 		}
 		writeJSON(w, http.StatusOK, stats)
+
 		return
 	}
 
@@ -716,23 +750,10 @@ func (h *TestTieringHandler) GetTieringPolicyStats(w http.ResponseWriter, r *htt
 	writeJSON(w, http.StatusOK, stats)
 }
 
-// Access stats handlers
+// Access stats handlers.
 func (h *TestTieringHandler) GetBucketAccessStats(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
-
-	limit := 100
-	offset := 0
-
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 1000 {
-			limit = int(l)
-		}
-	}
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if o, err := json.Number(offsetStr).Int64(); err == nil && o >= 0 {
-			offset = int(o)
-		}
-	}
+	limit, offset := ParsePaginationParams(r)
 
 	response := map[string]interface{}{
 		"bucket": bucket,
@@ -747,85 +768,41 @@ func (h *TestTieringHandler) GetBucketAccessStats(w http.ResponseWriter, r *http
 func (h *TestTieringHandler) GetObjectAccessStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucket := chi.URLParam(r, "bucket")
-	key := chi.URLParam(r, "*") // Catch-all for paths with slashes
-
-	if r.URL.Query().Get("key") != "" {
-		key = r.URL.Query().Get("key")
-	}
+	key := GetObjectKeyFromRequest(r)
 
 	stats, err := h.accessTracker.GetStats(ctx, bucket, key)
-	if err != nil || stats == nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"bucket":  bucket,
-			"key":     key,
-			"tracked": false,
-			"message": "No access stats tracked for this object",
-		})
-		return
+	if err != nil {
+		stats = nil
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"bucket":               bucket,
-		"key":                  key,
-		"tracked":              true,
-		"access_count":         stats.AccessCount,
-		"last_accessed":        stats.LastAccessed,
-		"accesses_last_24h":    stats.AccessesLast24h,
-		"accesses_last_7d":     stats.AccessesLast7d,
-		"accesses_last_30d":    stats.AccessesLast30d,
-		"average_accesses_day": stats.AverageAccessesDay,
-		"access_trend":         stats.AccessTrend,
-	})
+	WriteObjectAccessStatsResponse(w, bucket, key, stats)
 }
 
-// Manual transition handler
+// Manual transition handler.
 func (h *TestTieringHandler) ManualTransition(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req ManualTransitionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if req.Bucket == "" {
-		writeError(w, "bucket is required", http.StatusBadRequest)
-		return
-	}
-	if req.Key == "" {
-		writeError(w, "key is required", http.StatusBadRequest)
-		return
-	}
-	if req.TargetTier == "" {
-		writeError(w, "target_tier is required", http.StatusBadRequest)
+	if !ValidateManualTransitionRequest(w, &req) {
 		return
 	}
 
-	validTiers := map[tiering.TierType]bool{
-		tiering.TierHot:     true,
-		tiering.TierWarm:    true,
-		tiering.TierCold:    true,
-		tiering.TierArchive: true,
-	}
-	if !validTiers[req.TargetTier] {
-		writeError(w, "invalid target_tier: must be hot, warm, cold, or archive", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.tierManager.TransitionObject(ctx, req.Bucket, req.Key, req.TargetTier); err != nil {
+	err = h.tierManager.TransitionObject(ctx, req.Bucket, req.Key, req.TargetTier)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"bucket":      req.Bucket,
-		"key":         req.Key,
-		"target_tier": req.TargetTier,
-		"message":     "Object transition initiated successfully",
-	})
+	WriteManualTransitionResponse(w, req.Bucket, req.Key, req.TargetTier)
 }
 
-// S3 Lifecycle handlers
+// S3 Lifecycle handlers.
 func (h *TestTieringHandler) GetS3Lifecycle(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
 	config := h.tierManager.GetS3LifecycleConfiguration(bucket)
@@ -836,7 +813,9 @@ func (h *TestTieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Reque
 	bucket := chi.URLParam(r, "bucket")
 
 	var config tiering.S3LifecycleConfiguration
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+
+	err := json.NewDecoder(r.Body).Decode(&config)
+	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -856,7 +835,7 @@ func (h *TestTieringHandler) DeleteS3Lifecycle(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Status and metrics handlers
+// Status and metrics handlers.
 func (h *TestTieringHandler) GetTieringStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -867,6 +846,7 @@ func (h *TestTieringHandler) GetTieringStatus(w http.ResponseWriter, r *http.Req
 	}
 
 	enabledCount := 0
+
 	for _, p := range policies {
 		if p.Enabled {
 			enabledCount++
@@ -898,6 +878,7 @@ func (h *TestTieringHandler) GetTieringMetrics(w http.ResponseWriter, r *http.Re
 		if err != nil {
 			continue
 		}
+
 		totalExecutions += stats.TotalExecutions
 		totalObjectsTransitioned += stats.ObjectsTransitioned
 		totalBytesTransitioned += stats.BytesTransitioned
@@ -915,7 +896,7 @@ func (h *TestTieringHandler) GetTieringMetrics(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, metrics)
 }
 
-// Predictive handlers
+// Predictive handlers.
 func (h *TestTieringHandler) GetAccessPrediction(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
 	key := chi.URLParam(r, "*") // Catch-all for paths with slashes
@@ -931,6 +912,7 @@ func (h *TestTieringHandler) GetAccessPrediction(w http.ResponseWriter, r *http.
 			"key":     key,
 			"message": "Insufficient data for prediction",
 		})
+
 		return
 	}
 
@@ -939,8 +921,10 @@ func (h *TestTieringHandler) GetAccessPrediction(w http.ResponseWriter, r *http.
 
 func (h *TestTieringHandler) GetTierRecommendations(w http.ResponseWriter, r *http.Request) {
 	limit := 100
+
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 1000 {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= 1000 {
 			limit = int(l)
 		}
 	}
@@ -957,8 +941,10 @@ func (h *TestTieringHandler) GetHotObjectsPrediction(w http.ResponseWriter, r *h
 	ctx := r.Context()
 
 	limit := 50
+
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= 500 {
 			limit = int(l)
 		}
 	}
@@ -973,34 +959,19 @@ func (h *TestTieringHandler) GetHotObjectsPrediction(w http.ResponseWriter, r *h
 
 func (h *TestTieringHandler) GetColdObjectsPrediction(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	limit := 50
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
-			limit = int(l)
-		}
-	}
-
-	inactiveDays := 30
-	if daysStr := r.URL.Query().Get("inactive_days"); daysStr != "" {
-		if d, err := json.Number(daysStr).Int64(); err == nil && d > 0 && d <= 365 {
-			inactiveDays = int(d)
-		}
-	}
+	limit := ParseLimitParam(r, 50, 500)
+	inactiveDays := ParseInactiveDaysParam(r, 30)
 
 	coldObjects := h.accessTracker.GetColdObjects(ctx, inactiveDays, limit)
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"cold_objects":  coldObjects,
-		"count":         len(coldObjects),
-		"inactive_days": inactiveDays,
-	})
+	WriteColdObjectsResponse(w, coldObjects, len(coldObjects), inactiveDays)
 }
 
 func (h *TestTieringHandler) GetAccessAnomalies(w http.ResponseWriter, r *http.Request) {
 	limit := 50
+
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= 500 {
 			limit = int(l)
 		}
 	}
@@ -1027,12 +998,14 @@ func containsStringHelper(s, substr string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 func createTestRouter(handler *TestTieringHandler) *chi.Mux {
 	r := chi.NewRouter()
 	handler.RegisterTieringRoutes(r)
+
 	return r
 }
 
@@ -1074,6 +1047,7 @@ func TestListTieringPolicies(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response TieringPolicyListResponse
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, 0, response.TotalCount)
@@ -1084,6 +1058,7 @@ func TestListTieringPolicies(t *testing.T) {
 		// Add policies
 		policy1 := createValidPolicy("policy-1", "Test Policy 1")
 		policy2 := createValidPolicy("policy-2", "Test Policy 2")
+
 		require.NoError(t, handler.policyStore.Create(context.Background(), policy1))
 		require.NoError(t, handler.policyStore.Create(context.Background(), policy2))
 
@@ -1094,6 +1069,7 @@ func TestListTieringPolicies(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response TieringPolicyListResponse
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, 2, response.TotalCount)
@@ -1108,8 +1084,10 @@ func TestListTieringPolicies(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response TieringPolicyListResponse
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
+
 		for _, p := range response.Policies {
 			assert.Equal(t, tiering.PolicyTypeScheduled, p.Type)
 		}
@@ -1123,8 +1101,10 @@ func TestListTieringPolicies(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response TieringPolicyListResponse
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
+
 		for _, p := range response.Policies {
 			assert.True(t, p.Enabled)
 		}
@@ -1159,12 +1139,14 @@ func TestCreateTieringPolicy(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/tiering/policies", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
 		var policy tiering.AdvancedPolicy
+
 		err := json.NewDecoder(rr.Body).Decode(&policy)
 		require.NoError(t, err)
 		assert.Equal(t, "test-policy-1", policy.ID)
@@ -1178,6 +1160,7 @@ func TestCreateTieringPolicy(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/tiering/policies", bytes.NewReader([]byte("invalid json")))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -1210,6 +1193,7 @@ func TestCreateTieringPolicy(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/tiering/policies", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -1235,6 +1219,7 @@ func TestCreateTieringPolicy(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/tiering/policies", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -1257,6 +1242,7 @@ func TestGetTieringPolicy(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var retrieved tiering.AdvancedPolicy
+
 		err := json.NewDecoder(rr.Body).Decode(&retrieved)
 		require.NoError(t, err)
 		assert.Equal(t, "test-policy-1", retrieved.ID)
@@ -1300,12 +1286,14 @@ func TestUpdateTieringPolicy(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPut, "/tiering/policies/test-policy-1", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var updated tiering.AdvancedPolicy
+
 		err := json.NewDecoder(rr.Body).Decode(&updated)
 		require.NoError(t, err)
 		assert.Equal(t, "Updated Policy Name", updated.Name)
@@ -1325,6 +1313,7 @@ func TestUpdateTieringPolicy(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPut, "/tiering/policies/nonexistent", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -1386,10 +1375,11 @@ func TestGetPolicyStats(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var stats map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&stats)
 		require.NoError(t, err)
 		assert.Equal(t, "test-policy-1", stats["policy_id"])
-		assert.Equal(t, float64(100), stats["total_executions"])
+		assert.InDelta(t, float64(100), stats["total_executions"], 0.001)
 	})
 
 	t.Run("policy not found", func(t *testing.T) {
@@ -1420,6 +1410,7 @@ func TestEnableDisableTieringPolicy(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, true, response["enabled"])
@@ -1440,6 +1431,7 @@ func TestEnableDisableTieringPolicy(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, false, response["enabled"])
@@ -1483,12 +1475,13 @@ func TestGetObjectAccessStats(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, true, response["tracked"])
 		assert.Equal(t, "my-bucket", response["bucket"])
 		assert.Equal(t, "my-key.txt", response["key"])
-		assert.Equal(t, float64(150), response["access_count"])
+		assert.InDelta(t, float64(150), response["access_count"], 0.001)
 	})
 
 	t.Run("stats not found", func(t *testing.T) {
@@ -1502,6 +1495,7 @@ func TestGetObjectAccessStats(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, false, response["tracked"])
@@ -1519,6 +1513,7 @@ func TestGetBucketAccessStats(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var response map[string]interface{}
+
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
 	assert.Equal(t, "my-bucket", response["bucket"])
@@ -1540,9 +1535,10 @@ func TestGetHotObjects(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var response map[string]interface{}
+
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, float64(2), response["count"])
+	assert.InDelta(t, float64(2), response["count"], 0.001)
 }
 
 func TestGetColdObjects(t *testing.T) {
@@ -1561,10 +1557,11 @@ func TestGetColdObjects(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var response map[string]interface{}
+
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, float64(2), response["count"])
-	assert.Equal(t, float64(30), response["inactive_days"])
+	assert.InDelta(t, float64(2), response["count"], 0.001)
+	assert.InDelta(t, float64(30), response["inactive_days"], 0.001)
 }
 
 // ====================
@@ -1585,12 +1582,14 @@ func TestManualTransition(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/tiering/transition", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, "my-bucket", response["bucket"])
@@ -1610,6 +1609,7 @@ func TestManualTransition(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/tiering/transition", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -1628,6 +1628,7 @@ func TestManualTransition(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/tiering/transition", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -1647,6 +1648,7 @@ func TestManualTransition(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/tiering/transition", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -1657,7 +1659,7 @@ func TestManualTransition(t *testing.T) {
 		handler := NewTestTieringHandler()
 		router := createTestRouter(handler)
 
-		handler.tierManager.SetTransitionError(fmt.Errorf("storage error"))
+		handler.tierManager.SetTransitionError(errors.New("storage error"))
 
 		reqBody := ManualTransitionRequest{
 			Bucket:     "my-bucket",
@@ -1668,6 +1670,7 @@ func TestManualTransition(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/tiering/transition", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -1695,6 +1698,7 @@ func TestManualTransition(t *testing.T) {
 			body, _ := json.Marshal(reqBody)
 			req := httptest.NewRequest(http.MethodPost, "/tiering/transition", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
+
 			rr := httptest.NewRecorder()
 			router.ServeHTTP(rr, req)
 
@@ -1719,6 +1723,7 @@ func TestGetS3LifecycleConfiguration(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response tiering.S3LifecycleConfiguration
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Empty(t, response.Rules)
@@ -1750,6 +1755,7 @@ func TestGetS3LifecycleConfiguration(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response tiering.S3LifecycleConfiguration
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Len(t, response.Rules, 1)
@@ -1778,16 +1784,18 @@ func TestSetS3LifecycleConfiguration(t *testing.T) {
 		body, _ := json.Marshal(config)
 		req := httptest.NewRequest(http.MethodPut, "/tiering/s3-lifecycle/my-bucket", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, "my-bucket", response["bucket"])
-		assert.Equal(t, float64(1), response["rules"])
+		assert.InDelta(t, float64(1), response["rules"], 0.001)
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
@@ -1796,6 +1804,7 @@ func TestSetS3LifecycleConfiguration(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPut, "/tiering/s3-lifecycle/my-bucket", bytes.NewReader([]byte("invalid")))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -1854,10 +1863,11 @@ func TestGetAccessPrediction(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response tiering.AccessPrediction
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, "my-bucket", response.Bucket)
-		assert.Equal(t, 5.0, response.ShortTermAccessRate)
+		assert.InDelta(t, 5.0, response.ShortTermAccessRate, 0.001)
 		assert.Equal(t, tiering.TierWarm, response.RecommendedTier)
 	})
 
@@ -1872,6 +1882,7 @@ func TestGetAccessPrediction(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Contains(t, response["message"], "Insufficient data")
@@ -1909,9 +1920,10 @@ func TestGetTierRecommendations(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(2), response["count"])
+		assert.InDelta(t, float64(2), response["count"], 0.001)
 	})
 
 	t.Run("with limit parameter", func(t *testing.T) {
@@ -1919,7 +1931,7 @@ func TestGetTierRecommendations(t *testing.T) {
 		router := createTestRouter(handler)
 
 		recs := make([]*tiering.TierRecommendation, 10)
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			recs[i] = &tiering.TierRecommendation{
 				Bucket:          "bucket1",
 				Key:             fmt.Sprintf("file%d.txt", i),
@@ -1927,6 +1939,7 @@ func TestGetTierRecommendations(t *testing.T) {
 				RecommendedTier: tiering.TierCold,
 			}
 		}
+
 		handler.predictiveEngine.SetRecommendations(recs)
 
 		req := httptest.NewRequest(http.MethodGet, "/tiering/predictions/recommendations?limit=5", nil)
@@ -1936,9 +1949,10 @@ func TestGetTierRecommendations(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(5), response["count"])
+		assert.InDelta(t, float64(5), response["count"], 0.001)
 	})
 }
 
@@ -1967,9 +1981,10 @@ func TestGetAccessAnomalies(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(1), response["count"])
+		assert.InDelta(t, float64(1), response["count"], 0.001)
 	})
 
 	t.Run("no anomalies", func(t *testing.T) {
@@ -1983,9 +1998,10 @@ func TestGetAccessAnomalies(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(0), response["count"])
+		assert.InDelta(t, float64(0), response["count"], 0.001)
 	})
 
 	t.Run("with limit parameter", func(t *testing.T) {
@@ -1993,13 +2009,14 @@ func TestGetAccessAnomalies(t *testing.T) {
 		router := createTestRouter(handler)
 
 		anomalies := make([]*tiering.AccessAnomaly, 20)
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			anomalies[i] = &tiering.AccessAnomaly{
 				Bucket:      "bucket1",
 				Key:         fmt.Sprintf("file%d.txt", i),
 				AnomalyType: "spike",
 			}
 		}
+
 		handler.anomalyDetector.SetAnomalies(anomalies)
 
 		req := httptest.NewRequest(http.MethodGet, "/tiering/anomalies?limit=10", nil)
@@ -2009,9 +2026,10 @@ func TestGetAccessAnomalies(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(10), response["count"])
+		assert.InDelta(t, float64(10), response["count"], 0.001)
 	})
 }
 
@@ -2028,6 +2046,7 @@ func TestGetTieringStatus(t *testing.T) {
 	policy1.Enabled = true
 	policy2 := createValidPolicy("policy-2", "Policy 2")
 	policy2.Enabled = false
+
 	require.NoError(t, handler.policyStore.Create(context.Background(), policy1))
 	require.NoError(t, handler.policyStore.Create(context.Background(), policy2))
 
@@ -2038,11 +2057,12 @@ func TestGetTieringStatus(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var response map[string]interface{}
+
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
 	assert.Equal(t, "running", response["status"])
-	assert.Equal(t, float64(2), response["total_policies"])
-	assert.Equal(t, float64(1), response["enabled_policies"])
+	assert.InDelta(t, float64(2), response["total_policies"], 0.001)
+	assert.InDelta(t, float64(1), response["enabled_policies"], 0.001)
 }
 
 func TestGetTieringMetrics(t *testing.T) {
@@ -2067,12 +2087,13 @@ func TestGetTieringMetrics(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var response map[string]interface{}
+
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, float64(50), response["total_executions"])
-	assert.Equal(t, float64(200), response["total_objects_transitioned"])
-	assert.Equal(t, float64(500000), response["total_bytes_transitioned"])
-	assert.Equal(t, float64(5), response["total_errors"])
+	assert.InDelta(t, float64(50), response["total_executions"], 0.001)
+	assert.InDelta(t, float64(200), response["total_objects_transitioned"], 0.001)
+	assert.InDelta(t, float64(500000), response["total_bytes_transitioned"], 0.001)
+	assert.InDelta(t, float64(5), response["total_errors"], 0.001)
 }
 
 // ====================
@@ -2091,10 +2112,11 @@ func TestPaginationParameters(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(50), response["limit"])
-		assert.Equal(t, float64(10), response["offset"])
+		assert.InDelta(t, float64(50), response["limit"], 0.001)
+		assert.InDelta(t, float64(10), response["offset"], 0.001)
 	})
 
 	t.Run("limit clamping", func(t *testing.T) {
@@ -2109,6 +2131,7 @@ func TestPaginationParameters(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var response map[string]interface{}
+
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		// Should be clamped to maximum allowed (1000)
@@ -2124,6 +2147,7 @@ func TestRequestBodyValidation(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/tiering/policies", nil)
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -2136,6 +2160,7 @@ func TestRequestBodyValidation(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/tiering/policies", bytes.NewReader([]byte("{invalid json")))
 		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
@@ -2171,10 +2196,12 @@ func TestConcurrentRequests(t *testing.T) {
 
 	// Run concurrent requests
 	var wg sync.WaitGroup
+
 	errors := make(chan error, 10)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
+
 		go func(id int) {
 			defer wg.Done()
 

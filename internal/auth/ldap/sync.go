@@ -2,6 +2,7 @@ package ldap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -10,19 +11,25 @@ import (
 	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
-// UserSyncService synchronizes LDAP users with the local database
+// Sync configuration constants.
+const (
+	defaultSyncInterval = 15 * time.Minute
+	defaultPageSize     = 500
+)
+
+// UserSyncService synchronizes LDAP users with the local database.
 type UserSyncService struct {
-	provider   *Provider
-	store      UserStore
-	config     SyncConfig
-	mu         sync.RWMutex
 	lastSync   time.Time
-	syncErrors []error
+	store      UserStore
+	provider   *Provider
 	stopCh     chan struct{}
+	config     SyncConfig
+	syncErrors []error
+	mu         sync.RWMutex
 	started    bool
 }
 
-// UserStore is the interface for storing synced users
+// UserStore is the interface for storing synced users.
 type UserStore interface {
 	// UpsertUser creates or updates a user
 	UpsertUser(ctx context.Context, user *auth.User) error
@@ -34,28 +41,17 @@ type UserStore interface {
 	GetUser(ctx context.Context, username string) (*auth.User, error)
 }
 
-// SyncConfig holds user synchronization configuration
+// SyncConfig holds user synchronization configuration.
 type SyncConfig struct {
-	// Enabled indicates if sync is enabled
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// Interval is how often to sync
-	Interval time.Duration `json:"interval" yaml:"interval"`
-
-	// SyncOnStartup triggers a sync when the service starts
-	SyncOnStartup bool `json:"syncOnStartup" yaml:"syncOnStartup"`
-
-	// DeleteOrphans deletes users that no longer exist in LDAP
-	DeleteOrphans bool `json:"deleteOrphans" yaml:"deleteOrphans"`
-
-	// Filter is an additional LDAP filter to apply
-	Filter string `json:"filter,omitempty" yaml:"filter,omitempty"`
-
-	// PageSize is the page size for paged searches
-	PageSize int `json:"pageSize" yaml:"pageSize"`
+	Filter        string        `json:"filter,omitempty" yaml:"filter,omitempty"`
+	Interval      time.Duration `json:"interval" yaml:"interval"`
+	PageSize      int           `json:"pageSize" yaml:"pageSize"`
+	Enabled       bool          `json:"enabled" yaml:"enabled"`
+	SyncOnStartup bool          `json:"syncOnStartup" yaml:"syncOnStartup"`
+	DeleteOrphans bool          `json:"deleteOrphans" yaml:"deleteOrphans"`
 }
 
-// DefaultSyncConfig returns sensible defaults
+// DefaultSyncConfig returns sensible defaults.
 func DefaultSyncConfig() SyncConfig {
 	return SyncConfig{
 		Enabled:       false,
@@ -66,13 +62,14 @@ func DefaultSyncConfig() SyncConfig {
 	}
 }
 
-// NewUserSyncService creates a new user sync service
+// NewUserSyncService creates a new user sync service.
 func NewUserSyncService(provider *Provider, store UserStore, cfg SyncConfig) *UserSyncService {
 	if cfg.Interval <= 0 {
-		cfg.Interval = 15 * time.Minute
+		cfg.Interval = defaultSyncInterval
 	}
+
 	if cfg.PageSize <= 0 {
-		cfg.PageSize = 500
+		cfg.PageSize = defaultPageSize
 	}
 
 	return &UserSyncService{
@@ -83,19 +80,22 @@ func NewUserSyncService(provider *Provider, store UserStore, cfg SyncConfig) *Us
 	}
 }
 
-// Start starts the sync service
+// Start starts the sync service.
 func (s *UserSyncService) Start(ctx context.Context) error {
 	s.mu.Lock()
+
 	if s.started {
 		s.mu.Unlock()
-		return fmt.Errorf("sync service already started")
+		return errors.New("sync service already started")
 	}
+
 	s.started = true
 	s.mu.Unlock()
 
 	// Sync on startup if configured
 	if s.config.SyncOnStartup {
-		if err := s.Sync(ctx); err != nil {
+		err := s.Sync(ctx)
+		if err != nil {
 			// Log but don't fail startup
 			fmt.Printf("warning: initial LDAP sync failed: %v\n", err)
 		}
@@ -107,7 +107,7 @@ func (s *UserSyncService) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the sync service
+// Stop stops the sync service.
 func (s *UserSyncService) Stop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -120,7 +120,7 @@ func (s *UserSyncService) Stop() {
 	s.started = false
 }
 
-// Sync performs a synchronization
+// Sync performs a synchronization.
 func (s *UserSyncService) Sync(ctx context.Context) error {
 	s.mu.Lock()
 	s.syncErrors = nil
@@ -141,14 +141,16 @@ func (s *UserSyncService) Sync(ctx context.Context) error {
 		user.Provider = s.provider.Name()
 		seenUsers[user.Username] = true
 
-		if err := s.store.UpsertUser(ctx, user); err != nil {
+		err := s.store.UpsertUser(ctx, user)
+		if err != nil {
 			s.addSyncError(fmt.Errorf("failed to upsert user %s: %w", user.Username, err))
 		}
 	}
 
 	// Delete orphans if configured
 	if s.config.DeleteOrphans {
-		if err := s.deleteOrphans(ctx, seenUsers); err != nil {
+		err := s.deleteOrphans(ctx, seenUsers)
+		if err != nil {
 			s.addSyncError(err)
 		}
 	}
@@ -160,23 +162,26 @@ func (s *UserSyncService) Sync(ctx context.Context) error {
 	return nil
 }
 
-// GetLastSync returns the last sync time
+// GetLastSync returns the last sync time.
 func (s *UserSyncService) GetLastSync() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.lastSync
 }
 
-// GetSyncErrors returns any errors from the last sync
+// GetSyncErrors returns any errors from the last sync.
 func (s *UserSyncService) GetSyncErrors() []error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	errors := make([]error, len(s.syncErrors))
 	copy(errors, s.syncErrors)
+
 	return errors
 }
 
-// syncLoop runs periodic synchronization
+// syncLoop runs periodic synchronization.
 func (s *UserSyncService) syncLoop(ctx context.Context) {
 	ticker := time.NewTicker(s.config.Interval)
 	defer ticker.Stop()
@@ -188,14 +193,15 @@ func (s *UserSyncService) syncLoop(ctx context.Context) {
 		case <-s.stopCh:
 			return
 		case <-ticker.C:
-			if err := s.Sync(ctx); err != nil {
+			err := s.Sync(ctx)
+			if err != nil {
 				fmt.Printf("warning: LDAP sync failed: %v\n", err)
 			}
 		}
 	}
 }
 
-// fetchAllUsers fetches all users from LDAP
+// fetchAllUsers fetches all users from LDAP.
 func (s *UserSyncService) fetchAllUsers(ctx context.Context) ([]*auth.User, error) {
 	conn, err := s.provider.pool.get(ctx)
 	if err != nil {
@@ -211,19 +217,24 @@ func (s *UserSyncService) fetchAllUsers(ctx context.Context) ([]*auth.User, erro
 
 	// Build attributes to retrieve
 	attrs := []string{"dn"}
+
 	mapping := s.provider.config.UserSearch.Attributes
 	if mapping.Username != "" {
 		attrs = append(attrs, mapping.Username)
 	}
+
 	if mapping.DisplayName != "" {
 		attrs = append(attrs, mapping.DisplayName)
 	}
+
 	if mapping.Email != "" {
 		attrs = append(attrs, mapping.Email)
 	}
+
 	if mapping.MemberOf != "" {
 		attrs = append(attrs, mapping.MemberOf)
 	}
+
 	if mapping.UniqueID != "" {
 		attrs = append(attrs, mapping.UniqueID)
 	}
@@ -231,6 +242,7 @@ func (s *UserSyncService) fetchAllUsers(ctx context.Context) ([]*auth.User, erro
 	var users []*auth.User
 
 	// Use paged search for large directories
+	//nolint:gosec // G115: PageSize is bounded by config validation
 	pagingControl := ldap.NewControlPaging(uint32(s.config.PageSize))
 
 	for {
@@ -275,7 +287,7 @@ func (s *UserSyncService) fetchAllUsers(ctx context.Context) ([]*auth.User, erro
 	return users, nil
 }
 
-// deleteOrphans deletes users that no longer exist in LDAP
+// deleteOrphans deletes users that no longer exist in LDAP.
 func (s *UserSyncService) deleteOrphans(ctx context.Context, seenUsers map[string]bool) error {
 	// Get all local users from this provider
 	localUsers, err := s.store.ListUsers(ctx, s.provider.Name())
@@ -285,7 +297,8 @@ func (s *UserSyncService) deleteOrphans(ctx context.Context, seenUsers map[strin
 
 	for _, user := range localUsers {
 		if !seenUsers[user.Username] {
-			if err := s.store.DeleteUser(ctx, user.Username); err != nil {
+			err := s.store.DeleteUser(ctx, user.Username)
+			if err != nil {
 				s.addSyncError(fmt.Errorf("failed to delete orphan user %s: %w", user.Username, err))
 			}
 		}
@@ -294,14 +307,15 @@ func (s *UserSyncService) deleteOrphans(ctx context.Context, seenUsers map[strin
 	return nil
 }
 
-// addSyncError adds an error to the sync errors list
+// addSyncError adds an error to the sync errors list.
 func (s *UserSyncService) addSyncError(err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.syncErrors = append(s.syncErrors, err)
 }
 
-// SyncStatus returns the current sync status
+// SyncStatus returns the current sync status.
 type SyncStatus struct {
 	// LastSync is when the last sync completed
 	LastSync time.Time `json:"lastSync"`
@@ -313,7 +327,7 @@ type SyncStatus struct {
 	Running bool `json:"running"`
 }
 
-// Status returns the current sync status
+// Status returns the current sync status.
 func (s *UserSyncService) Status() SyncStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

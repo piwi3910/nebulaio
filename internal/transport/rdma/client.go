@@ -11,48 +11,41 @@ import (
 	"time"
 )
 
-// Client provides a high-level S3-compatible client with RDMA support
+// Transport type names for metrics.
+const (
+	transportTypeRDMA = "rdma"
+	transportTypeHTTP = "http"
+)
+
+// Client provides a high-level S3-compatible client with RDMA support.
 type Client struct {
 	config     *ClientConfig
 	transport  *Transport
 	httpClient *http.Client
-	endpoints  []string
-	mu         sync.RWMutex
 	conns      map[string]*Connection
 	ops        map[string]*S3Operations
+	endpoints  []string
+	mu         sync.RWMutex
 	closed     bool
 }
 
-// ClientConfig configures the RDMA client
+// ClientConfig configures the RDMA client.
 type ClientConfig struct {
-	// RDMA endpoints (rdma://host:port)
-	Endpoints []string
-
-	// RDMA transport configuration
-	RDMAConfig *Config
-
-	// Fall back to HTTP if RDMA unavailable
-	FallbackHTTP bool
-
-	// HTTP endpoint for fallback
-	HTTPEndpoint string
-
-	// AWS-style credentials for HTTP fallback
-	AccessKey string
-	SecretKey string
-
-	// Connection settings
+	RDMAConfig       *Config
+	HTTPEndpoint     string
+	AccessKey        string
+	SecretKey        string
+	Endpoints        []string
 	MaxConnections   int
 	ConnectionTTL    time.Duration
 	ReconnectBackoff time.Duration
-
-	// Request settings
-	RequestTimeout time.Duration
-	RetryAttempts  int
-	RetryDelay     time.Duration
+	RequestTimeout   time.Duration
+	RetryAttempts    int
+	RetryDelay       time.Duration
+	FallbackHTTP     bool
 }
 
-// DefaultClientConfig returns a default client configuration
+// DefaultClientConfig returns a default client configuration.
 func DefaultClientConfig() *ClientConfig {
 	return &ClientConfig{
 		RDMAConfig:       DefaultConfig(),
@@ -66,7 +59,7 @@ func DefaultClientConfig() *ClientConfig {
 	}
 }
 
-// NewClient creates a new RDMA-enabled S3 client
+// NewClient creates a new RDMA-enabled S3 client.
 func NewClient(endpoints []string, config *ClientConfig) (*Client, error) {
 	if config == nil {
 		config = DefaultClientConfig()
@@ -104,7 +97,7 @@ func NewClient(endpoints []string, config *ClientConfig) (*Client, error) {
 	return client, nil
 }
 
-// getConnection gets or creates a connection to an endpoint
+// getConnection gets or creates a connection to an endpoint.
 func (c *Client) getConnection(ctx context.Context, endpoint string) (*Connection, error) {
 	c.mu.RLock()
 	conn, exists := c.conns[endpoint]
@@ -137,7 +130,7 @@ func (c *Client) getConnection(ctx context.Context, endpoint string) (*Connectio
 	return conn, nil
 }
 
-// getOperations gets S3 operations handler for an endpoint
+// getOperations gets S3 operations handler for an endpoint.
 func (c *Client) getOperations(ctx context.Context) (*S3Operations, error) {
 	// Select best endpoint (could implement load balancing)
 	endpoint := c.endpoints[0]
@@ -163,23 +156,24 @@ func (c *Client) getOperations(ctx context.Context) (*S3Operations, error) {
 	return ops, nil
 }
 
-// useRDMA checks if RDMA should be used
+// useRDMA checks if RDMA should be used.
 func (c *Client) useRDMA() bool {
 	return c.transport != nil && c.transport.IsAvailable()
 }
 
-// GetObject retrieves an object
+// GetObject retrieves an object.
 func (c *Client) GetObject(ctx context.Context, bucket, key string) (*GetObjectResult, error) {
 	return c.GetObjectWithOptions(ctx, bucket, key, nil)
 }
 
-// GetObjectWithOptions retrieves an object with options
+// GetObjectWithOptions retrieves an object with options.
 func (c *Client) GetObjectWithOptions(ctx context.Context, bucket, key string, opts *GetObjectOptions) (*GetObjectResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
 	var lastErr error
-	for attempt := 0; attempt < c.config.RetryAttempts; attempt++ {
+
+	for attempt := range c.config.RetryAttempts {
 		if attempt > 0 {
 			time.Sleep(c.config.RetryDelay * time.Duration(attempt))
 		}
@@ -204,7 +198,7 @@ func (c *Client) GetObjectWithOptions(ctx context.Context, bucket, key string, o
 				ETag:        output.ETag,
 				Size:        output.Size,
 				Latency:     output.Latency,
-				Transport:   "rdma",
+				Transport:   transportTypeRDMA,
 			}, nil
 		}
 
@@ -219,30 +213,32 @@ func (c *Client) GetObjectWithOptions(ctx context.Context, bucket, key string, o
 	return nil, fmt.Errorf("all retry attempts failed: %w", lastErr)
 }
 
-// GetObjectResult contains the result of GetObject
+// GetObjectResult contains the result of GetObject.
 type GetObjectResult struct {
 	Body        io.Reader
-	ContentType string
 	Metadata    map[string]string
+	ContentType string
 	ETag        string
+	Transport   string
 	Size        int64
 	Latency     time.Duration
-	Transport   string // "rdma" or "http"
 }
 
-// getObjectHTTP performs GetObject via HTTP fallback
+// getObjectHTTP performs GetObject via HTTP fallback.
 func (c *Client) getObjectHTTP(ctx context.Context, bucket, key string, opts *GetObjectOptions) (*GetObjectResult, error) {
 	if c.config.HTTPEndpoint == "" {
 		return nil, errors.New("HTTP fallback endpoint not configured")
 	}
 
 	url := fmt.Sprintf("%s/%s/%s", c.config.HTTPEndpoint, bucket, key)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	start := time.Now()
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -259,16 +255,16 @@ func (c *Client) getObjectHTTP(ctx context.Context, bucket, key string, opts *Ge
 		ETag:        resp.Header.Get("ETag"),
 		Size:        resp.ContentLength,
 		Latency:     time.Since(start),
-		Transport:   "http",
+		Transport:   transportTypeHTTP,
 	}, nil
 }
 
-// PutObject uploads an object
+// PutObject uploads an object.
 func (c *Client) PutObject(ctx context.Context, bucket, key string, body io.Reader, size int64) (*PutObjectResult, error) {
 	return c.PutObjectWithOptions(ctx, bucket, key, body, size, nil)
 }
 
-// PutObjectWithOptions uploads an object with options
+// PutObjectWithOptions uploads an object with options.
 func (c *Client) PutObjectWithOptions(ctx context.Context, bucket, key string, body io.Reader, size int64, opts *PutObjectOptions) (*PutObjectResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
@@ -276,10 +272,12 @@ func (c *Client) PutObjectWithOptions(ctx context.Context, bucket, key string, b
 	if opts == nil {
 		opts = &PutObjectOptions{}
 	}
+
 	opts.ContentLength = size
 
 	var lastErr error
-	for attempt := 0; attempt < c.config.RetryAttempts; attempt++ {
+
+	for attempt := range c.config.RetryAttempts {
 		if attempt > 0 {
 			time.Sleep(c.config.RetryDelay * time.Duration(attempt))
 		}
@@ -300,7 +298,7 @@ func (c *Client) PutObjectWithOptions(ctx context.Context, bucket, key string, b
 			return &PutObjectResult{
 				ETag:      output.ETag,
 				Latency:   output.Latency,
-				Transport: "rdma",
+				Transport: transportTypeRDMA,
 			}, nil
 		}
 
@@ -315,34 +313,38 @@ func (c *Client) PutObjectWithOptions(ctx context.Context, bucket, key string, b
 	return nil, fmt.Errorf("all retry attempts failed: %w", lastErr)
 }
 
-// PutObjectResult contains the result of PutObject
+// PutObjectResult contains the result of PutObject.
 type PutObjectResult struct {
 	ETag      string
-	Latency   time.Duration
 	Transport string
+	Latency   time.Duration
 }
 
-// putObjectHTTP performs PutObject via HTTP fallback
+// putObjectHTTP performs PutObject via HTTP fallback.
 func (c *Client) putObjectHTTP(ctx context.Context, bucket, key string, body io.Reader, size int64, opts *PutObjectOptions) (*PutObjectResult, error) {
 	if c.config.HTTPEndpoint == "" {
 		return nil, errors.New("HTTP fallback endpoint not configured")
 	}
 
 	url := fmt.Sprintf("%s/%s/%s", c.config.HTTPEndpoint, bucket, key)
-	req, err := http.NewRequestWithContext(ctx, "PUT", url, body)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, body)
 	if err != nil {
 		return nil, err
 	}
+
 	req.ContentLength = size
 	if opts != nil && opts.ContentType != "" {
 		req.Header.Set("Content-Type", opts.ContentType)
 	}
 
 	start := time.Now()
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
@@ -352,11 +354,11 @@ func (c *Client) putObjectHTTP(ctx context.Context, bucket, key string, body io.
 	return &PutObjectResult{
 		ETag:      resp.Header.Get("ETag"),
 		Latency:   time.Since(start),
-		Transport: "http",
+		Transport: transportTypeHTTP,
 	}, nil
 }
 
-// DeleteObject deletes an object
+// DeleteObject deletes an object.
 func (c *Client) DeleteObject(ctx context.Context, bucket, key string) error {
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
@@ -368,6 +370,7 @@ func (c *Client) DeleteObject(ctx context.Context, bucket, key string) error {
 		}
 
 		_, err = ops.DeleteObject(ctx, bucket, key, nil)
+
 		return err
 	}
 
@@ -378,14 +381,15 @@ func (c *Client) DeleteObject(ctx context.Context, bucket, key string) error {
 	return ErrRDMANotAvailable
 }
 
-// deleteObjectHTTP performs DeleteObject via HTTP fallback
+// deleteObjectHTTP performs DeleteObject via HTTP fallback.
 func (c *Client) deleteObjectHTTP(ctx context.Context, bucket, key string) error {
 	if c.config.HTTPEndpoint == "" {
 		return errors.New("HTTP fallback endpoint not configured")
 	}
 
 	url := fmt.Sprintf("%s/%s/%s", c.config.HTTPEndpoint, bucket, key)
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
 	}
@@ -394,6 +398,7 @@ func (c *Client) deleteObjectHTTP(ctx context.Context, bucket, key string) error
 	if err != nil {
 		return err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
@@ -403,7 +408,7 @@ func (c *Client) deleteObjectHTTP(ctx context.Context, bucket, key string) error
 	return nil
 }
 
-// HeadObject gets object metadata
+// HeadObject gets object metadata.
 func (c *Client) HeadObject(ctx context.Context, bucket, key string) (*HeadObjectResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
@@ -425,7 +430,7 @@ func (c *Client) HeadObject(ctx context.Context, bucket, key string) (*HeadObjec
 			ETag:        output.ETag,
 			Size:        output.Size,
 			Latency:     output.Latency,
-			Transport:   "rdma",
+			Transport:   transportTypeRDMA,
 		}, nil
 	}
 
@@ -436,33 +441,36 @@ func (c *Client) HeadObject(ctx context.Context, bucket, key string) (*HeadObjec
 	return nil, ErrRDMANotAvailable
 }
 
-// HeadObjectResult contains the result of HeadObject
+// HeadObjectResult contains the result of HeadObject.
 type HeadObjectResult struct {
-	ContentType string
 	Metadata    map[string]string
+	ContentType string
 	ETag        string
+	Transport   string
 	Size        int64
 	Latency     time.Duration
-	Transport   string
 }
 
-// headObjectHTTP performs HeadObject via HTTP fallback
+// headObjectHTTP performs HeadObject via HTTP fallback.
 func (c *Client) headObjectHTTP(ctx context.Context, bucket, key string) (*HeadObjectResult, error) {
 	if c.config.HTTPEndpoint == "" {
 		return nil, errors.New("HTTP fallback endpoint not configured")
 	}
 
 	url := fmt.Sprintf("%s/%s/%s", c.config.HTTPEndpoint, bucket, key)
-	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	start := time.Now()
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -474,11 +482,11 @@ func (c *Client) headObjectHTTP(ctx context.Context, bucket, key string) (*HeadO
 		ETag:        resp.Header.Get("ETag"),
 		Size:        resp.ContentLength,
 		Latency:     time.Since(start),
-		Transport:   "http",
+		Transport:   transportTypeHTTP,
 	}, nil
 }
 
-// ListObjects lists objects in a bucket
+// ListObjects lists objects in a bucket.
 func (c *Client) ListObjects(ctx context.Context, bucket string, opts *ListObjectsOptions) (*ListObjectsResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
@@ -500,7 +508,7 @@ func (c *Client) ListObjects(ctx context.Context, bucket string, opts *ListObjec
 			NextContinuationToken: output.NextContinuationToken,
 			IsTruncated:           output.IsTruncated,
 			Latency:               output.Latency,
-			Transport:             "rdma",
+			Transport:             transportTypeRDMA,
 		}, nil
 	}
 
@@ -511,36 +519,36 @@ func (c *Client) ListObjects(ctx context.Context, bucket string, opts *ListObjec
 	return nil, ErrRDMANotAvailable
 }
 
-// ListObjectsResult contains the result of ListObjects
+// ListObjectsResult contains the result of ListObjects.
 type ListObjectsResult struct {
+	NextContinuationToken string
+	Transport             string
 	Objects               []ObjectInfo
 	CommonPrefixes        []string
-	NextContinuationToken string
-	IsTruncated           bool
 	Latency               time.Duration
-	Transport             string
+	IsTruncated           bool
 }
 
-// listObjectsHTTP performs ListObjects via HTTP fallback
+// listObjectsHTTP performs ListObjects via HTTP fallback.
 func (c *Client) listObjectsHTTP(ctx context.Context, bucket string, opts *ListObjectsOptions) (*ListObjectsResult, error) {
 	// Simplified - real implementation would parse XML response
 	return nil, errors.New("HTTP ListObjects not implemented")
 }
 
-// AllocateBuffer allocates a memory region from the RDMA pool for zero-copy operations
+// AllocateBuffer allocates a memory region from the RDMA pool for zero-copy operations.
 func (c *Client) AllocateBuffer(ctx context.Context, size int) (*MemoryRegion, error) {
 	if !c.useRDMA() {
 		// Return a regular buffer for non-RDMA
 		return &MemoryRegion{
 			Buffer: make([]byte, size),
-			Length: uint64(size),
+			Length: uint64(size), //nolint:gosec // G115: size is validated positive
 		}, nil
 	}
 
 	return c.transport.memPool.GetRegion(ctx)
 }
 
-// ReleaseBuffer releases a memory region back to the pool
+// ReleaseBuffer releases a memory region back to the pool.
 func (c *Client) ReleaseBuffer(mr *MemoryRegion) {
 	if mr == nil {
 		return
@@ -552,7 +560,7 @@ func (c *Client) ReleaseBuffer(mr *MemoryRegion) {
 	// For non-pool buffers, let GC handle it
 }
 
-// ZeroCopyGetObject performs a zero-copy GetObject (RDMA only)
+// ZeroCopyGetObject performs a zero-copy GetObject (RDMA only).
 func (c *Client) ZeroCopyGetObject(ctx context.Context, bucket, key string, buffer *MemoryRegion) (*GetObjectResult, error) {
 	if !c.useRDMA() {
 		return nil, errors.New("zero-copy requires RDMA")
@@ -579,7 +587,7 @@ func (c *Client) ZeroCopyGetObject(ctx context.Context, bucket, key string, buff
 	}, nil
 }
 
-// ZeroCopyPutObject performs a zero-copy PutObject (RDMA only)
+// ZeroCopyPutObject performs a zero-copy PutObject (RDMA only).
 func (c *Client) ZeroCopyPutObject(ctx context.Context, bucket, key string, buffer *MemoryRegion, size int64, opts *PutObjectOptions) (*PutObjectResult, error) {
 	if !c.useRDMA() {
 		return nil, errors.New("zero-copy requires RDMA")
@@ -602,7 +610,7 @@ func (c *Client) ZeroCopyPutObject(ctx context.Context, bucket, key string, buff
 	}, nil
 }
 
-// GetMetrics returns client metrics
+// GetMetrics returns client metrics.
 func (c *Client) GetMetrics() *ClientMetrics {
 	metrics := &ClientMetrics{}
 
@@ -617,16 +625,17 @@ func (c *Client) GetMetrics() *ClientMetrics {
 		metrics.AverageLatency = tm.AverageLatency()
 		metrics.MemoryUsed = tm.MemoryUsed
 		metrics.MemoryTotal = tm.MemoryTotal
-		metrics.Transport = "rdma"
+		metrics.Transport = transportTypeRDMA
 	} else {
-		metrics.Transport = "http"
+		metrics.Transport = transportTypeHTTP
 	}
 
 	return metrics
 }
 
-// ClientMetrics contains client performance metrics
+// ClientMetrics contains client performance metrics.
 type ClientMetrics struct {
+	Transport         string
 	ConnectionsActive int64
 	BytesSent         int64
 	BytesReceived     int64
@@ -636,10 +645,9 @@ type ClientMetrics struct {
 	AverageLatency    time.Duration
 	MemoryUsed        int64
 	MemoryTotal       int64
-	Transport         string
 }
 
-// Close closes the client and releases resources
+// Close closes the client and releases resources.
 func (c *Client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -647,6 +655,7 @@ func (c *Client) Close() error {
 	if c.closed {
 		return nil
 	}
+
 	c.closed = true
 
 	// Close all connections
@@ -655,6 +664,7 @@ func (c *Client) Close() error {
 			_ = c.transport.Disconnect(endpoint)
 		}
 	}
+
 	c.conns = nil
 	c.ops = nil
 
@@ -666,15 +676,16 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// IsRDMAEnabled returns true if RDMA is enabled and available
+// IsRDMAEnabled returns true if RDMA is enabled and available.
 func (c *Client) IsRDMAEnabled() bool {
 	return c.useRDMA()
 }
 
-// GetTransportType returns the active transport type
+// GetTransportType returns the active transport type.
 func (c *Client) GetTransportType() string {
 	if c.useRDMA() {
-		return "rdma"
+		return transportTypeRDMA
 	}
-	return "http"
+
+	return transportTypeHTTP
 }

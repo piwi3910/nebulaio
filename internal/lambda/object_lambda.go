@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,7 +25,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// TransformationType defines the type of transformation
+// TransformationType defines the type of transformation.
 type TransformationType string
 
 const (
@@ -34,7 +35,7 @@ const (
 	TransformJavaScript TransformationType = "javascript"
 )
 
-// BuiltInTransform defines built-in transformation functions
+// BuiltInTransform defines built-in transformation functions.
 type BuiltInTransform string
 
 const (
@@ -52,80 +53,52 @@ const (
 	BuiltInDecrypt      BuiltInTransform = "decrypt"       // Client-side decryption
 )
 
-// AccessPointConfig defines an Object Lambda access point configuration
+// Compression algorithm constants.
+const (
+	compressionAlgGzip = "gzip"
+	compressionAlgZstd = "zstd"
+)
+
+// AccessPointConfig defines an Object Lambda access point configuration.
 type AccessPointConfig struct {
-	// Name is the access point name
-	Name string `json:"name"`
-
-	// Arn is the access point ARN
-	Arn string `json:"arn"`
-
-	// SupportingAccessPoint is the S3 access point that provides data
-	SupportingAccessPoint string `json:"supporting_access_point"`
-
-	// TransformationConfigurations defines the transformations
+	CreatedAt                    time.Time              `json:"created_at"`
+	Name                         string                 `json:"name"`
+	Arn                          string                 `json:"arn"`
+	SupportingAccessPoint        string                 `json:"supporting_access_point"`
 	TransformationConfigurations []TransformationConfig `json:"transformation_configurations"`
-
-	// AllowedFeatures specifies allowed S3 features
-	AllowedFeatures []string `json:"allowed_features"`
-
-	// CreatedAt is when this config was created
-	CreatedAt time.Time `json:"created_at"`
+	AllowedFeatures              []string               `json:"allowed_features"`
 }
 
-// TransformationConfig defines a single transformation
+// TransformationConfig defines a single transformation.
 type TransformationConfig struct {
-	// Actions specifies which S3 actions trigger this transformation
-	// Currently only GetObject is supported
-	Actions []string `json:"actions"`
-
-	// ContentTransformation defines the transformation to apply
 	ContentTransformation ContentTransformation `json:"content_transformation"`
+	Actions               []string              `json:"actions"`
 }
 
-// ContentTransformation specifies how to transform content
+// ContentTransformation specifies how to transform content.
 type ContentTransformation struct {
-	// Type is the transformation type
-	Type TransformationType `json:"type"`
-
-	// WebhookConfig for webhook-based transformations
-	WebhookConfig *WebhookConfig `json:"webhook_config,omitempty"`
-
-	// BuiltInConfig for built-in transformations
-	BuiltInConfig *BuiltInConfig `json:"builtin_config,omitempty"`
-
-	// WASMConfig for WASM-based transformations
-	WASMConfig *WASMConfig `json:"wasm_config,omitempty"`
+	WebhookConfig *WebhookConfig     `json:"webhook_config,omitempty"`
+	BuiltInConfig *BuiltInConfig     `json:"builtin_config,omitempty"`
+	WASMConfig    *WASMConfig        `json:"wasm_config,omitempty"`
+	Type          TransformationType `json:"type"`
 }
 
-// WebhookConfig defines webhook-based transformation settings
+// WebhookConfig defines webhook-based transformation settings.
 type WebhookConfig struct {
-	// URL is the webhook endpoint
-	URL string `json:"url"`
-
-	// Headers are additional headers to send
-	Headers map[string]string `json:"headers,omitempty"`
-
-	// Timeout is the request timeout
-	Timeout time.Duration `json:"timeout"`
-
-	// RetryCount is the number of retries on failure
-	RetryCount int `json:"retry_count"`
-
-	// PassThroughBody if true, sends original body to webhook
-	PassThroughBody bool `json:"pass_through_body"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	URL             string            `json:"url"`
+	Timeout         time.Duration     `json:"timeout"`
+	RetryCount      int               `json:"retry_count"`
+	PassThroughBody bool              `json:"pass_through_body"`
 }
 
-// BuiltInConfig defines built-in transformation settings
+// BuiltInConfig defines built-in transformation settings.
 type BuiltInConfig struct {
-	// Function is the built-in function name
-	Function BuiltInTransform `json:"function"`
-
-	// Parameters are function-specific parameters
 	Parameters map[string]interface{} `json:"parameters,omitempty"`
+	Function   BuiltInTransform       `json:"function"`
 }
 
-// WASMConfig defines WASM-based transformation settings
+// WASMConfig defines WASM-based transformation settings.
 type WASMConfig struct {
 	// ModuleBucket is the bucket containing the WASM module
 	ModuleBucket string `json:"module_bucket"`
@@ -140,7 +113,7 @@ type WASMConfig struct {
 	MemoryLimit int `json:"memory_limit"`
 }
 
-// ObjectLambdaEvent is sent to webhook transformations
+// ObjectLambdaEvent is sent to webhook transformations.
 type ObjectLambdaEvent struct {
 	// RequestID is the unique request identifier
 	RequestID string `json:"requestId"`
@@ -161,7 +134,7 @@ type ObjectLambdaEvent struct {
 	ProtocolVersion string `json:"protocolVersion"`
 }
 
-// GetObjectContext contains GetObject-specific context
+// GetObjectContext contains GetObject-specific context.
 type GetObjectContext struct {
 	// InputS3URL is the presigned URL to fetch the original object
 	InputS3URL string `json:"inputS3Url"`
@@ -173,7 +146,7 @@ type GetObjectContext struct {
 	OutputToken string `json:"outputToken"`
 }
 
-// AccessPointConfiguration contains access point info
+// AccessPointConfiguration contains access point info.
 type AccessPointConfiguration struct {
 	// AccessPointArn is the Object Lambda access point ARN
 	AccessPointArn string `json:"accessPointArn"`
@@ -185,16 +158,13 @@ type AccessPointConfiguration struct {
 	Payload string `json:"payload,omitempty"`
 }
 
-// UserRequest contains the original request details
+// UserRequest contains the original request details.
 type UserRequest struct {
-	// URL is the original request URL
-	URL string `json:"url"`
-
-	// Headers are the original request headers
 	Headers map[string]string `json:"headers"`
+	URL     string            `json:"url"`
 }
 
-// UserIdentity contains requester identity
+// UserIdentity contains requester identity.
 type UserIdentity struct {
 	// Type is the identity type
 	Type string `json:"type"`
@@ -212,77 +182,42 @@ type UserIdentity struct {
 	AccessKeyID string `json:"accessKeyId"`
 }
 
-// WriteGetObjectResponseInput is used by Lambda to write transformed response
+// WriteGetObjectResponseInput is used by Lambda to write transformed response.
 type WriteGetObjectResponseInput struct {
-	// RequestRoute is the route token
-	RequestRoute string `json:"RequestRoute"`
-
-	// RequestToken is the output token
-	RequestToken string `json:"RequestToken"`
-
-	// StatusCode is the HTTP status code
-	StatusCode int `json:"StatusCode"`
-
-	// ErrorCode is an optional error code
-	ErrorCode string `json:"ErrorCode,omitempty"`
-
-	// ErrorMessage is an optional error message
-	ErrorMessage string `json:"ErrorMessage,omitempty"`
-
-	// Body is the transformed content
-	Body io.Reader `json:"-"`
-
-	// ContentLength is the body length
-	ContentLength int64 `json:"ContentLength"`
-
-	// ContentType is the content MIME type
-	ContentType string `json:"ContentType,omitempty"`
-
-	// CacheControl is the cache-control header
-	CacheControl string `json:"CacheControl,omitempty"`
-
-	// ContentDisposition is the content-disposition header
-	ContentDisposition string `json:"ContentDisposition,omitempty"`
-
-	// ContentEncoding is the content-encoding header
-	ContentEncoding string `json:"ContentEncoding,omitempty"`
-
-	// ContentLanguage is the content-language header
-	ContentLanguage string `json:"ContentLanguage,omitempty"`
-
-	// ETag is the object ETag
-	ETag string `json:"ETag,omitempty"`
-
-	// Expires is the expiration time
-	Expires *time.Time `json:"Expires,omitempty"`
-
-	// LastModified is the last modified time
-	LastModified *time.Time `json:"LastModified,omitempty"`
-
-	// Metadata is custom metadata
-	Metadata map[string]string `json:"Metadata,omitempty"`
+	Body               io.Reader         `json:"-"`
+	Metadata           map[string]string `json:"Metadata,omitempty"`
+	LastModified       *time.Time        `json:"LastModified,omitempty"`
+	Expires            *time.Time        `json:"Expires,omitempty"`
+	CacheControl       string            `json:"CacheControl,omitempty"`
+	ErrorMessage       string            `json:"ErrorMessage,omitempty"`
+	ContentType        string            `json:"ContentType,omitempty"`
+	RequestRoute       string            `json:"RequestRoute"`
+	ContentDisposition string            `json:"ContentDisposition,omitempty"`
+	ContentEncoding    string            `json:"ContentEncoding,omitempty"`
+	ContentLanguage    string            `json:"ContentLanguage,omitempty"`
+	ETag               string            `json:"ETag,omitempty"`
+	ErrorCode          string            `json:"ErrorCode,omitempty"`
+	RequestToken       string            `json:"RequestToken"`
+	ContentLength      int64             `json:"ContentLength"`
+	StatusCode         int               `json:"StatusCode"`
 }
 
-// ObjectLambdaService manages Object Lambda access points
+// ObjectLambdaService manages Object Lambda access points.
 type ObjectLambdaService struct {
-	accessPoints map[string]*AccessPointConfig
-	mu           sync.RWMutex
-	httpClient   *http.Client
-
-	// Built-in transformers
-	transformers map[BuiltInTransform]Transformer
-
-	// Pending responses from webhook transformations
+	accessPoints     map[string]*AccessPointConfig
+	httpClient       *http.Client
+	transformers     map[BuiltInTransform]Transformer
 	pendingResponses map[string]chan *WriteGetObjectResponseInput
+	mu               sync.RWMutex
 	pendingMu        sync.RWMutex
 }
 
-// Transformer interface for built-in transformations
+// Transformer interface for built-in transformations.
 type Transformer interface {
 	Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error)
 }
 
-// NewObjectLambdaService creates a new Object Lambda service
+// NewObjectLambdaService creates a new Object Lambda service.
 func NewObjectLambdaService() *ObjectLambdaService {
 	svc := &ObjectLambdaService{
 		accessPoints:     make(map[string]*AccessPointConfig),
@@ -299,7 +234,7 @@ func NewObjectLambdaService() *ObjectLambdaService {
 	return svc
 }
 
-// registerBuiltInTransformers registers all built-in transformation functions
+// registerBuiltInTransformers registers all built-in transformation functions.
 func (s *ObjectLambdaService) registerBuiltInTransformers() {
 	s.transformers[BuiltInRedact] = &RedactTransformer{}
 	s.transformers[BuiltInMaskPII] = &PIIMaskTransformer{}
@@ -309,21 +244,23 @@ func (s *ObjectLambdaService) registerBuiltInTransformers() {
 	s.transformers[BuiltInDecompress] = &DecompressTransformer{}
 }
 
-// CreateAccessPoint creates an Object Lambda access point
+// CreateAccessPoint creates an Object Lambda access point.
 func (s *ObjectLambdaService) CreateAccessPoint(cfg *AccessPointConfig) error {
 	if cfg.Name == "" {
-		return fmt.Errorf("access point name is required")
+		return errors.New("access point name is required")
 	}
+
 	if cfg.SupportingAccessPoint == "" {
-		return fmt.Errorf("supporting access point is required")
+		return errors.New("supporting access point is required")
 	}
+
 	if len(cfg.TransformationConfigurations) == 0 {
-		return fmt.Errorf("at least one transformation configuration is required")
+		return errors.New("at least one transformation configuration is required")
 	}
 
 	cfg.CreatedAt = time.Now()
 	if cfg.Arn == "" {
-		cfg.Arn = fmt.Sprintf("arn:aws:s3-object-lambda:region:account:accesspoint/%s", cfg.Name)
+		cfg.Arn = "arn:aws:s3-object-lambda:region:account:accesspoint/" + cfg.Name
 	}
 
 	s.mu.Lock()
@@ -333,7 +270,7 @@ func (s *ObjectLambdaService) CreateAccessPoint(cfg *AccessPointConfig) error {
 	return nil
 }
 
-// GetAccessPoint retrieves an access point configuration
+// GetAccessPoint retrieves an access point configuration.
 func (s *ObjectLambdaService) GetAccessPoint(name string) (*AccessPointConfig, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -342,22 +279,24 @@ func (s *ObjectLambdaService) GetAccessPoint(name string) (*AccessPointConfig, e
 	if !ok {
 		return nil, fmt.Errorf("access point not found: %s", name)
 	}
+
 	return cfg, nil
 }
 
-// ListAccessPoints lists all Object Lambda access points
+// ListAccessPoints lists all Object Lambda access points.
 func (s *ObjectLambdaService) ListAccessPoints() []*AccessPointConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var configs []*AccessPointConfig
+	configs := make([]*AccessPointConfig, 0, len(s.accessPoints))
 	for _, cfg := range s.accessPoints {
 		configs = append(configs, cfg)
 	}
+
 	return configs
 }
 
-// DeleteAccessPoint deletes an Object Lambda access point
+// DeleteAccessPoint deletes an Object Lambda access point.
 func (s *ObjectLambdaService) DeleteAccessPoint(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -367,10 +306,11 @@ func (s *ObjectLambdaService) DeleteAccessPoint(name string) error {
 	}
 
 	delete(s.accessPoints, name)
+
 	return nil
 }
 
-// TransformObject applies transformations to an object on GET
+// TransformObject applies transformations to an object on GET.
 func (s *ObjectLambdaService) TransformObject(
 	ctx context.Context,
 	accessPointName string,
@@ -386,6 +326,7 @@ func (s *ObjectLambdaService) TransformObject(
 
 	// Find matching transformation for GetObject
 	var transform *ContentTransformation
+
 	for _, tc := range cfg.TransformationConfigurations {
 		for _, action := range tc.Actions {
 			if action == "GetObject" {
@@ -393,6 +334,7 @@ func (s *ObjectLambdaService) TransformObject(
 				break
 			}
 		}
+
 		if transform != nil {
 			break
 		}
@@ -419,7 +361,7 @@ func (s *ObjectLambdaService) TransformObject(
 	}
 }
 
-// applyBuiltInTransform applies a built-in transformation
+// applyBuiltInTransform applies a built-in transformation.
 func (s *ObjectLambdaService) applyBuiltInTransform(
 	ctx context.Context,
 	input io.Reader,
@@ -433,7 +375,7 @@ func (s *ObjectLambdaService) applyBuiltInTransform(
 	return transformer.Transform(ctx, input, config.Parameters)
 }
 
-// applyWebhookTransform calls a webhook for transformation
+// applyWebhookTransform calls a webhook for transformation.
 func (s *ObjectLambdaService) applyWebhookTransform(
 	ctx context.Context,
 	cfg *AccessPointConfig,
@@ -463,7 +405,7 @@ func (s *ObjectLambdaService) applyWebhookTransform(
 			SupportingAccessPointArn: cfg.SupportingAccessPoint,
 		},
 		UserRequest: UserRequest{
-			URL:     fmt.Sprintf("/%s", objectKey),
+			URL:     "/" + objectKey,
 			Headers: originalHeaders,
 		},
 		UserIdentity:    userIdentity,
@@ -472,6 +414,7 @@ func (s *ObjectLambdaService) applyWebhookTransform(
 
 	// Create response channel
 	responseChan := make(chan *WriteGetObjectResponseInput, 1)
+
 	s.pendingMu.Lock()
 	s.pendingResponses[outputToken] = responseChan
 	s.pendingMu.Unlock()
@@ -493,8 +436,8 @@ func (s *ObjectLambdaService) applyWebhookTransform(
 		// Include original body in a multipart request (simplified)
 		bodyBytes, _ := io.ReadAll(originalBody)
 		combined := struct {
-			Event       json.RawMessage `json:"event"`
 			ObjectBytes string          `json:"objectBytes"`
+			Event       json.RawMessage `json:"event"`
 		}{
 			Event:       eventBody,
 			ObjectBytes: base64.StdEncoding.EncodeToString(bodyBytes),
@@ -503,12 +446,13 @@ func (s *ObjectLambdaService) applyWebhookTransform(
 		reqBody = bytes.NewReader(combinedBytes)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", webhookConfig.URL, reqBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookConfig.URL, reqBody)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
 	for k, v := range webhookConfig.Headers {
 		req.Header.Set(k, v)
 	}
@@ -518,6 +462,7 @@ func (s *ObjectLambdaService) applyWebhookTransform(
 	if err != nil {
 		return nil, nil, fmt.Errorf("webhook request failed: %w", err)
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -538,17 +483,18 @@ func (s *ObjectLambdaService) applyWebhookTransform(
 		if response.ETag != "" {
 			headers["ETag"] = response.ETag
 		}
+
 		return response.Body, headers, nil
 
 	case <-time.After(timeout):
-		return nil, nil, fmt.Errorf("webhook transformation timed out")
+		return nil, nil, errors.New("webhook transformation timed out")
 
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
 }
 
-// applyWASMTransform applies a WASM-based transformation
+// applyWASMTransform applies a WASM-based transformation.
 func (s *ObjectLambdaService) applyWASMTransform(
 	ctx context.Context,
 	input io.Reader,
@@ -556,10 +502,10 @@ func (s *ObjectLambdaService) applyWASMTransform(
 ) (io.Reader, map[string]string, error) {
 	// TODO: Implement WASM runtime integration
 	// This would use a WASM runtime like wasmtime or wasmer
-	return nil, nil, fmt.Errorf("WASM transformations not yet implemented")
+	return nil, nil, errors.New("WASM transformations not yet implemented")
 }
 
-// WriteGetObjectResponse handles the response from a Lambda function
+// WriteGetObjectResponse handles the response from a Lambda function.
 func (s *ObjectLambdaService) WriteGetObjectResponse(input *WriteGetObjectResponseInput) error {
 	s.pendingMu.RLock()
 	responseChan, ok := s.pendingResponses[input.RequestToken]
@@ -573,21 +519,22 @@ func (s *ObjectLambdaService) WriteGetObjectResponse(input *WriteGetObjectRespon
 	case responseChan <- input:
 		return nil
 	default:
-		return fmt.Errorf("response channel full")
+		return errors.New("response channel full")
 	}
 }
 
-// generateToken generates a secure random token
+// generateToken generates a secure random token.
 func generateToken() string {
 	data := make([]byte, 32)
 	hash := sha256.Sum256([]byte(uuid.New().String()))
 	copy(data, hash[:])
+
 	return base64.URLEncoding.EncodeToString(data)
 }
 
 // Built-in Transformers
 
-// RedactTransformer redacts sensitive patterns from text
+// RedactTransformer redacts sensitive patterns from text.
 type RedactTransformer struct{}
 
 func (t *RedactTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
@@ -599,9 +546,9 @@ func (t *RedactTransformer) Transform(ctx context.Context, input io.Reader, para
 	// Default patterns to redact
 	patterns := []string{
 		`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`, // Email
-		`\b\d{3}[-.]?\d{3}[-.]?\d{4}\b`,                        // Phone
-		`\b\d{3}[-]?\d{2}[-]?\d{4}\b`,                          // SSN
-		`\b\d{16}\b`,                                           // Credit card (simple)
+		`\b\d{3}[-.]?\d{3}[-.]?\d{4}\b`,                       // Phone
+		`\b\d{3}[-]?\d{2}[-]?\d{4}\b`,                         // SSN
+		`\b\d{16}\b`,                                          // Credit card (simple)
 	}
 
 	// Override with custom patterns if provided
@@ -618,6 +565,7 @@ func (t *RedactTransformer) Transform(ctx context.Context, input io.Reader, para
 	}
 
 	result := string(data)
+
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		result = re.ReplaceAllString(result, replacement)
@@ -626,7 +574,7 @@ func (t *RedactTransformer) Transform(ctx context.Context, input io.Reader, para
 	return strings.NewReader(result), map[string]string{"Content-Type": "text/plain"}, nil
 }
 
-// PIIMaskTransformer masks PII in JSON data
+// PIIMaskTransformer masks PII in JSON data.
 type PIIMaskTransformer struct{}
 
 func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
@@ -636,7 +584,8 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 	}
 
 	var obj map[string]interface{}
-	if err := json.Unmarshal(data, &obj); err != nil {
+	err = json.Unmarshal(data, &obj)
+	if err != nil {
 		// Not JSON, try text redaction
 		redactor := &RedactTransformer{}
 		return redactor.Transform(ctx, bytes.NewReader(data), params)
@@ -656,12 +605,15 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 			if len(s) > 4 {
 				return s[:2] + strings.Repeat("*", len(s)-4) + s[len(s)-2:]
 			}
+
 			return "****"
 		}
+
 		return "****"
 	}
 
 	var maskPII func(obj map[string]interface{})
+
 	maskPII = func(obj map[string]interface{}) {
 		for key, value := range obj {
 			keyLower := strings.ToLower(key)
@@ -676,6 +628,7 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 			if nested, ok := value.(map[string]interface{}); ok {
 				maskPII(nested)
 			}
+
 			if arr, ok := value.([]interface{}); ok {
 				for _, item := range arr {
 					if nested, ok := item.(map[string]interface{}); ok {
@@ -696,7 +649,7 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 	return bytes.NewReader(result), map[string]string{"Content-Type": "application/json"}, nil
 }
 
-// FilterFieldsTransformer filters JSON fields
+// FilterFieldsTransformer filters JSON fields.
 type FilterFieldsTransformer struct{}
 
 func (t *FilterFieldsTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
@@ -706,7 +659,8 @@ func (t *FilterFieldsTransformer) Transform(ctx context.Context, input io.Reader
 	}
 
 	var obj map[string]interface{}
-	if err := json.Unmarshal(data, &obj); err != nil {
+	err = json.Unmarshal(data, &obj)
+	if err != nil {
 		return nil, nil, fmt.Errorf("input must be JSON: %w", err)
 	}
 
@@ -719,6 +673,7 @@ func (t *FilterFieldsTransformer) Transform(ctx context.Context, input io.Reader
 				filtered[field] = v
 			}
 		}
+
 		obj = filtered
 	}
 
@@ -737,7 +692,7 @@ func (t *FilterFieldsTransformer) Transform(ctx context.Context, input io.Reader
 	return bytes.NewReader(result), map[string]string{"Content-Type": "application/json"}, nil
 }
 
-// ConvertJSONTransformer converts CSV to JSON
+// ConvertJSONTransformer converts CSV to JSON.
 type ConvertJSONTransformer struct{}
 
 func (t *ConvertJSONTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
@@ -748,7 +703,7 @@ func (t *ConvertJSONTransformer) Transform(ctx context.Context, input io.Reader,
 
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	if len(lines) < 2 {
-		return nil, nil, fmt.Errorf("CSV must have header and at least one data row")
+		return nil, nil, errors.New("CSV must have header and at least one data row")
 	}
 
 	delimiter := ","
@@ -757,16 +712,19 @@ func (t *ConvertJSONTransformer) Transform(ctx context.Context, input io.Reader,
 	}
 
 	headers := strings.Split(lines[0], delimiter)
+
 	var records []map[string]string
 
 	for i := 1; i < len(lines); i++ {
 		values := strings.Split(lines[i], delimiter)
 		record := make(map[string]string)
+
 		for j, header := range headers {
 			if j < len(values) {
 				record[strings.TrimSpace(header)] = strings.TrimSpace(values[j])
 			}
 		}
+
 		records = append(records, record)
 	}
 
@@ -778,23 +736,40 @@ func (t *ConvertJSONTransformer) Transform(ctx context.Context, input io.Reader,
 	return bytes.NewReader(result), map[string]string{"Content-Type": "application/json"}, nil
 }
 
-// CompressTransformer compresses content
+// CompressTransformer compresses content.
 type CompressTransformer struct{}
 
-// DefaultMaxTransformSize is the default maximum size of data that can be transformed in memory (100MB)
+// DefaultMaxTransformSize is the default maximum size of data that can be transformed in memory (100MB).
 const DefaultMaxTransformSize = 100 * 1024 * 1024
 
-// maxTransformSize is the configurable maximum transform size (defaults to DefaultMaxTransformSize)
-// Uses atomic operations for thread-safe access
+// DefaultStreamingThreshold is the default size threshold above which streaming mode is used (10MB).
+const DefaultStreamingThreshold = 10 * 1024 * 1024
+
+// DefaultMaxDecompressSize is the default maximum size of decompressed output (1GB).
+// This protects against decompression bomb attacks where small compressed files expand to huge sizes.
+const DefaultMaxDecompressSize = 1024 * 1024 * 1024
+
+// maxTransformSize is the configurable maximum transform size (defaults to DefaultMaxTransformSize).
+// Uses atomic operations for thread-safe access.
 var maxTransformSize atomic.Int64
+
+// streamingThreshold is the configurable size threshold for using streaming mode.
+// Uses atomic operations for thread-safe access.
+var streamingThreshold atomic.Int64
+
+// maxDecompressSize is the configurable maximum decompressed output size (defaults to DefaultMaxDecompressSize).
+// Uses atomic operations for thread-safe access.
+var maxDecompressSize atomic.Int64
 
 func init() {
 	maxTransformSize.Store(DefaultMaxTransformSize)
+	streamingThreshold.Store(DefaultStreamingThreshold)
+	maxDecompressSize.Store(DefaultMaxDecompressSize)
 }
 
-// SetMaxTransformSize sets the maximum size of data that can be transformed in memory
-// This function is thread-safe and can be called at any time
-// Warning: Setting this too high may cause memory exhaustion during transformation operations
+// SetMaxTransformSize sets the maximum size of data that can be transformed in memory.
+// This function is thread-safe and can be called at any time.
+// Warning: Setting this too high may cause memory exhaustion during transformation operations.
 func SetMaxTransformSize(size int64) {
 	if size > 0 {
 		maxTransformSize.Store(size)
@@ -806,26 +781,81 @@ func SetMaxTransformSize(size int64) {
 	}
 }
 
-// GetMaxTransformSize returns the current maximum transform size
-// This function is thread-safe
+// GetMaxTransformSize returns the current maximum transform size.
+// This function is thread-safe.
 func GetMaxTransformSize() int64 {
 	return maxTransformSize.Load()
 }
 
-func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
-	// Use LimitReader to prevent memory exhaustion from large objects
-	maxSize := GetMaxTransformSize()
-	limitedReader := io.LimitReader(input, maxSize+1)
-	data, err := io.ReadAll(limitedReader)
-	if err != nil {
-		return nil, nil, err
+// SetStreamingThreshold sets the size threshold above which streaming mode is used
+// for compression/decompression operations instead of buffering in memory.
+// This function is thread-safe and can be called at any time.
+func SetStreamingThreshold(size int64) {
+	if size > 0 {
+		streamingThreshold.Store(size)
+	} else {
+		log.Warn().
+			Int64("size", size).
+			Int64("current", streamingThreshold.Load()).
+			Msg("SetStreamingThreshold called with invalid size (<= 0), ignoring")
 	}
-	if int64(len(data)) > maxSize {
-		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", maxSize)
-	}
+}
 
+// GetStreamingThreshold returns the current streaming threshold.
+// This function is thread-safe.
+func GetStreamingThreshold() int64 {
+	return streamingThreshold.Load()
+}
+
+// SetMaxDecompressSize sets the maximum size of decompressed output.
+// This function is thread-safe and can be called at any time.
+// Warning: Setting this too high may allow decompression bomb attacks to succeed.
+func SetMaxDecompressSize(size int64) {
+	if size > 0 {
+		maxDecompressSize.Store(size)
+	} else {
+		log.Warn().
+			Int64("size", size).
+			Int64("current", maxDecompressSize.Load()).
+			Msg("SetMaxDecompressSize called with invalid size (<= 0), ignoring")
+	}
+}
+
+// GetMaxDecompressSize returns the current maximum decompressed output size.
+// This function is thread-safe.
+func GetMaxDecompressSize() int64 {
+	return maxDecompressSize.Load()
+}
+
+// ErrDecompressSizeLimitExceeded is returned when decompressed output exceeds the configured limit.
+var ErrDecompressSizeLimitExceeded = errors.New("decompressed size exceeds maximum allowed limit (potential decompression bomb)")
+
+// Compression magic bytes for auto-detection.
+const (
+	gzipMagic1 = 0x1f
+	gzipMagic2 = 0x8b
+	zstdMagic1 = 0x28
+	zstdMagic2 = 0xb5
+	zstdMagic3 = 0x2f
+	zstdMagic4 = 0xfd
+)
+
+// detectCompressionAlgorithm attempts to detect the compression algorithm from magic bytes.
+// Returns empty string if no known compression format is detected.
+func detectCompressionAlgorithm(data []byte) string {
+	switch {
+	case len(data) >= 2 && data[0] == gzipMagic1 && data[1] == gzipMagic2:
+		return compressionAlgGzip
+	case len(data) >= 4 && data[0] == zstdMagic1 && data[1] == zstdMagic2 && data[2] == zstdMagic3 && data[3] == zstdMagic4:
+		return compressionAlgZstd
+	default:
+		return ""
+	}
+}
+
+func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
 	// Get compression algorithm from params (default: gzip)
-	algorithm := "gzip"
+	algorithm := compressionAlgGzip
 	if alg, ok := params["algorithm"].(string); ok {
 		algorithm = alg
 	}
@@ -838,21 +868,61 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 		level = int(lvl)
 	}
 
-	var buf bytes.Buffer
-	var contentEncoding string
+	// Check if streaming mode should be used
+	// If content_length is provided and exceeds streaming threshold, use streaming
+	useStreaming := false
+
+	if contentLength, ok := params["content_length"].(int64); ok {
+		streamingThreshold := GetStreamingThreshold()
+		if contentLength > streamingThreshold {
+			useStreaming = true
+
+			log.Debug().
+				Int64("content_length", contentLength).
+				Int64("streaming_threshold", streamingThreshold).
+				Str("algorithm", algorithm).
+				Msg("Using streaming compression for large file")
+		}
+	}
+
+	if useStreaming {
+		return t.transformStreaming(ctx, input, algorithm, level)
+	}
+
+	// Buffered mode for small files
+	maxSize := GetMaxTransformSize()
+	limitedReader := io.LimitReader(input, maxSize+1)
+
+	data, err := io.ReadAll(limitedReader)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if int64(len(data)) > maxSize {
+		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", maxSize)
+	}
+
+	var (
+		buf             bytes.Buffer
+		contentEncoding string
+	)
 
 	switch strings.ToLower(algorithm) {
-	case "gzip":
-		if err := compressGzip(&buf, data, level); err != nil {
+	case compressionAlgGzip:
+		err := compressGzip(&buf, data, level)
+		if err != nil {
 			return nil, nil, err
 		}
-		contentEncoding = "gzip"
 
-	case "zstd":
-		if err := compressZstd(&buf, data, level); err != nil {
+		contentEncoding = compressionAlgGzip
+
+	case compressionAlgZstd:
+		err := compressZstd(&buf, data, level)
+		if err != nil {
 			return nil, nil, err
 		}
-		contentEncoding = "zstd"
+
+		contentEncoding = compressionAlgZstd
 
 	default:
 		return nil, nil, fmt.Errorf("unsupported compression algorithm: %s", algorithm)
@@ -861,29 +931,150 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 	return bytes.NewReader(buf.Bytes()), map[string]string{"Content-Encoding": contentEncoding}, nil
 }
 
-// compressGzip compresses data using gzip and writes to the buffer
+// transformStreaming performs streaming compression without buffering the entire input.
+func (t *CompressTransformer) transformStreaming(ctx context.Context, input io.Reader, algorithm string, level int) (io.Reader, map[string]string, error) {
+	pr, pw := io.Pipe()
+
+	var contentEncoding string
+
+	switch strings.ToLower(algorithm) {
+	case compressionAlgGzip:
+		contentEncoding = compressionAlgGzip
+
+		go func() {
+			defer pw.Close()
+
+			gzLevel := gzip.DefaultCompression
+			if level >= 0 && level <= 9 {
+				gzLevel = level
+			}
+
+			writer, err := gzip.NewWriterLevel(pw, gzLevel)
+			if err != nil {
+				pw.CloseWithError(fmt.Errorf("failed to create gzip writer: %w", err))
+				return
+			}
+			defer writer.Close()
+
+			buf := make([]byte, 32*1024) // 32KB buffer for streaming
+
+			for {
+				select {
+				case <-ctx.Done():
+					pw.CloseWithError(ctx.Err())
+					return
+				default:
+				}
+
+				n, err := input.Read(buf)
+				if n > 0 {
+					_, werr := writer.Write(buf[:n])
+					if werr != nil {
+						pw.CloseWithError(fmt.Errorf("failed to write gzip data: %w", werr))
+						return
+					}
+				}
+
+				if err == io.EOF {
+					break
+				}
+
+				if err != nil {
+					pw.CloseWithError(fmt.Errorf("failed to read input: %w", err))
+					return
+				}
+			}
+		}()
+
+	case compressionAlgZstd:
+		contentEncoding = compressionAlgZstd
+
+		go func() {
+			defer pw.Close()
+
+			var (
+				writer *zstd.Encoder
+				err    error
+			)
+
+			if level >= 1 && level <= 22 {
+				writer, err = zstd.NewWriter(pw, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
+			} else {
+				writer, err = zstd.NewWriter(pw, zstd.WithEncoderLevel(zstd.SpeedDefault))
+			}
+
+			if err != nil {
+				pw.CloseWithError(fmt.Errorf("failed to create zstd writer: %w", err))
+				return
+			}
+
+			defer writer.Close()
+
+			buf := make([]byte, 32*1024) // 32KB buffer for streaming
+
+			for {
+				select {
+				case <-ctx.Done():
+					pw.CloseWithError(ctx.Err())
+					return
+				default:
+				}
+
+				n, err := input.Read(buf)
+				if n > 0 {
+					_, werr := writer.Write(buf[:n])
+					if werr != nil {
+						pw.CloseWithError(fmt.Errorf("failed to write zstd data: %w", werr))
+						return
+					}
+				}
+
+				if err == io.EOF {
+					break
+				}
+
+				if err != nil {
+					pw.CloseWithError(fmt.Errorf("failed to read input: %w", err))
+					return
+				}
+			}
+		}()
+
+	default:
+		return nil, nil, fmt.Errorf("unsupported compression algorithm: %s", algorithm)
+	}
+
+	return pr, map[string]string{"Content-Encoding": contentEncoding}, nil
+}
+
+// compressGzip compresses data using gzip and writes to the buffer.
 func compressGzip(buf *bytes.Buffer, data []byte, level int) (err error) {
 	gzLevel := gzip.DefaultCompression
 	if level >= 0 && level <= 9 {
 		gzLevel = level
 	}
+
 	writer, err := gzip.NewWriterLevel(buf, gzLevel)
 	if err != nil {
 		return fmt.Errorf("failed to create gzip writer: %w", err)
 	}
+
 	defer func() {
-		if cerr := writer.Close(); cerr != nil && err == nil {
+		cerr := writer.Close()
+		if cerr != nil && err == nil {
 			err = fmt.Errorf("failed to close gzip writer: %w", cerr)
 		}
 	}()
 
-	if _, err = writer.Write(data); err != nil {
+	_, err = writer.Write(data)
+	if err != nil {
 		return fmt.Errorf("failed to write gzip data: %w", err)
 	}
+
 	return nil
 }
 
-// compressZstd compresses data using zstd and writes to the buffer
+// compressZstd compresses data using zstd and writes to the buffer.
 func compressZstd(buf *bytes.Buffer, data []byte, level int) (err error) {
 	var writer *zstd.Encoder
 	if level >= 1 && level <= 22 {
@@ -891,49 +1082,74 @@ func compressZstd(buf *bytes.Buffer, data []byte, level int) (err error) {
 	} else {
 		writer, err = zstd.NewWriter(buf, zstd.WithEncoderLevel(zstd.SpeedDefault))
 	}
+
 	if err != nil {
 		return fmt.Errorf("failed to create zstd writer: %w", err)
 	}
+
 	defer func() {
-		if cerr := writer.Close(); cerr != nil && err == nil {
+		cerr := writer.Close()
+		if cerr != nil && err == nil {
 			err = fmt.Errorf("failed to close zstd writer: %w", cerr)
 		}
 	}()
 
-	if _, err = writer.Write(data); err != nil {
+	_, err = writer.Write(data)
+	if err != nil {
 		return fmt.Errorf("failed to write zstd data: %w", err)
 	}
+
 	return nil
 }
 
-// DecompressTransformer decompresses content
+// DecompressTransformer decompresses content.
 type DecompressTransformer struct{}
 
 func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
-	// Use LimitReader to prevent memory exhaustion from large objects
-	maxSize := GetMaxTransformSize()
-	limitedReader := io.LimitReader(input, maxSize+1)
-	data, err := io.ReadAll(limitedReader)
-	if err != nil {
-		return nil, nil, err
-	}
-	if int64(len(data)) > maxSize {
-		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", maxSize)
-	}
-
 	// Get compression algorithm from params (auto-detect if not specified)
 	algorithm := ""
 	if alg, ok := params["algorithm"].(string); ok {
 		algorithm = strings.ToLower(alg)
 	}
 
+	// Check if streaming mode should be used
+	useStreaming := false
+
+	if contentLength, ok := params["content_length"].(int64); ok {
+		streamingThreshold := GetStreamingThreshold()
+		if contentLength > streamingThreshold {
+			useStreaming = true
+
+			log.Debug().
+				Int64("content_length", contentLength).
+				Int64("streaming_threshold", streamingThreshold).
+				Str("algorithm", algorithm).
+				Msg("Using streaming decompression for large file")
+		}
+	}
+
+	if useStreaming && algorithm != "" {
+		// For streaming mode, algorithm must be specified (no auto-detection)
+		return t.transformStreaming(ctx, input, algorithm)
+	}
+
+	// Buffered mode for small files or when auto-detection is needed
+	maxSize := GetMaxTransformSize()
+	limitedReader := io.LimitReader(input, maxSize+1)
+
+	data, err := io.ReadAll(limitedReader)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if int64(len(data)) > maxSize {
+		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", maxSize)
+	}
+
 	// Auto-detect compression based on magic bytes if algorithm not specified
 	if algorithm == "" {
-		if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
-			algorithm = "gzip"
-		} else if len(data) >= 4 && data[0] == 0x28 && data[1] == 0xb5 && data[2] == 0x2f && data[3] == 0xfd {
-			algorithm = "zstd"
-		} else {
+		algorithm = detectCompressionAlgorithm(data)
+		if algorithm == "" {
 			// Data doesn't appear to be compressed, return as-is
 			return bytes.NewReader(data), nil, nil
 		}
@@ -942,23 +1158,26 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 	var result []byte
 
 	switch algorithm {
-	case "gzip":
+	case compressionAlgGzip:
 		reader, err := gzip.NewReader(bytes.NewReader(data))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create gzip reader: %w", err)
 		}
+
 		defer func() { _ = reader.Close() }()
 		// Limit decompressed size to prevent decompression bombs
 		decompressLimit := io.LimitReader(reader, maxSize+1)
+
 		result, err = io.ReadAll(decompressLimit)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to decompress gzip data: %w", err)
 		}
+
 		if int64(len(result)) > maxSize {
 			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
 		}
 
-	case "zstd":
+	case compressionAlgZstd:
 		decoder, err := zstd.NewReader(bytes.NewReader(data))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create zstd decoder: %w", err)
@@ -966,10 +1185,12 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 		defer decoder.Close()
 		// Limit decompressed size to prevent decompression bombs
 		decompressLimit := io.LimitReader(decoder, maxSize+1)
+
 		result, err = io.ReadAll(decompressLimit)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to decompress zstd data: %w", err)
 		}
+
 		if int64(len(result)) > maxSize {
 			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
 		}
@@ -981,34 +1202,156 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 	return bytes.NewReader(result), nil, nil
 }
 
-// GetAccessPointForBucketConfiguration implements S3 API
+// transformStreaming performs streaming decompression for large files.
+// It enforces a maximum decompressed size limit to protect against decompression bombs.
+//
+//nolint:unparam // headers map[string]string is always nil for decompression (no headers to set), but kept for consistency with compression API
+func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io.Reader, algorithm string) (io.Reader, map[string]string, error) {
+	pr, pw := io.Pipe()
+	maxSize := GetMaxDecompressSize()
+
+	switch algorithm {
+	case compressionAlgGzip:
+		go func() {
+			defer pw.Close()
+
+			reader, err := gzip.NewReader(input)
+			if err != nil {
+				pw.CloseWithError(fmt.Errorf("failed to create gzip reader: %w", err))
+				return
+			}
+
+			defer func() { _ = reader.Close() }()
+
+			buf := make([]byte, 32*1024) // 32KB buffer for streaming
+			var totalWritten int64
+
+			for {
+				select {
+				case <-ctx.Done():
+					pw.CloseWithError(ctx.Err())
+					return
+				default:
+				}
+
+				n, err := reader.Read(buf)
+				if n > 0 {
+					// Check decompression bomb protection before writing
+					if totalWritten+int64(n) > maxSize {
+						pw.CloseWithError(fmt.Errorf("%w: limit is %d bytes", ErrDecompressSizeLimitExceeded, maxSize))
+						return
+					}
+
+					_, werr := pw.Write(buf[:n])
+					if werr != nil {
+						pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", werr))
+						return
+					}
+
+					totalWritten += int64(n)
+				}
+
+				if err == io.EOF {
+					break
+				}
+
+				if err != nil {
+					pw.CloseWithError(fmt.Errorf("failed to decompress gzip data: %w", err))
+					return
+				}
+			}
+		}()
+
+	case compressionAlgZstd:
+		go func() {
+			defer pw.Close()
+
+			decoder, err := zstd.NewReader(input)
+			if err != nil {
+				pw.CloseWithError(fmt.Errorf("failed to create zstd decoder: %w", err))
+				return
+			}
+			defer decoder.Close()
+
+			buf := make([]byte, 32*1024) // 32KB buffer for streaming
+			var totalWritten int64
+
+			for {
+				select {
+				case <-ctx.Done():
+					pw.CloseWithError(ctx.Err())
+					return
+				default:
+				}
+
+				n, err := decoder.Read(buf)
+				if n > 0 {
+					// Check decompression bomb protection before writing
+					if totalWritten+int64(n) > maxSize {
+						pw.CloseWithError(fmt.Errorf("%w: limit is %d bytes", ErrDecompressSizeLimitExceeded, maxSize))
+						return
+					}
+
+					_, werr := pw.Write(buf[:n])
+					if werr != nil {
+						pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", werr))
+						return
+					}
+
+					totalWritten += int64(n)
+				}
+
+				if err == io.EOF {
+					break
+				}
+
+				if err != nil {
+					pw.CloseWithError(fmt.Errorf("failed to decompress zstd data: %w", err))
+					return
+				}
+			}
+		}()
+
+	default:
+		return nil, nil, fmt.Errorf("unsupported decompression algorithm for streaming: %s", algorithm)
+	}
+
+	log.Debug().
+		Str("algorithm", algorithm).
+		Int64("max_decompress_size", maxSize).
+		Msg("Started streaming decompression with size limit")
+
+	return pr, nil, nil
+}
+
+// GetAccessPointForBucketConfiguration implements S3 API.
 func (s *ObjectLambdaService) GetAccessPointForBucketConfiguration(accessPoint, bucket string) (*AccessPointConfig, error) {
 	return s.GetAccessPoint(accessPoint)
 }
 
-// CreateAccessPointForObjectLambda implements S3 API
+// CreateAccessPointForObjectLambda implements S3 API.
 func (s *ObjectLambdaService) CreateAccessPointForObjectLambda(name string, config *AccessPointConfig) error {
 	config.Name = name
 	return s.CreateAccessPoint(config)
 }
 
-// DeleteAccessPointForObjectLambda implements S3 API
+// DeleteAccessPointForObjectLambda implements S3 API.
 func (s *ObjectLambdaService) DeleteAccessPointForObjectLambda(name string) error {
 	return s.DeleteAccessPoint(name)
 }
 
-// GetAccessPointConfigurationForObjectLambda implements S3 API
+// GetAccessPointConfigurationForObjectLambda implements S3 API.
 func (s *ObjectLambdaService) GetAccessPointConfigurationForObjectLambda(name string) (*AccessPointConfig, error) {
 	return s.GetAccessPoint(name)
 }
 
-// PutAccessPointConfigurationForObjectLambda implements S3 API
+// PutAccessPointConfigurationForObjectLambda implements S3 API.
 func (s *ObjectLambdaService) PutAccessPointConfigurationForObjectLambda(name string, config *AccessPointConfig) error {
 	config.Name = name
 	return s.CreateAccessPoint(config)
 }
 
-// ListAccessPointsForObjectLambda implements S3 API
+// ListAccessPointsForObjectLambda implements S3 API.
 func (s *ObjectLambdaService) ListAccessPointsForObjectLambda(accountID string) []*AccessPointConfig {
 	return s.ListAccessPoints()
 }

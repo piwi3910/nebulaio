@@ -2,6 +2,7 @@ package object
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,27 +10,27 @@ import (
 	"github.com/piwi3910/nebulaio/pkg/s3errors"
 )
 
-// RetentionMode represents the object lock retention mode
+// RetentionMode represents the object lock retention mode.
 type RetentionMode string
 
 const (
-	// RetentionModeGovernance allows users with special permissions to bypass lock
+	// RetentionModeGovernance allows users with special permissions to bypass lock.
 	RetentionModeGovernance RetentionMode = "GOVERNANCE"
-	// RetentionModeCompliance provides strict lock that cannot be bypassed
+	// RetentionModeCompliance provides strict lock that cannot be bypassed.
 	RetentionModeCompliance RetentionMode = "COMPLIANCE"
 )
 
-// LegalHoldStatus represents the legal hold status
+// LegalHoldStatus represents the legal hold status.
 type LegalHoldStatus string
 
 const (
-	// LegalHoldOn enables legal hold
+	// LegalHoldOn enables legal hold.
 	LegalHoldOn LegalHoldStatus = "ON"
-	// LegalHoldOff disables legal hold
+	// LegalHoldOff disables legal hold.
 	LegalHoldOff LegalHoldStatus = "OFF"
 )
 
-// ObjectLockCheckOptions contains options for checking object lock
+// ObjectLockCheckOptions contains options for checking object lock.
 type ObjectLockCheckOptions struct {
 	// BypassGovernanceRetention allows bypassing governance mode retention
 	// Requires s3:BypassGovernanceRetention permission
@@ -37,7 +38,7 @@ type ObjectLockCheckOptions struct {
 }
 
 // CheckObjectLock verifies if an object can be modified or deleted based on its lock status
-// Returns an error if the object is locked and cannot be modified
+// Returns an error if the object is locked and cannot be modified.
 func (s *Service) CheckObjectLock(ctx context.Context, meta *metadata.ObjectMeta, opts *ObjectLockCheckOptions) error {
 	if meta == nil {
 		return nil
@@ -64,6 +65,7 @@ func (s *Service) CheckObjectLock(ctx context.Context, meta *metadata.ObjectMeta
 				if opts != nil && opts.BypassGovernanceRetention {
 					return nil
 				}
+
 				return s3errors.ErrObjectLocked
 			}
 		}
@@ -72,7 +74,7 @@ func (s *Service) CheckObjectLock(ctx context.Context, meta *metadata.ObjectMeta
 	return nil
 }
 
-// CheckBucketObjectLockEnabled verifies if object lock is enabled for a bucket
+// CheckBucketObjectLockEnabled verifies if object lock is enabled for a bucket.
 func (s *Service) CheckBucketObjectLockEnabled(ctx context.Context, bucket string) (bool, error) {
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
 	if err != nil {
@@ -82,7 +84,7 @@ func (s *Service) CheckBucketObjectLockEnabled(ctx context.Context, bucket strin
 	return bucketInfo.ObjectLockEnabled, nil
 }
 
-// ValidateRetentionMode validates the retention mode string
+// ValidateRetentionMode validates the retention mode string.
 func ValidateRetentionMode(mode string) error {
 	switch RetentionMode(mode) {
 	case RetentionModeGovernance, RetentionModeCompliance:
@@ -94,7 +96,7 @@ func ValidateRetentionMode(mode string) error {
 	}
 }
 
-// ValidateLegalHoldStatus validates the legal hold status string
+// ValidateLegalHoldStatus validates the legal hold status string.
 func ValidateLegalHoldStatus(status string) error {
 	switch LegalHoldStatus(status) {
 	case LegalHoldOn, LegalHoldOff:
@@ -106,29 +108,33 @@ func ValidateLegalHoldStatus(status string) error {
 	}
 }
 
-// ValidateRetentionDate validates that the retention date is in the future
+// ValidateRetentionDate validates that the retention date is in the future.
 func ValidateRetentionDate(date time.Time) error {
 	if date.IsZero() {
 		return nil
 	}
+
 	if date.Before(time.Now()) {
-		return fmt.Errorf("retention date must be in the future")
+		return errors.New("retention date must be in the future")
 	}
+
 	return nil
 }
 
-// CanExtendRetention checks if retention can be extended (only longer periods allowed)
-func CanExtendRetention(current, new *time.Time) bool {
+// CanExtendRetention checks if retention can be extended (only longer periods allowed).
+func CanExtendRetention(current, newRetention *time.Time) bool {
 	if current == nil || current.IsZero() {
 		return true // No current retention, any new retention is valid
 	}
-	if new == nil || new.IsZero() {
+
+	if newRetention == nil || newRetention.IsZero() {
 		return false // Cannot remove existing retention
 	}
-	return new.After(*current) // New date must be after current date
+
+	return newRetention.After(*current) // New date must be after current date
 }
 
-// ApplyDefaultRetention applies bucket default retention to an object if not already set
+// ApplyDefaultRetention applies bucket default retention to an object if not already set.
 func (s *Service) ApplyDefaultRetention(ctx context.Context, bucket string, meta *metadata.ObjectMeta) error {
 	// If object already has retention, don't override
 	if meta.ObjectLockMode != "" || meta.ObjectLockRetainUntilDate != nil {
@@ -162,25 +168,28 @@ func (s *Service) ApplyDefaultRetention(ctx context.Context, bucket string, meta
 	return nil
 }
 
-// GetRetentionInfo returns the retention information for an object
+// GetRetentionInfo returns the retention information for an object.
 type RetentionInfo struct {
-	Mode            RetentionMode
 	RetainUntilDate *time.Time
+	Mode            RetentionMode
 	LegalHold       LegalHoldStatus
-	IsLocked        bool
 	Reason          string
+	IsLocked        bool
 }
 
-// GetRetentionInfo retrieves retention information for an object
+// GetRetentionInfo retrieves retention information for an object.
 func (s *Service) GetRetentionInfo(ctx context.Context, bucket, key, versionID string) (*RetentionInfo, error) {
-	var meta *metadata.ObjectMeta
-	var err error
+	var (
+		meta *metadata.ObjectMeta
+		err  error
+	)
 
 	if versionID != "" {
 		meta, err = s.store.GetObjectVersion(ctx, bucket, key, versionID)
 	} else {
 		meta, err = s.store.GetObjectMeta(ctx, bucket, key)
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -197,50 +206,56 @@ func (s *Service) GetRetentionInfo(ctx context.Context, bucket, key, versionID s
 		info.Reason = "legal hold is enabled"
 	} else if info.RetainUntilDate != nil && time.Now().Before(*info.RetainUntilDate) {
 		info.IsLocked = true
-		info.Reason = fmt.Sprintf("retention period until %s", info.RetainUntilDate.Format(time.RFC3339))
+		info.Reason = "retention period until " + info.RetainUntilDate.Format(time.RFC3339)
 	}
 
 	return info, nil
 }
 
-// ExtendRetention extends the retention period for an object (only to a later date)
+// ExtendRetention extends the retention period for an object (only to a later date).
 func (s *Service) ExtendRetention(ctx context.Context, bucket, key, versionID string, mode string, retainUntilDate time.Time) error {
-	var meta *metadata.ObjectMeta
-	var err error
+	var (
+		meta *metadata.ObjectMeta
+		err  error
+	)
 
 	if versionID != "" {
 		meta, err = s.store.GetObjectVersion(ctx, bucket, key, versionID)
 	} else {
 		meta, err = s.store.GetObjectMeta(ctx, bucket, key)
 	}
+
 	if err != nil {
 		return err
 	}
 
 	// Validate mode
-	if err := ValidateRetentionMode(mode); err != nil {
-		return err
+	validationErr := ValidateRetentionMode(mode)
+	if validationErr != nil {
+		return validationErr
 	}
 
 	// Check if extension is valid
 	if !CanExtendRetention(meta.ObjectLockRetainUntilDate, &retainUntilDate) {
-		return fmt.Errorf("retention can only be extended, not reduced")
+		return errors.New("retention can only be extended, not reduced")
 	}
 
 	// For compliance mode, mode cannot be changed once set
 	if meta.ObjectLockMode == string(RetentionModeCompliance) && mode != "" && mode != string(RetentionModeCompliance) {
-		return fmt.Errorf("compliance mode cannot be changed")
+		return errors.New("compliance mode cannot be changed")
 	}
 
 	// Update retention
 	if mode != "" {
 		meta.ObjectLockMode = mode
 	}
+
 	meta.ObjectLockRetainUntilDate = &retainUntilDate
 
 	// Use PutObjectMeta or PutObjectMetaVersioned based on versioning
 	if meta.VersionID != "" {
 		return s.store.PutObjectMetaVersioned(ctx, meta, false)
 	}
+
 	return s.store.PutObjectMeta(ctx, meta)
 }

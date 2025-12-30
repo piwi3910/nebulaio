@@ -12,16 +12,21 @@ import (
 	"time"
 )
 
-// mockAuditStore implements AuditStore for testing
+// Test constants.
+const maskedValue = "***MASKED***"
+
+// mockAuditStore implements AuditStore for testing.
 type mockAuditStore struct {
-	mu     sync.Mutex
 	events []*AuditEvent
+	mu     sync.Mutex
 }
 
 func (m *mockAuditStore) StoreAuditEvent(ctx context.Context, event *AuditEvent) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.events = append(m.events, event)
+
 	return nil
 }
 
@@ -38,18 +43,23 @@ func (m *mockAuditStore) ListAuditEvents(ctx context.Context, filter AuditFilter
 		if !filter.StartTime.IsZero() && e.Timestamp.Before(filter.StartTime) {
 			continue
 		}
+
 		if !filter.EndTime.IsZero() && e.Timestamp.After(filter.EndTime) {
 			continue
 		}
+
 		if filter.Bucket != "" && e.Resource.Bucket != filter.Bucket {
 			continue
 		}
+
 		if filter.User != "" && e.UserIdentity.Username != filter.User {
 			continue
 		}
+
 		if filter.EventType != "" && string(e.EventType) != filter.EventType {
 			continue
 		}
+
 		if filter.Result != "" && string(e.Result) != filter.Result {
 			continue
 		}
@@ -64,7 +74,7 @@ func (m *mockAuditStore) ListAuditEvents(ctx context.Context, filter AuditFilter
 	return result, nil
 }
 
-// mockGeoLookup implements GeoLookup for testing
+// mockGeoLookup implements GeoLookup for testing.
 type mockGeoLookup struct{}
 
 func (m *mockGeoLookup) Lookup(ip string) (*GeoLocation, error) {
@@ -81,6 +91,7 @@ func TestEnhancedAuditLoggerBasic(t *testing.T) {
 	config.IntegritySecret = "test-secret-key"
 
 	store := &mockAuditStore{}
+
 	logger, err := NewEnhancedAuditLogger(config, store, &mockGeoLookup{})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -135,6 +146,7 @@ func TestEnhancedAuditLoggerWithFileOutput(t *testing.T) {
 	}
 
 	store := &mockAuditStore{}
+
 	logger, err := NewEnhancedAuditLogger(config, store, nil)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -143,7 +155,7 @@ func TestEnhancedAuditLoggerWithFileOutput(t *testing.T) {
 	logger.Start()
 
 	// Log multiple events synchronously for reliable test
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		event := &EnhancedAuditEvent{
 			AuditEvent: AuditEvent{
 				EventType:   EventObjectCreated,
@@ -159,7 +171,9 @@ func TestEnhancedAuditLoggerWithFileOutput(t *testing.T) {
 				},
 			},
 		}
-		if err := logger.LogSync(context.Background(), event); err != nil {
+
+		err := logger.LogSync(context.Background(), event)
+		if err != nil {
 			t.Fatalf("Failed to log event: %v", err)
 		}
 	}
@@ -182,7 +196,9 @@ func TestEnhancedAuditLoggerWithFileOutput(t *testing.T) {
 	// Verify JSON parsing
 	for _, line := range lines {
 		var event EnhancedAuditEvent
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
+
+		err := json.Unmarshal([]byte(line), &event)
+		if err != nil {
 			t.Errorf("Failed to parse log line: %v", err)
 		}
 	}
@@ -194,6 +210,7 @@ func TestEnhancedAuditLoggerIntegrity(t *testing.T) {
 	config.IntegritySecret = "test-secret-key"
 
 	store := &mockAuditStore{}
+
 	logger, err := NewEnhancedAuditLogger(config, store, nil)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -203,7 +220,7 @@ func TestEnhancedAuditLoggerIntegrity(t *testing.T) {
 
 	// Create events with chain
 	events := make([]*EnhancedAuditEvent, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		events[i] = &EnhancedAuditEvent{
 			AuditEvent: AuditEvent{
 				EventType:   EventObjectCreated,
@@ -219,7 +236,9 @@ func TestEnhancedAuditLoggerIntegrity(t *testing.T) {
 				},
 			},
 		}
-		if err := logger.LogSync(context.Background(), events[i]); err != nil {
+
+		err := logger.LogSync(context.Background(), events[i])
+		if err != nil {
 			t.Fatalf("Failed to log event: %v", err)
 		}
 	}
@@ -231,6 +250,7 @@ func TestEnhancedAuditLoggerIntegrity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Integrity verification failed: %v", err)
 	}
+
 	if !valid {
 		t.Error("Integrity check should be valid")
 	}
@@ -254,6 +274,7 @@ func TestEnhancedAuditLoggerFiltering(t *testing.T) {
 	}
 
 	store := &mockAuditStore{}
+
 	logger, err := NewEnhancedAuditLogger(config, store, nil)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -299,7 +320,7 @@ func TestEnhancedAuditLoggerQuery(t *testing.T) {
 
 	// Log events
 	now := time.Now()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		event := &EnhancedAuditEvent{
 			AuditEvent: AuditEvent{
 				Timestamp:   now.Add(time.Duration(i) * time.Minute),
@@ -326,6 +347,7 @@ func TestEnhancedAuditLoggerQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query failed: %v", err)
 	}
+
 	if len(result.Events) != 5 {
 		t.Errorf("Expected 5 events for bucket0, got %d", len(result.Events))
 	}
@@ -337,6 +359,7 @@ func TestEnhancedAuditLoggerQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query failed: %v", err)
 	}
+
 	if len(result.Events) != 3 {
 		t.Errorf("Expected 3 events with limit, got %d", len(result.Events))
 	}
@@ -348,6 +371,7 @@ func TestEnhancedAuditLoggerMasking(t *testing.T) {
 	config.SensitiveFields = []string{"password", "secret", "authorization"}
 
 	store := &mockAuditStore{}
+
 	logger, err := NewEnhancedAuditLogger(config, store, nil)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -373,16 +397,19 @@ func TestEnhancedAuditLoggerMasking(t *testing.T) {
 	logger.Stop()
 
 	// Check that sensitive data is masked
-	if event.Extra["password"] != "***MASKED***" {
+	if event.Extra["password"] != maskedValue {
 		t.Error("Password should be masked")
 	}
-	if event.Extra["username"] == "***MASKED***" {
+
+	if event.Extra["username"] == maskedValue {
 		t.Error("Username should not be masked")
 	}
-	if event.RequestHeaders["Authorization"] != "***MASKED***" {
+
+	if event.RequestHeaders["Authorization"] != maskedValue {
 		t.Error("Authorization header should be masked")
 	}
-	if event.RequestHeaders["Content-Type"] == "***MASKED***" {
+
+	if event.RequestHeaders["Content-Type"] == maskedValue {
 		t.Error("Content-Type should not be masked")
 	}
 }
@@ -407,6 +434,7 @@ func TestEnhancedAuditLoggerCompliance(t *testing.T) {
 			config.ComplianceMode = tc.mode
 
 			store := &mockAuditStore{}
+
 			logger, err := NewEnhancedAuditLogger(config, store, nil)
 			if err != nil {
 				t.Fatalf("Failed to create logger: %v", err)
@@ -450,7 +478,7 @@ func TestEnhancedAuditLoggerExport(t *testing.T) {
 	logger.Start()
 
 	// Log events
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		event := &EnhancedAuditEvent{
 			AuditEvent: AuditEvent{
 				Timestamp:   time.Now(),
@@ -476,15 +504,18 @@ func TestEnhancedAuditLoggerExport(t *testing.T) {
 	// Test JSON export
 	t.Run("JSON", func(t *testing.T) {
 		var buf strings.Builder
+
 		err := logger.Export(context.Background(), AuditFilter{}, "json", &buf)
 		if err != nil {
 			t.Fatalf("JSON export failed: %v", err)
 		}
 
 		var events []AuditEvent
-		if err := json.Unmarshal([]byte(buf.String()), &events); err != nil {
+		err = json.Unmarshal([]byte(buf.String()), &events)
+		if err != nil {
 			t.Fatalf("Failed to parse JSON: %v", err)
 		}
+
 		if len(events) != 5 {
 			t.Errorf("Expected 5 events, got %d", len(events))
 		}
@@ -493,6 +524,7 @@ func TestEnhancedAuditLoggerExport(t *testing.T) {
 	// Test CSV export
 	t.Run("CSV", func(t *testing.T) {
 		var buf strings.Builder
+
 		err := logger.Export(context.Background(), AuditFilter{}, "csv", &buf)
 		if err != nil {
 			t.Fatalf("CSV export failed: %v", err)
@@ -507,6 +539,7 @@ func TestEnhancedAuditLoggerExport(t *testing.T) {
 	// Test CEF export
 	t.Run("CEF", func(t *testing.T) {
 		var buf strings.Builder
+
 		err := logger.Export(context.Background(), AuditFilter{}, "cef", &buf)
 		if err != nil {
 			t.Fatalf("CEF export failed: %v", err)
@@ -516,6 +549,7 @@ func TestEnhancedAuditLoggerExport(t *testing.T) {
 		if len(lines) != 5 {
 			t.Errorf("Expected 5 CEF lines, got %d", len(lines))
 		}
+
 		if !strings.HasPrefix(lines[0], "CEF:0|NebulaIO|") {
 			t.Error("CEF format incorrect")
 		}
@@ -526,6 +560,7 @@ func TestEnhancedAuditLoggerGeoLocation(t *testing.T) {
 	config := DefaultEnhancedConfig()
 
 	store := &mockAuditStore{}
+
 	logger, err := NewEnhancedAuditLogger(config, store, &mockGeoLookup{})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -555,6 +590,7 @@ func TestEnhancedAuditLoggerConcurrency(t *testing.T) {
 	config.BufferSize = 1000
 
 	store := &mockAuditStore{}
+
 	logger, err := NewEnhancedAuditLogger(config, store, nil)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -563,14 +599,17 @@ func TestEnhancedAuditLoggerConcurrency(t *testing.T) {
 	logger.Start()
 
 	var wg sync.WaitGroup
+
 	numGoroutines := 10
 	eventsPerGoroutine := 100
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
+
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < eventsPerGoroutine; j++ {
+
+			for range eventsPerGoroutine {
 				event := &EnhancedAuditEvent{
 					AuditEvent: AuditEvent{
 						EventType: EventObjectCreated,
@@ -635,8 +674,9 @@ func TestFileOutputRotation(t *testing.T) {
 	}
 
 	// Write 1500 events (~1.5MB) to trigger rotation
-	for i := 0; i < 1500; i++ {
-		if err := output.Write(context.Background(), event); err != nil {
+	for range 1500 {
+		err := output.Write(context.Background(), event)
+		if err != nil {
 			t.Fatalf("Write failed: %v", err)
 		}
 	}
@@ -670,7 +710,7 @@ func TestWebhookOutput(t *testing.T) {
 	defer output.Close()
 
 	// Write events (won't actually send since endpoint doesn't exist)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		event := &EnhancedAuditEvent{
 			AuditEvent: AuditEvent{
 				EventType: EventObjectCreated,
@@ -686,30 +726,36 @@ func TestDefaultEnhancedConfig(t *testing.T) {
 	if !cfg.Enabled {
 		t.Error("Default should be enabled")
 	}
+
 	if cfg.ComplianceMode != ComplianceNone {
 		t.Error("Default compliance mode should be none")
 	}
+
 	if cfg.RetentionDays != 90 {
 		t.Errorf("Default retention should be 90 days, got %d", cfg.RetentionDays)
 	}
+
 	if cfg.BufferSize != 10000 {
 		t.Errorf("Default buffer size should be 10000, got %d", cfg.BufferSize)
 	}
+
 	if !cfg.IntegrityEnabled {
 		t.Error("Default should have integrity enabled")
 	}
+
 	if !cfg.MaskSensitiveData {
 		t.Error("Default should mask sensitive data")
 	}
 }
 
-// BenchmarkEnhancedAuditLogger benchmarks the logger
+// BenchmarkEnhancedAuditLogger benchmarks the logger.
 func BenchmarkEnhancedAuditLogger(b *testing.B) {
 	config := DefaultEnhancedConfig()
 	config.IntegrityEnabled = false // Disable for pure throughput
 
 	store := &mockAuditStore{}
 	logger, _ := NewEnhancedAuditLogger(config, store, nil)
+
 	logger.Start()
 	defer logger.Stop()
 
@@ -730,12 +776,13 @@ func BenchmarkEnhancedAuditLogger(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		logger.Log(event)
 	}
 }
 
-// TestExportToWriter tests the export functionality to io.Writer
+// TestExportToWriter tests the export functionality to io.Writer.
 func TestExportToWriter(t *testing.T) {
 	store := &mockAuditStore{}
 	config := DefaultEnhancedConfig()
@@ -743,16 +790,17 @@ func TestExportToWriter(t *testing.T) {
 	logger, _ := NewEnhancedAuditLogger(config, store, nil)
 	logger.Start()
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		event := &EnhancedAuditEvent{
 			AuditEvent: AuditEvent{
-				Timestamp:   time.Now(),
-				EventType:   EventObjectCreated,
-				DurationMS:  100,
+				Timestamp:  time.Now(),
+				EventType:  EventObjectCreated,
+				DurationMS: 100,
 			},
 		}
 		logger.LogSync(context.Background(), event)
 	}
+
 	logger.Stop()
 
 	// Test unsupported format

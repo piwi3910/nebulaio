@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,7 +25,13 @@ import (
 	"github.com/piwi3910/nebulaio/pkg/s3types"
 )
 
-// MockMetadataStore implements metadata.Store for testing
+// Test constants.
+const (
+	testContentHelloWorld = "Hello, World!"
+	testContentTypePlain  = "text/plain"
+)
+
+// MockMetadataStore implements metadata.Store for testing.
 type MockMetadataStore struct {
 	buckets          map[string]*metadata.Bucket
 	objects          map[string]map[string]*metadata.ObjectMeta
@@ -63,19 +70,22 @@ func (m *MockMetadataStore) LeaderAddress() (string, error) {
 
 func (m *MockMetadataStore) CreateBucket(ctx context.Context, bucket *metadata.Bucket) error {
 	if _, exists := m.buckets[bucket.Name]; exists {
-		return fmt.Errorf("bucket already exists")
+		return errors.New("bucket already exists")
 	}
+
 	m.buckets[bucket.Name] = bucket
 	m.objects[bucket.Name] = make(map[string]*metadata.ObjectMeta)
 	m.versions[bucket.Name] = make(map[string][]*metadata.ObjectMeta)
+
 	return nil
 }
 
 func (m *MockMetadataStore) GetBucket(ctx context.Context, name string) (*metadata.Bucket, error) {
 	bucket, ok := m.buckets[name]
 	if !ok {
-		return nil, fmt.Errorf("bucket not found")
+		return nil, errors.New("bucket not found")
 	}
+
 	return bucket, nil
 }
 
@@ -83,24 +93,29 @@ func (m *MockMetadataStore) DeleteBucket(ctx context.Context, name string) error
 	delete(m.buckets, name)
 	delete(m.objects, name)
 	delete(m.versions, name)
+
 	return nil
 }
 
 func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*metadata.Bucket, error) {
 	var result []*metadata.Bucket
+
 	for _, b := range m.buckets {
 		if owner == "" || b.Owner == owner {
 			result = append(result, b)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.Bucket) error {
 	if _, exists := m.buckets[bucket.Name]; !exists {
-		return fmt.Errorf("bucket not found")
+		return errors.New("bucket not found")
 	}
+
 	m.buckets[bucket.Name] = bucket
+
 	return nil
 }
 
@@ -108,18 +123,22 @@ func (m *MockMetadataStore) PutObjectMeta(ctx context.Context, meta *metadata.Ob
 	if m.objects[meta.Bucket] == nil {
 		m.objects[meta.Bucket] = make(map[string]*metadata.ObjectMeta)
 	}
+
 	m.objects[meta.Bucket][meta.Key] = meta
+
 	return nil
 }
 
 func (m *MockMetadataStore) GetObjectMeta(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) {
 	if m.objects[bucket] == nil {
-		return nil, fmt.Errorf("object not found")
+		return nil, errors.New("object not found")
 	}
+
 	meta, ok := m.objects[bucket][key]
 	if !ok {
-		return nil, fmt.Errorf("object not found")
+		return nil, errors.New("object not found")
 	}
+
 	return meta, nil
 }
 
@@ -127,6 +146,7 @@ func (m *MockMetadataStore) DeleteObjectMeta(ctx context.Context, bucket, key st
 	if m.objects[bucket] != nil {
 		delete(m.objects[bucket], key)
 	}
+
 	return nil
 }
 
@@ -140,10 +160,12 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 	}
 
 	commonPrefixes := make(map[string]bool)
+
 	for key, obj := range m.objects[bucket] {
 		if obj.DeleteMarker {
 			continue
 		}
+
 		if prefix != "" && !strings.HasPrefix(key, prefix) {
 			continue
 		}
@@ -154,6 +176,7 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 			if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
 				cp := prefix + afterPrefix[:idx+len(delimiter)]
 				commonPrefixes[cp] = true
+
 				continue
 			}
 		}
@@ -170,6 +193,7 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 	for cp := range commonPrefixes {
 		result.CommonPrefixes = append(result.CommonPrefixes, cp)
 	}
+
 	sort.Strings(result.CommonPrefixes)
 
 	// Apply maxKeys limit
@@ -185,6 +209,7 @@ func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *me
 	if m.objects[meta.Bucket] == nil {
 		m.objects[meta.Bucket] = make(map[string]*metadata.ObjectMeta)
 	}
+
 	if m.versions[meta.Bucket] == nil {
 		m.versions[meta.Bucket] = make(map[string][]*metadata.ObjectMeta)
 	}
@@ -218,7 +243,8 @@ func (m *MockMetadataStore) GetObjectVersion(ctx context.Context, bucket, key, v
 			}
 		}
 	}
-	return nil, fmt.Errorf("version not found")
+
+	return nil, errors.New("version not found")
 }
 
 func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {
@@ -233,6 +259,7 @@ func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key
 				m.objects[bucket][key] = latest
 				m.versions[bucket][key] = versions[:len(versions)-1]
 			}
+
 			return nil
 		}
 	}
@@ -245,7 +272,8 @@ func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key
 			}
 		}
 	}
-	return fmt.Errorf("version not found")
+
+	return errors.New("version not found")
 }
 
 func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (*metadata.VersionListing, error) {
@@ -262,14 +290,17 @@ func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, pref
 		if prefix != "" && !strings.HasPrefix(key, prefix) {
 			continue
 		}
+
 		if delimiter != "" {
 			afterPrefix := strings.TrimPrefix(key, prefix)
 			if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
 				cp := prefix + afterPrefix[:idx+len(delimiter)]
 				commonPrefixes[cp] = true
+
 				continue
 			}
 		}
+
 		if obj.DeleteMarker {
 			result.DeleteMarkers = append(result.DeleteMarkers, obj)
 		} else {
@@ -282,12 +313,14 @@ func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, pref
 		if prefix != "" && !strings.HasPrefix(key, prefix) {
 			continue
 		}
+
 		if delimiter != "" {
 			afterPrefix := strings.TrimPrefix(key, prefix)
 			if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
 				continue
 			}
 		}
+
 		for _, v := range versions {
 			if v.DeleteMarker {
 				result.DeleteMarkers = append(result.DeleteMarkers, v)
@@ -301,6 +334,7 @@ func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, pref
 	for cp := range commonPrefixes {
 		result.CommonPrefixes = append(result.CommonPrefixes, cp)
 	}
+
 	sort.Strings(result.CommonPrefixes)
 
 	return result, nil
@@ -309,62 +343,74 @@ func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, pref
 func (m *MockMetadataStore) CreateMultipartUpload(ctx context.Context, upload *metadata.MultipartUpload) error {
 	key := fmt.Sprintf("%s/%s/%s", upload.Bucket, upload.Key, upload.UploadID)
 	m.multipartUploads[key] = upload
+
 	return nil
 }
 
 func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*metadata.MultipartUpload, error) {
 	k := fmt.Sprintf("%s/%s/%s", bucket, key, uploadID)
+
 	upload, ok := m.multipartUploads[k]
 	if !ok {
-		return nil, fmt.Errorf("upload not found")
+		return nil, errors.New("upload not found")
 	}
+
 	return upload, nil
 }
 
 func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uploadID string, part *metadata.UploadPart) error {
 	k := fmt.Sprintf("%s/%s/%s", bucket, key, uploadID)
+
 	upload, ok := m.multipartUploads[k]
 	if !ok {
-		return fmt.Errorf("upload not found")
+		return errors.New("upload not found")
 	}
 	// Replace existing part with same number or add new
 	found := false
+
 	for i, p := range upload.Parts {
 		if p.PartNumber == part.PartNumber {
 			upload.Parts[i] = *part
 			found = true
+
 			break
 		}
 	}
+
 	if !found {
 		upload.Parts = append(upload.Parts, *part)
 	}
+
 	return nil
 }
 
 func (m *MockMetadataStore) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	k := fmt.Sprintf("%s/%s/%s", bucket, key, uploadID)
 	delete(m.multipartUploads, k)
+
 	return nil
 }
 
 func (m *MockMetadataStore) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	k := fmt.Sprintf("%s/%s/%s", bucket, key, uploadID)
 	delete(m.multipartUploads, k)
+
 	return nil
 }
 
 func (m *MockMetadataStore) ListMultipartUploads(ctx context.Context, bucket string) ([]*metadata.MultipartUpload, error) {
 	var result []*metadata.MultipartUpload
+
 	for _, upload := range m.multipartUploads {
 		if upload.Bucket == bucket {
 			result = append(result, upload)
 		}
 	}
+
 	return result, nil
 }
 
-// User operations
+// User operations.
 func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User) error {
 	m.users[user.ID] = user
 	return nil
@@ -373,8 +419,9 @@ func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User)
 func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.User, error) {
 	user, ok := m.users[id]
 	if !ok {
-		return nil, fmt.Errorf("user not found")
+		return nil, errors.New("user not found")
 	}
+
 	return user, nil
 }
 
@@ -384,7 +431,8 @@ func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username stri
 			return user, nil
 		}
 	}
-	return nil, fmt.Errorf("user not found")
+
+	return nil, errors.New("user not found")
 }
 
 func (m *MockMetadataStore) UpdateUser(ctx context.Context, user *metadata.User) error {
@@ -398,14 +446,15 @@ func (m *MockMetadataStore) DeleteUser(ctx context.Context, id string) error {
 }
 
 func (m *MockMetadataStore) ListUsers(ctx context.Context) ([]*metadata.User, error) {
-	var result []*metadata.User
+	result := make([]*metadata.User, 0, len(m.users))
 	for _, user := range m.users {
 		result = append(result, user)
 	}
+
 	return result, nil
 }
 
-// Access key operations
+// Access key operations.
 func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.AccessKey) error {
 	m.accessKeys[key.AccessKeyID] = key
 	return nil
@@ -414,8 +463,9 @@ func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.A
 func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string) (*metadata.AccessKey, error) {
 	key, ok := m.accessKeys[accessKeyID]
 	if !ok {
-		return nil, fmt.Errorf("access key not found")
+		return nil, errors.New("access key not found")
 	}
+
 	return key, nil
 }
 
@@ -426,15 +476,17 @@ func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID str
 
 func (m *MockMetadataStore) ListAccessKeys(ctx context.Context, userID string) ([]*metadata.AccessKey, error) {
 	var result []*metadata.AccessKey
+
 	for _, key := range m.accessKeys {
 		if key.UserID == userID {
 			result = append(result, key)
 		}
 	}
+
 	return result, nil
 }
 
-// Policy operations
+// Policy operations.
 func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.Policy) error {
 	m.policies[policy.Name] = policy
 	return nil
@@ -443,8 +495,9 @@ func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.P
 func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metadata.Policy, error) {
 	policy, ok := m.policies[name]
 	if !ok {
-		return nil, fmt.Errorf("policy not found")
+		return nil, errors.New("policy not found")
 	}
+
 	return policy, nil
 }
 
@@ -459,14 +512,15 @@ func (m *MockMetadataStore) DeletePolicy(ctx context.Context, name string) error
 }
 
 func (m *MockMetadataStore) ListPolicies(ctx context.Context) ([]*metadata.Policy, error) {
-	var result []*metadata.Policy
+	result := make([]*metadata.Policy, 0, len(m.policies))
 	for _, policy := range m.policies {
 		result = append(result, policy)
 	}
+
 	return result, nil
 }
 
-// Cluster operations
+// Cluster operations.
 func (m *MockMetadataStore) GetClusterInfo(ctx context.Context) (*metadata.ClusterInfo, error) {
 	return &metadata.ClusterInfo{
 		ClusterID:     "test-cluster",
@@ -488,7 +542,7 @@ func (m *MockMetadataStore) ListNodes(ctx context.Context) ([]*metadata.NodeInfo
 	return []*metadata.NodeInfo{}, nil
 }
 
-// Audit operations
+// Audit operations.
 func (m *MockMetadataStore) StoreAuditEvent(ctx context.Context, event *audit.AuditEvent) error {
 	return nil
 }
@@ -501,7 +555,7 @@ func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before tim
 	return 0, nil
 }
 
-// MockStorageBackend implements object.StorageBackend for testing
+// MockStorageBackend implements object.StorageBackend for testing.
 type MockStorageBackend struct {
 	buckets map[string]bool
 	objects map[string]map[string][]byte
@@ -519,12 +573,14 @@ func NewMockStorageBackend() *MockStorageBackend {
 func (m *MockStorageBackend) CreateBucket(ctx context.Context, name string) error {
 	m.buckets[name] = true
 	m.objects[name] = make(map[string][]byte)
+
 	return nil
 }
 
 func (m *MockStorageBackend) DeleteBucket(ctx context.Context, name string) error {
 	delete(m.buckets, name)
 	delete(m.objects, name)
+
 	return nil
 }
 
@@ -533,13 +589,16 @@ func (m *MockStorageBackend) PutObject(ctx context.Context, bucket, key string, 
 	if err != nil {
 		return nil, err
 	}
+
 	if m.objects[bucket] == nil {
 		m.objects[bucket] = make(map[string][]byte)
 	}
+
 	m.objects[bucket][key] = data
 
 	// Calculate simple MD5 hash for ETag
 	hash := fmt.Sprintf("%x", len(data))
+
 	return &backend.PutResult{
 		Size: int64(len(data)),
 		ETag: hash,
@@ -549,12 +608,14 @@ func (m *MockStorageBackend) PutObject(ctx context.Context, bucket, key string, 
 
 func (m *MockStorageBackend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
 	if m.objects[bucket] == nil {
-		return nil, fmt.Errorf("bucket not found")
+		return nil, errors.New("bucket not found")
 	}
+
 	data, ok := m.objects[bucket][key]
 	if !ok {
-		return nil, fmt.Errorf("object not found")
+		return nil, errors.New("object not found")
 	}
+
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
@@ -562,12 +623,14 @@ func (m *MockStorageBackend) DeleteObject(ctx context.Context, bucket, key strin
 	if m.objects[bucket] != nil {
 		delete(m.objects[bucket], key)
 	}
+
 	return nil
 }
 
 func (m *MockStorageBackend) CreateMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	k := fmt.Sprintf("%s/%s/%s", bucket, key, uploadID)
 	m.parts[k] = make(map[int][]byte)
+
 	return nil
 }
 
@@ -576,13 +639,16 @@ func (m *MockStorageBackend) PutPart(ctx context.Context, bucket, key, uploadID 
 	if err != nil {
 		return nil, err
 	}
+
 	k := fmt.Sprintf("%s/%s/%s", bucket, key, uploadID)
 	if m.parts[k] == nil {
 		m.parts[k] = make(map[int][]byte)
 	}
+
 	m.parts[k][partNumber] = data
 
 	hash := fmt.Sprintf("%x", len(data))
+
 	return &backend.PutResult{
 		Size: int64(len(data)),
 		ETag: hash,
@@ -592,9 +658,10 @@ func (m *MockStorageBackend) PutPart(ctx context.Context, bucket, key, uploadID 
 
 func (m *MockStorageBackend) CompleteParts(ctx context.Context, bucket, key, uploadID string, partNumbers []int) (*backend.PutResult, error) {
 	k := fmt.Sprintf("%s/%s/%s", bucket, key, uploadID)
+
 	parts := m.parts[k]
 	if parts == nil {
-		return nil, fmt.Errorf("upload not found")
+		return nil, errors.New("upload not found")
 	}
 
 	var combined []byte
@@ -605,6 +672,7 @@ func (m *MockStorageBackend) CompleteParts(ctx context.Context, bucket, key, upl
 	if m.objects[bucket] == nil {
 		m.objects[bucket] = make(map[string][]byte)
 	}
+
 	m.objects[bucket][key] = combined
 	delete(m.parts, k)
 
@@ -617,6 +685,7 @@ func (m *MockStorageBackend) CompleteParts(ctx context.Context, bucket, key, upl
 func (m *MockStorageBackend) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	k := fmt.Sprintf("%s/%s/%s", bucket, key, uploadID)
 	delete(m.parts, k)
+
 	return nil
 }
 
@@ -634,7 +703,9 @@ func (m *MockStorageBackend) ObjectExists(ctx context.Context, bucket, key strin
 	if m.objects[bucket] == nil {
 		return false, nil
 	}
+
 	_, exists := m.objects[bucket][key]
+
 	return exists, nil
 }
 
@@ -655,16 +726,18 @@ func (m *MockStorageBackend) GetStorageInfo(ctx context.Context) (*backend.Stora
 func (m *MockStorageBackend) GetPart(ctx context.Context, bucket, key, uploadID string, partNumber int) (io.ReadCloser, error) {
 	k := fmt.Sprintf("%s/%s/%s", bucket, key, uploadID)
 	if m.parts[k] == nil {
-		return nil, fmt.Errorf("upload not found")
+		return nil, errors.New("upload not found")
 	}
+
 	data, ok := m.parts[k][partNumber]
 	if !ok {
-		return nil, fmt.Errorf("part not found")
+		return nil, errors.New("part not found")
 	}
+
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
-// Test helpers
+// Test helpers.
 type testContext struct {
 	store   *MockMetadataStore
 	storage *MockStorageBackend
@@ -676,6 +749,8 @@ type testContext struct {
 }
 
 func setupTestContext(t *testing.T) *testContext {
+	t.Helper()
+
 	store := NewMockMetadataStore()
 	storage := NewMockStorageBackend()
 
@@ -729,7 +804,7 @@ func TestListBuckets(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "bucket1", "test-owner", "", "")
 	tc.bucket.CreateBucket(ctx, "bucket2", "test-owner", "", "")
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -739,7 +814,9 @@ func TestListBuckets(t *testing.T) {
 	}
 
 	var result s3types.ListAllMyBucketsResult
-	if err := xml.Unmarshal(w.Body.Bytes(), &result); err != nil {
+
+	err := xml.Unmarshal(w.Body.Bytes(), &result)
+	if err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
 
@@ -751,7 +828,7 @@ func TestListBuckets(t *testing.T) {
 func TestCreateBucket(t *testing.T) {
 	tc := setupTestContext(t)
 
-	req := httptest.NewRequest("PUT", "/test-bucket", nil)
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -762,6 +839,7 @@ func TestCreateBucket(t *testing.T) {
 
 	// Verify bucket was created
 	ctx := context.Background()
+
 	_, err := tc.bucket.GetBucket(ctx, "test-bucket")
 	if err != nil {
 		t.Errorf("Bucket was not created: %v", err)
@@ -785,7 +863,7 @@ func TestCreateBucketInvalidName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("PUT", "/"+tt.bucket, nil)
+			req := httptest.NewRequest(http.MethodPut, "/"+tt.bucket, nil)
 			w := httptest.NewRecorder()
 
 			tc.router.ServeHTTP(w, req)
@@ -804,7 +882,7 @@ func TestDeleteBucket(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	req := httptest.NewRequest("DELETE", "/test-bucket", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -828,7 +906,7 @@ func TestDeleteBucketNotEmpty(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 
-	req := httptest.NewRequest("DELETE", "/test-bucket", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -845,7 +923,7 @@ func TestHeadBucket(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	req := httptest.NewRequest("HEAD", "/test-bucket", nil)
+	req := httptest.NewRequest(http.MethodHead, "/test-bucket", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -858,7 +936,7 @@ func TestHeadBucket(t *testing.T) {
 func TestHeadBucketNotFound(t *testing.T) {
 	tc := setupTestContext(t)
 
-	req := httptest.NewRequest("HEAD", "/nonexistent-bucket", nil)
+	req := httptest.NewRequest(http.MethodHead, "/nonexistent-bucket", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -879,9 +957,9 @@ func TestPutObject(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	content := "Hello, World!"
-	req := httptest.NewRequest("PUT", "/test-bucket/test-key", strings.NewReader(content))
-	req.Header.Set("Content-Type", "text/plain")
+	content := testContentHelloWorld
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket/test-key", strings.NewReader(content))
+	req.Header.Set("Content-Type", testContentTypePlain)
 	req.ContentLength = int64(len(content))
 	w := httptest.NewRecorder()
 
@@ -904,9 +982,9 @@ func TestPutObjectWithMetadata(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	content := "Hello, World!"
-	req := httptest.NewRequest("PUT", "/test-bucket/test-key", strings.NewReader(content))
-	req.Header.Set("Content-Type", "text/plain")
+	content := testContentHelloWorld
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket/test-key", strings.NewReader(content))
+	req.Header.Set("Content-Type", testContentTypePlain)
 	req.Header.Set("X-Amz-Meta-Custom", "value")
 	req.ContentLength = int64(len(content))
 	w := httptest.NewRecorder()
@@ -931,9 +1009,9 @@ func TestPutObjectWithTags(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	content := "Hello, World!"
-	req := httptest.NewRequest("PUT", "/test-bucket/test-key", strings.NewReader(content))
-	req.Header.Set("Content-Type", "text/plain")
+	content := testContentHelloWorld
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket/test-key", strings.NewReader(content))
+	req.Header.Set("Content-Type", testContentTypePlain)
 	req.Header.Set("X-Amz-Tagging", "key1=value1&key2=value2")
 	req.ContentLength = int64(len(content))
 	w := httptest.NewRecorder()
@@ -957,10 +1035,11 @@ func TestGetObject(t *testing.T) {
 	// Create bucket and object
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
-	content := "Hello, World!"
-	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader(content), int64(len(content)), "text/plain", "test-owner", nil)
 
-	req := httptest.NewRequest("GET", "/test-bucket/test-key", nil)
+	content := testContentHelloWorld
+	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader(content), int64(len(content)), testContentTypePlain, "test-owner", nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket/test-key", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -973,8 +1052,8 @@ func TestGetObject(t *testing.T) {
 		t.Errorf("Expected body '%s', got '%s'", content, w.Body.String())
 	}
 
-	if w.Header().Get("Content-Type") != "text/plain" {
-		t.Errorf("Expected Content-Type 'text/plain', got '%s'", w.Header().Get("Content-Type"))
+	if w.Header().Get("Content-Type") != testContentTypePlain {
+		t.Errorf("Expected Content-Type '%s', got '%s'", testContentTypePlain, w.Header().Get("Content-Type"))
 	}
 }
 
@@ -985,7 +1064,7 @@ func TestGetObjectNotFound(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	req := httptest.NewRequest("GET", "/test-bucket/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket/nonexistent", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1001,10 +1080,11 @@ func TestHeadObject(t *testing.T) {
 	// Create bucket and object
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
-	content := "Hello, World!"
-	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader(content), int64(len(content)), "text/plain", "test-owner", nil)
 
-	req := httptest.NewRequest("HEAD", "/test-bucket/test-key", nil)
+	content := testContentHelloWorld
+	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader(content), int64(len(content)), testContentTypePlain, "test-owner", nil)
+
+	req := httptest.NewRequest(http.MethodHead, "/test-bucket/test-key", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1013,8 +1093,8 @@ func TestHeadObject(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	if w.Header().Get("Content-Type") != "text/plain" {
-		t.Errorf("Expected Content-Type 'text/plain', got '%s'", w.Header().Get("Content-Type"))
+	if w.Header().Get("Content-Type") != testContentTypePlain {
+		t.Errorf("Expected Content-Type '%s', got '%s'", testContentTypePlain, w.Header().Get("Content-Type"))
 	}
 
 	if w.Header().Get("Content-Length") != "13" {
@@ -1030,7 +1110,7 @@ func TestDeleteObject(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 
-	req := httptest.NewRequest("DELETE", "/test-bucket/test-key", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket/test-key", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1052,11 +1132,13 @@ func TestCopyObject(t *testing.T) {
 	// Create bucket and source object
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
+
 	content := "Hello, World!"
 	tc.object.PutObject(ctx, "test-bucket", "source-key", strings.NewReader(content), int64(len(content)), "text/plain", "test-owner", nil)
 
-	req := httptest.NewRequest("PUT", "/test-bucket/dest-key", nil)
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket/dest-key", nil)
 	req.Header.Set("X-Amz-Copy-Source", "/test-bucket/source-key")
+
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1092,7 +1174,7 @@ func TestListObjectsV2(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "file2.txt", strings.NewReader("content2"), 8, "text/plain", "test-owner", nil)
 	tc.object.PutObject(ctx, "test-bucket", "folder/file3.txt", strings.NewReader("content3"), 8, "text/plain", "test-owner", nil)
 
-	req := httptest.NewRequest("GET", "/test-bucket", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1102,7 +1184,9 @@ func TestListObjectsV2(t *testing.T) {
 	}
 
 	var result s3types.ListBucketResult
-	if err := xml.Unmarshal(w.Body.Bytes(), &result); err != nil {
+
+	err := xml.Unmarshal(w.Body.Bytes(), &result)
+	if err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
 
@@ -1121,7 +1205,7 @@ func TestListObjectsV2WithPrefix(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "logs/file2.txt", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 	tc.object.PutObject(ctx, "test-bucket", "data/file3.txt", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 
-	req := httptest.NewRequest("GET", "/test-bucket?prefix=logs/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?prefix=logs/", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1144,7 +1228,7 @@ func TestListObjectsV2WithDelimiter(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "folder1/file2.txt", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 	tc.object.PutObject(ctx, "test-bucket", "folder2/file3.txt", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 
-	req := httptest.NewRequest("GET", "/test-bucket?delimiter=/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?delimiter=/", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1172,7 +1256,7 @@ func TestGetBucketVersioning(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	req := httptest.NewRequest("GET", "/test-bucket?versioning", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?versioning", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1198,7 +1282,7 @@ func TestPutBucketVersioning(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
 	body := `<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?versioning", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?versioning", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1223,7 +1307,7 @@ func TestPutBucketVersioningSuspend(t *testing.T) {
 	tc.bucket.SetVersioning(ctx, "test-bucket", metadata.VersioningEnabled)
 
 	body := `<VersioningConfiguration><Status>Suspended</Status></VersioningConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?versioning", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?versioning", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1251,7 +1335,7 @@ func TestListObjectVersions(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("v1"), 2, "text/plain", "test-owner", nil)
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("v2"), 2, "text/plain", "test-owner", nil)
 
-	req := httptest.NewRequest("GET", "/test-bucket?versions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?versions", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1280,7 +1364,7 @@ func TestPutBucketTagging(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
 	body := `<Tagging><TagSet><Tag><Key>env</Key><Value>prod</Value></Tag></TagSet></Tagging>`
-	req := httptest.NewRequest("PUT", "/test-bucket?tagging", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?tagging", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1304,7 +1388,7 @@ func TestGetBucketTagging(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 	tc.bucket.PutBucketTagging(ctx, "test-bucket", map[string]string{"env": "prod"})
 
-	req := httptest.NewRequest("GET", "/test-bucket?tagging", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?tagging", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1329,7 +1413,7 @@ func TestDeleteBucketTagging(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 	tc.bucket.PutBucketTagging(ctx, "test-bucket", map[string]string{"env": "prod"})
 
-	req := httptest.NewRequest("DELETE", "/test-bucket?tagging", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket?tagging", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1348,7 +1432,7 @@ func TestPutObjectTagging(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 
 	body := `<Tagging><TagSet><Tag><Key>status</Key><Value>archived</Value></Tag></TagSet></Tagging>`
-	req := httptest.NewRequest("PUT", "/test-bucket/test-key?tagging", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket/test-key?tagging", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1367,7 +1451,7 @@ func TestGetObjectTagging(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 	tc.object.PutObjectTagging(ctx, "test-bucket", "test-key", map[string]string{"status": "archived"})
 
-	req := httptest.NewRequest("GET", "/test-bucket/test-key?tagging", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket/test-key?tagging", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1386,7 +1470,7 @@ func TestDeleteObjectTagging(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 	tc.object.PutObjectTagging(ctx, "test-bucket", "test-key", map[string]string{"status": "archived"})
 
-	req := httptest.NewRequest("DELETE", "/test-bucket/test-key?tagging", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket/test-key?tagging", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1407,8 +1491,9 @@ func TestCreateMultipartUpload(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	req := httptest.NewRequest("POST", "/test-bucket/large-file?uploads", nil)
+	req := httptest.NewRequest(http.MethodPost, "/test-bucket/large-file?uploads", nil)
 	req.Header.Set("Content-Type", "application/octet-stream")
+
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1423,9 +1508,11 @@ func TestCreateMultipartUpload(t *testing.T) {
 	if result.UploadId == "" {
 		t.Error("Expected UploadId to be set")
 	}
+
 	if result.Bucket != "test-bucket" {
 		t.Errorf("Expected Bucket 'test-bucket', got '%s'", result.Bucket)
 	}
+
 	if result.Key != "large-file" {
 		t.Errorf("Expected Key 'large-file', got '%s'", result.Key)
 	}
@@ -1441,7 +1528,7 @@ func TestUploadPartAndComplete(t *testing.T) {
 
 	// Upload parts
 	part1Content := strings.Repeat("a", 5*1024*1024) // 5MB minimum
-	req := httptest.NewRequest("PUT", fmt.Sprintf("/test-bucket/large-file?uploadId=%s&partNumber=1", upload.UploadID), strings.NewReader(part1Content))
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/test-bucket/large-file?uploadId=%s&partNumber=1", upload.UploadID), strings.NewReader(part1Content))
 	req.ContentLength = int64(len(part1Content))
 	w := httptest.NewRecorder()
 
@@ -1458,7 +1545,7 @@ func TestUploadPartAndComplete(t *testing.T) {
 
 	// Complete multipart upload
 	completeBody := fmt.Sprintf(`<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>%s</ETag></Part></CompleteMultipartUpload>`, etag)
-	req = httptest.NewRequest("POST", fmt.Sprintf("/test-bucket/large-file?uploadId=%s", upload.UploadID), strings.NewReader(completeBody))
+	req = httptest.NewRequest(http.MethodPost, "/test-bucket/large-file?uploadId="+upload.UploadID, strings.NewReader(completeBody))
 	w = httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1483,7 +1570,7 @@ func TestAbortMultipartUpload(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 	upload, _ := tc.object.CreateMultipartUpload(ctx, "test-bucket", "large-file", "application/octet-stream", "test-owner", nil)
 
-	req := httptest.NewRequest("DELETE", fmt.Sprintf("/test-bucket/large-file?uploadId=%s", upload.UploadID), nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket/large-file?uploadId="+upload.UploadID, nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1502,7 +1589,7 @@ func TestListMultipartUploads(t *testing.T) {
 	tc.object.CreateMultipartUpload(ctx, "test-bucket", "file1", "application/octet-stream", "test-owner", nil)
 	tc.object.CreateMultipartUpload(ctx, "test-bucket", "file2", "application/octet-stream", "test-owner", nil)
 
-	req := httptest.NewRequest("GET", "/test-bucket?uploads", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?uploads", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1529,7 +1616,7 @@ func TestListParts(t *testing.T) {
 	tc.object.UploadPart(ctx, "test-bucket", "large-file", upload.UploadID, 1, strings.NewReader("part1"), 5)
 	tc.object.UploadPart(ctx, "test-bucket", "large-file", upload.UploadID, 2, strings.NewReader("part2"), 5)
 
-	req := httptest.NewRequest("GET", fmt.Sprintf("/test-bucket/large-file?uploadId=%s", upload.UploadID), nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket/large-file?uploadId="+upload.UploadID, nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1566,7 +1653,7 @@ func TestPutBucketCORS(t *testing.T) {
 			<MaxAgeSeconds>3600</MaxAgeSeconds>
 		</CORSRule>
 	</CORSConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?cors", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?cors", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1590,7 +1677,7 @@ func TestGetBucketCORS(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest("GET", "/test-bucket?cors", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?cors", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1610,7 +1697,7 @@ func TestDeleteBucketCORS(t *testing.T) {
 		{AllowedOrigins: []string{"*"}, AllowedMethods: []string{"GET"}},
 	})
 
-	req := httptest.NewRequest("DELETE", "/test-bucket?cors", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket?cors", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1639,7 +1726,7 @@ func TestPutBucketLifecycle(t *testing.T) {
 			<Expiration><Days>30</Days></Expiration>
 		</Rule>
 	</LifecycleConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?lifecycle", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?lifecycle", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1664,7 +1751,7 @@ func TestGetBucketLifecycle(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest("GET", "/test-bucket?lifecycle", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?lifecycle", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1684,7 +1771,7 @@ func TestDeleteBucketLifecycle(t *testing.T) {
 		{ID: "rule1", Enabled: true},
 	})
 
-	req := httptest.NewRequest("DELETE", "/test-bucket?lifecycle", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket?lifecycle", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1715,7 +1802,7 @@ func TestPutBucketPolicy(t *testing.T) {
 			"Resource": "arn:aws:s3:::test-bucket/*"
 		}]
 	}`
-	req := httptest.NewRequest("PUT", "/test-bucket?policy", strings.NewReader(policy))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?policy", strings.NewReader(policy))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1731,10 +1818,11 @@ func TestGetBucketPolicy(t *testing.T) {
 	// Create bucket with policy
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
+
 	policy := `{"Version":"2012-10-17","Statement":[{"Sid":"PublicRead","Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::test-bucket/*"}]}`
 	tc.bucket.SetBucketPolicy(ctx, "test-bucket", policy)
 
-	req := httptest.NewRequest("GET", "/test-bucket?policy", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?policy", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1756,7 +1844,7 @@ func TestDeleteBucketPolicy(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 	tc.bucket.SetBucketPolicy(ctx, "test-bucket", `{"Version":"2012-10-17"}`)
 
-	req := httptest.NewRequest("DELETE", "/test-bucket?policy", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket?policy", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1784,7 +1872,7 @@ func TestDeleteObjects(t *testing.T) {
 		<Object><Key>file1.txt</Key></Object>
 		<Object><Key>file2.txt</Key></Object>
 	</Delete>`
-	req := httptest.NewRequest("POST", "/test-bucket?delete", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/test-bucket?delete", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1816,7 +1904,7 @@ func TestDeleteObjectsQuiet(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "file1.txt", strings.NewReader("content1"), 8, "text/plain", "test-owner", nil)
 
 	body := `<Delete><Quiet>true</Quiet><Object><Key>file1.txt</Key></Object></Delete>`
-	req := httptest.NewRequest("POST", "/test-bucket?delete", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/test-bucket?delete", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1843,7 +1931,7 @@ func TestNoSuchBucket(t *testing.T) {
 
 	// ListObjectsV2 on nonexistent bucket returns NoSuchBucket from the handler's error check
 	// The handler checks for "not found" in the error message
-	req := httptest.NewRequest("GET", "/nonexistent-bucket", nil)
+	req := httptest.NewRequest(http.MethodGet, "/nonexistent-bucket", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1873,7 +1961,7 @@ func TestNoSuchKey(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	req := httptest.NewRequest("GET", "/test-bucket/nonexistent-key", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket/nonexistent-key", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1898,7 +1986,7 @@ func TestMalformedXML(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
 	body := `<Invalid XML>>`
-	req := httptest.NewRequest("PUT", "/test-bucket?versioning", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?versioning", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -1919,10 +2007,9 @@ func TestMalformedXML(t *testing.T) {
 // S3 COMPATIBILITY SUMMARY TEST
 // =============================================================================
 
-// TestS3CompatibilitySummary documents all implemented S3 operations
+// TestS3CompatibilitySummary documents all implemented S3 operations.
 func TestS3CompatibilitySummary(t *testing.T) {
 	// This test documents the implemented S3 API operations
-
 	implemented := []string{
 		// Service Operations
 		"ListBuckets (GET /)",
@@ -2100,11 +2187,13 @@ func TestS3CompatibilitySummary(t *testing.T) {
 
 	t.Logf("\n=== S3 API COMPATIBILITY REPORT ===\n")
 	t.Logf("\n✅ IMPLEMENTED OPERATIONS (%d):\n", len(implemented))
+
 	for _, op := range implemented {
 		t.Logf("  • %s\n", op)
 	}
 
 	t.Logf("\n⏸️  INTENTIONALLY NOT IMPLEMENTED (%d):\n", len(notImplemented))
+
 	for _, op := range notImplemented {
 		t.Logf("  • %s\n", op)
 	}
@@ -2124,7 +2213,7 @@ func TestGetBucketLocation(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "us-east-1", "")
 
-	req := httptest.NewRequest("GET", "/test-bucket?location", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?location", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2154,7 +2243,7 @@ func TestGetBucketAcl(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	req := httptest.NewRequest("GET", "/test-bucket?acl", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?acl", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2190,7 +2279,7 @@ func TestPutBucketAcl(t *testing.T) {
 			</Grant>
 		</AccessControlList>
 	</AccessControlPolicy>`
-	req := httptest.NewRequest("PUT", "/test-bucket?acl", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?acl", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2216,7 +2305,7 @@ func TestGetBucketEncryption(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest("GET", "/test-bucket?encryption", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?encryption", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2247,7 +2336,7 @@ func TestPutBucketEncryption(t *testing.T) {
 			</ApplyServerSideEncryptionByDefault>
 		</Rule>
 	</ServerSideEncryptionConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?encryption", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?encryption", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2269,7 +2358,7 @@ func TestDeleteBucketEncryption(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest("DELETE", "/test-bucket?encryption", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket?encryption", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2294,7 +2383,7 @@ func TestGetBucketWebsite(t *testing.T) {
 		ErrorDocument: "error.html",
 	})
 
-	req := httptest.NewRequest("GET", "/test-bucket?website", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?website", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2315,7 +2404,7 @@ func TestPutBucketWebsite(t *testing.T) {
 		<IndexDocument><Suffix>index.html</Suffix></IndexDocument>
 		<ErrorDocument><Key>error.html</Key></ErrorDocument>
 	</WebsiteConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?website", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?website", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2335,7 +2424,7 @@ func TestDeleteBucketWebsite(t *testing.T) {
 		IndexDocument: "index.html",
 	})
 
-	req := httptest.NewRequest("DELETE", "/test-bucket?website", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket?website", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2361,7 +2450,7 @@ func TestGetBucketLogging(t *testing.T) {
 		TargetPrefix: "logs/",
 	})
 
-	req := httptest.NewRequest("GET", "/test-bucket?logging", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?logging", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2385,7 +2474,7 @@ func TestPutBucketLogging(t *testing.T) {
 			<TargetPrefix>logs/</TargetPrefix>
 		</LoggingEnabled>
 	</BucketLoggingStatus>`
-	req := httptest.NewRequest("PUT", "/test-bucket?logging", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?logging", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2406,7 +2495,7 @@ func TestGetBucketNotification(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	req := httptest.NewRequest("GET", "/test-bucket?notification", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?notification", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2424,7 +2513,7 @@ func TestPutBucketNotification(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
 	body := `<NotificationConfiguration></NotificationConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?notification", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?notification", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2459,7 +2548,7 @@ func TestGetBucketReplication(t *testing.T) {
 			</Destination>
 		</Rule>
 	</ReplicationConfiguration>`
-	putReq := httptest.NewRequest("PUT", "/test-bucket?replication", strings.NewReader(putBody))
+	putReq := httptest.NewRequest(http.MethodPut, "/test-bucket?replication", strings.NewReader(putBody))
 	putW := httptest.NewRecorder()
 	tc.router.ServeHTTP(putW, putReq)
 
@@ -2468,7 +2557,7 @@ func TestGetBucketReplication(t *testing.T) {
 	}
 
 	// Now get replication
-	req := httptest.NewRequest("GET", "/test-bucket?replication", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?replication", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2498,7 +2587,7 @@ func TestPutBucketReplication(t *testing.T) {
 			</Destination>
 		</Rule>
 	</ReplicationConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?replication", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?replication", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2518,7 +2607,7 @@ func TestDeleteBucketReplication(t *testing.T) {
 		Role: "arn:aws:iam::123456789012:role/replication-role",
 	})
 
-	req := httptest.NewRequest("DELETE", "/test-bucket?replication", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket?replication", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2549,7 +2638,7 @@ func TestGetObjectLockConfiguration(t *testing.T) {
 			</DefaultRetention>
 		</Rule>
 	</ObjectLockConfiguration>`
-	putReq := httptest.NewRequest("PUT", "/test-bucket?object-lock", strings.NewReader(putBody))
+	putReq := httptest.NewRequest(http.MethodPut, "/test-bucket?object-lock", strings.NewReader(putBody))
 	putW := httptest.NewRecorder()
 	tc.router.ServeHTTP(putW, putReq)
 
@@ -2557,7 +2646,7 @@ func TestGetObjectLockConfiguration(t *testing.T) {
 	// In that case, just test that we get 404 for non-existent config
 	if putW.Code == http.StatusOK {
 		// Now get object lock config
-		req := httptest.NewRequest("GET", "/test-bucket?object-lock", nil)
+		req := httptest.NewRequest(http.MethodGet, "/test-bucket?object-lock", nil)
 		w := httptest.NewRecorder()
 
 		tc.router.ServeHTTP(w, req)
@@ -2567,7 +2656,7 @@ func TestGetObjectLockConfiguration(t *testing.T) {
 		}
 	} else {
 		// Test that getting non-existent config returns 404
-		req := httptest.NewRequest("GET", "/test-bucket?object-lock", nil)
+		req := httptest.NewRequest(http.MethodGet, "/test-bucket?object-lock", nil)
 		w := httptest.NewRecorder()
 
 		tc.router.ServeHTTP(w, req)
@@ -2594,7 +2683,7 @@ func TestPutObjectLockConfiguration(t *testing.T) {
 			</DefaultRetention>
 		</Rule>
 	</ObjectLockConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?object-lock", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?object-lock", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2624,7 +2713,7 @@ func TestGetPublicAccessBlock(t *testing.T) {
 		RestrictPublicBuckets: true,
 	})
 
-	req := httptest.NewRequest("GET", "/test-bucket?publicAccessBlock", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?publicAccessBlock", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2647,7 +2736,7 @@ func TestPutPublicAccessBlock(t *testing.T) {
 		<BlockPublicPolicy>true</BlockPublicPolicy>
 		<RestrictPublicBuckets>true</RestrictPublicBuckets>
 	</PublicAccessBlockConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?publicAccessBlock", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?publicAccessBlock", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2667,7 +2756,7 @@ func TestDeletePublicAccessBlock(t *testing.T) {
 		BlockPublicAcls: true,
 	})
 
-	req := httptest.NewRequest("DELETE", "/test-bucket?publicAccessBlock", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket?publicAccessBlock", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2693,7 +2782,7 @@ func TestGetBucketOwnershipControls(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest("GET", "/test-bucket?ownershipControls", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?ownershipControls", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2715,7 +2804,7 @@ func TestPutBucketOwnershipControls(t *testing.T) {
 			<ObjectOwnership>BucketOwnerEnforced</ObjectOwnership>
 		</Rule>
 	</OwnershipControls>`
-	req := httptest.NewRequest("PUT", "/test-bucket?ownershipControls", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?ownershipControls", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2737,7 +2826,7 @@ func TestDeleteBucketOwnershipControls(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest("DELETE", "/test-bucket?ownershipControls", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-bucket?ownershipControls", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2759,7 +2848,7 @@ func TestGetBucketAccelerateConfiguration(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 	tc.bucket.SetAccelerate(ctx, "test-bucket", "Enabled")
 
-	req := httptest.NewRequest("GET", "/test-bucket?accelerate", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket?accelerate", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2779,7 +2868,7 @@ func TestPutBucketAccelerateConfiguration(t *testing.T) {
 	body := `<AccelerateConfiguration>
 		<Status>Enabled</Status>
 	</AccelerateConfiguration>`
-	req := httptest.NewRequest("PUT", "/test-bucket?accelerate", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket?accelerate", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2801,7 +2890,7 @@ func TestGetObjectAcl(t *testing.T) {
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 
-	req := httptest.NewRequest("GET", "/test-bucket/test-key?acl", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket/test-key?acl", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2830,7 +2919,7 @@ func TestPutObjectAcl(t *testing.T) {
 			</Grant>
 		</AccessControlList>
 	</AccessControlPolicy>`
-	req := httptest.NewRequest("PUT", "/test-bucket/test-key?acl", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket/test-key?acl", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2854,10 +2943,11 @@ func TestGetObjectRetention(t *testing.T) {
 		ObjectLockEnabled: "Enabled",
 	})
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
+
 	retainUntil := time.Now().Add(24 * time.Hour)
 	tc.object.SetObjectRetention(ctx, "test-bucket", "test-key", "", "GOVERNANCE", retainUntil)
 
-	req := httptest.NewRequest("GET", "/test-bucket/test-key?retention", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket/test-key?retention", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2883,7 +2973,7 @@ func TestPutObjectRetention(t *testing.T) {
 		<Mode>GOVERNANCE</Mode>
 		<RetainUntilDate>%s</RetainUntilDate>
 	</Retention>`, retainDate)
-	req := httptest.NewRequest("PUT", "/test-bucket/test-key?retention", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket/test-key?retention", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2909,7 +2999,7 @@ func TestGetObjectLegalHold(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 	tc.object.SetObjectLegalHold(ctx, "test-bucket", "test-key", "", "ON")
 
-	req := httptest.NewRequest("GET", "/test-bucket/test-key?legal-hold", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test-bucket/test-key?legal-hold", nil)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
@@ -2931,7 +3021,7 @@ func TestPutObjectLegalHold(t *testing.T) {
 	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader("content"), 7, "text/plain", "test-owner", nil)
 
 	body := `<LegalHold><Status>ON</Status></LegalHold>`
-	req := httptest.NewRequest("PUT", "/test-bucket/test-key?legal-hold", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/test-bucket/test-key?legal-hold", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)

@@ -4,7 +4,7 @@ package hardware
 
 import (
 	"bufio"
-	"fmt"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,31 +26,36 @@ const (
 	DeviceTypeRDMA DeviceType = "rdma"
 )
 
+const (
+	unknownValue   = "unknown"
+	commandTimeout = 10 * time.Second
+)
+
 // GPUInfo contains information about a detected GPU.
 type GPUInfo struct {
-	Index        int    `json:"index"`
 	Name         string `json:"name"`
 	UUID         string `json:"uuid"`
-	MemoryTotal  uint64 `json:"memory_total"` // bytes
-	MemoryFree   uint64 `json:"memory_free"`  // bytes
 	Driver       string `json:"driver_version"`
 	CUDAVersion  string `json:"cuda_version"`
 	ComputeCap   string `json:"compute_capability"`
+	Index        int    `json:"index"`
+	MemoryTotal  uint64 `json:"memory_total"`
+	MemoryFree   uint64 `json:"memory_free"`
 	GDSSupported bool   `json:"gds_supported"`
 	P2PSupported bool   `json:"p2p_supported"`
 }
 
 // DPUInfo contains information about a detected DPU/SmartNIC.
 type DPUInfo struct {
-	Index           int      `json:"index"`
 	Name            string   `json:"name"`
 	Vendor          string   `json:"vendor"`
 	DevicePath      string   `json:"device_path"`
 	FirmwareVer     string   `json:"firmware_version"`
+	Capabilities    []string `json:"capabilities"`
+	Index           int      `json:"index"`
 	CryptoSupport   bool     `json:"crypto_support"`
 	CompressSupport bool     `json:"compress_support"`
 	RDMASupport     bool     `json:"rdma_support"`
-	Capabilities    []string `json:"capabilities"`
 }
 
 // RDMAInfo contains information about a detected RDMA device.
@@ -61,30 +66,30 @@ type RDMAInfo struct {
 	SysImageGUID  string `json:"sys_image_guid"`
 	BoardID       string `json:"board_id"`
 	FirmwareVer   string `json:"firmware_version"`
-	NodeType      string `json:"node_type"` // CA, Switch, Router
+	NodeType      string `json:"node_type"`
+	LinkLayer     string `json:"link_layer"`
+	State         string `json:"state"`
 	PhysPortCount int    `json:"phys_port_count"`
-	LinkLayer     string `json:"link_layer"` // InfiniBand, Ethernet
-	Speed         uint64 `json:"speed"`      // Gb/s
-	State         string `json:"state"`      // Active, Down
+	Speed         uint64 `json:"speed"`
 }
 
 // HardwareCapabilities represents detected hardware capabilities.
 type HardwareCapabilities struct {
+	LastUpdated   time.Time  `json:"last_updated"`
 	GPUs          []GPUInfo  `json:"gpus"`
 	DPUs          []DPUInfo  `json:"dpus"`
 	RDMADevices   []RDMAInfo `json:"rdma_devices"`
 	GPUAvailable  bool       `json:"gpu_available"`
 	DPUAvailable  bool       `json:"dpu_available"`
 	RDMAAvailable bool       `json:"rdma_available"`
-	LastUpdated   time.Time  `json:"last_updated"`
 }
 
 // Detector handles hardware detection operations.
 type Detector struct {
-	mu           sync.RWMutex
 	capabilities *HardwareCapabilities
-	refreshRate  time.Duration
 	stopCh       chan struct{}
+	refreshRate  time.Duration
+	mu           sync.RWMutex
 }
 
 // NewDetector creates a new hardware detector.
@@ -150,6 +155,7 @@ func (d *Detector) Refresh() {
 func (d *Detector) GetCapabilities() HardwareCapabilities {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return *d.capabilities
 }
 
@@ -157,6 +163,7 @@ func (d *Detector) GetCapabilities() HardwareCapabilities {
 func (d *Detector) HasGPU() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.capabilities.GPUAvailable
 }
 
@@ -164,6 +171,7 @@ func (d *Detector) HasGPU() bool {
 func (d *Detector) HasDPU() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.capabilities.DPUAvailable
 }
 
@@ -171,6 +179,7 @@ func (d *Detector) HasDPU() bool {
 func (d *Detector) HasRDMA() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.capabilities.RDMAAvailable
 }
 
@@ -179,14 +188,18 @@ func (d *Detector) detectGPUs() []GPUInfo {
 	var gpus []GPUInfo
 
 	// Check if nvidia-smi is available
-	if _, err := exec.LookPath("nvidia-smi"); err != nil {
+	_, err := exec.LookPath("nvidia-smi")
+	if err != nil {
 		log.Debug().Msg("nvidia-smi not found, GPU detection disabled")
 		return gpus
 	}
 
 	// Query GPU information
 	// All arguments are hardcoded to prevent command injection
-	cmd := exec.Command("nvidia-smi",
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "nvidia-smi",
 		"--query-gpu=index,name,uuid,memory.total,memory.free,driver_version,cuda_version,compute_cap",
 		"--format=csv,noheader,nounits")
 
@@ -199,6 +212,7 @@ func (d *Detector) detectGPUs() []GPUInfo {
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
 		line := scanner.Text()
+
 		fields := strings.Split(line, ", ")
 		if len(fields) < 8 {
 			continue
@@ -242,6 +256,7 @@ func (d *Detector) checkGDSSupport(gpu GPUInfo) bool {
 	cudaVer := strings.Split(gpu.CUDAVersion, ".")
 	if len(cudaVer) >= 2 {
 		major, _ := strconv.Atoi(cudaVer[0])
+
 		minor, _ := strconv.Atoi(cudaVer[1])
 		if major < 11 || (major == 11 && minor < 4) {
 			return false
@@ -264,7 +279,8 @@ func (d *Detector) checkGDSSupport(gpu GPUInfo) bool {
 	}
 
 	for _, path := range gdsLibPaths {
-		if _, err := os.Stat(path); err == nil {
+		_, err := os.Stat(path)
+		if err == nil {
 			return true
 		}
 	}
@@ -275,14 +291,19 @@ func (d *Detector) checkGDSSupport(gpu GPUInfo) bool {
 // checkP2PSupport checks if P2P transfers are supported between GPUs.
 func (d *Detector) checkP2PSupport(gpuIndex int) bool {
 	// Verify nvidia-smi is available before executing
-	if _, err := exec.LookPath("nvidia-smi"); err != nil {
+	_, err := exec.LookPath("nvidia-smi")
+	if err != nil {
 		log.Debug().Msg("nvidia-smi not found, cannot check P2P support")
 		return false
 	}
 
 	// Use nvidia-smi to check P2P support
 	// All arguments are hardcoded to prevent command injection
-	cmd := exec.Command("nvidia-smi", "topo", "-p2p", "r")
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "nvidia-smi", "topo", "-p2p", "r")
+
 	output, err := cmd.Output()
 	if err != nil {
 		return false
@@ -310,17 +331,22 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 	var dpus []DPUInfo
 
 	// Check if mst is available (Mellanox Software Tools)
-	if _, err := exec.LookPath("mst"); err != nil {
+	_, err := exec.LookPath("mst")
+	if err != nil {
 		return dpus
 	}
 
 	// Start MST
 	// All arguments are hardcoded to prevent command injection
-	_ = exec.Command("mst", "start").Run()
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	_ = exec.CommandContext(ctx, "mst", "start").Run()
 
 	// Query devices
 	// All arguments are hardcoded to prevent command injection
-	cmd := exec.Command("mst", "status", "-v")
+	cmd := exec.CommandContext(ctx, "mst", "status", "-v")
+
 	output, err := cmd.Output()
 	if err != nil {
 		log.Debug().Err(err).Msg("MST status query failed")
@@ -337,7 +363,7 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 		if match := bfPattern.FindStringSubmatch(line); match != nil {
 			dpu := DPUInfo{
 				Index:           index,
-				Name:            fmt.Sprintf("BlueField-%s", match[1]),
+				Name:            "BlueField-" + match[1],
 				Vendor:          "NVIDIA",
 				CryptoSupport:   true, // BlueField has crypto offload
 				CompressSupport: true, // BlueField has compression offload
@@ -359,17 +385,22 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 // getBlueFieldFirmware gets BlueField firmware version.
 func (d *Detector) getBlueFieldFirmware(index int) string {
 	// Verify mlxfwmanager is available before executing
-	if _, err := exec.LookPath("mlxfwmanager"); err != nil {
+	_, err := exec.LookPath("mlxfwmanager")
+	if err != nil {
 		log.Debug().Msg("mlxfwmanager not found, cannot query firmware version")
-		return "unknown"
+		return unknownValue
 	}
 
 	// Query firmware version
 	// All arguments are hardcoded to prevent command injection
-	cmd := exec.Command("mlxfwmanager", "--query")
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "mlxfwmanager", "--query")
+
 	output, err := cmd.Output()
 	if err != nil {
-		return "unknown"
+		return unknownValue
 	}
 
 	// Parse firmware version from output
@@ -378,7 +409,7 @@ func (d *Detector) getBlueFieldFirmware(index int) string {
 		return match[1]
 	}
 
-	return "unknown"
+	return unknownValue
 }
 
 // detectSysfsDPUs detects DPUs via sysfs.
@@ -387,6 +418,7 @@ func (d *Detector) detectSysfsDPUs() []DPUInfo {
 
 	// Check for DPU devices in sysfs
 	dpuPath := "/sys/class/infiniband"
+
 	entries, err := os.ReadDir(dpuPath)
 	if err != nil {
 		return dpus
@@ -395,7 +427,9 @@ func (d *Detector) detectSysfsDPUs() []DPUInfo {
 	for _, entry := range entries {
 		// Check for DPU-specific attributes
 		boardIDPath := filepath.Join(dpuPath, entry.Name(), "board_id")
-		if data, err := os.ReadFile(boardIDPath); err == nil {
+		//nolint:gosec // G304: Path constructed from trusted system paths, not user input
+		data, err := os.ReadFile(boardIDPath)
+		if err == nil {
 			boardID := strings.TrimSpace(string(data))
 			// Check if this is a DPU (BlueField has specific board IDs)
 			if strings.Contains(boardID, "MT4") || strings.Contains(boardID, "BF") {
@@ -415,15 +449,16 @@ func (d *Detector) detectSysfsDPUs() []DPUInfo {
 
 // detectRDMADevices detects RDMA-capable network devices.
 func (d *Detector) detectRDMADevices() []RDMAInfo {
-	var devices []RDMAInfo
-
 	// Check sysfs for RDMA devices
 	rdmaPath := "/sys/class/infiniband"
+
 	entries, err := os.ReadDir(rdmaPath)
 	if err != nil {
 		log.Debug().Msg("No RDMA devices found in sysfs")
-		return devices
+		return nil
 	}
+
+	devices := make([]RDMAInfo, 0, len(entries))
 
 	for _, entry := range entries {
 		devicePath := filepath.Join(rdmaPath, entry.Name())
@@ -444,7 +479,8 @@ func (d *Detector) detectRDMADevices() []RDMAInfo {
 
 		// Count physical ports
 		portsPath := filepath.Join(devicePath, "ports")
-		if portEntries, err := os.ReadDir(portsPath); err == nil {
+		portEntries, err := os.ReadDir(portsPath)
+		if err == nil {
 			device.PhysPortCount = len(portEntries)
 
 			// Get link info from first port
@@ -464,10 +500,12 @@ func (d *Detector) detectRDMADevices() []RDMAInfo {
 
 // readSysfsFile reads a sysfs file and returns its content.
 func (d *Detector) readSysfsFile(path string) string {
+	//nolint:gosec // G304: path is from trusted sysfs locations
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return ""
 	}
+
 	return strings.TrimSpace(string(data))
 }
 
@@ -493,6 +531,7 @@ func (d *Detector) parseSpeed(rate string) uint64 {
 		speed, _ := strconv.ParseUint(parts[0], 10, 64)
 		return speed
 	}
+
 	return 0
 }
 
@@ -512,11 +551,13 @@ func (d *Detector) GetRecommendedConfig() map[string]interface{} {
 
 		// Enable P2P if multiple GPUs with P2P support
 		p2pCount := 0
+
 		for _, gpu := range caps.GPUs {
 			if gpu.P2PSupported {
 				p2pCount++
 			}
 		}
+
 		if p2pCount >= 2 {
 			gpuConfig["enable_p2p"] = true
 		}
@@ -545,9 +586,11 @@ func (d *Detector) GetRecommendedConfig() map[string]interface{} {
 			if dpu.CryptoSupport {
 				dpuConfig["enable_crypto"] = true
 			}
+
 			if dpu.CompressSupport {
 				dpuConfig["enable_compression"] = true
 			}
+
 			if dpu.RDMASupport {
 				dpuConfig["enable_rdma"] = true
 			}
@@ -566,8 +609,11 @@ func (d *Detector) GetRecommendedConfig() map[string]interface{} {
 		}
 
 		// Find best device
-		var bestDevice *RDMAInfo
-		var maxSpeed uint64
+		var (
+			bestDevice *RDMAInfo
+			maxSpeed   uint64
+		)
+
 		for i := range caps.RDMADevices {
 			dev := &caps.RDMADevices[i]
 			if dev.State == "ACTIVE" && dev.Speed > maxSpeed {

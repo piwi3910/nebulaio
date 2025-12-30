@@ -20,8 +20,9 @@ package object
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // G501: MD5 required for S3 ETag compatibility
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -35,14 +36,14 @@ import (
 	versioningPkg "github.com/piwi3910/nebulaio/internal/versioning"
 )
 
-// Tag validation constants
+// Tag validation constants.
 const (
 	MaxTagsPerResource = 10
 	MaxTagKeyLength    = 128
 	MaxTagValueLength  = 256
 )
 
-// TagValidationError represents a tag validation error
+// TagValidationError represents a tag validation error.
 type TagValidationError struct {
 	Message string
 }
@@ -51,7 +52,7 @@ func (e *TagValidationError) Error() string {
 	return e.Message
 }
 
-// ValidateTags validates tags according to S3 tagging rules
+// ValidateTags validates tags according to S3 tagging rules.
 func ValidateTags(tags map[string]string) error {
 	if len(tags) > MaxTagsPerResource {
 		return &TagValidationError{
@@ -92,10 +93,10 @@ func ValidateTags(tags map[string]string) error {
 	return nil
 }
 
-// ParseTaggingHeader parses the x-amz-tagging header format (key1=value1&key2=value2)
+// ParseTaggingHeader parses the x-amz-tagging header format (key1=value1&key2=value2).
 func ParseTaggingHeader(header string) (map[string]string, error) {
 	if header == "" {
-		return nil, nil
+		return map[string]string{}, nil
 	}
 
 	tags := make(map[string]string)
@@ -129,20 +130,21 @@ func ParseTaggingHeader(header string) (map[string]string, error) {
 		tags[key] = value
 	}
 
-	if err := ValidateTags(tags); err != nil {
+	err := ValidateTags(tags)
+	if err != nil {
 		return nil, err
 	}
 
 	return tags, nil
 }
 
-// StorageBackend is the interface for object storage
+// StorageBackend is the interface for object storage.
 type StorageBackend interface {
 	backend.Backend
 	backend.MultipartBackend
 }
 
-// Service handles object operations
+// Service handles object operations.
 type Service struct {
 	store          metadata.Store
 	storage        StorageBackend
@@ -150,27 +152,27 @@ type Service struct {
 	versionService *versioningPkg.Service
 }
 
-// BucketService interface for bucket operations
+// BucketService interface for bucket operations.
 type BucketService interface {
 	GetBucket(ctx context.Context, name string) (*metadata.Bucket, error)
 	GetVersioning(ctx context.Context, name string) (metadata.VersioningStatus, error)
 }
 
-// DeleteObjectInput represents an object to delete in a batch operation
+// DeleteObjectInput represents an object to delete in a batch operation.
 type DeleteObjectInput struct {
 	Key       string
 	VersionID string
 }
 
-// DeletedObject represents a successfully deleted object
+// DeletedObject represents a successfully deleted object.
 type DeletedObject struct {
 	Key                   string
 	VersionID             string
-	DeleteMarker          bool
 	DeleteMarkerVersionID string
+	DeleteMarker          bool
 }
 
-// DeleteError represents an error deleting a specific object
+// DeleteError represents an error deleting a specific object.
 type DeleteError struct {
 	Key       string
 	VersionID string
@@ -178,13 +180,13 @@ type DeleteError struct {
 	Message   string
 }
 
-// DeleteObjectsResult represents the result of a batch delete operation
+// DeleteObjectsResult represents the result of a batch delete operation.
 type DeleteObjectsResult struct {
 	Deleted []DeletedObject
 	Errors  []DeleteError
 }
 
-// NewService creates a new object service
+// NewService creates a new object service.
 func NewService(store metadata.Store, storage StorageBackend, bucketService BucketService) *Service {
 	return &Service{
 		store:          store,
@@ -194,7 +196,7 @@ func NewService(store metadata.Store, storage StorageBackend, bucketService Buck
 	}
 }
 
-// PutObjectOptions contains optional parameters for PutObject
+// PutObjectOptions contains optional parameters for PutObject.
 type PutObjectOptions struct {
 	Tags map[string]string
 
@@ -204,12 +206,12 @@ type PutObjectOptions struct {
 	ObjectLockLegalHoldStatus string     // "ON" or "OFF"
 }
 
-// PutObject stores an object
+// PutObject stores an object.
 func (s *Service) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType, owner string, userMetadata map[string]string) (*metadata.ObjectMeta, error) {
 	return s.PutObjectWithOptions(ctx, bucket, key, reader, size, contentType, owner, userMetadata, nil)
 }
 
-// PutObjectWithOptions stores an object with additional options including tags
+// PutObjectWithOptions stores an object with additional options including tags.
 func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType, owner string, userMetadata map[string]string, opts *PutObjectOptions) (*metadata.ObjectMeta, error) {
 	// Verify bucket exists
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
@@ -219,10 +221,13 @@ func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, 
 
 	// Validate tags if provided
 	var tags map[string]string
+
 	if opts != nil && opts.Tags != nil {
-		if err := ValidateTags(opts.Tags); err != nil {
+		err := ValidateTags(opts.Tags)
+		if err != nil {
 			return nil, fmt.Errorf("invalid tags: %w", err)
 		}
+
 		tags = opts.Tags
 	}
 
@@ -270,7 +275,8 @@ func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, 
 	// Apply object lock settings if bucket has object lock enabled
 	if bucketInfo.ObjectLockEnabled {
 		// Apply default retention from bucket configuration
-		if err := s.ApplyDefaultRetention(ctx, bucket, meta); err != nil {
+		err := s.ApplyDefaultRetention(ctx, bucket, meta)
+		if err != nil {
 			// Rollback: delete the stored object
 			_ = s.storage.DeleteObject(ctx, bucket, key)
 			return nil, fmt.Errorf("failed to apply default retention: %w", err)
@@ -278,40 +284,48 @@ func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, 
 
 		// Apply explicit retention from options if provided
 		if opts != nil && opts.ObjectLockMode != "" {
-			if err := ValidateRetentionMode(opts.ObjectLockMode); err != nil {
+			err := ValidateRetentionMode(opts.ObjectLockMode)
+			if err != nil {
 				_ = s.storage.DeleteObject(ctx, bucket, key)
 				return nil, err
 			}
+
 			meta.ObjectLockMode = opts.ObjectLockMode
 		}
 
 		if opts != nil && opts.ObjectLockRetainUntilDate != nil {
-			if err := ValidateRetentionDate(*opts.ObjectLockRetainUntilDate); err != nil {
+			err := ValidateRetentionDate(*opts.ObjectLockRetainUntilDate)
+			if err != nil {
 				_ = s.storage.DeleteObject(ctx, bucket, key)
 				return nil, err
 			}
+
 			meta.ObjectLockRetainUntilDate = opts.ObjectLockRetainUntilDate
 		}
 
 		if opts != nil && opts.ObjectLockLegalHoldStatus != "" {
-			if err := ValidateLegalHoldStatus(opts.ObjectLockLegalHoldStatus); err != nil {
+			err := ValidateLegalHoldStatus(opts.ObjectLockLegalHoldStatus)
+			if err != nil {
 				_ = s.storage.DeleteObject(ctx, bucket, key)
 				return nil, err
 			}
+
 			meta.ObjectLockLegalHoldStatus = opts.ObjectLockLegalHoldStatus
 		}
 	}
 
 	// Store metadata with versioning support
 	if versionID != "" {
-		if err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions); err != nil {
+		err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions)
+		if err != nil {
 			// Rollback: delete the stored object
 			_ = s.storage.DeleteObject(ctx, bucket, key)
 			return nil, fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	} else {
 		// No versioning, just store normally
-		if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+		err := s.store.PutObjectMeta(ctx, meta)
+		if err != nil {
 			// Rollback: delete the stored object
 			_ = s.storage.DeleteObject(ctx, bucket, key)
 			return nil, fmt.Errorf("failed to store object metadata: %w", err)
@@ -321,7 +335,7 @@ func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, 
 	return meta, nil
 }
 
-// GetObject retrieves an object
+// GetObject retrieves an object.
 func (s *Service) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, *metadata.ObjectMeta, error) {
 	// Get object metadata
 	meta, err := s.store.GetObjectMeta(ctx, bucket, key)
@@ -331,7 +345,7 @@ func (s *Service) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 
 	// Skip delete markers
 	if meta.DeleteMarker {
-		return nil, nil, fmt.Errorf("object not found (delete marker)")
+		return nil, nil, errors.New("object not found (delete marker)")
 	}
 
 	// Get object data
@@ -343,7 +357,7 @@ func (s *Service) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 	return reader, meta, nil
 }
 
-// HeadObject retrieves object metadata without the body
+// HeadObject retrieves object metadata without the body.
 func (s *Service) HeadObject(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) {
 	meta, err := s.store.GetObjectMeta(ctx, bucket, key)
 	if err != nil {
@@ -351,30 +365,30 @@ func (s *Service) HeadObject(ctx context.Context, bucket, key string) (*metadata
 	}
 
 	if meta.DeleteMarker {
-		return nil, fmt.Errorf("object not found (delete marker)")
+		return nil, errors.New("object not found (delete marker)")
 	}
 
 	return meta, nil
 }
 
-// DeleteObjectResult contains information about a deleted object
+// DeleteObjectResult contains information about a deleted object.
 type DeleteObjectResult struct {
 	VersionID             string
-	DeleteMarker          bool
 	DeleteMarkerVersionID string
+	DeleteMarker          bool
 }
 
-// DeleteObject deletes an object (creates delete marker when versioning enabled)
+// DeleteObject deletes an object (creates delete marker when versioning enabled).
 func (s *Service) DeleteObject(ctx context.Context, bucket, key string) (*DeleteObjectResult, error) {
 	return s.DeleteObjectVersion(ctx, bucket, key, "")
 }
 
-// DeleteObjectVersion deletes a specific version of an object or creates a delete marker
+// DeleteObjectVersion deletes a specific version of an object or creates a delete marker.
 func (s *Service) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) (*DeleteObjectResult, error) {
 	return s.DeleteObjectVersionWithOptions(ctx, bucket, key, versionID, nil)
 }
 
-// DeleteObjectVersionWithOptions deletes a specific version with options for bypassing governance
+// DeleteObjectVersionWithOptions deletes a specific version with options for bypassing governance.
 func (s *Service) DeleteObjectVersionWithOptions(ctx context.Context, bucket, key, versionID string, opts *ObjectLockCheckOptions) (*DeleteObjectResult, error) {
 	// Get bucket info for versioning status
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
@@ -393,12 +407,14 @@ func (s *Service) DeleteObjectVersionWithOptions(ctx context.Context, bucket, ke
 		}
 
 		// Check object lock status before deletion
-		if err := s.CheckObjectLock(ctx, meta, opts); err != nil {
+		err = s.CheckObjectLock(ctx, meta, opts)
+		if err != nil {
 			return nil, err
 		}
 
 		// Delete the version from metadata
-		if err := s.store.DeleteObjectVersion(ctx, bucket, key, versionID); err != nil {
+		err = s.store.DeleteObjectVersion(ctx, bucket, key, versionID)
+		if err != nil {
 			return nil, fmt.Errorf("failed to delete object version: %w", err)
 		}
 
@@ -422,12 +438,14 @@ func (s *Service) DeleteObjectVersionWithOptions(ctx context.Context, bucket, ke
 			ModifiedAt:   time.Now(),
 		}
 
-		if err := s.store.PutObjectMetaVersioned(ctx, meta, true); err != nil {
+		err := s.store.PutObjectMetaVersioned(ctx, meta, true)
+		if err != nil {
 			return nil, fmt.Errorf("failed to create delete marker: %w", err)
 		}
 
 		result.DeleteMarker = true
 		result.DeleteMarkerVersionID = deleteMarkerVersionID
+
 		return result, nil
 	}
 
@@ -436,19 +454,22 @@ func (s *Service) DeleteObjectVersionWithOptions(ctx context.Context, bucket, ke
 	meta, metaErr := s.store.GetObjectMeta(ctx, bucket, key)
 	if metaErr == nil && meta != nil {
 		// Check object lock status before deletion
-		if err := s.CheckObjectLock(ctx, meta, opts); err != nil {
+		err := s.CheckObjectLock(ctx, meta, opts)
+		if err != nil {
 			return nil, err
 		}
 	}
 
-	if err := s.storage.DeleteObject(ctx, bucket, key); err != nil {
+	err = s.storage.DeleteObject(ctx, bucket, key)
+	if err != nil {
 		// Ignore "not found" errors for storage layer
 		if !strings.Contains(err.Error(), "not found") {
 			return nil, fmt.Errorf("failed to delete object data: %w", err)
 		}
 	}
 
-	if err := s.store.DeleteObjectMeta(ctx, bucket, key); err != nil {
+	err = s.store.DeleteObjectMeta(ctx, bucket, key)
+	if err != nil {
 		// Ignore "not found" errors
 		if !strings.Contains(err.Error(), "not found") {
 			return nil, fmt.Errorf("failed to delete object metadata: %w", err)
@@ -458,54 +479,59 @@ func (s *Service) DeleteObjectVersionWithOptions(ctx context.Context, bucket, ke
 	return result, nil
 }
 
-// ListObjects lists objects in a bucket
+// ListObjects lists objects in a bucket.
 func (s *Service) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*metadata.ObjectListing, error) {
 	// Verify bucket exists
-	if _, err := s.bucketService.GetBucket(ctx, bucket); err != nil {
+	_, err := s.bucketService.GetBucket(ctx, bucket)
+	if err != nil {
 		return nil, err
 	}
 
 	return s.store.ListObjects(ctx, bucket, prefix, delimiter, maxKeys, continuationToken)
 }
 
-// TaggingDirective specifies how to handle tags during copy
+// TaggingDirective specifies how to handle tags during copy.
 type TaggingDirective string
 
 const (
-	// TaggingDirectiveCopy copies tags from source object (default)
+	// TaggingDirectiveCopy copies tags from source object (default).
 	TaggingDirectiveCopy TaggingDirective = "COPY"
-	// TaggingDirectiveReplace uses tags from request headers
+	// TaggingDirectiveReplace uses tags from request headers.
 	TaggingDirectiveReplace TaggingDirective = "REPLACE"
 )
 
-// CopyObjectOptions contains optional parameters for CopyObject
+// CopyObjectOptions contains optional parameters for CopyObject.
 type CopyObjectOptions struct {
-	TaggingDirective TaggingDirective
 	Tags             map[string]string
+	TaggingDirective TaggingDirective
 }
 
-// CopyObject copies an object (preserves source tags by default)
+// CopyObject copies an object (preserves source tags by default).
 func (s *Service) CopyObject(ctx context.Context, srcBucket, srcKey, dstBucket, dstKey, owner string) (*metadata.ObjectMeta, error) {
 	return s.CopyObjectWithOptions(ctx, srcBucket, srcKey, dstBucket, dstKey, owner, nil)
 }
 
-// CopyObjectWithOptions copies an object with additional options including tagging directive
+// CopyObjectWithOptions copies an object with additional options including tagging directive.
 func (s *Service) CopyObjectWithOptions(ctx context.Context, srcBucket, srcKey, dstBucket, dstKey, owner string, opts *CopyObjectOptions) (*metadata.ObjectMeta, error) {
 	// Get source object
 	reader, srcMeta, err := s.GetObject(ctx, srcBucket, srcKey)
 	if err != nil {
 		return nil, fmt.Errorf("source object not found: %w", err)
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Determine tags based on tagging directive
 	var tags map[string]string
+
 	if opts != nil && opts.TaggingDirective == TaggingDirectiveReplace {
 		// Use tags from request
 		if opts.Tags != nil {
-			if err := ValidateTags(opts.Tags); err != nil {
+			err := ValidateTags(opts.Tags)
+			if err != nil {
 				return nil, fmt.Errorf("invalid tags: %w", err)
 			}
+
 			tags = opts.Tags
 		}
 	} else {
@@ -517,10 +543,11 @@ func (s *Service) CopyObjectWithOptions(ctx context.Context, srcBucket, srcKey, 
 	putOpts := &PutObjectOptions{
 		Tags: tags,
 	}
+
 	return s.PutObjectWithOptions(ctx, dstBucket, dstKey, reader, srcMeta.Size, srcMeta.ContentType, owner, srcMeta.Metadata, putOpts)
 }
 
-// GetObjectVersion retrieves a specific version of an object
+// GetObjectVersion retrieves a specific version of an object.
 func (s *Service) GetObjectVersion(ctx context.Context, bucket, key, versionID string) (io.ReadCloser, *metadata.ObjectMeta, error) {
 	meta, err := s.store.GetObjectVersion(ctx, bucket, key, versionID)
 	if err != nil {
@@ -529,7 +556,7 @@ func (s *Service) GetObjectVersion(ctx context.Context, bucket, key, versionID s
 
 	if meta.DeleteMarker {
 		// Return the metadata but indicate it's a delete marker
-		return nil, meta, fmt.Errorf("object is a delete marker")
+		return nil, meta, errors.New("object is a delete marker")
 	}
 
 	// For versioned objects, we need to read from the correct storage path
@@ -539,6 +566,7 @@ func (s *Service) GetObjectVersion(ctx context.Context, bucket, key, versionID s
 		if err != nil {
 			return nil, nil, err
 		}
+
 		return reader, meta, nil
 	}
 
@@ -550,7 +578,7 @@ func (s *Service) GetObjectVersion(ctx context.Context, bucket, key, versionID s
 	return reader, meta, nil
 }
 
-// HeadObjectVersion retrieves metadata for a specific version without the body
+// HeadObjectVersion retrieves metadata for a specific version without the body.
 func (s *Service) HeadObjectVersion(ctx context.Context, bucket, key, versionID string) (*metadata.ObjectMeta, error) {
 	meta, err := s.store.GetObjectVersion(ctx, bucket, key, versionID)
 	if err != nil {
@@ -560,25 +588,28 @@ func (s *Service) HeadObjectVersion(ctx context.Context, bucket, key, versionID 
 	return meta, nil
 }
 
-// ListObjectVersions lists all versions of objects in a bucket
+// ListObjectVersions lists all versions of objects in a bucket.
 func (s *Service) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (*metadata.VersionListing, error) {
 	// Verify bucket exists
-	if _, err := s.bucketService.GetBucket(ctx, bucket); err != nil {
+	_, err := s.bucketService.GetBucket(ctx, bucket)
+	if err != nil {
 		return nil, err
 	}
 
 	return s.store.ListObjectVersions(ctx, bucket, prefix, delimiter, keyMarker, versionIDMarker, maxKeys)
 }
 
-// PutObjectTagging sets tags on an object with validation
+// PutObjectTagging sets tags on an object with validation.
 func (s *Service) PutObjectTagging(ctx context.Context, bucket, key string, tags map[string]string) error {
 	// Validate tags
-	if err := ValidateTags(tags); err != nil {
+	err := ValidateTags(tags)
+	if err != nil {
 		return err
 	}
 
 	// Verify bucket exists
-	if _, err := s.bucketService.GetBucket(ctx, bucket); err != nil {
+	_, err = s.bucketService.GetBucket(ctx, bucket)
+	if err != nil {
 		return fmt.Errorf("bucket not found: %w", err)
 	}
 
@@ -588,17 +619,19 @@ func (s *Service) PutObjectTagging(ctx context.Context, bucket, key string, tags
 	}
 
 	if meta.DeleteMarker {
-		return fmt.Errorf("cannot tag a delete marker")
+		return errors.New("cannot tag a delete marker")
 	}
 
 	meta.Tags = tags
+
 	return s.store.PutObjectMeta(ctx, meta)
 }
 
-// GetObjectTagging returns tags for an object
+// GetObjectTagging returns tags for an object.
 func (s *Service) GetObjectTagging(ctx context.Context, bucket, key string) (map[string]string, error) {
 	// Verify bucket exists
-	if _, err := s.bucketService.GetBucket(ctx, bucket); err != nil {
+	_, err := s.bucketService.GetBucket(ctx, bucket)
+	if err != nil {
 		return nil, fmt.Errorf("bucket not found: %w", err)
 	}
 
@@ -608,7 +641,7 @@ func (s *Service) GetObjectTagging(ctx context.Context, bucket, key string) (map
 	}
 
 	if meta.DeleteMarker {
-		return nil, fmt.Errorf("object not found (delete marker)")
+		return nil, errors.New("object not found (delete marker)")
 	}
 
 	// Return empty map if no tags
@@ -619,10 +652,11 @@ func (s *Service) GetObjectTagging(ctx context.Context, bucket, key string) (map
 	return meta.Tags, nil
 }
 
-// DeleteObjectTagging deletes all tags from an object
+// DeleteObjectTagging deletes all tags from an object.
 func (s *Service) DeleteObjectTagging(ctx context.Context, bucket, key string) error {
 	// Verify bucket exists
-	if _, err := s.bucketService.GetBucket(ctx, bucket); err != nil {
+	_, err := s.bucketService.GetBucket(ctx, bucket)
+	if err != nil {
 		return fmt.Errorf("bucket not found: %w", err)
 	}
 
@@ -632,29 +666,30 @@ func (s *Service) DeleteObjectTagging(ctx context.Context, bucket, key string) e
 	}
 
 	if meta.DeleteMarker {
-		return fmt.Errorf("cannot delete tags from a delete marker")
+		return errors.New("cannot delete tags from a delete marker")
 	}
 
 	meta.Tags = nil
+
 	return s.store.PutObjectMeta(ctx, meta)
 }
 
-// SetObjectTags sets tags on an object (legacy method, calls PutObjectTagging)
+// SetObjectTags sets tags on an object (legacy method, calls PutObjectTagging).
 func (s *Service) SetObjectTags(ctx context.Context, bucket, key string, tags map[string]string) error {
 	return s.PutObjectTagging(ctx, bucket, key, tags)
 }
 
-// GetObjectTags returns tags for an object (legacy method, calls GetObjectTagging)
+// GetObjectTags returns tags for an object (legacy method, calls GetObjectTagging).
 func (s *Service) GetObjectTags(ctx context.Context, bucket, key string) (map[string]string, error) {
 	return s.GetObjectTagging(ctx, bucket, key)
 }
 
-// DeleteObjectTags deletes all tags from an object (legacy method, calls DeleteObjectTagging)
+// DeleteObjectTags deletes all tags from an object (legacy method, calls DeleteObjectTagging).
 func (s *Service) DeleteObjectTags(ctx context.Context, bucket, key string) error {
 	return s.DeleteObjectTagging(ctx, bucket, key)
 }
 
-// TransitionStorageClass transitions an object to a different storage class
+// TransitionStorageClass transitions an object to a different storage class.
 func (s *Service) TransitionStorageClass(ctx context.Context, bucket, key, targetClass string) error {
 	// Get current object metadata
 	meta, err := s.store.GetObjectMeta(ctx, bucket, key)
@@ -672,7 +707,8 @@ func (s *Service) TransitionStorageClass(ctx context.Context, bucket, key, targe
 	meta.ModifiedAt = time.Now()
 
 	// Store updated metadata
-	if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+	err = s.store.PutObjectMeta(ctx, meta)
+	if err != nil {
 		return fmt.Errorf("failed to update object storage class: %w", err)
 	}
 
@@ -681,7 +717,7 @@ func (s *Service) TransitionStorageClass(ctx context.Context, bucket, key, targe
 
 // Multipart upload operations
 
-// CreateMultipartUpload initiates a multipart upload
+// CreateMultipartUpload initiates a multipart upload.
 func (s *Service) CreateMultipartUpload(ctx context.Context, bucket, key, contentType, owner string, userMetadata map[string]string) (*metadata.MultipartUpload, error) {
 	// Verify bucket exists
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
@@ -708,12 +744,14 @@ func (s *Service) CreateMultipartUpload(ctx context.Context, bucket, key, conten
 	}
 
 	// Create storage for the upload
-	if err := s.storage.CreateMultipartUpload(ctx, bucket, key, uploadID); err != nil {
+	err = s.storage.CreateMultipartUpload(ctx, bucket, key, uploadID)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create multipart upload storage: %w", err)
 	}
 
 	// Store metadata
-	if err := s.store.CreateMultipartUpload(ctx, upload); err != nil {
+	err = s.store.CreateMultipartUpload(ctx, upload)
+	if err != nil {
 		_ = s.storage.AbortMultipartUpload(ctx, bucket, key, uploadID)
 		return nil, fmt.Errorf("failed to store multipart upload metadata: %w", err)
 	}
@@ -721,16 +759,16 @@ func (s *Service) CreateMultipartUpload(ctx context.Context, bucket, key, conten
 	return upload, nil
 }
 
-// MinPartSize is the minimum size for all parts except the last one (5MB)
+// MinPartSize is the minimum size for all parts except the last one (5MB).
 const MinPartSize = 5 * 1024 * 1024
 
-// MaxPartNumber is the maximum allowed part number
+// MaxPartNumber is the maximum allowed part number.
 const MaxPartNumber = 10000
 
-// MaxParts is the maximum number of parts allowed per upload
+// MaxParts is the maximum number of parts allowed per upload.
 const MaxPartsPerUpload = 10000
 
-// UploadPart uploads a part of a multipart upload
+// UploadPart uploads a part of a multipart upload.
 func (s *Service) UploadPart(ctx context.Context, bucket, key, uploadID string, partNumber int, reader io.Reader, size int64) (*metadata.UploadPart, error) {
 	// Validate part number (1-10000)
 	if partNumber < 1 || partNumber > MaxPartNumber {
@@ -745,12 +783,14 @@ func (s *Service) UploadPart(ctx context.Context, bucket, key, uploadID string, 
 
 	// Check if we already have max parts (only if this is a new part, not an overwrite)
 	isOverwrite := false
+
 	for _, existingPart := range upload.Parts {
 		if existingPart.PartNumber == partNumber {
 			isOverwrite = true
 			break
 		}
 	}
+
 	if !isOverwrite && len(upload.Parts) >= MaxPartsPerUpload {
 		return nil, fmt.Errorf("maximum number of parts (%d) exceeded", MaxPartsPerUpload)
 	}
@@ -770,20 +810,21 @@ func (s *Service) UploadPart(ctx context.Context, bucket, key, uploadID string, 
 	}
 
 	// Update upload metadata (this handles both new parts and overwrites)
-	if err := s.store.AddUploadPart(ctx, bucket, key, upload.UploadID, part); err != nil {
+	err = s.store.AddUploadPart(ctx, bucket, key, upload.UploadID, part)
+	if err != nil {
 		return nil, fmt.Errorf("failed to update upload metadata: %w", err)
 	}
 
 	return part, nil
 }
 
-// CompletePart represents a part in the complete multipart upload request
+// CompletePart represents a part in the complete multipart upload request.
 type CompletePart struct {
-	PartNumber int
 	ETag       string
+	PartNumber int
 }
 
-// CompleteMultipartUpload completes a multipart upload
+// CompleteMultipartUpload completes a multipart upload.
 func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string, requestParts []CompletePart) (*metadata.ObjectMeta, error) {
 	// Get upload metadata
 	upload, err := s.store.GetMultipartUpload(ctx, bucket, key, uploadID)
@@ -805,20 +846,22 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 
 	// Validate request parts
 	if len(requestParts) == 0 {
-		return nil, fmt.Errorf("at least one part must be specified")
+		return nil, errors.New("at least one part must be specified")
 	}
 
 	// Verify parts are in ascending order
 	prevPartNumber := 0
 	for _, reqPart := range requestParts {
 		if reqPart.PartNumber <= prevPartNumber {
-			return nil, fmt.Errorf("parts must be in ascending order")
+			return nil, errors.New("parts must be in ascending order")
 		}
+
 		prevPartNumber = reqPart.PartNumber
 	}
 
 	// Verify all parts exist and ETags match
-	var partNumbers []int
+	partNumbers := make([]int, 0, len(requestParts))
+
 	for i, reqPart := range requestParts {
 		uploadedPart, exists := partMap[reqPart.PartNumber]
 		if !exists {
@@ -827,6 +870,7 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 
 		// Normalize ETags for comparison (remove quotes if present)
 		requestETag := strings.Trim(reqPart.ETag, `"`)
+
 		uploadedETag := strings.Trim(uploadedPart.ETag, `"`)
 		if requestETag != uploadedETag {
 			return nil, fmt.Errorf("ETag mismatch for part %d: expected %s, got %s", reqPart.PartNumber, uploadedETag, requestETag)
@@ -848,8 +892,11 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 	}
 
 	// Calculate total size and combined ETag
-	var totalSize int64
-	var etagBytes []byte
+	var (
+		totalSize int64
+		etagBytes []byte
+	)
+
 	for _, partNum := range partNumbers {
 		part := partMap[partNum]
 		totalSize += part.Size
@@ -860,12 +907,13 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 	}
 
 	// Combined ETag for multipart uploads: MD5(concat(part_etags)) + "-" + num_parts
-	combinedHash := md5.Sum(etagBytes)
+	combinedHash := md5.Sum(etagBytes) //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	finalETag := fmt.Sprintf(`"%s-%d"`, hex.EncodeToString(combinedHash[:]), len(partNumbers))
 
 	// Determine version ID and whether to preserve old versions
 	versionID := ""
 	preserveOldVersions := false
+
 	if versioningPkg.IsVersioningEnabled(bucketInfo) {
 		versionID = s.versionService.GenerateVersionID()
 		preserveOldVersions = true
@@ -895,57 +943,63 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 
 	// Store object metadata with versioning support
 	if versionID != "" {
-		if err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions); err != nil {
+		err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions)
+		if err != nil {
 			return nil, fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	} else {
-		if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+		err := s.store.PutObjectMeta(ctx, meta)
+		if err != nil {
 			return nil, fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	}
 
 	// Clean up upload metadata
-	if err := s.store.CompleteMultipartUpload(ctx, bucket, key, uploadID); err != nil {
+	err = s.store.CompleteMultipartUpload(ctx, bucket, key, uploadID)
+	if err != nil {
 		// Log error but don't fail - object is already stored
 	}
 
 	return meta, nil
 }
 
-// AbortMultipartUpload aborts a multipart upload
+// AbortMultipartUpload aborts a multipart upload.
 func (s *Service) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	// Verify upload exists
-	if _, err := s.store.GetMultipartUpload(ctx, bucket, key, uploadID); err != nil {
+	_, err := s.store.GetMultipartUpload(ctx, bucket, key, uploadID)
+	if err != nil {
 		return err
 	}
 
 	// Abort in storage
-	if err := s.storage.AbortMultipartUpload(ctx, bucket, key, uploadID); err != nil {
+	err = s.storage.AbortMultipartUpload(ctx, bucket, key, uploadID)
+	if err != nil {
 		return fmt.Errorf("failed to abort multipart upload storage: %w", err)
 	}
 
 	// Remove metadata
-	if err := s.store.AbortMultipartUpload(ctx, bucket, key, uploadID); err != nil {
+	err = s.store.AbortMultipartUpload(ctx, bucket, key, uploadID)
+	if err != nil {
 		return fmt.Errorf("failed to remove multipart upload metadata: %w", err)
 	}
 
 	return nil
 }
 
-// ListMultipartUploads lists all in-progress multipart uploads for a bucket
+// ListMultipartUploads lists all in-progress multipart uploads for a bucket.
 func (s *Service) ListMultipartUploads(ctx context.Context, bucket string) ([]*metadata.MultipartUpload, error) {
 	return s.store.ListMultipartUploads(ctx, bucket)
 }
 
-// ListPartsResult contains the result of listing parts with pagination info
+// ListPartsResult contains the result of listing parts with pagination info.
 type ListPartsResult struct {
-	Parts                []metadata.UploadPart
 	Initiator            string
-	IsTruncated          bool
+	Parts                []metadata.UploadPart
 	NextPartNumberMarker int
+	IsTruncated          bool
 }
 
-// ListParts lists the parts of a multipart upload with pagination
+// ListParts lists the parts of a multipart upload with pagination.
 func (s *Service) ListParts(ctx context.Context, bucket, key, uploadID string, maxParts, partNumberMarker int) (*ListPartsResult, error) {
 	upload, err := s.store.GetMultipartUpload(ctx, bucket, key, uploadID)
 	if err != nil {
@@ -964,6 +1018,7 @@ func (s *Service) ListParts(ctx context.Context, bucket, key, uploadID string, m
 
 	// Filter parts after marker
 	var filteredParts []metadata.UploadPart
+
 	for _, part := range parts {
 		if part.PartNumber > partNumberMarker {
 			filteredParts = append(filteredParts, part)
@@ -987,9 +1042,9 @@ func (s *Service) ListParts(ctx context.Context, bucket, key, uploadID string, m
 	return result, nil
 }
 
-// sortParts sorts parts by part number in ascending order
+// sortParts sorts parts by part number in ascending order.
 func sortParts(parts []metadata.UploadPart) {
-	for i := 0; i < len(parts)-1; i++ {
+	for i := range len(parts) - 1 {
 		for j := i + 1; j < len(parts); j++ {
 			if parts[i].PartNumber > parts[j].PartNumber {
 				parts[i], parts[j] = parts[j], parts[i]
@@ -998,7 +1053,7 @@ func sortParts(parts []metadata.UploadPart) {
 	}
 }
 
-// DeleteObjects deletes multiple objects in a batch
+// DeleteObjects deletes multiple objects in a batch.
 func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []DeleteObjectInput, quiet bool) (*DeleteObjectsResult, error) {
 	// Verify bucket exists
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
@@ -1024,6 +1079,7 @@ func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []De
 				Code:      "InvalidArgument",
 				Message:   "Object key cannot be empty",
 			})
+
 			continue
 		}
 
@@ -1040,6 +1096,7 @@ func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []De
 			} else {
 				result.Deleted = append(result.Deleted, *deleted)
 			}
+
 			continue
 		}
 
@@ -1047,6 +1104,7 @@ func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []De
 		if versioningPkg.IsVersioningEnabled(bucketInfo) {
 			// Create a delete marker
 			deleteMarkerVersionID := s.versionService.GenerateVersionID()
+
 			meta := &metadata.ObjectMeta{
 				Bucket:       bucket,
 				Key:          obj.Key,
@@ -1056,7 +1114,9 @@ func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []De
 				Owner:        bucketInfo.Owner,
 				ModifiedAt:   time.Now(),
 			}
-			if err := s.store.PutObjectMetaVersioned(ctx, meta, true); err != nil {
+
+			err := s.store.PutObjectMetaVersioned(ctx, meta, true)
+			if err != nil {
 				result.Errors = append(result.Errors, DeleteError{
 					Key:     obj.Key,
 					Code:    "InternalError",
@@ -1071,7 +1131,8 @@ func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []De
 			}
 		} else {
 			// Non-versioned bucket: permanently delete
-			if err := s.deleteObjectPermanently(ctx, bucket, obj.Key); err != nil {
+			err := s.deleteObjectPermanently(ctx, bucket, obj.Key)
+			if err != nil {
 				// S3 doesn't report errors for non-existent objects
 				if !strings.Contains(err.Error(), "not found") {
 					result.Errors = append(result.Errors, DeleteError{
@@ -1096,7 +1157,7 @@ func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []De
 	return result, nil
 }
 
-// deleteSpecificVersion permanently deletes a specific object version
+// deleteSpecificVersion permanently deletes a specific object version.
 func (s *Service) deleteSpecificVersion(ctx context.Context, bucket, key, versionID string) (*DeletedObject, error) {
 	// Get the specific version to check if it exists and if it's a delete marker
 	meta, err := s.store.GetObjectVersion(ctx, bucket, key, versionID)
@@ -1112,24 +1173,24 @@ func (s *Service) deleteSpecificVersion(ctx context.Context, bucket, key, versio
 	// If this is a delete marker, we're removing the delete marker
 	if meta.DeleteMarker {
 		result.DeleteMarker = true
-	} else {
+	} else if meta.StorageInfo != nil {
 		// Delete the actual object data from storage
-		if meta.StorageInfo != nil {
-			if err := s.storage.DeleteObject(ctx, bucket, key); err != nil {
-				// Log but continue - metadata will still be cleaned up
-			}
+		err = s.storage.DeleteObject(ctx, bucket, key)
+		if err != nil {
+			// Log but continue - metadata will still be cleaned up
 		}
 	}
 
 	// Delete the version metadata
-	if err := s.store.DeleteObjectMeta(ctx, bucket, key); err != nil {
+	err = s.store.DeleteObjectMeta(ctx, bucket, key)
+	if err != nil {
 		return nil, fmt.Errorf("failed to delete object version: %w", err)
 	}
 
 	return result, nil
 }
 
-// deleteObjectPermanently deletes an object and its metadata
+// deleteObjectPermanently deletes an object and its metadata.
 func (s *Service) deleteObjectPermanently(ctx context.Context, bucket, key string) error {
 	// Get object metadata first to check if it exists
 	meta, err := s.store.GetObjectMeta(ctx, bucket, key)
@@ -1139,28 +1200,32 @@ func (s *Service) deleteObjectPermanently(ctx context.Context, bucket, key strin
 
 	// Delete the actual object data from storage (skip if it's a delete marker)
 	if !meta.DeleteMarker && meta.StorageInfo != nil {
-		if err := s.storage.DeleteObject(ctx, bucket, key); err != nil {
+		err = s.storage.DeleteObject(ctx, bucket, key)
+		if err != nil {
 			return fmt.Errorf("failed to delete object data: %w", err)
 		}
 	}
 
 	// Delete the metadata
-	if err := s.store.DeleteObjectMeta(ctx, bucket, key); err != nil {
+	err = s.store.DeleteObjectMeta(ctx, bucket, key)
+	if err != nil {
 		return fmt.Errorf("failed to delete object metadata: %w", err)
 	}
 
 	return nil
 }
 
-// getErrorCode returns an S3 error code based on the error
+// getErrorCode returns an S3 error code based on the error.
 func getErrorCode(err error) string {
 	errStr := err.Error()
 	if strings.Contains(errStr, "not found") {
 		return "NoSuchKey"
 	}
+
 	if strings.Contains(errStr, "access denied") {
 		return "AccessDenied"
 	}
+
 	return "InternalError"
 }
 
@@ -1174,7 +1239,7 @@ func generateUploadID() string {
 	return uuid.New().String()
 }
 
-// SetObjectACL sets the ACL for an object
+// SetObjectACL sets the ACL for an object.
 func (s *Service) SetObjectACL(ctx context.Context, bucket, key string, acl *metadata.ObjectACL) error {
 	// Get the object metadata
 	meta, err := s.store.GetObjectMeta(ctx, bucket, key)
@@ -1186,17 +1251,20 @@ func (s *Service) SetObjectACL(ctx context.Context, bucket, key string, acl *met
 	meta.ACL = acl
 
 	// Save the updated metadata using PutObjectMeta
-	if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+	err = s.store.PutObjectMeta(ctx, meta)
+	if err != nil {
 		return fmt.Errorf("failed to update object ACL: %w", err)
 	}
 
 	return nil
 }
 
-// SetObjectRetention sets the retention configuration for an object
+// SetObjectRetention sets the retention configuration for an object.
 func (s *Service) SetObjectRetention(ctx context.Context, bucket, key, versionID, mode string, retainUntilDate time.Time) error {
-	var meta *metadata.ObjectMeta
-	var err error
+	var (
+		meta *metadata.ObjectMeta
+		err  error
+	)
 
 	if versionID != "" {
 		meta, err = s.store.GetObjectVersion(ctx, bucket, key, versionID)
@@ -1215,7 +1283,7 @@ func (s *Service) SetObjectRetention(ctx context.Context, bucket, key, versionID
 
 	// Validate retain until date
 	if retainUntilDate.Before(time.Now()) {
-		return fmt.Errorf("retain until date must be in the future")
+		return errors.New("retain until date must be in the future")
 	}
 
 	// Update retention settings
@@ -1223,17 +1291,20 @@ func (s *Service) SetObjectRetention(ctx context.Context, bucket, key, versionID
 	meta.ObjectLockRetainUntilDate = &retainUntilDate
 
 	// Save the updated metadata using PutObjectMeta
-	if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+	err = s.store.PutObjectMeta(ctx, meta)
+	if err != nil {
 		return fmt.Errorf("failed to update object retention: %w", err)
 	}
 
 	return nil
 }
 
-// SetObjectLegalHold sets the legal hold status for an object
+// SetObjectLegalHold sets the legal hold status for an object.
 func (s *Service) SetObjectLegalHold(ctx context.Context, bucket, key, versionID, status string) error {
-	var meta *metadata.ObjectMeta
-	var err error
+	var (
+		meta *metadata.ObjectMeta
+		err  error
+	)
 
 	if versionID != "" {
 		meta, err = s.store.GetObjectVersion(ctx, bucket, key, versionID)
@@ -1249,7 +1320,8 @@ func (s *Service) SetObjectLegalHold(ctx context.Context, bucket, key, versionID
 	meta.ObjectLockLegalHoldStatus = status
 
 	// Save the updated metadata using PutObjectMeta
-	if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+	err = s.store.PutObjectMeta(ctx, meta)
+	if err != nil {
 		return fmt.Errorf("failed to update object legal hold: %w", err)
 	}
 

@@ -16,57 +16,63 @@ import (
 	"time"
 )
 
-// S3 Express API Errors
-var (
-	ErrOffsetConflict      = errors.New("offset conflict: another write already claimed this offset")
-	ErrInvalidOffset       = errors.New("invalid offset: must be at end of object or specified offset")
-	ErrAppendNotSupported  = errors.New("append not supported: object was not created with express API")
-	ErrObjectNotFound      = errors.New("object not found")
-	ErrBucketNotExpress    = errors.New("bucket is not configured for express mode")
-	ErrVersioningConflict  = errors.New("versioning must be disabled for express mode")
-	ErrSessionExpired      = errors.New("express session has expired")
-	ErrInvalidSession      = errors.New("invalid session token")
+// Configuration constants.
+const (
+	defaultMaxAppendSize          = 5 << 30   // 5GB
+	defaultStreamingListBatchSize = 1000
+	resultChannelBuffer           = 10
+	sessionCleanupInterval        = 5 * time.Minute
+	sessionIDBytes                = 16
+	accessKeyBytes                = 10
+	secretKeyBytes                = 20
+	sessionTokenBytes             = 64
+	etagBytes                     = 16
+	crcMultiplier                 = 31
+	checksumBufSize               = 4
 )
 
-// ExpressService provides S3 Express API functionality
+// S3 Express API Errors.
+var (
+	ErrOffsetConflict     = errors.New("offset conflict: another write already claimed this offset")
+	ErrInvalidOffset      = errors.New("invalid offset: must be at end of object or specified offset")
+	ErrAppendNotSupported = errors.New("append not supported: object was not created with express API")
+	ErrObjectNotFound     = errors.New("object not found")
+	ErrBucketNotExpress   = errors.New("bucket is not configured for express mode")
+	ErrVersioningConflict = errors.New("versioning must be disabled for express mode")
+	ErrSessionExpired     = errors.New("express session has expired")
+	ErrInvalidSession     = errors.New("invalid session token")
+)
+
+// ExpressService provides S3 Express API functionality.
 type ExpressService struct {
-	config   *Config
 	store    ObjectStore
-	sessions sync.Map // map[string]*Session
-	locks    sync.Map // map[string]*AppendLock - per-object append locks
+	config   *Config
 	metrics  *Metrics
+	sessions sync.Map
+	locks    sync.Map
 }
 
-// Config configures the Express service
+// Config configures the Express service.
 type Config struct {
-	// SessionDuration is how long express sessions remain valid
-	SessionDuration time.Duration
-
-	// MaxAppendSize is the maximum size for a single append operation
-	MaxAppendSize int64
-
-	// EnableLightweightETags uses random ETags instead of content digests
-	EnableLightweightETags bool
-
-	// StreamingListBatchSize controls streaming LIST batch size
+	SessionDuration        time.Duration
+	MaxAppendSize          int64
 	StreamingListBatchSize int
-
-	// EnableAtomicAppend enables atomic/exclusive append operations
-	EnableAtomicAppend bool
+	EnableLightweightETags bool
+	EnableAtomicAppend     bool
 }
 
-// DefaultConfig returns sensible defaults
+// DefaultConfig returns sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
 		SessionDuration:        1 * time.Hour,
-		MaxAppendSize:          5 << 30, // 5GB
+		MaxAppendSize:          defaultMaxAppendSize,
 		EnableLightweightETags: true,
-		StreamingListBatchSize: 1000,
+		StreamingListBatchSize: defaultStreamingListBatchSize,
 		EnableAtomicAppend:     true,
 	}
 }
 
-// ObjectStore interface for storage backend
+// ObjectStore interface for storage backend.
 type ObjectStore interface {
 	GetObject(ctx context.Context, bucket, key string) (*Object, error)
 	PutObject(ctx context.Context, bucket, key string, data io.Reader, size int64, meta map[string]string) (*PutResult, error)
@@ -77,88 +83,88 @@ type ObjectStore interface {
 	HeadBucket(ctx context.Context, bucket string) (*BucketInfo, error)
 }
 
-// Object represents a stored object
+// Object represents a stored object.
 type Object struct {
-	Key          string
-	Data         io.ReadCloser
-	Size         int64
-	ETag         string
 	LastModified time.Time
+	Data         io.ReadCloser
 	Metadata     map[string]string
+	Key          string
+	ETag         string
+	Size         int64
+	CurrentSize  int64
 	IsExpress    bool
-	CurrentSize  int64 // For append tracking
 }
 
-// PutResult contains the result of a PUT operation
+// PutResult contains the result of a PUT operation.
 type PutResult struct {
+	LastModified time.Time
 	ETag         string
 	VersionID    string
 	Size         int64
-	LastModified time.Time
 }
 
-// ListOptions for listing objects
+// ListOptions for listing objects.
 type ListOptions struct {
 	Prefix            string
 	StartAfter        string
-	MaxKeys           int
 	ContinuationToken string
 	Delimiter         string
+	MaxKeys           int
 }
 
-// ObjectInfo contains object metadata
+// ObjectInfo contains object metadata.
 type ObjectInfo struct {
-	Key          string
-	Size         int64
-	ETag         string
 	LastModified time.Time
+	Key          string
+	ETag         string
 	StorageClass string
 	Owner        string
+	Size         int64
 }
 
-// BucketInfo contains bucket metadata
+// BucketInfo contains bucket metadata.
 type BucketInfo struct {
-	Name              string
 	CreationDate      time.Time
+	Name              string
 	IsExpressBucket   bool
 	VersioningEnabled bool
 }
 
-// Session represents an express session
+// Session represents an express session.
 type Session struct {
-	ID           string
-	Bucket       string
 	CreatedAt    time.Time
 	ExpiresAt    time.Time
-	Credentials  SessionCredentials
 	LastActivity time.Time
+	Credentials  SessionCredentials
+	ID           string
+	Bucket       string
 	mu           sync.RWMutex
 }
 
-// SessionCredentials for express session authentication
+// SessionCredentials for express session authentication.
 type SessionCredentials struct {
 	AccessKeyID     string
 	SecretAccessKey string
 	SessionToken    string
 }
 
-// AppendLock manages exclusive append access to an object
+// AppendLock manages exclusive append access to an object.
 type AppendLock struct {
-	mu           sync.Mutex
-	currentSize  int64
-	pendingWrite *PendingWrite
 	lastWrite    time.Time
+	pendingWrite *PendingWrite
+	currentSize  int64
+	mu           sync.Mutex
 }
 
-// PendingWrite tracks a pending append operation
+// PendingWrite tracks a pending append operation.
 type PendingWrite struct {
+	StartTime time.Time
+	WriterID  string
 	Offset    int64
 	Size      int64
-	WriterID  string
-	StartTime time.Time
 }
 
-// Metrics tracks express API performance
+// Metrics tracks express API performance.
 type Metrics struct {
 	mu                   sync.RWMutex
 	PutOperations        int64
@@ -175,7 +181,7 @@ type Metrics struct {
 	LightweightETagsUsed int64
 }
 
-// NewExpressService creates a new Express API service
+// NewExpressService creates a new Express API service.
 func NewExpressService(store ObjectStore, config *Config) *ExpressService {
 	if config == nil {
 		config = DefaultConfig()
@@ -193,7 +199,7 @@ func NewExpressService(store ObjectStore, config *Config) *ExpressService {
 	return svc
 }
 
-// CreateSession creates a new express session for a bucket
+// CreateSession creates a new express session for a bucket.
 func (s *ExpressService) CreateSession(ctx context.Context, bucket string) (*Session, error) {
 	// Verify bucket exists and is configured for express mode
 	info, err := s.store.HeadBucket(ctx, bucket)
@@ -235,7 +241,7 @@ func (s *ExpressService) CreateSession(ctx context.Context, bucket string) (*Ses
 	return session, nil
 }
 
-// ValidateSession validates an express session
+// ValidateSession validates an express session.
 func (s *ExpressService) ValidateSession(sessionID string) (*Session, error) {
 	val, ok := s.sessions.Load(sessionID)
 	if !ok {
@@ -243,21 +249,24 @@ func (s *ExpressService) ValidateSession(sessionID string) (*Session, error) {
 	}
 
 	session := val.(*Session)
+
 	session.mu.RLock()
 	defer session.mu.RUnlock()
 
 	if time.Now().After(session.ExpiresAt) {
 		s.sessions.Delete(sessionID)
 		atomic.AddInt64(&s.metrics.SessionsExpired, 1)
+
 		return nil, ErrSessionExpired
 	}
 
 	return session, nil
 }
 
-// ExpressPutObject performs an accelerated PUT operation
+// ExpressPutObject performs an accelerated PUT operation.
 func (s *ExpressService) ExpressPutObject(ctx context.Context, bucket, key string, data io.Reader, size int64, meta map[string]string) (*PutResult, error) {
 	start := time.Now()
+
 	defer func() {
 		atomic.AddInt64(&s.metrics.PutOperations, 1)
 		atomic.AddInt64(&s.metrics.PutBytesWritten, size)
@@ -270,6 +279,7 @@ func (s *ExpressService) ExpressPutObject(ctx context.Context, bucket, key strin
 	if meta == nil {
 		meta = make(map[string]string)
 	}
+
 	meta["x-amz-express-object"] = "true"
 	meta["x-amz-express-created"] = time.Now().UTC().Format(time.RFC3339)
 
@@ -278,6 +288,7 @@ func (s *ExpressService) ExpressPutObject(ctx context.Context, bucket, key strin
 	if s.config.EnableLightweightETags {
 		etag = generateLightweightETag()
 		meta["x-amz-express-etag"] = etag
+
 		atomic.AddInt64(&s.metrics.LightweightETagsUsed, 1)
 	}
 
@@ -294,7 +305,7 @@ func (s *ExpressService) ExpressPutObject(ctx context.Context, bucket, key strin
 	return result, nil
 }
 
-// ExpressAppendObject performs an atomic/exclusive append operation
+// ExpressAppendObject performs an atomic/exclusive append operation.
 func (s *ExpressService) ExpressAppendObject(ctx context.Context, bucket, key string, data io.Reader, size int64, requestedOffset int64, writerID string) (*AppendResult, error) {
 	if !s.config.EnableAtomicAppend {
 		return nil, errors.New("atomic append is not enabled")
@@ -319,6 +330,7 @@ func (s *ExpressService) ExpressAppendObject(ctx context.Context, bucket, key st
 	if err != nil && !errors.Is(err, ErrObjectNotFound) {
 		return nil, err
 	}
+
 	if errors.Is(err, ErrObjectNotFound) {
 		currentSize = 0
 	}
@@ -336,6 +348,7 @@ func (s *ExpressService) ExpressAppendObject(ctx context.Context, bucket, key st
 	if lock.pendingWrite != nil && lock.pendingWrite.Offset == currentSize {
 		if time.Since(lock.pendingWrite.StartTime) < 30*time.Second {
 			atomic.AddInt64(&s.metrics.AppendConflicts, 1)
+
 			return nil, fmt.Errorf("%w: writer %s already writing at offset %d",
 				ErrOffsetConflict, lock.pendingWrite.WriterID, currentSize)
 		}
@@ -376,27 +389,27 @@ func (s *ExpressService) ExpressAppendObject(ctx context.Context, bucket, key st
 	}, nil
 }
 
-// AppendResult contains the result of an append operation
+// AppendResult contains the result of an append operation.
 type AppendResult struct {
+	AppendedAt time.Time
+	ETag       string
 	Offset     int64
 	Size       int64
 	NewSize    int64
-	ETag       string
-	AppendedAt time.Time
 }
 
-// StreamingListResult for streaming LIST responses
+// StreamingListResult for streaming LIST responses.
 type StreamingListResult struct {
+	ContinuationToken string
 	Objects           []ObjectInfo
 	CommonPrefixes    []string
-	IsTruncated       bool
-	ContinuationToken string
 	KeyCount          int
+	IsTruncated       bool
 }
 
-// ExpressListObjects performs a streaming LIST operation
+// ExpressListObjects performs a streaming LIST operation.
 func (s *ExpressService) ExpressListObjects(ctx context.Context, bucket, prefix string, opts ListOptions) (<-chan StreamingListResult, <-chan error) {
-	resultChan := make(chan StreamingListResult, 10)
+	resultChan := make(chan StreamingListResult, resultChannelBuffer)
 	errChan := make(chan error, 1)
 
 	go func() {
@@ -404,6 +417,7 @@ func (s *ExpressService) ExpressListObjects(ctx context.Context, bucket, prefix 
 		defer close(errChan)
 
 		start := time.Now()
+
 		defer func() {
 			atomic.AddInt64(&s.metrics.ListOperations, 1)
 			s.metrics.mu.Lock()
@@ -420,6 +434,7 @@ func (s *ExpressService) ExpressListObjects(ctx context.Context, bucket, prefix 
 		batch := make([]ObjectInfo, 0, s.config.StreamingListBatchSize)
 		prefixMap := make(map[string]bool)
 		keyCount := 0
+
 		var lastKey string
 
 		for {
@@ -455,8 +470,10 @@ func (s *ExpressService) ExpressListObjects(ctx context.Context, bucket, prefix 
 							errChan <- ctx.Err()
 							return
 						}
+
 						atomic.AddInt64(&s.metrics.ListObjectsReturned, int64(len(batch)))
 					}
+
 					return
 				}
 
@@ -467,6 +484,7 @@ func (s *ExpressService) ExpressListObjects(ctx context.Context, bucket, prefix 
 						if !prefixMap[commonPrefix] {
 							prefixMap[commonPrefix] = true
 						}
+
 						continue
 					}
 				}
@@ -519,7 +537,9 @@ func (s *ExpressService) ExpressListObjects(ctx context.Context, bucket, prefix 
 						errChan <- ctx.Err()
 						return
 					}
+
 					atomic.AddInt64(&s.metrics.ListObjectsReturned, int64(len(batch)))
+
 					return
 				}
 			}
@@ -529,7 +549,7 @@ func (s *ExpressService) ExpressListObjects(ctx context.Context, bucket, prefix 
 	return resultChan, errChan
 }
 
-// ExpressDeleteObject performs an accelerated DELETE operation
+// ExpressDeleteObject performs an accelerated DELETE operation.
 func (s *ExpressService) ExpressDeleteObject(ctx context.Context, bucket, key string) error {
 	// Clean up any append locks
 	lockKey := fmt.Sprintf("%s/%s", bucket, key)
@@ -538,7 +558,7 @@ func (s *ExpressService) ExpressDeleteObject(ctx context.Context, bucket, key st
 	return s.store.DeleteObject(ctx, bucket, key)
 }
 
-// GetMetrics returns current metrics
+// GetMetrics returns current metrics.
 func (s *ExpressService) GetMetrics() *Metrics {
 	s.metrics.mu.RLock()
 	defer s.metrics.mu.RUnlock()
@@ -559,35 +579,40 @@ func (s *ExpressService) GetMetrics() *Metrics {
 	}
 }
 
-// AveragePutLatency returns average PUT latency
+// AveragePutLatency returns average PUT latency.
 func (m *Metrics) AveragePutLatency() time.Duration {
 	ops := atomic.LoadInt64(&m.PutOperations)
 	if ops == 0 {
 		return 0
 	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.PutLatencySum / time.Duration(ops)
 }
 
-// AverageListLatency returns average LIST latency
+// AverageListLatency returns average LIST latency.
 func (m *Metrics) AverageListLatency() time.Duration {
 	ops := atomic.LoadInt64(&m.ListOperations)
 	if ops == 0 {
 		return 0
 	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.ListLatencySum / time.Duration(ops)
 }
 
-// cleanupExpiredSessions periodically removes expired sessions
+// cleanupExpiredSessions periodically removes expired sessions.
 func (s *ExpressService) cleanupExpiredSessions() {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(sessionCleanupInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
 		now := time.Now()
+
 		s.sessions.Range(func(key, value interface{}) bool {
 			session := value.(*Session)
 			session.mu.RLock()
@@ -598,6 +623,7 @@ func (s *ExpressService) cleanupExpiredSessions() {
 				s.sessions.Delete(key)
 				atomic.AddInt64(&s.metrics.SessionsExpired, 1)
 			}
+
 			return true
 		})
 	}
@@ -606,32 +632,37 @@ func (s *ExpressService) cleanupExpiredSessions() {
 // Helper functions
 
 func generateSessionID() string {
-	b := make([]byte, 16)
+	b := make([]byte, sessionIDBytes)
 	rand.Read(b)
+
 	return hex.EncodeToString(b)
 }
 
 func generateAccessKey() string {
-	b := make([]byte, 10)
+	b := make([]byte, accessKeyBytes)
 	rand.Read(b)
-	return "AKIA" + hex.EncodeToString(b)[:16]
+
+	return "AKIA" + hex.EncodeToString(b)[:sessionIDBytes]
 }
 
 func generateSecretKey() string {
-	b := make([]byte, 20)
+	b := make([]byte, secretKeyBytes)
 	rand.Read(b)
+
 	return hex.EncodeToString(b)
 }
 
 func generateSessionToken() string {
-	b := make([]byte, 64)
+	b := make([]byte, sessionTokenBytes)
 	rand.Read(b)
+
 	return hex.EncodeToString(b)
 }
 
 func generateLightweightETag() string {
-	b := make([]byte, 16)
+	b := make([]byte, etagBytes)
 	rand.Read(b)
+
 	return fmt.Sprintf("\"%s\"", hex.EncodeToString(b))
 }
 
@@ -639,60 +670,63 @@ func findDelimiter(key, prefix, delimiter string) int {
 	if len(key) <= len(prefix) {
 		return -1
 	}
+
 	remaining := key[len(prefix):]
 	for i := 0; i <= len(remaining)-len(delimiter); i++ {
 		if remaining[i:i+len(delimiter)] == delimiter {
 			return len(prefix) + i
 		}
 	}
+
 	return -1
 }
 
-// DirectoryBucket represents an S3 Express One Zone directory bucket
+// DirectoryBucket represents an S3 Express One Zone directory bucket.
 type DirectoryBucket struct {
-	Name            string
+	Name             string
 	AvailabilityZone string
-	CreatedAt       time.Time
-	DataRedundancy  string // "SingleAvailabilityZone"
+	CreatedAt        time.Time
+	DataRedundancy   string // "SingleAvailabilityZone"
 }
 
-// CreateDirectoryBucket creates a new S3 Express directory bucket
+// CreateDirectoryBucket creates a new S3 Express directory bucket.
 func (s *ExpressService) CreateDirectoryBucket(ctx context.Context, name, availabilityZone string) (*DirectoryBucket, error) {
 	// Directory buckets have special naming: bucket-name--az-id--x-s3
 	bucketName := fmt.Sprintf("%s--%s--x-s3", name, availabilityZone)
 
 	// Create the underlying bucket with express settings
 	meta := map[string]string{
-		"x-amz-bucket-type":        "directory",
-		"x-amz-data-redundancy":    "SingleAvailabilityZone",
-		"x-amz-availability-zone":  availabilityZone,
-		"x-amz-express-bucket":     "true",
+		"x-amz-bucket-type":       "directory",
+		"x-amz-data-redundancy":   "SingleAvailabilityZone",
+		"x-amz-availability-zone": availabilityZone,
+		"x-amz-express-bucket":    "true",
 	}
 
 	// Store bucket configuration (in real impl, would call store.CreateBucket)
 	_ = meta // Used for bucket creation
 
 	return &DirectoryBucket{
-		Name:            bucketName,
+		Name:             bucketName,
 		AvailabilityZone: availabilityZone,
-		CreatedAt:       time.Now(),
-		DataRedundancy:  "SingleAvailabilityZone",
+		CreatedAt:        time.Now(),
+		DataRedundancy:   "SingleAvailabilityZone",
 	}, nil
 }
 
-// ListDirectoryBuckets lists all directory buckets
+// ListDirectoryBuckets lists all directory buckets.
 func (s *ExpressService) ListDirectoryBuckets(ctx context.Context) ([]*DirectoryBucket, error) {
 	// In real implementation, would query bucket store for directory buckets
 	return []*DirectoryBucket{}, nil
 }
 
-// ExpressCopyObject performs optimized copy within express buckets
+// ExpressCopyObject performs optimized copy within express buckets.
 func (s *ExpressService) ExpressCopyObject(ctx context.Context, srcBucket, srcKey, dstBucket, dstKey string) (*PutResult, error) {
 	// Get source object
 	obj, err := s.store.GetObject(ctx, srcBucket, srcKey)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = obj.Data.Close() }()
 
 	// Read all data
@@ -705,22 +739,22 @@ func (s *ExpressService) ExpressCopyObject(ctx context.Context, srcBucket, srcKe
 	return s.ExpressPutObject(ctx, dstBucket, dstKey, bytes.NewReader(data), int64(len(data)), obj.Metadata)
 }
 
-// BatchAppend allows multiple append operations in a single request
+// BatchAppend allows multiple append operations in a single request.
 type BatchAppendRequest struct {
 	Bucket   string
 	Key      string
+	WriterID string
 	Data     []byte
 	Offset   int64
-	WriterID string
 }
 
-// BatchAppendResult contains results for batch append
+// BatchAppendResult contains results for batch append.
 type BatchAppendResult struct {
 	Results []AppendResult
 	Errors  []error
 }
 
-// ExpressBatchAppend performs multiple append operations atomically
+// ExpressBatchAppend performs multiple append operations atomically.
 func (s *ExpressService) ExpressBatchAppend(ctx context.Context, requests []BatchAppendRequest) *BatchAppendResult {
 	result := &BatchAppendResult{
 		Results: make([]AppendResult, len(requests)),
@@ -748,16 +782,16 @@ func (s *ExpressService) ExpressBatchAppend(ctx context.Context, requests []Batc
 	return result
 }
 
-// WriteMarker for tracking append position
+// WriteMarker for tracking append position.
 type WriteMarker struct {
+	LastModified time.Time
 	Bucket       string
 	Key          string
-	CurrentSize  int64
-	LastModified time.Time
 	WriterID     string
+	CurrentSize  int64
 }
 
-// GetWriteMarker returns the current write position for an object
+// GetWriteMarker returns the current write position for an object.
 func (s *ExpressService) GetWriteMarker(ctx context.Context, bucket, key string) (*WriteMarker, error) {
 	size, err := s.store.GetObjectSize(ctx, bucket, key)
 	if err != nil {
@@ -767,16 +801,20 @@ func (s *ExpressService) GetWriteMarker(ctx context.Context, bucket, key string)
 	lockKey := fmt.Sprintf("%s/%s", bucket, key)
 	lockVal, ok := s.locks.Load(lockKey)
 
-	var lastModified time.Time
-	var writerID string
+	var (
+		lastModified time.Time
+		writerID     string
+	)
 
 	if ok {
 		lock := lockVal.(*AppendLock)
 		lock.mu.Lock()
+
 		lastModified = lock.lastWrite
 		if lock.pendingWrite != nil {
 			writerID = lock.pendingWrite.WriterID
 		}
+
 		lock.mu.Unlock()
 	}
 
@@ -789,12 +827,13 @@ func (s *ExpressService) GetWriteMarker(ctx context.Context, bucket, key string)
 	}, nil
 }
 
-// ExpressHeadObject returns object metadata without body
+// ExpressHeadObject returns object metadata without body.
 func (s *ExpressService) ExpressHeadObject(ctx context.Context, bucket, key string) (*ObjectInfo, error) {
 	obj, err := s.store.GetObject(ctx, bucket, key)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = obj.Data.Close() }()
 
 	return &ObjectInfo{
@@ -805,21 +844,21 @@ func (s *ExpressService) ExpressHeadObject(ctx context.Context, bucket, key stri
 	}, nil
 }
 
-// GenerateChecksumHeader creates checksum headers for express mode
+// GenerateChecksumHeader creates checksum headers for express mode.
 type ChecksumHeader struct {
 	Algorithm string
 	Value     string
 }
 
-// CreateChecksum generates a lightweight checksum for express mode
+// CreateChecksum generates a lightweight checksum for express mode.
 func CreateChecksum(data []byte) *ChecksumHeader {
 	// Use lightweight CRC32 instead of SHA256 for express mode
 	var crc uint32
 	for _, b := range data {
-		crc = crc*31 + uint32(b)
+		crc = crc*crcMultiplier + uint32(b)
 	}
 
-	buf := make([]byte, 4)
+	buf := make([]byte, checksumBufSize)
 	binary.BigEndian.PutUint32(buf, crc)
 
 	return &ChecksumHeader{

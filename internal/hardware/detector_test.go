@@ -1,7 +1,6 @@
 package hardware
 
 import (
-	"os"
 	"os/exec"
 	"testing"
 
@@ -9,14 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestDetectGPUs_NvidiaSMINotFound tests graceful handling when nvidia-smi is not available
+// TestDetectGPUs_NvidiaSMINotFound tests graceful handling when nvidia-smi is not available.
 func TestDetectGPUs_NvidiaSMINotFound(t *testing.T) {
-	// Temporarily modify PATH to ensure nvidia-smi is not found
-	originalPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", originalPath)
-
-	// Set PATH to empty to ensure nvidia-smi is not found
-	os.Setenv("PATH", "/nonexistent")
+	// Set PATH to nonexistent to ensure nvidia-smi is not found
+	// t.Setenv automatically restores original value after test
+	t.Setenv("PATH", "/nonexistent")
 
 	detector := &Detector{}
 	gpus := detector.detectGPUs()
@@ -25,12 +21,9 @@ func TestDetectGPUs_NvidiaSMINotFound(t *testing.T) {
 	assert.Empty(t, gpus, "Should return empty slice when nvidia-smi is not found")
 }
 
-// TestCheckP2PSupport_NvidiaSMINotFound tests graceful handling when nvidia-smi is not available
+// TestCheckP2PSupport_NvidiaSMINotFound tests graceful handling when nvidia-smi is not available.
 func TestCheckP2PSupport_NvidiaSMINotFound(t *testing.T) {
-	originalPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", originalPath)
-
-	os.Setenv("PATH", "/nonexistent")
+	t.Setenv("PATH", "/nonexistent")
 
 	detector := &Detector{}
 	supported := detector.checkP2PSupport(0)
@@ -39,12 +32,9 @@ func TestCheckP2PSupport_NvidiaSMINotFound(t *testing.T) {
 	assert.False(t, supported, "Should return false when nvidia-smi is not found")
 }
 
-// TestGetBlueFieldFirmware_CommandNotFound tests graceful handling when mlxfwmanager is not available
+// TestGetBlueFieldFirmware_CommandNotFound tests graceful handling when mlxfwmanager is not available.
 func TestGetBlueFieldFirmware_CommandNotFound(t *testing.T) {
-	originalPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", originalPath)
-
-	os.Setenv("PATH", "/nonexistent")
+	t.Setenv("PATH", "/nonexistent")
 
 	detector := &Detector{}
 	version := detector.getBlueFieldFirmware(0)
@@ -53,12 +43,9 @@ func TestGetBlueFieldFirmware_CommandNotFound(t *testing.T) {
 	assert.Equal(t, "unknown", version, "Should return 'unknown' when mlxfwmanager is not found")
 }
 
-// TestDetectDPUs_MSTNotFound tests graceful handling when mst command is not available
+// TestDetectDPUs_MSTNotFound tests graceful handling when mst command is not available.
 func TestDetectDPUs_MSTNotFound(t *testing.T) {
-	originalPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", originalPath)
-
-	os.Setenv("PATH", "/nonexistent")
+	t.Setenv("PATH", "/nonexistent")
 
 	detector := &Detector{}
 	dpus := detector.detectDPUs()
@@ -67,15 +54,13 @@ func TestDetectDPUs_MSTNotFound(t *testing.T) {
 	assert.Empty(t, dpus, "Should return empty slice when mst is not found")
 }
 
-// TestCommandValidation_NoInjection tests that all commands use hardcoded arguments
+// TestCommandValidation_NoInjection tests that all commands use hardcoded arguments.
 func TestCommandValidation_NoInjection(t *testing.T) {
 	// This test verifies that exec.LookPath is called before command execution
 	// by checking that the detector doesn't panic or crash when commands are missing
 
 	// Clear PATH to ensure all external commands fail LookPath check
-	originalPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", originalPath)
-	os.Setenv("PATH", "")
+	t.Setenv("PATH", "")
 
 	detector := NewDetector()
 
@@ -97,7 +82,7 @@ func TestCommandValidation_NoInjection(t *testing.T) {
 	}, "getBlueFieldFirmware should not panic when mlxfwmanager is missing")
 }
 
-// TestExecLookPath_ValidatesCommands tests that exec.LookPath is actually called
+// TestExecLookPath_ValidatesCommands tests that exec.LookPath is actually called.
 func TestExecLookPath_ValidatesCommands(t *testing.T) {
 	// Test that exec.LookPath correctly identifies when a command is available
 	// We use a command that should exist on all systems
@@ -109,14 +94,13 @@ func TestExecLookPath_ValidatesCommands(t *testing.T) {
 	assert.Error(t, err, "Non-existent command should return error from LookPath")
 }
 
-// TestDetector_CommandArgumentsAreHardcoded verifies that no user input flows to command args
+// TestDetector_CommandArgumentsAreHardcoded verifies that no user input flows to command args.
 func TestDetector_CommandArgumentsAreHardcoded(t *testing.T) {
 	// This is a documentation test that verifies our security assumptions
 	// All exec.Command calls in detector.go use string literals for arguments
 
 	// We can verify this by inspecting that the detector methods don't accept
 	// any string parameters that could flow into command arguments
-
 	detector := &Detector{}
 
 	// detectGPUs() - no parameters

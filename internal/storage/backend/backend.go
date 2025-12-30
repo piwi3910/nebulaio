@@ -23,13 +23,13 @@ import (
 	"io"
 )
 
-// Common backend errors
+// Common backend errors.
 var (
 	ErrObjectNotFound = errors.New("object not found")
 	ErrBucketNotFound = errors.New("bucket not found")
 )
 
-// Backend is the interface for object storage backends
+// Backend is the interface for object storage backends.
 type Backend interface {
 	// Init initializes the storage backend
 	Init(ctx context.Context) error
@@ -62,7 +62,7 @@ type Backend interface {
 	GetStorageInfo(ctx context.Context) (*StorageInfo, error)
 }
 
-// PutResult contains the result of a put operation
+// PutResult contains the result of a put operation.
 type PutResult struct {
 	// ETag is the MD5/checksum of the stored object
 	ETag string
@@ -74,7 +74,7 @@ type PutResult struct {
 	Size int64
 }
 
-// StorageInfo contains storage statistics
+// StorageInfo contains storage statistics.
 type StorageInfo struct {
 	TotalBytes     int64
 	UsedBytes      int64
@@ -82,7 +82,7 @@ type StorageInfo struct {
 	ObjectCount    int64
 }
 
-// MultipartBackend extends Backend with multipart upload support
+// MultipartBackend extends Backend with multipart upload support.
 type MultipartBackend interface {
 	Backend
 

@@ -6,96 +6,72 @@ import (
 	"time"
 )
 
-// StorageClass represents an S3 storage class
+// StorageClass represents an S3 storage class.
 type StorageClass string
 
 const (
-	// StorageClassStandard is the default storage class
+	// StorageClassStandard is the default storage class.
 	StorageClassStandard StorageClass = "STANDARD"
-	// StorageClassStandardIA is for infrequent access
+	// StorageClassStandardIA is for infrequent access.
 	StorageClassStandardIA StorageClass = "STANDARD_IA"
-	// StorageClassOneZoneIA is for infrequent access in one zone
+	// StorageClassOneZoneIA is for infrequent access in one zone.
 	StorageClassOneZoneIA StorageClass = "ONEZONE_IA"
-	// StorageClassIntelligentTiering is for automatic tiering
+	// StorageClassIntelligentTiering is for automatic tiering.
 	StorageClassIntelligentTiering StorageClass = "INTELLIGENT_TIERING"
-	// StorageClassGlacier is for archival storage
+	// StorageClassGlacier is for archival storage.
 	StorageClassGlacier StorageClass = "GLACIER"
-	// StorageClassGlacierIR is for instant retrieval from archive
+	// StorageClassGlacierIR is for instant retrieval from archive.
 	StorageClassGlacierIR StorageClass = "GLACIER_IR"
-	// StorageClassDeepArchive is for long-term archival
+	// StorageClassDeepArchive is for long-term archival.
 	StorageClassDeepArchive StorageClass = "DEEP_ARCHIVE"
 )
 
-// TierType represents a storage tier
+// TierType represents a storage tier.
 type TierType string
 
 const (
-	// TierHot is the fastest tier (SSD, local storage)
+	// TierHot is the fastest tier (SSD, local storage).
 	TierHot TierType = "hot"
-	// TierWarm is for moderately accessed data
+	// TierWarm is for moderately accessed data.
 	TierWarm TierType = "warm"
-	// TierCold is for infrequently accessed data
+	// TierCold is for infrequently accessed data.
 	TierCold TierType = "cold"
-	// TierArchive is for rarely accessed data
+	// TierArchive is for rarely accessed data.
 	TierArchive TierType = "archive"
 )
 
-// TransitionAction defines what happens during a transition
+// TransitionAction defines what happens during a transition.
 type TransitionAction string
 
 const (
-	// TransitionMove moves the object to the target tier
+	// TransitionMove moves the object to the target tier.
 	TransitionMove TransitionAction = "move"
-	// TransitionCopy copies the object to the target tier
+	// TransitionCopy copies the object to the target tier.
 	TransitionCopy TransitionAction = "copy"
 )
 
-// Policy defines tiering rules for objects
+// Policy defines tiering rules for objects.
 type Policy struct {
-	// Name is a unique identifier for the policy
-	Name string `json:"name" yaml:"name"`
-
-	// Description explains the policy purpose
-	Description string `json:"description,omitempty" yaml:"description,omitempty"`
-
-	// Enabled determines if the policy is active
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// Priority determines evaluation order (lower = higher priority)
-	Priority int `json:"priority" yaml:"priority"`
-
-	// Filter specifies which objects this policy applies to
-	Filter PolicyFilter `json:"filter" yaml:"filter"`
-
-	// Rules define the tiering transitions
-	Rules []TransitionRule `json:"rules" yaml:"rules"`
+	Name        string           `json:"name" yaml:"name"`
+	Description string           `json:"description,omitempty" yaml:"description,omitempty"`
+	Filter      PolicyFilter     `json:"filter" yaml:"filter"`
+	Rules       []TransitionRule `json:"rules" yaml:"rules"`
+	Priority    int              `json:"priority" yaml:"priority"`
+	Enabled     bool             `json:"enabled" yaml:"enabled"`
 }
 
-// PolicyFilter defines criteria for selecting objects
+// PolicyFilter defines criteria for selecting objects.
 type PolicyFilter struct {
-	// Buckets to match (supports wildcards)
-	Buckets []string `json:"buckets,omitempty" yaml:"buckets,omitempty"`
-
-	// Prefix to match object keys
-	Prefix string `json:"prefix,omitempty" yaml:"prefix,omitempty"`
-
-	// Suffix to match object keys
-	Suffix string `json:"suffix,omitempty" yaml:"suffix,omitempty"`
-
-	// Tags to match (all must match)
-	Tags map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
-
-	// MinSize in bytes (objects smaller are excluded)
-	MinSize int64 `json:"minSize,omitempty" yaml:"minSize,omitempty"`
-
-	// MaxSize in bytes (objects larger are excluded)
-	MaxSize int64 `json:"maxSize,omitempty" yaml:"maxSize,omitempty"`
-
-	// ContentTypes to match (supports wildcards like "image/*")
-	ContentTypes []string `json:"contentTypes,omitempty" yaml:"contentTypes,omitempty"`
+	Tags         map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Prefix       string            `json:"prefix,omitempty" yaml:"prefix,omitempty"`
+	Suffix       string            `json:"suffix,omitempty" yaml:"suffix,omitempty"`
+	Buckets      []string          `json:"buckets,omitempty" yaml:"buckets,omitempty"`
+	ContentTypes []string          `json:"contentTypes,omitempty" yaml:"contentTypes,omitempty"`
+	MinSize      int64             `json:"minSize,omitempty" yaml:"minSize,omitempty"`
+	MaxSize      int64             `json:"maxSize,omitempty" yaml:"maxSize,omitempty"`
 }
 
-// TransitionRule defines when and where to move objects
+// TransitionRule defines when and where to move objects.
 type TransitionRule struct {
 	// Name of the transition rule
 	Name string `json:"name" yaml:"name"`
@@ -113,7 +89,7 @@ type TransitionRule struct {
 	Conditions TransitionConditions `json:"conditions" yaml:"conditions"`
 }
 
-// TransitionConditions defines when a transition should occur
+// TransitionConditions defines when a transition should occur.
 type TransitionConditions struct {
 	// DaysAfterCreation triggers after N days since creation
 	DaysAfterCreation int `json:"daysAfterCreation,omitempty" yaml:"daysAfterCreation,omitempty"`
@@ -131,63 +107,54 @@ type TransitionConditions struct {
 	AccessCountPeriodDays int `json:"accessCountPeriodDays,omitempty" yaml:"accessCountPeriodDays,omitempty"`
 }
 
-// ObjectInfo contains metadata about an object for policy evaluation
+// ObjectInfo contains metadata about an object for policy evaluation.
 type ObjectInfo struct {
-	Bucket         string
-	Key            string
-	Size           int64
-	ContentType    string
-	StorageClass   StorageClass
-	CurrentTier    TierType
-	Tags           map[string]string
 	CreatedAt      time.Time
 	ModifiedAt     time.Time
 	LastAccessedAt time.Time
+	Tags           map[string]string
+	Bucket         string
+	Key            string
+	ContentType    string
+	StorageClass   StorageClass
+	CurrentTier    TierType
+	Size           int64
 	AccessCount    int
 }
 
-// PolicyEvaluator evaluates policies against objects
+// PolicyEvaluator evaluates policies against objects.
 type PolicyEvaluator struct {
 	policies []Policy
 }
 
-// NewPolicyEvaluator creates a new policy evaluator
+// NewPolicyEvaluator creates a new policy evaluator.
 func NewPolicyEvaluator(policies []Policy) *PolicyEvaluator {
 	// Sort by priority
 	sortedPolicies := make([]Policy, len(policies))
 	copy(sortedPolicies, policies)
-	for i := 0; i < len(sortedPolicies)-1; i++ {
+
+	for i := range len(sortedPolicies) - 1 {
 		for j := i + 1; j < len(sortedPolicies); j++ {
 			if sortedPolicies[j].Priority < sortedPolicies[i].Priority {
 				sortedPolicies[i], sortedPolicies[j] = sortedPolicies[j], sortedPolicies[i]
 			}
 		}
 	}
+
 	return &PolicyEvaluator{policies: sortedPolicies}
 }
 
-// EvaluateResult contains the result of policy evaluation
+// EvaluateResult contains the result of policy evaluation.
 type EvaluateResult struct {
-	// ShouldTransition indicates if a transition should occur
-	ShouldTransition bool
-
-	// Policy that matched
-	Policy *Policy
-
-	// Rule that triggered the transition
-	Rule *TransitionRule
-
-	// TargetTier is the destination tier
-	TargetTier TierType
-
-	// TargetStorageClass is the S3 storage class to assign
+	Policy             *Policy
+	Rule               *TransitionRule
+	TargetTier         TierType
 	TargetStorageClass StorageClass
-
-	// Action to perform
-	Action TransitionAction
+	Action             TransitionAction
+	ShouldTransition   bool
 }
 
-// Evaluate evaluates all policies for an object
+// Evaluate evaluates all policies for an object.
 func (e *PolicyEvaluator) Evaluate(obj ObjectInfo) *EvaluateResult {
 	for _, policy := range e.policies {
 		if !policy.Enabled {
@@ -211,20 +178,23 @@ func (e *PolicyEvaluator) Evaluate(obj ObjectInfo) *EvaluateResult {
 			}
 		}
 	}
+
 	return &EvaluateResult{ShouldTransition: false}
 }
 
-// matchesFilter checks if an object matches the policy filter
+// matchesFilter checks if an object matches the policy filter.
 func (e *PolicyEvaluator) matchesFilter(obj ObjectInfo, filter PolicyFilter) bool {
 	// Check buckets
 	if len(filter.Buckets) > 0 {
 		matched := false
+
 		for _, pattern := range filter.Buckets {
 			if matchWildcard(pattern, obj.Bucket) {
 				matched = true
 				break
 			}
 		}
+
 		if !matched {
 			return false
 		}
@@ -244,6 +214,7 @@ func (e *PolicyEvaluator) matchesFilter(obj ObjectInfo, filter PolicyFilter) boo
 	if filter.MinSize > 0 && obj.Size < filter.MinSize {
 		return false
 	}
+
 	if filter.MaxSize > 0 && obj.Size > filter.MaxSize {
 		return false
 	}
@@ -251,12 +222,14 @@ func (e *PolicyEvaluator) matchesFilter(obj ObjectInfo, filter PolicyFilter) boo
 	// Check content types
 	if len(filter.ContentTypes) > 0 {
 		matched := false
+
 		for _, pattern := range filter.ContentTypes {
 			if matchContentType(pattern, obj.ContentType) {
 				matched = true
 				break
 			}
 		}
+
 		if !matched {
 			return false
 		}
@@ -274,7 +247,7 @@ func (e *PolicyEvaluator) matchesFilter(obj ObjectInfo, filter PolicyFilter) boo
 	return true
 }
 
-// matchesConditions checks if an object matches the transition conditions
+// matchesConditions checks if an object matches the transition conditions.
 func (e *PolicyEvaluator) matchesConditions(obj ObjectInfo, conditions TransitionConditions) bool {
 	now := time.Now()
 
@@ -312,11 +285,12 @@ func (e *PolicyEvaluator) matchesConditions(obj ObjectInfo, conditions Transitio
 	return true
 }
 
-// matchWildcard matches a string against a pattern with wildcards
+// matchWildcard matches a string against a pattern with wildcards.
 func matchWildcard(pattern, s string) bool {
 	if pattern == "*" {
 		return true
 	}
+
 	if !strings.Contains(pattern, "*") && !strings.Contains(pattern, "?") {
 		return pattern == s
 	}
@@ -327,10 +301,11 @@ func matchWildcard(pattern, s string) bool {
 	regexPattern = strings.ReplaceAll(regexPattern, `\?`, ".")
 
 	matched, _ := regexp.MatchString(regexPattern, s)
+
 	return matched
 }
 
-// matchContentType matches content type with wildcards (e.g., "image/*")
+// matchContentType matches content type with wildcards (e.g., "image/*").
 func matchContentType(pattern, contentType string) bool {
 	if pattern == "*" || pattern == "*/*" {
 		return true
@@ -356,7 +331,7 @@ func matchContentType(pattern, contentType string) bool {
 	return true
 }
 
-// DefaultPolicies returns a set of common tiering policies
+// DefaultPolicies returns a set of common tiering policies.
 func DefaultPolicies() []Policy {
 	return []Policy{
 		{

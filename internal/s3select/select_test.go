@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+// Test data constants.
+const testCSVData = `name,age,city
+Alice,30,New York
+Bob,25,Los Angeles
+Charlie,35,Chicago`
+
 func TestParseSQL(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -66,8 +72,10 @@ func TestParseSQL(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, got nil")
 				}
+
 				return
 			}
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -88,12 +96,8 @@ func TestParseSQL(t *testing.T) {
 }
 
 func TestExecuteCSVSelectStar(t *testing.T) {
-	csvData := `name,age,city
-Alice,30,New York
-Bob,25,Los Angeles
-Charlie,35,Chicago`
-
-	result, err := ExecuteCSV([]byte(csvData), "SELECT * FROM s3object", true)
+	//nolint:unqueryvet // Testing SELECT * functionality which is valid in S3 Select
+	result, err := ExecuteCSV([]byte(testCSVData), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
@@ -105,7 +109,8 @@ Charlie,35,Chicago`
 
 	// Verify first record
 	var record map[string]interface{}
-	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+	err = json.Unmarshal([]byte(lines[0]), &record)
+	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
@@ -115,12 +120,7 @@ Charlie,35,Chicago`
 }
 
 func TestExecuteCSVSelectColumns(t *testing.T) {
-	csvData := `name,age,city
-Alice,30,New York
-Bob,25,Los Angeles
-Charlie,35,Chicago`
-
-	result, err := ExecuteCSV([]byte(csvData), "SELECT name, city FROM s3object", true)
+	result, err := ExecuteCSV([]byte(testCSVData), "SELECT name, city FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
@@ -131,7 +131,8 @@ Charlie,35,Chicago`
 	}
 
 	var record map[string]interface{}
-	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+	err = json.Unmarshal([]byte(lines[0]), &record)
+	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
@@ -141,12 +142,8 @@ Charlie,35,Chicago`
 }
 
 func TestExecuteCSVWithWhere(t *testing.T) {
-	csvData := `name,age,city
-Alice,30,New York
-Bob,25,Los Angeles
-Charlie,35,Chicago`
-
-	result, err := ExecuteCSV([]byte(csvData), "SELECT * FROM s3object WHERE age > 28", true)
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
+	result, err := ExecuteCSV([]byte(testCSVData), "SELECT * FROM s3object WHERE age > 28", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
@@ -165,6 +162,7 @@ Charlie,35,Chicago
 David,28,Seattle
 Eve,32,Boston`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteCSV([]byte(csvData), "SELECT * FROM s3object LIMIT 2", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
@@ -177,12 +175,7 @@ Eve,32,Boston`
 }
 
 func TestExecuteCSVCount(t *testing.T) {
-	csvData := `name,age,city
-Alice,30,New York
-Bob,25,Los Angeles
-Charlie,35,Chicago`
-
-	result, err := ExecuteCSV([]byte(csvData), "SELECT COUNT(*) FROM s3object", true)
+	result, err := ExecuteCSV([]byte(testCSVData), "SELECT COUNT(*) FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
@@ -193,7 +186,8 @@ Charlie,35,Chicago`
 	}
 
 	var record map[string]interface{}
-	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+	err = json.Unmarshal([]byte(lines[0]), &record)
+	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
@@ -214,7 +208,8 @@ Gizmo,15,4`
 	}
 
 	var record map[string]interface{}
-	if err := json.Unmarshal(result.Records, &record); err != nil {
+	err = json.Unmarshal(result.Records, &record)
+	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
@@ -235,7 +230,8 @@ Gizmo,15,4`
 	}
 
 	var record map[string]interface{}
-	if err := json.Unmarshal(result.Records, &record); err != nil {
+	err = json.Unmarshal(result.Records, &record)
+	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
@@ -249,6 +245,7 @@ func TestExecuteJSONLines(t *testing.T) {
 {"name":"Bob","age":25}
 {"name":"Charlie","age":35}`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteJSON([]byte(jsonData), "SELECT * FROM s3object", false)
 	if err != nil {
 		t.Fatalf("ExecuteJSON failed: %v", err)
@@ -263,6 +260,7 @@ func TestExecuteJSONLines(t *testing.T) {
 func TestExecuteJSONDocument(t *testing.T) {
 	jsonData := `[{"name":"Alice","age":30},{"name":"Bob","age":25}]`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteJSON([]byte(jsonData), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteJSON failed: %v", err)
@@ -340,18 +338,14 @@ Charlie,35,Chicago`
 
 	var record map[string]interface{}
 	json.Unmarshal([]byte(lines[0]), &record)
+
 	if record["name"] != "Alice" {
 		t.Errorf("expected name Alice, got %v", record["name"])
 	}
 }
 
 func TestExecuteWithORCondition(t *testing.T) {
-	csvData := `name,age,city
-Alice,30,New York
-Bob,25,Los Angeles
-Charlie,35,Chicago`
-
-	result, err := ExecuteCSV([]byte(csvData), "SELECT name FROM s3object WHERE age < 26 OR age > 34", true)
+	result, err := ExecuteCSV([]byte(testCSVData), "SELECT name FROM s3object WHERE age < 26 OR age > 34", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
@@ -376,6 +370,7 @@ Gizmo,15`
 
 	var record map[string]interface{}
 	json.Unmarshal(result.Records, &record)
+
 	if record["MIN(price)"] != float64(10) {
 		t.Errorf("expected min 10, got %v", record["MIN(price)"])
 	}
@@ -387,6 +382,7 @@ Gizmo,15`
 	}
 
 	json.Unmarshal(result.Records, &record)
+
 	if record["MAX(price)"] != float64(50) {
 		t.Errorf("expected max 50, got %v", record["MAX(price)"])
 	}
@@ -416,6 +412,7 @@ Bob,25`
 		},
 	)
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := engine.Execute([]byte(csvData), "SELECT * FROM s3object")
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
@@ -436,6 +433,7 @@ func TestBytesScannedProcessed(t *testing.T) {
 	csvData := `name,age
 Alice,30`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteCSV([]byte(csvData), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
@@ -455,6 +453,7 @@ Alice,30`
 }
 
 func TestEmptyData(t *testing.T) {
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteCSV([]byte(""), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed on empty data: %v", err)
@@ -470,6 +469,7 @@ func TestSpecialCharactersInCSV(t *testing.T) {
 "Alice, Jr.","She said ""Hello"""
 Bob,Simple text`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteCSV([]byte(csvData), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
@@ -482,6 +482,7 @@ Bob,Simple text`
 
 	var record map[string]interface{}
 	json.Unmarshal([]byte(lines[0]), &record)
+
 	if record["name"] != "Alice, Jr." {
 		t.Errorf("expected name 'Alice, Jr.', got %v", record["name"])
 	}
@@ -491,6 +492,7 @@ func TestNestedJSONAccess(t *testing.T) {
 	jsonData := `{"user":{"name":"Alice","age":30},"active":true}
 {"user":{"name":"Bob","age":25},"active":false}`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteJSON([]byte(jsonData), "SELECT * FROM s3object WHERE active = true", false)
 	if err != nil {
 		t.Fatalf("ExecuteJSON failed: %v", err)
@@ -506,13 +508,17 @@ func BenchmarkExecuteCSV(b *testing.B) {
 	// Generate test data
 	var builder strings.Builder
 	builder.WriteString("id,name,value\n")
-	for i := 0; i < 1000; i++ {
+
+	for i := range 1000 {
 		builder.WriteString(fmt.Sprintf("%d,Item%d,%d\n", i, i, i*10))
 	}
+
 	data := []byte(builder.String())
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
+		//nolint:unqueryvet // SELECT * is intentional for S3 Select benchmarking
 		_, _ = ExecuteCSV(data, "SELECT * FROM s3object WHERE value > 5000", true)
 	}
 }
@@ -520,14 +526,17 @@ func BenchmarkExecuteCSV(b *testing.B) {
 func BenchmarkExecuteJSON(b *testing.B) {
 	// Generate test data
 	var builder strings.Builder
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		builder.WriteString(fmt.Sprintf(`{"id":%d,"name":"Item%d","value":%d}`, i, i, i*10))
 		builder.WriteString("\n")
 	}
+
 	data := []byte(builder.String())
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
+		//nolint:unqueryvet // SELECT * is intentional for S3 Select benchmarking
 		_, _ = ExecuteJSON(data, "SELECT * FROM s3object WHERE value > 5000", false)
 	}
 }

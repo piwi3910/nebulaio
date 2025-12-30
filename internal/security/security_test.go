@@ -110,8 +110,8 @@ func TestBucketNameValidation(t *testing.T) {
 		"UPPERCASE",
 		"has spaces",
 		"has_underscore",
-		"ab",                     // too short
-		strings.Repeat("a", 64),  // too long
+		"ab",                    // too short
+		strings.Repeat("a", 64), // too long
 		"has..consecutive.dots",
 		"192.168.1.1", // IP-like
 	}
@@ -136,13 +136,13 @@ func TestObjectKeyValidation(t *testing.T) {
 		"path/to/object",
 		"file.txt",
 		"folder/subfolder/file.json",
-		"unicode-日本語.txt",
+		"unicode-αβγδ.txt",
 		strings.Repeat("a", 1024), // max length
 	}
 
 	invalidKeys := []string{
-		"",                         // empty
-		strings.Repeat("a", 1025),  // too long
+		"",                        // empty
+		strings.Repeat("a", 1025), // too long
 	}
 
 	for _, key := range validKeys {
@@ -221,7 +221,7 @@ func TestRateLimiting(t *testing.T) {
 	limiter := NewRateLimiter(10, 1) // 10 requests per second
 
 	// Should allow up to limit
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		assert.True(t, limiter.Allow("test-client"),
 			"Request %d should be allowed", i+1)
 	}
@@ -247,7 +247,7 @@ func TestContentTypeValidation(t *testing.T) {
 	}
 
 	disallowedTypes := []string{
-		"text/html",      // Potential XSS
+		"text/html", // Potential XSS
 		"application/javascript",
 		"text/javascript",
 	}
@@ -267,7 +267,7 @@ func TestHTTPSecurityHeaders(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -312,7 +312,7 @@ func TestCORSValidation(t *testing.T) {
 func TestAccessControlBypass(t *testing.T) {
 	t.Run("HTTP method override is blocked", func(t *testing.T) {
 		// Ensure X-Http-Method-Override is not honored
-		req := httptest.NewRequest("POST", "/admin/delete", nil)
+		req := httptest.NewRequest(http.MethodPost, "/admin/delete", nil)
 		req.Header.Set("X-Http-Method-Override", "DELETE")
 
 		method := getEffectiveMethod(req)
@@ -337,12 +337,14 @@ func TestAccessControlBypass(t *testing.T) {
 
 func containsSQLInjection(input string) bool {
 	patterns := []string{"'", "--", ";", "UNION", "SELECT", "DROP", "DELETE", "INSERT", "UPDATE", "OR 1=1", "AND 1=1"}
+
 	upper := strings.ToUpper(input)
 	for _, pattern := range patterns {
 		if strings.Contains(upper, strings.ToUpper(pattern)) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -358,21 +360,25 @@ func sanitizeHTML(input string) string {
 		{"onload=", ""},
 		{"onclick=", ""},
 	}
+
 	result := input
 	for _, r := range replacements {
 		result = strings.ReplaceAll(strings.ToLower(result), r.old, r.new)
 	}
+
 	return result
 }
 
 func containsPathTraversal(input string) bool {
 	patterns := []string{"..", "%2e", "%252e", "%c0%af", "..\\", "%00"}
+
 	lower := strings.ToLower(input)
 	for _, pattern := range patterns {
 		if strings.Contains(lower, pattern) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -383,6 +389,7 @@ func containsCommandInjection(input string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -390,12 +397,15 @@ func isValidBucketName(name string) bool {
 	if len(name) < 3 || len(name) > 63 {
 		return false
 	}
+
 	if strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") {
 		return false
 	}
+
 	if strings.Contains(name, "..") {
 		return false
 	}
+
 	if strings.Contains(name, "_") || strings.Contains(name, " ") {
 		return false
 	}
@@ -403,14 +413,17 @@ func isValidBucketName(name string) bool {
 	if isIPAddress(name) {
 		return false
 	}
+
 	for _, c := range name {
 		isLowerAlpha := c >= 'a' && c <= 'z'
 		isDigit := c >= '0' && c <= '9'
+
 		isAllowed := isLowerAlpha || isDigit || c == '-' || c == '.'
 		if !isAllowed {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -419,16 +432,19 @@ func isIPAddress(s string) bool {
 	if len(parts) != 4 {
 		return false
 	}
+
 	for _, part := range parts {
 		if len(part) == 0 || len(part) > 3 {
 			return false
 		}
+
 		for _, c := range part {
 			if c < '0' || c > '9' {
 				return false
 			}
 		}
 	}
+
 	return true
 }
 
@@ -436,6 +452,7 @@ func isValidObjectKey(key string) bool {
 	if len(key) == 0 || len(key) > 1024 {
 		return false
 	}
+
 	return true
 }
 
@@ -444,13 +461,16 @@ func calculatePasswordStrength(password string) int {
 	if len(password) >= 8 {
 		score++
 	}
+
 	if len(password) >= 12 {
 		score++
 	}
+
 	hasLower := false
 	hasUpper := false
 	hasDigit := false
 	hasSpecial := false
+
 	for _, c := range password {
 		switch {
 		case c >= 'a' && c <= 'z':
@@ -463,18 +483,23 @@ func calculatePasswordStrength(password string) int {
 			hasSpecial = true
 		}
 	}
+
 	if hasLower {
 		score++
 	}
+
 	if hasUpper {
 		score++
 	}
+
 	if hasDigit {
 		score++
 	}
+
 	if hasSpecial {
 		score++
 	}
+
 	return score
 }
 
@@ -482,6 +507,7 @@ func validateJWTFormat(token string) (bool, error) {
 	if len(token) == 0 {
 		return false, assert.AnError
 	}
+
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return false, assert.AnError
@@ -497,33 +523,41 @@ func validateJWTFormat(token string) (bool, error) {
 	if err != nil {
 		return false, assert.AnError
 	}
+
 	var header map[string]interface{}
-	if err := json.Unmarshal(headerBytes, &header); err != nil {
+	err = json.Unmarshal(headerBytes, &header)
+	if err != nil {
 		return false, assert.AnError
 	}
+
 	if alg, ok := header["alg"].(string); ok && strings.ToLower(alg) == "none" {
 		return false, assert.AnError
 	}
+
 	return true, nil
 }
 
 func isTokenExpired(payload string) bool {
 	var claims map[string]interface{}
-	if err := json.Unmarshal([]byte(payload), &claims); err != nil {
+
+	err := json.Unmarshal([]byte(payload), &claims)
+	if err != nil {
 		return true
 	}
+
 	exp, ok := claims["exp"].(float64)
 	if !ok {
 		return true
 	}
+
 	return exp < 1700000000 // Arbitrary recent timestamp
 }
 
 // RateLimiter implements a simple token bucket rate limiter.
 type RateLimiter struct {
+	clients map[string]int
 	rate    int
 	burst   int
-	clients map[string]int
 }
 
 func NewRateLimiter(rate, burst int) *RateLimiter {
@@ -539,7 +573,9 @@ func (r *RateLimiter) Allow(clientID string) bool {
 	if count >= r.rate {
 		return false
 	}
+
 	r.clients[clientID] = count + 1
+
 	return true
 }
 
@@ -550,6 +586,7 @@ func isAllowedContentType(ct string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -574,6 +611,7 @@ func NewCORSValidator(origins []string) *CORSValidator {
 	for _, o := range origins {
 		allowed[o] = true
 	}
+
 	return &CORSValidator{allowedOrigins: allowed}
 }
 
@@ -596,5 +634,6 @@ func normalizePath(path string) string {
 	for strings.Contains(result, "..") {
 		result = strings.ReplaceAll(result, "..", "")
 	}
+
 	return result
 }

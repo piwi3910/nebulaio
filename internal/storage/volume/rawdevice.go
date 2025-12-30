@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// StorageTier represents a storage tier for tiered storage
+// StorageTier represents a storage tier for tiered storage.
 type StorageTier string
 
 const (
@@ -20,14 +20,14 @@ const (
 	TierCold StorageTier = "cold"
 )
 
-// Device signature constants
+// Device signature constants.
 const (
 	DeviceMagic         = "NEBULADEV"
 	DeviceVersion       = uint32(1)
 	DeviceSignatureSize = 512 // 512 bytes for device header
 )
 
-// Errors
+// Errors.
 var (
 	ErrInvalidTier         = errors.New("invalid storage tier")
 	ErrDeviceNotFound      = errors.New("device not found")
@@ -38,7 +38,7 @@ var (
 	ErrObjectNotInTier     = errors.New("object not found in specified tier")
 )
 
-// ParseTier parses a tier string into a StorageTier
+// ParseTier parses a tier string into a StorageTier.
 func ParseTier(s string) (StorageTier, error) {
 	switch strings.ToLower(s) {
 	case "hot":
@@ -52,19 +52,14 @@ func ParseTier(s string) (StorageTier, error) {
 	}
 }
 
-// RawDeviceConfig holds configuration for raw block device access
+// RawDeviceConfig holds configuration for raw block device access.
 type RawDeviceConfig struct {
-	// Enabled enables raw block device mode
-	Enabled bool
-
-	// Safety configuration
-	Safety RawDeviceSafetyConfig
-
-	// Devices is the list of devices to use
 	Devices []DeviceConfig
+	Safety  RawDeviceSafetyConfig
+	Enabled bool
 }
 
-// RawDeviceSafetyConfig holds safety configuration for raw device access
+// RawDeviceSafetyConfig holds safety configuration for raw device access.
 type RawDeviceSafetyConfig struct {
 	// CheckFilesystem verifies device has no filesystem before use
 	CheckFilesystem bool
@@ -79,7 +74,7 @@ type RawDeviceSafetyConfig struct {
 	ExclusiveLock bool
 }
 
-// DeviceConfig holds configuration for a single device
+// DeviceConfig holds configuration for a single device.
 type DeviceConfig struct {
 	// Path is the device path (e.g., /dev/nvme0n1)
 	Path string
@@ -91,7 +86,7 @@ type DeviceConfig struct {
 	Size uint64
 }
 
-// DefaultRawDeviceConfig returns the default raw device configuration
+// DefaultRawDeviceConfig returns the default raw device configuration.
 func DefaultRawDeviceConfig() RawDeviceConfig {
 	return RawDeviceConfig{
 		Enabled: false,
@@ -105,18 +100,18 @@ func DefaultRawDeviceConfig() RawDeviceConfig {
 	}
 }
 
-// DeviceSignature is the header written to raw devices for identification
+// DeviceSignature is the header written to raw devices for identification.
 type DeviceSignature struct {
-	Magic      string   // "NEBULADEV"
-	Version    uint32   // Signature version
-	DeviceID   [64]byte // Unique device identifier
-	DeviceSize uint64   // Total device size in bytes
-	Tier       [16]byte // Storage tier
-	CreatedAt  int64    // Unix timestamp
-	Reserved   [404]byte // Reserved for future use
+	Magic      string
+	DeviceSize uint64
+	CreatedAt  int64
+	Version    uint32
+	Reserved   [404]byte
+	DeviceID   [64]byte
+	Tier       [16]byte
 }
 
-// NewDeviceSignature creates a new device signature
+// NewDeviceSignature creates a new device signature.
 func NewDeviceSignature(deviceID string, size uint64, tier StorageTier) *DeviceSignature {
 	sig := &DeviceSignature{
 		Magic:      DeviceMagic,
@@ -126,15 +121,16 @@ func NewDeviceSignature(deviceID string, size uint64, tier StorageTier) *DeviceS
 	}
 	copy(sig.DeviceID[:], deviceID)
 	copy(sig.Tier[:], tier)
+
 	return sig
 }
 
-// IsValid checks if the signature is valid
+// IsValid checks if the signature is valid.
 func (s *DeviceSignature) IsValid() bool {
 	return s.Magic == DeviceMagic && s.Version > 0 && s.CreatedAt > 0
 }
 
-// Serialize converts the signature to bytes
+// Serialize converts the signature to bytes.
 func (s *DeviceSignature) Serialize() []byte {
 	buf := make([]byte, DeviceSignatureSize)
 
@@ -154,6 +150,7 @@ func (s *DeviceSignature) Serialize() []byte {
 	copy(buf[85:101], s.Tier[:])
 
 	// CreatedAt (8 bytes)
+	//nolint:gosec // G115: CreatedAt is Unix timestamp, positive values fit in uint64
 	binary.LittleEndian.PutUint64(buf[101:109], uint64(s.CreatedAt))
 
 	// Reserved (403 bytes) - already zero
@@ -161,7 +158,7 @@ func (s *DeviceSignature) Serialize() []byte {
 	return buf
 }
 
-// ParseDeviceSignature parses a device signature from bytes
+// ParseDeviceSignature parses a device signature from bytes.
 func ParseDeviceSignature(data []byte) (*DeviceSignature, error) {
 	if len(data) < DeviceSignatureSize {
 		return nil, ErrInvalidSignature
@@ -188,30 +185,29 @@ func ParseDeviceSignature(data []byte) (*DeviceSignature, error) {
 	copy(sig.Tier[:], data[85:101])
 
 	// CreatedAt
+	//nolint:gosec // G115: Unix timestamp fits in int64 range
 	sig.CreatedAt = int64(binary.LittleEndian.Uint64(data[101:109]))
 
 	return sig, nil
 }
 
-// RawDeviceVolume implements a volume on a raw block device
+// RawDeviceVolume implements a volume on a raw block device.
 type RawDeviceVolume struct {
-	path      string
-	file      *os.File
-	dio       *DirectIOFile
-	tier      StorageTier
-	config    RawDeviceConfig
-	signature *DeviceSignature
-	index     *Index
-	allocator *BlockAllocator
-	mu        sync.RWMutex
-
-	// Stats
+	file        *os.File
+	dio         *DirectIOFile
+	signature   *DeviceSignature
+	index       *Index
+	allocator   *BlockAllocator
+	path        string
+	tier        StorageTier
+	config      RawDeviceConfig
 	objectCount int
 	usedSpace   uint64
 	totalSpace  uint64
+	mu          sync.RWMutex
 }
 
-// RawDeviceVolumeStats contains stats for a raw device volume
+// RawDeviceVolumeStats contains stats for a raw device volume.
 type RawDeviceVolumeStats struct {
 	Tier        StorageTier
 	ObjectCount int
@@ -220,7 +216,7 @@ type RawDeviceVolumeStats struct {
 	FreeSpace   uint64
 }
 
-// NewRawDeviceVolume creates or opens a raw device volume
+// NewRawDeviceVolume creates or opens a raw device volume.
 func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*RawDeviceVolume, error) {
 	// Open the device/file
 	flags := os.O_RDWR
@@ -228,6 +224,7 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 		flags |= os.O_EXCL
 	}
 
+	//nolint:gosec // G304: path is validated by caller
 	file, err := os.OpenFile(path, flags, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open device: %w", err)
@@ -240,7 +237,7 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 		return nil, fmt.Errorf("failed to stat device: %w", err)
 	}
 
-	deviceSize := uint64(fi.Size())
+	deviceSize := uint64(fi.Size()) //nolint:gosec // G115: file size is non-negative
 	if deviceSize == 0 {
 		// For block devices, try to get size differently
 		deviceSize, err = getBlockDeviceSize(file)
@@ -252,7 +249,8 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 
 	// Try exclusive lock if requested
 	if cfg.Safety.ExclusiveLock {
-		if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err != nil {
 			_ = file.Close()
 			return nil, ErrDeviceLocked
 		}
@@ -277,7 +275,8 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 	}
 
 	// Check for existing signature or initialize
-	if err := vol.initializeOrLoad(cfg); err != nil {
+	err = vol.initializeOrLoad(cfg)
+	if err != nil {
 		_ = file.Close()
 		return nil, err
 	}
@@ -285,10 +284,11 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 	return vol, nil
 }
 
-// initializeOrLoad initializes a new device or loads existing one
+// initializeOrLoad initializes a new device or loads existing one.
 func (v *RawDeviceVolume) initializeOrLoad(cfg RawDeviceConfig) error {
 	// Try to read existing signature
 	sigBuf := make([]byte, DeviceSignatureSize)
+
 	_, err := v.file.ReadAt(sigBuf, 0)
 	if err == nil {
 		sig, err := ParseDeviceSignature(sigBuf)
@@ -307,6 +307,7 @@ func (v *RawDeviceVolume) initializeOrLoad(cfg RawDeviceConfig) error {
 
 		// Write signature
 		sigData := v.signature.Serialize()
+
 		_, err := v.file.WriteAt(sigData, 0)
 		if err != nil {
 			return fmt.Errorf("failed to write signature: %w", err)
@@ -317,16 +318,17 @@ func (v *RawDeviceVolume) initializeOrLoad(cfg RawDeviceConfig) error {
 	return v.initializeNew()
 }
 
-// loadExisting loads an existing volume from device
+// loadExisting loads an existing volume from device.
 func (v *RawDeviceVolume) loadExisting() error {
 	// For now, just initialize empty structures
 	// In a full implementation, we'd read the index and allocator from disk
 	v.index = NewIndex()
 	v.allocator = NewBlockAllocator(v.totalSpace, BlockSize)
+
 	return nil
 }
 
-// initializeNew initializes a new empty volume
+// initializeNew initializes a new empty volume.
 func (v *RawDeviceVolume) initializeNew() error {
 	v.index = NewIndex()
 	v.allocator = NewBlockAllocator(v.totalSpace, BlockSize)
@@ -337,7 +339,7 @@ func (v *RawDeviceVolume) initializeNew() error {
 	return nil
 }
 
-// Close closes the raw device volume
+// Close closes the raw device volume.
 func (v *RawDeviceVolume) Close() error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -350,13 +352,14 @@ func (v *RawDeviceVolume) Close() error {
 	return v.file.Close()
 }
 
-// ReadSignature reads and returns the device signature
+// ReadSignature reads and returns the device signature.
 func (v *RawDeviceVolume) ReadSignature() (*DeviceSignature, error) {
 	if v.signature != nil {
 		return v.signature, nil
 	}
 
 	sigBuf := make([]byte, DeviceSignatureSize)
+
 	_, err := v.file.ReadAt(sigBuf, 0)
 	if err != nil {
 		return nil, err
@@ -365,7 +368,7 @@ func (v *RawDeviceVolume) ReadSignature() (*DeviceSignature, error) {
 	return ParseDeviceSignature(sigBuf)
 }
 
-// Put stores an object in the volume
+// Put stores an object in the volume.
 func (v *RawDeviceVolume) Put(bucket, key string, data []byte) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -409,12 +412,12 @@ func (v *RawDeviceVolume) Put(bucket, key string, data []byte) error {
 		IndexEntry: IndexEntry{
 			KeyHash:       keyHash,
 			BlockNum:      blockNum,
-			BlockCount:    uint16(blocksNeeded),
+			BlockCount:    uint16(blocksNeeded), //nolint:gosec // G115: blocksNeeded bounded by max object size
 			OffsetInBlock: 0,
 			Size:          uint64(dataSize),
 			Created:       time.Now().Unix(),
 			Flags:         0,
-			KeyLen:        uint16(len(fullKey)),
+			KeyLen:        uint16(len(fullKey)), //nolint:gosec // G115: key length bounded by S3 limits
 		},
 		Key: fullKey,
 	}
@@ -426,7 +429,7 @@ func (v *RawDeviceVolume) Put(bucket, key string, data []byte) error {
 	return nil
 }
 
-// Get retrieves an object from the volume
+// Get retrieves an object from the volume.
 func (v *RawDeviceVolume) Get(bucket, key string) ([]byte, error) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -438,6 +441,7 @@ func (v *RawDeviceVolume) Get(bucket, key string) ([]byte, error) {
 
 	// Read data
 	offset := int64(entry.BlockNum) * int64(BlockSize)
+	//nolint:gosec // G115: entry.Size is bounded by max object size
 	alignedSize := ((int(entry.Size) + 4095) / 4096) * 4096
 	buf := AllocateAligned(alignedSize, 4096)
 
@@ -450,7 +454,7 @@ func (v *RawDeviceVolume) Get(bucket, key string) ([]byte, error) {
 	return buf[:entry.Size], nil
 }
 
-// Delete removes an object from the volume
+// Delete removes an object from the volume.
 func (v *RawDeviceVolume) Delete(bucket, key string) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -472,14 +476,15 @@ func (v *RawDeviceVolume) Delete(bucket, key string) error {
 	return nil
 }
 
-// FreeSpace returns the free space in bytes
+// FreeSpace returns the free space in bytes.
 func (v *RawDeviceVolume) FreeSpace() uint64 {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
+
 	return v.totalSpace - v.usedSpace
 }
 
-// Stats returns volume statistics
+// Stats returns volume statistics.
 func (v *RawDeviceVolume) Stats() RawDeviceVolumeStats {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -493,19 +498,19 @@ func (v *RawDeviceVolume) Stats() RawDeviceVolumeStats {
 	}
 }
 
-// TieredDeviceManagerConfig holds configuration for tiered device manager
+// TieredDeviceManagerConfig holds configuration for tiered device manager.
 type TieredDeviceManagerConfig struct {
 	RawDevices RawDeviceConfig
 }
 
-// TieredDeviceManager manages volumes across storage tiers
+// TieredDeviceManager manages volumes across storage tiers.
 type TieredDeviceManager struct {
 	volumes     map[StorageTier]*RawDeviceVolume
 	objectIndex map[string]StorageTier // fullKey -> tier
 	mu          sync.RWMutex
 }
 
-// NewTieredDeviceManager creates a new tiered device manager
+// NewTieredDeviceManager creates a new tiered device manager.
 func NewTieredDeviceManager(cfg TieredDeviceManagerConfig) (*TieredDeviceManager, error) {
 	mgr := &TieredDeviceManager{
 		volumes:     make(map[StorageTier]*RawDeviceVolume),
@@ -520,35 +525,41 @@ func NewTieredDeviceManager(cfg TieredDeviceManagerConfig) (*TieredDeviceManager
 			_ = mgr.Close()
 			return nil, fmt.Errorf("failed to open device %s: %w", devCfg.Path, err)
 		}
+
 		mgr.volumes[devCfg.Tier] = vol
 	}
 
 	return mgr, nil
 }
 
-// Close closes all volumes
+// Close closes all volumes.
 func (m *TieredDeviceManager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	var lastErr error
+
 	for _, vol := range m.volumes {
-		if err := vol.Close(); err != nil {
+		err := vol.Close()
+		if err != nil {
 			lastErr = err
 		}
 	}
+
 	return lastErr
 }
 
-// HasTier returns true if the tier is available
+// HasTier returns true if the tier is available.
 func (m *TieredDeviceManager) HasTier(tier StorageTier) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	_, ok := m.volumes[tier]
+
 	return ok
 }
 
-// Put stores an object in the specified tier
+// Put stores an object in the specified tier.
 func (m *TieredDeviceManager) Put(bucket, key string, data []byte, tier StorageTier) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -558,20 +569,23 @@ func (m *TieredDeviceManager) Put(bucket, key string, data []byte, tier StorageT
 		return ErrTierNotAvailable
 	}
 
-	if err := vol.Put(bucket, key, data); err != nil {
+	err := vol.Put(bucket, key, data)
+	if err != nil {
 		return err
 	}
 
 	m.objectIndex[FullKey(bucket, key)] = tier
+
 	return nil
 }
 
-// Get retrieves an object from any tier
+// Get retrieves an object from any tier.
 func (m *TieredDeviceManager) Get(bucket, key string) ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	fullKey := FullKey(bucket, key)
+
 	tier, ok := m.objectIndex[fullKey]
 	if !ok {
 		return nil, ErrObjectNotFound
@@ -585,20 +599,22 @@ func (m *TieredDeviceManager) Get(bucket, key string) ([]byte, error) {
 	return vol.Get(bucket, key)
 }
 
-// GetObjectTier returns the tier where an object is stored
+// GetObjectTier returns the tier where an object is stored.
 func (m *TieredDeviceManager) GetObjectTier(bucket, key string) (StorageTier, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	fullKey := FullKey(bucket, key)
+
 	tier, ok := m.objectIndex[fullKey]
 	if !ok {
 		return "", ErrObjectNotFound
 	}
+
 	return tier, nil
 }
 
-// MigrateObject moves an object from one tier to another
+// MigrateObject moves an object from one tier to another.
 func (m *TieredDeviceManager) MigrateObject(bucket, key string, targetTier StorageTier) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -634,12 +650,14 @@ func (m *TieredDeviceManager) MigrateObject(bucket, key string, targetTier Stora
 	}
 
 	// Write to target
-	if err := targetVol.Put(bucket, key, data); err != nil {
+	err = targetVol.Put(bucket, key, data)
+	if err != nil {
 		return err
 	}
 
 	// Delete from source
-	if err := sourceVol.Delete(bucket, key); err != nil {
+	err = sourceVol.Delete(bucket, key)
+	if err != nil {
 		// Rollback: delete from target
 		_ = targetVol.Delete(bucket, key)
 		return err
@@ -651,12 +669,13 @@ func (m *TieredDeviceManager) MigrateObject(bucket, key string, targetTier Stora
 	return nil
 }
 
-// Delete removes an object from its tier
+// Delete removes an object from its tier.
 func (m *TieredDeviceManager) Delete(bucket, key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	fullKey := FullKey(bucket, key)
+
 	tier, ok := m.objectIndex[fullKey]
 	if !ok {
 		return ErrObjectNotFound
@@ -667,15 +686,17 @@ func (m *TieredDeviceManager) Delete(bucket, key string) error {
 		return ErrTierNotAvailable
 	}
 
-	if err := vol.Delete(bucket, key); err != nil {
+	err := vol.Delete(bucket, key)
+	if err != nil {
 		return err
 	}
 
 	delete(m.objectIndex, fullKey)
+
 	return nil
 }
 
-// Stats returns statistics for all tiers
+// Stats returns statistics for all tiers.
 func (m *TieredDeviceManager) Stats() map[StorageTier]RawDeviceVolumeStats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -684,10 +705,11 @@ func (m *TieredDeviceManager) Stats() map[StorageTier]RawDeviceVolumeStats {
 	for tier, vol := range m.volumes {
 		stats[tier] = vol.Stats()
 	}
+
 	return stats
 }
 
-// Helper to get block device size
+// Helper to get block device size.
 func getBlockDeviceSize(file *os.File) (uint64, error) {
 	// For regular files, use stat
 	fi, err := file.Stat()
@@ -696,25 +718,26 @@ func getBlockDeviceSize(file *os.File) (uint64, error) {
 	}
 
 	if fi.Mode().IsRegular() {
-		return uint64(fi.Size()), nil
+		return uint64(fi.Size()), nil //nolint:gosec // G115: file size is non-negative
 	}
 
 	// For block devices on Linux, use ioctl
 	// This is platform-specific and simplified here
-	return 0, fmt.Errorf("cannot determine block device size")
+	return 0, errors.New("cannot determine block device size")
 }
 
-// BlockAllocator manages block allocation for raw devices
+// BlockAllocator manages block allocation for raw devices.
 type BlockAllocator struct {
+	bitmap      []uint64
+	mu          sync.Mutex
 	totalBlocks uint32
 	blockSize   uint32
-	bitmap      []uint64 // Allocation bitmap
 	freeBlocks  uint32
-	mu          sync.Mutex
 }
 
-// NewBlockAllocator creates a new block allocator
+// NewBlockAllocator creates a new block allocator.
 func NewBlockAllocator(deviceSize uint64, blockSize uint32) *BlockAllocator {
+	//nolint:gosec // G115: totalBlocks is bounded by device size / block size
 	totalBlocks := uint32(deviceSize / uint64(blockSize))
 	bitmapSize := (totalBlocks + 63) / 64
 
@@ -726,7 +749,7 @@ func NewBlockAllocator(deviceSize uint64, blockSize uint32) *BlockAllocator {
 	}
 }
 
-// Allocate allocates n contiguous blocks
+// Allocate allocates n contiguous blocks.
 func (a *BlockAllocator) Allocate(n int) (uint32, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -735,18 +758,23 @@ func (a *BlockAllocator) Allocate(n int) (uint32, error) {
 	consecutive := 0
 	startBlock := uint32(0)
 
-	for block := uint32(0); block < a.totalBlocks; block++ {
+	for block := range a.totalBlocks {
 		if a.isBlockFree(block) {
 			if consecutive == 0 {
 				startBlock = block
 			}
+
 			consecutive++
 			if consecutive >= n {
 				// Found enough blocks, mark them allocated
-				for i := uint32(0); i < uint32(n); i++ {
+				//nolint:gosec // G115: n is bounded by device capacity
+				for i := range uint32(n) {
 					a.setBlockUsed(startBlock + i)
 				}
+
+				//nolint:gosec // G115: n is bounded by device capacity
 				a.freeBlocks -= uint32(n)
+
 				return startBlock, nil
 			}
 		} else {
@@ -757,7 +785,7 @@ func (a *BlockAllocator) Allocate(n int) (uint32, error) {
 	return 0, ErrVolumeFull
 }
 
-// Free frees a block
+// Free frees a block.
 func (a *BlockAllocator) Free(blockNum uint32) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -768,7 +796,7 @@ func (a *BlockAllocator) Free(blockNum uint32) {
 	}
 }
 
-// Reserve marks a block as reserved (used for metadata)
+// Reserve marks a block as reserved (used for metadata).
 func (a *BlockAllocator) Reserve(blockNum uint32) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -782,6 +810,7 @@ func (a *BlockAllocator) Reserve(blockNum uint32) {
 func (a *BlockAllocator) isBlockFree(block uint32) bool {
 	idx := block / 64
 	bit := block % 64
+
 	return (a.bitmap[idx] & (1 << bit)) == 0
 }
 

@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,43 +22,43 @@ import (
 type DataType string
 
 const (
-	// PII - Personally Identifiable Information
-	DataTypeSSN              DataType = "ssn"                // Social Security Number
-	DataTypePassport         DataType = "passport"           // Passport Number
-	DataTypeDriverLicense    DataType = "driver_license"     // Driver's License
-	DataTypeNationalID       DataType = "national_id"        // National ID
-	DataTypeTaxID            DataType = "tax_id"             // Tax ID
-	DataTypeDateOfBirth      DataType = "date_of_birth"      // Date of Birth
+	// PII - Personally Identifiable Information.
+	DataTypeSSN           DataType = "ssn"            // Social Security Number
+	DataTypePassport      DataType = "passport"       // Passport Number
+	DataTypeDriverLicense DataType = "driver_license" // Driver's License
+	DataTypeNationalID    DataType = "national_id"    // National ID
+	DataTypeTaxID         DataType = "tax_id"         // Tax ID
+	DataTypeDateOfBirth   DataType = "date_of_birth"  // Date of Birth
 
-	// Financial
-	DataTypeCreditCard       DataType = "credit_card"        // Credit Card Number
-	DataTypeBankAccount      DataType = "bank_account"       // Bank Account Number
-	DataTypeIBAN             DataType = "iban"               // International Bank Account Number
-	DataTypeSWIFT            DataType = "swift"              // SWIFT/BIC Code
-	DataTypeRoutingNumber    DataType = "routing_number"     // Bank Routing Number
+	// Financial.
+	DataTypeCreditCard    DataType = "credit_card"    // Credit Card Number
+	DataTypeBankAccount   DataType = "bank_account"   // Bank Account Number
+	DataTypeIBAN          DataType = "iban"           // International Bank Account Number
+	DataTypeSWIFT         DataType = "swift"          // SWIFT/BIC Code
+	DataTypeRoutingNumber DataType = "routing_number" // Bank Routing Number
 
-	// Contact Information
-	DataTypeEmail            DataType = "email"              // Email Address
-	DataTypePhone            DataType = "phone"              // Phone Number
-	DataTypeAddress          DataType = "address"            // Physical Address
-	DataTypeIPAddress        DataType = "ip_address"         // IP Address
+	// Contact Information.
+	DataTypeEmail     DataType = "email"      // Email Address
+	DataTypePhone     DataType = "phone"      // Phone Number
+	DataTypeAddress   DataType = "address"    // Physical Address
+	DataTypeIPAddress DataType = "ip_address" // IP Address
 
-	// Healthcare
-	DataTypeMedicalRecord    DataType = "medical_record"     // Medical Record Number
-	DataTypeHealthInsurance  DataType = "health_insurance"   // Health Insurance ID
-	DataTypeDrugPrescription DataType = "drug_prescription"  // Drug/Prescription Info
+	// Healthcare.
+	DataTypeMedicalRecord    DataType = "medical_record"    // Medical Record Number
+	DataTypeHealthInsurance  DataType = "health_insurance"  // Health Insurance ID
+	DataTypeDrugPrescription DataType = "drug_prescription" // Drug/Prescription Info
 
-	// Credentials
-	DataTypePassword         DataType = "password"           // Password
-	DataTypeAPIKey           DataType = "api_key"            // API Key
-	DataTypeCryptocurrency   DataType = "cryptocurrency"     // Crypto Wallet/Key
+	// Credentials.
+	DataTypePassword       DataType = "password"       // Password
+	DataTypeAPIKey         DataType = "api_key"        // API Key
+	DataTypeCryptocurrency DataType = "cryptocurrency" // Crypto Wallet/Key
 
-	// Legal
-	DataTypeLegalCase        DataType = "legal_case"         // Legal Case Number
-	DataTypeContract         DataType = "contract"           // Contract Information
+	// Legal.
+	DataTypeLegalCase DataType = "legal_case" // Legal Case Number
+	DataTypeContract  DataType = "contract"   // Contract Information
 
-	// Custom
-	DataTypeCustom           DataType = "custom"             // Custom Pattern
+	// Custom.
+	DataTypeCustom DataType = "custom" // Custom Pattern
 )
 
 // Sensitivity represents the sensitivity level of data.
@@ -73,41 +75,41 @@ const (
 type Action string
 
 const (
-	ActionAllow   Action = "allow"   // Allow the operation
-	ActionLog     Action = "log"     // Log but allow
-	ActionBlock   Action = "block"   // Block the operation
-	ActionMask    Action = "mask"    // Mask sensitive data
-	ActionEncrypt Action = "encrypt" // Encrypt sensitive data
+	ActionAllow      Action = "allow"      // Allow the operation
+	ActionLog        Action = "log"        // Log but allow
+	ActionBlock      Action = "block"      // Block the operation
+	ActionMask       Action = "mask"       // Mask sensitive data
+	ActionEncrypt    Action = "encrypt"    // Encrypt sensitive data
 	ActionQuarantine Action = "quarantine" // Move to quarantine
 )
 
 // DLPRule defines a DLP rule.
 type DLPRule struct {
-	ID           string        `json:"id"`
-	Name         string        `json:"name"`
-	Description  string        `json:"description"`
-	Enabled      bool          `json:"enabled"`
-	Priority     int           `json:"priority"`
-	DataTypes    []DataType    `json:"dataTypes"`
-	Sensitivity  Sensitivity   `json:"sensitivity"`
-	Action       Action        `json:"action"`
+	UpdatedAt    time.Time       `json:"updatedAt"`
+	CreatedAt    time.Time       `json:"createdAt"`
 	Conditions   *RuleConditions `json:"conditions,omitempty"`
-	Exceptions   *RuleExceptions `json:"exceptions,omitempty"`
 	Notification *Notification   `json:"notification,omitempty"`
-	CreatedAt    time.Time     `json:"createdAt"`
-	UpdatedAt    time.Time     `json:"updatedAt"`
+	Exceptions   *RuleExceptions `json:"exceptions,omitempty"`
+	Sensitivity  Sensitivity     `json:"sensitivity"`
+	ID           string          `json:"id"`
+	Action       Action          `json:"action"`
+	Description  string          `json:"description"`
+	Name         string          `json:"name"`
+	DataTypes    []DataType      `json:"dataTypes"`
+	Priority     int             `json:"priority"`
+	Enabled      bool            `json:"enabled"`
 }
 
 // RuleConditions defines when a rule applies.
 type RuleConditions struct {
-	Buckets          []string `json:"buckets,omitempty"`
-	Prefixes         []string `json:"prefixes,omitempty"`
-	ContentTypes     []string `json:"contentTypes,omitempty"`
-	MinSize          int64    `json:"minSize,omitempty"`
-	MaxSize          int64    `json:"maxSize,omitempty"`
-	MinOccurrences   int      `json:"minOccurrences,omitempty"`
-	UserRoles        []string `json:"userRoles,omitempty"`
-	SourceIPs        []string `json:"sourceIps,omitempty"`
+	Buckets        []string `json:"buckets,omitempty"`
+	Prefixes       []string `json:"prefixes,omitempty"`
+	ContentTypes   []string `json:"contentTypes,omitempty"`
+	UserRoles      []string `json:"userRoles,omitempty"`
+	SourceIPs      []string `json:"sourceIps,omitempty"`
+	MinSize        int64    `json:"minSize,omitempty"`
+	MaxSize        int64    `json:"maxSize,omitempty"`
+	MinOccurrences int      `json:"minOccurrences,omitempty"`
 }
 
 // RuleExceptions defines exceptions to a rule.
@@ -120,10 +122,10 @@ type RuleExceptions struct {
 
 // Notification configures notifications for DLP violations.
 type Notification struct {
-	Email     []string `json:"email,omitempty"`
 	Webhook   string   `json:"webhook,omitempty"`
 	Slack     string   `json:"slack,omitempty"`
 	PagerDuty string   `json:"pagerDuty,omitempty"`
+	Email     []string `json:"email,omitempty"`
 }
 
 // DataPattern defines a pattern for detecting sensitive data.
@@ -138,78 +140,78 @@ type DataPattern struct {
 
 // DLPViolation represents a detected DLP violation.
 type DLPViolation struct {
-	ID           string      `json:"id"`
-	RuleID       string      `json:"ruleId"`
-	RuleName     string      `json:"ruleName"`
-	DataType     DataType    `json:"dataType"`
-	Sensitivity  Sensitivity `json:"sensitivity"`
-	Action       Action      `json:"action"`
-	Bucket       string      `json:"bucket"`
-	Key          string      `json:"key"`
-	VersionID    string      `json:"versionId,omitempty"`
-	UserID       string      `json:"userId"`
-	SourceIP     string      `json:"sourceIp"`
-	LineNumber   int         `json:"lineNumber,omitempty"`
-	Occurrences  int         `json:"occurrences"`
-	Sample       string      `json:"sample"` // Redacted sample
-	Context      string      `json:"context,omitempty"`
-	DetectedAt   time.Time   `json:"detectedAt"`
-	ActionTaken  Action      `json:"actionTaken"`
-	Reviewed     bool        `json:"reviewed"`
-	ReviewedBy   string      `json:"reviewedBy,omitempty"`
-	ReviewedAt   *time.Time  `json:"reviewedAt,omitempty"`
-	Notes        string      `json:"notes,omitempty"`
+	DetectedAt  time.Time   `json:"detectedAt"`
+	ReviewedAt  *time.Time  `json:"reviewedAt,omitempty"`
+	Action      Action      `json:"action"`
+	RuleName    string      `json:"ruleName"`
+	Sensitivity Sensitivity `json:"sensitivity"`
+	ID          string      `json:"id"`
+	Bucket      string      `json:"bucket"`
+	Key         string      `json:"key"`
+	VersionID   string      `json:"versionId,omitempty"`
+	UserID      string      `json:"userId"`
+	SourceIP    string      `json:"sourceIp"`
+	Notes       string      `json:"notes,omitempty"`
+	RuleID      string      `json:"ruleId"`
+	Sample      string      `json:"sample"`
+	Context     string      `json:"context,omitempty"`
+	DataType    DataType    `json:"dataType"`
+	ActionTaken Action      `json:"actionTaken"`
+	ReviewedBy  string      `json:"reviewedBy,omitempty"`
+	Occurrences int         `json:"occurrences"`
+	LineNumber  int         `json:"lineNumber,omitempty"`
+	Reviewed    bool        `json:"reviewed"`
 }
 
 // ScanRequest contains the context for a DLP scan.
 type ScanRequest struct {
+	Reader      io.Reader
 	Bucket      string
 	Key         string
 	VersionID   string
 	ContentType string
-	Size        int64
 	UserID      string
 	UserRole    string
 	SourceIP    string
-	Reader      io.Reader
+	Size        int64
 }
 
 // ScanResult contains the result of a DLP scan.
 type ScanResult struct {
-	ID           string          `json:"id"`
-	Bucket       string          `json:"bucket"`
-	Key          string          `json:"key"`
-	Violations   []*DLPViolation `json:"violations"`
-	DataTypes    []DataType      `json:"dataTypes"`
-	Sensitivity  Sensitivity     `json:"sensitivity"`
-	Action       Action          `json:"action"`
-	Blocked      bool            `json:"blocked"`
-	ScanTime     time.Duration   `json:"scanTime"`
-	ScannedAt    time.Time       `json:"scannedAt"`
-	Error        string          `json:"error,omitempty"`
+	ScannedAt   time.Time       `json:"scannedAt"`
+	ID          string          `json:"id"`
+	Bucket      string          `json:"bucket"`
+	Key         string          `json:"key"`
+	Sensitivity Sensitivity     `json:"sensitivity"`
+	Action      Action          `json:"action"`
+	Error       string          `json:"error,omitempty"`
+	Violations  []*DLPViolation `json:"violations"`
+	DataTypes   []DataType      `json:"dataTypes"`
+	ScanTime    time.Duration   `json:"scanTime"`
+	Blocked     bool            `json:"blocked"`
 }
 
 // DLPConfig configures the DLP engine.
 type DLPConfig struct {
-	Enabled           bool
-	MaxScanSize       int64
-	MaxLineLength     int
-	Concurrency       int
-	IncludeContext    bool
-	ContextLines      int
-	RedactSamples     bool
-	DefaultAction     Action
-	QuarantineBucket  string
+	DefaultAction    Action
+	QuarantineBucket string
+	MaxScanSize      int64
+	MaxLineLength    int
+	Concurrency      int
+	ContextLines     int
+	Enabled          bool
+	IncludeContext   bool
+	RedactSamples    bool
 }
 
 // DLPEngine provides DLP functionality.
 type DLPEngine struct {
-	mu        sync.RWMutex
-	config    *DLPConfig
-	rules     map[string]*DLPRule
-	patterns  []*DataPattern
-	storage   DLPStorage
-	stats     *DLPStats
+	storage  DLPStorage
+	config   *DLPConfig
+	rules    map[string]*DLPRule
+	stats    *DLPStats
+	patterns []*DataPattern
+	mu       sync.RWMutex
 }
 
 // DLPStorage interface for persisting DLP data.
@@ -225,13 +227,13 @@ type DLPStorage interface {
 
 // DLPStats tracks DLP statistics.
 type DLPStats struct {
-	ObjectsScanned      int64
-	BytesScanned        int64
-	ViolationsTotal     int64
-	ViolationsBlocked   int64
-	ViolationsByType    map[DataType]int64
-	ViolationsByAction  map[Action]int64
-	LastScanTime        time.Time
+	LastScanTime       time.Time
+	ViolationsByType   map[DataType]int64
+	ViolationsByAction map[Action]int64
+	ObjectsScanned     int64
+	BytesScanned       int64
+	ViolationsTotal    int64
+	ViolationsBlocked  int64
 }
 
 // DefaultDLPConfig returns the default DLP configuration.
@@ -304,6 +306,7 @@ func buildDataPatterns() []*DataPattern {
 				if serial == "0000" {
 					return false
 				}
+
 				return true
 			},
 		},
@@ -527,9 +530,10 @@ func validateIBAN(iban string) bool {
 
 	// Convert letters to numbers (A=10, B=11, etc.)
 	var numeric strings.Builder
+
 	for _, c := range rearranged {
 		if c >= 'A' && c <= 'Z' {
-			numeric.WriteString(fmt.Sprintf("%d", c-'A'+10))
+			numeric.WriteString(strconv.Itoa(int(c - 'A' + 10)))
 		} else {
 			numeric.WriteRune(c)
 		}
@@ -549,6 +553,7 @@ func validateRoutingNumber(routingNumber string) bool {
 
 	// Check checksum
 	weights := []int{3, 7, 1, 3, 7, 1, 3, 7, 1}
+
 	sum := 0
 	for i, w := range weights {
 		sum += int(cleaned[i]-'0') * w
@@ -577,16 +582,19 @@ func (e *DLPEngine) AddRule(ctx context.Context, rule *DLPRule) error {
 	if rule.ID == "" {
 		rule.ID = uuid.New().String()
 	}
+
 	rule.CreatedAt = time.Now()
 	rule.UpdatedAt = time.Now()
 
 	if e.storage != nil {
-		if err := e.storage.SaveRule(ctx, rule); err != nil {
+		err := e.storage.SaveRule(ctx, rule)
+		if err != nil {
 			return fmt.Errorf("failed to save rule: %w", err)
 		}
 	}
 
 	e.rules[rule.ID] = rule
+
 	return nil
 }
 
@@ -599,6 +607,7 @@ func (e *DLPEngine) GetRule(ctx context.Context, id string) (*DLPRule, error) {
 	if !exists {
 		return nil, fmt.Errorf("rule not found: %s", id)
 	}
+
 	return rule, nil
 }
 
@@ -608,12 +617,14 @@ func (e *DLPEngine) DeleteRule(ctx context.Context, id string) error {
 	defer e.mu.Unlock()
 
 	if e.storage != nil {
-		if err := e.storage.DeleteRule(ctx, id); err != nil {
+		err := e.storage.DeleteRule(ctx, id)
+		if err != nil {
 			return fmt.Errorf("failed to delete rule: %w", err)
 		}
 	}
 
 	delete(e.rules, id)
+
 	return nil
 }
 
@@ -626,6 +637,7 @@ func (e *DLPEngine) ListRules(ctx context.Context) []*DLPRule {
 	for _, rule := range e.rules {
 		rules = append(rules, rule)
 	}
+
 	return rules
 }
 
@@ -703,7 +715,8 @@ func (e *DLPEngine) Scan(ctx context.Context, req *ScanRequest) (*ScanResult, er
 
 		// Save violation (best-effort)
 		if e.storage != nil {
-			if err := e.storage.SaveViolation(ctx, violation); err != nil {
+			err := e.storage.SaveViolation(ctx, violation)
+			if err != nil {
 				_ = err // Log storage failure but continue
 			}
 		}
@@ -729,6 +742,7 @@ func (e *DLPEngine) Scan(ctx context.Context, req *ScanRequest) (*ScanResult, er
 	// Update stats
 	atomic.AddInt64(&e.stats.ObjectsScanned, 1)
 	atomic.AddInt64(&e.stats.BytesScanned, req.Size)
+
 	if result.Blocked {
 		atomic.AddInt64(&e.stats.ViolationsBlocked, 1)
 	}
@@ -742,13 +756,13 @@ func (e *DLPEngine) Scan(ctx context.Context, req *ScanRequest) (*ScanResult, er
 
 // finding represents an internal finding during scanning.
 type finding struct {
+	rule        *DLPRule
 	dataType    DataType
 	sensitivity Sensitivity
-	rule        *DLPRule
-	lineNumber  int
-	occurrences int
 	sample      string
 	context     string
+	lineNumber  int
+	occurrences int
 }
 
 // getApplicableRules returns rules that apply to the request.
@@ -756,7 +770,8 @@ func (e *DLPEngine) getApplicableRules(req *ScanRequest) []*DLPRule {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	var applicable []*DLPRule
+	applicable := make([]*DLPRule, 0, len(e.rules))
+
 	for _, rule := range e.rules {
 		if !rule.Enabled {
 			continue
@@ -767,12 +782,14 @@ func (e *DLPEngine) getApplicableRules(req *ScanRequest) []*DLPRule {
 			// Check bucket
 			if len(rule.Conditions.Buckets) > 0 {
 				found := false
+
 				for _, b := range rule.Conditions.Buckets {
 					if b == req.Bucket {
 						found = true
 						break
 					}
 				}
+
 				if !found {
 					continue
 				}
@@ -781,12 +798,14 @@ func (e *DLPEngine) getApplicableRules(req *ScanRequest) []*DLPRule {
 			// Check prefix
 			if len(rule.Conditions.Prefixes) > 0 {
 				found := false
+
 				for _, p := range rule.Conditions.Prefixes {
 					if strings.HasPrefix(req.Key, p) {
 						found = true
 						break
 					}
 				}
+
 				if !found {
 					continue
 				}
@@ -795,12 +814,14 @@ func (e *DLPEngine) getApplicableRules(req *ScanRequest) []*DLPRule {
 			// Check content type
 			if len(rule.Conditions.ContentTypes) > 0 {
 				found := false
+
 				for _, ct := range rule.Conditions.ContentTypes {
 					if strings.HasPrefix(req.ContentType, ct) {
 						found = true
 						break
 					}
 				}
+
 				if !found {
 					continue
 				}
@@ -810,6 +831,7 @@ func (e *DLPEngine) getApplicableRules(req *ScanRequest) []*DLPRule {
 			if rule.Conditions.MinSize > 0 && req.Size < rule.Conditions.MinSize {
 				continue
 			}
+
 			if rule.Conditions.MaxSize > 0 && req.Size > rule.Conditions.MaxSize {
 				continue
 			}
@@ -864,6 +886,7 @@ func (e *DLPEngine) scanContent(ctx context.Context, req *ScanRequest, rules []*
 
 	// Build pattern set from rules
 	dataTypes := make(map[DataType]bool)
+
 	for _, rule := range rules {
 		for _, dt := range rule.DataTypes {
 			dataTypes[dt] = true
@@ -930,6 +953,7 @@ func (e *DLPEngine) scanContent(ctx context.Context, req *ScanRequest, rules []*
 							}
 
 							findings = append(findings, f)
+
 							break
 						}
 					}
@@ -947,17 +971,20 @@ func (e *DLPEngine) getContext(lines [][]byte, lineNum, contextLines int) string
 	if start < 0 {
 		start = 0
 	}
+
 	end := lineNum + contextLines + 1
 	if end > len(lines) {
 		end = len(lines)
 	}
 
 	var context []string
+
 	for i := start; i < end; i++ {
 		prefix := "  "
 		if i == lineNum {
 			prefix = "> "
 		}
+
 		context = append(context, prefix+string(lines[i]))
 	}
 
@@ -1032,6 +1059,7 @@ func (e *DLPEngine) GetStats() *DLPStats {
 	for k, v := range e.stats.ViolationsByType {
 		stats.ViolationsByType[k] = v
 	}
+
 	for k, v := range e.stats.ViolationsByAction {
 		stats.ViolationsByAction[k] = v
 	}
@@ -1042,7 +1070,7 @@ func (e *DLPEngine) GetStats() *DLPStats {
 // ReviewViolation marks a violation as reviewed.
 func (e *DLPEngine) ReviewViolation(ctx context.Context, violationID, reviewerID, notes string) error {
 	if e.storage == nil {
-		return fmt.Errorf("storage not configured")
+		return errors.New("storage not configured")
 	}
 
 	// This would update the violation in storage

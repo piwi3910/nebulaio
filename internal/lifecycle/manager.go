@@ -37,37 +37,41 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// DefaultInterval is the default interval for lifecycle evaluation
+// DefaultInterval is the default interval for lifecycle evaluation.
 const DefaultInterval = time.Hour
 
-// ObjectService defines the interface for object operations needed by lifecycle
+// Processing batch sizes.
+const (
+	objectBatchSize  = 1000
+	versionBatchSize = 10000
+)
+
+// ObjectService defines the interface for object operations needed by lifecycle.
 type ObjectService interface {
 	DeleteObject(ctx context.Context, bucket, key string) error
 	DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error
 	TransitionStorageClass(ctx context.Context, bucket, key, targetClass string) error
 }
 
-// MultipartService defines the interface for multipart operations needed by lifecycle
+// MultipartService defines the interface for multipart operations needed by lifecycle.
 type MultipartService interface {
 	AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error
 	ListMultipartUploads(ctx context.Context, bucket string) ([]*metadata.MultipartUpload, error)
 }
 
-// Manager handles lifecycle policy evaluation and execution
+// Manager handles lifecycle policy evaluation and execution.
 type Manager struct {
 	store            metadata.Store
 	objectService    ObjectService
 	multipartService MultipartService
+	stopCh           chan struct{}
+	stoppedCh        chan struct{}
 	interval         time.Duration
-
-	// Control
-	stopCh    chan struct{}
-	stoppedCh chan struct{}
-	mu        sync.RWMutex
-	running   bool
+	mu               sync.RWMutex
+	running          bool
 }
 
-// NewManager creates a new lifecycle manager
+// NewManager creates a new lifecycle manager.
 func NewManager(store metadata.Store, objectService ObjectService, multipartService MultipartService) *Manager {
 	return &Manager{
 		store:            store,
@@ -79,20 +83,23 @@ func NewManager(store metadata.Store, objectService ObjectService, multipartServ
 	}
 }
 
-// SetInterval sets the evaluation interval
+// SetInterval sets the evaluation interval.
 func (m *Manager) SetInterval(interval time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.interval = interval
 }
 
-// Start starts the lifecycle manager background processing
+// Start starts the lifecycle manager background processing.
 func (m *Manager) Start(ctx context.Context) {
 	m.mu.Lock()
+
 	if m.running {
 		m.mu.Unlock()
 		return
 	}
+
 	m.running = true
 	m.stopCh = make(chan struct{})
 	m.stoppedCh = make(chan struct{})
@@ -101,13 +108,15 @@ func (m *Manager) Start(ctx context.Context) {
 	go m.run(ctx)
 }
 
-// Stop stops the lifecycle manager
+// Stop stops the lifecycle manager.
 func (m *Manager) Stop() {
 	m.mu.Lock()
+
 	if !m.running {
 		m.mu.Unlock()
 		return
 	}
+
 	m.running = false
 	close(m.stopCh)
 	m.mu.Unlock()
@@ -116,7 +125,7 @@ func (m *Manager) Stop() {
 	<-m.stoppedCh
 }
 
-// run is the main loop for lifecycle processing
+// run is the main loop for lifecycle processing.
 func (m *Manager) run(ctx context.Context) {
 	defer close(m.stoppedCh)
 
@@ -142,7 +151,7 @@ func (m *Manager) run(ctx context.Context) {
 	}
 }
 
-// runCycle runs a single lifecycle evaluation cycle
+// runCycle runs a single lifecycle evaluation cycle.
 func (m *Manager) runCycle(ctx context.Context) {
 	// Only run on leader node
 	if !m.store.IsLeader() {
@@ -151,6 +160,7 @@ func (m *Manager) runCycle(ctx context.Context) {
 	}
 
 	log.Debug().Msg("Starting lifecycle evaluation cycle")
+
 	startTime := time.Now()
 
 	// Get all buckets
@@ -161,9 +171,12 @@ func (m *Manager) runCycle(ctx context.Context) {
 	}
 
 	var processed, errors int
+
 	for _, bucket := range buckets {
-		if err := m.ProcessBucket(ctx, bucket.Name); err != nil {
+		err := m.ProcessBucket(ctx, bucket.Name)
+		if err != nil {
 			log.Error().Err(err).Str("bucket", bucket.Name).Msg("Failed to process bucket lifecycle")
+
 			errors++
 		} else {
 			processed++
@@ -177,7 +190,7 @@ func (m *Manager) runCycle(ctx context.Context) {
 		Msg("Lifecycle evaluation cycle completed")
 }
 
-// ProcessBucket evaluates and applies lifecycle rules for a single bucket
+// ProcessBucket evaluates and applies lifecycle rules for a single bucket.
 func (m *Manager) ProcessBucket(ctx context.Context, bucket string) error {
 	// Get bucket metadata
 	bucketMeta, err := m.store.GetBucket(ctx, bucket)
@@ -196,18 +209,21 @@ func (m *Manager) ProcessBucket(ctx context.Context, bucket string) error {
 	rules := convertMetadataRules(bucketMeta.Lifecycle)
 
 	// Process regular objects
-	if err := m.processObjects(ctx, bucket, rules); err != nil {
+	err = m.processObjects(ctx, bucket, rules)
+	if err != nil {
 		return err
 	}
 
 	// Process multipart uploads
-	if err := m.processMultipartUploads(ctx, bucket, rules); err != nil {
+	err = m.processMultipartUploads(ctx, bucket, rules)
+	if err != nil {
 		return err
 	}
 
 	// Process versioned objects if versioning is enabled
 	if bucketMeta.Versioning == metadata.VersioningEnabled || bucketMeta.Versioning == metadata.VersioningSuspended {
-		if err := m.processVersions(ctx, bucket, rules); err != nil {
+		err := m.processVersions(ctx, bucket, rules)
+		if err != nil {
 			return err
 		}
 	}
@@ -215,10 +231,11 @@ func (m *Manager) ProcessBucket(ctx context.Context, bucket string) error {
 	return nil
 }
 
-// processObjects processes current objects for expiration
+// processObjects processes current objects for expiration.
 func (m *Manager) processObjects(ctx context.Context, bucket string, rules []LifecycleRule) error {
 	var continuationToken string
-	batchSize := 1000
+
+	batchSize := objectBatchSize
 
 	for {
 		listing, err := m.store.ListObjects(ctx, bucket, "", "", batchSize, continuationToken)
@@ -233,7 +250,9 @@ func (m *Manager) processObjects(ctx context.Context, bucket string, rules []Lif
 			}
 
 			action := m.EvaluateObject(rules, obj)
-			if err := m.applyAction(ctx, bucket, obj, action); err != nil {
+
+			err := m.applyAction(ctx, bucket, obj, action)
+			if err != nil {
 				log.Error().Err(err).
 					Str("bucket", bucket).
 					Str("key", obj.Key).
@@ -244,15 +263,16 @@ func (m *Manager) processObjects(ctx context.Context, bucket string, rules []Lif
 		if !listing.IsTruncated {
 			break
 		}
+
 		continuationToken = listing.NextContinuationToken
 	}
 
 	return nil
 }
 
-// processVersions processes object versions for noncurrent version expiration
+// processVersions processes object versions for noncurrent version expiration.
 func (m *Manager) processVersions(ctx context.Context, bucket string, rules []LifecycleRule) error {
-	listing, err := m.store.ListObjectVersions(ctx, bucket, "", "", "", "", 10000)
+	listing, err := m.store.ListObjectVersions(ctx, bucket, "", "", "", "", versionBatchSize)
 	if err != nil {
 		return err
 	}
@@ -294,7 +314,8 @@ func (m *Manager) processVersions(ctx context.Context, bucket string, rules []Li
 				if v.DeleteMarker && rule.Expiration != nil && rule.Expiration.ExpiredObjectDeleteMarker {
 					// Delete marker is expired if it's the only version
 					if len(vers) == 1 {
-						if err := m.objectService.DeleteObjectVersion(ctx, bucket, key, v.VersionID); err != nil {
+						err := m.objectService.DeleteObjectVersion(ctx, bucket, key, v.VersionID)
+						if err != nil {
 							log.Error().Err(err).
 								Str("bucket", bucket).
 								Str("key", key).
@@ -309,6 +330,7 @@ func (m *Manager) processVersions(ctx context.Context, bucket string, rules []Li
 								Msg("Deleted expired delete marker")
 						}
 					}
+
 					continue
 				}
 
@@ -320,7 +342,8 @@ func (m *Manager) processVersions(ctx context.Context, bucket string, rules []Li
 					if nve.NoncurrentDays > 0 {
 						expirationTime := v.ModifiedAt.AddDate(0, 0, nve.NoncurrentDays)
 						if now.After(expirationTime) {
-							if err := m.objectService.DeleteObjectVersion(ctx, bucket, key, v.VersionID); err != nil {
+							err := m.objectService.DeleteObjectVersion(ctx, bucket, key, v.VersionID)
+							if err != nil {
 								log.Error().Err(err).
 									Str("bucket", bucket).
 									Str("key", key).
@@ -339,7 +362,8 @@ func (m *Manager) processVersions(ctx context.Context, bucket string, rules []Li
 
 					// Check by count (NewerNoncurrentVersions)
 					if nve.NewerNoncurrentVersions > 0 && i >= nve.NewerNoncurrentVersions {
-						if err := m.objectService.DeleteObjectVersion(ctx, bucket, key, v.VersionID); err != nil {
+						err := m.objectService.DeleteObjectVersion(ctx, bucket, key, v.VersionID)
+						if err != nil {
 							log.Error().Err(err).
 								Str("bucket", bucket).
 								Str("key", key).
@@ -362,7 +386,7 @@ func (m *Manager) processVersions(ctx context.Context, bucket string, rules []Li
 	return nil
 }
 
-// processMultipartUploads aborts incomplete multipart uploads
+// processMultipartUploads aborts incomplete multipart uploads.
 func (m *Manager) processMultipartUploads(ctx context.Context, bucket string, rules []LifecycleRule) error {
 	uploads, err := m.multipartService.ListMultipartUploads(ctx, bucket)
 	if err != nil {
@@ -389,7 +413,8 @@ func (m *Manager) processMultipartUploads(ctx context.Context, bucket string, ru
 			expirationTime := upload.CreatedAt.AddDate(0, 0, daysAfter)
 
 			if now.After(expirationTime) {
-				if err := m.multipartService.AbortMultipartUpload(ctx, bucket, upload.Key, upload.UploadID); err != nil {
+				err := m.multipartService.AbortMultipartUpload(ctx, bucket, upload.Key, upload.UploadID)
+				if err != nil {
 					log.Error().Err(err).
 						Str("bucket", bucket).
 						Str("key", upload.Key).
@@ -403,6 +428,7 @@ func (m *Manager) processMultipartUploads(ctx context.Context, bucket string, ru
 						Str("rule", rule.ID).
 						Msg("Aborted incomplete multipart upload")
 				}
+
 				break // Only apply first matching rule
 			}
 		}
@@ -411,7 +437,7 @@ func (m *Manager) processMultipartUploads(ctx context.Context, bucket string, ru
 	return nil
 }
 
-// EvaluateObject evaluates lifecycle rules against an object and returns the action
+// EvaluateObject evaluates lifecycle rules against an object and returns the action.
 func (m *Manager) EvaluateObject(rules []LifecycleRule, obj *metadata.ObjectMeta) ActionResult {
 	now := time.Now()
 
@@ -471,7 +497,7 @@ func (m *Manager) EvaluateObject(rules []LifecycleRule, obj *metadata.ObjectMeta
 	return ActionResult{Action: ActionNone}
 }
 
-// applyAction applies the lifecycle action to an object
+// applyAction applies the lifecycle action to an object.
 func (m *Manager) applyAction(ctx context.Context, bucket string, obj *metadata.ObjectMeta, action ActionResult) error {
 	switch action.Action {
 	case ActionNone:
@@ -483,6 +509,7 @@ func (m *Manager) applyAction(ctx context.Context, bucket string, obj *metadata.
 			Str("key", obj.Key).
 			Str("rule", action.RuleID).
 			Msg("Deleting expired object")
+
 		return m.objectService.DeleteObject(ctx, bucket, obj.Key)
 
 	case ActionTransition:
@@ -493,6 +520,7 @@ func (m *Manager) applyAction(ctx context.Context, bucket string, obj *metadata.
 			Str("currentClass", obj.StorageClass).
 			Str("targetClass", action.TargetClass).
 			Msg("Transitioning object to new storage class")
+
 		return m.objectService.TransitionStorageClass(ctx, bucket, obj.Key, action.TargetClass)
 
 	case ActionDeleteMarker:
@@ -502,6 +530,7 @@ func (m *Manager) applyAction(ctx context.Context, bucket string, obj *metadata.
 			Str("versionId", obj.VersionID).
 			Str("rule", action.RuleID).
 			Msg("Deleting expired delete marker")
+
 		return m.objectService.DeleteObjectVersion(ctx, bucket, obj.Key, obj.VersionID)
 
 	default:
@@ -509,7 +538,7 @@ func (m *Manager) applyAction(ctx context.Context, bucket string, obj *metadata.
 	}
 }
 
-// convertMetadataRules converts metadata.LifecycleRule to lifecycle.LifecycleRule
+// convertMetadataRules converts metadata.LifecycleRule to lifecycle.LifecycleRule.
 func convertMetadataRules(metaRules []metadata.LifecycleRule) []LifecycleRule {
 	rules := make([]LifecycleRule, len(metaRules))
 

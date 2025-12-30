@@ -23,106 +23,86 @@ import (
 	"time"
 )
 
-// Common errors
+// GPUDirect configuration constants.
+const (
+	// Default buffer pool size: 1GB per GPU.
+	defaultBufferPoolSize = 1 << 30
+	// Default max single buffer: 128MB.
+	defaultMaxBufferSize = 128 << 20
+	// Minimum transfer size for GDS: 4KB.
+	defaultMinTransferSize = 4 << 10
+	// Default batch timeout in milliseconds.
+	defaultBatchTimeoutMs = 1
+	// Default number of CUDA streams.
+	defaultCUDAStreams = 4
+	// Pending transfer queue size.
+	pendingQueueSize = 1000
+)
+
+// Common errors.
 var (
-	ErrGDSNotAvailable   = errors.New("gpudirect storage not available")
-	ErrNoGPU             = errors.New("no compatible GPU detected")
-	ErrBufferTooSmall    = errors.New("buffer too small for operation")
-	ErrInvalidHandle     = errors.New("invalid file handle")
-	ErrTransferFailed    = errors.New("gpu transfer failed")
-	ErrMemoryAllocation  = errors.New("gpu memory allocation failed")
-	ErrDriverMismatch    = errors.New("gpu driver version mismatch")
-	ErrNotInitialized    = errors.New("gpudirect not initialized")
-	ErrAlreadyClosed     = errors.New("gpudirect already closed")
+	ErrGDSNotAvailable  = errors.New("gpudirect storage not available")
+	ErrNoGPU            = errors.New("no compatible GPU detected")
+	ErrBufferTooSmall   = errors.New("buffer too small for operation")
+	ErrInvalidHandle    = errors.New("invalid file handle")
+	ErrTransferFailed   = errors.New("gpu transfer failed")
+	ErrMemoryAllocation = errors.New("gpu memory allocation failed")
+	ErrDriverMismatch   = errors.New("gpu driver version mismatch")
+	ErrNotInitialized   = errors.New("gpudirect not initialized")
+	ErrAlreadyClosed    = errors.New("gpudirect already closed")
 )
 
 // Config holds GPUDirect Storage configuration.
 type Config struct {
-	// Enable enables GPUDirect Storage if available
-	Enable bool `json:"enable" yaml:"enable"`
-
-	// MaxGPUs is the maximum number of GPUs to use (0 = all available)
-	MaxGPUs int `json:"max_gpus" yaml:"max_gpus"`
-
-	// BufferPoolSize is the size of the GPU buffer pool in bytes
-	BufferPoolSize int64 `json:"buffer_pool_size" yaml:"buffer_pool_size"`
-
-	// MaxBufferSize is the maximum size for a single buffer allocation
-	MaxBufferSize int64 `json:"max_buffer_size" yaml:"max_buffer_size"`
-
-	// MinTransferSize is the minimum transfer size for GDS (smaller uses standard I/O)
-	MinTransferSize int64 `json:"min_transfer_size" yaml:"min_transfer_size"`
-
-	// EnableBatchOperations enables batching of small I/O operations
-	EnableBatchOperations bool `json:"enable_batch_operations" yaml:"enable_batch_operations"`
-
-	// BatchTimeoutMs is the timeout for batch accumulation in milliseconds
-	BatchTimeoutMs int `json:"batch_timeout_ms" yaml:"batch_timeout_ms"`
-
-	// EnableAsyncTransfers enables asynchronous GPU transfers
-	EnableAsyncTransfers bool `json:"enable_async_transfers" yaml:"enable_async_transfers"`
-
-	// CUDAStreams is the number of CUDA streams per GPU for async operations
-	CUDAStreams int `json:"cuda_streams" yaml:"cuda_streams"`
-
-	// FallbackToStandardIO allows fallback to standard I/O when GDS fails
-	FallbackToStandardIO bool `json:"fallback_to_standard_io" yaml:"fallback_to_standard_io"`
+	MaxGPUs               int   `json:"max_gpus" yaml:"max_gpus"`
+	BufferPoolSize        int64 `json:"buffer_pool_size" yaml:"buffer_pool_size"`
+	MaxBufferSize         int64 `json:"max_buffer_size" yaml:"max_buffer_size"`
+	MinTransferSize       int64 `json:"min_transfer_size" yaml:"min_transfer_size"`
+	BatchTimeoutMs        int   `json:"batch_timeout_ms" yaml:"batch_timeout_ms"`
+	CUDAStreams           int   `json:"cuda_streams" yaml:"cuda_streams"`
+	Enable                bool  `json:"enable" yaml:"enable"`
+	EnableBatchOperations bool  `json:"enable_batch_operations" yaml:"enable_batch_operations"`
+	EnableAsyncTransfers  bool  `json:"enable_async_transfers" yaml:"enable_async_transfers"`
+	FallbackToStandardIO  bool  `json:"fallback_to_standard_io" yaml:"fallback_to_standard_io"`
 }
 
 // DefaultConfig returns default GPUDirect configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		Enable:               true,
-		MaxGPUs:              0,         // Use all available
-		BufferPoolSize:       1 << 30,   // 1GB buffer pool per GPU
-		MaxBufferSize:        128 << 20, // 128MB max single buffer
-		MinTransferSize:      4 << 10,   // 4KB minimum for GDS
+		Enable:                true,
+		MaxGPUs:               0, // Use all available
+		BufferPoolSize:        defaultBufferPoolSize,
+		MaxBufferSize:         defaultMaxBufferSize,
+		MinTransferSize:       defaultMinTransferSize,
 		EnableBatchOperations: true,
-		BatchTimeoutMs:       1,
-		EnableAsyncTransfers: true,
-		CUDAStreams:          4,
-		FallbackToStandardIO: true,
+		BatchTimeoutMs:        defaultBatchTimeoutMs,
+		EnableAsyncTransfers:  true,
+		CUDAStreams:           defaultCUDAStreams,
+		FallbackToStandardIO:  true,
 	}
 }
 
 // GPUInfo contains information about a detected GPU.
 type GPUInfo struct {
-	// DeviceID is the GPU device index
-	DeviceID int `json:"device_id"`
-
-	// Name is the GPU model name
-	Name string `json:"name"`
-
-	// UUID is the unique GPU identifier
-	UUID string `json:"uuid"`
-
-	// TotalMemory is the total GPU memory in bytes
-	TotalMemory int64 `json:"total_memory"`
-
-	// FreeMemory is the available GPU memory in bytes
-	FreeMemory int64 `json:"free_memory"`
-
-	// ComputeCapability is the CUDA compute capability (e.g., "8.6")
+	Name              string `json:"name"`
+	UUID              string `json:"uuid"`
 	ComputeCapability string `json:"compute_capability"`
-
-	// PCIBusID is the PCI bus identifier
-	PCIBusID string `json:"pci_bus_id"`
-
-	// GDSSupported indicates if GPUDirect Storage is supported
-	GDSSupported bool `json:"gds_supported"`
-
-	// P2PSupported indicates if peer-to-peer transfers are supported
-	P2PSupported bool `json:"p2p_supported"`
+	PCIBusID          string `json:"pci_bus_id"`
+	DeviceID          int    `json:"device_id"`
+	TotalMemory       int64  `json:"total_memory"`
+	FreeMemory        int64  `json:"free_memory"`
+	GDSSupported      bool   `json:"gds_supported"`
+	P2PSupported      bool   `json:"p2p_supported"`
 }
 
 // Metrics holds GPUDirect performance metrics.
 type Metrics struct {
 	// Transfer metrics
-	ReadBytes      int64 `json:"read_bytes"`
-	WriteBytes     int64 `json:"write_bytes"`
-	ReadOps        int64 `json:"read_ops"`
-	WriteOps       int64 `json:"write_ops"`
-	BatchOps       int64 `json:"batch_ops"`
+	ReadBytes  int64 `json:"read_bytes"`
+	WriteBytes int64 `json:"write_bytes"`
+	ReadOps    int64 `json:"read_ops"`
+	WriteOps   int64 `json:"write_ops"`
+	BatchOps   int64 `json:"batch_ops"`
 
 	// Latency metrics (nanoseconds)
 	AvgReadLatency  int64 `json:"avg_read_latency_ns"`
@@ -160,51 +140,33 @@ type GPUBuffer struct {
 
 // TransferRequest represents a GPU storage transfer request.
 type TransferRequest struct {
-	// Operation type
-	IsRead bool
-
-	// Source/destination buffer
-	Buffer *GPUBuffer
-
-	// File offset for the transfer
-	Offset int64
-
-	// Number of bytes to transfer
-	Length int64
-
-	// Handle is the file handle for cuFile operations
-	Handle uintptr
-
-	// Callback is called when the transfer completes
+	Buffer   *GPUBuffer
 	Callback func(error)
+	Offset   int64
+	Length   int64
+	Handle   uintptr
+	IsRead   bool
 }
 
 // TransferResult contains the result of a transfer operation.
 type TransferResult struct {
-	// BytesTransferred is the number of bytes actually transferred
+	Error            error
 	BytesTransferred int64
-
-	// Duration is the time taken for the transfer
-	Duration time.Duration
-
-	// Error is set if the transfer failed
-	Error error
+	Duration         time.Duration
 }
 
 // Service provides GPUDirect Storage functionality.
 type Service struct {
-	config   *Config
-	mu       sync.RWMutex
-	closed   atomic.Bool
-	gpus     []*GPUInfo
-	buffers  map[int][]*GPUBuffer // Per-GPU buffer pools
-	metrics  *Metrics
-	backend  GDSBackend
-
-	// Async transfer handling
-	streams  map[int][]uintptr // CUDA streams per GPU
-	pending  chan *TransferRequest
-	wg       sync.WaitGroup
+	backend GDSBackend
+	config  *Config
+	buffers map[int][]*GPUBuffer
+	metrics *Metrics
+	streams map[int][]uintptr
+	pending chan *TransferRequest
+	gpus    []*GPUInfo
+	wg      sync.WaitGroup
+	mu      sync.RWMutex
+	closed  atomic.Bool
 }
 
 // GDSBackend defines the interface for GPUDirect Storage operations.
@@ -255,6 +217,7 @@ func NewService(config *Config, backend GDSBackend) (*Service, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
+
 	if backend == nil {
 		backend = NewSimulatedBackend()
 	}
@@ -265,11 +228,12 @@ func NewService(config *Config, backend GDSBackend) (*Service, error) {
 		metrics: &Metrics{},
 		backend: backend,
 		streams: make(map[int][]uintptr),
-		pending: make(chan *TransferRequest, 1000),
+		pending: make(chan *TransferRequest, pendingQueueSize),
 	}
 
 	// Initialize the backend
-	if err := s.backend.Init(); err != nil {
+	err := s.backend.Init()
+	if err != nil {
 		return nil, fmt.Errorf("failed to initialize GDS backend: %w", err)
 	}
 
@@ -278,6 +242,7 @@ func NewService(config *Config, backend GDSBackend) (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to detect GPUs: %w", err)
 	}
+
 	s.gpus = gpus
 
 	// Apply max GPU limit
@@ -288,7 +253,8 @@ func NewService(config *Config, backend GDSBackend) (*Service, error) {
 	// Initialize buffer pools for each GPU
 	for _, gpu := range s.gpus {
 		if gpu.GDSSupported {
-			if err := s.initBufferPool(gpu.DeviceID); err != nil {
+			err := s.initBufferPool(gpu.DeviceID)
+			if err != nil {
 				return nil, fmt.Errorf("failed to initialize buffer pool for GPU %d: %w", gpu.DeviceID, err)
 			}
 		}
@@ -317,11 +283,12 @@ func (s *Service) initBufferPool(deviceID int) error {
 		initialBuffers = 1
 	}
 
-	for i := 0; i < initialBuffers; i++ {
+	for range initialBuffers {
 		buf, err := s.backend.AllocateBuffer(deviceID, s.config.MaxBufferSize)
 		if err != nil {
 			return err
 		}
+
 		s.buffers[deviceID] = append(s.buffers[deviceID], buf)
 	}
 
@@ -331,15 +298,19 @@ func (s *Service) initBufferPool(deviceID int) error {
 // startAsyncWorkers starts the async transfer workers.
 func (s *Service) startAsyncWorkers() {
 	s.wg.Add(1)
+
 	go func() {
 		defer s.wg.Done()
+
 		for req := range s.pending {
 			if s.closed.Load() {
 				if req.Callback != nil {
 					req.Callback(ErrAlreadyClosed)
 				}
+
 				continue
 			}
+
 			s.processTransferRequest(req)
 		}
 	}()
@@ -347,8 +318,10 @@ func (s *Service) startAsyncWorkers() {
 
 // processTransferRequest handles a single transfer request.
 func (s *Service) processTransferRequest(req *TransferRequest) {
-	var result *TransferResult
-	var err error
+	var (
+		result *TransferResult
+		err    error
+	)
 
 	if req.IsRead {
 		result, err = s.backend.Read(req.Handle, req.Buffer, req.Offset, req.Length)
@@ -358,9 +331,11 @@ func (s *Service) processTransferRequest(req *TransferRequest) {
 
 	if err != nil {
 		atomic.AddInt64(&s.metrics.Errors, 1)
+
 		if req.Callback != nil {
 			req.Callback(err)
 		}
+
 		return
 	}
 
@@ -399,12 +374,15 @@ func (s *Service) GetBuffer(ctx context.Context, deviceID int, size int64) (*GPU
 	// Find an available buffer
 	for _, buf := range buffers {
 		buf.mu.Lock()
+
 		if !buf.InUse && buf.Size >= size {
 			buf.InUse = true
 			buf.mu.Unlock()
 			atomic.AddInt64(&s.metrics.BufferHits, 1)
+
 			return buf, nil
 		}
+
 		buf.mu.Unlock()
 	}
 
@@ -416,9 +394,11 @@ func (s *Service) GetBuffer(ctx context.Context, deviceID int, size int64) (*GPU
 		if err != nil {
 			return nil, err
 		}
+
 		buf.InUse = true
 		s.buffers[deviceID] = append(s.buffers[deviceID], buf)
 		atomic.AddInt64(&s.metrics.BufferAllocations, 1)
+
 		return buf, nil
 	}
 
@@ -430,6 +410,7 @@ func (s *Service) ReleaseBuffer(buf *GPUBuffer) {
 	if buf == nil {
 		return
 	}
+
 	buf.mu.Lock()
 	buf.InUse = false
 	buf.mu.Unlock()
@@ -440,6 +421,7 @@ func (s *Service) RegisterFile(path string) (uintptr, error) {
 	if s.closed.Load() {
 		return 0, ErrAlreadyClosed
 	}
+
 	return s.backend.RegisterFile(path)
 }
 
@@ -448,68 +430,74 @@ func (s *Service) UnregisterFile(handle uintptr) error {
 	if s.closed.Load() {
 		return ErrAlreadyClosed
 	}
+
 	return s.backend.UnregisterFile(handle)
+}
+
+// transferOperation is a function type for GPUDirect read/write operations.
+type transferOperation func(handle uintptr, buf *GPUBuffer, offset, length int64) (*TransferResult, error)
+
+// fallbackOperation is a function type for fallback read/write operations.
+type fallbackOperation func(ctx context.Context, handle uintptr, buf *GPUBuffer, offset, length int64) (*TransferResult, error)
+
+// performTransferOp is a generic helper for GPUDirect read/write operations.
+func (s *Service) performTransferOp(
+	ctx context.Context,
+	handle uintptr,
+	buf *GPUBuffer,
+	offset, length int64,
+	backendOp transferOperation,
+	fallbackOp fallbackOperation,
+	bytesMetric, opsMetric *int64,
+) (*TransferResult, error) {
+	if s.closed.Load() {
+		return nil, ErrAlreadyClosed
+	}
+
+	// Check minimum transfer size
+	if length < s.config.MinTransferSize {
+		atomic.AddInt64(&s.metrics.FallbackOps, 1)
+
+		if s.config.FallbackToStandardIO {
+			return fallbackOp(ctx, handle, buf, offset, length)
+		}
+	}
+
+	result, err := backendOp(handle, buf, offset, length)
+	if err != nil {
+		atomic.AddInt64(&s.metrics.Errors, 1)
+
+		if s.config.FallbackToStandardIO {
+			atomic.AddInt64(&s.metrics.FallbackOps, 1)
+
+			return fallbackOp(ctx, handle, buf, offset, length)
+		}
+
+		return nil, err
+	}
+
+	atomic.AddInt64(bytesMetric, result.BytesTransferred)
+	atomic.AddInt64(opsMetric, 1)
+
+	return result, nil
 }
 
 // Read performs a GPUDirect read from storage to GPU memory.
 func (s *Service) Read(ctx context.Context, handle uintptr, buf *GPUBuffer, offset, length int64) (*TransferResult, error) {
-	if s.closed.Load() {
-		return nil, ErrAlreadyClosed
-	}
-
-	// Check minimum transfer size
-	if length < s.config.MinTransferSize {
-		atomic.AddInt64(&s.metrics.FallbackOps, 1)
-		// Fall back to standard I/O for small transfers
-		if s.config.FallbackToStandardIO {
-			return s.fallbackRead(ctx, handle, buf, offset, length)
-		}
-	}
-
-	result, err := s.backend.Read(handle, buf, offset, length)
-	if err != nil {
-		atomic.AddInt64(&s.metrics.Errors, 1)
-		if s.config.FallbackToStandardIO {
-			atomic.AddInt64(&s.metrics.FallbackOps, 1)
-			return s.fallbackRead(ctx, handle, buf, offset, length)
-		}
-		return nil, err
-	}
-
-	atomic.AddInt64(&s.metrics.ReadBytes, result.BytesTransferred)
-	atomic.AddInt64(&s.metrics.ReadOps, 1)
-
-	return result, nil
+	return s.performTransferOp(
+		ctx, handle, buf, offset, length,
+		s.backend.Read, s.fallbackRead,
+		&s.metrics.ReadBytes, &s.metrics.ReadOps,
+	)
 }
 
 // Write performs a GPUDirect write from GPU memory to storage.
 func (s *Service) Write(ctx context.Context, handle uintptr, buf *GPUBuffer, offset, length int64) (*TransferResult, error) {
-	if s.closed.Load() {
-		return nil, ErrAlreadyClosed
-	}
-
-	// Check minimum transfer size
-	if length < s.config.MinTransferSize {
-		atomic.AddInt64(&s.metrics.FallbackOps, 1)
-		if s.config.FallbackToStandardIO {
-			return s.fallbackWrite(ctx, handle, buf, offset, length)
-		}
-	}
-
-	result, err := s.backend.Write(handle, buf, offset, length)
-	if err != nil {
-		atomic.AddInt64(&s.metrics.Errors, 1)
-		if s.config.FallbackToStandardIO {
-			atomic.AddInt64(&s.metrics.FallbackOps, 1)
-			return s.fallbackWrite(ctx, handle, buf, offset, length)
-		}
-		return nil, err
-	}
-
-	atomic.AddInt64(&s.metrics.WriteBytes, result.BytesTransferred)
-	atomic.AddInt64(&s.metrics.WriteOps, 1)
-
-	return result, nil
+	return s.performTransferOp(
+		ctx, handle, buf, offset, length,
+		s.backend.Write, s.fallbackWrite,
+		&s.metrics.WriteBytes, &s.metrics.WriteOps,
+	)
 }
 
 // ReadAsync submits an async GPUDirect read.
@@ -524,6 +512,7 @@ func (s *Service) ReadAsync(handle uintptr, buf *GPUBuffer, offset, length int64
 		if callback != nil {
 			callback(err)
 		}
+
 		return nil
 	}
 
@@ -540,7 +529,7 @@ func (s *Service) ReadAsync(handle uintptr, buf *GPUBuffer, offset, length int64
 	case s.pending <- req:
 		return nil
 	default:
-		return fmt.Errorf("async queue full")
+		return errors.New("async queue full")
 	}
 }
 
@@ -555,6 +544,7 @@ func (s *Service) WriteAsync(handle uintptr, buf *GPUBuffer, offset, length int6
 		if callback != nil {
 			callback(err)
 		}
+
 		return nil
 	}
 
@@ -571,7 +561,7 @@ func (s *Service) WriteAsync(handle uintptr, buf *GPUBuffer, offset, length int6
 	case s.pending <- req:
 		return nil
 	default:
-		return fmt.Errorf("async queue full")
+		return errors.New("async queue full")
 	}
 }
 
@@ -607,21 +597,22 @@ func (s *Service) GetGPUs() []*GPUInfo {
 
 	result := make([]*GPUInfo, len(s.gpus))
 	copy(result, s.gpus)
+
 	return result
 }
 
 // GetMetrics returns current performance metrics.
 func (s *Service) GetMetrics() *Metrics {
 	return &Metrics{
-		ReadBytes:        atomic.LoadInt64(&s.metrics.ReadBytes),
-		WriteBytes:       atomic.LoadInt64(&s.metrics.WriteBytes),
-		ReadOps:          atomic.LoadInt64(&s.metrics.ReadOps),
-		WriteOps:         atomic.LoadInt64(&s.metrics.WriteOps),
-		BatchOps:         atomic.LoadInt64(&s.metrics.BatchOps),
-		AvgReadLatency:   atomic.LoadInt64(&s.metrics.AvgReadLatency),
-		AvgWriteLatency:  atomic.LoadInt64(&s.metrics.AvgWriteLatency),
-		P99ReadLatency:   atomic.LoadInt64(&s.metrics.P99ReadLatency),
-		P99WriteLatency:  atomic.LoadInt64(&s.metrics.P99WriteLatency),
+		ReadBytes:         atomic.LoadInt64(&s.metrics.ReadBytes),
+		WriteBytes:        atomic.LoadInt64(&s.metrics.WriteBytes),
+		ReadOps:           atomic.LoadInt64(&s.metrics.ReadOps),
+		WriteOps:          atomic.LoadInt64(&s.metrics.WriteOps),
+		BatchOps:          atomic.LoadInt64(&s.metrics.BatchOps),
+		AvgReadLatency:    atomic.LoadInt64(&s.metrics.AvgReadLatency),
+		AvgWriteLatency:   atomic.LoadInt64(&s.metrics.AvgWriteLatency),
+		P99ReadLatency:    atomic.LoadInt64(&s.metrics.P99ReadLatency),
+		P99WriteLatency:   atomic.LoadInt64(&s.metrics.P99WriteLatency),
 		BufferAllocations: atomic.LoadInt64(&s.metrics.BufferAllocations),
 		BufferHits:        atomic.LoadInt64(&s.metrics.BufferHits),
 		BufferMisses:      atomic.LoadInt64(&s.metrics.BufferMisses),
@@ -640,6 +631,7 @@ func (s *Service) IsAvailable() bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -655,11 +647,13 @@ func (s *Service) Close() error {
 
 	// Free all buffers
 	s.mu.Lock()
+
 	for _, buffers := range s.buffers {
 		for _, buf := range buffers {
 			_ = s.backend.FreeBuffer(buf)
 		}
 	}
+
 	s.buffers = nil
 	s.mu.Unlock()
 
@@ -669,8 +663,8 @@ func (s *Service) Close() error {
 // StorageReader wraps GPUDirect for io.Reader interface.
 type StorageReader struct {
 	service *Service
-	handle  uintptr
 	buffer  *GPUBuffer
+	handle  uintptr
 	offset  int64
 	length  int64
 }
@@ -703,14 +697,15 @@ func (r *StorageReader) Read(p []byte) (int, error) {
 	}
 
 	r.offset += result.BytesTransferred
+
 	return int(result.BytesTransferred), nil
 }
 
 // StorageWriter wraps GPUDirect for io.Writer interface.
 type StorageWriter struct {
 	service *Service
-	handle  uintptr
 	buffer  *GPUBuffer
+	handle  uintptr
 	offset  int64
 }
 
@@ -732,5 +727,6 @@ func (w *StorageWriter) Write(p []byte) (int, error) {
 	}
 
 	w.offset += result.BytesTransferred
+
 	return int(result.BytesTransferred), nil
 }

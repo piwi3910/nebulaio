@@ -13,27 +13,25 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// PolicyEngine evaluates and executes tiering policies
+// PolicyEngine evaluates and executes tiering policies.
 type PolicyEngine struct {
-	store        PolicyStore
-	accessStats  *AccessTracker
 	tierManager  TierManager
+	store        PolicyStore
+	rateLimiter  *RateLimiter
 	executor     *PolicyExecutor
 	scheduler    *PolicyScheduler
 	antiThrash   *AntiThrashManager
-	rateLimiter  *RateLimiter
+	accessStats  *AccessTracker
+	stopChan     chan struct{}
+	realtimeCh   chan RealtimeEvent
+	scheduledCh  chan *AdvancedPolicy
+	thresholdCh  chan ThresholdEvent
 	nodeID       string
 	clusterNodes []string
-
-	// Background workers
-	stopChan    chan struct{}
-	workerWg    sync.WaitGroup
-	realtimeCh  chan RealtimeEvent
-	scheduledCh chan *AdvancedPolicy
-	thresholdCh chan ThresholdEvent
+	workerWg     sync.WaitGroup
 }
 
-// TierManager interface for tier operations
+// TierManager interface for tier operations.
 type TierManager interface {
 	// GetObject retrieves an object
 	GetObject(ctx context.Context, bucket, key string) ([]byte, error)
@@ -54,7 +52,7 @@ type TierManager interface {
 	DeleteObject(ctx context.Context, bucket, key string) error
 }
 
-// TierInfo contains tier statistics
+// TierInfo contains tier statistics.
 type TierInfo struct {
 	Tier           TierType
 	TotalBytes     int64
@@ -64,39 +62,39 @@ type TierInfo struct {
 	UsagePercent   float64
 }
 
-// ObjectMetadata contains object information
+// ObjectMetadata contains object information.
 type ObjectMetadata struct {
+	CreatedAt    time.Time
+	ModifiedAt   time.Time
+	Tags         map[string]string
 	Bucket       string
 	Key          string
-	Size         int64
 	ContentType  string
 	StorageClass StorageClass
 	CurrentTier  TierType
-	Tags         map[string]string
-	CreatedAt    time.Time
-	ModifiedAt   time.Time
+	Size         int64
 }
 
-// RealtimeEvent represents an object access event for real-time policies
+// RealtimeEvent represents an object access event for real-time policies.
 type RealtimeEvent struct {
+	Timestamp time.Time
 	Bucket    string
 	Key       string
 	Operation string
 	Size      int64
-	Timestamp time.Time
 }
 
-// ThresholdEvent represents a capacity threshold crossing
+// ThresholdEvent represents a capacity threshold crossing.
 type ThresholdEvent struct {
 	Tier       TierType
+	Crossed    string
 	Usage      float64
 	Threshold  float64
-	Crossed    string // "high" or "low"
 	BytesUsed  int64
 	BytesTotal int64
 }
 
-// PolicyEngineConfig configures the policy engine
+// PolicyEngineConfig configures the policy engine.
 type PolicyEngineConfig struct {
 	// NodeID is this node's identifier
 	NodeID string
@@ -117,7 +115,7 @@ type PolicyEngineConfig struct {
 	MaxPendingEvents int
 }
 
-// DefaultPolicyEngineConfig returns default configuration
+// DefaultPolicyEngineConfig returns default configuration.
 func DefaultPolicyEngineConfig() PolicyEngineConfig {
 	return PolicyEngineConfig{
 		NodeID:                 "node-1",
@@ -129,7 +127,7 @@ func DefaultPolicyEngineConfig() PolicyEngineConfig {
 	}
 }
 
-// NewPolicyEngine creates a new policy engine
+// NewPolicyEngine creates a new policy engine.
 func NewPolicyEngine(
 	cfg PolicyEngineConfig,
 	store PolicyStore,
@@ -156,37 +154,42 @@ func NewPolicyEngine(
 	return engine
 }
 
-// Start starts the policy engine
+// Start starts the policy engine.
 func (e *PolicyEngine) Start() error {
 	log.Info().Str("node_id", e.nodeID).Msg("Starting policy engine")
 
 	// Start real-time workers
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		e.workerWg.Add(1)
+
 		go e.realtimeWorker(i)
 	}
 
 	// Start scheduled policy worker
 	e.workerWg.Add(1)
+
 	go e.scheduledWorker()
 
 	// Start threshold monitor
 	e.workerWg.Add(1)
+
 	go e.thresholdMonitor()
 
 	// Start threshold worker
 	e.workerWg.Add(1)
+
 	go e.thresholdWorker()
 
 	// Start scheduler
-	if err := e.scheduler.Start(e.scheduledCh); err != nil {
+	err := e.scheduler.Start(e.scheduledCh)
+	if err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// Stop stops the policy engine
+// Stop stops the policy engine.
 func (e *PolicyEngine) Stop() error {
 	log.Info().Msg("Stopping policy engine")
 
@@ -197,7 +200,7 @@ func (e *PolicyEngine) Stop() error {
 	return nil
 }
 
-// RecordAccess records an object access for real-time policies
+// RecordAccess records an object access for real-time policies.
 func (e *PolicyEngine) RecordAccess(bucket, key, operation string, size int64) {
 	event := RealtimeEvent{
 		Bucket:    bucket,
@@ -215,7 +218,7 @@ func (e *PolicyEngine) RecordAccess(bucket, key, operation string, size int64) {
 	}
 }
 
-// EvaluateObject evaluates all policies for an object
+// EvaluateObject evaluates all policies for an object.
 func (e *PolicyEngine) EvaluateObject(ctx context.Context, obj ObjectMetadata) (*EvaluationResult, error) {
 	policies, err := e.store.List(ctx)
 	if err != nil {
@@ -299,7 +302,7 @@ func (e *PolicyEngine) EvaluateObject(ctx context.Context, obj ObjectMetadata) (
 	return result, nil
 }
 
-// EvaluationResult contains the result of policy evaluation
+// EvaluationResult contains the result of policy evaluation.
 type EvaluationResult struct {
 	Object              ObjectMetadata
 	MatchingPolicies    []PolicyMatch
@@ -308,23 +311,25 @@ type EvaluationResult struct {
 	RateLimited         bool
 }
 
-// PolicyMatch represents a matched policy
+// PolicyMatch represents a matched policy.
 type PolicyMatch struct {
 	Policy      *AdvancedPolicy
 	TriggerInfo string
 }
 
-// matchesSelector checks if an object matches a policy selector
+// matchesSelector checks if an object matches a policy selector.
 func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessStats, sel PolicySelector) bool {
 	// Check buckets
 	if len(sel.Buckets) > 0 {
 		matched := false
+
 		for _, pattern := range sel.Buckets {
 			if matchWildcard(pattern, obj.Bucket) {
 				matched = true
 				break
 			}
 		}
+
 		if !matched {
 			return false
 		}
@@ -333,12 +338,14 @@ func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessSt
 	// Check prefixes
 	if len(sel.Prefixes) > 0 {
 		matched := false
+
 		for _, prefix := range sel.Prefixes {
 			if strings.HasPrefix(obj.Key, prefix) {
 				matched = true
 				break
 			}
 		}
+
 		if !matched {
 			return false
 		}
@@ -347,12 +354,14 @@ func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessSt
 	// Check suffixes
 	if len(sel.Suffixes) > 0 {
 		matched := false
+
 		for _, suffix := range sel.Suffixes {
 			if strings.HasSuffix(obj.Key, suffix) {
 				matched = true
 				break
 			}
 		}
+
 		if !matched {
 			return false
 		}
@@ -362,6 +371,7 @@ func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessSt
 	if sel.MinSize > 0 && obj.Size < sel.MinSize {
 		return false
 	}
+
 	if sel.MaxSize > 0 && obj.Size > sel.MaxSize {
 		return false
 	}
@@ -369,12 +379,14 @@ func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessSt
 	// Check content types
 	if len(sel.ContentTypes) > 0 {
 		matched := false
+
 		for _, pattern := range sel.ContentTypes {
 			if matchContentType(pattern, obj.ContentType) {
 				matched = true
 				break
 			}
 		}
+
 		if !matched {
 			return false
 		}
@@ -383,12 +395,14 @@ func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessSt
 	// Check current tiers
 	if len(sel.CurrentTiers) > 0 {
 		matched := false
+
 		for _, tier := range sel.CurrentTiers {
 			if tier == obj.CurrentTier {
 				matched = true
 				break
 			}
 		}
+
 		if !matched {
 			return false
 		}
@@ -406,12 +420,14 @@ func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessSt
 	// Check storage classes
 	if len(sel.StorageClasses) > 0 {
 		matched := false
+
 		for _, sc := range sel.StorageClasses {
 			if sc == obj.StorageClass {
 				matched = true
 				break
 			}
 		}
+
 		if !matched {
 			return false
 		}
@@ -429,7 +445,7 @@ func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessSt
 	return true
 }
 
-// checkTriggers checks if any triggers are satisfied
+// checkTriggers checks if any triggers are satisfied.
 func (e *PolicyEngine) checkTriggers(obj ObjectMetadata, stats *ObjectAccessStats, policy *AdvancedPolicy) (bool, string) {
 	now := time.Now()
 
@@ -443,18 +459,21 @@ func (e *PolicyEngine) checkTriggers(obj ObjectMetadata, stats *ObjectAccessStat
 						return true, fmt.Sprintf("age: %d days since creation", days)
 					}
 				}
+
 				if trigger.Age.DaysSinceModification > 0 {
 					days := int(now.Sub(obj.ModifiedAt).Hours() / 24)
 					if days >= trigger.Age.DaysSinceModification {
 						return true, fmt.Sprintf("age: %d days since modification", days)
 					}
 				}
+
 				if trigger.Age.DaysSinceAccess > 0 && !stats.LastAccessed.IsZero() {
 					days := int(now.Sub(stats.LastAccessed).Hours() / 24)
 					if days >= trigger.Age.DaysSinceAccess {
 						return true, fmt.Sprintf("age: %d days since access", days)
 					}
 				}
+
 				if trigger.Age.HoursSinceAccess > 0 && !stats.LastAccessed.IsZero() {
 					hours := int(now.Sub(stats.LastAccessed).Hours())
 					if hours >= trigger.Age.HoursSinceAccess {
@@ -469,6 +488,7 @@ func (e *PolicyEngine) checkTriggers(obj ObjectMetadata, stats *ObjectAccessStat
 					// This is handled in real-time worker
 					return true, "access: read promotion"
 				}
+
 				if trigger.Access.CountThreshold > 0 && trigger.Access.PeriodMinutes > 0 {
 					// Count accesses in period
 					count := e.countAccessesInPeriod(stats, trigger.Access.PeriodMinutes)
@@ -476,6 +496,7 @@ func (e *PolicyEngine) checkTriggers(obj ObjectMetadata, stats *ObjectAccessStat
 						return true, fmt.Sprintf("access: %d accesses in %d minutes (threshold: %d)",
 							count, trigger.Access.PeriodMinutes, trigger.Access.CountThreshold)
 					}
+
 					if trigger.Access.Direction == TierDirectionUp && count >= int64(trigger.Access.CountThreshold) {
 						return true, fmt.Sprintf("access: %d accesses in %d minutes (threshold: %d)",
 							count, trigger.Access.PeriodMinutes, trigger.Access.CountThreshold)
@@ -489,9 +510,11 @@ func (e *PolicyEngine) checkTriggers(obj ObjectMetadata, stats *ObjectAccessStat
 				if trigger.Frequency.MinAccessesPerDay > 0 && avgPerDay >= trigger.Frequency.MinAccessesPerDay {
 					return true, fmt.Sprintf("frequency: %.2f accesses/day (min: %.2f)", avgPerDay, trigger.Frequency.MinAccessesPerDay)
 				}
+
 				if trigger.Frequency.MaxAccessesPerDay > 0 && avgPerDay <= trigger.Frequency.MaxAccessesPerDay {
 					return true, fmt.Sprintf("frequency: %.2f accesses/day (max: %.2f)", avgPerDay, trigger.Frequency.MaxAccessesPerDay)
 				}
+
 				if trigger.Frequency.Pattern != "" && stats.AccessTrend == trigger.Frequency.Pattern {
 					return true, fmt.Sprintf("frequency: pattern match '%s'", trigger.Frequency.Pattern)
 				}
@@ -510,13 +533,14 @@ func (e *PolicyEngine) checkTriggers(obj ObjectMetadata, stats *ObjectAccessStat
 	return false, ""
 }
 
-// countAccessesInPeriod counts accesses in the last N minutes
+// countAccessesInPeriod counts accesses in the last N minutes.
 func (e *PolicyEngine) countAccessesInPeriod(stats *ObjectAccessStats, minutes int) int64 {
 	if stats == nil {
 		return 0
 	}
 
 	cutoff := time.Now().Add(-time.Duration(minutes) * time.Minute)
+
 	var count int64
 
 	for _, record := range stats.AccessHistory {
@@ -528,7 +552,7 @@ func (e *PolicyEngine) countAccessesInPeriod(stats *ObjectAccessStats, minutes i
 	return count
 }
 
-// shouldHandleBucket determines if this node should handle a bucket (consistent hashing)
+// shouldHandleBucket determines if this node should handle a bucket (consistent hashing).
 func (e *PolicyEngine) shouldHandleBucket(bucket string, policyID string) bool {
 	if len(e.clusterNodes) <= 1 {
 		return true
@@ -546,10 +570,11 @@ func (e *PolicyEngine) shouldHandleBucket(bucket string, policyID string) bool {
 
 	// Pick node based on hash
 	nodeIndex := int(hash) % len(nodes)
+
 	return nodes[nodeIndex] == e.nodeID
 }
 
-// isInScheduleWindow checks if current time is in a maintenance window
+// isInScheduleWindow checks if current time is in a maintenance window.
 func (e *PolicyEngine) isInScheduleWindow(schedule ScheduleConfig) bool {
 	if !schedule.Enabled {
 		return true
@@ -577,17 +602,19 @@ func (e *PolicyEngine) isInScheduleWindow(schedule ScheduleConfig) bool {
 				return true
 			}
 		}
+
 		return false
 	}
 
 	return true
 }
 
-// isInWindow checks if a time is within a window
+// isInWindow checks if a time is within a window.
 func (e *PolicyEngine) isInWindow(t time.Time, window MaintenanceWindow) bool {
 	// Check day of week
 	if len(window.DaysOfWeek) > 0 {
 		dayMatched := false
+
 		weekday := int(t.Weekday())
 		for _, day := range window.DaysOfWeek {
 			if day == weekday {
@@ -595,6 +622,7 @@ func (e *PolicyEngine) isInWindow(t time.Time, window MaintenanceWindow) bool {
 				break
 			}
 		}
+
 		if !dayMatched {
 			return false
 		}
@@ -625,7 +653,7 @@ func (e *PolicyEngine) isInWindow(t time.Time, window MaintenanceWindow) bool {
 	return currentMinutes >= startMinutes && currentMinutes <= endMinutes
 }
 
-// realtimeWorker processes real-time access events
+// realtimeWorker processes real-time access events.
 func (e *PolicyEngine) realtimeWorker(id int) {
 	defer e.workerWg.Done()
 
@@ -639,7 +667,7 @@ func (e *PolicyEngine) realtimeWorker(id int) {
 	}
 }
 
-// handleRealtimeEvent handles a single real-time event
+// handleRealtimeEvent handles a single real-time event.
 func (e *PolicyEngine) handleRealtimeEvent(event RealtimeEvent) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -667,7 +695,8 @@ func (e *PolicyEngine) handleRealtimeEvent(event RealtimeEvent) {
 					// Execute promotion
 					for _, action := range policy.Actions {
 						if action.Type == ActionTransition && action.Transition != nil {
-							if err := e.executor.ExecuteTransition(ctx, event.Bucket, event.Key, action.Transition); err != nil {
+							err := e.executor.ExecuteTransition(ctx, event.Bucket, event.Key, action.Transition)
+							if err != nil {
 								log.Error().Err(err).
 									Str("bucket", event.Bucket).
 									Str("key", event.Key).
@@ -681,7 +710,7 @@ func (e *PolicyEngine) handleRealtimeEvent(event RealtimeEvent) {
 	}
 }
 
-// scheduledWorker processes scheduled policies
+// scheduledWorker processes scheduled policies.
 func (e *PolicyEngine) scheduledWorker() {
 	defer e.workerWg.Done()
 
@@ -695,7 +724,7 @@ func (e *PolicyEngine) scheduledWorker() {
 	}
 }
 
-// executeScheduledPolicy executes a scheduled policy
+// executeScheduledPolicy executes a scheduled policy.
 func (e *PolicyEngine) executeScheduledPolicy(policy *AdvancedPolicy) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
@@ -721,11 +750,13 @@ func (e *PolicyEngine) executeScheduledPolicy(policy *AdvancedPolicy) {
 
 		// List objects in bucket
 		var marker string
+
 		for {
 			objects, err := e.tierManager.ListObjects(ctx, bucket, "", 1000)
 			if err != nil {
 				stats.Errors++
 				stats.LastError = err.Error()
+
 				break
 			}
 
@@ -762,7 +793,8 @@ func (e *PolicyEngine) executeScheduledPolicy(policy *AdvancedPolicy) {
 
 				// Execute actions
 				for _, action := range policy.Actions {
-					if err := e.executor.Execute(ctx, bucket, obj.Key, &action); err != nil {
+					err := e.executor.Execute(ctx, bucket, obj.Key, &action)
+					if err != nil {
 						stats.Errors++
 						stats.LastError = err.Error()
 					} else {
@@ -793,7 +825,8 @@ func (e *PolicyEngine) executeScheduledPolicy(policy *AdvancedPolicy) {
 	stats.TotalExecutions++
 
 	// Update stats
-	if err := e.store.UpdateStats(ctx, stats); err != nil {
+	err := e.store.UpdateStats(ctx, stats)
+	if err != nil {
 		log.Error().Err(err).Str("policy_id", policy.ID).Msg("Failed to update policy stats")
 	}
 
@@ -805,7 +838,7 @@ func (e *PolicyEngine) executeScheduledPolicy(policy *AdvancedPolicy) {
 		Msg("Scheduled policy completed")
 }
 
-// getBucketsForPolicy returns buckets that match a policy
+// getBucketsForPolicy returns buckets that match a policy.
 func (e *PolicyEngine) getBucketsForPolicy(ctx context.Context, policy *AdvancedPolicy) []string {
 	// In a real implementation, this would query the metadata store
 	// For now, return the buckets from the selector
@@ -817,7 +850,7 @@ func (e *PolicyEngine) getBucketsForPolicy(ctx context.Context, policy *Advanced
 	return []string{"*"}
 }
 
-// thresholdMonitor monitors tier capacity thresholds
+// thresholdMonitor monitors tier capacity thresholds.
 func (e *PolicyEngine) thresholdMonitor() {
 	defer e.workerWg.Done()
 
@@ -834,7 +867,7 @@ func (e *PolicyEngine) thresholdMonitor() {
 	}
 }
 
-// checkThresholds checks all tier capacity thresholds
+// checkThresholds checks all tier capacity thresholds.
 func (e *PolicyEngine) checkThresholds() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -876,7 +909,7 @@ func (e *PolicyEngine) checkThresholds() {
 	}
 }
 
-// thresholdWorker handles threshold events
+// thresholdWorker handles threshold events.
 func (e *PolicyEngine) thresholdWorker() {
 	defer e.workerWg.Done()
 
@@ -890,7 +923,7 @@ func (e *PolicyEngine) thresholdWorker() {
 	}
 }
 
-// handleThresholdEvent handles a threshold crossing event
+// handleThresholdEvent handles a threshold crossing event.
 func (e *PolicyEngine) handleThresholdEvent(event ThresholdEvent) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
@@ -927,10 +960,11 @@ func (e *PolicyEngine) handleThresholdEvent(event ThresholdEvent) {
 	}
 }
 
-// executeCapacityPolicy moves objects to free up tier capacity
+// executeCapacityPolicy moves objects to free up tier capacity.
 func (e *PolicyEngine) executeCapacityPolicy(ctx context.Context, policy *AdvancedPolicy, trigger *CapacityTrigger, event ThresholdEvent) {
 	// Get target tier from actions
 	var targetTier TierType
+
 	for _, action := range policy.Actions {
 		if action.Type == ActionTransition && action.Transition != nil {
 			targetTier = action.Transition.TargetTier
@@ -981,7 +1015,8 @@ func (e *PolicyEngine) executeCapacityPolicy(ctx context.Context, policy *Advanc
 			}
 
 			// Transition object
-			if err := e.tierManager.TransitionObject(ctx, bucket, obj.Key, targetTier); err != nil {
+			err := e.tierManager.TransitionObject(ctx, bucket, obj.Key, targetTier)
+			if err != nil {
 				continue
 			}
 

@@ -28,7 +28,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err != nil {
+		err := cfg.Validate()
+		if err != nil {
 			t.Errorf("valid config should not error: %v", err)
 		}
 	})
@@ -39,7 +40,8 @@ func TestConfigValidation(t *testing.T) {
 			Rules: []Rule{},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for empty rules")
 		}
 	})
@@ -72,7 +74,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for duplicate rule ID")
 		}
 	})
@@ -94,7 +97,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for invalid rule ID")
 		}
 	})
@@ -115,7 +119,8 @@ func TestConfigValidation(t *testing.T) {
 			},
 		}
 
-		if err := cfg.Validate(); err == nil {
+		err := cfg.Validate()
+		if err == nil {
 			t.Error("expected error for missing destination bucket")
 		}
 	})
@@ -251,11 +256,13 @@ func TestQueue(t *testing.T) {
 		item, _ := q.Enqueue(ctx, "bucket", "key2", "", "PUT", "rule1")
 		_, _ = q.Dequeue(ctx)
 
-		if err := q.Complete(item.ID); err != nil {
+		err := q.Complete(item.ID)
+		if err != nil {
 			t.Errorf("complete failed: %v", err)
 		}
 
-		if _, err := q.Get(item.ID); err == nil {
+		_, err = q.Get(item.ID)
+		if err == nil {
 			t.Error("item should be removed after completion")
 		}
 	})
@@ -264,7 +271,8 @@ func TestQueue(t *testing.T) {
 		item, _ := q.Enqueue(ctx, "bucket", "key3", "", "PUT", "rule1")
 		_, _ = q.Dequeue(ctx)
 
-		if err := q.Fail(item.ID, io.EOF); err != nil {
+		err := q.Fail(item.ID, io.EOF)
+		if err != nil {
 			t.Errorf("fail failed: %v", err)
 		}
 
@@ -283,8 +291,9 @@ func TestQueue(t *testing.T) {
 		_, _ = q.Dequeue(ctx)
 
 		// Fail until max retry
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			_ = q.Fail(item.ID, io.EOF)
+
 			time.Sleep(10 * time.Millisecond)
 		}
 
@@ -312,10 +321,10 @@ func TestQueue(t *testing.T) {
 }
 
 // mockBackend implements ObjectBackend for testing
-// Thread-safe with RWMutex protection for concurrent access
+// Thread-safe with RWMutex protection for concurrent access.
 type mockBackend struct {
-	mu      sync.RWMutex
 	objects map[string][]byte
+	mu      sync.RWMutex
 }
 
 func newMockBackend() *mockBackend {
@@ -327,22 +336,28 @@ func newMockBackend() *mockBackend {
 func (m *mockBackend) GetObject(_ context.Context, bucket, key string) (io.ReadCloser, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	k := bucket + "/" + key
+
 	data, ok := m.objects[k]
 	if !ok {
 		return nil, io.EOF
 	}
+
 	return io.NopCloser(strings.NewReader(string(data))), nil
 }
 
 func (m *mockBackend) GetObjectInfo(_ context.Context, bucket, key string) (*ObjectInfo, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	k := bucket + "/" + key
+
 	data, ok := m.objects[k]
 	if !ok {
 		return nil, io.EOF
 	}
+
 	return &ObjectInfo{
 		Key:          key,
 		Size:         int64(len(data)),
@@ -354,15 +369,16 @@ func (m *mockBackend) GetObjectInfo(_ context.Context, bucket, key string) (*Obj
 func (m *mockBackend) PutObject(bucket, key string, data []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.objects[bucket+"/"+key] = data
 }
 
 // mockMetaStore implements MetadataStore for testing
-// Thread-safe with RWMutex protection for concurrent access
+// Thread-safe with RWMutex protection for concurrent access.
 type mockMetaStore struct {
-	mu       sync.RWMutex
 	configs  map[string]*Config
 	statuses map[string]*ReplicationStatus
+	mu       sync.RWMutex
 }
 
 func newMockMetaStore() *mockMetaStore {
@@ -375,43 +391,54 @@ func newMockMetaStore() *mockMetaStore {
 func (m *mockMetaStore) GetReplicationConfig(_ context.Context, bucket string) (*Config, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	cfg, ok := m.configs[bucket]
 	if !ok {
 		return nil, io.EOF
 	}
+
 	return cfg, nil
 }
 
 func (m *mockMetaStore) SetReplicationConfig(_ context.Context, bucket string, config *Config) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.configs[bucket] = config
+
 	return nil
 }
 
 func (m *mockMetaStore) DeleteReplicationConfig(_ context.Context, bucket string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	delete(m.configs, bucket)
+
 	return nil
 }
 
 func (m *mockMetaStore) GetReplicationStatus(_ context.Context, bucket, key, versionID string) (*ReplicationStatus, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	k := bucket + "/" + key + "/" + versionID
+
 	status, ok := m.statuses[k]
 	if !ok {
 		return nil, io.EOF
 	}
+
 	return status, nil
 }
 
 func (m *mockMetaStore) SetReplicationStatus(_ context.Context, bucket, key, versionID string, status *ReplicationStatus) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	k := bucket + "/" + key + "/" + versionID
 	m.statuses[k] = status
+
 	return nil
 }
 
@@ -440,7 +467,8 @@ func TestService(t *testing.T) {
 			},
 		}
 
-		if err := svc.SetConfig(ctx, "source-bucket", config); err != nil {
+		err := svc.SetConfig(ctx, "source-bucket", config)
+		if err != nil {
 			t.Fatalf("set config failed: %v", err)
 		}
 
@@ -455,11 +483,13 @@ func TestService(t *testing.T) {
 	})
 
 	t.Run("DeleteConfig", func(t *testing.T) {
-		if err := svc.DeleteConfig(ctx, "source-bucket"); err != nil {
+		err := svc.DeleteConfig(ctx, "source-bucket")
+		if err != nil {
 			t.Fatalf("delete config failed: %v", err)
 		}
 
-		if _, err := svc.GetConfig(ctx, "source-bucket"); err == nil {
+		_, err = svc.GetConfig(ctx, "source-bucket")
+		if err == nil {
 			t.Error("config should be deleted")
 		}
 	})

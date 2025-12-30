@@ -13,14 +13,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockMetadataStore implements metadata.Store interface for lifecycle testing
+// MockMetadataStore implements metadata.Store interface for lifecycle testing.
 type MockMetadataStore struct {
-	mu             sync.RWMutex
-	isLeader       bool
+	listBucketsErr error
 	buckets        map[string]*metadata.Bucket
 	objects        map[string][]*metadata.ObjectMeta
 	versions       map[string]*metadata.VersionListing
-	listBucketsErr error
+	mu             sync.RWMutex
+	isLeader       bool
 }
 
 func NewMockMetadataStore() *MockMetadataStore {
@@ -40,26 +40,32 @@ func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*m
 	if m.listBucketsErr != nil {
 		return nil, m.listBucketsErr
 	}
+
 	buckets := make([]*metadata.Bucket, 0, len(m.buckets))
 	for _, b := range m.buckets {
 		buckets = append(buckets, b)
 	}
+
 	return buckets, nil
 }
 
 func (m *MockMetadataStore) GetBucket(ctx context.Context, name string) (*metadata.Bucket, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if b, ok := m.buckets[name]; ok {
 		return b, nil
 	}
+
 	return nil, s3errors.ErrNoSuchBucket
 }
 
 func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*metadata.ObjectListing, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	objs := m.objects[bucket]
+
 	return &metadata.ObjectListing{
 		Objects:     objs,
 		IsTruncated: false,
@@ -69,20 +75,27 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionMarker string, maxKeys int) (*metadata.VersionListing, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if v, ok := m.versions[bucket]; ok {
 		return v, nil
 	}
+
 	return &metadata.VersionListing{
 		Versions:      []*metadata.ObjectMeta{},
 		DeleteMarkers: []*metadata.ObjectMeta{},
 	}, nil
 }
 
-// Implement remaining interface methods as no-ops
-func (m *MockMetadataStore) CreateBucket(ctx context.Context, bucket *metadata.Bucket) error { return nil }
-func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.Bucket) error { return nil }
-func (m *MockMetadataStore) DeleteBucket(ctx context.Context, name string) error             { return nil }
+// Implement remaining interface methods as no-ops.
+func (m *MockMetadataStore) CreateBucket(ctx context.Context, bucket *metadata.Bucket) error {
+	return nil
+}
+func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.Bucket) error {
+	return nil
+}
+func (m *MockMetadataStore) DeleteBucket(ctx context.Context, name string) error { return nil }
 func (m *MockMetadataStore) GetObject(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) PutObject(ctx context.Context, bucket string, obj *metadata.ObjectMeta) error {
@@ -90,6 +103,7 @@ func (m *MockMetadataStore) PutObject(ctx context.Context, bucket string, obj *m
 }
 func (m *MockMetadataStore) DeleteObject(ctx context.Context, bucket, key string) error { return nil }
 func (m *MockMetadataStore) GetObjectVersion(ctx context.Context, bucket, key, versionID string) (*metadata.ObjectMeta, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {
@@ -99,6 +113,7 @@ func (m *MockMetadataStore) CreateMultipartUpload(ctx context.Context, upload *m
 	return nil
 }
 func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*metadata.MultipartUpload, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
@@ -123,41 +138,84 @@ func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID 
 	return nil, nil
 }
 func (m *MockMetadataStore) GetClusterInfo(ctx context.Context) (*metadata.ClusterInfo, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) LeaderAddress() (string, error) { return "", nil }
-func (m *MockMetadataStore) PutObjectMeta(ctx context.Context, meta *metadata.ObjectMeta) error { return nil }
-func (m *MockMetadataStore) GetObjectMeta(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) { return nil, nil }
-func (m *MockMetadataStore) DeleteObjectMeta(ctx context.Context, bucket, key string) error { return nil }
-func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *metadata.ObjectMeta, preserveOldVersions bool) error { return nil }
+func (m *MockMetadataStore) PutObjectMeta(ctx context.Context, meta *metadata.ObjectMeta) error {
+	return nil
+}
+func (m *MockMetadataStore) GetObjectMeta(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
+	return nil, nil
+}
+func (m *MockMetadataStore) DeleteObjectMeta(ctx context.Context, bucket, key string) error {
+	return nil
+}
+func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *metadata.ObjectMeta, preserveOldVersions bool) error {
+	return nil
+}
 func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User) error { return nil }
-func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.User, error) { return nil, nil }
-func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username string) (*metadata.User, error) { return nil, nil }
+func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.User, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
+	return nil, nil
+}
+func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username string) (*metadata.User, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
+	return nil, nil
+}
 func (m *MockMetadataStore) UpdateUser(ctx context.Context, user *metadata.User) error { return nil }
-func (m *MockMetadataStore) DeleteUser(ctx context.Context, id string) error { return nil }
-func (m *MockMetadataStore) ListUsers(ctx context.Context) ([]*metadata.User, error) { return nil, nil }
-func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.AccessKey) error { return nil }
-func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string) (*metadata.AccessKey, error) { return nil, nil }
-func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID string) error { return nil }
-func (m *MockMetadataStore) ListAccessKeys(ctx context.Context, userID string) ([]*metadata.AccessKey, error) { return nil, nil }
-func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.Policy) error { return nil }
-func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metadata.Policy, error) { return nil, nil }
-func (m *MockMetadataStore) UpdatePolicy(ctx context.Context, policy *metadata.Policy) error { return nil }
+func (m *MockMetadataStore) DeleteUser(ctx context.Context, id string) error           { return nil }
+func (m *MockMetadataStore) ListUsers(ctx context.Context) ([]*metadata.User, error)   { return nil, nil }
+func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.AccessKey) error {
+	return nil
+}
+func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string) (*metadata.AccessKey, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
+	return nil, nil
+}
+func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID string) error {
+	return nil
+}
+func (m *MockMetadataStore) ListAccessKeys(ctx context.Context, userID string) ([]*metadata.AccessKey, error) {
+	return nil, nil
+}
+func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.Policy) error {
+	return nil
+}
+func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metadata.Policy, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
+	return nil, nil
+}
+func (m *MockMetadataStore) UpdatePolicy(ctx context.Context, policy *metadata.Policy) error {
+	return nil
+}
 func (m *MockMetadataStore) DeletePolicy(ctx context.Context, name string) error { return nil }
-func (m *MockMetadataStore) ListPolicies(ctx context.Context) ([]*metadata.Policy, error) { return nil, nil }
+func (m *MockMetadataStore) ListPolicies(ctx context.Context) ([]*metadata.Policy, error) {
+	return nil, nil
+}
 func (m *MockMetadataStore) RemoveNode(ctx context.Context, nodeID string) error { return nil }
-func (m *MockMetadataStore) ListNodes(ctx context.Context) ([]*metadata.NodeInfo, error) { return nil, nil }
-func (m *MockMetadataStore) StoreAuditEvent(ctx context.Context, event *audit.AuditEvent) error { return nil }
-func (m *MockMetadataStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) { return nil, nil }
-func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error) { return 0, nil }
-func (m *MockMetadataStore) Close() error                  { return nil }
+func (m *MockMetadataStore) ListNodes(ctx context.Context) ([]*metadata.NodeInfo, error) {
+	return nil, nil
+}
+func (m *MockMetadataStore) StoreAuditEvent(ctx context.Context, event *audit.AuditEvent) error {
+	return nil
+}
+func (m *MockMetadataStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) {
+	//nolint:nilnil // mock returns nil,nil for empty result
+	return nil, nil
+}
+func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error) {
+	return 0, nil
+}
+func (m *MockMetadataStore) Close() error { return nil }
 
-// MockObjectService implements ObjectService interface
+// MockObjectService implements ObjectService interface.
 type MockObjectService struct {
-	mu             sync.Mutex
-	deletedObjects map[string][]string
+	deletedObjects  map[string][]string
 	deletedVersions map[string]map[string][]string
-	transitions    map[string]map[string]string
+	transitions     map[string]map[string]string
+	mu              sync.Mutex
 }
 
 func NewMockObjectService() *MockObjectService {
@@ -171,34 +229,42 @@ func NewMockObjectService() *MockObjectService {
 func (m *MockObjectService) DeleteObject(ctx context.Context, bucket, key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.deletedObjects[bucket] = append(m.deletedObjects[bucket], key)
+
 	return nil
 }
 
 func (m *MockObjectService) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.deletedVersions[bucket] == nil {
 		m.deletedVersions[bucket] = make(map[string][]string)
 	}
+
 	m.deletedVersions[bucket][key] = append(m.deletedVersions[bucket][key], versionID)
+
 	return nil
 }
 
 func (m *MockObjectService) TransitionStorageClass(ctx context.Context, bucket, key, targetClass string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.transitions[bucket] == nil {
 		m.transitions[bucket] = make(map[string]string)
 	}
+
 	m.transitions[bucket][key] = targetClass
+
 	return nil
 }
 
-// MockMultipartService implements MultipartService interface
+// MockMultipartService implements MultipartService interface.
 type MockMultipartService struct {
-	uploads       []*metadata.MultipartUpload
 	abortedUploads map[string]bool
+	uploads        []*metadata.MultipartUpload
 }
 
 func NewMockMultipartService() *MockMultipartService {
@@ -368,9 +434,9 @@ func TestEvaluateObject(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
+		obj            *metadata.ObjectMeta
 		name           string
 		rules          []LifecycleRule
-		obj            *metadata.ObjectMeta
 		expectedAction Action
 	}{
 		{
@@ -519,10 +585,10 @@ func TestEvaluateObject(t *testing.T) {
 
 func TestLifecycleRuleMatching(t *testing.T) {
 	tests := []struct {
-		name     string
 		rule     LifecycleRule
-		key      string
 		tags     map[string]string
+		name     string
+		key      string
 		expected bool
 	}{
 		{
@@ -604,10 +670,10 @@ func TestIsEnabled(t *testing.T) {
 func TestConvertMetadataRules(t *testing.T) {
 	metaRules := []metadata.LifecycleRule{
 		{
-			ID:                             "rule1",
-			Enabled:                        true,
-			Prefix:                         "logs/",
-			ExpirationDays:                 30,
+			ID:                              "rule1",
+			Enabled:                         true,
+			Prefix:                          "logs/",
+			ExpirationDays:                  30,
 			NoncurrentVersionExpirationDays: 7,
 			Transitions: []metadata.LifecycleTransition{
 				{

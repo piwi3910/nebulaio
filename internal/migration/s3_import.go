@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,19 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+)
+
+// File permission constants.
+const (
+	stateDirPermissions  = 0750
+	jobsFilePermissions  = 0644
+	failedLogPermissions = 0600
+)
+
+// Migration operation constants.
+const (
+	defaultHTTPTimeout = 30 * time.Minute
+	listMaxKeys        = 1000
 )
 
 // SourceType represents the type of source system.
@@ -50,98 +64,85 @@ const (
 
 // MigrationConfig contains configuration for a migration job.
 type MigrationConfig struct {
-	// Source configuration
-	SourceType      SourceType
-	SourceEndpoint  string
-	SourceAccessKey string
-	SourceSecretKey string
-	SourceRegion    string
-	SourceSecure    bool
-
-	// Source selection
-	SourceBuckets []string
-	SourcePrefix  string
-	SourceExclude []string
-
-	// Destination configuration
-	DestBuckets []string
-	DestPrefix  string
-
-	// Migration options
-	Concurrency      int
-	SkipExisting     bool
-	Overwrite        bool
-	PreserveMetadata bool
-	PreserveTags     bool
-	DryRun           bool
-
-	// Bandwidth limiting
-	MaxBandwidth int64 // bytes per second, 0 = unlimited
-
-	// Filtering
-	MinSize        int64
-	MaxSize        int64
-	ModifiedAfter  *time.Time
-	ModifiedBefore *time.Time
-	ContentTypes   []string
-
-	// Verification
-	VerifyChecksum bool
+	ModifiedAfter    *time.Time `json:"modifiedAfter,omitempty"`
+	ModifiedBefore   *time.Time `json:"modifiedBefore,omitempty"`
+	DestPrefix       string     `json:"destPrefix"`
+	SourceEndpoint   string     `json:"sourceEndpoint"`
+	SourceAccessKey  string     `json:"sourceAccessKey"`
+	SourceSecretKey  string     `json:"sourceSecretKey"`
+	SourceRegion     string     `json:"sourceRegion"`
+	SourceType       SourceType `json:"sourceType"`
+	SourcePrefix     string     `json:"sourcePrefix"`
+	SourceBuckets    []string   `json:"sourceBuckets"`
+	DestBuckets      []string   `json:"destBuckets"`
+	SourceExclude    []string   `json:"sourceExclude,omitempty"`
+	ContentTypes     []string   `json:"contentTypes,omitempty"`
+	MinSize          int64      `json:"minSize,omitempty"`
+	MaxBandwidth     int64      `json:"maxBandwidth,omitempty"`
+	MaxSize          int64      `json:"maxSize,omitempty"`
+	Concurrency      int        `json:"concurrency"`
+	PreserveMetadata bool       `json:"preserveMetadata"`
+	PreserveTags     bool       `json:"preserveTags"`
+	DryRun           bool       `json:"dryRun"`
+	Overwrite        bool       `json:"overwrite"`
+	SkipExisting     bool       `json:"skipExisting"`
+	SourceSecure     bool       `json:"sourceSecure"`
+	VerifyChecksum   bool       `json:"verifyChecksum"`
 }
 
 // MigrationJob represents a migration job.
 type MigrationJob struct {
-	ID        string             `json:"id"`
-	Config    *MigrationConfig   `json:"config"`
-	Status    MigrationStatus    `json:"status"`
 	StartTime time.Time          `json:"startTime"`
 	EndTime   time.Time          `json:"endTime,omitempty"`
+	Config    *MigrationConfig   `json:"config"`
 	Progress  *MigrationProgress `json:"progress"`
-	Error     string             `json:"error,omitempty"`
 	Resume    *ResumeState       `json:"resume,omitempty"`
+	ID        string             `json:"id"`
+	Status    MigrationStatus    `json:"status"`
+	Error     string             `json:"error,omitempty"`
 }
 
 // MigrationProgress tracks migration progress.
 type MigrationProgress struct {
+	StartTime              time.Time     `json:"startTime"`
+	LastUpdateTime         time.Time     `json:"lastUpdateTime"`
+	CurrentBucket          string        `json:"currentBucket"`
+	CurrentKey             string        `json:"currentKey"`
 	TotalObjects           int64         `json:"totalObjects"`
 	MigratedObjects        int64         `json:"migratedObjects"`
 	FailedObjects          int64         `json:"failedObjects"`
 	SkippedObjects         int64         `json:"skippedObjects"`
 	TotalBytes             int64         `json:"totalBytes"`
 	MigratedBytes          int64         `json:"migratedBytes"`
-	CurrentBucket          string        `json:"currentBucket"`
-	CurrentKey             string        `json:"currentKey"`
-	StartTime              time.Time     `json:"startTime"`
-	LastUpdateTime         time.Time     `json:"lastUpdateTime"`
 	BytesPerSecond         float64       `json:"bytesPerSecond"`
 	EstimatedTimeRemaining time.Duration `json:"estimatedTimeRemaining"`
 }
 
 // ResumeState contains state for resuming a migration.
 type ResumeState struct {
+	ProcessedKeys map[string]bool `json:"processedKeys"`
 	LastBucket    string          `json:"lastBucket"`
 	LastKey       string          `json:"lastKey"`
 	LastVersionID string          `json:"lastVersionId,omitempty"`
-	ProcessedKeys map[string]bool `json:"processedKeys"`
 }
 
 // FailedObject represents a failed migration.
 type FailedObject struct {
-	Bucket    string
-	Key       string
-	Error     string
-	Timestamp time.Time
-	Retries   int
+	Timestamp time.Time `json:"timestamp"`
+	Bucket    string    `json:"bucket"`
+	Key       string    `json:"key"`
+	Error     string    `json:"error"`
+	Retries   int       `json:"retries"`
 }
 
 // MigrationManager manages migration jobs.
 type MigrationManager struct {
-	mu          sync.RWMutex
+	destStorage DestinationStorage
 	jobs        map[string]*MigrationJob
 	activeJob   *activeMigrationJob
-	destStorage DestinationStorage
-	stateDir    string
 	failedLog   *os.File
+	stateDir    string
+	mu          sync.RWMutex
 }
 
 // activeMigrationJob represents an active migration.
@@ -174,22 +175,22 @@ type PutOptions struct {
 
 // ObjectInfo contains object metadata.
 type ObjectInfo struct {
-	Key          string
-	Size         int64
-	ETag         string
-	ContentType  string
 	LastModified time.Time
 	Metadata     map[string]string
+	Key          string
+	ETag         string
+	ContentType  string
+	Size         int64
 }
 
 // S3Client is a simple S3 client for migration.
 type S3Client struct {
+	client    *http.Client
 	endpoint  string
 	accessKey string
 	secretKey string
 	region    string
 	secure    bool
-	client    *http.Client
 }
 
 // ListBucketResult represents the result of ListObjects.
@@ -199,9 +200,9 @@ type ListBucketResult struct {
 	Prefix      string     `xml:"Prefix"`
 	Marker      string     `xml:"Marker"`
 	NextMarker  string     `xml:"NextMarker"`
+	Contents    []S3Object `xml:"Contents"`
 	MaxKeys     int        `xml:"MaxKeys"`
 	IsTruncated bool       `xml:"IsTruncated"`
-	Contents    []S3Object `xml:"Contents"`
 }
 
 // S3Object represents an object in an S3 bucket.
@@ -209,18 +210,21 @@ type S3Object struct {
 	Key          string `xml:"Key"`
 	LastModified string `xml:"LastModified"`
 	ETag         string `xml:"ETag"`
-	Size         int64  `xml:"Size"`
 	StorageClass string `xml:"StorageClass"`
+	Size         int64  `xml:"Size"`
 }
 
 // NewMigrationManager creates a new migration manager.
 func NewMigrationManager(destStorage DestinationStorage, stateDir string) (*MigrationManager, error) {
-	if err := os.MkdirAll(stateDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create state directory: %w", err)
+	mkdirErr := os.MkdirAll(stateDir, stateDirPermissions)
+	if mkdirErr != nil {
+		return nil, fmt.Errorf("failed to create state directory: %w", mkdirErr)
 	}
 
 	failedLogPath := filepath.Join(stateDir, "failed.log")
-	failedLog, err := os.OpenFile(failedLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+	//nolint:gosec // G304: failedLogPath is constructed from trusted config
+	failedLog, err := os.OpenFile(failedLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, failedLogPermissions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open failed log: %w", err)
 	}
@@ -233,8 +237,9 @@ func NewMigrationManager(destStorage DestinationStorage, stateDir string) (*Migr
 	}
 
 	// Load existing jobs
-	if err := mm.loadJobs(); err != nil {
-		return nil, fmt.Errorf("failed to load jobs: %w", err)
+	loadErr := mm.loadJobs()
+	if loadErr != nil {
+		return nil, fmt.Errorf("failed to load jobs: %w", loadErr)
 	}
 
 	return mm, nil
@@ -243,17 +248,22 @@ func NewMigrationManager(destStorage DestinationStorage, stateDir string) (*Migr
 // loadJobs loads existing job states.
 func (mm *MigrationManager) loadJobs() error {
 	jobsPath := filepath.Join(mm.stateDir, "jobs.json")
+
+	//nolint:gosec // G304: jobsPath is constructed from trusted config
 	data, err := os.ReadFile(jobsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
+
 		return err
 	}
 
 	var jobs []*MigrationJob
-	if err := json.Unmarshal(data, &jobs); err != nil {
-		return err
+
+	unmarshalErr := json.Unmarshal(data, &jobs)
+	if unmarshalErr != nil {
+		return unmarshalErr
 	}
 
 	for _, j := range jobs {
@@ -266,10 +276,12 @@ func (mm *MigrationManager) loadJobs() error {
 // saveJobs saves job states.
 func (mm *MigrationManager) saveJobs() error {
 	mm.mu.RLock()
+
 	jobs := make([]*MigrationJob, 0, len(mm.jobs))
 	for _, j := range mm.jobs {
 		jobs = append(jobs, j)
 	}
+
 	mm.mu.RUnlock()
 
 	data, err := json.MarshalIndent(jobs, "", "  ")
@@ -278,12 +290,14 @@ func (mm *MigrationManager) saveJobs() error {
 	}
 
 	jobsPath := filepath.Join(mm.stateDir, "jobs.json")
-	return os.WriteFile(jobsPath, data, 0644)
+
+	return os.WriteFile(jobsPath, data, jobsFilePermissions)
 }
 
 // CreateMigration creates a new migration job.
 func (mm *MigrationManager) CreateMigration(config *MigrationConfig) (*MigrationJob, error) {
-	if err := mm.validateConfig(config); err != nil {
+	err := mm.validateConfig(config)
+	if err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
@@ -299,7 +313,8 @@ func (mm *MigrationManager) CreateMigration(config *MigrationConfig) (*Migration
 	mm.jobs[job.ID] = job
 	mm.mu.Unlock()
 
-	if err := mm.saveJobs(); err != nil {
+	err = mm.saveJobs()
+	if err != nil {
 		return nil, fmt.Errorf("failed to save job: %w", err)
 	}
 
@@ -309,11 +324,11 @@ func (mm *MigrationManager) CreateMigration(config *MigrationConfig) (*Migration
 // validateConfig validates migration configuration.
 func (mm *MigrationManager) validateConfig(config *MigrationConfig) error {
 	if config.SourceEndpoint == "" && config.SourceType != SourceTypeLocal {
-		return fmt.Errorf("source endpoint is required")
+		return errors.New("source endpoint is required")
 	}
 
 	if len(config.SourceBuckets) == 0 {
-		return fmt.Errorf("at least one source bucket is required")
+		return errors.New("at least one source bucket is required")
 	}
 
 	if config.Concurrency < 1 {
@@ -323,7 +338,7 @@ func (mm *MigrationManager) validateConfig(config *MigrationConfig) error {
 	if len(config.DestBuckets) == 0 {
 		config.DestBuckets = config.SourceBuckets
 	} else if len(config.DestBuckets) != len(config.SourceBuckets) {
-		return fmt.Errorf("destination bucket count must match source bucket count")
+		return errors.New("destination bucket count must match source bucket count")
 	}
 
 	return nil
@@ -332,9 +347,10 @@ func (mm *MigrationManager) validateConfig(config *MigrationConfig) error {
 // StartMigration starts a migration job.
 func (mm *MigrationManager) StartMigration(ctx context.Context, jobID string) error {
 	mm.mu.Lock()
+
 	if mm.activeJob != nil {
 		mm.mu.Unlock()
-		return fmt.Errorf("a migration is already running")
+		return errors.New("a migration is already running")
 	}
 
 	job, exists := mm.jobs[jobID]
@@ -369,6 +385,7 @@ func (mm *MigrationManager) StartMigration(ctx context.Context, jobID string) er
 
 	mm.activeJob = activeJob
 	job.Status = MigrationStatusRunning
+
 	mm.mu.Unlock()
 
 	// Start migration in goroutine
@@ -385,7 +402,7 @@ func NewS3Client(endpoint, accessKey, secretKey, region string, secure bool) *S3
 		secretKey: secretKey,
 		region:    region,
 		secure:    secure,
-		client:    &http.Client{Timeout: 30 * time.Minute},
+		client:    &http.Client{Timeout: defaultHTTPTimeout},
 	}
 }
 
@@ -400,14 +417,16 @@ func (c *S3Client) ListObjects(ctx context.Context, bucket, prefix, marker strin
 	if prefix != "" {
 		params.Set("prefix", prefix)
 	}
+
 	if marker != "" {
 		params.Set("marker", marker)
 	}
+
 	params.Set("max-keys", strconv.Itoa(maxKeys))
 
 	reqURL := fmt.Sprintf("%s://%s/%s?%s", scheme, c.endpoint, bucket, params.Encode())
 
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -418,6 +437,7 @@ func (c *S3Client) ListObjects(ctx context.Context, bucket, prefix, marker strin
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -426,8 +446,10 @@ func (c *S3Client) ListObjects(ctx context.Context, bucket, prefix, marker strin
 	}
 
 	var result ListBucketResult
-	if err := xml.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+
+	decodeErr := xml.NewDecoder(resp.Body).Decode(&result)
+	if decodeErr != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", decodeErr)
 	}
 
 	return &result, nil
@@ -442,7 +464,7 @@ func (c *S3Client) GetObject(ctx context.Context, bucket, key string) (io.ReadCl
 
 	reqURL := fmt.Sprintf("%s://%s/%s/%s", scheme, c.endpoint, bucket, url.PathEscape(key))
 
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -457,6 +479,7 @@ func (c *S3Client) GetObject(ctx context.Context, bucket, key string) (io.ReadCl
 	if resp.StatusCode != http.StatusOK {
 		_ = resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, nil, fmt.Errorf("get object failed: %s - %s", resp.Status, string(body))
 	}
 
@@ -465,6 +488,7 @@ func (c *S3Client) GetObject(ctx context.Context, bucket, key string) (io.ReadCl
 
 	// Extract metadata
 	metadata := make(map[string]string)
+
 	for k, v := range resp.Header {
 		if strings.HasPrefix(strings.ToLower(k), "x-amz-meta-") {
 			metaKey := strings.TrimPrefix(strings.ToLower(k), "x-amz-meta-")
@@ -534,6 +558,7 @@ func (c *S3Client) signRequest(req *http.Request) {
 
 func (c *S3Client) getCanonicalHeaders(req *http.Request) string {
 	headers := make(map[string]string)
+
 	for k := range req.Header {
 		lowerKey := strings.ToLower(k)
 		if strings.HasPrefix(lowerKey, "x-amz-") || lowerKey == "host" {
@@ -541,10 +566,11 @@ func (c *S3Client) getCanonicalHeaders(req *http.Request) string {
 		}
 	}
 
-	var keys []string
+	keys := make([]string, 0, len(headers))
 	for k := range headers {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
 
 	var canonical strings.Builder
@@ -560,13 +586,16 @@ func (c *S3Client) getCanonicalHeaders(req *http.Request) string {
 
 func (c *S3Client) getSignedHeaders(req *http.Request) string {
 	var headers []string
+
 	for k := range req.Header {
 		lowerKey := strings.ToLower(k)
 		if strings.HasPrefix(lowerKey, "x-amz-") || lowerKey == "host" {
 			headers = append(headers, lowerKey)
 		}
 	}
+
 	sort.Strings(headers)
+
 	return strings.Join(headers, ";")
 }
 
@@ -578,6 +607,7 @@ func (c *S3Client) sha256Hash(data []byte) string {
 func (c *S3Client) hmacSHA256(key, data []byte) []byte {
 	h := hmac.New(sha256.New, key)
 	h.Write(data)
+
 	return h.Sum(nil)
 }
 
@@ -586,6 +616,7 @@ func (c *S3Client) getSignatureKey(dateStamp string) []byte {
 	kRegion := c.hmacSHA256(kDate, []byte(c.region))
 	kService := c.hmacSHA256(kRegion, []byte("s3"))
 	kSigning := c.hmacSHA256(kService, []byte("aws4_request"))
+
 	return kSigning
 }
 
@@ -595,7 +626,9 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 		mm.mu.Lock()
 		mm.activeJob = nil
 		mm.mu.Unlock()
-		if saveErr := mm.saveJobs(); saveErr != nil {
+
+		saveErr := mm.saveJobs()
+		if saveErr != nil {
 			log.Error().
 				Err(saveErr).
 				Str("job_id", activeJob.job.ID).
@@ -611,36 +644,46 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 		if err != nil {
 			job.Status = MigrationStatusFailed
 			job.Error = fmt.Sprintf("failed to check bucket %s: %v", destBucket, err)
+
 			return
 		}
+
 		if !exists {
-			if err := mm.destStorage.CreateBucket(activeJob.ctx, destBucket); err != nil {
+			err := mm.destStorage.CreateBucket(activeJob.ctx, destBucket)
+			if err != nil {
 				job.Status = MigrationStatusFailed
 				job.Error = fmt.Sprintf("failed to create bucket %s: %v", destBucket, err)
+
 				return
 			}
 		}
 	}
 
 	// First pass: count objects
-	if err := mm.countObjects(activeJob); err != nil {
+	err := mm.countObjects(activeJob)
+	if err != nil {
 		if activeJob.ctx.Err() != nil {
 			job.Status = MigrationStatusCancelled
 			return
 		}
+
 		job.Status = MigrationStatusFailed
 		job.Error = err.Error()
+
 		return
 	}
 
 	// Second pass: migrate objects
-	if err := mm.migrateObjects(activeJob); err != nil {
+	err = mm.migrateObjects(activeJob)
+	if err != nil {
 		if activeJob.ctx.Err() != nil {
 			job.Status = MigrationStatusCancelled
 			return
 		}
+
 		job.Status = MigrationStatusFailed
 		job.Error = err.Error()
+
 		return
 	}
 
@@ -654,6 +697,7 @@ func (mm *MigrationManager) countObjects(activeJob *activeMigrationJob) error {
 
 	for _, bucket := range job.Config.SourceBuckets {
 		marker := ""
+
 		for {
 			select {
 			case <-activeJob.ctx.Done():
@@ -666,7 +710,7 @@ func (mm *MigrationManager) countObjects(activeJob *activeMigrationJob) error {
 				bucket,
 				job.Config.SourcePrefix,
 				marker,
-				1000,
+				listMaxKeys,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to list objects in %s: %w", bucket, err)
@@ -682,6 +726,7 @@ func (mm *MigrationManager) countObjects(activeJob *activeMigrationJob) error {
 			if !result.IsTruncated {
 				break
 			}
+
 			marker = result.NextMarker
 			if marker == "" && len(result.Contents) > 0 {
 				marker = result.Contents[len(result.Contents)-1].Key
@@ -698,9 +743,12 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 
 	// Semaphore for concurrency control
 	sem := make(chan struct{}, job.Config.Concurrency)
-	var wg sync.WaitGroup
-	var migrationErr error
-	var errMu sync.Mutex
+
+	var (
+		wg           sync.WaitGroup
+		migrationErr error
+		errMu        sync.Mutex
+	)
 
 	for i, sourceBucket := range job.Config.SourceBuckets {
 		destBucket := job.Config.DestBuckets[i]
@@ -720,8 +768,10 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 
 			// Check for pause
 			activeJob.mu.Lock()
+
 			if activeJob.isPaused {
 				activeJob.mu.Unlock()
+
 				select {
 				case <-activeJob.resumeChan:
 				case <-activeJob.ctx.Done():
@@ -736,7 +786,7 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 				sourceBucket,
 				job.Config.SourcePrefix,
 				marker,
-				1000,
+				listMaxKeys,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to list objects: %w", err)
@@ -754,17 +804,22 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 				}
 
 				wg.Add(1)
+
 				go func(o S3Object) {
 					defer wg.Done()
+
 					sem <- struct{}{}
+
 					defer func() { <-sem }()
 
 					err := mm.migrateObject(activeJob, sourceBucket, destBucket, &o)
 					if err != nil {
 						errMu.Lock()
+
 						if migrationErr == nil {
 							migrationErr = err
 						}
+
 						errMu.Unlock()
 
 						atomic.AddInt64(&job.Progress.FailedObjects, 1)
@@ -782,6 +837,7 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 					if elapsed > 0 {
 						job.Progress.BytesPerSecond = float64(job.Progress.MigratedBytes) / elapsed.Seconds()
 					}
+
 					if job.Progress.BytesPerSecond > 0 {
 						remaining := job.Progress.TotalBytes - job.Progress.MigratedBytes
 						job.Progress.EstimatedTimeRemaining = time.Duration(float64(remaining) / job.Progress.BytesPerSecond * float64(time.Second))
@@ -794,6 +850,7 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 			if !result.IsTruncated {
 				break
 			}
+
 			marker = result.NextMarker
 			if marker == "" && len(result.Contents) > 0 {
 				marker = result.Contents[len(result.Contents)-1].Key
@@ -804,7 +861,9 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 				LastBucket: sourceBucket,
 				LastKey:    marker,
 			}
-			if saveErr := mm.saveJobs(); saveErr != nil {
+
+			saveErr := mm.saveJobs()
+			if saveErr != nil {
 				log.Warn().
 					Err(saveErr).
 					Str("job_id", job.ID).
@@ -831,6 +890,7 @@ func (mm *MigrationManager) shouldMigrate(config *MigrationConfig, obj *S3Object
 	if config.MinSize > 0 && obj.Size < config.MinSize {
 		return false
 	}
+
 	if config.MaxSize > 0 && obj.Size > config.MaxSize {
 		return false
 	}
@@ -840,6 +900,7 @@ func (mm *MigrationManager) shouldMigrate(config *MigrationConfig, obj *S3Object
 	if config.ModifiedAfter != nil && objTime.Before(*config.ModifiedAfter) {
 		return false
 	}
+
 	if config.ModifiedBefore != nil && objTime.After(*config.ModifiedBefore) {
 		return false
 	}
@@ -857,6 +918,7 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 	if config.SourcePrefix != "" {
 		destKey = strings.TrimPrefix(destKey, config.SourcePrefix)
 	}
+
 	if config.DestPrefix != "" {
 		destKey = config.DestPrefix + destKey
 	}
@@ -882,6 +944,7 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 	if err != nil {
 		return fmt.Errorf("failed to get source object: %w", err)
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Apply bandwidth limit
@@ -899,8 +962,9 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 		opts.Metadata = info.Metadata
 	}
 
-	if err := mm.destStorage.PutObject(activeJob.ctx, destBucket, destKey, limitedReader, info.Size, opts); err != nil {
-		return fmt.Errorf("failed to put object: %w", err)
+	putErr := mm.destStorage.PutObject(activeJob.ctx, destBucket, destKey, limitedReader, info.Size, opts)
+	if putErr != nil {
+		return fmt.Errorf("failed to put object: %w", putErr)
 	}
 
 	// Verify checksum if enabled
@@ -909,6 +973,7 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 		if err != nil {
 			return fmt.Errorf("failed to verify object: %w", err)
 		}
+
 		if destInfo.ETag != strings.Trim(obj.ETag, "\"") {
 			return fmt.Errorf("checksum mismatch: source=%s, dest=%s", obj.ETag, destInfo.ETag)
 		}
@@ -935,9 +1000,12 @@ func (mm *MigrationManager) logFailedObject(jobID, bucket, key string, err error
 			Str("key", key).
 			Str("original_error", err.Error()).
 			Msg("failed to marshal migration failure entry - failure will not be logged to file")
+
 		return
 	}
-	if _, writeErr := mm.failedLog.Write(append(data, '\n')); writeErr != nil {
+
+	_, writeErr := mm.failedLog.Write(append(data, '\n'))
+	if writeErr != nil {
 		log.Error().
 			Err(writeErr).
 			Str("job_id", jobID).
@@ -953,7 +1021,7 @@ func (mm *MigrationManager) PauseMigration() error {
 	defer mm.mu.Unlock()
 
 	if mm.activeJob == nil {
-		return fmt.Errorf("no active migration")
+		return errors.New("no active migration")
 	}
 
 	mm.activeJob.mu.Lock()
@@ -961,6 +1029,7 @@ func (mm *MigrationManager) PauseMigration() error {
 	mm.activeJob.mu.Unlock()
 
 	mm.activeJob.job.Status = MigrationStatusPaused
+
 	return nil
 }
 
@@ -970,20 +1039,23 @@ func (mm *MigrationManager) ResumeMigration() error {
 	defer mm.mu.Unlock()
 
 	if mm.activeJob == nil {
-		return fmt.Errorf("no active migration")
+		return errors.New("no active migration")
 	}
 
 	mm.activeJob.mu.Lock()
+
 	if !mm.activeJob.isPaused {
 		mm.activeJob.mu.Unlock()
-		return fmt.Errorf("migration is not paused")
+		return errors.New("migration is not paused")
 	}
+
 	mm.activeJob.isPaused = false
 	mm.activeJob.mu.Unlock()
 
 	close(mm.activeJob.resumeChan)
 	mm.activeJob.resumeChan = make(chan struct{})
 	mm.activeJob.job.Status = MigrationStatusRunning
+
 	return nil
 }
 
@@ -993,10 +1065,11 @@ func (mm *MigrationManager) CancelMigration() error {
 	defer mm.mu.Unlock()
 
 	if mm.activeJob == nil {
-		return fmt.Errorf("no active migration")
+		return errors.New("no active migration")
 	}
 
 	mm.activeJob.cancel()
+
 	return nil
 }
 
@@ -1009,6 +1082,7 @@ func (mm *MigrationManager) GetMigration(id string) (*MigrationJob, error) {
 	if !exists {
 		return nil, fmt.Errorf("job not found: %s", id)
 	}
+
 	return job, nil
 }
 
@@ -1035,7 +1109,7 @@ func (mm *MigrationManager) GetProgress() (*MigrationProgress, error) {
 	defer mm.mu.RUnlock()
 
 	if mm.activeJob == nil {
-		return nil, fmt.Errorf("no active migration")
+		return nil, errors.New("no active migration")
 	}
 
 	return mm.activeJob.job.Progress, nil
@@ -1043,9 +1117,9 @@ func (mm *MigrationManager) GetProgress() (*MigrationProgress, error) {
 
 // RateLimitedReader wraps a reader with rate limiting.
 type RateLimitedReader struct {
-	reader   io.Reader
-	rate     int64 // bytes per second
 	lastTime time.Time
+	reader   io.Reader
+	rate     int64
 	bucket   int64
 }
 
@@ -1086,6 +1160,7 @@ func (r *RateLimitedReader) Read(p []byte) (int, error) {
 
 	n, err := r.reader.Read(p[:toRead])
 	r.bucket -= int64(n)
+
 	return n, err
 }
 

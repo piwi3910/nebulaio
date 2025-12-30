@@ -7,85 +7,74 @@ import (
 	"time"
 )
 
-// Site represents a remote site in the replication cluster
+// Configuration constants.
+const (
+	defaultHealthCheckInterval = 30 * time.Second // Default health check interval
+)
+
+// Site represents a remote site in the replication cluster.
 type Site struct {
-	// Name is the unique name for this site
-	Name string `json:"name" yaml:"name"`
-	// Endpoint is the S3-compatible endpoint URL
-	Endpoint string `json:"endpoint" yaml:"endpoint"`
-	// AccessKey for authentication
-	AccessKey string `json:"accessKey" yaml:"accessKey"`
-	// SecretKey for authentication
-	SecretKey string `json:"secretKey" yaml:"secretKey"`
-	// Region of the site
-	Region string `json:"region,omitempty" yaml:"region,omitempty"`
-	// UseSSL enables HTTPS
-	UseSSL bool `json:"useSSL" yaml:"useSSL"`
-	// IsLocal indicates if this is the local site
-	IsLocal bool `json:"isLocal" yaml:"isLocal"`
-	// Status is the current connection status
-	Status SiteStatus `json:"status" yaml:"status"`
-	// LastSeen is when the site was last reachable
-	LastSeen time.Time `json:"lastSeen,omitempty" yaml:"lastSeen,omitempty"`
+	LastSeen  time.Time  `json:"lastSeen,omitempty" yaml:"lastSeen,omitempty"`
+	Name      string     `json:"name" yaml:"name"`
+	Endpoint  string     `json:"endpoint" yaml:"endpoint"`
+	AccessKey string     `json:"accessKey" yaml:"accessKey"`
+	SecretKey string     `json:"secretKey" yaml:"secretKey"`
+	Region    string     `json:"region,omitempty" yaml:"region,omitempty"`
+	Status    SiteStatus `json:"status" yaml:"status"`
+	UseSSL    bool       `json:"useSSL" yaml:"useSSL"`
+	IsLocal   bool       `json:"isLocal" yaml:"isLocal"`
 }
 
-// SiteStatus represents the status of a site
+// SiteStatus represents the status of a site.
 type SiteStatus string
 
 const (
-	// SiteStatusOnline indicates the site is reachable
+	// SiteStatusOnline indicates the site is reachable.
 	SiteStatusOnline SiteStatus = "online"
-	// SiteStatusOffline indicates the site is unreachable
+	// SiteStatusOffline indicates the site is unreachable.
 	SiteStatusOffline SiteStatus = "offline"
-	// SiteStatusSyncing indicates the site is syncing
+	// SiteStatusSyncing indicates the site is syncing.
 	SiteStatusSyncing SiteStatus = "syncing"
-	// SiteStatusError indicates an error with the site
+	// SiteStatusError indicates an error with the site.
 	SiteStatusError SiteStatus = "error"
 )
 
-// Config holds site replication configuration
+// Config holds site replication configuration.
 type Config struct {
-	// Sites is the list of all sites in the replication cluster
-	Sites []Site `json:"sites" yaml:"sites"`
-	// SyncInterval is how often to check for sync
-	SyncInterval time.Duration `json:"syncInterval" yaml:"syncInterval"`
-	// HealthCheckInterval is how often to check site health
-	HealthCheckInterval time.Duration `json:"healthCheckInterval" yaml:"healthCheckInterval"`
-	// ConflictResolution determines how conflicts are resolved
-	ConflictResolution ConflictResolution `json:"conflictResolution" yaml:"conflictResolution"`
-	// SyncBuckets lists buckets to sync (empty = all buckets)
-	SyncBuckets []string `json:"syncBuckets,omitempty" yaml:"syncBuckets,omitempty"`
-	// SyncIAM enables IAM policy synchronization
-	SyncIAM bool `json:"syncIAM" yaml:"syncIAM"`
-	// SyncBucketConfig enables bucket configuration sync
-	SyncBucketConfig bool `json:"syncBucketConfig" yaml:"syncBucketConfig"`
+	ConflictResolution  ConflictResolution `json:"conflictResolution" yaml:"conflictResolution"`
+	Sites               []Site             `json:"sites" yaml:"sites"`
+	SyncBuckets         []string           `json:"syncBuckets,omitempty" yaml:"syncBuckets,omitempty"`
+	SyncInterval        time.Duration      `json:"syncInterval" yaml:"syncInterval"`
+	HealthCheckInterval time.Duration      `json:"healthCheckInterval" yaml:"healthCheckInterval"`
+	SyncIAM             bool               `json:"syncIAM" yaml:"syncIAM"`
+	SyncBucketConfig    bool               `json:"syncBucketConfig" yaml:"syncBucketConfig"`
 }
 
-// ConflictResolution determines how conflicts are resolved
+// ConflictResolution determines how conflicts are resolved.
 type ConflictResolution string
 
 const (
-	// ConflictLastWriteWins uses timestamp to resolve conflicts
+	// ConflictLastWriteWins uses timestamp to resolve conflicts.
 	ConflictLastWriteWins ConflictResolution = "last-write-wins"
-	// ConflictLocalWins always prefers local version
+	// ConflictLocalWins always prefers local version.
 	ConflictLocalWins ConflictResolution = "local-wins"
-	// ConflictRemoteWins always prefers remote version
+	// ConflictRemoteWins always prefers remote version.
 	ConflictRemoteWins ConflictResolution = "remote-wins"
 )
 
-// DefaultConfig returns sensible defaults
+// DefaultConfig returns sensible defaults.
 func DefaultConfig() Config {
 	return Config{
 		Sites:               []Site{},
 		SyncInterval:        time.Minute,
-		HealthCheckInterval: 30 * time.Second,
+		HealthCheckInterval: defaultHealthCheckInterval,
 		ConflictResolution:  ConflictLastWriteWins,
 		SyncIAM:             true,
 		SyncBucketConfig:    true,
 	}
 }
 
-// Validate checks if the configuration is valid
+// Validate checks if the configuration is valid.
 func (c *Config) Validate() error {
 	if len(c.Sites) == 0 {
 		return errors.New("at least one site is required")
@@ -95,13 +84,15 @@ func (c *Config) Validate() error {
 	localCount := 0
 
 	for _, site := range c.Sites {
-		if err := site.Validate(); err != nil {
+		err := site.Validate()
+		if err != nil {
 			return err
 		}
 
 		if names[site.Name] {
 			return errors.New("duplicate site name: " + site.Name)
 		}
+
 		names[site.Name] = true
 
 		if site.IsLocal {
@@ -124,7 +115,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Validate checks if the site configuration is valid
+// Validate checks if the site configuration is valid.
 func (s *Site) Validate() error {
 	if s.Name == "" {
 		return errors.New("site name is required")
@@ -141,7 +132,8 @@ func (s *Site) Validate() error {
 	}
 
 	// Validate endpoint URL
-	if _, err := url.Parse(s.Endpoint); err != nil {
+	_, err := url.Parse(s.Endpoint)
+	if err != nil {
 		return errors.New("invalid endpoint URL: " + err.Error())
 	}
 
@@ -154,77 +146,75 @@ func (s *Site) Validate() error {
 	return nil
 }
 
-// GetLocalSite returns the local site from the config
+// GetLocalSite returns the local site from the config.
 func (c *Config) GetLocalSite() *Site {
 	for i := range c.Sites {
 		if c.Sites[i].IsLocal {
 			return &c.Sites[i]
 		}
 	}
+
 	return nil
 }
 
-// GetRemoteSites returns all remote sites
+// GetRemoteSites returns all remote sites.
 func (c *Config) GetRemoteSites() []Site {
 	var remote []Site
+
 	for _, site := range c.Sites {
 		if !site.IsLocal {
 			remote = append(remote, site)
 		}
 	}
+
 	return remote
 }
 
-// GetSite returns a site by name
+// GetSite returns a site by name.
 func (c *Config) GetSite(name string) *Site {
 	for i := range c.Sites {
 		if c.Sites[i].Name == name {
 			return &c.Sites[i]
 		}
 	}
+
 	return nil
 }
 
-// SyncState holds the current synchronization state
+// SyncState holds the current synchronization state.
 type SyncState struct {
-	// LastSync is when sync last completed
-	LastSync time.Time `json:"lastSync"`
-	// SyncInProgress indicates if sync is currently running
-	SyncInProgress bool `json:"syncInProgress"`
-	// LastError is the last sync error
-	LastError string `json:"lastError,omitempty"`
-	// PendingObjects is the number of objects pending sync
-	PendingObjects int64 `json:"pendingObjects"`
-	// SyncedObjects is the total objects synced
-	SyncedObjects int64 `json:"syncedObjects"`
-	// SyncedBytes is the total bytes synced
-	SyncedBytes int64 `json:"syncedBytes"`
+	LastSync       time.Time `json:"lastSync"`
+	LastError      string    `json:"lastError,omitempty"`
+	PendingObjects int64     `json:"pendingObjects"`
+	SyncedObjects  int64     `json:"syncedObjects"`
+	SyncedBytes    int64     `json:"syncedBytes"`
+	SyncInProgress bool      `json:"syncInProgress"`
 }
 
-// VectorClock tracks causality for conflict resolution
+// VectorClock tracks causality for conflict resolution.
 type VectorClock struct {
 	// Clocks maps site name to logical clock value
 	Clocks map[string]int64 `json:"clocks"`
 }
 
-// NewVectorClock creates a new vector clock
+// NewVectorClock creates a new vector clock.
 func NewVectorClock() *VectorClock {
 	return &VectorClock{
 		Clocks: make(map[string]int64),
 	}
 }
 
-// Increment increments the clock for a site
+// Increment increments the clock for a site.
 func (v *VectorClock) Increment(site string) {
 	v.Clocks[site]++
 }
 
-// Get returns the clock value for a site
+// Get returns the clock value for a site.
 func (v *VectorClock) Get(site string) int64 {
 	return v.Clocks[site]
 }
 
-// Merge merges another vector clock into this one
+// Merge merges another vector clock into this one.
 func (v *VectorClock) Merge(other *VectorClock) {
 	for site, clock := range other.Clocks {
 		if v.Clocks[site] < clock {
@@ -234,7 +224,7 @@ func (v *VectorClock) Merge(other *VectorClock) {
 }
 
 // Compare compares two vector clocks
-// Returns -1 if v < other, 0 if concurrent, 1 if v > other
+// Returns -1 if v < other, 0 if concurrent, 1 if v > other.
 func (v *VectorClock) Compare(other *VectorClock) int {
 	vGreater := false
 	otherGreater := false
@@ -261,65 +251,50 @@ func (v *VectorClock) Compare(other *VectorClock) int {
 	if vGreater && !otherGreater {
 		return 1
 	}
+
 	if otherGreater && !vGreater {
 		return -1
 	}
+
 	return 0 // Concurrent
 }
 
-// Copy creates a copy of the vector clock
+// Copy creates a copy of the vector clock.
 func (v *VectorClock) Copy() *VectorClock {
-	copy := NewVectorClock()
+	clockCopy := NewVectorClock()
 	for site, clock := range v.Clocks {
-		copy.Clocks[site] = clock
+		clockCopy.Clocks[site] = clock
 	}
-	return copy
+
+	return clockCopy
 }
 
-// ObjectVersion tracks version information for an object
+// ObjectVersion tracks version information for an object.
 type ObjectVersion struct {
-	// Key is the object key
-	Key string `json:"key"`
-	// VersionID is the S3 version ID
-	VersionID string `json:"versionId,omitempty"`
-	// ETag is the object ETag
-	ETag string `json:"etag"`
-	// Size is the object size
-	Size int64 `json:"size"`
-	// LastModified is when the object was last modified
-	LastModified time.Time `json:"lastModified"`
-	// Site is which site this version is from
-	Site string `json:"site"`
-	// VectorClock is the causal order
-	VectorClock *VectorClock `json:"vectorClock"`
-	// IsDeleteMarker indicates if this is a delete marker
-	IsDeleteMarker bool `json:"isDeleteMarker"`
+	LastModified   time.Time    `json:"lastModified"`
+	VectorClock    *VectorClock `json:"vectorClock"`
+	Key            string       `json:"key"`
+	VersionID      string       `json:"versionId,omitempty"`
+	ETag           string       `json:"etag"`
+	Site           string       `json:"site"`
+	Size           int64        `json:"size"`
+	IsDeleteMarker bool         `json:"isDeleteMarker"`
 }
 
-// IAMSync holds IAM synchronization state
+// IAMSync holds IAM synchronization state.
 type IAMSync struct {
-	// Users to sync
-	Users []string `json:"users,omitempty"`
-	// Groups to sync
-	Groups []string `json:"groups,omitempty"`
-	// Policies to sync
-	Policies []string `json:"policies,omitempty"`
-	// LastSync is when IAM was last synced
 	LastSync time.Time `json:"lastSync"`
+	Users    []string  `json:"users,omitempty"`
+	Groups   []string  `json:"groups,omitempty"`
+	Policies []string  `json:"policies,omitempty"`
 }
 
-// BucketSync holds bucket configuration sync state
+// BucketSync holds bucket configuration sync state.
 type BucketSync struct {
-	// Bucket name
-	Bucket string `json:"bucket"`
-	// LastSync is when the bucket config was last synced
-	LastSync time.Time `json:"lastSync"`
-	// SyncVersioning enables versioning sync
-	SyncVersioning bool `json:"syncVersioning"`
-	// SyncLifecycle enables lifecycle sync
-	SyncLifecycle bool `json:"syncLifecycle"`
-	// SyncNotifications enables notification sync
-	SyncNotifications bool `json:"syncNotifications"`
-	// SyncPolicy enables policy sync
-	SyncPolicy bool `json:"syncPolicy"`
+	LastSync          time.Time `json:"lastSync"`
+	Bucket            string    `json:"bucket"`
+	SyncVersioning    bool      `json:"syncVersioning"`
+	SyncLifecycle     bool      `json:"syncLifecycle"`
+	SyncNotifications bool      `json:"syncNotifications"`
+	SyncPolicy        bool      `json:"syncPolicy"`
 }

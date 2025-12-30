@@ -16,35 +16,29 @@ import (
 // MockMetadataStore implements metadata.Store interface for testing.
 // It provides thread-safe in-memory storage with configurable error injection.
 type MockMetadataStore struct {
-	mu sync.RWMutex
-
-	// Data storage
-	buckets          map[string]*metadata.Bucket
-	objects          map[string]map[string]*metadata.ObjectMeta
-	versions         map[string]map[string][]*metadata.ObjectMeta
-	multipartUploads map[string]*metadata.MultipartUpload
-	uploadParts      map[string][]*metadata.UploadPart // uploadKey -> parts
-	users            map[string]*metadata.User
-	accessKeys       map[string]*metadata.AccessKey
-	policies         map[string]*metadata.Policy
-	nodes            map[string]*metadata.NodeInfo
-	auditEvents      []*audit.AuditEvent
-
-	// Cluster state
-	isLeader      bool
-	leaderAddress string
-	clusterInfo   *metadata.ClusterInfo
-
-	// Error injection
-	createBucketErr           error
+	updateUserErr             error
 	updateBucketErr           error
+	getPartsErr               error
+	putObjectMetaVersionedErr error
+	deleteObjectVersionErr    error
+	abortMultipartUploadErr   error
+	completeMultipartErr      error
+	addUploadPartErr          error
+	deletePolicyErr           error
+	updatePolicyErr           error
+	deleteAccessKeyErr        error
+	deleteUserErr             error
+	getPolicyErr              error
+	createPolicyErr           error
+	createBucketErr           error
+	getAccessKeyErr           error
 	deleteBucketErr           error
 	getBucketErr              error
 	listBucketsErr            error
 	putObjectMetaErr          error
+	listObjectsErr            error
 	getObjectMetaErr          error
 	deleteObjectMetaErr       error
-	listObjectsErr            error
 	getClusterInfoErr         error
 	createMultipartUploadErr  error
 	getMultipartUploadErr     error
@@ -52,20 +46,20 @@ type MockMetadataStore struct {
 	createUserErr             error
 	getUserErr                error
 	createAccessKeyErr        error
-	getAccessKeyErr           error
-	createPolicyErr           error
-	getPolicyErr              error
-	updateUserErr             error
-	deleteUserErr             error
-	deleteAccessKeyErr        error
-	updatePolicyErr           error
-	deletePolicyErr           error
-	addUploadPartErr          error
-	completeMultipartErr      error
-	abortMultipartUploadErr   error
-	deleteObjectVersionErr    error
-	putObjectMetaVersionedErr error
-	getPartsErr               error
+	buckets                   map[string]*metadata.Bucket
+	uploadParts               map[string][]*metadata.UploadPart
+	objects                   map[string]map[string]*metadata.ObjectMeta
+	versions                  map[string]map[string][]*metadata.ObjectMeta
+	multipartUploads          map[string]*metadata.MultipartUpload
+	clusterInfo               *metadata.ClusterInfo
+	nodes                     map[string]*metadata.NodeInfo
+	policies                  map[string]*metadata.Policy
+	accessKeys                map[string]*metadata.AccessKey
+	users                     map[string]*metadata.User
+	leaderAddress             string
+	auditEvents               []*audit.AuditEvent
+	mu                        sync.RWMutex
+	isLeader                  bool
 }
 
 // NewMockMetadataStore creates a new MockMetadataStore with initialized maps.
@@ -90,6 +84,7 @@ func NewMockMetadataStore() *MockMetadataStore {
 func (m *MockMetadataStore) SetCreateBucketError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.createBucketErr = err
 }
 
@@ -97,6 +92,7 @@ func (m *MockMetadataStore) SetCreateBucketError(err error) {
 func (m *MockMetadataStore) SetUpdateBucketError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.updateBucketErr = err
 }
 
@@ -104,6 +100,7 @@ func (m *MockMetadataStore) SetUpdateBucketError(err error) {
 func (m *MockMetadataStore) SetDeleteBucketError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.deleteBucketErr = err
 }
 
@@ -111,6 +108,7 @@ func (m *MockMetadataStore) SetDeleteBucketError(err error) {
 func (m *MockMetadataStore) SetGetBucketError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.getBucketErr = err
 }
 
@@ -118,6 +116,7 @@ func (m *MockMetadataStore) SetGetBucketError(err error) {
 func (m *MockMetadataStore) SetListBucketsError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.listBucketsErr = err
 }
 
@@ -125,6 +124,7 @@ func (m *MockMetadataStore) SetListBucketsError(err error) {
 func (m *MockMetadataStore) SetPutObjectMetaError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.putObjectMetaErr = err
 }
 
@@ -132,6 +132,7 @@ func (m *MockMetadataStore) SetPutObjectMetaError(err error) {
 func (m *MockMetadataStore) SetGetObjectMetaError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.getObjectMetaErr = err
 }
 
@@ -139,6 +140,7 @@ func (m *MockMetadataStore) SetGetObjectMetaError(err error) {
 func (m *MockMetadataStore) SetDeleteObjectMetaError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.deleteObjectMetaErr = err
 }
 
@@ -146,6 +148,7 @@ func (m *MockMetadataStore) SetDeleteObjectMetaError(err error) {
 func (m *MockMetadataStore) SetListObjectsError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.listObjectsErr = err
 }
 
@@ -153,6 +156,7 @@ func (m *MockMetadataStore) SetListObjectsError(err error) {
 func (m *MockMetadataStore) SetGetClusterInfoError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.getClusterInfoErr = err
 }
 
@@ -160,6 +164,7 @@ func (m *MockMetadataStore) SetGetClusterInfoError(err error) {
 func (m *MockMetadataStore) SetCreateMultipartUploadError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.createMultipartUploadErr = err
 }
 
@@ -167,6 +172,7 @@ func (m *MockMetadataStore) SetCreateMultipartUploadError(err error) {
 func (m *MockMetadataStore) SetGetMultipartUploadError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.getMultipartUploadErr = err
 }
 
@@ -174,6 +180,7 @@ func (m *MockMetadataStore) SetGetMultipartUploadError(err error) {
 func (m *MockMetadataStore) SetListMultipartUploadsError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.listMultipartUploadsErr = err
 }
 
@@ -181,6 +188,7 @@ func (m *MockMetadataStore) SetListMultipartUploadsError(err error) {
 func (m *MockMetadataStore) SetCreateUserError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.createUserErr = err
 }
 
@@ -188,6 +196,7 @@ func (m *MockMetadataStore) SetCreateUserError(err error) {
 func (m *MockMetadataStore) SetGetUserError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.getUserErr = err
 }
 
@@ -195,6 +204,7 @@ func (m *MockMetadataStore) SetGetUserError(err error) {
 func (m *MockMetadataStore) SetCreateAccessKeyError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.createAccessKeyErr = err
 }
 
@@ -202,6 +212,7 @@ func (m *MockMetadataStore) SetCreateAccessKeyError(err error) {
 func (m *MockMetadataStore) SetGetAccessKeyError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.getAccessKeyErr = err
 }
 
@@ -209,6 +220,7 @@ func (m *MockMetadataStore) SetGetAccessKeyError(err error) {
 func (m *MockMetadataStore) SetCreatePolicyError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.createPolicyErr = err
 }
 
@@ -216,6 +228,7 @@ func (m *MockMetadataStore) SetCreatePolicyError(err error) {
 func (m *MockMetadataStore) SetGetPolicyError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.getPolicyErr = err
 }
 
@@ -223,6 +236,7 @@ func (m *MockMetadataStore) SetGetPolicyError(err error) {
 func (m *MockMetadataStore) SetUpdateUserError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.updateUserErr = err
 }
 
@@ -230,6 +244,7 @@ func (m *MockMetadataStore) SetUpdateUserError(err error) {
 func (m *MockMetadataStore) SetDeleteUserError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.deleteUserErr = err
 }
 
@@ -237,6 +252,7 @@ func (m *MockMetadataStore) SetDeleteUserError(err error) {
 func (m *MockMetadataStore) SetDeleteAccessKeyError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.deleteAccessKeyErr = err
 }
 
@@ -244,6 +260,7 @@ func (m *MockMetadataStore) SetDeleteAccessKeyError(err error) {
 func (m *MockMetadataStore) SetUpdatePolicyError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.updatePolicyErr = err
 }
 
@@ -251,6 +268,7 @@ func (m *MockMetadataStore) SetUpdatePolicyError(err error) {
 func (m *MockMetadataStore) SetDeletePolicyError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.deletePolicyErr = err
 }
 
@@ -258,6 +276,7 @@ func (m *MockMetadataStore) SetDeletePolicyError(err error) {
 func (m *MockMetadataStore) SetAddUploadPartError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.addUploadPartErr = err
 }
 
@@ -265,6 +284,7 @@ func (m *MockMetadataStore) SetAddUploadPartError(err error) {
 func (m *MockMetadataStore) SetCompleteMultipartUploadError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.completeMultipartErr = err
 }
 
@@ -272,6 +292,7 @@ func (m *MockMetadataStore) SetCompleteMultipartUploadError(err error) {
 func (m *MockMetadataStore) SetAbortMultipartUploadError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.abortMultipartUploadErr = err
 }
 
@@ -279,6 +300,7 @@ func (m *MockMetadataStore) SetAbortMultipartUploadError(err error) {
 func (m *MockMetadataStore) SetDeleteObjectVersionError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.deleteObjectVersionErr = err
 }
 
@@ -286,6 +308,7 @@ func (m *MockMetadataStore) SetDeleteObjectVersionError(err error) {
 func (m *MockMetadataStore) SetPutObjectMetaVersionedError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.putObjectMetaVersionedErr = err
 }
 
@@ -293,6 +316,7 @@ func (m *MockMetadataStore) SetPutObjectMetaVersionedError(err error) {
 func (m *MockMetadataStore) SetGetPartsError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.getPartsErr = err
 }
 
@@ -300,6 +324,7 @@ func (m *MockMetadataStore) SetGetPartsError(err error) {
 func (m *MockMetadataStore) SetIsLeader(isLeader bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.isLeader = isLeader
 }
 
@@ -307,6 +332,7 @@ func (m *MockMetadataStore) SetIsLeader(isLeader bool) {
 func (m *MockMetadataStore) SetLeaderAddress(addr string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.leaderAddress = addr
 }
 
@@ -314,6 +340,7 @@ func (m *MockMetadataStore) SetLeaderAddress(addr string) {
 func (m *MockMetadataStore) SetClusterInfo(info *metadata.ClusterInfo) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.clusterInfo = info
 }
 
@@ -321,6 +348,7 @@ func (m *MockMetadataStore) SetClusterInfo(info *metadata.ClusterInfo) {
 func (m *MockMetadataStore) AddBucket(bucket *metadata.Bucket) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.buckets[bucket.Name] = bucket
 	if m.objects[bucket.Name] == nil {
 		m.objects[bucket.Name] = make(map[string]*metadata.ObjectMeta)
@@ -331,9 +359,11 @@ func (m *MockMetadataStore) AddBucket(bucket *metadata.Bucket) {
 func (m *MockMetadataStore) AddObject(bucket string, obj *metadata.ObjectMeta) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.objects[bucket] == nil {
 		m.objects[bucket] = make(map[string]*metadata.ObjectMeta)
 	}
+
 	m.objects[bucket][obj.Key] = obj
 }
 
@@ -341,10 +371,12 @@ func (m *MockMetadataStore) AddObject(bucket string, obj *metadata.ObjectMeta) {
 func (m *MockMetadataStore) GetBuckets() map[string]*metadata.Bucket {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	result := make(map[string]*metadata.Bucket)
 	for k, v := range m.buckets {
 		result[k] = v
 	}
+
 	return result
 }
 
@@ -352,12 +384,15 @@ func (m *MockMetadataStore) GetBuckets() map[string]*metadata.Bucket {
 func (m *MockMetadataStore) GetObjects(bucket string) map[string]*metadata.ObjectMeta {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	result := make(map[string]*metadata.ObjectMeta)
+
 	if objs, ok := m.objects[bucket]; ok {
 		for k, v := range objs {
 			result[k] = v
 		}
 	}
+
 	return result
 }
 
@@ -417,9 +452,11 @@ func (m *MockMetadataStore) Reset() {
 func (m *MockMetadataStore) AddVersion(bucket string, obj *metadata.ObjectMeta) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.versions[bucket] == nil {
 		m.versions[bucket] = make(map[string][]*metadata.ObjectMeta)
 	}
+
 	m.versions[bucket][obj.Key] = append(m.versions[bucket][obj.Key], obj)
 }
 
@@ -427,6 +464,7 @@ func (m *MockMetadataStore) AddVersion(bucket string, obj *metadata.ObjectMeta) 
 func (m *MockMetadataStore) AddUser(user *metadata.User) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.users[user.ID] = user
 }
 
@@ -434,6 +472,7 @@ func (m *MockMetadataStore) AddUser(user *metadata.User) {
 func (m *MockMetadataStore) AddAccessKey(key *metadata.AccessKey) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.accessKeys[key.AccessKeyID] = key
 }
 
@@ -441,6 +480,7 @@ func (m *MockMetadataStore) AddAccessKey(key *metadata.AccessKey) {
 func (m *MockMetadataStore) AddPolicy(policy *metadata.Policy) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.policies[policy.Name] = policy
 }
 
@@ -448,6 +488,7 @@ func (m *MockMetadataStore) AddPolicy(policy *metadata.Policy) {
 func (m *MockMetadataStore) AddMultipartUpload(upload *metadata.MultipartUpload) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	mpKey := testutil.MultipartUploadKey(upload.Bucket, upload.Key, upload.UploadID)
 	m.multipartUploads[mpKey] = upload
 }
@@ -462,8 +503,10 @@ func (m *MockMetadataStore) IsLeader() bool {
 	if m == nil {
 		return false
 	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.isLeader
 }
 
@@ -472,11 +515,14 @@ func (m *MockMetadataStore) LeaderAddress() (string, error) {
 	if m == nil {
 		return "", s3errors.ErrInternalError
 	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.leaderAddress == "" {
 		return "", s3errors.ErrInternalError
 	}
+
 	return m.leaderAddress, nil
 }
 
@@ -484,14 +530,18 @@ func (m *MockMetadataStore) LeaderAddress() (string, error) {
 func (m *MockMetadataStore) CreateBucket(ctx context.Context, bucket *metadata.Bucket) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.createBucketErr != nil {
 		return m.createBucketErr
 	}
+
 	if _, exists := m.buckets[bucket.Name]; exists {
 		return s3errors.ErrBucketAlreadyExists
 	}
+
 	m.buckets[bucket.Name] = bucket
 	m.objects[bucket.Name] = make(map[string]*metadata.ObjectMeta)
+
 	return nil
 }
 
@@ -500,14 +550,18 @@ func (m *MockMetadataStore) GetBucket(ctx context.Context, name string) (*metada
 	if m == nil {
 		return nil, s3errors.ErrInternalError
 	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.getBucketErr != nil {
 		return nil, m.getBucketErr
 	}
+
 	if bucket, ok := m.buckets[name]; ok {
 		return bucket, nil
 	}
+
 	return nil, s3errors.ErrNoSuchBucket
 }
 
@@ -515,11 +569,14 @@ func (m *MockMetadataStore) GetBucket(ctx context.Context, name string) (*metada
 func (m *MockMetadataStore) DeleteBucket(ctx context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.deleteBucketErr != nil {
 		return m.deleteBucketErr
 	}
+
 	delete(m.buckets, name)
 	delete(m.objects, name)
+
 	return nil
 }
 
@@ -528,17 +585,21 @@ func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*m
 	if m == nil {
 		return nil, s3errors.ErrInternalError
 	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.listBucketsErr != nil {
 		return nil, m.listBucketsErr
 	}
+
 	buckets := make([]*metadata.Bucket, 0, len(m.buckets))
 	for _, b := range m.buckets {
 		if owner == "" || b.Owner == owner {
 			buckets = append(buckets, b)
 		}
 	}
+
 	return buckets, nil
 }
 
@@ -546,10 +607,13 @@ func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*m
 func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.Bucket) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.updateBucketErr != nil {
 		return m.updateBucketErr
 	}
+
 	m.buckets[bucket.Name] = bucket
+
 	return nil
 }
 
@@ -557,13 +621,17 @@ func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.B
 func (m *MockMetadataStore) PutObjectMeta(ctx context.Context, meta *metadata.ObjectMeta) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.putObjectMetaErr != nil {
 		return m.putObjectMetaErr
 	}
+
 	if m.objects[meta.Bucket] == nil {
 		m.objects[meta.Bucket] = make(map[string]*metadata.ObjectMeta)
 	}
+
 	m.objects[meta.Bucket][meta.Key] = meta
+
 	return nil
 }
 
@@ -571,14 +639,17 @@ func (m *MockMetadataStore) PutObjectMeta(ctx context.Context, meta *metadata.Ob
 func (m *MockMetadataStore) GetObjectMeta(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.getObjectMetaErr != nil {
 		return nil, m.getObjectMetaErr
 	}
+
 	if objs, ok := m.objects[bucket]; ok {
 		if obj, ok := objs[key]; ok {
 			return obj, nil
 		}
 	}
+
 	return nil, s3errors.ErrNoSuchKey
 }
 
@@ -586,12 +657,15 @@ func (m *MockMetadataStore) GetObjectMeta(ctx context.Context, bucket, key strin
 func (m *MockMetadataStore) DeleteObjectMeta(ctx context.Context, bucket, key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.deleteObjectMetaErr != nil {
 		return m.deleteObjectMetaErr
 	}
+
 	if objs, ok := m.objects[bucket]; ok {
 		delete(objs, key)
 	}
+
 	return nil
 }
 
@@ -599,10 +673,13 @@ func (m *MockMetadataStore) DeleteObjectMeta(ctx context.Context, bucket, key st
 func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*metadata.ObjectListing, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.listObjectsErr != nil {
 		return nil, m.listObjectsErr
 	}
+
 	objs := m.objects[bucket]
+
 	listing := &metadata.ObjectListing{
 		Objects: make([]*metadata.ObjectMeta, 0, len(objs)),
 	}
@@ -611,12 +688,14 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 		if prefix != "" && !strings.HasPrefix(obj.Key, prefix) {
 			continue
 		}
+
 		listing.Objects = append(listing.Objects, obj)
 		if maxKeys > 0 && len(listing.Objects) >= maxKeys {
 			listing.IsTruncated = true
 			break
 		}
 	}
+
 	return listing, nil
 }
 
@@ -625,6 +704,7 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 func (m *MockMetadataStore) GetObjectVersion(ctx context.Context, bucket, key, versionID string) (*metadata.ObjectMeta, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if versions, ok := m.versions[bucket]; ok {
 		if objVersions, ok := versions[key]; ok {
 			for _, v := range objVersions {
@@ -634,6 +714,7 @@ func (m *MockMetadataStore) GetObjectVersion(ctx context.Context, bucket, key, v
 			}
 		}
 	}
+
 	return nil, s3errors.ErrNoSuchKey
 }
 
@@ -642,10 +723,12 @@ func (m *MockMetadataStore) GetObjectVersion(ctx context.Context, bucket, key, v
 func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (*metadata.VersionListing, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	listing := &metadata.VersionListing{
 		Versions:      make([]*metadata.ObjectMeta, 0),
 		DeleteMarkers: make([]*metadata.ObjectMeta, 0),
 	}
+
 	if versions, ok := m.versions[bucket]; ok {
 		for key, objVersions := range versions {
 			if prefix == "" || strings.HasPrefix(key, prefix) {
@@ -653,6 +736,7 @@ func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, pref
 			}
 		}
 	}
+
 	return listing, nil
 }
 
@@ -660,6 +744,7 @@ func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, pref
 func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.deleteObjectVersionErr != nil {
 		return m.deleteObjectVersionErr
 	}
@@ -674,6 +759,7 @@ func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -681,6 +767,7 @@ func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key
 func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *metadata.ObjectMeta, preserveOldVersions bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.putObjectMetaVersionedErr != nil {
 		return m.putObjectMetaVersionedErr
 	}
@@ -688,6 +775,7 @@ func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *me
 	if m.versions[meta.Bucket] == nil {
 		m.versions[meta.Bucket] = make(map[string][]*metadata.ObjectMeta)
 	}
+
 	if preserveOldVersions {
 		m.versions[meta.Bucket][meta.Key] = append(m.versions[meta.Bucket][meta.Key], meta)
 	} else {
@@ -697,7 +785,9 @@ func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *me
 	if m.objects[meta.Bucket] == nil {
 		m.objects[meta.Bucket] = make(map[string]*metadata.ObjectMeta)
 	}
+
 	m.objects[meta.Bucket][meta.Key] = meta
+
 	return nil
 }
 
@@ -705,11 +795,14 @@ func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *me
 func (m *MockMetadataStore) CreateMultipartUpload(ctx context.Context, upload *metadata.MultipartUpload) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.createMultipartUploadErr != nil {
 		return m.createMultipartUploadErr
 	}
+
 	mpKey := testutil.MultipartUploadKey(upload.Bucket, upload.Key, upload.UploadID)
 	m.multipartUploads[mpKey] = upload
+
 	return nil
 }
 
@@ -718,13 +811,16 @@ func (m *MockMetadataStore) CreateMultipartUpload(ctx context.Context, upload *m
 func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*metadata.MultipartUpload, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.getMultipartUploadErr != nil {
 		return nil, m.getMultipartUploadErr
 	}
+
 	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	if upload, ok := m.multipartUploads[mpKey]; ok {
 		return upload, nil
 	}
+
 	return nil, s3errors.ErrNoSuchUpload
 }
 
@@ -732,11 +828,14 @@ func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key,
 func (m *MockMetadataStore) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.abortMultipartUploadErr != nil {
 		return m.abortMultipartUploadErr
 	}
+
 	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	delete(m.multipartUploads, mpKey)
+
 	return nil
 }
 
@@ -744,11 +843,14 @@ func (m *MockMetadataStore) AbortMultipartUpload(ctx context.Context, bucket, ke
 func (m *MockMetadataStore) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.completeMultipartErr != nil {
 		return m.completeMultipartErr
 	}
+
 	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	delete(m.multipartUploads, mpKey)
+
 	return nil
 }
 
@@ -756,11 +858,14 @@ func (m *MockMetadataStore) CompleteMultipartUpload(ctx context.Context, bucket,
 func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uploadID string, part *metadata.UploadPart) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.addUploadPartErr != nil {
 		return m.addUploadPartErr
 	}
+
 	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	m.uploadParts[mpKey] = append(m.uploadParts[mpKey], part)
+
 	return nil
 }
 
@@ -768,13 +873,16 @@ func (m *MockMetadataStore) AddUploadPart(ctx context.Context, bucket, key, uplo
 func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID string) ([]*metadata.UploadPart, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.getPartsErr != nil {
 		return nil, m.getPartsErr
 	}
+
 	mpKey := testutil.MultipartUploadKey(bucket, key, uploadID)
 	if parts, ok := m.uploadParts[mpKey]; ok {
 		return parts, nil
 	}
+
 	return nil, nil
 }
 
@@ -782,15 +890,18 @@ func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID 
 func (m *MockMetadataStore) ListMultipartUploads(ctx context.Context, bucket string) ([]*metadata.MultipartUpload, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.listMultipartUploadsErr != nil {
 		return nil, m.listMultipartUploadsErr
 	}
+
 	uploads := make([]*metadata.MultipartUpload, 0, len(m.multipartUploads))
 	for _, upload := range m.multipartUploads {
 		if upload.Bucket == bucket {
 			uploads = append(uploads, upload)
 		}
 	}
+
 	return uploads, nil
 }
 
@@ -798,10 +909,13 @@ func (m *MockMetadataStore) ListMultipartUploads(ctx context.Context, bucket str
 func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.createUserErr != nil {
 		return m.createUserErr
 	}
+
 	m.users[user.ID] = user
+
 	return nil
 }
 
@@ -809,12 +923,16 @@ func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User)
 func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.User, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.getUserErr != nil {
 		return nil, m.getUserErr
 	}
+
 	if user, ok := m.users[id]; ok {
 		return user, nil
 	}
+
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 
@@ -822,11 +940,14 @@ func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.U
 func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username string) (*metadata.User, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	for _, user := range m.users {
 		if user.Username == username {
 			return user, nil
 		}
 	}
+
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 
@@ -834,10 +955,13 @@ func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username stri
 func (m *MockMetadataStore) UpdateUser(ctx context.Context, user *metadata.User) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.updateUserErr != nil {
 		return m.updateUserErr
 	}
+
 	m.users[user.ID] = user
+
 	return nil
 }
 
@@ -845,10 +969,13 @@ func (m *MockMetadataStore) UpdateUser(ctx context.Context, user *metadata.User)
 func (m *MockMetadataStore) DeleteUser(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.deleteUserErr != nil {
 		return m.deleteUserErr
 	}
+
 	delete(m.users, id)
+
 	return nil
 }
 
@@ -856,10 +983,12 @@ func (m *MockMetadataStore) DeleteUser(ctx context.Context, id string) error {
 func (m *MockMetadataStore) ListUsers(ctx context.Context) ([]*metadata.User, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	users := make([]*metadata.User, 0, len(m.users))
 	for _, user := range m.users {
 		users = append(users, user)
 	}
+
 	return users, nil
 }
 
@@ -867,10 +996,13 @@ func (m *MockMetadataStore) ListUsers(ctx context.Context) ([]*metadata.User, er
 func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.AccessKey) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.createAccessKeyErr != nil {
 		return m.createAccessKeyErr
 	}
+
 	m.accessKeys[key.AccessKeyID] = key
+
 	return nil
 }
 
@@ -878,12 +1010,16 @@ func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.A
 func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string) (*metadata.AccessKey, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.getAccessKeyErr != nil {
 		return nil, m.getAccessKeyErr
 	}
+
 	if key, ok := m.accessKeys[accessKeyID]; ok {
 		return key, nil
 	}
+
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 
@@ -891,10 +1027,13 @@ func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string
 func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.deleteAccessKeyErr != nil {
 		return m.deleteAccessKeyErr
 	}
+
 	delete(m.accessKeys, accessKeyID)
+
 	return nil
 }
 
@@ -902,12 +1041,14 @@ func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID str
 func (m *MockMetadataStore) ListAccessKeys(ctx context.Context, userID string) ([]*metadata.AccessKey, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	keys := make([]*metadata.AccessKey, 0, len(m.accessKeys))
 	for _, key := range m.accessKeys {
 		if key.UserID == userID {
 			keys = append(keys, key)
 		}
 	}
+
 	return keys, nil
 }
 
@@ -915,10 +1056,13 @@ func (m *MockMetadataStore) ListAccessKeys(ctx context.Context, userID string) (
 func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.Policy) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.createPolicyErr != nil {
 		return m.createPolicyErr
 	}
+
 	m.policies[policy.Name] = policy
+
 	return nil
 }
 
@@ -926,12 +1070,16 @@ func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.P
 func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metadata.Policy, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.getPolicyErr != nil {
 		return nil, m.getPolicyErr
 	}
+
 	if policy, ok := m.policies[name]; ok {
 		return policy, nil
 	}
+
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 
@@ -939,10 +1087,13 @@ func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metada
 func (m *MockMetadataStore) UpdatePolicy(ctx context.Context, policy *metadata.Policy) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.updatePolicyErr != nil {
 		return m.updatePolicyErr
 	}
+
 	m.policies[policy.Name] = policy
+
 	return nil
 }
 
@@ -950,10 +1101,13 @@ func (m *MockMetadataStore) UpdatePolicy(ctx context.Context, policy *metadata.P
 func (m *MockMetadataStore) DeletePolicy(ctx context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.deletePolicyErr != nil {
 		return m.deletePolicyErr
 	}
+
 	delete(m.policies, name)
+
 	return nil
 }
 
@@ -961,10 +1115,12 @@ func (m *MockMetadataStore) DeletePolicy(ctx context.Context, name string) error
 func (m *MockMetadataStore) ListPolicies(ctx context.Context) ([]*metadata.Policy, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	policies := make([]*metadata.Policy, 0, len(m.policies))
 	for _, policy := range m.policies {
 		policies = append(policies, policy)
 	}
+
 	return policies, nil
 }
 
@@ -973,18 +1129,23 @@ func (m *MockMetadataStore) GetClusterInfo(ctx context.Context) (*metadata.Clust
 	if m == nil {
 		return nil, s3errors.ErrInternalError
 	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if m.getClusterInfoErr != nil {
 		return nil, m.getClusterInfoErr
 	}
+
 	if m.clusterInfo != nil {
 		return m.clusterInfo, nil
 	}
+
 	state := "Follower"
 	if m.isLeader {
 		state = "Leader"
 	}
+
 	return &metadata.ClusterInfo{
 		RaftState:     state,
 		LeaderAddress: m.leaderAddress,
@@ -995,7 +1156,9 @@ func (m *MockMetadataStore) GetClusterInfo(ctx context.Context) (*metadata.Clust
 func (m *MockMetadataStore) AddNode(ctx context.Context, node *metadata.NodeInfo) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.nodes[node.ID] = node
+
 	return nil
 }
 
@@ -1003,7 +1166,9 @@ func (m *MockMetadataStore) AddNode(ctx context.Context, node *metadata.NodeInfo
 func (m *MockMetadataStore) RemoveNode(ctx context.Context, nodeID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	delete(m.nodes, nodeID)
+
 	return nil
 }
 
@@ -1011,10 +1176,12 @@ func (m *MockMetadataStore) RemoveNode(ctx context.Context, nodeID string) error
 func (m *MockMetadataStore) ListNodes(ctx context.Context) ([]*metadata.NodeInfo, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	nodes := make([]*metadata.NodeInfo, 0, len(m.nodes))
 	for _, node := range m.nodes {
 		nodes = append(nodes, node)
 	}
+
 	return nodes, nil
 }
 
@@ -1022,7 +1189,9 @@ func (m *MockMetadataStore) ListNodes(ctx context.Context) ([]*metadata.NodeInfo
 func (m *MockMetadataStore) StoreAuditEvent(ctx context.Context, event *audit.AuditEvent) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.auditEvents = append(m.auditEvents, event)
+
 	return nil
 }
 
@@ -1048,8 +1217,10 @@ func (m *MockMetadataStore) ListAuditEvents(ctx context.Context, filter audit.Au
 func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	count := 0
 	newEvents := make([]*audit.AuditEvent, 0)
+
 	for _, event := range m.auditEvents {
 		if event.Timestamp.Before(before) {
 			count++
@@ -1057,6 +1228,8 @@ func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before tim
 			newEvents = append(newEvents, event)
 		}
 	}
+
 	m.auditEvents = newEvents
+
 	return count, nil
 }

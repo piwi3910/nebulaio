@@ -25,6 +25,7 @@ func TestCreateVolume(t *testing.T) {
 
 	vol, err := CreateVolume(path, cfg)
 	require.NoError(t, err)
+
 	require.NotNil(t, vol)
 	defer vol.Close()
 
@@ -37,7 +38,7 @@ func TestCreateVolume(t *testing.T) {
 	assert.NotEmpty(t, vol.ID())
 	stats := vol.Stats()
 	assert.Equal(t, cfg.Size, stats.TotalSize)
-	assert.Greater(t, stats.FreeBlocks, uint32(0))
+	assert.Positive(t, stats.FreeBlocks)
 }
 
 func TestOpenVolume(t *testing.T) {
@@ -48,12 +49,14 @@ func TestOpenVolume(t *testing.T) {
 	cfg := VolumeConfig{Size: 64 * 1024 * 1024}
 	vol, err := CreateVolume(path, cfg)
 	require.NoError(t, err)
+
 	volumeID := vol.ID()
 	vol.Close()
 
 	// Reopen volume
 	vol2, err := OpenVolume(path)
 	require.NoError(t, err)
+
 	defer vol2.Close()
 
 	assert.Equal(t, volumeID, vol2.ID())
@@ -66,6 +69,7 @@ func TestPutGetObject(t *testing.T) {
 	cfg := VolumeConfig{Size: 64 * 1024 * 1024}
 	vol, err := CreateVolume(path, cfg)
 	require.NoError(t, err)
+
 	defer vol.Close()
 
 	// Test tiny object
@@ -126,6 +130,7 @@ func TestDeleteObject(t *testing.T) {
 	cfg := VolumeConfig{Size: 64 * 1024 * 1024}
 	vol, err := CreateVolume(path, cfg)
 	require.NoError(t, err)
+
 	defer vol.Close()
 
 	// Store object
@@ -155,10 +160,11 @@ func TestListObjects(t *testing.T) {
 	cfg := VolumeConfig{Size: 64 * 1024 * 1024}
 	vol, err := CreateVolume(path, cfg)
 	require.NoError(t, err)
+
 	defer vol.Close()
 
 	// Store multiple objects
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		key := fmt.Sprintf("prefix/key-%d", i)
 		data := []byte(fmt.Sprintf("data-%d", i))
 		err := vol.Put("bucket1", key, bytes.NewReader(data), int64(len(data)))
@@ -183,6 +189,7 @@ func TestUpdateObject(t *testing.T) {
 	cfg := VolumeConfig{Size: 64 * 1024 * 1024}
 	vol, err := CreateVolume(path, cfg)
 	require.NoError(t, err)
+
 	defer vol.Close()
 
 	// Store object
@@ -214,7 +221,8 @@ func TestPersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	testData := make(map[string][]byte)
-	for i := 0; i < 5; i++ {
+
+	for i := range 5 {
 		key := fmt.Sprintf("persist-key-%d", i)
 		data := make([]byte, 1024+i*100)
 		rand.Read(data)
@@ -231,6 +239,7 @@ func TestPersistence(t *testing.T) {
 	// Reopen and verify
 	vol2, err := OpenVolume(path)
 	require.NoError(t, err)
+
 	defer vol2.Close()
 
 	for key, expectedData := range testData {
@@ -251,6 +260,7 @@ func TestManagerBasic(t *testing.T) {
 
 	mgr, err := NewManager(cfg)
 	require.NoError(t, err)
+
 	defer mgr.Close()
 
 	// Store object
@@ -275,6 +285,7 @@ func TestBackendInterface(t *testing.T) {
 
 	backend, err := NewBackend(dir)
 	require.NoError(t, err)
+
 	defer backend.Close()
 
 	ctx := context.Background()
@@ -297,6 +308,7 @@ func TestBackendInterface(t *testing.T) {
 	// Get object
 	reader, err := backend.GetObject(ctx, "test-bucket", "test-key")
 	require.NoError(t, err)
+
 	defer reader.Close()
 
 	retrieved := make([]byte, len(data))
@@ -320,7 +332,7 @@ func TestBackendInterface(t *testing.T) {
 	// Storage info
 	info, err := backend.GetStorageInfo(ctx)
 	require.NoError(t, err)
-	assert.Greater(t, info.TotalBytes, int64(0))
+	assert.Positive(t, info.TotalBytes)
 }
 
 func TestPackedBlockPacking(t *testing.T) {
@@ -330,10 +342,11 @@ func TestPackedBlockPacking(t *testing.T) {
 	cfg := VolumeConfig{Size: 64 * 1024 * 1024}
 	vol, err := CreateVolume(path, cfg)
 	require.NoError(t, err)
+
 	defer vol.Close()
 
 	// Store many small objects that should pack into same block
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		key := fmt.Sprintf("tiny-%d", i)
 		data := []byte(fmt.Sprintf("tiny-data-%d", i))
 		err := vol.Put("bucket1", key, bytes.NewReader(data), int64(len(data)))
@@ -346,7 +359,7 @@ func TestPackedBlockPacking(t *testing.T) {
 	assert.Less(t, usedBlocks, uint32(5), "Expected packed blocks, but used %d blocks", usedBlocks)
 
 	// Verify all objects are readable
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		key := fmt.Sprintf("tiny-%d", i)
 		expectedData := []byte(fmt.Sprintf("tiny-data-%d", i))
 		retrieved, err := vol.Get("bucket1", key)
@@ -359,7 +372,7 @@ func TestIndexSerialization(t *testing.T) {
 	idx := NewIndex()
 
 	// Add entries
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		key := fmt.Sprintf("bucket/key-%d", i)
 		entry := IndexEntryFull{
 			IndexEntry: IndexEntry{
@@ -381,7 +394,7 @@ func TestIndexSerialization(t *testing.T) {
 
 	// Serialize
 	data := idx.marshal()
-	assert.Greater(t, len(data), 0)
+	assert.NotEmpty(t, data)
 
 	// Deserialize
 	idx2, err := unmarshalIndex(data)
@@ -389,7 +402,7 @@ func TestIndexSerialization(t *testing.T) {
 	assert.Equal(t, 100, idx2.Count())
 
 	// Verify entries
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		entry, exists := idx2.Get("bucket", fmt.Sprintf("key-%d", i))
 		require.True(t, exists)
 		assert.Equal(t, uint32(i), entry.BlockNum)
@@ -428,13 +441,15 @@ func BenchmarkPutSmallObject(b *testing.B) {
 	cfg := VolumeConfig{Size: 256 * 1024 * 1024}
 	vol, err := CreateVolume(path, cfg)
 	require.NoError(b, err)
+
 	defer vol.Close()
 
 	data := make([]byte, 1024) // 1KB object
 	rand.Read(data)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		key := fmt.Sprintf("bench-key-%d", i)
 		vol.Put("bucket", key, bytes.NewReader(data), int64(len(data)))
 	}
@@ -447,18 +462,21 @@ func BenchmarkGetSmallObject(b *testing.B) {
 	cfg := VolumeConfig{Size: 256 * 1024 * 1024}
 	vol, err := CreateVolume(path, cfg)
 	require.NoError(b, err)
+
 	defer vol.Close()
 
 	// Pre-populate
 	data := make([]byte, 1024)
 	rand.Read(data)
-	for i := 0; i < 1000; i++ {
+
+	for i := range 1000 {
 		key := fmt.Sprintf("bench-key-%d", i)
 		vol.Put("bucket", key, bytes.NewReader(data), int64(len(data)))
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		key := fmt.Sprintf("bench-key-%d", i%1000)
 		vol.Get("bucket", key)
 	}

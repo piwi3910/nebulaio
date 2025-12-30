@@ -10,11 +10,17 @@ import (
 	"sync"
 )
 
+// Conversion constants.
+const (
+	// Microseconds per millisecond for time conversion.
+	microsecondsPerMs = 1000.0
+)
+
 // S3Integration provides GPUDirect-aware S3 operations.
 type S3Integration struct {
 	service *Service
+	handles map[string]uintptr
 	mu      sync.RWMutex
-	handles map[string]uintptr // object path -> GDS handle
 }
 
 // NewS3Integration creates a new S3 integration layer.
@@ -27,25 +33,25 @@ func NewS3Integration(service *Service) *S3Integration {
 
 // GPUDirectHeaders are HTTP headers for GPUDirect operations.
 const (
-	// HeaderGPUDeviceID specifies which GPU to use for the transfer
+	// HeaderGPUDeviceID specifies which GPU to use for the transfer.
 	HeaderGPUDeviceID = "X-Gpu-Device-Id"
 
-	// HeaderGPUDirectEnabled indicates if GPUDirect should be used
+	// HeaderGPUDirectEnabled indicates if GPUDirect should be used.
 	HeaderGPUDirectEnabled = "X-Gpu-Direct-Enabled"
 
-	// HeaderGPUBufferSize specifies the GPU buffer size to use
+	// HeaderGPUBufferSize specifies the GPU buffer size to use.
 	HeaderGPUBufferSize = "X-Gpu-Buffer-Size"
 
-	// HeaderGPUAsync indicates if async transfer is requested
+	// HeaderGPUAsync indicates if async transfer is requested.
 	HeaderGPUAsync = "X-Gpu-Async"
 
-	// ResponseHeaderGPUDirectUsed indicates if GPUDirect was used
+	// ResponseHeaderGPUDirectUsed indicates if GPUDirect was used.
 	ResponseHeaderGPUDirectUsed = "X-Gpu-Direct-Used"
 
-	// ResponseHeaderGPUDeviceID indicates which GPU was used
+	// ResponseHeaderGPUDeviceID indicates which GPU was used.
 	ResponseHeaderGPUDeviceID = "X-Gpu-Device-Id"
 
-	// ResponseHeaderGPUTransferTime indicates the GPU transfer time in ms
+	// ResponseHeaderGPUTransferTime indicates the GPU transfer time in ms.
 	ResponseHeaderGPUTransferTime = "X-Gpu-Transfer-Time-Ms"
 )
 
@@ -64,14 +70,16 @@ func ParseGPUDirectRequest(r *http.Request) *GPUDirectRequest {
 
 	// Parse GPU device ID
 	if deviceStr := r.Header.Get(HeaderGPUDeviceID); deviceStr != "" {
-		if deviceID, err := strconv.Atoi(deviceStr); err == nil {
+		deviceID, err := strconv.Atoi(deviceStr)
+		if err == nil {
 			req.DeviceID = deviceID
 		}
 	}
 
 	// Parse buffer size
 	if sizeStr := r.Header.Get(HeaderGPUBufferSize); sizeStr != "" {
-		if size, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
+		size, err := strconv.ParseInt(sizeStr, 10, 64)
+		if err == nil {
 			req.BufferSize = size
 		}
 	}
@@ -86,35 +94,19 @@ func ParseGPUDirectRequest(r *http.Request) *GPUDirectRequest {
 
 // GPUDirectRequest contains GPUDirect request parameters.
 type GPUDirectRequest struct {
-	// Enabled indicates if GPUDirect should be used
-	Enabled bool
-
-	// DeviceID is the GPU device to use
-	DeviceID int
-
-	// BufferSize is the requested buffer size
+	DeviceID   int
 	BufferSize int64
-
-	// Async indicates if async transfer is requested
-	Async bool
+	Enabled    bool
+	Async      bool
 }
 
 // GPUDirectResponse contains GPUDirect response information.
 type GPUDirectResponse struct {
-	// Used indicates if GPUDirect was actually used
-	Used bool
-
-	// DeviceID is the GPU that was used
-	DeviceID int
-
-	// TransferTimeMs is the transfer time in milliseconds
-	TransferTimeMs float64
-
-	// BytesTransferred is the number of bytes transferred
+	Error            error
+	DeviceID         int
+	TransferTimeMs   float64
 	BytesTransferred int64
-
-	// Error is set if GPUDirect failed
-	Error error
+	Used             bool
 }
 
 // SetResponseHeaders adds GPUDirect response headers.
@@ -153,6 +145,7 @@ func (s *S3Integration) GetObject(ctx context.Context, bucket, key string, req *
 
 	// Get or register file handle
 	objectPath := fmt.Sprintf("%s/%s", bucket, key)
+
 	handle, err := s.getOrRegisterHandle(objectPath)
 	if err != nil {
 		resp.Error = err
@@ -183,7 +176,7 @@ func (s *S3Integration) GetObject(ctx context.Context, bucket, key string, req *
 	resp.Used = true
 	resp.DeviceID = req.DeviceID
 	resp.BytesTransferred = result.BytesTransferred
-	resp.TransferTimeMs = float64(result.Duration.Microseconds()) / 1000.0
+	resp.TransferTimeMs = float64(result.Duration.Microseconds()) / microsecondsPerMs
 
 	return resp, nil
 }
@@ -213,6 +206,7 @@ func (s *S3Integration) PutObject(ctx context.Context, bucket, key string, req *
 
 	// Get or register file handle
 	objectPath := fmt.Sprintf("%s/%s", bucket, key)
+
 	handle, err := s.getOrRegisterHandle(objectPath)
 	if err != nil {
 		resp.Error = err
@@ -224,6 +218,7 @@ func (s *S3Integration) PutObject(ctx context.Context, bucket, key string, req *
 	if bufferSize == 0 {
 		bufferSize = s.service.config.MaxBufferSize
 	}
+
 	if size > 0 && size < bufferSize {
 		bufferSize = size
 	}
@@ -246,7 +241,7 @@ func (s *S3Integration) PutObject(ctx context.Context, bucket, key string, req *
 	resp.Used = true
 	resp.DeviceID = req.DeviceID
 	resp.BytesTransferred = result.BytesTransferred
-	resp.TransferTimeMs = float64(result.Duration.Microseconds()) / 1000.0
+	resp.TransferTimeMs = float64(result.Duration.Microseconds()) / microsecondsPerMs
 
 	return resp, nil
 }
@@ -276,6 +271,7 @@ func (s *S3Integration) getOrRegisterHandle(path string) (uintptr, error) {
 	}
 
 	s.handles[path] = handle
+
 	return handle, nil
 }
 
@@ -291,11 +287,13 @@ func (s *S3Integration) UnregisterObject(bucket, key string) error {
 		return nil
 	}
 
-	if err := s.service.UnregisterFile(handle); err != nil {
+	err := s.service.UnregisterFile(handle)
+	if err != nil {
 		return err
 	}
 
 	delete(s.handles, path)
+
 	return nil
 }
 

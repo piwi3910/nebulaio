@@ -7,18 +7,18 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// AIMLMetrics contains all AI/ML feature metrics
+// AIMLMetrics contains all AI/ML feature metrics.
 type AIMLMetrics struct {
-	S3Express  *S3ExpressMetrics  `json:"s3_express"`
-	Iceberg    *IcebergMetrics    `json:"iceberg"`
-	MCP        *MCPMetrics        `json:"mcp"`
-	GPUDirect  *GPUDirectMetrics  `json:"gpudirect"`
-	DPU        *DPUMetrics        `json:"dpu"`
-	RDMA       *RDMAMetrics       `json:"rdma"`
-	NIM        *NIMMetrics        `json:"nim"`
+	S3Express *S3ExpressMetrics `json:"s3_express"`
+	Iceberg   *IcebergMetrics   `json:"iceberg"`
+	MCP       *MCPMetrics       `json:"mcp"`
+	GPUDirect *GPUDirectMetrics `json:"gpudirect"`
+	DPU       *DPUMetrics       `json:"dpu"`
+	RDMA      *RDMAMetrics      `json:"rdma"`
+	NIM       *NIMMetrics       `json:"nim"`
 }
 
-// S3ExpressMetrics contains S3 Express metrics
+// S3ExpressMetrics contains S3 Express metrics.
 type S3ExpressMetrics struct {
 	Enabled             bool    `json:"enabled"`
 	SessionsCreated     int64   `json:"sessions_created"`
@@ -36,41 +36,41 @@ type S3ExpressMetrics struct {
 	AvgListLatencyMs    float64 `json:"avg_list_latency_ms"`
 }
 
-// IcebergMetrics contains Iceberg metrics
+// IcebergMetrics contains Iceberg metrics.
 type IcebergMetrics struct {
-	Enabled            bool    `json:"enabled"`
-	NamespacesCreated  int64   `json:"namespaces_created"`
-	NamespacesDeleted  int64   `json:"namespaces_deleted"`
-	NamespacesTotal    int64   `json:"namespaces_total"`
-	TablesCreated      int64   `json:"tables_created"`
-	TablesUpdated      int64   `json:"tables_updated"`
-	TablesDeleted      int64   `json:"tables_deleted"`
-	TablesTotal        int64   `json:"tables_total"`
-	SnapshotsCreated   int64   `json:"snapshots_created"`
-	CommitsSucceeded   int64   `json:"commits_succeeded"`
-	CommitsFailed      int64   `json:"commits_failed"`
-	CommitConflicts    int64   `json:"commit_conflicts"`
-	ViewsCreated       int64   `json:"views_created"`
-	ViewsUpdated       int64   `json:"views_updated"`
-	CacheHits          int64   `json:"cache_hits"`
-	CacheMisses        int64   `json:"cache_misses"`
-	CacheHitRate       float64 `json:"cache_hit_rate"`
-}
-
-// MCPMetrics contains MCP Server metrics
-type MCPMetrics struct {
 	Enabled           bool    `json:"enabled"`
-	RequestsTotal     int64   `json:"requests_total"`
-	RequestsSuccess   int64   `json:"requests_success"`
-	RequestsFailed    int64   `json:"requests_failed"`
-	ToolInvocations   int64   `json:"tool_invocations"`
-	ResourceReads     int64   `json:"resource_reads"`
-	ActiveSessions    int64   `json:"active_sessions"`
-	BytesTransferred  int64   `json:"bytes_transferred"`
-	AvgLatencyMs      float64 `json:"avg_latency_ms"`
+	NamespacesCreated int64   `json:"namespaces_created"`
+	NamespacesDeleted int64   `json:"namespaces_deleted"`
+	NamespacesTotal   int64   `json:"namespaces_total"`
+	TablesCreated     int64   `json:"tables_created"`
+	TablesUpdated     int64   `json:"tables_updated"`
+	TablesDeleted     int64   `json:"tables_deleted"`
+	TablesTotal       int64   `json:"tables_total"`
+	SnapshotsCreated  int64   `json:"snapshots_created"`
+	CommitsSucceeded  int64   `json:"commits_succeeded"`
+	CommitsFailed     int64   `json:"commits_failed"`
+	CommitConflicts   int64   `json:"commit_conflicts"`
+	ViewsCreated      int64   `json:"views_created"`
+	ViewsUpdated      int64   `json:"views_updated"`
+	CacheHits         int64   `json:"cache_hits"`
+	CacheMisses       int64   `json:"cache_misses"`
+	CacheHitRate      float64 `json:"cache_hit_rate"`
 }
 
-// GPUDirectMetrics contains GPUDirect metrics
+// MCPMetrics contains MCP Server metrics.
+type MCPMetrics struct {
+	Enabled          bool    `json:"enabled"`
+	RequestsTotal    int64   `json:"requests_total"`
+	RequestsSuccess  int64   `json:"requests_success"`
+	RequestsFailed   int64   `json:"requests_failed"`
+	ToolInvocations  int64   `json:"tool_invocations"`
+	ResourceReads    int64   `json:"resource_reads"`
+	ActiveSessions   int64   `json:"active_sessions"`
+	BytesTransferred int64   `json:"bytes_transferred"`
+	AvgLatencyMs     float64 `json:"avg_latency_ms"`
+}
+
+// GPUDirectMetrics contains GPUDirect metrics.
 type GPUDirectMetrics struct {
 	Enabled           bool    `json:"enabled"`
 	ReadBytes         int64   `json:"read_bytes"`
@@ -88,7 +88,7 @@ type GPUDirectMetrics struct {
 	AvgWriteLatencyUs float64 `json:"avg_write_latency_us"`
 }
 
-// DPUMetrics contains BlueField DPU metrics
+// DPUMetrics contains BlueField DPU metrics.
 type DPUMetrics struct {
 	Enabled              bool    `json:"enabled"`
 	StorageOps           int64   `json:"storage_ops"`
@@ -106,7 +106,7 @@ type DPUMetrics struct {
 	AvgCompressLatencyUs float64 `json:"avg_compress_latency_us"`
 }
 
-// RDMAMetrics contains S3 over RDMA metrics
+// RDMAMetrics contains S3 over RDMA metrics.
 type RDMAMetrics struct {
 	Enabled           bool    `json:"enabled"`
 	ConnectionsTotal  int64   `json:"connections_total"`
@@ -121,36 +121,36 @@ type RDMAMetrics struct {
 	AvgLatencyUs      float64 `json:"avg_latency_us"`
 }
 
-// NIMMetrics contains NVIDIA NIM metrics
+// NIMMetrics contains NVIDIA NIM metrics.
 type NIMMetrics struct {
-	Enabled            bool    `json:"enabled"`
-	RequestsTotal      int64   `json:"requests_total"`
-	RequestsSuccess    int64   `json:"requests_success"`
-	RequestsFailed     int64   `json:"requests_failed"`
-	TokensUsed         int64   `json:"tokens_used"`
-	StreamingRequests  int64   `json:"streaming_requests"`
-	CacheHits          int64   `json:"cache_hits"`
-	CacheMisses        int64   `json:"cache_misses"`
-	CacheHitRate       float64 `json:"cache_hit_rate"`
-	AvgLatencyMs       float64 `json:"avg_latency_ms"`
-	ModelsAvailable    int     `json:"models_available"`
+	Enabled           bool    `json:"enabled"`
+	RequestsTotal     int64   `json:"requests_total"`
+	RequestsSuccess   int64   `json:"requests_success"`
+	RequestsFailed    int64   `json:"requests_failed"`
+	TokensUsed        int64   `json:"tokens_used"`
+	StreamingRequests int64   `json:"streaming_requests"`
+	CacheHits         int64   `json:"cache_hits"`
+	CacheMisses       int64   `json:"cache_misses"`
+	CacheHitRate      float64 `json:"cache_hit_rate"`
+	AvgLatencyMs      float64 `json:"avg_latency_ms"`
+	ModelsAvailable   int     `json:"models_available"`
 }
 
-// FeatureStatus contains the status of a single AI/ML feature
+// FeatureStatus contains the status of a single AI/ML feature.
 type FeatureStatus struct {
 	Name        string `json:"name"`
-	Enabled     bool   `json:"enabled"`
-	Available   bool   `json:"available"`
 	Version     string `json:"version"`
 	Description string `json:"description"`
+	Enabled     bool   `json:"enabled"`
+	Available   bool   `json:"available"`
 }
 
-// AIMLFeaturesStatus contains status of all AI/ML features
+// AIMLFeaturesStatus contains status of all AI/ML features.
 type AIMLFeaturesStatus struct {
 	Features []FeatureStatus `json:"features"`
 }
 
-// RegisterAIMLRoutes registers AI/ML-related routes
+// RegisterAIMLRoutes registers AI/ML-related routes.
 func (h *Handler) RegisterAIMLRoutes(r chi.Router) {
 	r.Get("/aiml/metrics", h.GetAIMLMetrics)
 	r.Get("/aiml/metrics/{feature}", h.GetFeatureMetrics)
@@ -159,26 +159,27 @@ func (h *Handler) RegisterAIMLRoutes(r chi.Router) {
 	r.Put("/config", h.UpdateConfig)
 }
 
-// GetAIMLMetrics returns metrics for all AI/ML features
+// GetAIMLMetrics returns metrics for all AI/ML features.
 func (h *Handler) GetAIMLMetrics(w http.ResponseWriter, r *http.Request) {
 	metrics := &AIMLMetrics{
-		S3Express:  h.getS3ExpressMetrics(),
-		Iceberg:    h.getIcebergMetrics(),
-		MCP:        h.getMCPMetrics(),
-		GPUDirect:  h.getGPUDirectMetrics(),
-		DPU:        h.getDPUMetrics(),
-		RDMA:       h.getRDMAMetrics(),
-		NIM:        h.getNIMMetrics(),
+		S3Express: h.getS3ExpressMetrics(),
+		Iceberg:   h.getIcebergMetrics(),
+		MCP:       h.getMCPMetrics(),
+		GPUDirect: h.getGPUDirectMetrics(),
+		DPU:       h.getDPUMetrics(),
+		RDMA:      h.getRDMAMetrics(),
+		NIM:       h.getNIMMetrics(),
 	}
 
 	writeJSON(w, http.StatusOK, metrics)
 }
 
-// GetFeatureMetrics returns metrics for a specific feature
+// GetFeatureMetrics returns metrics for a specific feature.
 func (h *Handler) GetFeatureMetrics(w http.ResponseWriter, r *http.Request) {
 	feature := chi.URLParam(r, "feature")
 
 	var metrics interface{}
+
 	switch feature {
 	case "s3-express", "s3express":
 		metrics = h.getS3ExpressMetrics()
@@ -202,7 +203,7 @@ func (h *Handler) GetFeatureMetrics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, metrics)
 }
 
-// GetAIMLStatus returns the status of all AI/ML features
+// GetAIMLStatus returns the status of all AI/ML features.
 func (h *Handler) GetAIMLStatus(w http.ResponseWriter, r *http.Request) {
 	// Get feature status from config (defaults to false if config not set)
 	s3ExpressEnabled := false
@@ -280,7 +281,7 @@ func (h *Handler) GetAIMLStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, status)
 }
 
-// GetConfig returns the server configuration
+// GetConfig returns the server configuration.
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	// Build config from actual configuration values
 	configResponse := make(map[string]interface{})
@@ -396,10 +397,12 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, configResponse)
 }
 
-// UpdateConfig updates the server configuration
+// UpdateConfig updates the server configuration.
 func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	var config map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+
+	err := json.NewDecoder(r.Body).Decode(&config)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -436,37 +439,37 @@ func (h *Handler) getS3ExpressMetrics() *S3ExpressMetrics {
 
 func (h *Handler) getIcebergMetrics() *IcebergMetrics {
 	return &IcebergMetrics{
-		Enabled:            false,
-		NamespacesCreated:  0,
-		NamespacesDeleted:  0,
-		NamespacesTotal:    0,
-		TablesCreated:      0,
-		TablesUpdated:      0,
-		TablesDeleted:      0,
-		TablesTotal:        0,
-		SnapshotsCreated:   0,
-		CommitsSucceeded:   0,
-		CommitsFailed:      0,
-		CommitConflicts:    0,
-		ViewsCreated:       0,
-		ViewsUpdated:       0,
-		CacheHits:          0,
-		CacheMisses:        0,
-		CacheHitRate:       0,
+		Enabled:           false,
+		NamespacesCreated: 0,
+		NamespacesDeleted: 0,
+		NamespacesTotal:   0,
+		TablesCreated:     0,
+		TablesUpdated:     0,
+		TablesDeleted:     0,
+		TablesTotal:       0,
+		SnapshotsCreated:  0,
+		CommitsSucceeded:  0,
+		CommitsFailed:     0,
+		CommitConflicts:   0,
+		ViewsCreated:      0,
+		ViewsUpdated:      0,
+		CacheHits:         0,
+		CacheMisses:       0,
+		CacheHitRate:      0,
 	}
 }
 
 func (h *Handler) getMCPMetrics() *MCPMetrics {
 	return &MCPMetrics{
-		Enabled:           false,
-		RequestsTotal:     0,
-		RequestsSuccess:   0,
-		RequestsFailed:    0,
-		ToolInvocations:   0,
-		ResourceReads:     0,
-		ActiveSessions:    0,
-		BytesTransferred:  0,
-		AvgLatencyMs:      0,
+		Enabled:          false,
+		RequestsTotal:    0,
+		RequestsSuccess:  0,
+		RequestsFailed:   0,
+		ToolInvocations:  0,
+		ResourceReads:    0,
+		ActiveSessions:   0,
+		BytesTransferred: 0,
+		AvgLatencyMs:     0,
 	}
 }
 
@@ -526,16 +529,16 @@ func (h *Handler) getRDMAMetrics() *RDMAMetrics {
 
 func (h *Handler) getNIMMetrics() *NIMMetrics {
 	return &NIMMetrics{
-		Enabled:            false,
-		RequestsTotal:      0,
-		RequestsSuccess:    0,
-		RequestsFailed:     0,
-		TokensUsed:         0,
-		StreamingRequests:  0,
-		CacheHits:          0,
-		CacheMisses:        0,
-		CacheHitRate:       0,
-		AvgLatencyMs:       0,
-		ModelsAvailable:    0,
+		Enabled:           false,
+		RequestsTotal:     0,
+		RequestsSuccess:   0,
+		RequestsFailed:    0,
+		TokensUsed:        0,
+		StreamingRequests: 0,
+		CacheHits:         0,
+		CacheMisses:       0,
+		CacheHitRate:      0,
+		AvgLatencyMs:      0,
+		ModelsAvailable:   0,
 	}
 }

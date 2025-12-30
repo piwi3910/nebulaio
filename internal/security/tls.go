@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -19,7 +20,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// TLSManager handles TLS certificate management with auto-generation support
+// TLSManager handles TLS certificate management with auto-generation support.
 type TLSManager struct {
 	config    *config.TLSConfig
 	tlsConfig *tls.Config
@@ -29,10 +30,10 @@ type TLSManager struct {
 }
 
 // NewTLSManager creates a new TLS manager with the given configuration
-// It will automatically generate self-signed certificates if needed
+// It will automatically generate self-signed certificates if needed.
 func NewTLSManager(cfg *config.TLSConfig, hostname string) (*TLSManager, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("TLS configuration is nil")
+		return nil, errors.New("TLS configuration is nil")
 	}
 
 	m := &TLSManager{
@@ -40,12 +41,14 @@ func NewTLSManager(cfg *config.TLSConfig, hostname string) (*TLSManager, error) 
 	}
 
 	// Ensure cert directory exists
-	if err := os.MkdirAll(cfg.CertDir, 0700); err != nil {
+	err := os.MkdirAll(cfg.CertDir, 0700)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate directory: %w", err)
 	}
 
 	// Determine certificate paths
-	if cfg.CertFile != "" && cfg.KeyFile != "" {
+	switch {
+	case cfg.CertFile != "" && cfg.KeyFile != "":
 		// Use provided certificates
 		m.certFile = cfg.CertFile
 		m.keyFile = cfg.KeyFile
@@ -54,17 +57,18 @@ func NewTLSManager(cfg *config.TLSConfig, hostname string) (*TLSManager, error) 
 			Str("cert_file", cfg.CertFile).
 			Str("key_file", cfg.KeyFile).
 			Msg("Using provided TLS certificates")
-	} else if cfg.AutoGenerate {
+	case cfg.AutoGenerate:
 		// Auto-generate certificates
 		m.certFile = filepath.Join(cfg.CertDir, "server.crt")
 		m.keyFile = filepath.Join(cfg.CertDir, "server.key")
 		m.caFile = filepath.Join(cfg.CertDir, "ca.crt")
 
-		if err := m.ensureCertificates(hostname); err != nil {
+		err := m.ensureCertificates(hostname)
+		if err != nil {
 			return nil, fmt.Errorf("failed to generate certificates: %w", err)
 		}
-	} else {
-		return nil, fmt.Errorf("TLS enabled but no certificates provided and auto_generate is disabled")
+	default:
+		return nil, errors.New("TLS enabled but no certificates provided and auto_generate is disabled")
 	}
 
 	// Build TLS configuration
@@ -72,32 +76,33 @@ func NewTLSManager(cfg *config.TLSConfig, hostname string) (*TLSManager, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to build TLS config: %w", err)
 	}
+
 	m.tlsConfig = tlsConfig
 
 	return m, nil
 }
 
-// GetTLSConfig returns the TLS configuration for use with HTTP servers
+// GetTLSConfig returns the TLS configuration for use with HTTP servers.
 func (m *TLSManager) GetTLSConfig() *tls.Config {
 	return m.tlsConfig
 }
 
-// GetCertFile returns the path to the server certificate
+// GetCertFile returns the path to the server certificate.
 func (m *TLSManager) GetCertFile() string {
 	return m.certFile
 }
 
-// GetKeyFile returns the path to the server private key
+// GetKeyFile returns the path to the server private key.
 func (m *TLSManager) GetKeyFile() string {
 	return m.keyFile
 }
 
-// GetCAFile returns the path to the CA certificate
+// GetCAFile returns the path to the CA certificate.
 func (m *TLSManager) GetCAFile() string {
 	return m.caFile
 }
 
-// ensureCertificates checks if certificates exist and generates them if not
+// ensureCertificates checks if certificates exist and generates them if not.
 func (m *TLSManager) ensureCertificates(hostname string) error {
 	// Check if certificates already exist
 	certExists := fileExists(m.certFile) && fileExists(m.keyFile)
@@ -106,9 +111,11 @@ func (m *TLSManager) ensureCertificates(hostname string) error {
 		valid, err := m.verifyCertificate()
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to verify existing certificate, regenerating")
+
 			certExists = false
 		} else if !valid {
 			log.Info().Msg("Existing certificate expired or invalid, regenerating")
+
 			certExists = false
 		}
 	}
@@ -117,15 +124,17 @@ func (m *TLSManager) ensureCertificates(hostname string) error {
 		log.Info().
 			Str("cert_file", m.certFile).
 			Msg("Using existing TLS certificates")
+
 		return nil
 	}
 
 	// Generate new certificates
 	log.Info().Msg("Generating self-signed TLS certificates")
+
 	return m.generateCertificates(hostname)
 }
 
-// verifyCertificate checks if the existing certificate is valid
+// verifyCertificate checks if the existing certificate is valid.
 func (m *TLSManager) verifyCertificate() (bool, error) {
 	certPEM, err := os.ReadFile(m.certFile)
 	if err != nil {
@@ -134,7 +143,7 @@ func (m *TLSManager) verifyCertificate() (bool, error) {
 
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
-		return false, fmt.Errorf("failed to parse certificate PEM")
+		return false, errors.New("failed to parse certificate PEM")
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
@@ -151,7 +160,7 @@ func (m *TLSManager) verifyCertificate() (bool, error) {
 	return true, nil
 }
 
-// generateCertificates creates a CA and server certificate
+// generateCertificates creates a CA and server certificate.
 func (m *TLSManager) generateCertificates(hostname string) error {
 	// Generate CA first
 	caCert, caKey, err := m.generateCA()
@@ -160,7 +169,8 @@ func (m *TLSManager) generateCertificates(hostname string) error {
 	}
 
 	// Save CA certificate
-	if err := m.saveCertificate(m.caFile, caCert); err != nil {
+	err = m.saveCertificate(m.caFile, caCert)
+	if err != nil {
 		return fmt.Errorf("failed to save CA certificate: %w", err)
 	}
 
@@ -171,16 +181,20 @@ func (m *TLSManager) generateCertificates(hostname string) error {
 	}
 
 	// Save server certificate and key
-	if err := m.saveCertificate(m.certFile, serverCert); err != nil {
+	err = m.saveCertificate(m.certFile, serverCert)
+	if err != nil {
 		return fmt.Errorf("failed to save server certificate: %w", err)
 	}
-	if err := m.saveKey(m.keyFile, serverKey); err != nil {
+
+	err = m.saveKey(m.keyFile, serverKey)
+	if err != nil {
 		return fmt.Errorf("failed to save server key: %w", err)
 	}
 
 	// Also save CA key for potential future use (cluster operations)
 	caKeyFile := filepath.Join(m.config.CertDir, "ca.key")
-	if err := m.saveKey(caKeyFile, caKey); err != nil {
+	err = m.saveKey(caKeyFile, caKey)
+	if err != nil {
 		return fmt.Errorf("failed to save CA key: %w", err)
 	}
 
@@ -194,7 +208,7 @@ func (m *TLSManager) generateCertificates(hostname string) error {
 	return nil
 }
 
-// generateCA creates a self-signed CA certificate
+// generateCA creates a self-signed CA certificate.
 func (m *TLSManager) generateCA() ([]byte, *ecdsa.PrivateKey, error) {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -233,7 +247,7 @@ func (m *TLSManager) generateCA() ([]byte, *ecdsa.PrivateKey, error) {
 	return certDER, privateKey, nil
 }
 
-// generateServerCert creates a server certificate signed by the CA
+// generateServerCert creates a server certificate signed by the CA.
 func (m *TLSManager) generateServerCert(caCertDER []byte, caKey *ecdsa.PrivateKey, hostname string) ([]byte, *ecdsa.PrivateKey, error) {
 	caCert, err := x509.ParseCertificate(caCertDER)
 	if err != nil {
@@ -294,29 +308,32 @@ func (m *TLSManager) generateServerCert(caCertDER []byte, caKey *ecdsa.PrivateKe
 	return certDER, privateKey, nil
 }
 
-// saveCertificate saves a DER-encoded certificate to a PEM file
+// saveCertificate saves a DER-encoded certificate to a PEM file.
 func (m *TLSManager) saveCertificate(path string, certDER []byte) error {
 	certPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: certDER,
 	})
+
 	return os.WriteFile(path, certPEM, 0644)
 }
 
-// saveKey saves an ECDSA private key to a PEM file
+// saveKey saves an ECDSA private key to a PEM file.
 func (m *TLSManager) saveKey(path string, key *ecdsa.PrivateKey) error {
 	keyBytes, err := x509.MarshalECPrivateKey(key)
 	if err != nil {
 		return err
 	}
+
 	keyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "EC PRIVATE KEY",
 		Bytes: keyBytes,
 	})
+
 	return os.WriteFile(path, keyPEM, 0600)
 }
 
-// buildTLSConfig creates a tls.Config from the manager's settings
+// buildTLSConfig creates a tls.Config from the manager's settings.
 func (m *TLSManager) buildTLSConfig() (*tls.Config, error) {
 	// Load server certificate
 	cert, err := tls.LoadX509KeyPair(m.certFile, m.keyFile)
@@ -338,20 +355,23 @@ func (m *TLSManager) buildTLSConfig() (*tls.Config, error) {
 
 	// Load CA for client verification if mTLS is enabled
 	var clientCAs *x509.CertPool
+
 	if m.config.RequireClientCert && m.caFile != "" {
 		caCert, err := os.ReadFile(m.caFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read CA certificate: %w", err)
 		}
+
 		clientCAs = x509.NewCertPool()
 		if !clientCAs.AppendCertsFromPEM(caCert) {
-			return nil, fmt.Errorf("failed to parse CA certificate")
+			return nil, errors.New("failed to parse CA certificate")
 		}
 	}
 
+	//nolint:gosec // G402,G115: MinVersion is user-configurable, defaults to TLS 1.2
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		MinVersion:   uint16(minVersion),
+		MinVersion:   uint16(minVersion), //nolint:gosec // Safe conversion, validated above
 		ClientAuth:   clientAuth,
 		ClientCAs:    clientCAs,
 		CipherSuites: []uint16{
@@ -367,13 +387,13 @@ func (m *TLSManager) buildTLSConfig() (*tls.Config, error) {
 	return tlsConfig, nil
 }
 
-// fileExists checks if a file exists
+// fileExists checks if a file exists.
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
-// getLocalIPs returns all non-loopback local IP addresses
+// getLocalIPs returns all non-loopback local IP addresses.
 func getLocalIPs() []net.IP {
 	var ips []net.IP
 

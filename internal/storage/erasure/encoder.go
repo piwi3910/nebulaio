@@ -3,7 +3,7 @@ package erasure
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // G501: MD5 required for S3 ETag compatibility
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -11,7 +11,7 @@ import (
 	"github.com/klauspost/reedsolomon"
 )
 
-// Encoder handles Reed-Solomon encoding operations
+// Encoder handles Reed-Solomon encoding operations.
 type Encoder struct {
 	encoder      reedsolomon.Encoder
 	dataShards   int
@@ -19,7 +19,7 @@ type Encoder struct {
 	shardSize    int
 }
 
-// NewEncoder creates a new erasure encoder
+// NewEncoder creates a new erasure encoder.
 func NewEncoder(dataShards, parityShards, shardSize int) (*Encoder, error) {
 	enc, err := reedsolomon.New(dataShards, parityShards)
 	if err != nil {
@@ -34,27 +34,21 @@ func NewEncoder(dataShards, parityShards, shardSize int) (*Encoder, error) {
 	}, nil
 }
 
-// EncodedData represents the result of encoding an object
+// EncodedData represents the result of encoding an object.
 type EncodedData struct {
-	// Shards contains all data and parity shards
-	Shards [][]byte
-
-	// ShardChecksums contains MD5 checksums for each shard
-	ShardChecksums []string
-
-	// OriginalSize is the size of the original data before encoding
-	OriginalSize int64
-
-	// OriginalChecksum is the MD5 of the original data
 	OriginalChecksum string
+	Shards           [][]byte
+	ShardChecksums   []string
+	OriginalSize     int64
 }
 
-// Encode encodes data using Reed-Solomon erasure coding
+// Encode encodes data using Reed-Solomon erasure coding.
 func (e *Encoder) Encode(reader io.Reader) (*EncodedData, error) {
 	// Read all data into memory
 	// For very large files, we should use streaming, but for now we buffer
 	var buf bytes.Buffer
-	originalHash := md5.New()
+
+	originalHash := md5.New() //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	writer := io.MultiWriter(&buf, originalHash)
 
 	n, err := io.Copy(writer, reader)
@@ -71,8 +65,9 @@ func (e *Encoder) Encode(reader io.Reader) (*EncodedData, error) {
 
 	// Create data shards
 	shards := make([][]byte, e.dataShards+e.parityShards)
-	for i := 0; i < e.dataShards; i++ {
+	for i := range e.dataShards {
 		start := i * shardSize
+
 		end := start + shardSize
 		if end > len(data) {
 			end = len(data)
@@ -91,14 +86,15 @@ func (e *Encoder) Encode(reader io.Reader) (*EncodedData, error) {
 	}
 
 	// Encode parity shards
-	if err := e.encoder.Encode(shards); err != nil {
+	err = e.encoder.Encode(shards)
+	if err != nil {
 		return nil, fmt.Errorf("failed to encode parity: %w", err)
 	}
 
 	// Calculate checksums for each shard
 	checksums := make([]string, len(shards))
 	for i, shard := range shards {
-		hash := md5.Sum(shard)
+		hash := md5.Sum(shard) //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 		checksums[i] = hex.EncodeToString(hash[:])
 	}
 
@@ -111,7 +107,7 @@ func (e *Encoder) Encode(reader io.Reader) (*EncodedData, error) {
 }
 
 // contextReader wraps an io.Reader to make it context-aware
-// It checks for context cancellation before each Read operation
+// It checks for context cancellation before each Read operation.
 type contextReader struct {
 	ctx context.Context
 	r   io.Reader
@@ -119,9 +115,11 @@ type contextReader struct {
 
 func (cr *contextReader) Read(p []byte) (n int, err error) {
 	// Check if context is already cancelled before attempting read
-	if err := cr.ctx.Err(); err != nil {
+	err = cr.ctx.Err()
+	if err != nil {
 		return 0, err
 	}
+
 	return cr.r.Read(p)
 }
 
@@ -186,18 +184,18 @@ func (e *Encoder) EncodeStream(ctx context.Context, reader io.Reader, chunkSize 
 	return dataChan, errChan
 }
 
-// VerifyShard verifies a shard against its expected checksum
+// VerifyShard verifies a shard against its expected checksum.
 func VerifyShard(shard []byte, expectedChecksum string) bool {
-	hash := md5.Sum(shard)
+	hash := md5.Sum(shard) //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	return hex.EncodeToString(hash[:]) == expectedChecksum
 }
 
-// ShardIndex returns true if the index is a data shard (vs parity)
+// ShardIndex returns true if the index is a data shard (vs parity).
 func (e *Encoder) IsDataShard(index int) bool {
 	return index < e.dataShards
 }
 
-// TotalShards returns the total number of shards
+// TotalShards returns the total number of shards.
 func (e *Encoder) TotalShards() int {
 	return e.dataShards + e.parityShards
 }

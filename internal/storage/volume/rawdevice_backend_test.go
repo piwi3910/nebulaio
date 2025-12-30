@@ -41,17 +41,21 @@ func TestRawDeviceBackendCreation(t *testing.T) {
 		DefaultTier:  TierHot,
 		TierSelector: DefaultTierSelector,
 	}
+
 	t.Log("Config created")
 
 	t.Log("Creating backend...")
+
 	be, err := NewRawDeviceBackend(cfg)
 	require.NoError(t, err)
 	t.Log("Backend created")
+
 	defer be.Close()
 
 	ctx := context.Background()
 
 	t.Log("Init...")
+
 	err = be.Init(ctx)
 	require.NoError(t, err)
 	t.Log("Initialized")
@@ -85,12 +89,14 @@ func TestRawDeviceBackendPutGet(t *testing.T) {
 
 	be, err := NewRawDeviceBackend(cfg)
 	require.NoError(t, err)
+
 	defer be.Close()
 
 	ctx := context.Background()
 	require.NoError(t, be.Init(ctx))
 
 	t.Log("Put object...")
+
 	testData := []byte("Hello, World!")
 	result, err := be.PutObject(ctx, "bucket", "key", bytes.NewReader(testData), int64(len(testData)))
 	require.NoError(t, err)
@@ -98,10 +104,12 @@ func TestRawDeviceBackendPutGet(t *testing.T) {
 
 	t.Log("Get object...")
 	t.Log("Calling be.GetObject...")
+
 	reader, err := be.GetObject(ctx, "bucket", "key")
 	t.Logf("GetObject returned, reader=%v, err=%v", reader != nil, err)
 	require.NoError(t, err)
 	t.Log("Reading data from reader...")
+
 	data, err := io.ReadAll(reader)
 	t.Logf("ReadAll returned %d bytes, err=%v", len(data), err)
 	require.NoError(t, err)
@@ -144,9 +152,12 @@ func TestRawDeviceBackendMultiTier(t *testing.T) {
 	}
 
 	t.Log("Creating backend with 2 tiers...")
+
 	be, err := NewRawDeviceBackend(cfg)
 	require.NoError(t, err)
+
 	defer be.Close()
+
 	t.Log("Backend created")
 
 	assert.True(t, be.HasTier(TierHot))

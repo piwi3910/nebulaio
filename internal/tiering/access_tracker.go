@@ -3,35 +3,39 @@ package tiering
 import (
 	"container/list"
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
 
-// AccessTracker tracks object access patterns for tiering decisions
+// ErrStatsNotFound is returned when access stats are not found for an object.
+var ErrStatsNotFound = errors.New("access stats not found")
+
+// Access trend constants.
+const (
+	trendIncreasing = "increasing"
+	trendStable     = "stable"
+	trendDeclining  = "declining"
+)
+
+// AccessTracker tracks object access patterns for tiering decisions.
 type AccessTracker struct {
-	// In-memory tracking
-	stats   map[string]*ObjectAccessStats
-	statsMu sync.RWMutex
-
-	// LRU eviction for memory management
-	lruList *list.List
-	lruMap  map[string]*list.Element
-
-	// Configuration
+	persistStore    AccessStatsStore
+	stopChan        chan struct{}
+	lruList         *list.List
+	lruMap          map[string]*list.Element
+	stats           map[string]*ObjectAccessStats
+	pendingFlush    map[string]*ObjectAccessStats
+	flushWg         sync.WaitGroup
 	maxEntries      int
 	historyDuration time.Duration
 	maxHistorySize  int
-
-	// Background flush
-	persistStore   AccessStatsStore
-	flushInterval  time.Duration
-	stopChan       chan struct{}
-	flushWg        sync.WaitGroup
-	pendingFlush   map[string]*ObjectAccessStats
-	pendingFlushMu sync.Mutex
+	flushInterval   time.Duration
+	statsMu         sync.RWMutex
+	pendingFlushMu  sync.Mutex
 }
 
-// AccessStatsStore interface for persistent storage
+// AccessStatsStore interface for persistent storage.
 type AccessStatsStore interface {
 	Get(ctx context.Context, bucket, key string) (*ObjectAccessStats, error)
 	Put(ctx context.Context, stats *ObjectAccessStats) error
@@ -39,25 +43,16 @@ type AccessStatsStore interface {
 	List(ctx context.Context, bucket string) ([]*ObjectAccessStats, error)
 }
 
-// AccessTrackerConfig configures the access tracker
+// AccessTrackerConfig configures the access tracker.
 type AccessTrackerConfig struct {
-	// MaxEntries limits memory usage
-	MaxEntries int
-
-	// HistoryDuration is how long to keep access history
+	PersistStore    AccessStatsStore
+	MaxEntries      int
 	HistoryDuration time.Duration
-
-	// MaxHistorySize is max access records per object
-	MaxHistorySize int
-
-	// FlushInterval is how often to flush to persistent storage
-	FlushInterval time.Duration
-
-	// PersistStore for durable storage (optional)
-	PersistStore AccessStatsStore
+	MaxHistorySize  int
+	FlushInterval   time.Duration
 }
 
-// DefaultAccessTrackerConfig returns default configuration
+// DefaultAccessTrackerConfig returns default configuration.
 func DefaultAccessTrackerConfig() AccessTrackerConfig {
 	return AccessTrackerConfig{
 		MaxEntries:      100000,
@@ -67,7 +62,7 @@ func DefaultAccessTrackerConfig() AccessTrackerConfig {
 	}
 }
 
-// NewAccessTracker creates a new access tracker
+// NewAccessTracker creates a new access tracker.
 func NewAccessTracker(cfg AccessTrackerConfig) *AccessTracker {
 	tracker := &AccessTracker{
 		stats:           make(map[string]*ObjectAccessStats),
@@ -85,13 +80,14 @@ func NewAccessTracker(cfg AccessTrackerConfig) *AccessTracker {
 	// Start background flush if store is configured
 	if cfg.PersistStore != nil {
 		tracker.flushWg.Add(1)
+
 		go tracker.backgroundFlush()
 	}
 
 	return tracker
 }
 
-// RecordAccess records an object access
+// RecordAccess records an object access.
 func (t *AccessTracker) RecordAccess(ctx context.Context, bucket, key, operation string, size int64) {
 	fullKey := bucket + "/" + key
 	now := time.Now()
@@ -149,6 +145,7 @@ func (t *AccessTracker) RecordAccess(ctx context.Context, bucket, key, operation
 			if i > 0 {
 				stats.AccessHistory = stats.AccessHistory[i:]
 			}
+
 			break
 		}
 	}
@@ -164,7 +161,7 @@ func (t *AccessTracker) RecordAccess(ctx context.Context, bucket, key, operation
 	}
 }
 
-// GetStats returns access stats for an object
+// GetStats returns access stats for an object.
 func (t *AccessTracker) GetStats(ctx context.Context, bucket, key string) (*ObjectAccessStats, error) {
 	fullKey := bucket + "/" + key
 
@@ -181,10 +178,10 @@ func (t *AccessTracker) GetStats(ctx context.Context, bucket, key string) (*Obje
 		return t.persistStore.Get(ctx, bucket, key)
 	}
 
-	return nil, nil
+	return nil, ErrStatsNotFound
 }
 
-// UpdateTier updates the current tier for an object
+// UpdateTier updates the current tier for an object.
 func (t *AccessTracker) UpdateTier(ctx context.Context, bucket, key string, tier TierType, previousTier TierType) {
 	fullKey := bucket + "/" + key
 	now := time.Now()
@@ -204,7 +201,7 @@ func (t *AccessTracker) UpdateTier(ctx context.Context, bucket, key string, tier
 	stats.ConsecutiveEvaluations = 0
 }
 
-// RecordEvaluation records a policy evaluation (for anti-thrash)
+// RecordEvaluation records a policy evaluation (for anti-thrash).
 func (t *AccessTracker) RecordEvaluation(ctx context.Context, bucket, key string) {
 	fullKey := bucket + "/" + key
 
@@ -217,7 +214,7 @@ func (t *AccessTracker) RecordEvaluation(ctx context.Context, bucket, key string
 	}
 }
 
-// ResetEvaluations resets consecutive evaluations
+// ResetEvaluations resets consecutive evaluations.
 func (t *AccessTracker) ResetEvaluations(ctx context.Context, bucket, key string) {
 	fullKey := bucket + "/" + key
 
@@ -230,7 +227,7 @@ func (t *AccessTracker) ResetEvaluations(ctx context.Context, bucket, key string
 	}
 }
 
-// updateMetrics computes derived metrics from access history
+// updateMetrics computes derived metrics from access history.
 func (t *AccessTracker) updateMetrics(stats *ObjectAccessStats) {
 	now := time.Now()
 
@@ -247,9 +244,11 @@ func (t *AccessTracker) updateMetrics(stats *ObjectAccessStats) {
 		if record.Timestamp.After(cutoff24h) {
 			stats.AccessesLast24h++
 		}
+
 		if record.Timestamp.After(cutoff7d) {
 			stats.AccessesLast7d++
 		}
+
 		if record.Timestamp.After(cutoff30d) {
 			stats.AccessesLast30d++
 		}
@@ -258,13 +257,16 @@ func (t *AccessTracker) updateMetrics(stats *ObjectAccessStats) {
 	// Calculate average per day over last 30 days
 	if len(stats.AccessHistory) > 0 {
 		oldestAccess := stats.AccessHistory[0].Timestamp
+
 		daysCovered := now.Sub(oldestAccess).Hours() / 24
 		if daysCovered < 1 {
 			daysCovered = 1
 		}
+
 		if daysCovered > 30 {
 			daysCovered = 30
 		}
+
 		stats.AverageAccessesDay = float64(stats.AccessesLast30d) / daysCovered
 	}
 
@@ -272,7 +274,7 @@ func (t *AccessTracker) updateMetrics(stats *ObjectAccessStats) {
 	stats.AccessTrend = t.detectTrend(stats)
 }
 
-// detectTrend analyzes access history to detect patterns
+// detectTrend analyzes access history to detect patterns.
 func (t *AccessTracker) detectTrend(stats *ObjectAccessStats) string {
 	if len(stats.AccessHistory) < 7 {
 		return "unknown"
@@ -298,22 +300,24 @@ func (t *AccessTracker) detectTrend(stats *ObjectAccessStats) string {
 	// Determine trend
 	if previousCount == 0 {
 		if recentCount > 0 {
-			return "increasing"
+			return trendIncreasing
 		}
-		return "stable"
+
+		return trendStable
 	}
 
 	ratio := float64(recentCount) / float64(previousCount)
 
 	if ratio > 1.3 {
-		return "increasing"
+		return trendIncreasing
 	} else if ratio < 0.7 {
-		return "declining"
+		return trendDeclining
 	}
-	return "stable"
+
+	return trendStable
 }
 
-// evictLRU removes the least recently used entry
+// evictLRU removes the least recently used entry.
 func (t *AccessTracker) evictLRU() {
 	elem := t.lruList.Back()
 	if elem == nil {
@@ -326,7 +330,7 @@ func (t *AccessTracker) evictLRU() {
 	delete(t.lruMap, key)
 }
 
-// backgroundFlush periodically flushes to persistent storage
+// backgroundFlush periodically flushes to persistent storage.
 func (t *AccessTracker) backgroundFlush() {
 	defer t.flushWg.Done()
 
@@ -345,7 +349,7 @@ func (t *AccessTracker) backgroundFlush() {
 	}
 }
 
-// flush writes pending stats to persistent storage
+// flush writes pending stats to persistent storage.
 func (t *AccessTracker) flush() {
 	if t.persistStore == nil {
 		return
@@ -360,7 +364,8 @@ func (t *AccessTracker) flush() {
 	defer cancel()
 
 	for _, stats := range toFlush {
-		if err := t.persistStore.Put(ctx, stats); err != nil {
+		err := t.persistStore.Put(ctx, stats)
+		if err != nil {
 			// Re-add to pending on failure
 			t.pendingFlushMu.Lock()
 			t.pendingFlush[stats.Bucket+"/"+stats.Key] = stats
@@ -369,7 +374,7 @@ func (t *AccessTracker) flush() {
 	}
 }
 
-// GetHotObjects returns the most accessed objects
+// GetHotObjects returns the most accessed objects.
 func (t *AccessTracker) GetHotObjects(ctx context.Context, limit int) []*ObjectAccessStats {
 	t.statsMu.RLock()
 	defer t.statsMu.RUnlock()
@@ -381,7 +386,7 @@ func (t *AccessTracker) GetHotObjects(ctx context.Context, limit int) []*ObjectA
 	}
 
 	// Sort by access count (descending)
-	for i := 0; i < len(all)-1; i++ {
+	for i := range len(all) - 1 {
 		for j := i + 1; j < len(all); j++ {
 			if all[j].AccessCount > all[i].AccessCount {
 				all[i], all[j] = all[j], all[i]
@@ -396,12 +401,13 @@ func (t *AccessTracker) GetHotObjects(ctx context.Context, limit int) []*ObjectA
 	return all
 }
 
-// GetColdObjects returns objects not accessed recently
+// GetColdObjects returns objects not accessed recently.
 func (t *AccessTracker) GetColdObjects(ctx context.Context, inactiveDays int, limit int) []*ObjectAccessStats {
 	t.statsMu.RLock()
 	defer t.statsMu.RUnlock()
 
 	cutoff := time.Now().Add(-time.Duration(inactiveDays) * 24 * time.Hour)
+
 	var cold []*ObjectAccessStats
 
 	for _, stats := range t.stats {
@@ -411,7 +417,7 @@ func (t *AccessTracker) GetColdObjects(ctx context.Context, inactiveDays int, li
 	}
 
 	// Sort by last access (oldest first)
-	for i := 0; i < len(cold)-1; i++ {
+	for i := range len(cold) - 1 {
 		for j := i + 1; j < len(cold); j++ {
 			if cold[j].LastAccessed.Before(cold[i].LastAccessed) {
 				cold[i], cold[j] = cold[j], cold[i]
@@ -426,7 +432,7 @@ func (t *AccessTracker) GetColdObjects(ctx context.Context, inactiveDays int, li
 	return cold
 }
 
-// GetTrendingObjects returns objects with increasing access patterns
+// GetTrendingObjects returns objects with increasing access patterns.
 func (t *AccessTracker) GetTrendingObjects(ctx context.Context, limit int) []*ObjectAccessStats {
 	t.statsMu.RLock()
 	defer t.statsMu.RUnlock()
@@ -440,7 +446,7 @@ func (t *AccessTracker) GetTrendingObjects(ctx context.Context, limit int) []*Ob
 	}
 
 	// Sort by average daily accesses (descending)
-	for i := 0; i < len(trending)-1; i++ {
+	for i := range len(trending) - 1 {
 		for j := i + 1; j < len(trending); j++ {
 			if trending[j].AverageAccessesDay > trending[i].AverageAccessesDay {
 				trending[i], trending[j] = trending[j], trending[i]
@@ -455,7 +461,7 @@ func (t *AccessTracker) GetTrendingObjects(ctx context.Context, limit int) []*Ob
 	return trending
 }
 
-// GetDecliningObjects returns objects with declining access patterns
+// GetDecliningObjects returns objects with declining access patterns.
 func (t *AccessTracker) GetDecliningObjects(ctx context.Context, limit int) []*ObjectAccessStats {
 	t.statsMu.RLock()
 	defer t.statsMu.RUnlock()
@@ -469,7 +475,7 @@ func (t *AccessTracker) GetDecliningObjects(ctx context.Context, limit int) []*O
 	}
 
 	// Sort by average daily accesses (ascending - least accessed first)
-	for i := 0; i < len(declining)-1; i++ {
+	for i := range len(declining) - 1 {
 		for j := i + 1; j < len(declining); j++ {
 			if declining[j].AverageAccessesDay < declining[i].AverageAccessesDay {
 				declining[i], declining[j] = declining[j], declining[i]
@@ -484,7 +490,7 @@ func (t *AccessTracker) GetDecliningObjects(ctx context.Context, limit int) []*O
 	return declining
 }
 
-// Stats returns tracker statistics
+// Stats returns tracker statistics.
 func (t *AccessTracker) Stats() AccessTrackerStats {
 	t.statsMu.RLock()
 	defer t.statsMu.RUnlock()
@@ -495,68 +501,74 @@ func (t *AccessTracker) Stats() AccessTrackerStats {
 	}
 }
 
-// AccessTrackerStats contains tracker statistics
+// AccessTrackerStats contains tracker statistics.
 type AccessTrackerStats struct {
 	TrackedObjects int `json:"trackedObjects"`
 	MaxObjects     int `json:"maxObjects"`
 }
 
-// Close stops the access tracker
+// Close stops the access tracker.
 func (t *AccessTracker) Close() error {
 	close(t.stopChan)
 	t.flushWg.Wait()
+
 	return nil
 }
 
-// InMemoryAccessStatsStore implements AccessStatsStore for testing
+// InMemoryAccessStatsStore implements AccessStatsStore for testing.
 type InMemoryAccessStatsStore struct {
 	data map[string]*ObjectAccessStats
 	mu   sync.RWMutex
 }
 
-// NewInMemoryAccessStatsStore creates an in-memory store
+// NewInMemoryAccessStatsStore creates an in-memory store.
 func NewInMemoryAccessStatsStore() *InMemoryAccessStatsStore {
 	return &InMemoryAccessStatsStore{
 		data: make(map[string]*ObjectAccessStats),
 	}
 }
 
-// Get retrieves stats
+// Get retrieves stats.
 func (s *InMemoryAccessStatsStore) Get(ctx context.Context, bucket, key string) (*ObjectAccessStats, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	stats, exists := s.data[bucket+"/"+key]
 	if !exists {
+		//nolint:nilnil // nil,nil indicates not found (not an error condition)
 		return nil, nil
 	}
+
 	return stats, nil
 }
 
-// Put stores stats
+// Put stores stats.
 func (s *InMemoryAccessStatsStore) Put(ctx context.Context, stats *ObjectAccessStats) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.data[stats.Bucket+"/"+stats.Key] = stats
+
 	return nil
 }
 
-// Delete removes stats
+// Delete removes stats.
 func (s *InMemoryAccessStatsStore) Delete(ctx context.Context, bucket, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	delete(s.data, bucket+"/"+key)
+
 	return nil
 }
 
-// List returns stats for a bucket
+// List returns stats for a bucket.
 func (s *InMemoryAccessStatsStore) List(ctx context.Context, bucket string) ([]*ObjectAccessStats, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	prefix := bucket + "/"
+
 	var result []*ObjectAccessStats
 
 	for key, stats := range s.data {

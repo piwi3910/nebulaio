@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// mockProvider implements LLMProvider for testing
+// mockProvider implements LLMProvider for testing.
 type mockProvider struct {
 	name      string
 	response  string
@@ -50,12 +50,15 @@ func (m *mockProvider) Query(ctx context.Context, req *PromptRequest) (*PromptRe
 
 func (m *mockProvider) StreamQuery(ctx context.Context, req *PromptRequest) (<-chan *StreamChunk, error) {
 	chunks := make(chan *StreamChunk, 1)
+
 	go func() {
 		defer close(chunks)
+
 		if m.err != nil {
 			chunks <- &StreamChunk{Error: m.err}
 			return
 		}
+
 		chunks <- &StreamChunk{
 			RequestID:    "mock-stream-id",
 			Index:        0,
@@ -63,6 +66,7 @@ func (m *mockProvider) StreamQuery(ctx context.Context, req *PromptRequest) (<-c
 			FinishReason: "stop",
 		}
 	}()
+
 	return chunks, nil
 }
 
@@ -70,9 +74,11 @@ func (m *mockProvider) Embed(ctx context.Context, content string) ([]float64, er
 	if m.err != nil {
 		return nil, m.err
 	}
+
 	if m.embedding != nil {
 		return m.embedding, nil
 	}
+
 	return []float64{0.1, 0.2, 0.3, 0.4, 0.5}, nil
 }
 
@@ -80,10 +86,10 @@ func TestCreateConfig(t *testing.T) {
 	svc := NewPromptObjectService()
 
 	cfg := &AIConfig{
-		Name:       "test-config",
-		Provider:   "mock",
-		Model:      "mock-model",
-		MaxTokens:  1000,
+		Name:        "test-config",
+		Provider:    "mock",
+		Model:       "mock-model",
+		MaxTokens:   1000,
 		EnableCache: true,
 	}
 
@@ -111,8 +117,8 @@ func TestCreateConfigValidation(t *testing.T) {
 	svc := NewPromptObjectService()
 
 	tests := []struct {
-		name    string
 		cfg     *AIConfig
+		name    string
 		wantErr bool
 	}{
 		{
@@ -151,6 +157,7 @@ func TestDuplicateConfig(t *testing.T) {
 	}
 
 	svc.CreateConfig(cfg)
+
 	err := svc.CreateConfig(cfg)
 	if err == nil {
 		t.Error("Expected error for duplicate config")
@@ -160,7 +167,7 @@ func TestDuplicateConfig(t *testing.T) {
 func TestListConfigs(t *testing.T) {
 	svc := NewPromptObjectService()
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		svc.CreateConfig(&AIConfig{
 			Name:     "config-" + string(rune('a'+i)),
 			Provider: "mock",
@@ -273,6 +280,7 @@ func TestPromptObjectCaching(t *testing.T) {
 
 	// Second request with same parameters
 	req.ObjectContent = strings.NewReader("Content") // Reset reader
+
 	resp2, _ := svc.PromptObject(ctx, "cached-config", req)
 	if !resp2.Cached {
 		t.Error("Second request should be cached")
@@ -301,6 +309,7 @@ func TestPromptObjectBucketRestriction(t *testing.T) {
 		ObjectContent: strings.NewReader("content"),
 		Prompt:        "test",
 	}
+
 	_, err := svc.PromptObject(ctx, "restricted-config", req1)
 	if err != nil {
 		t.Errorf("Should allow access to allowed-bucket: %v", err)
@@ -313,6 +322,7 @@ func TestPromptObjectBucketRestriction(t *testing.T) {
 		ObjectContent: strings.NewReader("content"),
 		Prompt:        "test",
 	}
+
 	_, err = svc.PromptObject(ctx, "restricted-config", req2)
 	if err == nil {
 		t.Error("Should deny access to other-bucket")
@@ -348,10 +358,12 @@ func TestStreamPromptObject(t *testing.T) {
 	}
 
 	var response string
+
 	for chunk := range chunks {
 		if chunk.Error != nil {
 			t.Fatalf("Stream error: %v", chunk.Error)
 		}
+
 		response += chunk.Content
 	}
 
@@ -375,6 +387,7 @@ func TestGenerateEmbedding(t *testing.T) {
 	})
 
 	ctx := context.Background()
+
 	embedding, err := svc.GenerateEmbedding(ctx, "embed-config", "test content")
 	if err != nil {
 		t.Fatalf("GenerateEmbedding failed: %v", err)
@@ -402,7 +415,8 @@ func TestGetMetrics(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	for i := 0; i < 5; i++ {
+
+	for i := range 5 {
 		req := &PromptRequest{
 			Bucket:        "bucket-" + string(rune('a'+i%2)),
 			Key:           "doc.txt",
@@ -468,8 +482,8 @@ func TestContentProcessor(t *testing.T) {
 		name        string
 		content     string
 		contentType string
-		maxChars    int
 		wantContain string
+		maxChars    int
 	}{
 		{
 			name:        "plain text",
@@ -500,6 +514,7 @@ func TestContentProcessor(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ProcessForLLM failed: %v", err)
 			}
+
 			if !strings.Contains(result, tt.wantContain) {
 				t.Errorf("Expected result to contain '%s', got '%s'", tt.wantContain, result)
 			}
@@ -522,6 +537,7 @@ func TestChunkContent(t *testing.T) {
 	if len(chunks) > 1 {
 		// Check that chunks have overlapping content
 		firstEnd := chunks[0][len(chunks[0])-50:]
+
 		secondStart := chunks[1][:50]
 		if firstEnd != secondStart {
 			t.Error("Chunks should have overlapping content")
@@ -624,6 +640,7 @@ func TestMultipleProviders(t *testing.T) {
 		ObjectContent: strings.NewReader("content"),
 		Prompt:        "test",
 	}
+
 	resp1, _ := svc.PromptObject(ctx, "config1", req1)
 	if resp1.Response != "response1" {
 		t.Errorf("Expected 'response1', got '%s'", resp1.Response)
@@ -636,6 +653,7 @@ func TestMultipleProviders(t *testing.T) {
 		ObjectContent: strings.NewReader("content"),
 		Prompt:        "test",
 	}
+
 	resp2, _ := svc.PromptObject(ctx, "config2", req2)
 	if resp2.Response != "response2" {
 		t.Errorf("Expected 'response2', got '%s'", resp2.Response)

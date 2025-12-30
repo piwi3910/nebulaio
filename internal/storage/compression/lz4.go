@@ -7,14 +7,15 @@ import (
 	"github.com/pierrec/lz4/v4"
 )
 
-// LZ4Compressor implements LZ4 compression
+// LZ4Compressor implements LZ4 compression.
 type LZ4Compressor struct {
 	level lz4.CompressionLevel
 }
 
-// NewLZ4Compressor creates a new LZ4 compressor
+// NewLZ4Compressor creates a new LZ4 compressor.
 func NewLZ4Compressor(level Level) (*LZ4Compressor, error) {
 	var lz4Level lz4.CompressionLevel
+
 	switch level {
 	case LevelFastest:
 		lz4Level = lz4.Fast
@@ -29,14 +30,15 @@ func NewLZ4Compressor(level Level) (*LZ4Compressor, error) {
 	return &LZ4Compressor{level: lz4Level}, nil
 }
 
-// Algorithm returns the algorithm name
+// Algorithm returns the algorithm name.
 func (c *LZ4Compressor) Algorithm() Algorithm {
 	return AlgorithmLZ4
 }
 
-// Compress compresses data using LZ4
+// Compress compresses data using LZ4.
 func (c *LZ4Compressor) Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
+
 	writer := lz4.NewWriter(&buf)
 	_ = writer.Apply(lz4.CompressionLevelOption(c.level))
 
@@ -45,20 +47,21 @@ func (c *LZ4Compressor) Compress(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if err := writer.Close(); err != nil {
+	err = writer.Close()
+	if err != nil {
 		return nil, err
 	}
 
 	return buf.Bytes(), nil
 }
 
-// Decompress decompresses LZ4 data
+// Decompress decompresses LZ4 data.
 func (c *LZ4Compressor) Decompress(data []byte) ([]byte, error) {
 	reader := lz4.NewReader(bytes.NewReader(data))
 	return io.ReadAll(reader)
 }
 
-// CompressReader returns a reader that compresses data on read
+// CompressReader returns a reader that compresses data on read.
 func (c *LZ4Compressor) CompressReader(r io.Reader) (io.ReadCloser, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -73,11 +76,11 @@ func (c *LZ4Compressor) CompressReader(r io.Reader) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(compressed)), nil
 }
 
-// DecompressReader returns a reader that decompresses data on read
+// DecompressReader returns a reader that decompresses data on read.
 func (c *LZ4Compressor) DecompressReader(r io.Reader) (io.ReadCloser, error) {
 	reader := lz4.NewReader(r)
 	return io.NopCloser(reader), nil
 }
 
-// Ensure LZ4Compressor implements Compressor
+// Ensure LZ4Compressor implements Compressor.
 var _ Compressor = (*LZ4Compressor)(nil)

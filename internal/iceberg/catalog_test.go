@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-// MockMetadataStore implements MetadataStore for testing
+// MockMetadataStore implements MetadataStore for testing.
 type MockMetadataStore struct {
-	mu         sync.RWMutex
 	namespaces map[string]*Namespace
 	tables     map[string]*Table
 	views      map[string]*View
+	mu         sync.RWMutex
 }
 
 func newMockMetadataStore() *MockMetadataStore {
@@ -32,6 +32,7 @@ func (m *MockMetadataStore) GetNamespace(ctx context.Context, name string) (*Nam
 	if !ok {
 		return nil, ErrNamespaceNotFound
 	}
+
 	return ns, nil
 }
 
@@ -40,6 +41,7 @@ func (m *MockMetadataStore) PutNamespace(ctx context.Context, ns *Namespace) err
 	defer m.mu.Unlock()
 
 	m.namespaces[ns.NamespaceName()] = ns
+
 	return nil
 }
 
@@ -48,6 +50,7 @@ func (m *MockMetadataStore) DeleteNamespace(ctx context.Context, name string) er
 	defer m.mu.Unlock()
 
 	delete(m.namespaces, name)
+
 	return nil
 }
 
@@ -56,12 +59,14 @@ func (m *MockMetadataStore) ListNamespaces(ctx context.Context, parent string) (
 	defer m.mu.RUnlock()
 
 	var result []*Namespace
+
 	for _, ns := range m.namespaces {
 		name := ns.NamespaceName()
 		if parent == "" || (len(name) > len(parent) && name[:len(parent)] == parent) {
 			result = append(result, ns)
 		}
 	}
+
 	return result, nil
 }
 
@@ -70,10 +75,12 @@ func (m *MockMetadataStore) GetTable(ctx context.Context, namespace, name string
 	defer m.mu.RUnlock()
 
 	key := namespace + "." + name
+
 	table, ok := m.tables[key]
 	if !ok {
 		return nil, ErrTableNotFound
 	}
+
 	return table, nil
 }
 
@@ -83,6 +90,7 @@ func (m *MockMetadataStore) PutTable(ctx context.Context, table *Table) error {
 
 	key := table.Identifier.FullName()
 	m.tables[key] = table
+
 	return nil
 }
 
@@ -92,6 +100,7 @@ func (m *MockMetadataStore) DeleteTable(ctx context.Context, namespace, name str
 
 	key := namespace + "." + name
 	delete(m.tables, key)
+
 	return nil
 }
 
@@ -100,11 +109,13 @@ func (m *MockMetadataStore) ListTables(ctx context.Context, namespace string) ([
 	defer m.mu.RUnlock()
 
 	var result []*Table
+
 	for key, table := range m.tables {
 		if len(key) > len(namespace) && key[:len(namespace)] == namespace {
 			result = append(result, table)
 		}
 	}
+
 	return result, nil
 }
 
@@ -113,10 +124,12 @@ func (m *MockMetadataStore) GetView(ctx context.Context, namespace, name string)
 	defer m.mu.RUnlock()
 
 	key := namespace + "." + name
+
 	view, ok := m.views[key]
 	if !ok {
 		return nil, ErrViewNotFound
 	}
+
 	return view, nil
 }
 
@@ -126,6 +139,7 @@ func (m *MockMetadataStore) PutView(ctx context.Context, view *View) error {
 
 	key := view.Identifier.FullName()
 	m.views[key] = view
+
 	return nil
 }
 
@@ -135,6 +149,7 @@ func (m *MockMetadataStore) DeleteView(ctx context.Context, namespace, name stri
 
 	key := namespace + "." + name
 	delete(m.views, key)
+
 	return nil
 }
 
@@ -143,18 +158,20 @@ func (m *MockMetadataStore) ListViews(ctx context.Context, namespace string) ([]
 	defer m.mu.RUnlock()
 
 	var result []*View
+
 	for key, view := range m.views {
 		if len(key) > len(namespace) && key[:len(namespace)] == namespace {
 			result = append(result, view)
 		}
 	}
+
 	return result, nil
 }
 
-// MockWarehouseStore implements WarehouseStore for testing
+// MockWarehouseStore implements WarehouseStore for testing.
 type MockWarehouseStore struct {
-	mu    sync.RWMutex
 	files map[string][]byte
+	mu    sync.RWMutex
 }
 
 func newMockWarehouseStore() *MockWarehouseStore {
@@ -168,6 +185,7 @@ func (m *MockWarehouseStore) WriteMetadata(ctx context.Context, path string, dat
 	defer m.mu.Unlock()
 
 	m.files[path] = data
+
 	return nil
 }
 
@@ -179,6 +197,7 @@ func (m *MockWarehouseStore) ReadMetadata(ctx context.Context, path string) ([]b
 	if !ok {
 		return nil, errors.New("file not found")
 	}
+
 	return data, nil
 }
 
@@ -187,6 +206,7 @@ func (m *MockWarehouseStore) DeleteMetadata(ctx context.Context, path string) er
 	defer m.mu.Unlock()
 
 	delete(m.files, path)
+
 	return nil
 }
 
@@ -195,11 +215,13 @@ func (m *MockWarehouseStore) ListFiles(ctx context.Context, prefix string) ([]st
 	defer m.mu.RUnlock()
 
 	var result []string
+
 	for path := range m.files {
 		if len(path) >= len(prefix) && path[:len(prefix)] == prefix {
 			result = append(result, path)
 		}
 	}
+
 	return result, nil
 }
 
@@ -401,6 +423,7 @@ func TestLoadTable(t *testing.T) {
 		SchemaID: 0,
 		Fields:   []*Field{{ID: 1, Name: "id", Type: "long"}},
 	}
+
 	_, err := catalog.CreateTable(ctx, []string{"testdb"}, "mytable", schema, nil, "", nil)
 	if err != nil {
 		t.Fatalf("CreateTable failed: %v", err)
@@ -561,7 +584,7 @@ func TestAddSnapshot(t *testing.T) {
 		TimestampMs:    time.Now().UnixMilli(),
 		ManifestList:   "s3://warehouse/testdb/snaptest/metadata/snap-12345.avro",
 		Summary: map[string]string{
-			"operation": "append",
+			"operation":     "append",
 			"added-records": "100",
 		},
 	}
@@ -635,6 +658,7 @@ func TestRequirementValidation(t *testing.T) {
 
 	// Commit with invalid UUID requirement
 	request.Requirements[0].UUID = "wrong-uuid"
+
 	_, err = catalog.CommitTable(ctx, request)
 	if !errors.Is(err, ErrRequirementFailed) {
 		t.Errorf("Expected ErrRequirementFailed, got %v", err)
@@ -936,7 +960,7 @@ func intPtr(i int) *int {
 }
 
 // TestCopyMetadataErrorHandling verifies that copyMetadata handles errors properly
-// and callers check for nil returns
+// and callers check for nil returns.
 func TestCopyMetadataErrorHandling(t *testing.T) {
 	catalog := &Catalog{
 		config:  &CatalogConfig{CatalogName: "test"},
@@ -954,6 +978,7 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("copyMetadata should not return error for valid metadata: %v", err)
 		}
+
 		if copied == nil {
 			t.Fatal("copyMetadata should return non-nil for valid metadata")
 		}
@@ -983,6 +1008,7 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 		if err == nil {
 			t.Error("copyMetadata with nil input should return error")
 		}
+
 		if copied != nil {
 			t.Error("copyMetadata with nil input should return nil result")
 		}
@@ -1019,6 +1045,7 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("copyMetadata should not return error for complex metadata: %v", err)
 		}
+
 		if copied == nil {
 			t.Fatal("copyMetadata should return non-nil for complex metadata")
 		}

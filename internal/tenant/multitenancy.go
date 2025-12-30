@@ -3,6 +3,7 @@ package tenant
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -11,6 +12,29 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// Default quota constants.
+const (
+	defaultMaxStorageBytes      = 100 * 1024 * 1024 * 1024 * 1024 // 100 TB
+	defaultMaxBuckets           = 100
+	defaultMaxObjectsPerBucket  = 10000000                       // 10 million
+	defaultMaxObjectSize        = 5 * 1024 * 1024 * 1024 * 1024  // 5 TB
+	defaultMaxRequestsPerSecond = 10000
+	defaultMaxConcurrentUploads = 100
+	defaultMaxBandwidthBps      = 10 * 1024 * 1024 * 1024        // 10 Gbps
+	defaultMaxUsers             = 100
+	defaultMaxAccessKeys        = 10
+	defaultQuotaWarningThreshold = 0.8
+)
+
+// Slug validation constants.
+const (
+	minSlugLength = 3
+	maxSlugLength = 63
+)
+
+// Percentage multiplier for display.
+const percentMultiplierTenant = 100
 
 // TenantStatus represents the status of a tenant.
 type TenantStatus string
@@ -23,27 +47,27 @@ const (
 
 // Tenant represents a tenant in the system.
 type Tenant struct {
-	ID              string                 `json:"id"`
-	Name            string                 `json:"name"`
-	Slug            string                 `json:"slug"`
-	Status          TenantStatus           `json:"status"`
-	Namespace       string                 `json:"namespace"`
-	Quota           *TenantQuota           `json:"quota"`
-	Settings        *TenantSettings        `json:"settings"`
-	Metadata        map[string]string      `json:"metadata,omitempty"`
-	CreatedAt       time.Time              `json:"createdAt"`
-	UpdatedAt       time.Time              `json:"updatedAt"`
-	SuspendedAt     *time.Time             `json:"suspendedAt,omitempty"`
-	SuspensionReason string                `json:"suspensionReason,omitempty"`
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Slug             string            `json:"slug"`
+	Status           TenantStatus      `json:"status"`
+	Namespace        string            `json:"namespace"`
+	Quota            *TenantQuota      `json:"quota"`
+	Settings         *TenantSettings   `json:"settings"`
+	Metadata         map[string]string `json:"metadata,omitempty"`
+	CreatedAt        time.Time         `json:"createdAt"`
+	UpdatedAt        time.Time         `json:"updatedAt"`
+	SuspendedAt      *time.Time        `json:"suspendedAt,omitempty"`
+	SuspensionReason string            `json:"suspensionReason,omitempty"`
 }
 
 // TenantQuota defines resource limits for a tenant.
 type TenantQuota struct {
 	// Storage limits
-	MaxStorageBytes      int64 `json:"maxStorageBytes"`      // Total storage limit
-	MaxBuckets           int   `json:"maxBuckets"`           // Maximum number of buckets
-	MaxObjectsPerBucket  int64 `json:"maxObjectsPerBucket"`  // Max objects per bucket
-	MaxObjectSize        int64 `json:"maxObjectSize"`        // Max size per object
+	MaxStorageBytes     int64 `json:"maxStorageBytes"`     // Total storage limit
+	MaxBuckets          int   `json:"maxBuckets"`          // Maximum number of buckets
+	MaxObjectsPerBucket int64 `json:"maxObjectsPerBucket"` // Max objects per bucket
+	MaxObjectSize       int64 `json:"maxObjectSize"`       // Max size per object
 
 	// API limits
 	MaxRequestsPerSecond int   `json:"maxRequestsPerSecond"` // Rate limit
@@ -51,66 +75,57 @@ type TenantQuota struct {
 	MaxBandwidthBps      int64 `json:"maxBandwidthBps"`      // Bandwidth limit
 
 	// User limits
-	MaxUsers             int   `json:"maxUsers"`             // Maximum users
-	MaxAccessKeys        int   `json:"maxAccessKeys"`        // Max access keys per user
+	MaxUsers      int `json:"maxUsers"`      // Maximum users
+	MaxAccessKeys int `json:"maxAccessKeys"` // Max access keys per user
 
 	// Feature limits
-	EnableVersioning     bool  `json:"enableVersioning"`
-	EnableReplication    bool  `json:"enableReplication"`
-	EnableEncryption     bool  `json:"enableEncryption"`
-	EnableObjectLock     bool  `json:"enableObjectLock"`
-	EnableAIMl           bool  `json:"enableAiMl"`
+	EnableVersioning  bool `json:"enableVersioning"`
+	EnableReplication bool `json:"enableReplication"`
+	EnableEncryption  bool `json:"enableEncryption"`
+	EnableObjectLock  bool `json:"enableObjectLock"`
+	EnableAIMl        bool `json:"enableAiMl"`
 }
 
 // TenantSettings contains tenant-specific settings.
 type TenantSettings struct {
-	// Storage settings
-	DefaultStorageClass   string   `json:"defaultStorageClass"`
-	AllowedStorageClasses []string `json:"allowedStorageClasses"`
 	DefaultRegion         string   `json:"defaultRegion"`
-	AllowedRegions        []string `json:"allowedRegions"`
-
-	// Security settings
-	RequireMFA            bool     `json:"requireMfa"`
-	AllowedIPRanges       []string `json:"allowedIpRanges"`
-	EnforceEncryption     bool     `json:"enforceEncryption"`
-	EncryptionKeyID       string   `json:"encryptionKeyId,omitempty"`
-
-	// Naming conventions
-	BucketNamePrefix      string   `json:"bucketNamePrefix"`
-	EnforceBucketPrefix   bool     `json:"enforceBucketPrefix"`
-
-	// Notification settings
-	WebhookURL            string   `json:"webhookUrl,omitempty"`
-	NotifyOnQuotaWarning  bool     `json:"notifyOnQuotaWarning"`
-	QuotaWarningThreshold float64  `json:"quotaWarningThreshold"` // 0.0-1.0
-
-	// Billing settings
-	BillingEmail          string   `json:"billingEmail,omitempty"`
 	CostCenter            string   `json:"costCenter,omitempty"`
+	DefaultStorageClass   string   `json:"defaultStorageClass"`
+	EncryptionKeyID       string   `json:"encryptionKeyId,omitempty"`
+	BucketNamePrefix      string   `json:"bucketNamePrefix"`
+	BillingEmail          string   `json:"billingEmail,omitempty"`
+	WebhookURL            string   `json:"webhookUrl,omitempty"`
+	AllowedStorageClasses []string `json:"allowedStorageClasses"`
+	AllowedRegions        []string `json:"allowedRegions"`
+	AllowedIPRanges       []string `json:"allowedIpRanges"`
+	QuotaWarningThreshold float64  `json:"quotaWarningThreshold"`
+	EnforceEncryption     bool     `json:"enforceEncryption"`
+	NotifyOnQuotaWarning  bool     `json:"notifyOnQuotaWarning"`
+	EnforceBucketPrefix   bool     `json:"enforceBucketPrefix"`
+	RequireMFA            bool     `json:"requireMfa"`
 }
 
 // TenantUsage tracks resource usage for a tenant.
 type TenantUsage struct {
-	TenantID           string    `json:"tenantId"`
-	StorageBytes       int64     `json:"storageBytes"`
-	ObjectCount        int64     `json:"objectCount"`
-	BucketCount        int       `json:"bucketCount"`
-	UserCount          int       `json:"userCount"`
-	RequestsToday      int64     `json:"requestsToday"`
-	BandwidthToday     int64     `json:"bandwidthToday"`
-	LastUpdated        time.Time `json:"lastUpdated"`
+	LastUpdated    time.Time `json:"lastUpdated"`
+	TenantID       string    `json:"tenantId"`
+	StorageBytes   int64     `json:"storageBytes"`
+	ObjectCount    int64     `json:"objectCount"`
+	BucketCount    int       `json:"bucketCount"`
+	UserCount      int       `json:"userCount"`
+	RequestsToday  int64     `json:"requestsToday"`
+	BandwidthToday int64     `json:"bandwidthToday"`
 }
 
 // TenantManager manages multi-tenant operations.
 type TenantManager struct {
-	mu            sync.RWMutex
-	tenants       map[string]*Tenant      // id -> tenant
-	namespaces    map[string]string       // namespace -> tenant id
-	slugs         map[string]string       // slug -> tenant id
-	usage         map[string]*TenantUsage // tenant id -> usage
-	storage       TenantStorage
-	namespaceRE   *regexp.Regexp
+	storage     TenantStorage
+	tenants     map[string]*Tenant
+	namespaces  map[string]string
+	slugs       map[string]string
+	usage       map[string]*TenantUsage
+	namespaceRE *regexp.Regexp
+	mu          sync.RWMutex
 }
 
 // TenantStorage interface for persisting tenant data.
@@ -125,11 +140,11 @@ type TenantStorage interface {
 
 // NamespaceContext contains tenant context for request processing.
 type NamespaceContext struct {
-	TenantID    string
-	TenantName  string
-	Namespace   string
-	Quota       *TenantQuota
-	Settings    *TenantSettings
+	Quota      *TenantQuota
+	Settings   *TenantSettings
+	TenantID   string
+	TenantName string
+	Namespace  string
 }
 
 // contextKey is a custom type for context keys.
@@ -140,15 +155,15 @@ const tenantContextKey contextKey = "tenant"
 // DefaultQuota returns the default quota for new tenants.
 func DefaultQuota() *TenantQuota {
 	return &TenantQuota{
-		MaxStorageBytes:      100 * 1024 * 1024 * 1024 * 1024, // 100 TB
-		MaxBuckets:           100,
-		MaxObjectsPerBucket:  10000000, // 10 million
-		MaxObjectSize:        5 * 1024 * 1024 * 1024 * 1024, // 5 TB
-		MaxRequestsPerSecond: 10000,
-		MaxConcurrentUploads: 100,
-		MaxBandwidthBps:      10 * 1024 * 1024 * 1024, // 10 Gbps
-		MaxUsers:             100,
-		MaxAccessKeys:        10,
+		MaxStorageBytes:      defaultMaxStorageBytes,
+		MaxBuckets:           defaultMaxBuckets,
+		MaxObjectsPerBucket:  defaultMaxObjectsPerBucket,
+		MaxObjectSize:        defaultMaxObjectSize,
+		MaxRequestsPerSecond: defaultMaxRequestsPerSecond,
+		MaxConcurrentUploads: defaultMaxConcurrentUploads,
+		MaxBandwidthBps:      defaultMaxBandwidthBps,
+		MaxUsers:             defaultMaxUsers,
+		MaxAccessKeys:        defaultMaxAccessKeys,
 		EnableVersioning:     true,
 		EnableReplication:    true,
 		EnableEncryption:     true,
@@ -168,23 +183,24 @@ func DefaultSettings() *TenantSettings {
 		EnforceEncryption:     false,
 		EnforceBucketPrefix:   true,
 		NotifyOnQuotaWarning:  true,
-		QuotaWarningThreshold: 0.8,
+		QuotaWarningThreshold: defaultQuotaWarningThreshold,
 	}
 }
 
 // NewTenantManager creates a new tenant manager.
 func NewTenantManager(storage TenantStorage) (*TenantManager, error) {
 	tm := &TenantManager{
-		tenants:    make(map[string]*Tenant),
-		namespaces: make(map[string]string),
-		slugs:      make(map[string]string),
-		usage:      make(map[string]*TenantUsage),
-		storage:    storage,
+		tenants:     make(map[string]*Tenant),
+		namespaces:  make(map[string]string),
+		slugs:       make(map[string]string),
+		usage:       make(map[string]*TenantUsage),
+		storage:     storage,
 		namespaceRE: regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`),
 	}
 
 	// Load existing tenants
-	if err := tm.loadTenants(); err != nil {
+	err := tm.loadTenants()
+	if err != nil {
 		return nil, fmt.Errorf("failed to load tenants: %w", err)
 	}
 
@@ -219,7 +235,7 @@ func (tm *TenantManager) CreateTenant(ctx context.Context, name string, opts *Cr
 	// Generate slug from name
 	slug := tm.generateSlug(name)
 	if _, exists := tm.slugs[slug]; exists {
-		return nil, fmt.Errorf("tenant with similar name already exists")
+		return nil, errors.New("tenant with similar name already exists")
 	}
 
 	// Generate namespace
@@ -230,13 +246,15 @@ func (tm *TenantManager) CreateTenant(ctx context.Context, name string, opts *Cr
 
 	// Validate namespace
 	if !tm.namespaceRE.MatchString(namespace) {
-		return nil, fmt.Errorf("invalid namespace format: must be lowercase alphanumeric with hyphens")
+		return nil, errors.New("invalid namespace format: must be lowercase alphanumeric with hyphens")
 	}
+
 	if len(namespace) < 3 || len(namespace) > 63 {
-		return nil, fmt.Errorf("namespace must be between 3 and 63 characters")
+		return nil, errors.New("namespace must be between 3 and 63 characters")
 	}
+
 	if _, exists := tm.namespaces[namespace]; exists {
-		return nil, fmt.Errorf("namespace already in use")
+		return nil, errors.New("namespace already in use")
 	}
 
 	tenant := &Tenant{
@@ -257,9 +275,11 @@ func (tm *TenantManager) CreateTenant(ctx context.Context, name string, opts *Cr
 		if opts.Quota != nil {
 			tenant.Quota = opts.Quota
 		}
+
 		if opts.Settings != nil {
 			tenant.Settings = opts.Settings
 		}
+
 		if opts.Metadata != nil {
 			tenant.Metadata = opts.Metadata
 		}
@@ -272,7 +292,8 @@ func (tm *TenantManager) CreateTenant(ctx context.Context, name string, opts *Cr
 
 	// Save to storage
 	if tm.storage != nil {
-		if err := tm.storage.SaveTenant(ctx, tenant); err != nil {
+		err := tm.storage.SaveTenant(ctx, tenant)
+		if err != nil {
 			return nil, fmt.Errorf("failed to save tenant: %w", err)
 		}
 	}
@@ -293,10 +314,10 @@ func (tm *TenantManager) CreateTenant(ctx context.Context, name string, opts *Cr
 
 // CreateTenantOptions contains options for creating a tenant.
 type CreateTenantOptions struct {
-	Namespace string
 	Quota     *TenantQuota
 	Settings  *TenantSettings
 	Metadata  map[string]string
+	Namespace string
 }
 
 // generateSlug generates a URL-safe slug from a name.
@@ -307,11 +328,12 @@ func (tm *TenantManager) generateSlug(name string) string {
 	slug = regexp.MustCompile(`-+`).ReplaceAllString(slug, "-")
 	slug = strings.Trim(slug, "-")
 
-	if len(slug) < 3 {
-		slug = slug + "-tenant"
+	if len(slug) < minSlugLength {
+		slug += "-tenant"
 	}
-	if len(slug) > 63 {
-		slug = slug[:63]
+
+	if len(slug) > maxSlugLength {
+		slug = slug[:maxSlugLength]
 	}
 
 	return slug
@@ -326,6 +348,7 @@ func (tm *TenantManager) GetTenant(ctx context.Context, id string) (*Tenant, err
 	if !exists {
 		return nil, fmt.Errorf("tenant not found: %s", id)
 	}
+
 	return tenant, nil
 }
 
@@ -371,7 +394,7 @@ func (tm *TenantManager) UpdateTenant(ctx context.Context, id string, updates *T
 	}
 
 	if tenant.Status == TenantStatusDeleted {
-		return nil, fmt.Errorf("cannot update deleted tenant")
+		return nil, errors.New("cannot update deleted tenant")
 	}
 
 	if updates.Name != "" && updates.Name != tenant.Name {
@@ -395,7 +418,8 @@ func (tm *TenantManager) UpdateTenant(ctx context.Context, id string, updates *T
 	tenant.UpdatedAt = time.Now()
 
 	if tm.storage != nil {
-		if err := tm.storage.SaveTenant(ctx, tenant); err != nil {
+		err := tm.storage.SaveTenant(ctx, tenant)
+		if err != nil {
 			return nil, fmt.Errorf("failed to save tenant: %w", err)
 		}
 	}
@@ -405,10 +429,10 @@ func (tm *TenantManager) UpdateTenant(ctx context.Context, id string, updates *T
 
 // TenantUpdates contains fields that can be updated.
 type TenantUpdates struct {
-	Name     string
 	Quota    *TenantQuota
 	Settings *TenantSettings
 	Metadata map[string]string
+	Name     string
 }
 
 // SuspendTenant suspends a tenant.
@@ -422,7 +446,7 @@ func (tm *TenantManager) SuspendTenant(ctx context.Context, id, reason string) e
 	}
 
 	if tenant.Status == TenantStatusDeleted {
-		return fmt.Errorf("tenant is deleted")
+		return errors.New("tenant is deleted")
 	}
 
 	now := time.Now()
@@ -432,7 +456,8 @@ func (tm *TenantManager) SuspendTenant(ctx context.Context, id, reason string) e
 	tenant.UpdatedAt = now
 
 	if tm.storage != nil {
-		if err := tm.storage.SaveTenant(ctx, tenant); err != nil {
+		err := tm.storage.SaveTenant(ctx, tenant)
+		if err != nil {
 			return fmt.Errorf("failed to save tenant: %w", err)
 		}
 	}
@@ -451,7 +476,7 @@ func (tm *TenantManager) ActivateTenant(ctx context.Context, id string) error {
 	}
 
 	if tenant.Status == TenantStatusDeleted {
-		return fmt.Errorf("cannot activate deleted tenant")
+		return errors.New("cannot activate deleted tenant")
 	}
 
 	tenant.Status = TenantStatusActive
@@ -460,7 +485,8 @@ func (tm *TenantManager) ActivateTenant(ctx context.Context, id string) error {
 	tenant.UpdatedAt = time.Now()
 
 	if tm.storage != nil {
-		if err := tm.storage.SaveTenant(ctx, tenant); err != nil {
+		err := tm.storage.SaveTenant(ctx, tenant)
+		if err != nil {
 			return fmt.Errorf("failed to save tenant: %w", err)
 		}
 	}
@@ -482,7 +508,8 @@ func (tm *TenantManager) DeleteTenant(ctx context.Context, id string) error {
 	tenant.UpdatedAt = time.Now()
 
 	if tm.storage != nil {
-		if err := tm.storage.SaveTenant(ctx, tenant); err != nil {
+		err := tm.storage.SaveTenant(ctx, tenant)
+		if err != nil {
 			return fmt.Errorf("failed to save tenant: %w", err)
 		}
 	}
@@ -578,7 +605,8 @@ func (tm *TenantManager) UpdateUsage(ctx context.Context, tenantID string, delta
 	}
 
 	if tm.storage != nil {
-		if err := tm.storage.SaveUsage(ctx, usage); err != nil {
+		err := tm.storage.SaveUsage(ctx, usage)
+		if err != nil {
 			return fmt.Errorf("failed to save usage: %w", err)
 		}
 	}
@@ -630,7 +658,7 @@ func (tm *TenantManager) sendQuotaWarning(tenant *Tenant, resource string, perce
 	// Implementation would send webhook/email notification
 	// For now, just log
 	fmt.Printf("Quota warning: tenant %s is at %.1f%% of %s quota\n",
-		tenant.Name, percent*100, resource)
+		tenant.Name, percent*percentMultiplierTenant, resource)
 }
 
 // CheckQuota checks if an operation would exceed quota.
@@ -644,7 +672,7 @@ func (tm *TenantManager) CheckQuota(ctx context.Context, tenantID string, check 
 	}
 
 	if tenant.Status != TenantStatusActive {
-		return fmt.Errorf("tenant is not active")
+		return errors.New("tenant is not active")
 	}
 
 	usage := tm.usage[tenantID]
@@ -817,8 +845,10 @@ func NewTenantMiddleware(manager *TenantManager) *TenantMiddleware {
 
 // ExtractTenantFromHeader extracts tenant from request headers.
 func (m *TenantMiddleware) ExtractTenantFromHeader(header string, value string) (*Tenant, error) {
-	var tenant *Tenant
-	var err error
+	var (
+		tenant *Tenant
+		err    error
+	)
 
 	switch header {
 	case "X-Tenant-ID":
@@ -836,7 +866,7 @@ func (m *TenantMiddleware) ExtractTenantFromHeader(header string, value string) 
 	}
 
 	if tenant.Status != TenantStatusActive {
-		return nil, fmt.Errorf("tenant is not active")
+		return nil, errors.New("tenant is not active")
 	}
 
 	return tenant, nil
@@ -851,6 +881,7 @@ func (m *TenantMiddleware) ExtractTenantFromBucketName(bucketName string) (*Tena
 			}
 		}
 	}
+
 	return nil, fmt.Errorf("cannot determine tenant from bucket name: %s", bucketName)
 }
 

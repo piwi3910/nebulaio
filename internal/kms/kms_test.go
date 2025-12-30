@@ -15,11 +15,7 @@ import (
 
 func TestLocalProvider(t *testing.T) {
 	// Create temp directory for keys
-	tmpDir, err := os.MkdirTemp("", "kms-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	config := local.Config{
 		ProviderConfig: kms.ProviderConfig{
@@ -35,6 +31,7 @@ func TestLocalProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create local provider: %v", err)
 	}
+
 	defer func() { _ = provider.Close() }()
 
 	t.Run("Name", func(t *testing.T) {
@@ -59,12 +56,15 @@ func TestLocalProvider(t *testing.T) {
 		if keyInfo.KeyID == "" {
 			t.Error("Expected non-empty key ID")
 		}
+
 		if keyInfo.Name != "test-key-1" {
 			t.Errorf("Expected name 'test-key-1', got '%s'", keyInfo.Name)
 		}
+
 		if keyInfo.Algorithm != kms.AlgorithmAES256GCM {
 			t.Errorf("Expected algorithm AES_256_GCM, got '%s'", keyInfo.Algorithm)
 		}
+
 		if keyInfo.State != kms.KeyStateEnabled {
 			t.Errorf("Expected state ENABLED, got '%s'", keyInfo.State)
 		}
@@ -123,9 +123,11 @@ func TestLocalProvider(t *testing.T) {
 		if len(dataKey.Plaintext) != 32 {
 			t.Errorf("Expected 32-byte plaintext, got %d bytes", len(dataKey.Plaintext))
 		}
+
 		if len(dataKey.Ciphertext) == 0 {
 			t.Error("Expected non-empty ciphertext")
 		}
+
 		if dataKey.KeyID != keys[0].KeyID {
 			t.Errorf("Key ID mismatch: expected '%s', got '%s'", keys[0].KeyID, dataKey.KeyID)
 		}
@@ -206,6 +208,7 @@ func TestLocalProvider(t *testing.T) {
 		if rotatedInfo.RotatedAt == nil {
 			t.Error("Expected RotatedAt to be set after rotation")
 		}
+
 		if originalInfo.RotatedAt != nil && rotatedInfo.RotatedAt.Before(*originalInfo.RotatedAt) {
 			t.Error("RotatedAt should be after previous rotation time")
 		}
@@ -234,6 +237,7 @@ func TestLocalProvider(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get key info: %v", err)
 		}
+
 		if info.State != kms.KeyStatePendingDeletion {
 			t.Errorf("Expected state PENDING_DELETION, got '%s'", info.State)
 		}
@@ -264,6 +268,7 @@ func TestLocalProvider(t *testing.T) {
 
 		// Encrypt some data
 		plaintext := []byte("Test data for persistence")
+
 		ciphertext, err := provider.Encrypt(ctx, keyInfo.KeyID, plaintext)
 		if err != nil {
 			t.Fatalf("Failed to encrypt: %v", err)
@@ -277,6 +282,7 @@ func TestLocalProvider(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create new provider: %v", err)
 		}
+
 		defer func() { _ = newProvider.Close() }()
 
 		// Verify the key still exists
@@ -284,6 +290,7 @@ func TestLocalProvider(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get key info from new provider: %v", err)
 		}
+
 		if loadedInfo.KeyID != keyInfo.KeyID {
 			t.Error("Key ID changed after reload")
 		}
@@ -293,6 +300,7 @@ func TestLocalProvider(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to decrypt with new provider: %v", err)
 		}
+
 		if string(decrypted) != string(plaintext) {
 			t.Error("Decrypted data does not match original")
 		}
@@ -317,6 +325,7 @@ func TestVaultProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create vault provider: %v", err)
 	}
+
 	defer func() { _ = provider.Close() }()
 
 	t.Run("Name", func(t *testing.T) {
@@ -420,11 +429,7 @@ func TestVaultProvider(t *testing.T) {
 
 func TestEncryptionService(t *testing.T) {
 	// Create temp directory for keys
-	tmpDir, err := os.MkdirTemp("", "encryption-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	// Create local KMS provider
 	kmsConfig := local.Config{
@@ -441,10 +446,12 @@ func TestEncryptionService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
+
 	defer func() { _ = provider.Close() }()
 
 	// Create a key
 	ctx := context.Background()
+
 	keyInfo, err := provider.CreateKey(ctx, kms.KeySpec{
 		Name:      "test-encryption-key",
 		Algorithm: kms.AlgorithmAES256GCM,
@@ -466,6 +473,7 @@ func TestEncryptionService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create encryption service: %v", err)
 	}
+
 	defer func() { _ = service.Close() }()
 
 	t.Run("EncryptDecrypt", func(t *testing.T) {
@@ -479,9 +487,11 @@ func TestEncryptionService(t *testing.T) {
 		if encrypted.KeyID != keyInfo.KeyID {
 			t.Errorf("Key ID mismatch: expected '%s', got '%s'", keyInfo.KeyID, encrypted.KeyID)
 		}
+
 		if len(encrypted.EncryptedDEK) == 0 {
 			t.Error("Expected non-empty encrypted DEK")
 		}
+
 		if len(encrypted.Ciphertext) == 0 {
 			t.Error("Expected non-empty ciphertext")
 		}
@@ -578,6 +588,7 @@ func TestEncryptionService(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create stream encryptor: %v", err)
 		}
+
 		defer func() { _ = encryptor.Close() }()
 
 		// Encrypt chunks
@@ -595,6 +606,7 @@ func TestEncryptionService(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to encrypt chunk %d: %v", i, err)
 			}
+
 			encryptedChunks[i] = encrypted
 		}
 
@@ -603,6 +615,7 @@ func TestEncryptionService(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create stream decryptor: %v", err)
 		}
+
 		defer func() { _ = decryptor.Close() }()
 
 		// Decrypt chunks
@@ -611,6 +624,7 @@ func TestEncryptionService(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to decrypt chunk %d: %v", i, err)
 			}
+
 			if string(decrypted) != string(chunks[i]) {
 				t.Errorf("Chunk %d mismatch: expected '%s', got '%s'", i, chunks[i], decrypted)
 			}
@@ -638,6 +652,7 @@ func TestEncryptionService(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create ChaCha20 service: %v", err)
 		}
+
 		defer func() { _ = chachaSvc.Close() }()
 
 		plaintext := []byte("Testing ChaCha20-Poly1305")
@@ -664,11 +679,7 @@ func TestEncryptionService(t *testing.T) {
 
 func TestProviderErrors(t *testing.T) {
 	// Create temp directory
-	tmpDir, err := os.MkdirTemp("", "kms-error-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	config := local.Config{
 		ProviderConfig: kms.ProviderConfig{
@@ -722,11 +733,7 @@ func TestProviderErrors(t *testing.T) {
 
 func TestKeyFileStorage(t *testing.T) {
 	t.Run("WithPassword", func(t *testing.T) {
-		tmpDir, err := os.MkdirTemp("", "kms-storage-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp dir: %v", err)
-		}
-		defer func() { _ = os.RemoveAll(tmpDir) }()
+		tmpDir := t.TempDir()
 
 		config := local.Config{
 			ProviderConfig: kms.ProviderConfig{
@@ -754,27 +761,28 @@ func TestKeyFileStorage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create key: %v", err)
 		}
+
 		_ = provider.Close()
 
 		// Verify key file exists
 		keyPath := filepath.Join(tmpDir, keyInfo.KeyID+".key")
-		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+
+		_, statErr := os.Stat(keyPath)
+		if os.IsNotExist(statErr) {
 			t.Error("Key file should exist")
 		}
 
 		// When password is provided, master key file should NOT exist
 		masterPath := filepath.Join(tmpDir, ".master.key")
-		if _, err := os.Stat(masterPath); !os.IsNotExist(err) {
+
+		_, masterStatErr := os.Stat(masterPath)
+		if !os.IsNotExist(masterStatErr) {
 			t.Error("Master key file should NOT exist when password is provided")
 		}
 	})
 
 	t.Run("WithoutPassword", func(t *testing.T) {
-		tmpDir, err := os.MkdirTemp("", "kms-storage-nopass-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp dir: %v", err)
-		}
-		defer func() { _ = os.RemoveAll(tmpDir) }()
+		tmpDir := t.TempDir()
 
 		config := local.Config{
 			ProviderConfig: kms.ProviderConfig{
@@ -802,11 +810,13 @@ func TestKeyFileStorage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create key: %v", err)
 		}
+
 		_ = provider.Close()
 
 		// Verify master key file exists when no password provided
 		masterPath := filepath.Join(tmpDir, ".master.key")
-		if _, err := os.Stat(masterPath); os.IsNotExist(err) {
+		_, err = os.Stat(masterPath)
+		if os.IsNotExist(err) {
 			t.Error("Master key file should exist when no password provided")
 		}
 	})

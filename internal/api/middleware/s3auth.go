@@ -8,10 +8,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// S3AuthContextKey is the context key for S3 auth information
+// S3AuthContextKey is the context key for S3 auth information.
 type S3AuthContextKey struct{}
 
-// S3AuthInfo contains authentication information for an S3 request
+// S3AuthInfo contains authentication information for an S3 request.
 type S3AuthInfo struct {
 	AccessKeyID string
 	UserID      string
@@ -19,7 +19,7 @@ type S3AuthInfo struct {
 	IsAnonymous bool
 }
 
-// S3AuthConfig configures the S3 authentication middleware
+// S3AuthConfig configures the S3 authentication middleware.
 type S3AuthConfig struct {
 	// AuthService is the authentication service for validating credentials
 	AuthService *auth.Service
@@ -53,11 +53,13 @@ func S3Auth(cfg S3AuthConfig) func(http.Handler) http.Handler {
 					}
 					ctx = context.WithValue(ctx, S3AuthContextKey{}, authInfo)
 					next.ServeHTTP(w, r.WithContext(ctx))
+
 					return
 				}
 
 				// Require authentication
 				writeS3Error(w, "AccessDenied", "No authentication provided", http.StatusForbidden)
+
 				return
 			}
 
@@ -92,6 +94,7 @@ func S3Auth(cfg S3AuthConfig) func(http.Handler) http.Handler {
 				}
 
 				writeS3Error(w, errorCode, err.Error(), statusCode)
+
 				return
 			}
 
@@ -109,11 +112,12 @@ func S3Auth(cfg S3AuthConfig) func(http.Handler) http.Handler {
 	}
 }
 
-// GetS3AuthInfo retrieves the S3 auth info from the request context
+// GetS3AuthInfo retrieves the S3 auth info from the request context.
 func GetS3AuthInfo(ctx context.Context) *S3AuthInfo {
 	if info, ok := ctx.Value(S3AuthContextKey{}).(*S3AuthInfo); ok {
 		return info
 	}
+
 	return nil
 }
 
@@ -124,6 +128,7 @@ func GetOwnerID(ctx context.Context) string {
 	if info != nil && !info.IsAnonymous && info.UserID != "" {
 		return info.UserID
 	}
+
 	return "anonymous"
 }
 
@@ -134,10 +139,11 @@ func GetOwnerDisplayName(ctx context.Context) string {
 	if info != nil && !info.IsAnonymous && info.Username != "" {
 		return info.Username
 	}
+
 	return "anonymous"
 }
 
-// RequireS3Auth is a middleware that requires valid S3 authentication
+// RequireS3Auth is a middleware that requires valid S3 authentication.
 func RequireS3Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		info := GetS3AuthInfo(r.Context())
@@ -145,11 +151,12 @@ func RequireS3Auth(next http.Handler) http.Handler {
 			writeS3Error(w, "AccessDenied", "Authentication required", http.StatusForbidden)
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }
 
-// contains is a helper to check if a string contains a substring
+// contains is a helper to check if a string contains a substring.
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsImpl(s, substr))
 }
@@ -160,10 +167,11 @@ func containsImpl(s, substr string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
-// writeS3Error writes an S3-formatted XML error response
+// writeS3Error writes an S3-formatted XML error response.
 func writeS3Error(w http.ResponseWriter, code, message string, status int) {
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(status)
@@ -177,9 +185,10 @@ func writeS3Error(w http.ResponseWriter, code, message string, status int) {
 	w.Write([]byte(response))
 }
 
-// escapeXML escapes special XML characters
+// escapeXML escapes special XML characters.
 func escapeXML(s string) string {
 	result := s
+
 	replacements := map[string]string{
 		"&":  "&amp;",
 		"<":  "&lt;",
@@ -190,23 +199,27 @@ func escapeXML(s string) string {
 	for old, new := range replacements {
 		result = replaceAll(result, old, new)
 	}
+
 	return result
 }
 
-// replaceAll replaces all occurrences of old with new in s
-func replaceAll(s, old, new string) string {
-	if old == new || old == "" {
+// replaceAll replaces all occurrences of old with replacement in s.
+func replaceAll(s, old, replacement string) string {
+	if old == replacement || old == "" {
 		return s
 	}
+
 	var result []byte
+
 	for i := 0; i < len(s); {
 		if i+len(old) <= len(s) && s[i:i+len(old)] == old {
-			result = append(result, new...)
+			result = append(result, replacement...)
 			i += len(old)
 		} else {
 			result = append(result, s[i])
 			i++
 		}
 	}
+
 	return string(result)
 }

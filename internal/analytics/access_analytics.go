@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// AccessType represents the type of access operation
+// AccessType represents the type of access operation.
 type AccessType string
 
 const (
@@ -27,25 +27,25 @@ const (
 	AccessTypePolicy    AccessType = "POLICY"
 )
 
-// AnomalyType represents the type of anomaly detected
+// AnomalyType represents the type of anomaly detected.
 type AnomalyType string
 
 const (
-	AnomalyTypeUnusualTime       AnomalyType = "UNUSUAL_TIME"
-	AnomalyTypeUnusualLocation   AnomalyType = "UNUSUAL_LOCATION"
-	AnomalyTypeHighVolume        AnomalyType = "HIGH_VOLUME"
-	AnomalyTypeUnusualPattern    AnomalyType = "UNUSUAL_PATTERN"
-	AnomalyTypeSensitiveAccess   AnomalyType = "SENSITIVE_ACCESS"
-	AnomalyTypeFirstTimeAccess   AnomalyType = "FIRST_TIME_ACCESS"
-	AnomalyTypeBulkOperation     AnomalyType = "BULK_OPERATION"
-	AnomalyTypeRapidChanges      AnomalyType = "RAPID_CHANGES"
-	AnomalyTypeUnusualUserAgent  AnomalyType = "UNUSUAL_USER_AGENT"
-	AnomalyTypeGeoVelocity       AnomalyType = "GEO_VELOCITY"
+	AnomalyTypeUnusualTime          AnomalyType = "UNUSUAL_TIME"
+	AnomalyTypeUnusualLocation      AnomalyType = "UNUSUAL_LOCATION"
+	AnomalyTypeHighVolume           AnomalyType = "HIGH_VOLUME"
+	AnomalyTypeUnusualPattern       AnomalyType = "UNUSUAL_PATTERN"
+	AnomalyTypeSensitiveAccess      AnomalyType = "SENSITIVE_ACCESS"
+	AnomalyTypeFirstTimeAccess      AnomalyType = "FIRST_TIME_ACCESS"
+	AnomalyTypeBulkOperation        AnomalyType = "BULK_OPERATION"
+	AnomalyTypeRapidChanges         AnomalyType = "RAPID_CHANGES"
+	AnomalyTypeUnusualUserAgent     AnomalyType = "UNUSUAL_USER_AGENT"
+	AnomalyTypeGeoVelocity          AnomalyType = "GEO_VELOCITY"
 	AnomalyTypePermissionEscalation AnomalyType = "PERMISSION_ESCALATION"
-	AnomalyTypeDataExfiltration  AnomalyType = "DATA_EXFILTRATION"
+	AnomalyTypeDataExfiltration     AnomalyType = "DATA_EXFILTRATION"
 )
 
-// Severity represents the severity level of an anomaly
+// Severity represents the severity level of an anomaly.
 type Severity string
 
 const (
@@ -55,113 +55,138 @@ const (
 	SeverityCritical Severity = "CRITICAL"
 )
 
-// AccessEvent represents a single access event
+// Analytics configuration constants.
+const (
+	defaultMinEventsForBaseline   = 100
+	defaultAnomalyThreshold       = 3.0
+	defaultBatchSize              = 1000
+	defaultEventChannelSize       = 10000
+	thresholdUnusualTime          = 2.0
+	thresholdHighVolume           = 5.0
+	thresholdHighVolumeWindowMins = 15
+	thresholdBulkDelete           = 100
+	thresholdBulkDeleteWindowMins = 5
+	thresholdGeoVelocity          = 500
+	thresholdDataExfiltration     = 10
+	thresholdRapidChanges         = 5
+	thresholdRapidChangesWindowMins = 10
+	baselineDays                  = 24
+	minBaselineEvents             = 2
+	heatmapDegrees                = 180
+	embeddingDim                  = 1024
+	minGeoEventsForCheck          = 2
+	degreesToRadiansDivisor       = 180
+	haversineDivisor              = 2
+	bytesPerGB                    = 1024 * 1024 * 1024
+)
+
+// AccessEvent represents a single access event.
 type AccessEvent struct {
-	ID            string            `json:"id"`
-	Timestamp     time.Time         `json:"timestamp"`
-	UserID        string            `json:"user_id"`
-	AccessKeyID   string            `json:"access_key_id"`
-	Bucket        string            `json:"bucket"`
-	Key           string            `json:"key"`
-	AccessType    AccessType        `json:"access_type"`
-	SourceIP      string            `json:"source_ip"`
-	UserAgent     string            `json:"user_agent"`
-	Region        string            `json:"region"`
-	BytesRead     int64             `json:"bytes_read"`
-	BytesWritten  int64             `json:"bytes_written"`
-	Duration      time.Duration     `json:"duration_ms"`
-	StatusCode    int               `json:"status_code"`
-	ErrorCode     string            `json:"error_code,omitempty"`
-	RequestID     string            `json:"request_id"`
-	SessionID     string            `json:"session_id,omitempty"`
-	TenantID      string            `json:"tenant_id,omitempty"`
-	GeoLocation   *GeoLocation      `json:"geo_location,omitempty"`
-	Metadata      map[string]string `json:"metadata,omitempty"`
-}
-
-// GeoLocation represents geographic location information
-type GeoLocation struct {
-	Country     string  `json:"country"`
-	Region      string  `json:"region"`
-	City        string  `json:"city"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	ISP         string  `json:"isp,omitempty"`
-	ASN         string  `json:"asn,omitempty"`
-}
-
-// Anomaly represents a detected anomaly
-type Anomaly struct {
-	ID            string            `json:"id"`
-	Type          AnomalyType       `json:"type"`
-	Severity      Severity          `json:"severity"`
-	Timestamp     time.Time         `json:"timestamp"`
-	UserID        string            `json:"user_id"`
-	Description   string            `json:"description"`
-	Events        []*AccessEvent    `json:"events"`
-	Score         float64           `json:"score"`
-	Baseline      *BaselineMetrics  `json:"baseline,omitempty"`
-	Observed      *BaselineMetrics  `json:"observed,omitempty"`
-	Acknowledged  bool              `json:"acknowledged"`
-	AcknowledgedBy string           `json:"acknowledged_by,omitempty"`
-	AcknowledgedAt *time.Time       `json:"acknowledged_at,omitempty"`
-	Resolution    string            `json:"resolution,omitempty"`
-	Metadata      map[string]string `json:"metadata,omitempty"`
-}
-
-// BaselineMetrics represents baseline behavior metrics
-type BaselineMetrics struct {
-	AvgRequestsPerHour    float64            `json:"avg_requests_per_hour"`
-	AvgBytesPerHour       float64            `json:"avg_bytes_per_hour"`
-	ActiveHours           []int              `json:"active_hours"`
-	CommonBuckets         []string           `json:"common_buckets"`
-	CommonOperations      map[AccessType]int `json:"common_operations"`
-	CommonIPs             []string           `json:"common_ips"`
-	CommonUserAgents      []string           `json:"common_user_agents"`
-	CommonRegions         []string           `json:"common_regions"`
-	StdDevRequests        float64            `json:"std_dev_requests"`
-	StdDevBytes           float64            `json:"std_dev_bytes"`
-	LastUpdated           time.Time          `json:"last_updated"`
-}
-
-// UserBaseline represents a user's baseline behavior
-type UserBaseline struct {
+	Timestamp    time.Time         `json:"timestamp"`
+	GeoLocation  *GeoLocation      `json:"geo_location,omitempty"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	RequestID    string            `json:"request_id"`
+	SessionID    string            `json:"session_id,omitempty"`
+	Key          string            `json:"key"`
+	AccessType   AccessType        `json:"access_type"`
+	SourceIP     string            `json:"source_ip"`
+	UserAgent    string            `json:"user_agent"`
+	Region       string            `json:"region"`
 	UserID       string            `json:"user_id"`
-	Metrics      *BaselineMetrics  `json:"metrics"`
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
-	EventCount   int64             `json:"event_count"`
-	IsStable     bool              `json:"is_stable"`
+	AccessKeyID  string            `json:"access_key_id"`
+	TenantID     string            `json:"tenant_id,omitempty"`
+	Bucket       string            `json:"bucket"`
+	ErrorCode    string            `json:"error_code,omitempty"`
+	ID           string            `json:"id"`
+	StatusCode   int               `json:"status_code"`
+	Duration     time.Duration     `json:"duration_ms"`
+	BytesWritten int64             `json:"bytes_written"`
+	BytesRead    int64             `json:"bytes_read"`
 }
 
-// AnomalyRule defines a rule for detecting anomalies
+// GeoLocation represents geographic location information.
+type GeoLocation struct {
+	Country   string  `json:"country"`
+	Region    string  `json:"region"`
+	City      string  `json:"city"`
+	ISP       string  `json:"isp,omitempty"`
+	ASN       string  `json:"asn,omitempty"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
+// Anomaly represents a detected anomaly.
+type Anomaly struct {
+	Timestamp      time.Time         `json:"timestamp"`
+	Observed       *BaselineMetrics  `json:"observed,omitempty"`
+	Baseline       *BaselineMetrics  `json:"baseline,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
+	AcknowledgedAt *time.Time        `json:"acknowledged_at,omitempty"`
+	Description    string            `json:"description"`
+	Severity       Severity          `json:"severity"`
+	ID             string            `json:"id"`
+	AcknowledgedBy string            `json:"acknowledged_by,omitempty"`
+	UserID         string            `json:"user_id"`
+	Resolution     string            `json:"resolution,omitempty"`
+	Type           AnomalyType       `json:"type"`
+	Events         []*AccessEvent    `json:"events"`
+	Score          float64           `json:"score"`
+	Acknowledged   bool              `json:"acknowledged"`
+}
+
+// BaselineMetrics represents baseline behavior metrics.
+type BaselineMetrics struct {
+	LastUpdated        time.Time          `json:"last_updated"`
+	CommonOperations   map[AccessType]int `json:"common_operations"`
+	ActiveHours        []int              `json:"active_hours"`
+	CommonBuckets      []string           `json:"common_buckets"`
+	CommonIPs          []string           `json:"common_ips"`
+	CommonUserAgents   []string           `json:"common_user_agents"`
+	CommonRegions      []string           `json:"common_regions"`
+	AvgRequestsPerHour float64            `json:"avg_requests_per_hour"`
+	AvgBytesPerHour    float64            `json:"avg_bytes_per_hour"`
+	StdDevRequests     float64            `json:"std_dev_requests"`
+	StdDevBytes        float64            `json:"std_dev_bytes"`
+}
+
+// UserBaseline represents a user's baseline behavior.
+type UserBaseline struct {
+	CreatedAt  time.Time        `json:"created_at"`
+	UpdatedAt  time.Time        `json:"updated_at"`
+	Metrics    *BaselineMetrics `json:"metrics"`
+	UserID     string           `json:"user_id"`
+	EventCount int64            `json:"event_count"`
+	IsStable   bool             `json:"is_stable"`
+}
+
+// AnomalyRule defines a rule for detecting anomalies.
 type AnomalyRule struct {
-	ID          string      `json:"id"`
-	Name        string      `json:"name"`
-	Type        AnomalyType `json:"type"`
-	Enabled     bool        `json:"enabled"`
-	Severity    Severity    `json:"severity"`
-	Threshold   float64     `json:"threshold"`
-	Window      time.Duration `json:"window"`
-	Description string      `json:"description"`
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Type        AnomalyType     `json:"type"`
+	Severity    Severity        `json:"severity"`
+	Description string          `json:"description"`
 	Conditions  []RuleCondition `json:"conditions"`
 	Actions     []RuleAction    `json:"actions"`
+	Threshold   float64         `json:"threshold"`
+	Window      time.Duration   `json:"window"`
+	Enabled     bool            `json:"enabled"`
 }
 
-// RuleCondition defines a condition for an anomaly rule
+// RuleCondition defines a condition for an anomaly rule.
 type RuleCondition struct {
-	Field    string `json:"field"`
-	Operator string `json:"operator"` // eq, ne, gt, lt, gte, lte, contains, regex, in
 	Value    interface{} `json:"value"`
+	Field    string      `json:"field"`
+	Operator string      `json:"operator"`
 }
 
-// RuleAction defines an action to take when an anomaly is detected
+// RuleAction defines an action to take when an anomaly is detected.
 type RuleAction struct {
-	Type       string            `json:"type"` // alert, block, log, webhook, email
 	Parameters map[string]string `json:"parameters"`
+	Type       string            `json:"type"`
 }
 
-// AnalyticsConfig contains configuration for the analytics engine
+// AnalyticsConfig contains configuration for the analytics engine.
 type AnalyticsConfig struct {
 	BaselineWindow       time.Duration `json:"baseline_window"`
 	MinEventsForBaseline int           `json:"min_events_for_baseline"`
@@ -173,36 +198,36 @@ type AnalyticsConfig struct {
 	FlushInterval        time.Duration `json:"flush_interval"`
 }
 
-// AnalyticsStats contains statistics for the analytics engine
+// AnalyticsStats contains statistics for the analytics engine.
 type AnalyticsStats struct {
-	TotalEvents       int64            `json:"total_events"`
-	EventsLastHour    int64            `json:"events_last_hour"`
-	AnomaliesDetected int64            `json:"anomalies_detected"`
-	ActiveUsers       int64            `json:"active_users"`
-	TopBuckets        map[string]int64 `json:"top_buckets"`
-	TopOperations     map[string]int64 `json:"top_operations"`
+	LastUpdated         time.Time        `json:"last_updated"`
+	TopBuckets          map[string]int64 `json:"top_buckets"`
+	TopOperations       map[string]int64 `json:"top_operations"`
 	AnomaliesBySeverity map[string]int64 `json:"anomalies_by_severity"`
-	AnomaliesByType   map[string]int64 `json:"anomalies_by_type"`
-	LastUpdated       time.Time        `json:"last_updated"`
+	AnomaliesByType     map[string]int64 `json:"anomalies_by_type"`
+	TotalEvents         int64            `json:"total_events"`
+	EventsLastHour      int64            `json:"events_last_hour"`
+	AnomaliesDetected   int64            `json:"anomalies_detected"`
+	ActiveUsers         int64            `json:"active_users"`
 }
 
-// AccessAnalytics provides access analytics with anomaly detection
+// AccessAnalytics provides access analytics with anomaly detection.
 type AccessAnalytics struct {
-	mu           sync.RWMutex
-	config       *AnalyticsConfig
-	events       []*AccessEvent
-	baselines    map[string]*UserBaseline
-	anomalies    []*Anomaly
-	rules        map[string]*AnomalyRule
-	stats        *AnalyticsStats
 	storage      AnalyticsStorage
 	alertHandler AlertHandler
+	config       *AnalyticsConfig
+	baselines    map[string]*UserBaseline
+	rules        map[string]*AnomalyRule
+	stats        *AnalyticsStats
 	eventChan    chan *AccessEvent
 	stopChan     chan struct{}
+	events       []*AccessEvent
+	anomalies    []*Anomaly
 	wg           sync.WaitGroup
+	mu           sync.RWMutex
 }
 
-// AnalyticsStorage defines the interface for analytics persistence
+// AnalyticsStorage defines the interface for analytics persistence.
 type AnalyticsStorage interface {
 	StoreEvent(ctx context.Context, event *AccessEvent) error
 	GetEvents(ctx context.Context, filter *EventFilter) ([]*AccessEvent, error)
@@ -214,13 +239,13 @@ type AnalyticsStorage interface {
 	Cleanup(ctx context.Context, before time.Time) error
 }
 
-// AlertHandler defines the interface for handling anomaly alerts
+// AlertHandler defines the interface for handling anomaly alerts.
 type AlertHandler interface {
 	SendAlert(ctx context.Context, anomaly *Anomaly) error
 	SendBulkAlert(ctx context.Context, anomalies []*Anomaly) error
 }
 
-// EventFilter defines filters for querying events
+// EventFilter defines filters for querying events.
 type EventFilter struct {
 	UserID     string     `json:"user_id,omitempty"`
 	Bucket     string     `json:"bucket,omitempty"`
@@ -232,40 +257,40 @@ type EventFilter struct {
 	Offset     int        `json:"offset"`
 }
 
-// AnomalyFilter defines filters for querying anomalies
+// AnomalyFilter defines filters for querying anomalies.
 type AnomalyFilter struct {
+	StartTime    time.Time   `json:"start_time"`
+	EndTime      time.Time   `json:"end_time"`
+	Acknowledged *bool       `json:"acknowledged,omitempty"`
 	UserID       string      `json:"user_id,omitempty"`
 	Type         AnomalyType `json:"type,omitempty"`
 	Severity     Severity    `json:"severity,omitempty"`
-	Acknowledged *bool       `json:"acknowledged,omitempty"`
-	StartTime    time.Time   `json:"start_time"`
-	EndTime      time.Time   `json:"end_time"`
 	Limit        int         `json:"limit"`
 	Offset       int         `json:"offset"`
 }
 
-// NewAccessAnalytics creates a new access analytics engine
+// NewAccessAnalytics creates a new access analytics engine.
 func NewAccessAnalytics(config *AnalyticsConfig, storage AnalyticsStorage, alertHandler AlertHandler) *AccessAnalytics {
 	if config == nil {
 		config = &AnalyticsConfig{
 			BaselineWindow:       7 * 24 * time.Hour, // 7 days
-			MinEventsForBaseline: 100,
-			AnomalyThreshold:     3.0, // 3 standard deviations
-			RetentionPeriod:      30 * 24 * time.Hour, // 30 days
-			SamplingRate:         1.0, // 100%
+			MinEventsForBaseline: defaultMinEventsForBaseline,
+			AnomalyThreshold:     defaultAnomalyThreshold,      // 3 standard deviations
+			RetentionPeriod:      30 * 24 * time.Hour,          // 30 days
+			SamplingRate:         1.0,                          // 100%
 			EnableRealTime:       true,
-			BatchSize:            1000,
+			BatchSize:            defaultBatchSize,
 			FlushInterval:        time.Minute,
 		}
 	}
 
 	aa := &AccessAnalytics{
-		config:       config,
-		events:       make([]*AccessEvent, 0),
-		baselines:    make(map[string]*UserBaseline),
-		anomalies:    make([]*Anomaly, 0),
-		rules:        make(map[string]*AnomalyRule),
-		stats:        &AnalyticsStats{
+		config:    config,
+		events:    make([]*AccessEvent, 0),
+		baselines: make(map[string]*UserBaseline),
+		anomalies: make([]*Anomaly, 0),
+		rules:     make(map[string]*AnomalyRule),
+		stats: &AnalyticsStats{
 			TopBuckets:          make(map[string]int64),
 			TopOperations:       make(map[string]int64),
 			AnomaliesBySeverity: make(map[string]int64),
@@ -273,7 +298,7 @@ func NewAccessAnalytics(config *AnalyticsConfig, storage AnalyticsStorage, alert
 		},
 		storage:      storage,
 		alertHandler: alertHandler,
-		eventChan:    make(chan *AccessEvent, 10000),
+		eventChan:    make(chan *AccessEvent, defaultEventChannelSize),
 		stopChan:     make(chan struct{}),
 	}
 
@@ -283,13 +308,14 @@ func NewAccessAnalytics(config *AnalyticsConfig, storage AnalyticsStorage, alert
 	// Start background processing if real-time is enabled
 	if config.EnableRealTime {
 		aa.wg.Add(1)
+
 		go aa.processEvents()
 	}
 
 	return aa
 }
 
-// initializeDefaultRules sets up default anomaly detection rules
+// initializeDefaultRules sets up default anomaly detection rules.
 func (aa *AccessAnalytics) initializeDefaultRules() {
 	defaultRules := []*AnomalyRule{
 		{
@@ -298,7 +324,7 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeUnusualTime,
 			Enabled:     true,
 			Severity:    SeverityMedium,
-			Threshold:   2.0,
+			Threshold:   thresholdUnusualTime,
 			Window:      time.Hour,
 			Description: "Detects access during unusual hours for a user",
 		},
@@ -308,8 +334,8 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeHighVolume,
 			Enabled:     true,
 			Severity:    SeverityHigh,
-			Threshold:   5.0,
-			Window:      15 * time.Minute,
+			Threshold:   thresholdHighVolume,
+			Window:      thresholdHighVolumeWindowMins * time.Minute,
 			Description: "Detects unusually high request volume",
 		},
 		{
@@ -318,8 +344,8 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeBulkOperation,
 			Enabled:     true,
 			Severity:    SeverityCritical,
-			Threshold:   100,
-			Window:      5 * time.Minute,
+			Threshold:   thresholdBulkDelete,
+			Window:      thresholdBulkDeleteWindowMins * time.Minute,
 			Description: "Detects bulk delete operations",
 			Conditions: []RuleCondition{
 				{Field: "access_type", Operator: "eq", Value: "DELETE"},
@@ -331,7 +357,7 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeGeoVelocity,
 			Enabled:     true,
 			Severity:    SeverityCritical,
-			Threshold:   500, // 500 km/h max velocity
+			Threshold:   thresholdGeoVelocity, // 500 km/h max velocity
 			Window:      time.Hour,
 			Description: "Detects impossible travel based on location changes",
 		},
@@ -341,7 +367,7 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeDataExfiltration,
 			Enabled:     true,
 			Severity:    SeverityCritical,
-			Threshold:   10, // 10GB
+			Threshold:   thresholdDataExfiltration, // 10GB
 			Window:      time.Hour,
 			Description: "Detects large data downloads",
 		},
@@ -352,7 +378,7 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Enabled:     true,
 			Severity:    SeverityLow,
 			Threshold:   1,
-			Window:      24 * time.Hour,
+			Window:      baselineDays * time.Hour,
 			Description: "Detects first-time access to a bucket",
 		},
 		{
@@ -371,8 +397,8 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeRapidChanges,
 			Enabled:     true,
 			Severity:    SeverityHigh,
-			Threshold:   5,
-			Window:      10 * time.Minute,
+			Threshold:   thresholdRapidChanges,
+			Window:      thresholdRapidChangesWindowMins * time.Minute,
 			Description: "Detects rapid ACL or policy changes",
 			Conditions: []RuleCondition{
 				{Field: "access_type", Operator: "in", Value: []string{"ACL", "POLICY"}},
@@ -385,18 +411,20 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 	}
 }
 
-// RecordEvent records an access event
+// RecordEvent records an access event.
 func (aa *AccessAnalytics) RecordEvent(ctx context.Context, event *AccessEvent) error {
 	if event.ID == "" {
 		event.ID = uuid.New().String()
 	}
+
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
 
 	// Store event
 	if aa.storage != nil {
-		if err := aa.storage.StoreEvent(ctx, event); err != nil {
+		err := aa.storage.StoreEvent(ctx, event)
+		if err != nil {
 			return err
 		}
 	}
@@ -420,11 +448,12 @@ func (aa *AccessAnalytics) RecordEvent(ctx context.Context, event *AccessEvent) 
 	return nil
 }
 
-// processEvents processes events in real-time
+// processEvents processes events in real-time.
 func (aa *AccessAnalytics) processEvents() {
 	defer aa.wg.Done()
 
 	batch := make([]*AccessEvent, 0, aa.config.BatchSize)
+
 	ticker := time.NewTicker(aa.config.FlushInterval)
 	defer ticker.Stop()
 
@@ -435,6 +464,7 @@ func (aa *AccessAnalytics) processEvents() {
 			if len(batch) > 0 {
 				aa.processBatch(batch)
 			}
+
 			return
 
 		case event := <-aa.eventChan:
@@ -453,7 +483,7 @@ func (aa *AccessAnalytics) processEvents() {
 	}
 }
 
-// processBatch processes a batch of events
+// processBatch processes a batch of events.
 func (aa *AccessAnalytics) processBatch(events []*AccessEvent) {
 	ctx := context.Background()
 
@@ -465,6 +495,7 @@ func (aa *AccessAnalytics) processBatch(events []*AccessEvent) {
 
 	// Detect anomalies for each user
 	var detectedAnomalies []*Anomaly
+
 	for userID, events := range userEvents {
 		anomalies := aa.detectAnomalies(ctx, userID, events)
 		detectedAnomalies = append(detectedAnomalies, anomalies...)
@@ -476,17 +507,20 @@ func (aa *AccessAnalytics) processBatch(events []*AccessEvent) {
 	// Store and alert on anomalies
 	if len(detectedAnomalies) > 0 {
 		aa.mu.Lock()
+
 		aa.anomalies = append(aa.anomalies, detectedAnomalies...)
 		for _, anomaly := range detectedAnomalies {
 			aa.stats.AnomaliesDetected++
 			aa.stats.AnomaliesBySeverity[string(anomaly.Severity)]++
 			aa.stats.AnomaliesByType[string(anomaly.Type)]++
 		}
+
 		aa.mu.Unlock()
 
 		// Send alerts (best-effort, log errors)
 		if aa.alertHandler != nil {
-			if err := aa.alertHandler.SendBulkAlert(ctx, detectedAnomalies); err != nil {
+			err := aa.alertHandler.SendBulkAlert(ctx, detectedAnomalies)
+			if err != nil {
 				// Log alert sending failure but continue
 				_ = err
 			}
@@ -494,7 +528,7 @@ func (aa *AccessAnalytics) processBatch(events []*AccessEvent) {
 	}
 }
 
-// detectAnomalies detects anomalies in user events
+// detectAnomalies detects anomalies in user events.
 func (aa *AccessAnalytics) detectAnomalies(ctx context.Context, userID string, events []*AccessEvent) []*Anomaly {
 	var anomalies []*Anomaly
 
@@ -515,7 +549,7 @@ func (aa *AccessAnalytics) detectAnomalies(ctx context.Context, userID string, e
 	return anomalies
 }
 
-// checkRule checks a single rule against events
+// checkRule checks a single rule against events.
 func (aa *AccessAnalytics) checkRule(rule *AnomalyRule, userID string, events []*AccessEvent, baseline *UserBaseline) *Anomaly {
 	// Filter events by rule conditions
 	filteredEvents := aa.filterEventsByConditions(events, rule.Conditions)
@@ -547,32 +581,35 @@ func (aa *AccessAnalytics) checkRule(rule *AnomalyRule, userID string, events []
 	return anomaly
 }
 
-// filterEventsByConditions filters events based on rule conditions
+// filterEventsByConditions filters events based on rule conditions.
 func (aa *AccessAnalytics) filterEventsByConditions(events []*AccessEvent, conditions []RuleCondition) []*AccessEvent {
 	if len(conditions) == 0 {
 		return events
 	}
 
 	var filtered []*AccessEvent
+
 	for _, event := range events {
 		if aa.matchesConditions(event, conditions) {
 			filtered = append(filtered, event)
 		}
 	}
+
 	return filtered
 }
 
-// matchesConditions checks if an event matches all conditions
+// matchesConditions checks if an event matches all conditions.
 func (aa *AccessAnalytics) matchesConditions(event *AccessEvent, conditions []RuleCondition) bool {
 	for _, cond := range conditions {
 		if !aa.matchesCondition(event, cond) {
 			return false
 		}
 	}
+
 	return true
 }
 
-// matchesCondition checks if an event matches a single condition
+// matchesCondition checks if an event matches a single condition.
 func (aa *AccessAnalytics) matchesCondition(event *AccessEvent, cond RuleCondition) bool {
 	var fieldValue interface{}
 
@@ -604,6 +641,7 @@ func (aa *AccessAnalytics) matchesCondition(event *AccessEvent, cond RuleConditi
 				}
 			}
 		}
+
 		return false
 	case "contains":
 		if s, ok := fieldValue.(string); ok {
@@ -611,13 +649,14 @@ func (aa *AccessAnalytics) matchesCondition(event *AccessEvent, cond RuleConditi
 				return len(s) > 0 && len(v) > 0 && (s == v || len(s) > len(v))
 			}
 		}
+
 		return false
 	}
 
 	return false
 }
 
-// checkUnusualTime detects access during unusual hours
+// checkUnusualTime detects access during unusual hours.
 func (aa *AccessAnalytics) checkUnusualTime(rule *AnomalyRule, userID string, events []*AccessEvent, baseline *UserBaseline) *Anomaly {
 	if baseline == nil || len(baseline.Metrics.ActiveHours) == 0 {
 		return nil
@@ -629,6 +668,7 @@ func (aa *AccessAnalytics) checkUnusualTime(rule *AnomalyRule, userID string, ev
 	}
 
 	var unusualEvents []*AccessEvent
+
 	for _, event := range events {
 		hour := event.Timestamp.Hour()
 		if !activeHoursMap[hour] {
@@ -653,7 +693,7 @@ func (aa *AccessAnalytics) checkUnusualTime(rule *AnomalyRule, userID string, ev
 	}
 }
 
-// checkHighVolume detects unusually high request volume
+// checkHighVolume detects unusually high request volume.
 func (aa *AccessAnalytics) checkHighVolume(rule *AnomalyRule, userID string, events []*AccessEvent, baseline *UserBaseline) *Anomaly {
 	if baseline == nil || baseline.Metrics.AvgRequestsPerHour == 0 {
 		return nil
@@ -662,7 +702,9 @@ func (aa *AccessAnalytics) checkHighVolume(rule *AnomalyRule, userID string, eve
 	// Calculate current requests per hour
 	now := time.Now()
 	windowStart := now.Add(-rule.Window)
+
 	var countInWindow int
+
 	for _, event := range events {
 		if event.Timestamp.After(windowStart) {
 			countInWindow++
@@ -676,6 +718,7 @@ func (aa *AccessAnalytics) checkHighVolume(rule *AnomalyRule, userID string, eve
 	if baseline.Metrics.StdDevRequests == 0 {
 		return nil
 	}
+
 	zscore := (hourlyRate - baseline.Metrics.AvgRequestsPerHour) / baseline.Metrics.StdDevRequests
 
 	if zscore < rule.Threshold {
@@ -698,7 +741,7 @@ func (aa *AccessAnalytics) checkHighVolume(rule *AnomalyRule, userID string, eve
 	}
 }
 
-// checkBulkOperation detects bulk operations
+// checkBulkOperation detects bulk operations.
 func (aa *AccessAnalytics) checkBulkOperation(rule *AnomalyRule, userID string, events []*AccessEvent) *Anomaly {
 	if float64(len(events)) < rule.Threshold {
 		return nil
@@ -736,17 +779,18 @@ func (aa *AccessAnalytics) checkBulkOperation(rule *AnomalyRule, userID string, 
 	return nil
 }
 
-// checkGeoVelocity detects impossible travel
+// checkGeoVelocity detects impossible travel.
 func (aa *AccessAnalytics) checkGeoVelocity(rule *AnomalyRule, userID string, events []*AccessEvent) *Anomaly {
 	// Need at least 2 events with geo locations
 	var geoEvents []*AccessEvent
+
 	for _, event := range events {
 		if event.GeoLocation != nil {
 			geoEvents = append(geoEvents, event)
 		}
 	}
 
-	if len(geoEvents) < 2 {
+	if len(geoEvents) < minGeoEventsForCheck {
 		return nil
 	}
 
@@ -798,29 +842,31 @@ func (aa *AccessAnalytics) checkGeoVelocity(rule *AnomalyRule, userID string, ev
 	return nil
 }
 
-// haversineDistance calculates distance between two coordinates in km
+// haversineDistance calculates distance between two coordinates in km.
 func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
 	const earthRadius = 6371 // km
 
-	dLat := (lat2 - lat1) * math.Pi / 180
-	dLon := (lon2 - lon1) * math.Pi / 180
+	dLat := (lat2 - lat1) * math.Pi / degreesToRadiansDivisor
+	dLon := (lon2 - lon1) * math.Pi / degreesToRadiansDivisor
 
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
-		math.Cos(lat1*math.Pi/180)*math.Cos(lat2*math.Pi/180)*
-			math.Sin(dLon/2)*math.Sin(dLon/2)
+	a := math.Sin(dLat/haversineDivisor)*math.Sin(dLat/haversineDivisor) +
+		math.Cos(lat1*math.Pi/degreesToRadiansDivisor)*math.Cos(lat2*math.Pi/degreesToRadiansDivisor)*
+			math.Sin(dLon/haversineDivisor)*math.Sin(dLon/haversineDivisor)
 
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	c := haversineDivisor * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 
 	return earthRadius * c
 }
 
-// checkDataExfiltration detects large data downloads
+// checkDataExfiltration detects large data downloads.
 func (aa *AccessAnalytics) checkDataExfiltration(rule *AnomalyRule, userID string, events []*AccessEvent) *Anomaly {
 	now := time.Now()
 	windowStart := now.Add(-rule.Window)
 
-	var totalBytesRead int64
-	var readEvents []*AccessEvent
+	var (
+		totalBytesRead int64
+		readEvents     []*AccessEvent
+	)
 
 	for _, event := range events {
 		if event.Timestamp.After(windowStart) && event.AccessType == AccessTypeRead {
@@ -830,7 +876,7 @@ func (aa *AccessAnalytics) checkDataExfiltration(rule *AnomalyRule, userID strin
 	}
 
 	// Convert threshold from GB to bytes
-	thresholdBytes := int64(rule.Threshold * 1024 * 1024 * 1024)
+	thresholdBytes := int64(rule.Threshold * bytesPerGB)
 
 	if totalBytesRead < thresholdBytes {
 		return nil
@@ -852,7 +898,7 @@ func (aa *AccessAnalytics) checkDataExfiltration(rule *AnomalyRule, userID strin
 	}
 }
 
-// checkFirstTimeAccess detects first-time access to resources
+// checkFirstTimeAccess detects first-time access to resources.
 func (aa *AccessAnalytics) checkFirstTimeAccess(rule *AnomalyRule, userID string, events []*AccessEvent, baseline *UserBaseline) *Anomaly {
 	if baseline == nil {
 		return nil
@@ -864,6 +910,7 @@ func (aa *AccessAnalytics) checkFirstTimeAccess(rule *AnomalyRule, userID string
 	}
 
 	var newBucketEvents []*AccessEvent
+
 	newBuckets := make(map[string]bool)
 
 	for _, event := range events {
@@ -890,7 +937,7 @@ func (aa *AccessAnalytics) checkFirstTimeAccess(rule *AnomalyRule, userID string
 	}
 }
 
-// checkUnusualUserAgent detects access from unusual user agents
+// checkUnusualUserAgent detects access from unusual user agents.
 func (aa *AccessAnalytics) checkUnusualUserAgent(rule *AnomalyRule, userID string, events []*AccessEvent, baseline *UserBaseline) *Anomaly {
 	if baseline == nil || len(baseline.Metrics.CommonUserAgents) == 0 {
 		return nil
@@ -902,6 +949,7 @@ func (aa *AccessAnalytics) checkUnusualUserAgent(rule *AnomalyRule, userID strin
 	}
 
 	var unusualEvents []*AccessEvent
+
 	for _, event := range events {
 		if !commonUAMap[event.UserAgent] {
 			unusualEvents = append(unusualEvents, event)
@@ -925,12 +973,13 @@ func (aa *AccessAnalytics) checkUnusualUserAgent(rule *AnomalyRule, userID strin
 	}
 }
 
-// checkRapidChanges detects rapid permission or configuration changes
+// checkRapidChanges detects rapid permission or configuration changes.
 func (aa *AccessAnalytics) checkRapidChanges(rule *AnomalyRule, userID string, events []*AccessEvent) *Anomaly {
 	now := time.Now()
 	windowStart := now.Add(-rule.Window)
 
 	var changeEvents []*AccessEvent
+
 	for _, event := range events {
 		if event.Timestamp.After(windowStart) {
 			if event.AccessType == AccessTypeACL || event.AccessType == AccessTypePolicy {
@@ -955,7 +1004,7 @@ func (aa *AccessAnalytics) checkRapidChanges(rule *AnomalyRule, userID string, e
 	}
 }
 
-// getBaseline retrieves or creates a baseline for a user
+// getBaseline retrieves or creates a baseline for a user.
 func (aa *AccessAnalytics) getBaseline(ctx context.Context, userID string) *UserBaseline {
 	aa.mu.RLock()
 	baseline, exists := aa.baselines[userID]
@@ -967,10 +1016,12 @@ func (aa *AccessAnalytics) getBaseline(ctx context.Context, userID string) *User
 
 	// Try to load from storage
 	if aa.storage != nil {
-		if stored, err := aa.storage.GetBaseline(ctx, userID); err == nil && stored != nil {
+		stored, err := aa.storage.GetBaseline(ctx, userID)
+		if err == nil && stored != nil {
 			aa.mu.Lock()
 			aa.baselines[userID] = stored
 			aa.mu.Unlock()
+
 			return stored
 		}
 	}
@@ -978,7 +1029,7 @@ func (aa *AccessAnalytics) getBaseline(ctx context.Context, userID string) *User
 	return nil
 }
 
-// updateBaseline updates the baseline for a user
+// updateBaseline updates the baseline for a user.
 func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, events []*AccessEvent) {
 	aa.mu.Lock()
 	defer aa.mu.Unlock()
@@ -1003,9 +1054,11 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for _, h := range metrics.ActiveHours {
 		hourCounts[h]++
 	}
+
 	for _, event := range events {
 		hourCounts[event.Timestamp.Hour()]++
 	}
+
 	metrics.ActiveHours = make([]int, 0)
 	for h := range hourCounts {
 		metrics.ActiveHours = append(metrics.ActiveHours, h)
@@ -1016,9 +1069,11 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for _, b := range metrics.CommonBuckets {
 		bucketSet[b] = true
 	}
+
 	for _, event := range events {
 		bucketSet[event.Bucket] = true
 	}
+
 	metrics.CommonBuckets = make([]string, 0, len(bucketSet))
 	for b := range bucketSet {
 		metrics.CommonBuckets = append(metrics.CommonBuckets, b)
@@ -1034,9 +1089,11 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for _, ip := range metrics.CommonIPs {
 		ipSet[ip] = true
 	}
+
 	for _, event := range events {
 		ipSet[event.SourceIP] = true
 	}
+
 	metrics.CommonIPs = make([]string, 0, len(ipSet))
 	for ip := range ipSet {
 		metrics.CommonIPs = append(metrics.CommonIPs, ip)
@@ -1047,9 +1104,11 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for _, ua := range metrics.CommonUserAgents {
 		uaSet[ua] = true
 	}
+
 	for _, event := range events {
 		uaSet[event.UserAgent] = true
 	}
+
 	metrics.CommonUserAgents = make([]string, 0, len(uaSet))
 	for ua := range uaSet {
 		metrics.CommonUserAgents = append(metrics.CommonUserAgents, ua)
@@ -1066,14 +1125,15 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 
 	// Store updated baseline (best-effort)
 	if aa.storage != nil {
-		if err := aa.storage.StoreBaseline(ctx, baseline); err != nil {
+		err := aa.storage.StoreBaseline(ctx, baseline)
+		if err != nil {
 			// Log storage failure but continue
 			_ = err
 		}
 	}
 }
 
-// GetAnomalies retrieves anomalies based on filter
+// GetAnomalies retrieves anomalies based on filter.
 func (aa *AccessAnalytics) GetAnomalies(ctx context.Context, filter *AnomalyFilter) ([]*Anomaly, error) {
 	if aa.storage != nil {
 		return aa.storage.GetAnomalies(ctx, filter)
@@ -1083,6 +1143,7 @@ func (aa *AccessAnalytics) GetAnomalies(ctx context.Context, filter *AnomalyFilt
 	defer aa.mu.RUnlock()
 
 	var result []*Anomaly
+
 	for _, anomaly := range aa.anomalies {
 		if aa.matchesAnomalyFilter(anomaly, filter) {
 			result = append(result, anomaly)
@@ -1093,6 +1154,7 @@ func (aa *AccessAnalytics) GetAnomalies(ctx context.Context, filter *AnomalyFilt
 	if filter.Offset > 0 && filter.Offset < len(result) {
 		result = result[filter.Offset:]
 	}
+
 	if filter.Limit > 0 && filter.Limit < len(result) {
 		result = result[:filter.Limit]
 	}
@@ -1100,30 +1162,36 @@ func (aa *AccessAnalytics) GetAnomalies(ctx context.Context, filter *AnomalyFilt
 	return result, nil
 }
 
-// matchesAnomalyFilter checks if an anomaly matches the filter
+// matchesAnomalyFilter checks if an anomaly matches the filter.
 func (aa *AccessAnalytics) matchesAnomalyFilter(anomaly *Anomaly, filter *AnomalyFilter) bool {
 	if filter.UserID != "" && anomaly.UserID != filter.UserID {
 		return false
 	}
+
 	if filter.Type != "" && anomaly.Type != filter.Type {
 		return false
 	}
+
 	if filter.Severity != "" && anomaly.Severity != filter.Severity {
 		return false
 	}
+
 	if filter.Acknowledged != nil && anomaly.Acknowledged != *filter.Acknowledged {
 		return false
 	}
+
 	if !filter.StartTime.IsZero() && anomaly.Timestamp.Before(filter.StartTime) {
 		return false
 	}
+
 	if !filter.EndTime.IsZero() && anomaly.Timestamp.After(filter.EndTime) {
 		return false
 	}
+
 	return true
 }
 
-// AcknowledgeAnomaly marks an anomaly as acknowledged
+// AcknowledgeAnomaly marks an anomaly as acknowledged.
 func (aa *AccessAnalytics) AcknowledgeAnomaly(ctx context.Context, anomalyID, userID, resolution string) error {
 	aa.mu.Lock()
 	defer aa.mu.Unlock()
@@ -1139,6 +1207,7 @@ func (aa *AccessAnalytics) AcknowledgeAnomaly(ctx context.Context, anomalyID, us
 			if aa.storage != nil {
 				return aa.storage.StoreAnomaly(ctx, anomaly)
 			}
+
 			return nil
 		}
 	}
@@ -1146,7 +1215,7 @@ func (aa *AccessAnalytics) AcknowledgeAnomaly(ctx context.Context, anomalyID, us
 	return nil
 }
 
-// AddRule adds a custom anomaly detection rule
+// AddRule adds a custom anomaly detection rule.
 func (aa *AccessAnalytics) AddRule(rule *AnomalyRule) error {
 	if rule.ID == "" {
 		rule.ID = uuid.New().String()
@@ -1159,14 +1228,14 @@ func (aa *AccessAnalytics) AddRule(rule *AnomalyRule) error {
 	return nil
 }
 
-// RemoveRule removes an anomaly detection rule
+// RemoveRule removes an anomaly detection rule.
 func (aa *AccessAnalytics) RemoveRule(ruleID string) {
 	aa.mu.Lock()
 	delete(aa.rules, ruleID)
 	aa.mu.Unlock()
 }
 
-// GetRules returns all anomaly detection rules
+// GetRules returns all anomaly detection rules.
 func (aa *AccessAnalytics) GetRules() []*AnomalyRule {
 	aa.mu.RLock()
 	defer aa.mu.RUnlock()
@@ -1175,10 +1244,11 @@ func (aa *AccessAnalytics) GetRules() []*AnomalyRule {
 	for _, rule := range aa.rules {
 		rules = append(rules, rule)
 	}
+
 	return rules
 }
 
-// GetStats returns analytics statistics
+// GetStats returns analytics statistics.
 func (aa *AccessAnalytics) GetStats(ctx context.Context) (*AnalyticsStats, error) {
 	if aa.storage != nil {
 		return aa.storage.GetStats(ctx)
@@ -1189,19 +1259,22 @@ func (aa *AccessAnalytics) GetStats(ctx context.Context) (*AnalyticsStats, error
 
 	stats := *aa.stats
 	stats.LastUpdated = time.Now()
+
 	return &stats, nil
 }
 
-// GetUserBaseline returns the baseline for a specific user
+// GetUserBaseline returns the baseline for a specific user.
 func (aa *AccessAnalytics) GetUserBaseline(ctx context.Context, userID string) (*UserBaseline, error) {
 	baseline := aa.getBaseline(ctx, userID)
 	if baseline == nil {
+		//nolint:nilnil // nil,nil indicates no baseline found (not an error condition)
 		return nil, nil
 	}
+
 	return baseline, nil
 }
 
-// GenerateReport generates an analytics report
+// GenerateReport generates an analytics report.
 func (aa *AccessAnalytics) GenerateReport(ctx context.Context, startTime, endTime time.Time) (*AnalyticsReport, error) {
 	filter := &AnomalyFilter{
 		StartTime: startTime,
@@ -1234,10 +1307,12 @@ func (aa *AccessAnalytics) GenerateReport(ctx context.Context, startTime, endTim
 		userID string
 		count  int
 	}
-	var userCounts []userCount
+
+	userCounts := make([]userCount, 0, len(userDist))
 	for u, c := range userDist {
 		userCounts = append(userCounts, userCount{u, c})
 	}
+
 	sort.Slice(userCounts, func(i, j int) bool {
 		return userCounts[i].count > userCounts[j].count
 	})
@@ -1248,43 +1323,43 @@ func (aa *AccessAnalytics) GenerateReport(ctx context.Context, startTime, endTim
 	}
 
 	return &AnalyticsReport{
-		GeneratedAt:      time.Now(),
-		StartTime:        startTime,
-		EndTime:          endTime,
-		TotalEvents:      stats.TotalEvents,
-		TotalAnomalies:   int64(len(anomalies)),
+		GeneratedAt:       time.Now(),
+		StartTime:         startTime,
+		EndTime:           endTime,
+		TotalEvents:       stats.TotalEvents,
+		TotalAnomalies:    int64(len(anomalies)),
 		SeverityBreakdown: severityDist,
-		TypeBreakdown:    typeDist,
-		TopAffectedUsers: topUsers,
-		Anomalies:        anomalies,
+		TypeBreakdown:     typeDist,
+		TopAffectedUsers:  topUsers,
+		Anomalies:         anomalies,
 	}, nil
 }
 
-// AnalyticsReport represents a generated analytics report
+// AnalyticsReport represents a generated analytics report.
 type AnalyticsReport struct {
-	GeneratedAt       time.Time              `json:"generated_at"`
-	StartTime         time.Time              `json:"start_time"`
-	EndTime           time.Time              `json:"end_time"`
-	TotalEvents       int64                  `json:"total_events"`
-	TotalAnomalies    int64                  `json:"total_anomalies"`
-	SeverityBreakdown map[Severity]int       `json:"severity_breakdown"`
-	TypeBreakdown     map[AnomalyType]int    `json:"type_breakdown"`
-	TopAffectedUsers  []string               `json:"top_affected_users"`
-	Anomalies         []*Anomaly             `json:"anomalies"`
+	GeneratedAt       time.Time           `json:"generated_at"`
+	StartTime         time.Time           `json:"start_time"`
+	EndTime           time.Time           `json:"end_time"`
+	SeverityBreakdown map[Severity]int    `json:"severity_breakdown"`
+	TypeBreakdown     map[AnomalyType]int `json:"type_breakdown"`
+	TopAffectedUsers  []string            `json:"top_affected_users"`
+	Anomalies         []*Anomaly          `json:"anomalies"`
+	TotalEvents       int64               `json:"total_events"`
+	TotalAnomalies    int64               `json:"total_anomalies"`
 }
 
-// ExportJSON exports the report as JSON
+// ExportJSON exports the report as JSON.
 func (r *AnalyticsReport) ExportJSON() ([]byte, error) {
 	return json.MarshalIndent(r, "", "  ")
 }
 
-// Stop stops the analytics engine
+// Stop stops the analytics engine.
 func (aa *AccessAnalytics) Stop() {
 	close(aa.stopChan)
 	aa.wg.Wait()
 }
 
-// Cleanup removes old data based on retention policy
+// Cleanup removes old data based on retention policy.
 func (aa *AccessAnalytics) Cleanup(ctx context.Context) error {
 	before := time.Now().Add(-aa.config.RetentionPeriod)
 
@@ -1297,16 +1372,20 @@ func (aa *AccessAnalytics) Cleanup(ctx context.Context) error {
 
 	// Clean up in-memory events
 	var newEvents []*AccessEvent
+
 	for _, event := range aa.events {
 		if event.Timestamp.After(before) {
 			newEvents = append(newEvents, event)
 		}
 	}
+
 	aa.events = newEvents
 
 	// Clean up old anomalies (keep acknowledged ones longer)
 	var newAnomalies []*Anomaly
+
 	acknowledgedBefore := before.Add(-30 * 24 * time.Hour) // Keep acknowledged for extra 30 days
+
 	for _, anomaly := range aa.anomalies {
 		if anomaly.Acknowledged {
 			if anomaly.Timestamp.After(acknowledgedBefore) {
@@ -1318,6 +1397,7 @@ func (aa *AccessAnalytics) Cleanup(ctx context.Context) error {
 			}
 		}
 	}
+
 	aa.anomalies = newAnomalies
 
 	return nil

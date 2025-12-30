@@ -13,22 +13,16 @@ import (
 )
 
 // testPassword is a valid password for testing that meets all requirements:
-// - 12+ characters, uppercase, lowercase, number
+// - 12+ characters, uppercase, lowercase, number.
 const testPassword = "TestPassword123"
 
 // setTestPassword sets a valid password environment variable for tests
-// Returns a cleanup function to restore the original value
+// setTestPassword sets a valid test password for config loading.
+// t.Setenv automatically restores the original value after the test.
 func setTestPassword(t *testing.T) {
 	t.Helper()
-	originalValue := os.Getenv("NEBULAIO_AUTH_ROOT_PASSWORD")
-	os.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", testPassword)
-	t.Cleanup(func() {
-		if originalValue == "" {
-			os.Unsetenv("NEBULAIO_AUTH_ROOT_PASSWORD")
-		} else {
-			os.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", originalValue)
-		}
-	})
+
+	t.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", testPassword)
 }
 
 func TestLoadDefaultConfig(t *testing.T) {
@@ -116,11 +110,9 @@ func TestLoadWithEnvironmentVariables(t *testing.T) {
 	setTestPassword(t)
 	tempDir := t.TempDir()
 
-	// Set environment variables
-	os.Setenv("NEBULAIO_S3_PORT", "6000")
-	os.Setenv("NEBULAIO_LOG_LEVEL", "warn")
-	defer os.Unsetenv("NEBULAIO_S3_PORT")
-	defer os.Unsetenv("NEBULAIO_LOG_LEVEL")
+	// Set environment variables - t.Setenv handles cleanup automatically
+	t.Setenv("NEBULAIO_S3_PORT", "6000")
+	t.Setenv("NEBULAIO_LOG_LEVEL", "warn")
 
 	opts := Options{
 		DataDir: tempDir,
@@ -172,7 +164,7 @@ func TestNodeIDGeneration(t *testing.T) {
 
 	// Node ID should be generated
 	assert.NotEmpty(t, cfg.NodeID)
-	assert.True(t, len(cfg.NodeID) > 5, "NodeID should be a reasonable length")
+	assert.Greater(t, len(cfg.NodeID), 5, "NodeID should be a reasonable length")
 
 	// Node ID file should exist
 	nodeIDPath := filepath.Join(tempDir, "node-id")
@@ -426,10 +418,10 @@ func TestAuthDefaults(t *testing.T) {
 
 func TestPasswordValidation(t *testing.T) {
 	tests := []struct {
+		errorType   error
 		name        string
 		password    string
 		expectError bool
-		errorType   error
 	}{
 		{
 			name:        "empty password",
@@ -506,9 +498,8 @@ func TestLoadFailsWithEmptyPassword(t *testing.T) {
 }
 
 func TestLoadFailsWithWeakPassword(t *testing.T) {
-	// Set a weak password
-	os.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", "weak")
-	defer os.Unsetenv("NEBULAIO_AUTH_ROOT_PASSWORD")
+	// Set a weak password - t.Setenv handles cleanup automatically
+	t.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", "weak")
 
 	tempDir := t.TempDir()
 	opts := Options{
@@ -532,10 +523,10 @@ auth:
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
 	require.NoError(t, err)
 
-	// Set a different password via environment variable
+	// Set a different password via environment variable - t.Setenv handles cleanup
 	envPassword := "EnvVarPassword123"
-	os.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", envPassword)
-	defer os.Unsetenv("NEBULAIO_AUTH_ROOT_PASSWORD")
+
+	t.Setenv("NEBULAIO_AUTH_ROOT_PASSWORD", envPassword)
 
 	opts := Options{
 		DataDir: tempDir,
@@ -753,7 +744,7 @@ func TestNIMDefaults(t *testing.T) {
 func TestGenerateNodeID(t *testing.T) {
 	id := generateNodeID()
 	assert.NotEmpty(t, id)
-	assert.True(t, len(id) > 5, "NodeID should be a reasonable length")
+	assert.Greater(t, len(id), 5, "NodeID should be a reasonable length")
 	assert.Contains(t, id, "node-")
 }
 
@@ -765,7 +756,8 @@ func TestGenerateReplicaID(t *testing.T) {
 func TestGenerateSecret(t *testing.T) {
 	// Generate several secrets
 	secrets := make(map[string]bool)
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		s := generateSecret(32)
 		assert.Len(t, s, 32)
 		secrets[s] = true

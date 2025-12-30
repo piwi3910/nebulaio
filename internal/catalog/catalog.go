@@ -6,10 +6,12 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,7 +19,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// OutputFormat specifies the inventory output format
+// OutputFormat specifies the inventory output format.
 type OutputFormat string
 
 const (
@@ -27,7 +29,7 @@ const (
 	FormatORC     OutputFormat = "ORC"
 )
 
-// Frequency specifies how often inventory is generated
+// Frequency specifies how often inventory is generated.
 type Frequency string
 
 const (
@@ -35,7 +37,7 @@ const (
 	FrequencyWeekly Frequency = "Weekly"
 )
 
-// InventoryConfig defines the configuration for an inventory job
+// InventoryConfig defines the configuration for an inventory job.
 type InventoryConfig struct {
 	// ID is the unique identifier for this inventory configuration
 	ID string `json:"id"`
@@ -74,7 +76,7 @@ type InventoryConfig struct {
 	LastRun *time.Time `json:"last_run,omitempty"`
 }
 
-// InventoryFilter defines filtering criteria for inventory
+// InventoryFilter defines filtering criteria for inventory.
 type InventoryFilter struct {
 	// Prefix filters objects by key prefix
 	Prefix string `json:"prefix,omitempty"`
@@ -98,7 +100,7 @@ type InventoryFilter struct {
 	StorageClass string `json:"storage_class,omitempty"`
 }
 
-// InventoryField represents a field that can be included in inventory
+// InventoryField represents a field that can be included in inventory.
 type InventoryField string
 
 const (
@@ -122,7 +124,7 @@ const (
 	FieldChecksumAlgorithm         InventoryField = "ChecksumAlgorithm"
 )
 
-// AllInventoryFields returns all available inventory fields
+// AllInventoryFields returns all available inventory fields.
 func AllInventoryFields() []InventoryField {
 	return []InventoryField{
 		FieldBucket,
@@ -146,29 +148,29 @@ func AllInventoryFields() []InventoryField {
 	}
 }
 
-// InventoryRecord represents a single object in the inventory
+// InventoryRecord represents a single object in the inventory.
 type InventoryRecord struct {
-	Bucket                    string     `json:"bucket" parquet:"name=bucket, type=BYTE_ARRAY, convertedtype=UTF8"`
-	Key                       string     `json:"key" parquet:"name=key, type=BYTE_ARRAY, convertedtype=UTF8"`
-	VersionID                 string     `json:"version_id,omitempty" parquet:"name=version_id, type=BYTE_ARRAY, convertedtype=UTF8"`
-	IsLatest                  bool       `json:"is_latest" parquet:"name=is_latest, type=BOOLEAN"`
-	IsDeleteMarker            bool       `json:"is_delete_marker" parquet:"name=is_delete_marker, type=BOOLEAN"`
-	Size                      int64      `json:"size" parquet:"name=size, type=INT64"`
-	LastModified              time.Time  `json:"last_modified" parquet:"name=last_modified, type=INT64, convertedtype=TIMESTAMP_MILLIS"`
-	ETag                      string     `json:"etag" parquet:"name=etag, type=BYTE_ARRAY, convertedtype=UTF8"`
-	StorageClass              string     `json:"storage_class" parquet:"name=storage_class, type=BYTE_ARRAY, convertedtype=UTF8"`
-	IsMultipartUploaded       bool       `json:"is_multipart_uploaded" parquet:"name=is_multipart_uploaded, type=BOOLEAN"`
-	ReplicationStatus         string     `json:"replication_status,omitempty" parquet:"name=replication_status, type=BYTE_ARRAY, convertedtype=UTF8"`
-	EncryptionStatus          string     `json:"encryption_status,omitempty" parquet:"name=encryption_status, type=BYTE_ARRAY, convertedtype=UTF8"`
+	Bucket                    string     `json:"bucket"                                  parquet:"name=bucket, type=BYTE_ARRAY, convertedtype=UTF8"`
+	Key                       string     `json:"key"                                     parquet:"name=key, type=BYTE_ARRAY, convertedtype=UTF8"`
+	VersionID                 string     `json:"version_id,omitempty"                    parquet:"name=version_id, type=BYTE_ARRAY, convertedtype=UTF8"`
+	IsLatest                  bool       `json:"is_latest"                               parquet:"name=is_latest, type=BOOLEAN"`
+	IsDeleteMarker            bool       `json:"is_delete_marker"                        parquet:"name=is_delete_marker, type=BOOLEAN"`
+	Size                      int64      `json:"size"                                    parquet:"name=size, type=INT64"`
+	LastModified              time.Time  `json:"last_modified"                           parquet:"name=last_modified, type=INT64, convertedtype=TIMESTAMP_MILLIS"`
+	ETag                      string     `json:"etag"                                    parquet:"name=etag, type=BYTE_ARRAY, convertedtype=UTF8"`
+	StorageClass              string     `json:"storage_class"                           parquet:"name=storage_class, type=BYTE_ARRAY, convertedtype=UTF8"`
+	IsMultipartUploaded       bool       `json:"is_multipart_uploaded"                   parquet:"name=is_multipart_uploaded, type=BOOLEAN"`
+	ReplicationStatus         string     `json:"replication_status,omitempty"            parquet:"name=replication_status, type=BYTE_ARRAY, convertedtype=UTF8"`
+	EncryptionStatus          string     `json:"encryption_status,omitempty"             parquet:"name=encryption_status, type=BYTE_ARRAY, convertedtype=UTF8"`
 	ObjectLockRetainUntilDate *time.Time `json:"object_lock_retain_until_date,omitempty" parquet:"name=object_lock_retain_until_date, type=INT64, convertedtype=TIMESTAMP_MILLIS"`
-	ObjectLockMode            string     `json:"object_lock_mode,omitempty" parquet:"name=object_lock_mode, type=BYTE_ARRAY, convertedtype=UTF8"`
+	ObjectLockMode            string     `json:"object_lock_mode,omitempty"              parquet:"name=object_lock_mode, type=BYTE_ARRAY, convertedtype=UTF8"`
 	ObjectLockLegalHoldStatus string     `json:"object_lock_legal_hold_status,omitempty" parquet:"name=object_lock_legal_hold_status, type=BYTE_ARRAY, convertedtype=UTF8"`
-	IntelligentTieringAccess  string     `json:"intelligent_tiering_access,omitempty" parquet:"name=intelligent_tiering_access, type=BYTE_ARRAY, convertedtype=UTF8"`
-	BucketKeyStatus           string     `json:"bucket_key_status,omitempty" parquet:"name=bucket_key_status, type=BYTE_ARRAY, convertedtype=UTF8"`
-	ChecksumAlgorithm         string     `json:"checksum_algorithm,omitempty" parquet:"name=checksum_algorithm, type=BYTE_ARRAY, convertedtype=UTF8"`
+	IntelligentTieringAccess  string     `json:"intelligent_tiering_access,omitempty"    parquet:"name=intelligent_tiering_access, type=BYTE_ARRAY, convertedtype=UTF8"`
+	BucketKeyStatus           string     `json:"bucket_key_status,omitempty"             parquet:"name=bucket_key_status, type=BYTE_ARRAY, convertedtype=UTF8"`
+	ChecksumAlgorithm         string     `json:"checksum_algorithm,omitempty"            parquet:"name=checksum_algorithm, type=BYTE_ARRAY, convertedtype=UTF8"`
 }
 
-// InventoryManifest describes the inventory output
+// InventoryManifest describes the inventory output.
 type InventoryManifest struct {
 	// SourceBucket is the inventoried bucket
 	SourceBucket string `json:"sourceBucket"`
@@ -192,7 +194,7 @@ type InventoryManifest struct {
 	Files []ManifestFile `json:"files"`
 }
 
-// ManifestFile describes a single inventory file
+// ManifestFile describes a single inventory file.
 type ManifestFile struct {
 	// Key is the S3 key of the file
 	Key string `json:"key"`
@@ -204,7 +206,7 @@ type ManifestFile struct {
 	MD5Checksum string `json:"MD5checksum"`
 }
 
-// InventoryJob represents a running inventory job
+// InventoryJob represents a running inventory job.
 type InventoryJob struct {
 	// ID is the unique job identifier
 	ID string `json:"id"`
@@ -231,7 +233,7 @@ type InventoryJob struct {
 	ManifestKey string `json:"manifest_key,omitempty"`
 }
 
-// JobStatus represents the status of an inventory job
+// JobStatus represents the status of an inventory job.
 type JobStatus string
 
 const (
@@ -242,7 +244,7 @@ const (
 	JobStatusCancelled JobStatus = "cancelled"
 )
 
-// JobProgress tracks inventory generation progress
+// JobProgress tracks inventory generation progress.
 type JobProgress struct {
 	TotalObjects     int64 `json:"total_objects"`
 	ProcessedObjects int64 `json:"processed_objects"`
@@ -251,12 +253,12 @@ type JobProgress struct {
 	FilesGenerated   int   `json:"files_generated"`
 }
 
-// ObjectLister provides an interface to list objects in a bucket
+// ObjectLister provides an interface to list objects in a bucket.
 type ObjectLister interface {
 	ListObjects(ctx context.Context, bucket, prefix string, recursive bool) (<-chan ObjectInfo, <-chan error)
 }
 
-// ObjectInfo contains metadata about an object
+// ObjectInfo contains metadata about an object.
 type ObjectInfo struct {
 	Bucket                    string
 	Key                       string
@@ -279,12 +281,12 @@ type ObjectInfo struct {
 	Tags                      map[string]string
 }
 
-// ObjectWriter provides an interface to write inventory files
+// ObjectWriter provides an interface to write inventory files.
 type ObjectWriter interface {
 	PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType string) error
 }
 
-// CatalogService manages inventory generation
+// CatalogService manages inventory generation.
 type CatalogService struct {
 	lister ObjectLister
 	writer ObjectWriter
@@ -301,17 +303,18 @@ type CatalogService struct {
 	cancelMu    sync.Mutex
 }
 
-// CatalogConfig holds configuration for the catalog service
+// CatalogConfig holds configuration for the catalog service.
 type CatalogConfig struct {
 	Concurrency int
 	BatchSize   int
 }
 
-// NewCatalogService creates a new catalog service
+// NewCatalogService creates a new catalog service.
 func NewCatalogService(lister ObjectLister, writer ObjectWriter, cfg CatalogConfig) *CatalogService {
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = 10
 	}
+
 	if cfg.BatchSize <= 0 {
 		cfg.BatchSize = 10000
 	}
@@ -327,23 +330,28 @@ func NewCatalogService(lister ObjectLister, writer ObjectWriter, cfg CatalogConf
 	}
 }
 
-// CreateInventoryConfig creates a new inventory configuration
+// CreateInventoryConfig creates a new inventory configuration.
 func (s *CatalogService) CreateInventoryConfig(cfg *InventoryConfig) error {
 	if cfg.ID == "" {
 		cfg.ID = uuid.New().String()
 	}
+
 	if cfg.SourceBucket == "" {
-		return fmt.Errorf("source bucket is required")
+		return errors.New("source bucket is required")
 	}
+
 	if cfg.DestinationBucket == "" {
-		return fmt.Errorf("destination bucket is required")
+		return errors.New("destination bucket is required")
 	}
+
 	if cfg.Format == "" {
 		cfg.Format = FormatCSV
 	}
+
 	if cfg.Frequency == "" {
 		cfg.Frequency = FrequencyDaily
 	}
+
 	if len(cfg.IncludedFields) == 0 {
 		cfg.IncludedFields = []string{
 			string(FieldBucket),
@@ -364,7 +372,7 @@ func (s *CatalogService) CreateInventoryConfig(cfg *InventoryConfig) error {
 	return nil
 }
 
-// GetInventoryConfig retrieves an inventory configuration
+// GetInventoryConfig retrieves an inventory configuration.
 func (s *CatalogService) GetInventoryConfig(id string) (*InventoryConfig, error) {
 	s.configMu.RLock()
 	defer s.configMu.RUnlock()
@@ -373,10 +381,11 @@ func (s *CatalogService) GetInventoryConfig(id string) (*InventoryConfig, error)
 	if !ok {
 		return nil, fmt.Errorf("inventory config not found: %s", id)
 	}
+
 	return cfg, nil
 }
 
-// ListInventoryConfigs lists all inventory configurations
+// ListInventoryConfigs lists all inventory configurations.
 func (s *CatalogService) ListInventoryConfigs(bucket string) []*InventoryConfig {
 	s.configMu.RLock()
 	defer s.configMu.RUnlock()
@@ -387,10 +396,11 @@ func (s *CatalogService) ListInventoryConfigs(bucket string) []*InventoryConfig 
 			configs = append(configs, cfg)
 		}
 	}
+
 	return configs
 }
 
-// DeleteInventoryConfig deletes an inventory configuration
+// DeleteInventoryConfig deletes an inventory configuration.
 func (s *CatalogService) DeleteInventoryConfig(id string) error {
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
@@ -400,10 +410,11 @@ func (s *CatalogService) DeleteInventoryConfig(id string) error {
 	}
 
 	delete(s.configs, id)
+
 	return nil
 }
 
-// StartInventoryJob starts an inventory generation job
+// StartInventoryJob starts an inventory generation job.
 func (s *CatalogService) StartInventoryJob(ctx context.Context, configID string) (*InventoryJob, error) {
 	cfg, err := s.GetInventoryConfig(configID)
 	if err != nil {
@@ -424,6 +435,7 @@ func (s *CatalogService) StartInventoryJob(ctx context.Context, configID string)
 
 	// Create cancellable context
 	jobCtx, cancel := context.WithCancel(ctx)
+
 	s.cancelMu.Lock()
 	s.cancelFuncs[job.ID] = cancel
 	s.cancelMu.Unlock()
@@ -434,7 +446,7 @@ func (s *CatalogService) StartInventoryJob(ctx context.Context, configID string)
 	return job, nil
 }
 
-// GetInventoryJob retrieves job status
+// GetInventoryJob retrieves job status.
 func (s *CatalogService) GetInventoryJob(jobID string) (*InventoryJob, error) {
 	s.jobMu.RLock()
 	defer s.jobMu.RUnlock()
@@ -443,10 +455,11 @@ func (s *CatalogService) GetInventoryJob(jobID string) (*InventoryJob, error) {
 	if !ok {
 		return nil, fmt.Errorf("job not found: %s", jobID)
 	}
+
 	return job, nil
 }
 
-// ListInventoryJobs lists all inventory jobs
+// ListInventoryJobs lists all inventory jobs.
 func (s *CatalogService) ListInventoryJobs(configID string) []*InventoryJob {
 	s.jobMu.RLock()
 	defer s.jobMu.RUnlock()
@@ -457,10 +470,11 @@ func (s *CatalogService) ListInventoryJobs(configID string) []*InventoryJob {
 			jobs = append(jobs, job)
 		}
 	}
+
 	return jobs
 }
 
-// CancelInventoryJob cancels a running job
+// CancelInventoryJob cancels a running job.
 func (s *CatalogService) CancelInventoryJob(jobID string) error {
 	s.cancelMu.Lock()
 	cancel, ok := s.cancelFuncs[jobID]
@@ -471,17 +485,19 @@ func (s *CatalogService) CancelInventoryJob(jobID string) error {
 	}
 
 	s.jobMu.Lock()
+
 	if job, ok := s.jobs[jobID]; ok {
 		job.Status = JobStatusCancelled
 		now := time.Now()
 		job.CompletedAt = &now
 	}
+
 	s.jobMu.Unlock()
 
 	return nil
 }
 
-// runInventoryJob executes the inventory generation
+// runInventoryJob executes the inventory generation.
 func (s *CatalogService) runInventoryJob(ctx context.Context, job *InventoryJob, cfg *InventoryConfig) {
 	defer func() {
 		s.cancelMu.Lock()
@@ -499,14 +515,19 @@ func (s *CatalogService) runInventoryJob(ctx context.Context, job *InventoryJob,
 	if prefix == "" {
 		prefix = cfg.SourceBucket
 	}
+
 	inventoryDir := fmt.Sprintf("%s/%s/data", prefix, timestamp)
 
 	// List objects and generate inventory
 	objects, errs := s.lister.ListObjects(ctx, cfg.SourceBucket, "", true)
 
-	var records []InventoryRecord
-	var files []ManifestFile
+	var (
+		records []InventoryRecord
+		files   []ManifestFile
+	)
+
 	fileIndex := 0
+
 	var totalObjects, totalBytes int64
 
 	for {
@@ -530,8 +551,10 @@ func (s *CatalogService) runInventoryJob(ctx context.Context, job *InventoryJob,
 						s.updateJobError(job, err.Error())
 						return
 					}
+
 					files = append(files, file)
 				}
+
 				goto done
 			}
 
@@ -557,6 +580,7 @@ func (s *CatalogService) runInventoryJob(ctx context.Context, job *InventoryJob,
 					s.updateJobError(job, err.Error())
 					return
 				}
+
 				files = append(files, file)
 				records = records[:0]
 				fileIndex++
@@ -577,14 +601,18 @@ done:
 	}
 
 	manifestKey := fmt.Sprintf("%s/%s/manifest.json", prefix, timestamp)
-	if err := s.writeManifest(ctx, cfg.DestinationBucket, manifestKey, manifest); err != nil {
+
+	err := s.writeManifest(ctx, cfg.DestinationBucket, manifestKey, manifest)
+	if err != nil {
 		s.updateJobError(job, err.Error())
 		return
 	}
 
 	// Update job as completed (only if not already cancelled)
 	now := time.Now()
+
 	s.jobMu.Lock()
+
 	if job.Status != JobStatusCancelled {
 		job.Status = JobStatusCompleted
 		job.CompletedAt = &now
@@ -595,17 +623,20 @@ done:
 		job.Progress.ProcessedBytes = totalBytes
 		job.Progress.FilesGenerated = len(files)
 	}
+
 	s.jobMu.Unlock()
 
 	// Update config last run (only if job completed successfully)
 	if job.Status == JobStatusCompleted {
 		s.configMu.Lock()
+
 		cfg.LastRun = &now
+
 		s.configMu.Unlock()
 	}
 }
 
-// matchesFilter checks if an object matches the filter criteria
+// matchesFilter checks if an object matches the filter criteria.
 func (s *CatalogService) matchesFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if filter == nil {
 		return true
@@ -646,7 +677,7 @@ func (s *CatalogService) matchesFilter(obj ObjectInfo, filter *InventoryFilter) 
 	return true
 }
 
-// objectToRecord converts ObjectInfo to InventoryRecord
+// objectToRecord converts ObjectInfo to InventoryRecord.
 func (s *CatalogService) objectToRecord(obj ObjectInfo, fields []string) InventoryRecord {
 	return InventoryRecord{
 		Bucket:                    obj.Bucket,
@@ -670,9 +701,10 @@ func (s *CatalogService) objectToRecord(obj ObjectInfo, fields []string) Invento
 	}
 }
 
-// writeInventoryFile writes a batch of records to an inventory file
+// writeInventoryFile writes a batch of records to an inventory file.
 func (s *CatalogService) writeInventoryFile(ctx context.Context, cfg *InventoryConfig, dir string, index int, records []InventoryRecord) (ManifestFile, error) {
 	var ext string
+
 	switch cfg.Format {
 	case FormatCSV:
 		ext = "csv.gz"
@@ -693,6 +725,7 @@ func (s *CatalogService) writeInventoryFile(ctx context.Context, cfg *InventoryC
 	if err != nil {
 		return ManifestFile{}, fmt.Errorf("failed to create temp file: %w", err)
 	}
+
 	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	defer func() { _ = tmpFile.Close() }()
 
@@ -724,7 +757,8 @@ func (s *CatalogService) writeInventoryFile(ctx context.Context, cfg *InventoryC
 		contentType = "application/json"
 	}
 
-	if err := s.writer.PutObject(ctx, cfg.DestinationBucket, filename, tmpFile, size, contentType); err != nil {
+	err = s.writer.PutObject(ctx, cfg.DestinationBucket, filename, tmpFile, size, contentType)
+	if err != nil {
 		return ManifestFile{}, fmt.Errorf("failed to upload inventory file: %w", err)
 	}
 
@@ -734,25 +768,30 @@ func (s *CatalogService) writeInventoryFile(ctx context.Context, cfg *InventoryC
 	}, nil
 }
 
-// writeCSV writes records in CSV format
+// writeCSV writes records in CSV format.
 func (s *CatalogService) writeCSV(w io.Writer, records []InventoryRecord, fields []string) (int64, error) {
 	cw := csv.NewWriter(w)
 
 	// Write header
-	if err := cw.Write(fields); err != nil {
+	err := cw.Write(fields)
+	if err != nil {
 		return 0, err
 	}
 
 	// Write records
 	for _, rec := range records {
 		row := s.recordToRow(rec, fields)
-		if err := cw.Write(row); err != nil {
+
+		err := cw.Write(row)
+		if err != nil {
 			return 0, err
 		}
 	}
 
 	cw.Flush()
-	if err := cw.Error(); err != nil {
+
+	err = cw.Error()
+	if err != nil {
 		return 0, err
 	}
 
@@ -761,14 +800,16 @@ func (s *CatalogService) writeCSV(w io.Writer, records []InventoryRecord, fields
 		info, _ := f.Stat()
 		return info.Size(), nil
 	}
+
 	return 0, nil
 }
 
-// writeJSON writes records in JSON format
+// writeJSON writes records in JSON format.
 func (s *CatalogService) writeJSON(w io.Writer, records []InventoryRecord) (int64, error) {
 	encoder := json.NewEncoder(w)
 	for _, rec := range records {
-		if err := encoder.Encode(rec); err != nil {
+		err := encoder.Encode(rec)
+		if err != nil {
 			return 0, err
 		}
 	}
@@ -777,17 +818,18 @@ func (s *CatalogService) writeJSON(w io.Writer, records []InventoryRecord) (int6
 		info, _ := f.Stat()
 		return info.Size(), nil
 	}
+
 	return 0, nil
 }
 
-// writeParquet writes records in Parquet format (placeholder - needs parquet library)
+// writeParquet writes records in Parquet format (placeholder - needs parquet library).
 func (s *CatalogService) writeParquet(w io.Writer, records []InventoryRecord) (int64, error) {
 	// TODO: Implement parquet writing using xitongsys/parquet-go
 	// For now, fall back to JSON
 	return s.writeJSON(w, records)
 }
 
-// recordToRow converts a record to a CSV row
+// recordToRow converts a record to a CSV row.
 func (s *CatalogService) recordToRow(rec InventoryRecord, fields []string) []string {
 	row := make([]string, len(fields))
 	for i, field := range fields {
@@ -799,11 +841,11 @@ func (s *CatalogService) recordToRow(rec InventoryRecord, fields []string) []str
 		case FieldVersionID:
 			row[i] = rec.VersionID
 		case FieldIsLatest:
-			row[i] = fmt.Sprintf("%t", rec.IsLatest)
+			row[i] = strconv.FormatBool(rec.IsLatest)
 		case FieldIsDeleteMarker:
-			row[i] = fmt.Sprintf("%t", rec.IsDeleteMarker)
+			row[i] = strconv.FormatBool(rec.IsDeleteMarker)
 		case FieldSize:
-			row[i] = fmt.Sprintf("%d", rec.Size)
+			row[i] = strconv.FormatInt(rec.Size, 10)
 		case FieldLastModified:
 			row[i] = rec.LastModified.UTC().Format(time.RFC3339)
 		case FieldETag:
@@ -811,7 +853,7 @@ func (s *CatalogService) recordToRow(rec InventoryRecord, fields []string) []str
 		case FieldStorageClass:
 			row[i] = rec.StorageClass
 		case FieldIsMultipartUploaded:
-			row[i] = fmt.Sprintf("%t", rec.IsMultipartUploaded)
+			row[i] = strconv.FormatBool(rec.IsMultipartUploaded)
 		case FieldReplicationStatus:
 			row[i] = rec.ReplicationStatus
 		case FieldEncryptionStatus:
@@ -832,15 +874,16 @@ func (s *CatalogService) recordToRow(rec InventoryRecord, fields []string) []str
 			row[i] = rec.ChecksumAlgorithm
 		}
 	}
+
 	return row
 }
 
-// buildSchema builds the schema string for the manifest
+// buildSchema builds the schema string for the manifest.
 func (s *CatalogService) buildSchema(fields []string) string {
 	return fmt.Sprintf("%v", fields)
 }
 
-// writeManifest writes the inventory manifest file
+// writeManifest writes the inventory manifest file.
 func (s *CatalogService) writeManifest(ctx context.Context, bucket, key string, manifest InventoryManifest) error {
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
@@ -851,10 +894,12 @@ func (s *CatalogService) writeManifest(ctx context.Context, bucket, key string, 
 	if err != nil {
 		return err
 	}
+
 	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	defer func() { _ = tmpFile.Close() }()
 
-	if _, err := tmpFile.Write(data); err != nil {
+	_, err = tmpFile.Write(data)
+	if err != nil {
 		return err
 	}
 
@@ -863,24 +908,28 @@ func (s *CatalogService) writeManifest(ctx context.Context, bucket, key string, 
 	return s.writer.PutObject(ctx, bucket, key, tmpFile, int64(len(data)), "application/json")
 }
 
-// updateJobStatus updates the job status
+// updateJobStatus updates the job status.
 func (s *CatalogService) updateJobStatus(job *InventoryJob, status JobStatus) {
 	s.jobMu.Lock()
+
 	job.Status = status
+
 	s.jobMu.Unlock()
 }
 
-// updateJobProgress updates the job progress
+// updateJobProgress updates the job progress.
 func (s *CatalogService) updateJobProgress(job *InventoryJob, objects, bytes int64, files int) {
 	s.jobMu.Lock()
+
 	job.Progress.ProcessedObjects = objects
 	job.Progress.ProcessedBytes = bytes
 	job.Progress.FilesGenerated = files
+
 	s.jobMu.Unlock()
 }
 
 // updateJobError sets the job to failed with an error
-// If the job was already cancelled, it preserves the cancelled status
+// If the job was already cancelled, it preserves the cancelled status.
 func (s *CatalogService) updateJobError(job *InventoryJob, errMsg string) {
 	s.jobMu.Lock()
 	// Don't overwrite cancelled status - CancelInventoryJob already set it
@@ -888,24 +937,26 @@ func (s *CatalogService) updateJobError(job *InventoryJob, errMsg string) {
 		job.Status = JobStatusFailed
 		job.Error = errMsg
 	}
+
 	now := time.Now()
 	job.CompletedAt = &now
+
 	s.jobMu.Unlock()
 }
 
-// hasPrefix checks if a string has a given prefix
+// hasPrefix checks if a string has a given prefix.
 func hasPrefix(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }
 
-// GetInventoryManifest retrieves and parses an inventory manifest
+// GetInventoryManifest retrieves and parses an inventory manifest.
 func (s *CatalogService) GetInventoryManifest(ctx context.Context, bucket, key string) (*InventoryManifest, error) {
 	// This would need to read from object storage
 	// For now, return an error indicating implementation needed
-	return nil, fmt.Errorf("not implemented: requires object reader interface")
+	return nil, errors.New("not implemented: requires object reader interface")
 }
 
-// QueryInventory queries inventory data using SQL (for S3 Select integration)
+// QueryInventory queries inventory data using SQL (for S3 Select integration).
 func (s *CatalogService) QueryInventory(ctx context.Context, manifestKey string, query string) (<-chan InventoryRecord, <-chan error) {
 	records := make(chan InventoryRecord)
 	errs := make(chan error, 1)
@@ -913,13 +964,14 @@ func (s *CatalogService) QueryInventory(ctx context.Context, manifestKey string,
 	go func() {
 		defer close(records)
 		defer close(errs)
-		errs <- fmt.Errorf("not implemented: requires S3 Select integration")
+
+		errs <- errors.New("not implemented: requires S3 Select integration")
 	}()
 
 	return records, errs
 }
 
-// AnalyzeInventory provides analytics on inventory data
+// AnalyzeInventory provides analytics on inventory data.
 type InventoryAnalytics struct {
 	TotalObjects     int64            `json:"total_objects"`
 	TotalSize        int64            `json:"total_size"`
@@ -931,7 +983,7 @@ type InventoryAnalytics struct {
 	DeleteMarkers    int64            `json:"delete_markers"`
 }
 
-// AnalyzeInventory generates analytics from inventory files
+// AnalyzeInventory generates analytics from inventory files.
 func (s *CatalogService) AnalyzeInventory(ctx context.Context, bucket, manifestKey string) (*InventoryAnalytics, error) {
 	analytics := &InventoryAnalytics{
 		ByStorageClass: make(map[string]int64),
@@ -941,10 +993,10 @@ func (s *CatalogService) AnalyzeInventory(ctx context.Context, bucket, manifestK
 
 	// This would read and analyze inventory files
 	// Placeholder for now
-	return analytics, fmt.Errorf("not implemented: requires inventory file reading")
+	return analytics, errors.New("not implemented: requires inventory file reading")
 }
 
-// GetBucketInventoryConfiguration implements S3 API GetBucketInventoryConfiguration
+// GetBucketInventoryConfiguration implements S3 API GetBucketInventoryConfiguration.
 func (s *CatalogService) GetBucketInventoryConfiguration(bucket, id string) (*InventoryConfig, error) {
 	s.configMu.RLock()
 	defer s.configMu.RUnlock()
@@ -954,15 +1006,16 @@ func (s *CatalogService) GetBucketInventoryConfiguration(bucket, id string) (*In
 			return cfg, nil
 		}
 	}
-	return nil, fmt.Errorf("inventory configuration not found")
+
+	return nil, errors.New("inventory configuration not found")
 }
 
-// PutBucketInventoryConfiguration implements S3 API PutBucketInventoryConfiguration
+// PutBucketInventoryConfiguration implements S3 API PutBucketInventoryConfiguration.
 func (s *CatalogService) PutBucketInventoryConfiguration(cfg *InventoryConfig) error {
 	return s.CreateInventoryConfig(cfg)
 }
 
-// DeleteBucketInventoryConfiguration implements S3 API DeleteBucketInventoryConfiguration
+// DeleteBucketInventoryConfiguration implements S3 API DeleteBucketInventoryConfiguration.
 func (s *CatalogService) DeleteBucketInventoryConfiguration(bucket, id string) error {
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
@@ -973,20 +1026,21 @@ func (s *CatalogService) DeleteBucketInventoryConfiguration(bucket, id string) e
 			return nil
 		}
 	}
-	return fmt.Errorf("inventory configuration not found")
+
+	return errors.New("inventory configuration not found")
 }
 
-// ListBucketInventoryConfigurations implements S3 API ListBucketInventoryConfigurations
+// ListBucketInventoryConfigurations implements S3 API ListBucketInventoryConfigurations.
 func (s *CatalogService) ListBucketInventoryConfigurations(bucket string) []*InventoryConfig {
 	return s.ListInventoryConfigs(bucket)
 }
 
-// _ensureDir ensures directory exists (reserved for future use)
+// _ensureDir ensures directory exists with secure permissions (reserved for future use).
 func _ensureDir(dir string) error {
-	return os.MkdirAll(dir, 0755)
+	return os.MkdirAll(dir, 0750)
 }
 
-// GetTempDir returns a temp directory for inventory operations
+// GetTempDir returns a temp directory for inventory operations.
 func GetTempDir() string {
 	return filepath.Join(os.TempDir(), "nebulaio-inventory")
 }

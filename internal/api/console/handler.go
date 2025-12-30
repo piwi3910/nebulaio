@@ -25,7 +25,19 @@ import (
 	"github.com/piwi3910/nebulaio/internal/object"
 )
 
-// Handler handles Console API requests (user-facing, non-admin)
+// Console handler constants.
+const (
+	// Default presigned URL expiration in seconds.
+	defaultPresignedExpirySec = 3600 // 1 hour
+	// Copy buffer size in bytes.
+	copyBufferSize = 32 * 1024 // 32KB
+	// Maximum presigned URL expiry in seconds (7 days).
+	maxPresignedExpirySec = 604800
+	// Maximum multipart form size in bytes (32MB).
+	maxMultipartFormSize = 32 << 20
+)
+
+// Handler handles Console API requests (user-facing, non-admin).
 type Handler struct {
 	auth   *auth.Service
 	bucket *bucket.Service
@@ -33,7 +45,7 @@ type Handler struct {
 	store  metadata.Store
 }
 
-// NewHandler creates a new Console API handler
+// NewHandler creates a new Console API handler.
 func NewHandler(authService *auth.Service, bucketService *bucket.Service, objectService *object.Service, store metadata.Store) *Handler {
 	return &Handler{
 		auth:   authService,
@@ -43,7 +55,7 @@ func NewHandler(authService *auth.Service, bucketService *bucket.Service, object
 	}
 }
 
-// RegisterRoutes registers Console API routes
+// RegisterRoutes registers Console API routes.
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	// All console endpoints require authentication
 	r.Use(h.authMiddleware)
@@ -77,7 +89,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/buckets/{bucket}/settings", h.GetBucketSettings)
 }
 
-// Auth middleware
+// Auth middleware.
 func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -143,7 +155,9 @@ func (h *Handler) UpdateMyPassword(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 
 	var req UpdatePasswordRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+
+	decodeErr := json.NewDecoder(r.Body).Decode(&req)
+	if decodeErr != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -156,14 +170,16 @@ func (h *Handler) UpdateMyPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify current password matches
-	if err := auth.VerifyPassword(user.PasswordHash, req.CurrentPassword); err != nil {
+	verifyErr := auth.VerifyPassword(user.PasswordHash, req.CurrentPassword)
+	if verifyErr != nil {
 		writeError(w, "Current password is incorrect", http.StatusUnauthorized)
 		return
 	}
 
 	// Update password
-	if err := h.auth.UpdatePassword(ctx, userID, req.NewPassword); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+	updateErr := h.auth.UpdatePassword(ctx, userID, req.NewPassword)
+	if updateErr != nil {
+		writeError(w, updateErr.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -173,11 +189,11 @@ func (h *Handler) UpdateMyPassword(w http.ResponseWriter, r *http.Request) {
 // Access key handlers
 
 type AccessKeyResponse struct {
+	CreatedAt       time.Time `json:"created_at"`
 	AccessKeyID     string    `json:"access_key_id"`
 	SecretAccessKey string    `json:"secret_access_key,omitempty"`
 	Description     string    `json:"description"`
 	Enabled         bool      `json:"enabled"`
-	CreatedAt       time.Time `json:"created_at"`
 }
 
 func (h *Handler) ListMyAccessKeys(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +208,7 @@ func (h *Handler) ListMyAccessKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Transform to response format (without exposing secrets)
-	var response []AccessKeyResponse
+	response := make([]AccessKeyResponse, 0, len(keys))
 	for _, key := range keys {
 		response = append(response, AccessKeyResponse{
 			AccessKeyID: key.AccessKeyID,
@@ -213,7 +229,8 @@ func (h *Handler) CreateMyAccessKey(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 
 	var req CreateAccessKeyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -253,7 +270,8 @@ func (h *Handler) DeleteMyAccessKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete the access key
-	if err := h.store.DeleteAccessKey(ctx, accessKeyID); err != nil {
+	err = h.store.DeleteAccessKey(ctx, accessKeyID)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -264,8 +282,8 @@ func (h *Handler) DeleteMyAccessKey(w http.ResponseWriter, r *http.Request) {
 // Bucket browsing handlers
 
 type BucketSummary struct {
-	Name        string    `json:"name"`
 	CreatedAt   time.Time `json:"created_at"`
+	Name        string    `json:"name"`
 	ObjectCount int       `json:"object_count"`
 	TotalSize   int64     `json:"total_size"`
 	CanRead     bool      `json:"can_read"`
@@ -291,7 +309,7 @@ func (h *Handler) ListMyBuckets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Transform to summary with permissions
-	var response []BucketSummary
+	response := make([]BucketSummary, 0, len(buckets))
 	for _, b := range buckets {
 		summary := BucketSummary{
 			Name:      b.Name,
@@ -307,20 +325,20 @@ func (h *Handler) ListMyBuckets(w http.ResponseWriter, r *http.Request) {
 }
 
 type ObjectSummary struct {
-	Key          string    `json:"key"`
-	Size         int64     `json:"size"`
 	LastModified time.Time `json:"last_modified"`
+	Key          string    `json:"key"`
 	ContentType  string    `json:"content_type"`
 	ETag         string    `json:"etag"`
+	Size         int64     `json:"size"`
 	IsFolder     bool      `json:"is_folder"`
 }
 
 type ListObjectsResponse struct {
+	Prefix        string          `json:"prefix"`
+	NextPageToken string          `json:"next_page_token,omitempty"`
 	Objects       []ObjectSummary `json:"objects"`
 	Folders       []string        `json:"folders"`
-	Prefix        string          `json:"prefix"`
 	IsTruncated   bool            `json:"is_truncated"`
-	NextPageToken string          `json:"next_page_token,omitempty"`
 }
 
 func (h *Handler) ListBucketObjects(w http.ResponseWriter, r *http.Request) {
@@ -329,6 +347,7 @@ func (h *Handler) ListBucketObjects(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	prefix := query.Get("prefix")
+
 	delimiter := query.Get("delimiter")
 	if delimiter == "" {
 		delimiter = "/" // Default to folder-like listing
@@ -336,8 +355,10 @@ func (h *Handler) ListBucketObjects(w http.ResponseWriter, r *http.Request) {
 
 	maxKeysStr := query.Get("max_keys")
 	maxKeys := 100
+
 	if maxKeysStr != "" {
-		if mk, err := strconv.Atoi(maxKeysStr); err == nil && mk > 0 && mk <= 1000 {
+		mk, err := strconv.Atoi(maxKeysStr)
+		if err == nil && mk > 0 && mk <= 1000 {
 			maxKeys = mk
 		}
 	}
@@ -350,7 +371,9 @@ func (h *Handler) ListBucketObjects(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Bucket not found", http.StatusNotFound)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -376,18 +399,17 @@ func (h *Handler) ListBucketObjects(w http.ResponseWriter, r *http.Request) {
 }
 
 type ObjectInfoResponse struct {
-	Key          string            `json:"key"`
-	Bucket       string            `json:"bucket"`
-	Size         int64             `json:"size"`
-	ContentType  string            `json:"content_type"`
-	ETag         string            `json:"etag"`
 	LastModified time.Time         `json:"last_modified"`
-	StorageClass string            `json:"storage_class"`
-	VersionID    string            `json:"version_id,omitempty"`
 	Metadata     map[string]string `json:"metadata,omitempty"`
 	Tags         map[string]string `json:"tags,omitempty"`
-	// Presigned URL for download
-	DownloadURL string `json:"download_url,omitempty"`
+	Key          string            `json:"key"`
+	Bucket       string            `json:"bucket"`
+	ContentType  string            `json:"content_type"`
+	ETag         string            `json:"etag"`
+	StorageClass string            `json:"storage_class"`
+	VersionID    string            `json:"version_id,omitempty"`
+	DownloadURL  string            `json:"download_url,omitempty"`
+	Size         int64             `json:"size"`
 }
 
 func (h *Handler) GetObjectInfo(w http.ResponseWriter, r *http.Request) {
@@ -401,7 +423,9 @@ func (h *Handler) GetObjectInfo(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Object not found", http.StatusNotFound)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -420,10 +444,12 @@ func (h *Handler) GetObjectInfo(w http.ResponseWriter, r *http.Request) {
 
 	// Generate presigned URL if user has access keys
 	userID := r.Header.Get("X-User-Id")
+
 	keys, err := h.store.ListAccessKeys(ctx, userID)
 	if err == nil && len(keys) > 0 {
 		// Find first enabled key
 		var accessKey *metadata.AccessKey
+
 		for _, k := range keys {
 			if k.Enabled {
 				accessKey = k
@@ -434,11 +460,12 @@ func (h *Handler) GetObjectInfo(w http.ResponseWriter, r *http.Request) {
 		// Generate presigned URL if we have an enabled key
 		if accessKey != nil {
 			generator := auth.NewPresignedURLGenerator("us-east-1", "")
+
 			presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
 				Method:      "GET",
 				Bucket:      bucketName,
 				Key:         key,
-				Expiration:  3600 * time.Second, // 1 hour default
+				Expiration:  defaultPresignedExpirySec * time.Second,
 				AccessKeyID: accessKey.AccessKeyID,
 				SecretKey:   accessKey.SecretAccessKey,
 				Region:      "us-east-1",
@@ -452,7 +479,7 @@ func (h *Handler) GetObjectInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// GetObjectContent streams the object content directly to the client
+// GetObjectContent streams the object content directly to the client.
 func (h *Handler) GetObjectContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -465,7 +492,9 @@ func (h *Handler) GetObjectContent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Object not found", http.StatusNotFound)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -475,6 +504,7 @@ func (h *Handler) GetObjectContent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Set response headers
@@ -488,10 +518,12 @@ func (h *Handler) GetObjectContent(w http.ResponseWriter, r *http.Request) {
 	_, _ = copyBuffer(w, reader)
 }
 
-// copyBuffer copies from src to dst using a buffer
-func copyBuffer(dst http.ResponseWriter, src interface{ Read([]byte) (int, error) }) (int64, error) {
-	buf := make([]byte, 32*1024) // 32KB buffer
+// copyBuffer copies from src to dst using a buffer.
+func copyBuffer(dst http.ResponseWriter, src interface{ Read(p []byte) (n int, err error) }) (int64, error) {
+	buf := make([]byte, copyBufferSize)
+
 	var written int64
+
 	for {
 		nr, rerr := src.Read(buf)
 		if nr > 0 {
@@ -499,20 +531,23 @@ func copyBuffer(dst http.ResponseWriter, src interface{ Read([]byte) (int, error
 			if nw > 0 {
 				written += int64(nw)
 			}
+
 			if werr != nil {
 				return written, werr
 			}
 		}
+
 		if rerr != nil {
 			if rerr == io.EOF {
 				return written, nil
 			}
+
 			return written, rerr
 		}
 	}
 }
 
-// BucketSettingsResponse contains bucket settings for console users
+// BucketSettingsResponse contains bucket settings for console users.
 type BucketSettingsResponse struct {
 	Name         string `json:"name"`
 	Region       string `json:"region"`
@@ -520,7 +555,7 @@ type BucketSettingsResponse struct {
 	StorageClass string `json:"storage_class"`
 }
 
-// GetBucketSettings returns bucket settings (read-only for console users)
+// GetBucketSettings returns bucket settings (read-only for console users).
 func (h *Handler) GetBucketSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -531,7 +566,9 @@ func (h *Handler) GetBucketSettings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Bucket not found", http.StatusNotFound)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -559,7 +596,8 @@ func (h *Handler) UploadObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse multipart form
-	if err := r.ParseMultipartForm(32 << 20); err != nil { // 32MB max
+	err := r.ParseMultipartForm(maxMultipartFormSize)
+	if err != nil {
 		writeError(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
@@ -569,16 +607,19 @@ func (h *Handler) UploadObject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "No file provided", http.StatusBadRequest)
 		return
 	}
+
 	defer func() { _ = file.Close() }()
 
 	// Get optional path prefix
 	pathPrefix := r.FormValue("path")
+
 	key := header.Filename
 	if pathPrefix != "" {
 		key = strings.TrimSuffix(pathPrefix, "/") + "/" + key
 	}
 
 	owner := r.Header.Get("X-User-Id")
+
 	contentType := header.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -611,7 +652,8 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.object.DeleteObject(ctx, bucketName, key); err != nil {
+	_, err := h.object.DeleteObject(ctx, bucketName, key)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -621,13 +663,13 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request) {
 
 // Presigned URL handlers
 
-// DownloadURLResponse contains the presigned download URL
+// DownloadURLResponse contains the presigned download URL.
 type DownloadURLResponse struct {
-	URL       string    `json:"url"`
 	ExpiresAt time.Time `json:"expires_at"`
+	URL       string    `json:"url"`
 }
 
-// GetDownloadURL generates a presigned download URL for an object
+// GetDownloadURL generates a presigned download URL for an object.
 func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucketName := chi.URLParam(r, "bucket")
@@ -635,12 +677,15 @@ func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 
 	// Verify object exists
-	if _, err := h.object.HeadObject(ctx, bucketName, key); err != nil {
+	_, err := h.object.HeadObject(ctx, bucketName, key)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, "Object not found", http.StatusNotFound)
 			return
 		}
+
 		writeError(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -653,12 +698,14 @@ func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 
 	// Use the first enabled access key
 	var accessKey *metadata.AccessKey
+
 	for _, k := range keys {
 		if k.Enabled {
 			accessKey = k
 			break
 		}
 	}
+
 	if accessKey == nil {
 		writeError(w, "No enabled access keys found", http.StatusBadRequest)
 		return
@@ -666,18 +713,22 @@ func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 
 	// Get expiration from query param (default 1 hour, max 7 days)
 	expirationStr := r.URL.Query().Get("expiration")
-	expiration := 3600 // 1 hour default
+	expiration := defaultPresignedExpirySec
+
 	if expirationStr != "" {
-		if exp, err := strconv.Atoi(expirationStr); err == nil && exp > 0 {
+		exp, err := strconv.Atoi(expirationStr)
+		if err == nil && exp > 0 {
 			expiration = exp
 		}
 	}
-	if expiration > 604800 { // 7 days max
-		expiration = 604800
+
+	if expiration > maxPresignedExpirySec {
+		expiration = maxPresignedExpirySec
 	}
 
 	// Generate the presigned URL
 	generator := auth.NewPresignedURLGenerator("us-east-1", "")
+
 	presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
 		Method:      "GET",
 		Bucket:      bucketName,
@@ -700,32 +751,33 @@ func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// ConsolePresignRequest is the request body for generating a presigned URL from console
+// ConsolePresignRequest is the request body for generating a presigned URL from console.
 type ConsolePresignRequest struct {
-	Method     string            `json:"method"`     // HTTP method: GET, PUT, DELETE, HEAD
-	Bucket     string            `json:"bucket"`     // Bucket name
-	Key        string            `json:"key"`        // Object key
-	Expiration int               `json:"expiration"` // Expiration in seconds (max 604800 = 7 days)
-	Headers    map[string]string `json:"headers"`    // Optional headers to sign
+	Headers    map[string]string `json:"headers"`
+	Method     string            `json:"method"`
+	Bucket     string            `json:"bucket"`
+	Key        string            `json:"key"`
+	Expiration int               `json:"expiration"`
 }
 
-// ConsolePresignResponse is the response containing the presigned URL
+// ConsolePresignResponse is the response containing the presigned URL.
 type ConsolePresignResponse struct {
+	ExpiresAt time.Time `json:"expires_at"`
 	URL       string    `json:"url"`
 	Method    string    `json:"method"`
 	Bucket    string    `json:"bucket"`
 	Key       string    `json:"key"`
-	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// GeneratePresignedURL generates a presigned URL for user's own buckets
+// GeneratePresignedURL generates a presigned URL for user's own buckets.
 func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := r.Header.Get("X-User-Id")
 	role := metadata.UserRole(r.Header.Get("X-User-Role"))
 
 	var req ConsolePresignRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -735,6 +787,7 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Bucket is required", http.StatusBadRequest)
 		return
 	}
+
 	if req.Method == "" {
 		req.Method = "GET"
 	}
@@ -745,16 +798,17 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid method. Allowed: GET, PUT, DELETE, HEAD", http.StatusBadRequest)
 		return
 	}
+
 	req.Method = strings.ToUpper(req.Method)
 
 	// Check write permission for PUT
-	if req.Method == "PUT" && role == metadata.RoleReadOnly {
+	if req.Method == http.MethodPut && role == metadata.RoleReadOnly {
 		writeError(w, "Permission denied: read-only user cannot create upload URLs", http.StatusForbidden)
 		return
 	}
 
 	// Check delete permission for DELETE
-	if req.Method == "DELETE" && (role == metadata.RoleReadOnly || role == metadata.RoleUser) {
+	if req.Method == http.MethodDelete && (role == metadata.RoleReadOnly || role == metadata.RoleUser) {
 		writeError(w, "Permission denied: cannot create delete URLs", http.StatusForbidden)
 		return
 	}
@@ -776,11 +830,11 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 
 	// Set default expiration (1 hour)
 	if req.Expiration <= 0 {
-		req.Expiration = 3600
+		req.Expiration = defaultPresignedExpirySec
 	}
 	// Max 7 days
-	if req.Expiration > 604800 {
-		req.Expiration = 604800
+	if req.Expiration > maxPresignedExpirySec {
+		req.Expiration = maxPresignedExpirySec
 	}
 
 	// Get user's access key
@@ -792,12 +846,14 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 
 	// Use the first enabled access key
 	var accessKey *metadata.AccessKey
+
 	for _, k := range keys {
 		if k.Enabled {
 			accessKey = k
 			break
 		}
 	}
+
 	if accessKey == nil {
 		writeError(w, "No enabled access keys found", http.StatusBadRequest)
 		return
@@ -805,6 +861,7 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 
 	// Generate the presigned URL
 	generator := auth.NewPresignedURLGenerator("us-east-1", "")
+
 	presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
 		Method:      req.Method,
 		Bucket:      req.Bucket,

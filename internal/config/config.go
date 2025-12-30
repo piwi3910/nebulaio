@@ -22,9 +22,11 @@ package config
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,326 +35,142 @@ import (
 	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
-// Config holds all configuration for NebulaIO
+// Config holds all configuration for NebulaIO.
 type Config struct {
-	// Node identification
-	NodeID   string `mapstructure:"node_id"`
-	NodeName string `mapstructure:"node_name"`
-
-	// Data storage
-	DataDir string `mapstructure:"data_dir"`
-
-	// Network ports
-	S3Port      int `mapstructure:"s3_port"`
-	AdminPort   int `mapstructure:"admin_port"`
-	ConsolePort int `mapstructure:"console_port"`
-
-	// Cluster configuration
-	Cluster ClusterConfig `mapstructure:"cluster"`
-
-	// Storage configuration
-	Storage StorageConfig `mapstructure:"storage"`
-
-	// Cache configuration
-	Cache CacheConfig `mapstructure:"cache"`
-
-	// Firewall configuration
-	Firewall FirewallConfig `mapstructure:"firewall"`
-
-	// Audit configuration
-	Audit AuditConfig `mapstructure:"audit"`
-
-	// Auth configuration
-	Auth AuthConfig `mapstructure:"auth"`
-
-	// S3 Express configuration (high-performance S3)
-	S3Express S3ExpressConfig `mapstructure:"s3_express"`
-
-	// Iceberg configuration (table format)
-	Iceberg IcebergConfig `mapstructure:"iceberg"`
-
-	// MCP Server configuration (AI agents)
-	MCP MCPConfig `mapstructure:"mcp"`
-
-	// GPUDirect configuration (GPU-to-storage)
-	GPUDirect GPUDirectConfig `mapstructure:"gpudirect"`
-
-	// DPU configuration (BlueField SmartNIC)
-	DPU DPUConfig `mapstructure:"dpu"`
-
-	// RDMA configuration (remote direct memory access)
-	RDMA RDMAConfig `mapstructure:"rdma"`
-
-	// NIM configuration (NVIDIA Inference Microservices)
-	NIM NIMConfig `mapstructure:"nim"`
-
-	// TLS configuration
-	TLS TLSConfig `mapstructure:"tls"`
-
-	// Logging
-	LogLevel string `mapstructure:"log_level"`
+	GPUDirect   GPUDirectConfig `mapstructure:"gpudirect"`
+	NodeID      string          `mapstructure:"node_id"`
+	NodeName    string          `mapstructure:"node_name"`
+	DataDir     string          `mapstructure:"data_dir"`
+	LogLevel    string          `mapstructure:"log_level"`
+	Storage     StorageConfig   `mapstructure:"storage"`
+	TLS         TLSConfig       `mapstructure:"tls"`
+	NIM         NIMConfig       `mapstructure:"nim"`
+	Cache       CacheConfig     `mapstructure:"cache"`
+	Audit       AuditConfig     `mapstructure:"audit"`
+	Firewall    FirewallConfig  `mapstructure:"firewall"`
+	Cluster     ClusterConfig   `mapstructure:"cluster"`
+	Auth        AuthConfig      `mapstructure:"auth"`
+	Iceberg     IcebergConfig   `mapstructure:"iceberg"`
+	S3Express   S3ExpressConfig `mapstructure:"s3_express"`
+	MCP         MCPConfig       `mapstructure:"mcp"`
+	RDMA        RDMAConfig      `mapstructure:"rdma"`
+	DPU         DPUConfig       `mapstructure:"dpu"`
+	Lambda      LambdaConfig    `mapstructure:"lambda"`
+	ConsolePort int             `mapstructure:"console_port"`
+	AdminPort   int             `mapstructure:"admin_port"`
+	S3Port      int             `mapstructure:"s3_port"`
 }
 
-// TLSConfig holds TLS configuration for secure communications
+// TLSConfig holds TLS configuration for secure communications.
 type TLSConfig struct {
-	// Enabled enables TLS for all HTTP servers (S3, Admin, Console)
-	// Default: true (secure by default)
-	Enabled bool `mapstructure:"enabled"`
-
-	// CertDir is the directory for storing certificates
-	// If certificates don't exist, self-signed ones will be generated
-	CertDir string `mapstructure:"cert_dir"`
-
-	// CertFile is the path to a custom TLS certificate file
-	// If not specified, a self-signed certificate will be generated
-	CertFile string `mapstructure:"cert_file"`
-
-	// KeyFile is the path to a custom TLS private key file
-	// Required if CertFile is specified
-	KeyFile string `mapstructure:"key_file"`
-
-	// CAFile is the path to a custom CA certificate for client verification
-	// If not specified, the generated CA will be used
-	CAFile string `mapstructure:"ca_file"`
-
-	// MinVersion is the minimum TLS version (1.2 or 1.3)
-	// Default: 1.2
-	MinVersion string `mapstructure:"min_version"`
-
-	// RequireClientCert enables mutual TLS (client certificate verification)
-	// Default: false (for external clients, true for internal cluster communication)
-	RequireClientCert bool `mapstructure:"require_client_cert"`
-
-	// AutoGenerate enables automatic generation of self-signed certificates
-	// Default: true
-	AutoGenerate bool `mapstructure:"auto_generate"`
-
-	// Organization for generated certificates
-	Organization string `mapstructure:"organization"`
-
-	// ValidityDays is the validity period for generated certificates in days
-	// Default: 365
-	ValidityDays int `mapstructure:"validity_days"`
-
-	// DNSNames are additional DNS names for the certificate
-	// localhost and the node name are always included
-	DNSNames []string `mapstructure:"dns_names"`
-
-	// IPAddresses are additional IP addresses for the certificate
-	// 127.0.0.1 and detected local IPs are always included
-	IPAddresses []string `mapstructure:"ip_addresses"`
+	CertDir           string   `mapstructure:"cert_dir"`
+	CertFile          string   `mapstructure:"cert_file"`
+	KeyFile           string   `mapstructure:"key_file"`
+	CAFile            string   `mapstructure:"ca_file"`
+	MinVersion        string   `mapstructure:"min_version"`
+	Organization      string   `mapstructure:"organization"`
+	DNSNames          []string `mapstructure:"dns_names"`
+	IPAddresses       []string `mapstructure:"ip_addresses"`
+	ValidityDays      int      `mapstructure:"validity_days"`
+	Enabled           bool     `mapstructure:"enabled"`
+	RequireClientCert bool     `mapstructure:"require_client_cert"`
+	AutoGenerate      bool     `mapstructure:"auto_generate"`
 }
 
-// ClusterConfig holds cluster-related configuration
+// ClusterConfig holds cluster-related configuration.
 type ClusterConfig struct {
-	// Bootstrap indicates if this node should bootstrap a new cluster
-	Bootstrap bool `mapstructure:"bootstrap"`
-
-	// JoinAddresses is a list of existing cluster nodes to join (gossip addresses)
-	JoinAddresses []string `mapstructure:"join_addresses"`
-
-	// AdvertiseAddress is the address advertised to other nodes
-	// If empty, the system will try to detect the outbound IP
-	AdvertiseAddress string `mapstructure:"advertise_address"`
-
-	// RaftPort is the port used for Raft consensus (Dragonboat RaftAddress)
-	RaftPort int `mapstructure:"raft_port"`
-
-	// GossipPort is the port used for gossip-based node discovery
-	GossipPort int `mapstructure:"gossip_port"`
-
-	// NodeRole is the role of this node: "gateway" or "storage"
-	// Gateway nodes handle S3 requests, storage nodes store data
-	// Default is "storage" which does both
-	NodeRole string `mapstructure:"node_role"`
-
-	// ClusterName is an optional name for the cluster
-	ClusterName string `mapstructure:"cluster_name"`
-
-	// ExpectNodes is the expected number of nodes for initial cluster formation
-	// Only used during bootstrap to wait for the expected number of nodes
-	ExpectNodes int `mapstructure:"expect_nodes"`
-
-	// RetryJoinMaxAttempts is the maximum number of join attempts
-	RetryJoinMaxAttempts int `mapstructure:"retry_join_max_attempts"`
-
-	// RetryJoinInterval is the interval between join attempts
-	RetryJoinInterval time.Duration `mapstructure:"retry_join_interval"`
-
-	// ShardID is the Dragonboat shard (cluster) ID for this node
-	// Each logical Raft cluster has a unique shard ID
-	ShardID uint64 `mapstructure:"shard_id"`
-
-	// ReplicaID is the unique replica ID for this node within the shard
-	// If set to 0, a replica ID will be auto-generated
-	ReplicaID uint64 `mapstructure:"replica_id"`
-
-	// WALDir is the directory for Write-Ahead Log storage
-	// Keeping WAL separate from data can improve performance
-	WALDir string `mapstructure:"wal_dir"`
-
-	// SnapshotCount is the number of applied entries before taking a snapshot
-	// Lower values reduce recovery time but increase I/O overhead
-	SnapshotCount uint64 `mapstructure:"snapshot_count"`
-
-	// CompactionOverhead is the number of entries to keep after compaction
-	// This allows some historical data for lagging replicas
-	CompactionOverhead uint64 `mapstructure:"compaction_overhead"`
+	NodeRole             string        `mapstructure:"node_role"`
+	AdvertiseAddress     string        `mapstructure:"advertise_address"`
+	WALDir               string        `mapstructure:"wal_dir"`
+	ClusterName          string        `mapstructure:"cluster_name"`
+	JoinAddresses        []string      `mapstructure:"join_addresses"`
+	RaftPort             int           `mapstructure:"raft_port"`
+	GossipPort           int           `mapstructure:"gossip_port"`
+	ExpectNodes          int           `mapstructure:"expect_nodes"`
+	RetryJoinMaxAttempts int           `mapstructure:"retry_join_max_attempts"`
+	RetryJoinInterval    time.Duration `mapstructure:"retry_join_interval"`
+	ShardID              uint64        `mapstructure:"shard_id"`
+	ReplicaID            uint64        `mapstructure:"replica_id"`
+	SnapshotCount        uint64        `mapstructure:"snapshot_count"`
+	CompactionOverhead   uint64        `mapstructure:"compaction_overhead"`
+	Bootstrap            bool          `mapstructure:"bootstrap"`
 }
 
-// StorageConfig holds storage-related configuration
+// StorageConfig holds storage-related configuration.
 type StorageConfig struct {
-	// Backend type: "fs" (filesystem), "erasure" (distributed), "volume" (high-performance)
-	// This is the default backend used if tier-specific backends are not configured
-	Backend string `mapstructure:"backend"`
-
-	// DefaultStorageClass for new buckets
-	DefaultStorageClass string `mapstructure:"default_storage_class"`
-
-	// MaxObjectSize in bytes (default: 5TB)
-	MaxObjectSize int64 `mapstructure:"max_object_size"`
-
-	// MultipartPartSize default size in bytes
-	MultipartPartSize int64 `mapstructure:"multipart_part_size"`
-
-	// Volume backend specific configuration
-	Volume VolumeStorageConfig `mapstructure:"volume"`
-
-	// Tiering configuration for data lifecycle management
-	Tiering TieringConfig `mapstructure:"tiering"`
-
-	// DefaultRedundancy is the default redundancy configuration for new buckets
-	// This can be overridden at the bucket or object level
-	DefaultRedundancy RedundancyConfig `mapstructure:"default_redundancy"`
-
-	// PlacementGroups configuration
-	PlacementGroups PlacementGroupsConfig `mapstructure:"placement_groups"`
+	Volume              VolumeStorageConfig   `mapstructure:"volume"`
+	Backend             string                `mapstructure:"backend"`
+	DefaultStorageClass string                `mapstructure:"default_storage_class"`
+	PlacementGroups     PlacementGroupsConfig `mapstructure:"placement_groups"`
+	DefaultRedundancy   RedundancyConfig      `mapstructure:"default_redundancy"`
+	Tiering             TieringConfig         `mapstructure:"tiering"`
+	MaxObjectSize       int64                 `mapstructure:"max_object_size"`
+	MultipartPartSize   int64                 `mapstructure:"multipart_part_size"`
 }
 
-// TieringConfig holds configuration for tiered storage
+// TieringConfig holds configuration for tiered storage.
 type TieringConfig struct {
-	// Enabled enables automatic data tiering
-	Enabled bool `mapstructure:"enabled"`
-
-	// Tiers defines the storage tiers with their specific backends
-	Tiers map[string]TierConfig `mapstructure:"tiers"`
-
-	// Policies for automatic data movement
+	Tiers    map[string]TierConfig `mapstructure:"tiers"`
 	Policies []TieringPolicyConfig `mapstructure:"policies"`
+	Enabled  bool                  `mapstructure:"enabled"`
 }
 
-// TierConfig holds configuration for a specific storage tier
+// TierConfig holds configuration for a specific storage tier.
 type TierConfig struct {
-	// Backend type for this tier: "fs", "erasure", "volume", "rawdevice"
-	Backend string `mapstructure:"backend"`
-
-	// DataDir is the data directory for this tier
-	DataDir string `mapstructure:"data_dir"`
-
-	// Device is the raw device path (only for "rawdevice" backend)
-	Device string `mapstructure:"device"`
-
-	// VolumeConfig for volume-based backends
-	VolumeConfig *VolumeStorageConfig `mapstructure:"volume_config,omitempty"`
-
-	// ErasureConfig for erasure-coded backends
-	ErasureConfig *ErasureStorageConfig `mapstructure:"erasure_config,omitempty"`
-
-	// Priority determines preference for new data (lower = preferred)
-	Priority int `mapstructure:"priority"`
-
-	// MaxCapacity is the maximum capacity for this tier (0 = unlimited)
-	MaxCapacity int64 `mapstructure:"max_capacity"`
-
-	// CapacityThreshold triggers migration to next tier when exceeded (0.0-1.0)
-	CapacityThreshold float64 `mapstructure:"capacity_threshold"`
+	VolumeConfig      *VolumeStorageConfig  `mapstructure:"volume_config,omitempty"`
+	ErasureConfig     *ErasureStorageConfig `mapstructure:"erasure_config,omitempty"`
+	Backend           string                `mapstructure:"backend"`
+	DataDir           string                `mapstructure:"data_dir"`
+	Device            string                `mapstructure:"device"`
+	Priority          int                   `mapstructure:"priority"`
+	MaxCapacity       int64                 `mapstructure:"max_capacity"`
+	CapacityThreshold float64               `mapstructure:"capacity_threshold"`
 }
 
-// ErasureStorageConfig holds erasure coding specific configuration
+// ErasureStorageConfig holds erasure coding specific configuration.
 type ErasureStorageConfig struct {
-	// DataShards is the number of data shards
-	DataShards int `mapstructure:"data_shards"`
-
-	// ParityShards is the number of parity shards
-	ParityShards int `mapstructure:"parity_shards"`
-
-	// ShardSize is the size of each shard in bytes
-	ShardSize int64 `mapstructure:"shard_size"`
-
-	// PlacementPolicy determines shard distribution
 	PlacementPolicy string `mapstructure:"placement_policy"`
+	DataShards      int    `mapstructure:"data_shards"`
+	ParityShards    int    `mapstructure:"parity_shards"`
+	ShardSize       int64  `mapstructure:"shard_size"`
 }
 
-// TieringPolicyConfig defines a policy for automatic data movement
+// TieringPolicyConfig defines a policy for automatic data movement.
 type TieringPolicyConfig struct {
-	// Name is the policy identifier
-	Name string `mapstructure:"name"`
-
-	// Enabled activates this policy
-	Enabled bool `mapstructure:"enabled"`
-
-	// SourceTier is the tier to move data from
-	SourceTier string `mapstructure:"source_tier"`
-
-	// DestinationTier is the tier to move data to
-	DestinationTier string `mapstructure:"destination_tier"`
-
-	// Condition defines when to trigger the policy
-	Condition TieringCondition `mapstructure:"condition"`
+	Condition       TieringCondition `mapstructure:"condition"`
+	Name            string           `mapstructure:"name"`
+	SourceTier      string           `mapstructure:"source_tier"`
+	DestinationTier string           `mapstructure:"destination_tier"`
+	Enabled         bool             `mapstructure:"enabled"`
 }
 
-// TieringCondition defines when a tiering policy should trigger
+// TieringCondition defines when a tiering policy should trigger.
 type TieringCondition struct {
-	// Type: "age", "access", "capacity", "cron"
-	Type string `mapstructure:"type"`
-
-	// AgeDays triggers when object is older than N days
-	AgeDays int `mapstructure:"age_days,omitempty"`
-
-	// AccessDays triggers when object hasn't been accessed for N days
-	AccessDays int `mapstructure:"access_days,omitempty"`
-
-	// CapacityPercent triggers when source tier exceeds N% capacity
+	Type            string  `mapstructure:"type"`
+	CronSchedule    string  `mapstructure:"cron_schedule,omitempty"`
+	AgeDays         int     `mapstructure:"age_days,omitempty"`
+	AccessDays      int     `mapstructure:"access_days,omitempty"`
 	CapacityPercent float64 `mapstructure:"capacity_percent,omitempty"`
-
-	// CronSchedule for scheduled migrations
-	CronSchedule string `mapstructure:"cron_schedule,omitempty"`
 }
 
-// RedundancyConfig holds default redundancy configuration
+// RedundancyConfig holds default redundancy configuration.
 type RedundancyConfig struct {
-	// Enabled enables erasure coding by default
-	Enabled bool `mapstructure:"enabled"`
-
-	// DataShards is the default number of data shards
-	DataShards int `mapstructure:"data_shards"`
-
-	// ParityShards is the default number of parity shards
-	ParityShards int `mapstructure:"parity_shards"`
-
-	// PlacementPolicy is the default shard placement policy
-	PlacementPolicy string `mapstructure:"placement_policy"`
-
-	// ReplicationFactor for cross-placement-group DR
-	ReplicationFactor int `mapstructure:"replication_factor"`
+	PlacementPolicy   string `mapstructure:"placement_policy"`
+	DataShards        int    `mapstructure:"data_shards"`
+	ParityShards      int    `mapstructure:"parity_shards"`
+	ReplicationFactor int    `mapstructure:"replication_factor"`
+	Enabled           bool   `mapstructure:"enabled"`
 }
 
-// PlacementGroupsConfig holds placement group configuration
+// PlacementGroupsConfig holds placement group configuration.
 type PlacementGroupsConfig struct {
-	// LocalGroupID is the placement group this node belongs to
-	LocalGroupID string `mapstructure:"local_group_id"`
-
-	// Groups defines all known placement groups
-	Groups []PlacementGroupConfig `mapstructure:"groups"`
-
-	// MinNodesForErasure is minimum nodes needed for distributed erasure coding
-	MinNodesForErasure int `mapstructure:"min_nodes_for_erasure"`
-
-	// ReplicationTargets are placement groups to replicate to for DR
-	ReplicationTargets []string `mapstructure:"replication_targets"`
+	LocalGroupID       string                 `mapstructure:"local_group_id"`
+	Groups             []PlacementGroupConfig `mapstructure:"groups"`
+	ReplicationTargets []string               `mapstructure:"replication_targets"`
+	MinNodesForErasure int                    `mapstructure:"min_nodes_for_erasure"`
 }
 
-// PlacementGroupConfig defines a single placement group
+// PlacementGroupConfig defines a single placement group.
 type PlacementGroupConfig struct {
 	// ID is the unique identifier for this placement group
 	ID string `mapstructure:"id"`
@@ -373,37 +191,23 @@ type PlacementGroupConfig struct {
 	MaxNodes int `mapstructure:"max_nodes"`
 }
 
-// VolumeStorageConfig holds configuration for the volume storage backend
+// VolumeStorageConfig holds configuration for the volume storage backend.
 type VolumeStorageConfig struct {
-	// MaxVolumeSize is the maximum size of each volume file in bytes (default: 32GB)
-	MaxVolumeSize uint64 `mapstructure:"max_volume_size"`
-
-	// AutoCreate enables automatic creation of new volumes when needed (default: true)
-	AutoCreate bool `mapstructure:"auto_create"`
-
-	// DirectIO configuration for bypassing kernel page cache
-	DirectIO DirectIOStorageConfig `mapstructure:"direct_io"`
-
-	// RawDevices configuration for raw block device access
-	RawDevices RawDevicesConfig `mapstructure:"raw_devices"`
-
-	// TierDirectories for directory-based tiering (alternative to raw devices)
 	TierDirectories TierDirectoriesConfig `mapstructure:"tier_directories"`
+	RawDevices      RawDevicesConfig      `mapstructure:"raw_devices"`
+	DirectIO        DirectIOStorageConfig `mapstructure:"direct_io"`
+	MaxVolumeSize   uint64                `mapstructure:"max_volume_size"`
+	AutoCreate      bool                  `mapstructure:"auto_create"`
 }
 
-// RawDevicesConfig holds configuration for raw block device access
+// RawDevicesConfig holds configuration for raw block device access.
 type RawDevicesConfig struct {
-	// Enabled enables raw block device mode (bypasses filesystem)
-	Enabled bool `mapstructure:"enabled"`
-
-	// Safety configuration for device access
-	Safety RawDeviceSafetyConfig `mapstructure:"safety"`
-
-	// Devices is the list of block devices to use
-	Devices []RawDeviceConfig `mapstructure:"devices"`
+	Devices []RawDeviceConfig     `mapstructure:"devices"`
+	Safety  RawDeviceSafetyConfig `mapstructure:"safety"`
+	Enabled bool                  `mapstructure:"enabled"`
 }
 
-// RawDeviceSafetyConfig holds safety configuration for raw device access
+// RawDeviceSafetyConfig holds safety configuration for raw device access.
 type RawDeviceSafetyConfig struct {
 	// CheckFilesystem verifies device has no existing filesystem before use
 	CheckFilesystem bool `mapstructure:"check_filesystem"`
@@ -418,7 +222,7 @@ type RawDeviceSafetyConfig struct {
 	ExclusiveLock bool `mapstructure:"exclusive_lock"`
 }
 
-// RawDeviceConfig holds configuration for a single raw block device
+// RawDeviceConfig holds configuration for a single raw block device.
 type RawDeviceConfig struct {
 	// Path is the device path (e.g., /dev/nvme0n1, /dev/sda)
 	Path string `mapstructure:"path"`
@@ -430,7 +234,7 @@ type RawDeviceConfig struct {
 	Size uint64 `mapstructure:"size"`
 }
 
-// TierDirectoriesConfig holds directory paths for tiered storage
+// TierDirectoriesConfig holds directory paths for tiered storage.
 type TierDirectoriesConfig struct {
 	// Hot tier directory (mount NVMe here)
 	Hot string `mapstructure:"hot"`
@@ -442,120 +246,55 @@ type TierDirectoriesConfig struct {
 	Cold string `mapstructure:"cold"`
 }
 
-// DirectIOStorageConfig holds direct I/O configuration for volume storage
+// DirectIOStorageConfig holds direct I/O configuration for volume storage.
 type DirectIOStorageConfig struct {
-	// Enabled enables direct I/O (O_DIRECT on Linux) for bypassing kernel cache
-	// This provides more predictable latency and avoids double-buffering
-	// Default: true on Linux, false on other platforms
-	Enabled bool `mapstructure:"enabled"`
-
-	// BlockAlignment is the alignment requirement for buffers and offsets
-	// Must be a power of 2, typically 512 or 4096 bytes (default: 4096)
-	BlockAlignment int `mapstructure:"block_alignment"`
-
-	// UseMemoryPool enables pooling of aligned buffers for reduced allocations
-	// Default: true
-	UseMemoryPool bool `mapstructure:"use_memory_pool"`
-
-	// FallbackOnError falls back to buffered I/O if direct I/O fails
-	// Default: true
+	BlockAlignment  int  `mapstructure:"block_alignment"`
+	Enabled         bool `mapstructure:"enabled"`
+	UseMemoryPool   bool `mapstructure:"use_memory_pool"`
 	FallbackOnError bool `mapstructure:"fallback_on_error"`
 }
 
-// CacheConfig holds DRAM cache configuration for high-performance workloads
+// CacheConfig holds DRAM cache configuration for high-performance workloads.
 type CacheConfig struct {
-	// Enabled enables the DRAM cache
-	Enabled bool `mapstructure:"enabled"`
-
-	// MaxSize is the maximum cache size in bytes (default: 8GB)
-	MaxSize int64 `mapstructure:"max_size"`
-
-	// ShardCount is the number of cache shards for lock reduction (default: 256)
-	ShardCount int `mapstructure:"shard_count"`
-
-	// EntryMaxSize is the maximum size for a single cache entry (default: 256MB)
-	EntryMaxSize int64 `mapstructure:"entry_max_size"`
-
-	// TTL is the default time-to-live in seconds (default: 3600)
-	TTL int `mapstructure:"ttl"`
-
-	// EvictionPolicy is the cache eviction policy: lru, lfu, arc (default: arc)
-	EvictionPolicy string `mapstructure:"eviction_policy"`
-
-	// PrefetchEnabled enables predictive prefetching for AI/ML workloads
-	PrefetchEnabled bool `mapstructure:"prefetch_enabled"`
-
-	// PrefetchThreshold is the access count before enabling prefetch
-	PrefetchThreshold int `mapstructure:"prefetch_threshold"`
-
-	// PrefetchAhead is the number of chunks to prefetch ahead
-	PrefetchAhead int `mapstructure:"prefetch_ahead"`
-
-	// ZeroCopyEnabled enables zero-copy reads where supported
-	ZeroCopyEnabled bool `mapstructure:"zero_copy_enabled"`
-
-	// DistributedMode enables distributed cache across cluster nodes
-	DistributedMode bool `mapstructure:"distributed_mode"`
-
-	// ReplicationFactor for distributed cache (default: 2)
-	ReplicationFactor int `mapstructure:"replication_factor"`
-
-	// WarmupEnabled enables cache warmup on startup
-	WarmupEnabled bool `mapstructure:"warmup_enabled"`
-
-	// WarmupKeys are the keys to pre-warm on startup
-	WarmupKeys []string `mapstructure:"warmup_keys"`
+	EvictionPolicy    string   `mapstructure:"eviction_policy"`
+	WarmupKeys        []string `mapstructure:"warmup_keys"`
+	ReplicationFactor int      `mapstructure:"replication_factor"`
+	MaxSize           int64    `mapstructure:"max_size"`
+	ShardCount        int      `mapstructure:"shard_count"`
+	EntryMaxSize      int64    `mapstructure:"entry_max_size"`
+	TTL               int      `mapstructure:"ttl"`
+	PrefetchThreshold int      `mapstructure:"prefetch_threshold"`
+	PrefetchAhead     int      `mapstructure:"prefetch_ahead"`
+	PrefetchEnabled   bool     `mapstructure:"prefetch_enabled"`
+	DistributedMode   bool     `mapstructure:"distributed_mode"`
+	ZeroCopyEnabled   bool     `mapstructure:"zero_copy_enabled"`
+	WarmupEnabled     bool     `mapstructure:"warmup_enabled"`
+	Enabled           bool     `mapstructure:"enabled"`
 }
 
-// FirewallConfig holds data firewall configuration for QoS and rate limiting
+// FirewallConfig holds data firewall configuration for QoS and rate limiting.
 type FirewallConfig struct {
-	// Enabled enables the data firewall
-	Enabled bool `mapstructure:"enabled"`
-
-	// DefaultPolicy is the default action: allow, deny
-	DefaultPolicy string `mapstructure:"default_policy"`
-
-	// RateLimiting configures request rate limiting
-	RateLimiting RateLimitingConfig `mapstructure:"rate_limiting"`
-
-	// Bandwidth configures bandwidth throttling
-	Bandwidth BandwidthConfig `mapstructure:"bandwidth"`
-
-	// Connections configures connection limits
-	Connections ConnectionsConfig `mapstructure:"connections"`
-
-	// IPAllowlist is a list of allowed IP addresses/CIDRs
-	IPAllowlist []string `mapstructure:"ip_allowlist"`
-
-	// IPBlocklist is a list of blocked IP addresses/CIDRs
-	IPBlocklist []string `mapstructure:"ip_blocklist"`
-
-	// AuditEnabled enables firewall audit logging
-	AuditEnabled bool `mapstructure:"audit_enabled"`
+	DefaultPolicy string             `mapstructure:"default_policy"`
+	IPAllowlist   []string           `mapstructure:"ip_allowlist"`
+	IPBlocklist   []string           `mapstructure:"ip_blocklist"`
+	Connections   ConnectionsConfig  `mapstructure:"connections"`
+	RateLimiting  RateLimitingConfig `mapstructure:"rate_limiting"`
+	Bandwidth     BandwidthConfig    `mapstructure:"bandwidth"`
+	Enabled       bool               `mapstructure:"enabled"`
+	AuditEnabled  bool               `mapstructure:"audit_enabled"`
 }
 
-// RateLimitingConfig configures request rate limiting
+// RateLimitingConfig configures request rate limiting.
 type RateLimitingConfig struct {
-	// Enabled enables rate limiting
-	Enabled bool `mapstructure:"enabled"`
-
-	// RequestsPerSecond is the default requests per second limit
-	RequestsPerSecond int `mapstructure:"requests_per_second"`
-
-	// BurstSize is the maximum burst size
-	BurstSize int `mapstructure:"burst_size"`
-
-	// PerUser enables per-user rate limiting
-	PerUser bool `mapstructure:"per_user"`
-
-	// PerIP enables per-IP rate limiting
-	PerIP bool `mapstructure:"per_ip"`
-
-	// PerBucket enables per-bucket rate limiting
-	PerBucket bool `mapstructure:"per_bucket"`
+	RequestsPerSecond int  `mapstructure:"requests_per_second"`
+	BurstSize         int  `mapstructure:"burst_size"`
+	Enabled           bool `mapstructure:"enabled"`
+	PerUser           bool `mapstructure:"per_user"`
+	PerIP             bool `mapstructure:"per_ip"`
+	PerBucket         bool `mapstructure:"per_bucket"`
 }
 
-// BandwidthConfig configures bandwidth throttling
+// BandwidthConfig configures bandwidth throttling.
 type BandwidthConfig struct {
 	// Enabled enables bandwidth throttling
 	Enabled bool `mapstructure:"enabled"`
@@ -570,7 +309,7 @@ type BandwidthConfig struct {
 	MaxBytesPerSecondPerBucket int64 `mapstructure:"max_bytes_per_second_per_bucket"`
 }
 
-// ConnectionsConfig configures connection limits
+// ConnectionsConfig configures connection limits.
 type ConnectionsConfig struct {
 	// Enabled enables connection limiting
 	Enabled bool `mapstructure:"enabled"`
@@ -588,76 +327,39 @@ type ConnectionsConfig struct {
 	IdleTimeoutSeconds int `mapstructure:"idle_timeout_seconds"`
 }
 
-// AuditConfig holds enhanced audit logging configuration
+// AuditConfig holds enhanced audit logging configuration.
 type AuditConfig struct {
-	// Enabled enables audit logging
-	Enabled bool `mapstructure:"enabled"`
-
-	// ComplianceMode sets the compliance standard (none, soc2, pci, hipaa, gdpr, fedramp)
-	ComplianceMode string `mapstructure:"compliance_mode"`
-
-	// FilePath is the path to the audit log file
-	FilePath string `mapstructure:"file_path"`
-
-	// RetentionDays is how long to keep audit logs
-	RetentionDays int `mapstructure:"retention_days"`
-
-	// BufferSize is the async buffer size
-	BufferSize int `mapstructure:"buffer_size"`
-
-	// IntegrityEnabled enables cryptographic integrity verification
-	IntegrityEnabled bool `mapstructure:"integrity_enabled"`
-
-	// IntegritySecret is the HMAC secret for integrity (auto-generated if empty)
-	IntegritySecret string `mapstructure:"integrity_secret"`
-
-	// MaskSensitiveData masks sensitive data like passwords
-	MaskSensitiveData bool `mapstructure:"mask_sensitive_data"`
-
-	// Rotation configures log rotation
-	Rotation AuditRotationConfig `mapstructure:"rotation"`
-
-	// Webhook configures webhook output
-	Webhook AuditWebhookConfig `mapstructure:"webhook"`
+	ComplianceMode    string              `mapstructure:"compliance_mode"`
+	FilePath          string              `mapstructure:"file_path"`
+	IntegritySecret   string              `mapstructure:"integrity_secret"`
+	Webhook           AuditWebhookConfig  `mapstructure:"webhook"`
+	Rotation          AuditRotationConfig `mapstructure:"rotation"`
+	RetentionDays     int                 `mapstructure:"retention_days"`
+	BufferSize        int                 `mapstructure:"buffer_size"`
+	Enabled           bool                `mapstructure:"enabled"`
+	IntegrityEnabled  bool                `mapstructure:"integrity_enabled"`
+	MaskSensitiveData bool                `mapstructure:"mask_sensitive_data"`
 }
 
-// AuditRotationConfig configures audit log rotation
+// AuditRotationConfig configures audit log rotation.
 type AuditRotationConfig struct {
-	// Enabled enables log rotation
-	Enabled bool `mapstructure:"enabled"`
-
-	// MaxSizeMB is the max file size before rotation
-	MaxSizeMB int `mapstructure:"max_size_mb"`
-
-	// MaxBackups is the max number of old files to keep
-	MaxBackups int `mapstructure:"max_backups"`
-
-	// MaxAgeDays is the max age of old files
-	MaxAgeDays int `mapstructure:"max_age_days"`
-
-	// Compress compresses rotated files
-	Compress bool `mapstructure:"compress"`
+	MaxSizeMB  int  `mapstructure:"max_size_mb"`
+	MaxBackups int  `mapstructure:"max_backups"`
+	MaxAgeDays int  `mapstructure:"max_age_days"`
+	Enabled    bool `mapstructure:"enabled"`
+	Compress   bool `mapstructure:"compress"`
 }
 
-// AuditWebhookConfig configures audit webhook output
+// AuditWebhookConfig configures audit webhook output.
 type AuditWebhookConfig struct {
-	// Enabled enables webhook output
-	Enabled bool `mapstructure:"enabled"`
-
-	// URL is the webhook endpoint URL
-	URL string `mapstructure:"url"`
-
-	// AuthToken for authenticated webhooks
-	AuthToken string `mapstructure:"auth_token"`
-
-	// BatchSize for batched outputs
-	BatchSize int `mapstructure:"batch_size"`
-
-	// FlushIntervalSeconds is how often to flush batches
-	FlushIntervalSeconds int `mapstructure:"flush_interval_seconds"`
+	URL                  string `mapstructure:"url"`
+	AuthToken            string `mapstructure:"auth_token"`
+	BatchSize            int    `mapstructure:"batch_size"`
+	FlushIntervalSeconds int    `mapstructure:"flush_interval_seconds"`
+	Enabled              bool   `mapstructure:"enabled"`
 }
 
-// AuthConfig holds authentication configuration
+// AuthConfig holds authentication configuration.
 type AuthConfig struct {
 	// RootUser is the initial admin username
 	RootUser string `mapstructure:"root_user"`
@@ -675,28 +377,17 @@ type AuthConfig struct {
 	RefreshTokenExpiry int `mapstructure:"refresh_token_expiry"`
 }
 
-// S3ExpressConfig holds S3 Express One Zone configuration
+// S3ExpressConfig holds S3 Express One Zone configuration.
 type S3ExpressConfig struct {
-	// Enabled enables S3 Express One Zone support
-	Enabled bool `mapstructure:"enabled"`
-
-	// Zones defines the available express zones
-	Zones []ExpressZoneConfig `mapstructure:"zones"`
-
-	// DefaultZone is the default zone for new directory buckets
-	DefaultZone string `mapstructure:"default_zone"`
-
-	// SessionDuration is the session token duration in seconds
-	SessionDuration int `mapstructure:"session_duration"`
-
-	// MaxAppendSize is the maximum size for atomic append operations
-	MaxAppendSize int64 `mapstructure:"max_append_size"`
-
-	// EnableAtomicAppend enables atomic append operations
-	EnableAtomicAppend bool `mapstructure:"enable_atomic_append"`
+	DefaultZone        string              `mapstructure:"default_zone"`
+	Zones              []ExpressZoneConfig `mapstructure:"zones"`
+	SessionDuration    int                 `mapstructure:"session_duration"`
+	MaxAppendSize      int64               `mapstructure:"max_append_size"`
+	Enabled            bool                `mapstructure:"enabled"`
+	EnableAtomicAppend bool                `mapstructure:"enable_atomic_append"`
 }
 
-// ExpressZoneConfig defines an S3 Express zone
+// ExpressZoneConfig defines an S3 Express zone.
 type ExpressZoneConfig struct {
 	// Name is the zone identifier (e.g., "use1-az1")
 	Name string `mapstructure:"name"`
@@ -714,214 +405,113 @@ type ExpressZoneConfig struct {
 	MaxThroughputMBps int `mapstructure:"max_throughput_mbps"`
 }
 
-// IcebergConfig holds Apache Iceberg table format configuration
+// IcebergConfig holds Apache Iceberg table format configuration.
 type IcebergConfig struct {
-	// Enabled enables Iceberg table support
-	Enabled bool `mapstructure:"enabled"`
-
-	// CatalogType is the catalog implementation (rest, hive, glue)
-	CatalogType string `mapstructure:"catalog_type"`
-
-	// CatalogURI is the catalog service URI
-	CatalogURI string `mapstructure:"catalog_uri"`
-
-	// Warehouse is the default warehouse location
-	Warehouse string `mapstructure:"warehouse"`
-
-	// DefaultFileFormat is the default file format (parquet, orc, avro)
-	DefaultFileFormat string `mapstructure:"default_file_format"`
-
-	// MetadataPath is where table metadata is stored
-	MetadataPath string `mapstructure:"metadata_path"`
-
-	// SnapshotRetention is how many snapshots to retain
-	SnapshotRetention int `mapstructure:"snapshot_retention"`
-
-	// ExpireSnapshotsOlderThan in hours
-	ExpireSnapshotsOlderThan int `mapstructure:"expire_snapshots_older_than"`
-
-	// EnableACID enables ACID transaction support
-	EnableACID bool `mapstructure:"enable_acid"`
+	CatalogType              string `mapstructure:"catalog_type"`
+	CatalogURI               string `mapstructure:"catalog_uri"`
+	Warehouse                string `mapstructure:"warehouse"`
+	DefaultFileFormat        string `mapstructure:"default_file_format"`
+	MetadataPath             string `mapstructure:"metadata_path"`
+	SnapshotRetention        int    `mapstructure:"snapshot_retention"`
+	ExpireSnapshotsOlderThan int    `mapstructure:"expire_snapshots_older_than"`
+	Enabled                  bool   `mapstructure:"enabled"`
+	EnableACID               bool   `mapstructure:"enable_acid"`
 }
 
-// MCPConfig holds Model Context Protocol server configuration
+// MCPConfig holds Model Context Protocol server configuration.
 type MCPConfig struct {
-	// Enabled enables the MCP server
-	Enabled bool `mapstructure:"enabled"`
-
-	// Port is the MCP server port
-	Port int `mapstructure:"port"`
-
-	// MaxConnections is the maximum concurrent connections
-	MaxConnections int `mapstructure:"max_connections"`
-
-	// EnableTools enables tool execution
-	EnableTools bool `mapstructure:"enable_tools"`
-
-	// EnableResources enables resource access
-	EnableResources bool `mapstructure:"enable_resources"`
-
-	// EnablePrompts enables prompt templates
-	EnablePrompts bool `mapstructure:"enable_prompts"`
-
-	// AllowedOrigins for CORS
-	AllowedOrigins []string `mapstructure:"allowed_origins"`
-
-	// AuthRequired requires authentication for MCP access
-	AuthRequired bool `mapstructure:"auth_required"`
-
-	// RateLimitPerMinute is requests per minute limit
-	RateLimitPerMinute int `mapstructure:"rate_limit_per_minute"`
+	AllowedOrigins     []string `mapstructure:"allowed_origins"`
+	Port               int      `mapstructure:"port"`
+	MaxConnections     int      `mapstructure:"max_connections"`
+	RateLimitPerMinute int      `mapstructure:"rate_limit_per_minute"`
+	Enabled            bool     `mapstructure:"enabled"`
+	EnableTools        bool     `mapstructure:"enable_tools"`
+	EnableResources    bool     `mapstructure:"enable_resources"`
+	EnablePrompts      bool     `mapstructure:"enable_prompts"`
+	AuthRequired       bool     `mapstructure:"auth_required"`
 }
 
-// GPUDirectConfig holds GPUDirect Storage configuration
+// GPUDirectConfig holds GPUDirect Storage configuration.
 type GPUDirectConfig struct {
-	// Enabled enables GPUDirect Storage support
-	Enabled bool `mapstructure:"enabled"`
-
-	// Devices is a list of GPU device IDs to use
-	Devices []int `mapstructure:"devices"`
-
-	// BufferPoolSize is the GPU buffer pool size in bytes
-	BufferPoolSize int64 `mapstructure:"buffer_pool_size"`
-
-	// MaxTransferSize is the maximum single transfer size
-	MaxTransferSize int64 `mapstructure:"max_transfer_size"`
-
-	// EnableAsync enables asynchronous transfers
-	EnableAsync bool `mapstructure:"enable_async"`
-
-	// CUDAStreamCount is the number of CUDA streams per GPU
-	CUDAStreamCount int `mapstructure:"cuda_stream_count"`
-
-	// EnableP2P enables peer-to-peer GPU transfers
-	EnableP2P bool `mapstructure:"enable_p2p"`
-
-	// NVMePath is the path pattern for NVMe devices
-	NVMePath string `mapstructure:"nvme_path"`
+	NVMePath        string `mapstructure:"nvme_path"`
+	Devices         []int  `mapstructure:"devices"`
+	BufferPoolSize  int64  `mapstructure:"buffer_pool_size"`
+	MaxTransferSize int64  `mapstructure:"max_transfer_size"`
+	CUDAStreamCount int    `mapstructure:"cuda_stream_count"`
+	Enabled         bool   `mapstructure:"enabled"`
+	EnableAsync     bool   `mapstructure:"enable_async"`
+	EnableP2P       bool   `mapstructure:"enable_p2p"`
 }
 
-// DPUConfig holds BlueField DPU configuration
+// DPUConfig holds BlueField DPU configuration.
 type DPUConfig struct {
-	// Enabled enables DPU offload support
-	Enabled bool `mapstructure:"enabled"`
-
-	// DeviceIndex is the DPU device index to use
-	DeviceIndex int `mapstructure:"device_index"`
-
-	// EnableCrypto enables crypto offload
-	EnableCrypto bool `mapstructure:"enable_crypto"`
-
-	// EnableCompression enables compression offload
-	EnableCompression bool `mapstructure:"enable_compression"`
-
-	// EnableStorage enables storage offload
-	EnableStorage bool `mapstructure:"enable_storage"`
-
-	// EnableNetwork enables network offload
-	EnableNetwork bool `mapstructure:"enable_network"`
-
-	// EnableRDMA enables RDMA offload via DPU
-	EnableRDMA bool `mapstructure:"enable_rdma"`
-
-	// EnableRegex enables regex offload
-	EnableRegex bool `mapstructure:"enable_regex"`
-
-	// HealthCheckInterval in seconds
-	HealthCheckInterval int `mapstructure:"health_check_interval"`
-
-	// FallbackOnError falls back to CPU on DPU errors
-	FallbackOnError bool `mapstructure:"fallback_on_error"`
-
-	// MinSizeForOffload minimum data size to offload (bytes)
-	MinSizeForOffload int `mapstructure:"min_size_for_offload"`
+	DeviceIndex         int  `mapstructure:"device_index"`
+	HealthCheckInterval int  `mapstructure:"health_check_interval"`
+	MinSizeForOffload   int  `mapstructure:"min_size_for_offload"`
+	Enabled             bool `mapstructure:"enabled"`
+	EnableCrypto        bool `mapstructure:"enable_crypto"`
+	EnableCompression   bool `mapstructure:"enable_compression"`
+	EnableStorage       bool `mapstructure:"enable_storage"`
+	EnableNetwork       bool `mapstructure:"enable_network"`
+	EnableRDMA          bool `mapstructure:"enable_rdma"`
+	EnableRegex         bool `mapstructure:"enable_regex"`
+	FallbackOnError     bool `mapstructure:"fallback_on_error"`
 }
 
-// RDMAConfig holds RDMA transport configuration
+// RDMAConfig holds RDMA transport configuration.
 type RDMAConfig struct {
-	// Enabled enables RDMA transport
-	Enabled bool `mapstructure:"enabled"`
-
-	// Port is the RDMA listener port
-	Port int `mapstructure:"port"`
-
-	// DeviceName is the RDMA device name (e.g., "mlx5_0")
-	DeviceName string `mapstructure:"device_name"`
-
-	// GIDIndex is the GID index for RoCE
-	GIDIndex int `mapstructure:"gid_index"`
-
-	// MaxSendWR is max send work requests per QP
-	MaxSendWR int `mapstructure:"max_send_wr"`
-
-	// MaxRecvWR is max receive work requests per QP
-	MaxRecvWR int `mapstructure:"max_recv_wr"`
-
-	// MaxSendSGE is max scatter/gather elements per send
-	MaxSendSGE int `mapstructure:"max_send_sge"`
-
-	// MaxRecvSGE is max scatter/gather elements per receive
-	MaxRecvSGE int `mapstructure:"max_recv_sge"`
-
-	// MaxInlineData is max inline data size
-	MaxInlineData int `mapstructure:"max_inline_data"`
-
-	// MemoryPoolSize is the registered memory pool size
-	MemoryPoolSize int64 `mapstructure:"memory_pool_size"`
-
-	// EnableZeroCopy enables zero-copy data transfers
-	EnableZeroCopy bool `mapstructure:"enable_zero_copy"`
-
-	// FallbackToTCP falls back to TCP if RDMA unavailable
-	FallbackToTCP bool `mapstructure:"fallback_to_tcp"`
+	DeviceName     string `mapstructure:"device_name"`
+	Port           int    `mapstructure:"port"`
+	GIDIndex       int    `mapstructure:"gid_index"`
+	MaxSendWR      int    `mapstructure:"max_send_wr"`
+	MaxRecvWR      int    `mapstructure:"max_recv_wr"`
+	MaxSendSGE     int    `mapstructure:"max_send_sge"`
+	MaxRecvSGE     int    `mapstructure:"max_recv_sge"`
+	MaxInlineData  int    `mapstructure:"max_inline_data"`
+	MemoryPoolSize int64  `mapstructure:"memory_pool_size"`
+	Enabled        bool   `mapstructure:"enabled"`
+	EnableZeroCopy bool   `mapstructure:"enable_zero_copy"`
+	FallbackToTCP  bool   `mapstructure:"fallback_to_tcp"`
 }
 
-// NIMConfig holds NVIDIA NIM Microservices configuration
+// NIMConfig holds NVIDIA NIM Microservices configuration.
 type NIMConfig struct {
-	// Enabled enables NIM integration
-	Enabled bool `mapstructure:"enabled"`
-
-	// Endpoints are NIM server endpoints
-	Endpoints []string `mapstructure:"endpoints"`
-
-	// APIKey is the NVIDIA API key
-	APIKey string `mapstructure:"api_key"`
-
-	// OrganizationID is the NVIDIA organization ID
-	OrganizationID string `mapstructure:"organization_id"`
-
-	// DefaultModel is the default model for inference
-	DefaultModel string `mapstructure:"default_model"`
-
-	// Timeout is the inference timeout in seconds
-	Timeout int `mapstructure:"timeout"`
-
-	// MaxRetries for failed requests
-	MaxRetries int `mapstructure:"max_retries"`
-
-	// MaxBatchSize for batch inference
-	MaxBatchSize int `mapstructure:"max_batch_size"`
-
-	// EnableStreaming enables streaming responses
-	EnableStreaming bool `mapstructure:"enable_streaming"`
-
-	// CacheResults enables inference result caching
-	CacheResults bool `mapstructure:"cache_results"`
-
-	// CacheTTL is cache TTL in seconds
-	CacheTTL int `mapstructure:"cache_ttl"`
-
-	// EnableMetrics enables detailed metrics
-	EnableMetrics bool `mapstructure:"enable_metrics"`
-
-	// ProcessOnUpload triggers inference on object upload
-	ProcessOnUpload bool `mapstructure:"process_on_upload"`
-
-	// ProcessContentTypes are content types to process
+	APIKey              string   `mapstructure:"api_key"`
+	OrganizationID      string   `mapstructure:"organization_id"`
+	DefaultModel        string   `mapstructure:"default_model"`
 	ProcessContentTypes []string `mapstructure:"process_content_types"`
+	Endpoints           []string `mapstructure:"endpoints"`
+	MaxRetries          int      `mapstructure:"max_retries"`
+	MaxBatchSize        int      `mapstructure:"max_batch_size"`
+	CacheTTL            int      `mapstructure:"cache_ttl"`
+	Timeout             int      `mapstructure:"timeout"`
+	Enabled             bool     `mapstructure:"enabled"`
+	EnableStreaming     bool     `mapstructure:"enable_streaming"`
+	CacheResults        bool     `mapstructure:"cache_results"`
+	EnableMetrics       bool     `mapstructure:"enable_metrics"`
+	ProcessOnUpload     bool     `mapstructure:"process_on_upload"`
 }
 
-// Options are command line overrides
+// LambdaConfig holds S3 Object Lambda configuration.
+type LambdaConfig struct {
+	// ObjectLambda holds Object Lambda specific settings
+	ObjectLambda ObjectLambdaConfig `mapstructure:"object_lambda"`
+}
+
+// ObjectLambdaConfig holds Object Lambda transformation settings.
+type ObjectLambdaConfig struct {
+	// MaxTransformSize is the maximum size of data that can be transformed in memory
+	// Default: 100MB (100 * 1024 * 1024 bytes)
+	// Warning: Setting this too high may cause memory exhaustion during transformation operations
+	MaxTransformSize int64 `mapstructure:"max_transform_size"`
+
+	// StreamingThreshold is the size threshold above which streaming mode is used
+	// for compression/decompression operations instead of buffering in memory
+	// Default: 10MB (10 * 1024 * 1024 bytes)
+	StreamingThreshold int64 `mapstructure:"streaming_threshold"`
+}
+
+// Options are command line overrides.
 type Options struct {
 	DataDir     string
 	S3Port      int
@@ -929,7 +519,7 @@ type Options struct {
 	ConsolePort int
 }
 
-// Load loads configuration from file and applies command line options
+// Load loads configuration from file and applies command line options.
 func Load(configPath string, opts Options) (*Config, error) {
 	v := viper.New()
 
@@ -939,7 +529,9 @@ func Load(configPath string, opts Options) (*Config, error) {
 	// Load from config file if specified
 	if configPath != "" {
 		v.SetConfigFile(configPath)
-		if err := v.ReadInConfig(); err != nil {
+
+		err := v.ReadInConfig()
+		if err != nil {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
 	} else {
@@ -963,24 +555,30 @@ func Load(configPath string, opts Options) (*Config, error) {
 	if opts.DataDir != "" {
 		v.Set("data_dir", opts.DataDir)
 	}
+
 	if opts.S3Port != 0 {
 		v.Set("s3_port", opts.S3Port)
 	}
+
 	if opts.AdminPort != 0 {
 		v.Set("admin_port", opts.AdminPort)
 	}
+
 	if opts.ConsolePort != 0 {
 		v.Set("console_port", opts.ConsolePort)
 	}
 
 	// Unmarshal config
 	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
+
+	err := v.Unmarshal(&cfg)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	// Validate and set derived values
-	if err := cfg.validate(); err != nil {
+	err = cfg.validate()
+	if err != nil {
 		return nil, err
 	}
 
@@ -1205,24 +803,33 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("tls.organization", "NebulaIO")
 	v.SetDefault("tls.validity_days", 365)
 
+	// Lambda defaults (S3 Object Lambda)
+	v.SetDefault("lambda.object_lambda.max_transform_size", 100*1024*1024) // 100MB
+	v.SetDefault("lambda.object_lambda.streaming_threshold", 10*1024*1024) // 10MB
+
 	// Logging
 	v.SetDefault("log_level", "info")
 }
 
 func (c *Config) validate() error {
 	// Ensure data directory exists
-	if err := os.MkdirAll(c.DataDir, 0755); err != nil {
+	err := os.MkdirAll(c.DataDir, 0750)
+	if err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	// Generate node ID if not set
 	if c.NodeID == "" {
 		nodeIDPath := filepath.Join(c.DataDir, "node-id")
-		if data, err := os.ReadFile(nodeIDPath); err == nil {
+		//nolint:gosec // G304: nodeIDPath is constructed from trusted config
+		data, err := os.ReadFile(nodeIDPath)
+		if err == nil {
 			c.NodeID = string(data)
 		} else {
 			c.NodeID = generateNodeID()
-			if err := os.WriteFile(nodeIDPath, []byte(c.NodeID), 0644); err != nil {
+
+			err = os.WriteFile(nodeIDPath, []byte(c.NodeID), 0644)
+			if err != nil {
 				return fmt.Errorf("failed to write node ID: %w", err)
 			}
 		}
@@ -1231,11 +838,14 @@ func (c *Config) validate() error {
 	// Generate JWT secret if not set
 	if c.Auth.JWTSecret == "" {
 		jwtSecretPath := filepath.Join(c.DataDir, "jwt-secret")
-		if data, err := os.ReadFile(jwtSecretPath); err == nil {
+		//nolint:gosec // G304: jwtSecretPath is constructed from trusted config
+		data, err := os.ReadFile(jwtSecretPath)
+		if err == nil {
 			c.Auth.JWTSecret = string(data)
 		} else {
 			c.Auth.JWTSecret = generateSecret(32)
-			if err := os.WriteFile(jwtSecretPath, []byte(c.Auth.JWTSecret), 0600); err != nil {
+			err = os.WriteFile(jwtSecretPath, []byte(c.Auth.JWTSecret), 0600)
+			if err != nil {
 				return fmt.Errorf("failed to write JWT secret: %w", err)
 			}
 		}
@@ -1243,24 +853,29 @@ func (c *Config) validate() error {
 
 	// Validate root password - fail fast if missing or weak
 	// Password must be: min 12 chars, with uppercase, lowercase, and number
-	if err := auth.ValidatePasswordStrength(c.Auth.RootPassword); err != nil {
+	err = auth.ValidatePasswordStrength(c.Auth.RootPassword)
+	if err != nil {
 		return fmt.Errorf("invalid root password: %w. Set via NEBULAIO_AUTH_ROOT_PASSWORD environment variable", err)
 	}
 
 	// Generate or load replica ID if not set
 	if c.Cluster.ReplicaID == 0 {
 		replicaIDPath := filepath.Join(c.DataDir, "replica-id")
-		if data, err := os.ReadFile(replicaIDPath); err == nil {
+		//nolint:gosec // G304: replicaIDPath is constructed from trusted config
+		data, err := os.ReadFile(replicaIDPath)
+		if err == nil {
 			// Parse stored replica ID
 			var replicaID uint64
-			if _, err := fmt.Sscanf(string(data), "%d", &replicaID); err == nil && replicaID > 0 {
+			_, parseErr := fmt.Sscanf(string(data), "%d", &replicaID)
+			if parseErr == nil && replicaID > 0 {
 				c.Cluster.ReplicaID = replicaID
 			}
 		}
 		// Generate new replica ID if still not set
 		if c.Cluster.ReplicaID == 0 {
 			c.Cluster.ReplicaID = generateReplicaID()
-			if err := os.WriteFile(replicaIDPath, []byte(fmt.Sprintf("%d", c.Cluster.ReplicaID)), 0644); err != nil {
+			err = os.WriteFile(replicaIDPath, []byte(strconv.FormatUint(c.Cluster.ReplicaID, 10)), 0644)
+			if err != nil {
 				return fmt.Errorf("failed to write replica ID: %w", err)
 			}
 		}
@@ -1272,24 +887,27 @@ func (c *Config) validate() error {
 	}
 
 	// Ensure WAL directory exists
-	if err := os.MkdirAll(c.Cluster.WALDir, 0755); err != nil {
+	err = os.MkdirAll(c.Cluster.WALDir, 0750)
+	if err != nil {
 		return fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 
 	// Validate placement group configuration
-	if err := c.Storage.PlacementGroups.validate(); err != nil {
+	err = c.Storage.PlacementGroups.validate()
+	if err != nil {
 		return fmt.Errorf("invalid placement group configuration: %w", err)
 	}
 
 	// Validate redundancy settings against available nodes
-	if err := c.validateRedundancyVsNodes(); err != nil {
+	err = c.validateRedundancyVsNodes()
+	if err != nil {
 		return fmt.Errorf("invalid redundancy configuration: %w", err)
 	}
 
 	return nil
 }
 
-// validateRedundancyVsNodes checks that redundancy settings are compatible with placement groups
+// validateRedundancyVsNodes checks that redundancy settings are compatible with placement groups.
 func (c *Config) validateRedundancyVsNodes() error {
 	// Skip validation if redundancy is not enabled
 	if !c.Storage.DefaultRedundancy.Enabled {
@@ -1342,26 +960,31 @@ func (c *Config) validateRedundancyVsNodes() error {
 	return nil
 }
 
-// validate checks placement group configuration for consistency
+// validate checks placement group configuration for consistency.
 func (c *PlacementGroupsConfig) validate() error {
 	// Build a map of known group IDs
 	groupIDs := make(map[string]bool)
+
 	for _, g := range c.Groups {
 		if g.ID == "" {
-			return fmt.Errorf("placement group ID cannot be empty")
+			return errors.New("placement group ID cannot be empty")
 		}
+
 		if groupIDs[g.ID] {
 			return fmt.Errorf("duplicate placement group ID: %s", g.ID)
 		}
+
 		groupIDs[g.ID] = true
 
 		// Validate MinNodes and MaxNodes
 		if g.MinNodes < 0 {
 			return fmt.Errorf("placement group %s: min_nodes cannot be negative", g.ID)
 		}
+
 		if g.MaxNodes < 0 {
 			return fmt.Errorf("placement group %s: max_nodes cannot be negative", g.ID)
 		}
+
 		if g.MaxNodes > 0 && g.MinNodes > g.MaxNodes {
 			return fmt.Errorf("placement group %s: min_nodes (%d) cannot exceed max_nodes (%d)", g.ID, g.MinNodes, g.MaxNodes)
 		}
@@ -1383,20 +1006,22 @@ func (c *PlacementGroupsConfig) validate() error {
 
 	// Validate MinNodesForErasure
 	if c.MinNodesForErasure < 0 {
-		return fmt.Errorf("min_nodes_for_erasure cannot be negative")
+		return errors.New("min_nodes_for_erasure cannot be negative")
 	}
 
 	return nil
 }
 
 func generateNodeID() string {
-	return fmt.Sprintf("node-%s", generateSecret(8))
+	return "node-" + generateSecret(8)
 }
 
 func generateReplicaID() uint64 {
 	// Generate a unique replica ID based on process ID and timestamp
 	// This creates a reasonably unique ID for Dragonboat
+	//nolint:gosec // G115: pid is always positive
 	pid := uint64(os.Getpid())
+	//nolint:gosec // G115: uid is always positive
 	uid := uint64(os.Getuid())
 	// Combine pid and uid to create a unique replica ID
 	// Use simple hash to ensure it's a positive uint64
@@ -1404,24 +1029,29 @@ func generateReplicaID() uint64 {
 	if replicaID == 0 {
 		replicaID = 1
 	}
+
 	return replicaID
 }
 
 func generateSecret(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
 	b := make([]byte, length)
 	for i := range b {
 		b[i] = charset[int(randomByte())%len(charset)]
 	}
+
 	return string(b)
 }
 
 func randomByte() byte {
 	var b [1]byte
-	if _, err := rand.Read(b[:]); err != nil {
+	_, err := rand.Read(b[:])
+	if err != nil {
 		// This should never happen with crypto/rand, but if it does,
 		// panic is appropriate since we cannot safely generate secrets
 		panic(fmt.Sprintf("failed to generate random bytes: %v", err))
 	}
+
 	return b[0]
 }

@@ -9,13 +9,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// PolicyExecutor executes policy actions
+// PolicyExecutor executes policy actions.
 type PolicyExecutor struct {
 	tierManager TierManager
 	store       PolicyStore
 }
 
-// NewPolicyExecutor creates a new policy executor
+// NewPolicyExecutor creates a new policy executor.
 func NewPolicyExecutor(tierManager TierManager, store PolicyStore) *PolicyExecutor {
 	return &PolicyExecutor{
 		tierManager: tierManager,
@@ -23,7 +23,7 @@ func NewPolicyExecutor(tierManager TierManager, store PolicyStore) *PolicyExecut
 	}
 }
 
-// Execute executes a policy action
+// Execute executes a policy action.
 func (e *PolicyExecutor) Execute(ctx context.Context, bucket, key string, action *PolicyAction) error {
 	switch action.Type {
 	case ActionTransition:
@@ -41,10 +41,11 @@ func (e *PolicyExecutor) Execute(ctx context.Context, bucket, key string, action
 			return e.ExecuteNotify(ctx, bucket, key, action.Notify)
 		}
 	}
+
 	return nil
 }
 
-// ExecuteTransition moves an object to a different tier
+// ExecuteTransition moves an object to a different tier.
 func (e *PolicyExecutor) ExecuteTransition(ctx context.Context, bucket, key string, config *TransitionActionConfig) error {
 	log.Debug().
 		Str("bucket", bucket).
@@ -55,7 +56,7 @@ func (e *PolicyExecutor) ExecuteTransition(ctx context.Context, bucket, key stri
 	return e.tierManager.TransitionObject(ctx, bucket, key, config.TargetTier)
 }
 
-// ExecuteDelete removes an object
+// ExecuteDelete removes an object.
 func (e *PolicyExecutor) ExecuteDelete(ctx context.Context, bucket, key string, config *DeleteActionConfig) error {
 	log.Debug().
 		Str("bucket", bucket).
@@ -65,7 +66,7 @@ func (e *PolicyExecutor) ExecuteDelete(ctx context.Context, bucket, key string, 
 	return e.tierManager.DeleteObject(ctx, bucket, key)
 }
 
-// ExecuteReplicate copies an object to another location
+// ExecuteReplicate copies an object to another location.
 func (e *PolicyExecutor) ExecuteReplicate(ctx context.Context, bucket, key string, config *ReplicateActionConfig) error {
 	log.Debug().
 		Str("bucket", bucket).
@@ -85,7 +86,7 @@ func (e *PolicyExecutor) ExecuteReplicate(ctx context.Context, bucket, key strin
 	return nil
 }
 
-// ExecuteNotify sends a notification
+// ExecuteNotify sends a notification.
 func (e *PolicyExecutor) ExecuteNotify(ctx context.Context, bucket, key string, config *NotifyActionConfig) error {
 	log.Debug().
 		Str("bucket", bucket).
@@ -97,14 +98,14 @@ func (e *PolicyExecutor) ExecuteNotify(ctx context.Context, bucket, key string, 
 	return nil
 }
 
-// PolicyScheduler schedules policy execution
+// PolicyScheduler schedules policy execution.
 type PolicyScheduler struct {
-	store        PolicyStore
-	stopChan     chan struct{}
-	wg           sync.WaitGroup
-	schedules    map[string]*scheduleEntry
-	schedulesMu  sync.RWMutex
-	outputCh     chan<- *AdvancedPolicy
+	store       PolicyStore
+	stopChan    chan struct{}
+	schedules   map[string]*scheduleEntry
+	outputCh    chan<- *AdvancedPolicy
+	wg          sync.WaitGroup
+	schedulesMu sync.RWMutex
 }
 
 type scheduleEntry struct {
@@ -113,7 +114,7 @@ type scheduleEntry struct {
 	stopChan chan struct{}
 }
 
-// NewPolicyScheduler creates a new scheduler
+// NewPolicyScheduler creates a new scheduler.
 func NewPolicyScheduler(store PolicyStore) *PolicyScheduler {
 	return &PolicyScheduler{
 		store:     store,
@@ -122,12 +123,13 @@ func NewPolicyScheduler(store PolicyStore) *PolicyScheduler {
 	}
 }
 
-// Start starts the scheduler
+// Start starts the scheduler.
 func (s *PolicyScheduler) Start(outputCh chan<- *AdvancedPolicy) error {
 	s.outputCh = outputCh
 
 	// Load scheduled policies
 	ctx := context.Background()
+
 	policies, err := s.store.ListByType(ctx, PolicyTypeScheduled)
 	if err != nil {
 		return err
@@ -141,29 +143,33 @@ func (s *PolicyScheduler) Start(outputCh chan<- *AdvancedPolicy) error {
 
 	// Watch for policy changes
 	s.wg.Add(1)
+
 	go s.watchPolicies()
 
 	return nil
 }
 
-// Stop stops the scheduler
+// Stop stops the scheduler.
 func (s *PolicyScheduler) Stop() {
 	close(s.stopChan)
 	s.wg.Wait()
 
 	// Stop all scheduled policies
 	s.schedulesMu.Lock()
+
 	for _, entry := range s.schedules {
 		close(entry.stopChan)
 	}
+
 	s.schedules = make(map[string]*scheduleEntry)
 	s.schedulesMu.Unlock()
 }
 
-// schedulePolicy adds a policy to the schedule
+// schedulePolicy adds a policy to the schedule.
 func (s *PolicyScheduler) schedulePolicy(policy *AdvancedPolicy) {
 	// Find cron trigger
 	var cronExpr string
+
 	for _, trigger := range policy.Triggers {
 		if trigger.Type == TriggerTypeCron && trigger.Cron != nil {
 			cronExpr = trigger.Cron.Expression
@@ -196,10 +202,11 @@ func (s *PolicyScheduler) schedulePolicy(policy *AdvancedPolicy) {
 
 	// Start goroutine for this schedule
 	s.wg.Add(1)
+
 	go s.runSchedule(entry)
 }
 
-// runSchedule runs a scheduled policy
+// runSchedule runs a scheduled policy.
 func (s *PolicyScheduler) runSchedule(entry *scheduleEntry) {
 	defer s.wg.Done()
 
@@ -228,18 +235,20 @@ func (s *PolicyScheduler) runSchedule(entry *scheduleEntry) {
 
 			// Calculate next run
 			var cronExpr string
+
 			for _, trigger := range entry.policy.Triggers {
 				if trigger.Type == TriggerTypeCron && trigger.Cron != nil {
 					cronExpr = trigger.Cron.Expression
 					break
 				}
 			}
+
 			entry.nextRun = s.parseAndCalculateNext(cronExpr)
 		}
 	}
 }
 
-// parseAndCalculateNext parses cron expression and calculates next run time
+// parseAndCalculateNext parses cron expression and calculates next run time.
 func (s *PolicyScheduler) parseAndCalculateNext(cronExpr string) time.Time {
 	// Simplified cron parsing - in production use a proper cron library
 	// Format: minute hour day-of-month month day-of-week
@@ -248,7 +257,7 @@ func (s *PolicyScheduler) parseAndCalculateNext(cronExpr string) time.Time {
 	return now.Add(1 * time.Hour).Truncate(time.Hour)
 }
 
-// watchPolicies watches for policy changes
+// watchPolicies watches for policy changes.
 func (s *PolicyScheduler) watchPolicies() {
 	defer s.wg.Done()
 
@@ -277,7 +286,7 @@ func (s *PolicyScheduler) watchPolicies() {
 	}
 }
 
-// unschedulePolicy removes a policy from the schedule
+// unschedulePolicy removes a policy from the schedule.
 func (s *PolicyScheduler) unschedulePolicy(policyID string) {
 	s.schedulesMu.Lock()
 	defer s.schedulesMu.Unlock()
@@ -288,7 +297,7 @@ func (s *PolicyScheduler) unschedulePolicy(policyID string) {
 	}
 }
 
-// AntiThrashManager prevents tier oscillation
+// AntiThrashManager prevents tier oscillation.
 type AntiThrashManager struct {
 	transitions map[string]*transitionRecord
 	mu          sync.RWMutex
@@ -299,14 +308,14 @@ type transitionRecord struct {
 	transitionCount int
 }
 
-// NewAntiThrashManager creates a new anti-thrash manager
+// NewAntiThrashManager creates a new anti-thrash manager.
 func NewAntiThrashManager() *AntiThrashManager {
 	return &AntiThrashManager{
 		transitions: make(map[string]*transitionRecord),
 	}
 }
 
-// CanTransition checks if an object can be transitioned
+// CanTransition checks if an object can be transitioned.
 func (m *AntiThrashManager) CanTransition(bucket, key string, policy *AdvancedPolicy) bool {
 	if !policy.AntiThrash.Enabled {
 		return true
@@ -347,7 +356,7 @@ func (m *AntiThrashManager) CanTransition(bucket, key string, policy *AdvancedPo
 	return true
 }
 
-// RecordTransition records a tier transition
+// RecordTransition records a tier transition.
 func (m *AntiThrashManager) RecordTransition(bucket, key string) {
 	fullKey := bucket + "/" + key
 	now := time.Now()
@@ -361,6 +370,7 @@ func (m *AntiThrashManager) RecordTransition(bucket, key string) {
 			lastTransition:  now,
 			transitionCount: 1,
 		}
+
 		return
 	}
 
@@ -374,7 +384,7 @@ func (m *AntiThrashManager) RecordTransition(bucket, key string) {
 	record.transitionCount++
 }
 
-// Cleanup removes old records
+// Cleanup removes old records.
 func (m *AntiThrashManager) Cleanup(maxAge time.Duration) {
 	cutoff := time.Now().Add(-maxAge)
 
@@ -388,20 +398,20 @@ func (m *AntiThrashManager) Cleanup(maxAge time.Duration) {
 	}
 }
 
-// RateLimiter controls policy execution rate
+// RateLimiter controls policy execution rate.
 type RateLimiter struct {
-	config   RateLimiterConfig
 	limiters map[string]*tokenBucket
+	config   RateLimiterConfig
 	mu       sync.RWMutex
 }
 
-// RateLimiterConfig configures the rate limiter
+// RateLimiterConfig configures the rate limiter.
 type RateLimiterConfig struct {
 	DefaultObjectsPerSecond int
 	DefaultBurstSize        int
 }
 
-// DefaultRateLimiterConfig returns default configuration
+// DefaultRateLimiterConfig returns default configuration.
 func DefaultRateLimiterConfig() RateLimiterConfig {
 	return RateLimiterConfig{
 		DefaultObjectsPerSecond: 100,
@@ -410,14 +420,14 @@ func DefaultRateLimiterConfig() RateLimiterConfig {
 }
 
 type tokenBucket struct {
-	tokens       float64
 	lastUpdate   time.Time
+	tokens       float64
 	tokensPerSec float64
 	maxTokens    float64
 	mu           sync.Mutex
 }
 
-// NewRateLimiter creates a new rate limiter
+// NewRateLimiter creates a new rate limiter.
 func NewRateLimiter(cfg RateLimiterConfig) *RateLimiter {
 	return &RateLimiter{
 		config:   cfg,
@@ -425,9 +435,10 @@ func NewRateLimiter(cfg RateLimiterConfig) *RateLimiter {
 	}
 }
 
-// Allow checks if an operation is allowed
+// Allow checks if an operation is allowed.
 func (r *RateLimiter) Allow(policyID string) bool {
 	r.mu.Lock()
+
 	bucket, exists := r.limiters[policyID]
 	if !exists {
 		bucket = &tokenBucket{
@@ -438,6 +449,7 @@ func (r *RateLimiter) Allow(policyID string) bool {
 		}
 		r.limiters[policyID] = bucket
 	}
+
 	r.mu.Unlock()
 
 	bucket.mu.Lock()
@@ -446,10 +458,12 @@ func (r *RateLimiter) Allow(policyID string) bool {
 	// Refill tokens
 	now := time.Now()
 	elapsed := now.Sub(bucket.lastUpdate).Seconds()
+
 	bucket.tokens += elapsed * bucket.tokensPerSec
 	if bucket.tokens > bucket.maxTokens {
 		bucket.tokens = bucket.maxTokens
 	}
+
 	bucket.lastUpdate = now
 
 	// Check if we have a token
@@ -461,14 +475,14 @@ func (r *RateLimiter) Allow(policyID string) bool {
 	return false
 }
 
-// Wait waits until an operation is allowed
+// Wait waits until an operation is allowed.
 func (r *RateLimiter) Wait(policyID string) {
 	for !r.Allow(policyID) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
 
-// SetRate sets the rate for a policy
+// SetRate sets the rate for a policy.
 func (r *RateLimiter) SetRate(policyID string, objectsPerSecond int, burstSize int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

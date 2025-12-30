@@ -9,10 +9,10 @@ import (
 	"time"
 )
 
-// mockObjectLister implements ObjectLister for testing
+// mockObjectLister implements ObjectLister for testing.
 type mockObjectLister struct {
-	objects []ObjectListEntry
 	err     error
+	objects []ObjectListEntry
 }
 
 func (m *mockObjectLister) ListObjects(ctx context.Context, bucket, prefix string, recursive bool) (<-chan ObjectListEntry, <-chan error) {
@@ -32,6 +32,7 @@ func (m *mockObjectLister) ListObjects(ctx context.Context, bucket, prefix strin
 			if prefix != "" && !strings.HasPrefix(obj.Key, prefix) {
 				continue
 			}
+
 			select {
 			case objCh <- obj:
 			case <-ctx.Done():
@@ -72,6 +73,7 @@ func TestBatchManagerCreateJob(t *testing.T) {
 	if createdJob.Status != BatchJobStatusPending {
 		t.Errorf("Expected status Pending, got %s", createdJob.Status)
 	}
+
 	if createdJob.Concurrency != 10 {
 		t.Errorf("Expected default concurrency 10, got %d", createdJob.Concurrency)
 	}
@@ -83,8 +85,8 @@ func TestBatchManagerCreateJobValidation(t *testing.T) {
 	bm := NewBatchManager(svc, lister, nil, DefaultBatchManagerConfig())
 
 	tests := []struct {
-		name    string
 		job     *BatchJob
+		name    string
 		wantErr bool
 	}{
 		{
@@ -128,6 +130,7 @@ func TestBatchManagerCreateJobValidation(t *testing.T) {
 			if tc.wantErr && err == nil {
 				t.Error("Expected error but got none")
 			}
+
 			if !tc.wantErr && err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
@@ -164,13 +167,15 @@ func TestBatchManagerListJobs(t *testing.T) {
 	bm := NewBatchManager(svc, lister, nil, DefaultBatchManagerConfig())
 
 	// Create multiple jobs
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		job := &BatchJob{
 			JobID:             "job-" + string(rune('a'+i)),
 			SourceBucket:      "source",
 			DestinationBucket: "dest",
 		}
-		if err := bm.CreateJob(job); err != nil {
+
+		err := bm.CreateJob(job)
+		if err != nil {
 			t.Fatalf("Failed to create job: %v", err)
 		}
 	}
@@ -264,8 +269,8 @@ func TestBatchJobFilters(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
 		obj     ObjectListEntry
+		name    string
 		matches bool
 	}{
 		{
@@ -365,11 +370,12 @@ func TestBatchJobProgress(t *testing.T) {
 	}
 
 	// Wait for job to complete or timeout
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		job, _ := bm.GetJob("progress-test")
 		if job.Status == BatchJobStatusCompleted || job.Status == BatchJobStatusFailed {
 			break
 		}
+
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -398,9 +404,11 @@ func TestBatchJobSummary(t *testing.T) {
 	if summary.JobID != job.JobID {
 		t.Errorf("Expected JobID %s, got %s", job.JobID, summary.JobID)
 	}
+
 	if summary.Description != job.Description {
 		t.Errorf("Expected Description %s, got %s", job.Description, summary.Description)
 	}
+
 	if summary.Status != job.Status {
 		t.Errorf("Expected Status %s, got %s", job.Status, summary.Status)
 	}
@@ -415,15 +423,19 @@ func TestRateLimitedReader(t *testing.T) {
 	reader := newRateLimitedReader(strings.NewReader(string(data)), 64*1024) // 64KB/s limit
 
 	buf := make([]byte, 1024)
+
 	var totalRead int
+
 	start := time.Now()
 
 	for {
 		n, err := reader.Read(buf)
 		totalRead += n
+
 		if err == io.EOF {
 			break
 		}
+
 		if err != nil {
 			t.Fatalf("Read error: %v", err)
 		}
@@ -444,6 +456,7 @@ func TestRateLimitedReader(t *testing.T) {
 
 func TestMaxConcurrentJobs(t *testing.T) {
 	svc := createTestService()
+
 	objects := make([]ObjectListEntry, 1000) // Many objects to keep jobs running
 	for i := range objects {
 		objects[i] = ObjectListEntry{Key: "obj" + string(rune(i)) + ".txt", Size: 100}
@@ -455,14 +468,16 @@ func TestMaxConcurrentJobs(t *testing.T) {
 	bm := NewBatchManager(svc, lister, nil, cfg)
 
 	// Create 3 jobs
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		job := &BatchJob{
 			JobID:             "job-" + string(rune('a'+i)),
 			SourceBucket:      "source",
 			DestinationBucket: "dest",
 			Concurrency:       1,
 		}
-		if err := bm.CreateJob(job); err != nil {
+
+		err := bm.CreateJob(job)
+		if err != nil {
 			t.Fatalf("Failed to create job: %v", err)
 		}
 	}
@@ -470,15 +485,18 @@ func TestMaxConcurrentJobs(t *testing.T) {
 	ctx := context.Background()
 
 	// Start first 2 jobs - should succeed
-	if err := bm.StartJob(ctx, "job-a"); err != nil {
+	err := bm.StartJob(ctx, "job-a")
+	if err != nil {
 		t.Fatalf("Failed to start job-a: %v", err)
 	}
-	if err := bm.StartJob(ctx, "job-b"); err != nil {
+
+	err = bm.StartJob(ctx, "job-b")
+	if err != nil {
 		t.Fatalf("Failed to start job-b: %v", err)
 	}
 
 	// Third job should fail due to max concurrent limit
-	err := bm.StartJob(ctx, "job-c")
+	err = bm.StartJob(ctx, "job-c")
 	if err == nil {
 		t.Error("Expected error when starting third job")
 	}
@@ -496,18 +514,21 @@ func TestJobHistoryCleanup(t *testing.T) {
 	bm := NewBatchManager(svc, lister, nil, cfg)
 
 	// Create and complete 5 jobs
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		job := &BatchJob{
 			JobID:             "job-" + string(rune('a'+i)),
 			SourceBucket:      "source",
 			DestinationBucket: "dest",
 		}
-		if err := bm.CreateJob(job); err != nil {
+
+		err := bm.CreateJob(job)
+		if err != nil {
 			t.Fatalf("Failed to create job: %v", err)
 		}
 
 		// Manually mark as completed
 		bm.mu.Lock()
+
 		now := time.Now()
 		bm.jobs[job.JobID].Status = BatchJobStatusCompleted
 		bm.jobs[job.JobID].CompletedAt = &now
@@ -525,7 +546,7 @@ func TestJobHistoryCleanup(t *testing.T) {
 	}
 }
 
-// Helper to create a test service
+// Helper to create a test service.
 func createTestService() *Service {
 	cfg := DefaultServiceConfig()
 	return NewService(newMockBackend(), newMockMetaStore(), cfg)

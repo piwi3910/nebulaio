@@ -33,45 +33,44 @@ import (
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 )
 
-// Algorithm represents a compression algorithm
+// Algorithm represents a compression algorithm.
 type Algorithm string
 
 const (
-	// AlgorithmNone disables compression
+	// AlgorithmNone disables compression.
 	AlgorithmNone Algorithm = "none"
-	// AlgorithmZstd uses Zstandard compression (recommended)
+	// AlgorithmZstd uses Zstandard compression (recommended).
 	AlgorithmZstd Algorithm = "zstd"
-	// AlgorithmLZ4 uses LZ4 compression (faster, less compression)
+	// AlgorithmLZ4 uses LZ4 compression (faster, less compression).
 	AlgorithmLZ4 Algorithm = "lz4"
-	// AlgorithmGzip uses Gzip compression (widely compatible)
+	// AlgorithmGzip uses Gzip compression (widely compatible).
 	AlgorithmGzip Algorithm = "gzip"
 )
 
-// Level represents compression level
+// percentMultiplier is used for percentage calculations.
+const percentMultiplier = 100
+
+// Level represents compression level.
 type Level int
 
 const (
-	// LevelFastest prioritizes speed over compression ratio
+	// LevelFastest prioritizes speed over compression ratio.
 	LevelFastest Level = 1
-	// LevelDefault balances speed and compression
+	// LevelDefault balances speed and compression.
 	LevelDefault Level = 3
-	// LevelBest prioritizes compression ratio over speed
+	// LevelBest prioritizes compression ratio over speed.
 	LevelBest Level = 9
 )
 
-// Config holds compression configuration
+// Config holds compression configuration.
 type Config struct {
-	// Algorithm to use for compression
-	Algorithm Algorithm `json:"algorithm" yaml:"algorithm"`
-	// Level controls compression ratio vs speed trade-off
-	Level Level `json:"level" yaml:"level"`
-	// MinSize is the minimum object size to compress (bytes)
-	MinSize int64 `json:"min_size" yaml:"min_size"`
-	// ExcludeTypes are content types that should not be compressed
-	ExcludeTypes []string `json:"exclude_types" yaml:"exclude_types"`
+	Algorithm    Algorithm `json:"algorithm" yaml:"algorithm"`
+	ExcludeTypes []string  `json:"exclude_types" yaml:"exclude_types"`
+	Level        Level     `json:"level" yaml:"level"`
+	MinSize      int64     `json:"min_size" yaml:"min_size"`
 }
 
-// DefaultConfig returns sensible defaults
+// DefaultConfig returns sensible defaults.
 func DefaultConfig() Config {
 	return Config{
 		Algorithm: AlgorithmZstd,
@@ -100,7 +99,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// Compressor handles compression/decompression
+// Compressor handles compression/decompression.
 type Compressor interface {
 	// Compress compresses data and returns compressed bytes
 	Compress(data []byte) ([]byte, error)
@@ -114,24 +113,26 @@ type Compressor interface {
 	Algorithm() Algorithm
 }
 
-// metaKeySuffix is appended to object keys to store compression metadata
+// metaKeySuffix is appended to object keys to store compression metadata.
 const metaKeySuffix = ".__compression_meta__"
 
-// Backend wraps another backend with compression support
+// Backend wraps another backend with compression support.
 type Backend struct {
 	inner      backend.Backend
-	config     Config
 	compressor Compressor
+	config     Config
 }
 
-// New creates a compression backend wrapping the given backend
+// New creates a compression backend wrapping the given backend.
 func New(inner backend.Backend, cfg Config) (*Backend, error) {
 	if inner == nil {
 		return nil, errors.New("inner backend is required")
 	}
 
-	var comp Compressor
-	var err error
+	var (
+		comp Compressor
+		err  error
+	)
 
 	switch cfg.Algorithm {
 	case AlgorithmNone:
@@ -157,17 +158,17 @@ func New(inner backend.Backend, cfg Config) (*Backend, error) {
 	}, nil
 }
 
-// Init initializes the backend
+// Init initializes the backend.
 func (b *Backend) Init(ctx context.Context) error {
 	return b.inner.Init(ctx)
 }
 
-// Close closes the backend
+// Close closes the backend.
 func (b *Backend) Close() error {
 	return b.inner.Close()
 }
 
-// shouldCompress determines if an object should be compressed
+// shouldCompress determines if an object should be compressed.
 func (b *Backend) shouldCompress(size int64, contentType string) bool {
 	if b.compressor == nil {
 		return false
@@ -189,10 +190,11 @@ func (b *Backend) shouldCompress(size int64, contentType string) bool {
 	return true
 }
 
-// PutObject stores an object with optional compression
+// PutObject stores an object with optional compression.
 func (b *Backend) PutObject(ctx context.Context, bucket, key string, data io.Reader, size int64) (*backend.PutResult, error) {
 	// Read all data to determine if we should compress
 	var buf bytes.Buffer
+
 	actualSize, err := io.Copy(&buf, data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read object data: %w", err)
@@ -214,6 +216,7 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, data io.Rea
 
 			// Store compression metadata as separate object
 			meta := fmt.Sprintf(`{"algorithm":"%s","original_size":%d}`, b.config.Algorithm, actualSize)
+
 			_, err = b.inner.PutObject(ctx, bucket, key+metaKeySuffix, bytes.NewReader([]byte(meta)), int64(len(meta)))
 			if err != nil {
 				// Clean up the compressed object if metadata write fails
@@ -229,7 +232,7 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, data io.Rea
 	return b.inner.PutObject(ctx, bucket, key, bytes.NewReader(buf.Bytes()), actualSize)
 }
 
-// GetObject retrieves an object with automatic decompression
+// GetObject retrieves an object with automatic decompression.
 func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
 	reader, err := b.inner.GetObject(ctx, bucket, key)
 	if err != nil {
@@ -239,27 +242,31 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 	// Check if compression metadata exists
 	metaReader, err := b.inner.GetObject(ctx, bucket, key+metaKeySuffix)
 	if err != nil {
-		// No metadata = not compressed
+		//nolint:nilerr // Expected: missing metadata means not compressed, return original reader
 		return reader, nil
 	}
 
 	metaBytes, err := io.ReadAll(metaReader)
 	_ = metaReader.Close()
+
 	if err != nil {
-		// Can't read metadata, assume not compressed
+		//nolint:nilerr // Fallback: can't read metadata, assume not compressed and return original
 		return reader, nil
 	}
 
 	// Parse algorithm from metadata (simple parsing)
 	metaStr := string(metaBytes)
+
 	var algorithm Algorithm
-	if strings.Contains(metaStr, `"algorithm":"zstd"`) {
+
+	switch {
+	case strings.Contains(metaStr, `"algorithm":"zstd"`):
 		algorithm = AlgorithmZstd
-	} else if strings.Contains(metaStr, `"algorithm":"lz4"`) {
+	case strings.Contains(metaStr, `"algorithm":"lz4"`):
 		algorithm = AlgorithmLZ4
-	} else if strings.Contains(metaStr, `"algorithm":"gzip"`) {
+	case strings.Contains(metaStr, `"algorithm":"gzip"`):
 		algorithm = AlgorithmGzip
-	} else {
+	default:
 		// Unknown or no compression
 		return reader, nil
 	}
@@ -267,12 +274,14 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 	// Read compressed data
 	compressed, err := io.ReadAll(reader)
 	_ = reader.Close()
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to read compressed data: %w", err)
 	}
 
 	// Decompress
 	var decompressor Compressor
+
 	switch algorithm {
 	case AlgorithmZstd:
 		decompressor, err = NewZstdCompressor(LevelDefault)
@@ -296,7 +305,7 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 	return io.NopCloser(bytes.NewReader(decompressed)), nil
 }
 
-// DeleteObject removes an object and its compression metadata
+// DeleteObject removes an object and its compression metadata.
 func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 	// Delete compression metadata if it exists (ignore errors)
 	_ = b.inner.DeleteObject(ctx, bucket, key+metaKeySuffix)
@@ -304,35 +313,35 @@ func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 	return b.inner.DeleteObject(ctx, bucket, key)
 }
 
-// ObjectExists checks if an object exists
+// ObjectExists checks if an object exists.
 func (b *Backend) ObjectExists(ctx context.Context, bucket, key string) (bool, error) {
 	return b.inner.ObjectExists(ctx, bucket, key)
 }
 
-// CreateBucket creates a new bucket
+// CreateBucket creates a new bucket.
 func (b *Backend) CreateBucket(ctx context.Context, bucket string) error {
 	return b.inner.CreateBucket(ctx, bucket)
 }
 
-// DeleteBucket removes a bucket
+// DeleteBucket removes a bucket.
 func (b *Backend) DeleteBucket(ctx context.Context, bucket string) error {
 	return b.inner.DeleteBucket(ctx, bucket)
 }
 
-// BucketExists checks if a bucket exists
+// BucketExists checks if a bucket exists.
 func (b *Backend) BucketExists(ctx context.Context, bucket string) (bool, error) {
 	return b.inner.BucketExists(ctx, bucket)
 }
 
-// GetStorageInfo returns storage statistics
+// GetStorageInfo returns storage statistics.
 func (b *Backend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, error) {
 	return b.inner.GetStorageInfo(ctx)
 }
 
-// Ensure Backend implements backend.Backend
+// Ensure Backend implements backend.Backend.
 var _ backend.Backend = (*Backend)(nil)
 
-// CompressionStats holds statistics about compression effectiveness
+// CompressionStats holds statistics about compression effectiveness.
 type CompressionStats struct {
 	Algorithm        Algorithm
 	OriginalSize     int64
@@ -341,22 +350,23 @@ type CompressionStats struct {
 	Duration         time.Duration
 }
 
-// CalculateRatio computes the compression ratio
+// CalculateRatio computes the compression ratio.
 func (s *CompressionStats) CalculateRatio() {
 	if s.OriginalSize > 0 {
 		s.CompressionRatio = float64(s.CompressedSize) / float64(s.OriginalSize)
 	}
 }
 
-// SpaceSaved returns bytes saved by compression
+// SpaceSaved returns bytes saved by compression.
 func (s *CompressionStats) SpaceSaved() int64 {
 	return s.OriginalSize - s.CompressedSize
 }
 
-// SpaceSavedPercent returns percentage of space saved
+// SpaceSavedPercent returns percentage of space saved.
 func (s *CompressionStats) SpaceSavedPercent() float64 {
 	if s.OriginalSize > 0 {
-		return (1 - s.CompressionRatio) * 100
+		return (1 - s.CompressionRatio) * percentMultiplier
 	}
+
 	return 0
 }

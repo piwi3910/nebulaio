@@ -11,7 +11,12 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metrics"
 )
 
-// MetricsMiddleware records request metrics
+// HTTP method constants.
+const (
+	methodGET = "GET"
+)
+
+// MetricsMiddleware records request metrics.
 func MetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -54,28 +59,34 @@ func MetricsMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Record errors
-		if ww.Status() >= 400 {
+		if ww.Status() >= http.StatusBadRequest {
 			errorType := getErrorType(ww.Status())
 			metrics.RecordError(operation, errorType)
 		}
 	})
 }
 
-// extractS3Operation extracts the S3 operation name from the request
+// extractS3Operation extracts the S3 operation name from the request.
 func extractS3Operation(r *http.Request) string {
 	method := r.Method
 	path := r.URL.Path
 	query := r.URL.Query()
 
 	// Service-level operations
-	if path == "/" && method == "GET" {
+	if path == "/" && method == methodGET {
 		return "ListBuckets"
 	}
 
 	// Check for bucket-level vs object-level
 	parts := strings.Split(strings.Trim(path, "/"), "/")
-	hasBucket := len(parts) >= 1 && parts[0] != ""
-	hasKey := len(parts) >= 2 && parts[1] != ""
+
+	const (
+		minBucketParts = 1
+		minKeyParts    = 2
+	)
+
+	hasBucket := len(parts) >= minBucketParts && parts[0] != ""
+	hasKey := len(parts) >= minKeyParts && parts[1] != ""
 
 	// Bucket-level operations
 	if hasBucket && !hasKey {
@@ -86,32 +97,40 @@ func extractS3Operation(r *http.Request) string {
 			return "DeleteBucket"
 		case "HEAD":
 			return "HeadBucket"
-		case "GET":
+		case methodGET:
 			// Check for subresources
 			if _, ok := query["versioning"]; ok {
 				return "GetBucketVersioning"
 			}
+
 			if _, ok := query["policy"]; ok {
 				return "GetBucketPolicy"
 			}
+
 			if _, ok := query["tagging"]; ok {
 				return "GetBucketTagging"
 			}
+
 			if _, ok := query["cors"]; ok {
 				return "GetBucketCORS"
 			}
+
 			if _, ok := query["lifecycle"]; ok {
 				return "GetBucketLifecycle"
 			}
+
 			if _, ok := query["uploads"]; ok {
 				return "ListMultipartUploads"
 			}
+
 			if _, ok := query["location"]; ok {
 				return "GetBucketLocation"
 			}
+
 			if _, ok := query["acl"]; ok {
 				return "GetBucketAcl"
 			}
+
 			return "ListObjectsV2"
 		}
 	}
@@ -123,25 +142,31 @@ func extractS3Operation(r *http.Request) string {
 			if _, ok := query["partNumber"]; ok {
 				return "UploadPart"
 			}
+
 			if r.Header.Get("X-Amz-Copy-Source") != "" {
 				return "CopyObject"
 			}
+
 			return "PutObject"
-		case "GET":
+		case methodGET:
 			if _, ok := query["uploadId"]; ok {
 				return "ListParts"
 			}
+
 			if _, ok := query["acl"]; ok {
 				return "GetObjectAcl"
 			}
+
 			if _, ok := query["tagging"]; ok {
 				return "GetObjectTagging"
 			}
+
 			return "GetObject"
 		case "DELETE":
 			if _, ok := query["uploadId"]; ok {
 				return "AbortMultipartUpload"
 			}
+
 			return "DeleteObject"
 		case "HEAD":
 			return "HeadObject"
@@ -149,12 +174,15 @@ func extractS3Operation(r *http.Request) string {
 			if _, ok := query["uploads"]; ok {
 				return "CreateMultipartUpload"
 			}
+
 			if _, ok := query["uploadId"]; ok {
 				return "CompleteMultipartUpload"
 			}
+
 			if _, ok := query["delete"]; ok {
 				return "DeleteObjects"
 			}
+
 			return "PostObject"
 		}
 	}
@@ -162,44 +190,44 @@ func extractS3Operation(r *http.Request) string {
 	return "Unknown"
 }
 
-// getErrorType returns an error type string based on HTTP status code
+// getErrorType returns an error type string based on HTTP status code.
 func getErrorType(status int) string {
 	switch {
-	case status == 400:
+	case status == http.StatusBadRequest:
 		return "BadRequest"
-	case status == 401:
+	case status == http.StatusUnauthorized:
 		return "Unauthorized"
-	case status == 403:
+	case status == http.StatusForbidden:
 		return "Forbidden"
-	case status == 404:
+	case status == http.StatusNotFound:
 		return "NotFound"
-	case status == 405:
+	case status == http.StatusMethodNotAllowed:
 		return "MethodNotAllowed"
-	case status == 409:
+	case status == http.StatusConflict:
 		return "Conflict"
-	case status == 500:
+	case status == http.StatusInternalServerError:
 		return "InternalError"
-	case status == 501:
+	case status == http.StatusNotImplemented:
 		return "NotImplemented"
-	case status == 503:
+	case status == http.StatusServiceUnavailable:
 		return "ServiceUnavailable"
-	case status >= 400 && status < 500:
+	case status >= http.StatusBadRequest && status < http.StatusInternalServerError:
 		return "ClientError"
-	case status >= 500:
+	case status >= http.StatusInternalServerError:
 		return "ServerError"
 	default:
 		return "Unknown"
 	}
 }
 
-// ByteCountingResponseWriter wraps http.ResponseWriter to count bytes written
+// ByteCountingResponseWriter wraps http.ResponseWriter to count bytes written.
 type ByteCountingResponseWriter struct {
 	http.ResponseWriter
 	bytesWritten int64
 	statusCode   int
 }
 
-// NewByteCountingResponseWriter creates a new ByteCountingResponseWriter
+// NewByteCountingResponseWriter creates a new ByteCountingResponseWriter.
 func NewByteCountingResponseWriter(w http.ResponseWriter) *ByteCountingResponseWriter {
 	return &ByteCountingResponseWriter{
 		ResponseWriter: w,
@@ -207,35 +235,38 @@ func NewByteCountingResponseWriter(w http.ResponseWriter) *ByteCountingResponseW
 	}
 }
 
-// Write writes data and counts bytes
+// Write writes data and counts bytes.
 func (w *ByteCountingResponseWriter) Write(b []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(b)
 	w.bytesWritten += int64(n)
+
 	return n, err
 }
 
-// WriteHeader captures the status code
+// WriteHeader captures the status code.
 func (w *ByteCountingResponseWriter) WriteHeader(code int) {
 	w.statusCode = code
 	w.ResponseWriter.WriteHeader(code)
 }
 
-// BytesWritten returns the number of bytes written
+// BytesWritten returns the number of bytes written.
 func (w *ByteCountingResponseWriter) BytesWritten() int64 {
 	return w.bytesWritten
 }
 
-// StatusCode returns the HTTP status code
+// StatusCode returns the HTTP status code.
 func (w *ByteCountingResponseWriter) StatusCode() int {
 	return w.statusCode
 }
 
-// ContentLengthFromHeader extracts content length from request header
+// ContentLengthFromHeader extracts content length from request header.
 func ContentLengthFromHeader(r *http.Request) int64 {
 	if cl := r.Header.Get("Content-Length"); cl != "" {
-		if length, err := strconv.ParseInt(cl, 10, 64); err == nil {
+		length, err := strconv.ParseInt(cl, 10, 64)
+		if err == nil {
 			return length
 		}
 	}
+
 	return 0
 }

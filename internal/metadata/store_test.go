@@ -7,10 +7,10 @@ import (
 
 func TestRedundancyConfig_Validate(t *testing.T) {
 	tests := []struct {
-		name    string
 		config  *RedundancyConfig
-		wantErr bool
+		name    string
 		errMsg  string
+		wantErr bool
 	}{
 		{
 			name:    "nil config is valid",
@@ -224,13 +224,12 @@ func TestRedundancyConfig_Validate(t *testing.T) {
 					t.Errorf("Validate() expected error containing %q, got nil", tt.errMsg)
 					return
 				}
+
 				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("Validate() error = %q, want containing %q", err.Error(), tt.errMsg)
 				}
-			} else {
-				if err != nil {
-					t.Errorf("Validate() unexpected error: %v", err)
-				}
+			} else if err != nil {
+				t.Errorf("Validate() unexpected error: %v", err)
 			}
 		})
 	}

@@ -10,7 +10,7 @@ import (
 // =============================================================================
 
 var (
-	// S3ExpressEnabled indicates if S3 Express is enabled
+	// S3ExpressEnabled indicates if S3 Express is enabled.
 	S3ExpressEnabled = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_s3express_enabled",
@@ -18,7 +18,7 @@ var (
 		},
 	)
 
-	// S3ExpressSessionsTotal tracks total sessions created
+	// S3ExpressSessionsTotal tracks total sessions created.
 	S3ExpressSessionsTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_s3express_sessions_total",
@@ -26,7 +26,7 @@ var (
 		},
 	)
 
-	// S3ExpressSessionsActive tracks active sessions
+	// S3ExpressSessionsActive tracks active sessions.
 	S3ExpressSessionsActive = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_s3express_sessions_active",
@@ -34,7 +34,7 @@ var (
 		},
 	)
 
-	// S3ExpressOperationsTotal tracks operations by type
+	// S3ExpressOperationsTotal tracks operations by type.
 	S3ExpressOperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_s3express_operations_total",
@@ -43,7 +43,7 @@ var (
 		[]string{"operation"}, // put, list, append
 	)
 
-	// S3ExpressBytesTotal tracks bytes by operation type
+	// S3ExpressBytesTotal tracks bytes by operation type.
 	S3ExpressBytesTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_s3express_bytes_total",
@@ -52,7 +52,7 @@ var (
 		[]string{"operation"}, // put, append
 	)
 
-	// S3ExpressLatency tracks operation latency
+	// S3ExpressLatency tracks operation latency.
 	S3ExpressLatency = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_s3express_latency_seconds",
@@ -62,7 +62,7 @@ var (
 		[]string{"operation"},
 	)
 
-	// S3ExpressAppendConflicts tracks append conflicts
+	// S3ExpressAppendConflicts tracks append conflicts.
 	S3ExpressAppendConflicts = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_s3express_append_conflicts_total",
@@ -70,7 +70,7 @@ var (
 		},
 	)
 
-	// S3ExpressLightweightETags tracks lightweight ETags used
+	// S3ExpressLightweightETags tracks lightweight ETags used.
 	S3ExpressLightweightETags = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_s3express_lightweight_etags_total",
@@ -84,7 +84,7 @@ var (
 // =============================================================================
 
 var (
-	// IcebergEnabled indicates if Iceberg is enabled
+	// IcebergEnabled indicates if Iceberg is enabled.
 	IcebergEnabled = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_iceberg_enabled",
@@ -92,23 +92,23 @@ var (
 		},
 	)
 
-	// IcebergNamespacesTotal tracks total namespaces
+	// IcebergNamespacesTotal tracks total namespaces.
 	IcebergNamespacesTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_iceberg_namespaces_total",
-			Help: "Total number of Iceberg namespaces",
+			Name: "nebulaio_iceberg_namespaces",
+			Help: "Current number of Iceberg namespaces",
 		},
 	)
 
-	// IcebergTablesTotal tracks total tables
+	// IcebergTablesTotal tracks total tables.
 	IcebergTablesTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_iceberg_tables_total",
-			Help: "Total number of Iceberg tables",
+			Name: "nebulaio_iceberg_tables",
+			Help: "Current number of Iceberg tables",
 		},
 	)
 
-	// IcebergOperationsTotal tracks operations by type
+	// IcebergOperationsTotal tracks operations by type.
 	IcebergOperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_iceberg_operations_total",
@@ -117,7 +117,7 @@ var (
 		[]string{"operation"}, // create_namespace, delete_namespace, create_table, update_table, delete_table, commit, snapshot
 	)
 
-	// IcebergCommitsTotal tracks commit outcomes
+	// IcebergCommitsTotal tracks commit outcomes.
 	IcebergCommitsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_iceberg_commits_total",
@@ -126,7 +126,7 @@ var (
 		[]string{"outcome"}, // success, failed, conflict
 	)
 
-	// IcebergCacheHits tracks cache performance
+	// IcebergCacheHits tracks cache performance.
 	IcebergCacheHits = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_iceberg_cache_hits_total",
@@ -134,7 +134,7 @@ var (
 		},
 	)
 
-	// IcebergCacheMisses tracks cache misses
+	// IcebergCacheMisses tracks cache misses.
 	IcebergCacheMisses = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_iceberg_cache_misses_total",
@@ -142,7 +142,7 @@ var (
 		},
 	)
 
-	// IcebergSnapshotsTotal tracks snapshots created
+	// IcebergSnapshotsTotal tracks snapshots created.
 	IcebergSnapshotsTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_iceberg_snapshots_total",
@@ -156,7 +156,7 @@ var (
 // =============================================================================
 
 var (
-	// MCPEnabled indicates if MCP is enabled
+	// MCPEnabled indicates if MCP is enabled.
 	MCPEnabled = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_mcp_enabled",
@@ -164,7 +164,7 @@ var (
 		},
 	)
 
-	// MCPSessionsActive tracks active MCP sessions
+	// MCPSessionsActive tracks active MCP sessions.
 	MCPSessionsActive = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_mcp_sessions_active",
@@ -172,7 +172,7 @@ var (
 		},
 	)
 
-	// MCPRequestsTotal tracks requests by outcome
+	// MCPRequestsTotal tracks requests by outcome.
 	MCPRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_mcp_requests_total",
@@ -181,7 +181,7 @@ var (
 		[]string{"outcome"}, // success, failed
 	)
 
-	// MCPToolInvocations tracks tool invocations
+	// MCPToolInvocations tracks tool invocations.
 	MCPToolInvocations = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_mcp_tool_invocations_total",
@@ -190,7 +190,7 @@ var (
 		[]string{"tool"},
 	)
 
-	// MCPResourceReads tracks resource reads
+	// MCPResourceReads tracks resource reads.
 	MCPResourceReads = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_mcp_resource_reads_total",
@@ -198,7 +198,7 @@ var (
 		},
 	)
 
-	// MCPBytesTransferred tracks bytes transferred
+	// MCPBytesTransferred tracks bytes transferred.
 	MCPBytesTransferred = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_mcp_bytes_transferred_total",
@@ -206,7 +206,7 @@ var (
 		},
 	)
 
-	// MCPLatency tracks request latency
+	// MCPLatency tracks request latency.
 	MCPLatency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_mcp_latency_seconds",
@@ -221,7 +221,7 @@ var (
 // =============================================================================
 
 var (
-	// GPUDirectEnabled indicates if GPUDirect is enabled
+	// GPUDirectEnabled indicates if GPUDirect is enabled.
 	GPUDirectEnabled = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_gpudirect_enabled",
@@ -229,7 +229,7 @@ var (
 		},
 	)
 
-	// GPUDirectOperationsTotal tracks operations by type
+	// GPUDirectOperationsTotal tracks operations by type.
 	GPUDirectOperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_gpudirect_operations_total",
@@ -238,7 +238,7 @@ var (
 		[]string{"operation"}, // read, write, batch
 	)
 
-	// GPUDirectBytesTotal tracks bytes by operation
+	// GPUDirectBytesTotal tracks bytes by operation.
 	GPUDirectBytesTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_gpudirect_bytes_total",
@@ -247,7 +247,7 @@ var (
 		[]string{"operation"}, // read, write
 	)
 
-	// GPUDirectLatency tracks latency by operation
+	// GPUDirectLatency tracks latency by operation.
 	GPUDirectLatency = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_gpudirect_latency_seconds",
@@ -257,7 +257,7 @@ var (
 		[]string{"operation"},
 	)
 
-	// GPUDirectBufferHits tracks buffer pool hits
+	// GPUDirectBufferHits tracks buffer pool hits.
 	GPUDirectBufferHits = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_gpudirect_buffer_hits_total",
@@ -265,7 +265,7 @@ var (
 		},
 	)
 
-	// GPUDirectBufferMisses tracks buffer pool misses
+	// GPUDirectBufferMisses tracks buffer pool misses.
 	GPUDirectBufferMisses = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_gpudirect_buffer_misses_total",
@@ -273,7 +273,7 @@ var (
 		},
 	)
 
-	// GPUDirectFallbacks tracks fallback to CPU operations
+	// GPUDirectFallbacks tracks fallback to CPU operations.
 	GPUDirectFallbacks = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_gpudirect_fallbacks_total",
@@ -281,7 +281,7 @@ var (
 		},
 	)
 
-	// GPUDirectErrors tracks errors
+	// GPUDirectErrors tracks errors.
 	GPUDirectErrors = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_gpudirect_errors_total",
@@ -295,7 +295,7 @@ var (
 // =============================================================================
 
 var (
-	// DPUEnabled indicates if DPU is enabled
+	// DPUEnabled indicates if DPU is enabled.
 	DPUEnabled = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_dpu_enabled",
@@ -303,7 +303,7 @@ var (
 		},
 	)
 
-	// DPUOperationsTotal tracks operations by type
+	// DPUOperationsTotal tracks operations by type.
 	DPUOperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_dpu_operations_total",
@@ -312,7 +312,7 @@ var (
 		[]string{"operation"}, // crypto, compress, storage, network
 	)
 
-	// DPUBytesTotal tracks bytes by operation
+	// DPUBytesTotal tracks bytes by operation.
 	DPUBytesTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_dpu_bytes_total",
@@ -321,7 +321,7 @@ var (
 		[]string{"operation"},
 	)
 
-	// DPULatency tracks latency by operation
+	// DPULatency tracks latency by operation.
 	DPULatency = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_dpu_latency_seconds",
@@ -331,7 +331,7 @@ var (
 		[]string{"operation"},
 	)
 
-	// DPUFallbacks tracks fallbacks to software
+	// DPUFallbacks tracks fallbacks to software.
 	DPUFallbacks = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_dpu_fallbacks_total",
@@ -339,7 +339,7 @@ var (
 		},
 	)
 
-	// DPUErrors tracks errors
+	// DPUErrors tracks errors.
 	DPUErrors = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_dpu_errors_total",
@@ -347,7 +347,7 @@ var (
 		},
 	)
 
-	// DPUHealthChecks tracks health check outcomes
+	// DPUHealthChecks tracks health check outcomes.
 	DPUHealthChecks = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_dpu_health_checks_total",
@@ -362,7 +362,7 @@ var (
 // =============================================================================
 
 var (
-	// RDMAEnabled indicates if RDMA is enabled
+	// RDMAEnabled indicates if RDMA is enabled.
 	RDMAEnabled = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_rdma_enabled",
@@ -370,7 +370,7 @@ var (
 		},
 	)
 
-	// RDMAConnectionsActive tracks active RDMA connections
+	// RDMAConnectionsActive tracks active RDMA connections.
 	RDMAConnectionsActive = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_rdma_connections_active",
@@ -378,7 +378,7 @@ var (
 		},
 	)
 
-	// RDMAConnectionsTotal tracks total RDMA connections
+	// RDMAConnectionsTotal tracks total RDMA connections.
 	RDMAConnectionsTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_rdma_connections_total",
@@ -386,7 +386,7 @@ var (
 		},
 	)
 
-	// RDMARequestsTotal tracks requests by outcome
+	// RDMARequestsTotal tracks requests by outcome.
 	RDMARequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_rdma_requests_total",
@@ -395,7 +395,7 @@ var (
 		[]string{"outcome"}, // success, failed
 	)
 
-	// RDMABytesTotal tracks bytes by direction
+	// RDMABytesTotal tracks bytes by direction.
 	RDMABytesTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_rdma_bytes_total",
@@ -404,7 +404,7 @@ var (
 		[]string{"direction"}, // sent, received
 	)
 
-	// RDMALatency tracks request latency
+	// RDMALatency tracks request latency.
 	RDMALatency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_rdma_latency_seconds",
@@ -413,7 +413,7 @@ var (
 		},
 	)
 
-	// RDMAMemoryUsed tracks RDMA memory pool usage
+	// RDMAMemoryUsed tracks RDMA memory pool usage.
 	RDMAMemoryUsed = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_rdma_memory_bytes_used",
@@ -421,11 +421,11 @@ var (
 		},
 	)
 
-	// RDMAMemoryTotal tracks total RDMA memory pool
+	// RDMAMemoryTotal tracks total RDMA memory pool.
 	RDMAMemoryTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_rdma_memory_bytes_total",
-			Help: "RDMA memory pool total bytes",
+			Name: "nebulaio_rdma_memory_bytes_capacity",
+			Help: "RDMA memory pool capacity bytes",
 		},
 	)
 )
@@ -435,7 +435,7 @@ var (
 // =============================================================================
 
 var (
-	// NIMEnabled indicates if NIM is enabled
+	// NIMEnabled indicates if NIM is enabled.
 	NIMEnabled = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_nim_enabled",
@@ -443,7 +443,7 @@ var (
 		},
 	)
 
-	// NIMRequestsTotal tracks requests by outcome
+	// NIMRequestsTotal tracks requests by outcome.
 	NIMRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_nim_requests_total",
@@ -452,7 +452,7 @@ var (
 		[]string{"outcome", "model"}, // success/failed, model name
 	)
 
-	// NIMTokensTotal tracks tokens used
+	// NIMTokensTotal tracks tokens used.
 	NIMTokensTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nebulaio_nim_tokens_total",
@@ -461,7 +461,7 @@ var (
 		[]string{"type"}, // prompt, completion, total
 	)
 
-	// NIMLatency tracks inference latency
+	// NIMLatency tracks inference latency.
 	NIMLatency = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_nim_latency_seconds",
@@ -471,7 +471,7 @@ var (
 		[]string{"model"},
 	)
 
-	// NIMCacheHits tracks cache hits
+	// NIMCacheHits tracks cache hits.
 	NIMCacheHits = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_nim_cache_hits_total",
@@ -479,7 +479,7 @@ var (
 		},
 	)
 
-	// NIMCacheMisses tracks cache misses
+	// NIMCacheMisses tracks cache misses.
 	NIMCacheMisses = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_nim_cache_misses_total",
@@ -487,7 +487,7 @@ var (
 		},
 	)
 
-	// NIMStreamingRequests tracks streaming requests
+	// NIMStreamingRequests tracks streaming requests.
 	NIMStreamingRequests = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "nebulaio_nim_streaming_requests_total",
@@ -495,7 +495,7 @@ var (
 		},
 	)
 
-	// NIMModelsAvailable tracks available models
+	// NIMModelsAvailable tracks available models.
 	NIMModelsAvailable = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_nim_models_available",
@@ -509,7 +509,7 @@ var (
 // =============================================================================
 
 var (
-	// AIMLFeatureInfo provides feature status information
+	// AIMLFeatureInfo provides feature status information.
 	AIMLFeatureInfo = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nebulaio_aiml_feature_info",
@@ -523,7 +523,7 @@ var (
 // Helper Functions
 // =============================================================================
 
-// SetS3ExpressEnabled sets the S3 Express enabled status
+// SetS3ExpressEnabled sets the S3 Express enabled status.
 func SetS3ExpressEnabled(enabled bool) {
 	if enabled {
 		S3ExpressEnabled.Set(1)
@@ -534,7 +534,7 @@ func SetS3ExpressEnabled(enabled bool) {
 	}
 }
 
-// SetIcebergEnabled sets the Iceberg enabled status
+// SetIcebergEnabled sets the Iceberg enabled status.
 func SetIcebergEnabled(enabled bool) {
 	if enabled {
 		IcebergEnabled.Set(1)
@@ -545,7 +545,7 @@ func SetIcebergEnabled(enabled bool) {
 	}
 }
 
-// SetMCPEnabled sets the MCP enabled status
+// SetMCPEnabled sets the MCP enabled status.
 func SetMCPEnabled(enabled bool) {
 	if enabled {
 		MCPEnabled.Set(1)
@@ -556,7 +556,7 @@ func SetMCPEnabled(enabled bool) {
 	}
 }
 
-// SetGPUDirectEnabled sets the GPUDirect enabled status
+// SetGPUDirectEnabled sets the GPUDirect enabled status.
 func SetGPUDirectEnabled(enabled bool) {
 	if enabled {
 		GPUDirectEnabled.Set(1)
@@ -567,7 +567,7 @@ func SetGPUDirectEnabled(enabled bool) {
 	}
 }
 
-// SetDPUEnabled sets the DPU enabled status
+// SetDPUEnabled sets the DPU enabled status.
 func SetDPUEnabled(enabled bool) {
 	if enabled {
 		DPUEnabled.Set(1)
@@ -578,7 +578,7 @@ func SetDPUEnabled(enabled bool) {
 	}
 }
 
-// SetRDMAEnabled sets the RDMA enabled status
+// SetRDMAEnabled sets the RDMA enabled status.
 func SetRDMAEnabled(enabled bool) {
 	if enabled {
 		RDMAEnabled.Set(1)
@@ -589,7 +589,7 @@ func SetRDMAEnabled(enabled bool) {
 	}
 }
 
-// SetNIMEnabled sets the NIM enabled status
+// SetNIMEnabled sets the NIM enabled status.
 func SetNIMEnabled(enabled bool) {
 	if enabled {
 		NIMEnabled.Set(1)

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestEncodeStream_ContextCancellation tests that EncodeStream goroutine terminates when context is cancelled
+// TestEncodeStream_ContextCancellation tests that EncodeStream goroutine terminates when context is cancelled.
 func TestEncodeStream_ContextCancellation(t *testing.T) {
 	encoder, err := NewEncoder(4, 2, 1024)
 	require.NoError(t, err, "Failed to create encoder")
@@ -56,7 +56,7 @@ func TestEncodeStream_ContextCancellation(t *testing.T) {
 						channelsClosed = true
 					} else if err != nil {
 						// Should be context.Canceled
-						assert.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error")
+						require.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error")
 					}
 				case <-time.After(100 * time.Millisecond):
 					require.Fail(t, "errChan not closed after dataChan closed")
@@ -68,7 +68,7 @@ func TestEncodeStream_ContextCancellation(t *testing.T) {
 	}
 }
 
-// TestEncodeStream_FullStream tests that EncodeStream completes successfully
+// TestEncodeStream_FullStream tests that EncodeStream completes successfully.
 func TestEncodeStream_FullStream(t *testing.T) {
 	encoder, err := NewEncoder(4, 2, 1024)
 	require.NoError(t, err, "Failed to create encoder")
@@ -84,6 +84,7 @@ func TestEncodeStream_FullStream(t *testing.T) {
 
 	// Read all chunks
 	chunkCount := 0
+
 	for {
 		select {
 		case data, ok := <-dataChan:
@@ -91,14 +92,17 @@ func TestEncodeStream_FullStream(t *testing.T) {
 				// Channel closed, check for errors
 				select {
 				case err := <-errChan:
-					assert.NoError(t, err, "Encoding should complete without error")
+					require.NoError(t, err, "Encoding should complete without error")
 				default:
 				}
 				// Success
-				assert.Greater(t, chunkCount, 0, "Expected at least one chunk")
+				assert.Positive(t, chunkCount, "Expected at least one chunk")
+
 				return
 			}
+
 			assert.NotNil(t, data, "Received data should not be nil")
+
 			chunkCount++
 
 		case err := <-errChan:
@@ -110,7 +114,7 @@ func TestEncodeStream_FullStream(t *testing.T) {
 	}
 }
 
-// TestEncodeStream_EmptyReader tests handling of empty input
+// TestEncodeStream_EmptyReader tests handling of empty input.
 func TestEncodeStream_EmptyReader(t *testing.T) {
 	encoder, err := NewEncoder(4, 2, 1024)
 	require.NoError(t, err, "Failed to create encoder")
@@ -137,7 +141,7 @@ func TestEncodeStream_EmptyReader(t *testing.T) {
 	}
 }
 
-// TestEncodeStream_ContextCancelledBeforeRead tests cancellation before any data is read
+// TestEncodeStream_ContextCancelledBeforeRead tests cancellation before any data is read.
 func TestEncodeStream_ContextCancelledBeforeRead(t *testing.T) {
 	encoder, err := NewEncoder(4, 2, 1024)
 	require.NoError(t, err, "Failed to create encoder")
@@ -155,7 +159,7 @@ func TestEncodeStream_ContextCancelledBeforeRead(t *testing.T) {
 	timeout := time.After(1 * time.Second)
 	select {
 	case err := <-errChan:
-		assert.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error")
+		require.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error")
 	case <-timeout:
 		require.Fail(t, "Timeout waiting for context cancellation error")
 	}
@@ -169,7 +173,7 @@ func TestEncodeStream_ContextCancelledBeforeRead(t *testing.T) {
 	}
 }
 
-// TestEncodeStream_SlowReader tests that cancellation works even with slow data source
+// TestEncodeStream_SlowReader tests that cancellation works even with slow data source.
 func TestEncodeStream_SlowReader(t *testing.T) {
 	encoder, err := NewEncoder(4, 2, 1024)
 	require.NoError(t, err, "Failed to create encoder")
@@ -193,7 +197,7 @@ func TestEncodeStream_SlowReader(t *testing.T) {
 	case err := <-errChan:
 		// Should get context.Canceled
 		if err != nil {
-			assert.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error from slow reader")
+			require.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error from slow reader")
 		}
 	case <-timeout:
 		require.Fail(t, "Goroutine did not terminate within 2 seconds")
@@ -204,7 +208,7 @@ func TestEncodeStream_SlowReader(t *testing.T) {
 	}
 }
 
-// TestEncodeStream_ReadError tests handling of read errors
+// TestEncodeStream_ReadError tests handling of read errors.
 func TestEncodeStream_ReadError(t *testing.T) {
 	encoder, err := NewEncoder(4, 2, 1024)
 	require.NoError(t, err, "Failed to create encoder")
@@ -220,7 +224,7 @@ func TestEncodeStream_ReadError(t *testing.T) {
 	case err := <-errChan:
 		require.Error(t, err, "Should receive error from failing reader")
 		assert.Contains(t, err.Error(), "failed to read chunk", "Error should indicate read failure")
-		assert.ErrorIs(t, err, expectedErr, "Should wrap original error")
+		require.ErrorIs(t, err, expectedErr, "Should wrap original error")
 	case <-dataChan:
 		require.Fail(t, "Should not receive data from failing reader")
 	case <-timeout:
@@ -228,7 +232,7 @@ func TestEncodeStream_ReadError(t *testing.T) {
 	}
 }
 
-// slowReader simulates a slow data source
+// slowReader simulates a slow data source.
 type slowReader struct {
 	data  []byte
 	pos   int
@@ -252,7 +256,7 @@ func (s *slowReader) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
-// errorReader simulates a failing reader
+// errorReader simulates a failing reader.
 type errorReader struct {
 	err error
 }

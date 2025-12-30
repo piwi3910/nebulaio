@@ -16,13 +16,13 @@ func TestAllocateAligned(t *testing.T) {
 	}{
 		{1024, 512},
 		{4096, 4096},
-		{1024 * 1024, 4096},   // 1MB
+		{1024 * 1024, 4096},     // 1MB
 		{4 * 1024 * 1024, 4096}, // 4MB (block size)
 	}
 
 	for _, tt := range tests {
 		buf := AllocateAligned(tt.size, tt.alignment)
-		assert.Equal(t, tt.size, len(buf), "Buffer should be correct size")
+		assert.Len(t, buf, tt.size, "Buffer should be correct size")
 		assert.True(t, IsAligned(buf, tt.alignment), "Buffer should be aligned to %d", tt.alignment)
 	}
 }
@@ -54,7 +54,7 @@ func TestAlignedBufferPool(t *testing.T) {
 
 	// Get buffer from pool
 	buf1 := pool.Get()
-	assert.Equal(t, BlockSize, len(buf1))
+	assert.Len(t, buf1, BlockSize)
 	assert.True(t, IsAligned(buf1, 4096))
 
 	// Write some data
@@ -66,7 +66,7 @@ func TestAlignedBufferPool(t *testing.T) {
 
 	// Get another buffer (may be recycled)
 	buf2 := pool.Get()
-	assert.Equal(t, BlockSize, len(buf2))
+	assert.Len(t, buf2, BlockSize)
 	assert.True(t, IsAligned(buf2, 4096))
 
 	// Buffer should be cleared if recycled
@@ -75,8 +75,9 @@ func TestAlignedBufferPool(t *testing.T) {
 
 func TestDirectIOFileBasic(t *testing.T) {
 	// Create a temp file
-	tmpFile, err := os.CreateTemp("", "directio_test_*.dat")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "directio_test_*.dat")
 	require.NoError(t, err)
+
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
@@ -119,8 +120,9 @@ func TestDirectIOFileBasic(t *testing.T) {
 
 func TestDirectIOFileWithPool(t *testing.T) {
 	// Create a temp file
-	tmpFile, err := os.CreateTemp("", "directio_pool_test_*.dat")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "directio_pool_test_*.dat")
 	require.NoError(t, err)
+
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
@@ -139,7 +141,7 @@ func TestDirectIOFileWithPool(t *testing.T) {
 
 	// Get aligned buffer from pool
 	buf := dio.GetAlignedBuffer(BlockSize)
-	assert.Equal(t, BlockSize, len(buf))
+	assert.Len(t, buf, BlockSize)
 	assert.True(t, IsAligned(buf, 4096))
 
 	// Fill with pattern
@@ -162,7 +164,7 @@ func TestDirectIOFileWithPool(t *testing.T) {
 	assert.Equal(t, BlockSize, n)
 
 	// Verify data
-	for i := 0; i < BlockSize; i++ {
+	for i := range BlockSize {
 		if readBuf[i] != byte(i%256) {
 			t.Errorf("Data mismatch at offset %d: got %d, want %d", i, readBuf[i], byte(i%256))
 			break
@@ -174,8 +176,9 @@ func TestDirectIOFileWithPool(t *testing.T) {
 
 func TestDirectIOFallback(t *testing.T) {
 	// Create a temp file
-	tmpFile, err := os.CreateTemp("", "directio_fallback_test_*.dat")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "directio_fallback_test_*.dat")
 	require.NoError(t, err)
+
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
@@ -238,6 +241,7 @@ func TestVolumeWithDirectIO(t *testing.T) {
 
 	vol, err := CreateVolume(dir+"/test.neb", cfg)
 	require.NoError(t, err)
+
 	defer vol.Close()
 
 	// Write an object
@@ -280,6 +284,7 @@ func TestManagerWithDirectIO(t *testing.T) {
 
 	mgr, err := NewManager(cfg)
 	require.NoError(t, err)
+
 	defer mgr.Close()
 
 	// Write multiple objects
@@ -339,6 +344,7 @@ func TestOpenVolumeWithDirectIOConfig(t *testing.T) {
 
 	vol2, err := OpenVolumeWithConfig(dir+"/test.neb", dioConfig)
 	require.NoError(t, err)
+
 	defer vol2.Close()
 
 	// Read the data
@@ -370,13 +376,16 @@ func BenchmarkDirectIOWrite(b *testing.B) {
 
 	vol, err := CreateVolume(dir+"/bench.neb", cfg)
 	require.NoError(b, err)
+
 	defer vol.Close()
 
 	data := bytes.Repeat([]byte("Benchmark data for direct I/O testing "), 256) // ~10KB
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		key := "key-" + string(rune(i%1000))
+
 		err := vol.Put("bench", key, bytes.NewReader(data), int64(len(data)))
 		if err != nil {
 			b.Fatal(err)
@@ -401,19 +410,23 @@ func BenchmarkDirectIORead(b *testing.B) {
 
 	vol, err := CreateVolume(dir+"/bench.neb", cfg)
 	require.NoError(b, err)
+
 	defer vol.Close()
 
 	// Pre-populate data
 	data := bytes.Repeat([]byte("Benchmark data for direct I/O testing "), 256)
-	for i := 0; i < 100; i++ {
+
+	for i := range 100 {
 		key := "key-" + string(rune(i))
 		err := vol.Put("bench", key, bytes.NewReader(data), int64(len(data)))
 		require.NoError(b, err)
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := range b.N {
 		key := "key-" + string(rune(i%100))
+
 		_, err := vol.Get("bench", key)
 		if err != nil {
 			b.Fatal(err)

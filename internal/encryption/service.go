@@ -15,7 +15,13 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-// Config holds encryption service configuration
+// Service configuration constants.
+const (
+	defaultKeyCacheTTL     = 5 * time.Minute // Default TTL for cached keys
+	defaultKeyCacheMaxSize = 1000            // Default maximum number of cached keys
+)
+
+// Config holds encryption service configuration.
 type Config struct {
 	// DefaultKeyID is the default KMS key to use for encryption
 	DefaultKeyID string `json:"defaultKeyId" yaml:"defaultKeyId"`
@@ -30,23 +36,23 @@ type Config struct {
 	KeyCacheMaxSize int `json:"keyCacheMaxSize" yaml:"keyCacheMaxSize"`
 }
 
-// DefaultConfig returns a default encryption service configuration
+// DefaultConfig returns a default encryption service configuration.
 func DefaultConfig() Config {
 	return Config{
 		Algorithm:       kms.AlgorithmAES256GCM,
-		KeyCacheTTL:     5 * time.Minute,
-		KeyCacheMaxSize: 1000,
+		KeyCacheTTL:     defaultKeyCacheTTL,
+		KeyCacheMaxSize: defaultKeyCacheMaxSize,
 	}
 }
 
-// Service provides envelope encryption using a KMS provider
+// Service provides envelope encryption using a KMS provider.
 type Service struct {
-	config   Config
 	provider kms.Provider
 	cache    *keyCache
+	config   Config
 }
 
-// keyCache holds cached decrypted data keys
+// keyCache holds cached decrypted data keys.
 type keyCache struct {
 	entries map[string]*cacheEntry
 	maxSize int
@@ -54,21 +60,22 @@ type keyCache struct {
 }
 
 type cacheEntry struct {
-	key       []byte
 	expiresAt time.Time
+	key       []byte
 }
 
-// NewService creates a new encryption service
+// NewService creates a new encryption service.
 func NewService(config Config, provider kms.Provider) (*Service, error) {
 	if provider == nil {
 		return nil, errors.New("KMS provider is required")
 	}
 
 	if config.KeyCacheMaxSize == 0 {
-		config.KeyCacheMaxSize = 1000
+		config.KeyCacheMaxSize = defaultKeyCacheMaxSize
 	}
+
 	if config.KeyCacheTTL == 0 {
-		config.KeyCacheTTL = 5 * time.Minute
+		config.KeyCacheTTL = defaultKeyCacheTTL
 	}
 
 	return &Service{
@@ -81,7 +88,7 @@ func NewService(config Config, provider kms.Provider) (*Service, error) {
 	}, nil
 }
 
-// EncryptedData holds the result of envelope encryption
+// EncryptedData holds the result of envelope encryption.
 type EncryptedData struct {
 	// KeyID is the KMS key used to encrypt the DEK
 	KeyID string `json:"keyId"`
@@ -96,12 +103,12 @@ type EncryptedData struct {
 	Ciphertext []byte `json:"ciphertext"`
 }
 
-// Encrypt performs envelope encryption on the given data
+// Encrypt performs envelope encryption on the given data.
 func (s *Service) Encrypt(ctx context.Context, plaintext []byte) (*EncryptedData, error) {
 	return s.EncryptWithKey(ctx, s.config.DefaultKeyID, plaintext)
 }
 
-// EncryptWithKey performs envelope encryption using a specific KMS key
+// EncryptWithKey performs envelope encryption using a specific KMS key.
 func (s *Service) EncryptWithKey(ctx context.Context, keyID string, plaintext []byte) (*EncryptedData, error) {
 	if keyID == "" {
 		return nil, errors.New("key ID is required")
@@ -132,7 +139,7 @@ func (s *Service) EncryptWithKey(ctx context.Context, keyID string, plaintext []
 	}, nil
 }
 
-// Decrypt performs envelope decryption on the given encrypted data
+// Decrypt performs envelope decryption on the given encrypted data.
 func (s *Service) Decrypt(ctx context.Context, data *EncryptedData) ([]byte, error) {
 	if data == nil {
 		return nil, errors.New("encrypted data is required")
@@ -162,7 +169,7 @@ func (s *Service) Decrypt(ctx context.Context, data *EncryptedData) ([]byte, err
 	return plaintext, nil
 }
 
-// encryptData encrypts data using the given key and algorithm
+// encryptData encrypts data using the given key and algorithm.
 func (s *Service) encryptData(key, plaintext []byte, algo kms.Algorithm) ([]byte, error) {
 	switch algo {
 	case kms.AlgorithmAES128, kms.AlgorithmAES256, kms.AlgorithmAES256GCM:
@@ -174,7 +181,7 @@ func (s *Service) encryptData(key, plaintext []byte, algo kms.Algorithm) ([]byte
 	}
 }
 
-// decryptData decrypts data using the given key and algorithm
+// decryptData decrypts data using the given key and algorithm.
 func (s *Service) decryptData(key, ciphertext []byte, algo kms.Algorithm) ([]byte, error) {
 	switch algo {
 	case kms.AlgorithmAES128, kms.AlgorithmAES256, kms.AlgorithmAES256GCM:
@@ -186,7 +193,7 @@ func (s *Service) decryptData(key, ciphertext []byte, algo kms.Algorithm) ([]byt
 	}
 }
 
-// encryptAESGCM encrypts data using AES-GCM
+// encryptAESGCM encrypts data using AES-GCM.
 func (s *Service) encryptAESGCM(key, plaintext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -199,14 +206,16 @@ func (s *Service) encryptAESGCM(key, plaintext []byte) ([]byte, error) {
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
+
+	_, readErr := io.ReadFull(rand.Reader, nonce)
+	if readErr != nil {
+		return nil, readErr
 	}
 
 	return gcm.Seal(nonce, nonce, plaintext, nil), nil
 }
 
-// decryptAESGCM decrypts data using AES-GCM
+// decryptAESGCM decrypts data using AES-GCM.
 func (s *Service) decryptAESGCM(key, ciphertext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -228,7 +237,7 @@ func (s *Service) decryptAESGCM(key, ciphertext []byte) ([]byte, error) {
 	return gcm.Open(nil, nonce, ciphertext, nil)
 }
 
-// encryptChaCha20 encrypts data using ChaCha20-Poly1305
+// encryptChaCha20 encrypts data using ChaCha20-Poly1305.
 func (s *Service) encryptChaCha20(key, plaintext []byte) ([]byte, error) {
 	aead, err := chacha20poly1305.New(key)
 	if err != nil {
@@ -236,14 +245,16 @@ func (s *Service) encryptChaCha20(key, plaintext []byte) ([]byte, error) {
 	}
 
 	nonce := make([]byte, aead.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
+
+	_, readErr := io.ReadFull(rand.Reader, nonce)
+	if readErr != nil {
+		return nil, readErr
 	}
 
 	return aead.Seal(nonce, nonce, plaintext, nil), nil
 }
 
-// decryptChaCha20 decrypts data using ChaCha20-Poly1305
+// decryptChaCha20 decrypts data using ChaCha20-Poly1305.
 func (s *Service) decryptChaCha20(key, ciphertext []byte) ([]byte, error) {
 	aead, err := chacha20poly1305.New(key)
 	if err != nil {
@@ -260,7 +271,7 @@ func (s *Service) decryptChaCha20(key, ciphertext []byte) ([]byte, error) {
 	return aead.Open(nil, nonce, ciphertext, nil)
 }
 
-// RotateKey re-encrypts data with a new data key
+// RotateKey re-encrypts data with a new data key.
 func (s *Service) RotateKey(ctx context.Context, data *EncryptedData) (*EncryptedData, error) {
 	// Decrypt the data
 	plaintext, err := s.Decrypt(ctx, data)
@@ -280,12 +291,12 @@ func (s *Service) RotateKey(ctx context.Context, data *EncryptedData) (*Encrypte
 	return newData, nil
 }
 
-// Provider returns the underlying KMS provider
+// Provider returns the underlying KMS provider.
 func (s *Service) Provider() kms.Provider {
 	return s.provider
 }
 
-// Close closes the encryption service
+// Close closes the encryption service.
 func (s *Service) Close() error {
 	s.cache.clear()
 	return nil
@@ -309,6 +320,7 @@ func (c *keyCache) get(key string) []byte {
 	// Return a copy to prevent modification
 	result := make([]byte, len(entry.key))
 	copy(result, entry.key)
+
 	return result
 }
 
@@ -347,8 +359,10 @@ func (c *keyCache) evictExpired() {
 }
 
 func (c *keyCache) evictOldest() {
-	var oldestKey string
-	var oldestTime time.Time
+	var (
+		oldestKey  string
+		oldestTime time.Time
+	)
 
 	for key, entry := range c.entries {
 		if oldestKey == "" || entry.expiresAt.Before(oldestTime) {
@@ -370,18 +384,20 @@ func (c *keyCache) clear() {
 	for _, entry := range c.entries {
 		clearBytes(entry.key)
 	}
+
 	c.entries = make(map[string]*cacheEntry)
 }
 
-// clearBytes securely clears a byte slice
+// clearBytes securely clears a byte slice.
 func clearBytes(b []byte) {
 	for i := range b {
 		b[i] = 0
 	}
 }
 
-// StreamEncryptor provides streaming encryption for large files
+// StreamEncryptor provides streaming encryption for large files.
 type StreamEncryptor struct {
+	aead      cipher.AEAD
 	service   *Service
 	keyID     string
 	algorithm kms.Algorithm
@@ -389,10 +405,9 @@ type StreamEncryptor struct {
 	encDEK    []byte
 	nonce     []byte
 	counter   uint64
-	aead      cipher.AEAD
 }
 
-// NewStreamEncryptor creates a new stream encryptor
+// NewStreamEncryptor creates a new stream encryptor.
 func (s *Service) NewStreamEncryptor(ctx context.Context, keyID string) (*StreamEncryptor, error) {
 	if keyID == "" {
 		keyID = s.config.DefaultKeyID
@@ -408,24 +423,29 @@ func (s *Service) NewStreamEncryptor(ctx context.Context, keyID string) (*Stream
 
 	// Create AEAD
 	var aead cipher.AEAD
+
 	switch s.config.Algorithm {
 	case kms.AlgorithmChaCha20:
 		aead, err = chacha20poly1305.New(dataKey.Plaintext)
 	default:
 		var block cipher.Block
+
 		block, err = aes.NewCipher(dataKey.Plaintext)
 		if err != nil {
 			return nil, err
 		}
+
 		aead, err = cipher.NewGCM(block)
 	}
+
 	if err != nil {
 		return nil, err
 	}
 
 	// Generate random base nonce
 	nonce := make([]byte, aead.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	_, err = io.ReadFull(rand.Reader, nonce)
+	if err != nil {
 		return nil, err
 	}
 
@@ -441,7 +461,7 @@ func (s *Service) NewStreamEncryptor(ctx context.Context, keyID string) (*Stream
 	}, nil
 }
 
-// Header returns the encryption header to be stored with the encrypted data
+// Header returns the encryption header to be stored with the encrypted data.
 func (e *StreamEncryptor) Header() *EncryptedData {
 	return &EncryptedData{
 		KeyID:        e.keyID,
@@ -451,7 +471,7 @@ func (e *StreamEncryptor) Header() *EncryptedData {
 	}
 }
 
-// EncryptChunk encrypts a single chunk of data
+// EncryptChunk encrypts a single chunk of data.
 func (e *StreamEncryptor) EncryptChunk(plaintext []byte) ([]byte, error) {
 	// Create counter-based nonce
 	nonce := make([]byte, len(e.nonce))
@@ -460,6 +480,7 @@ func (e *StreamEncryptor) EncryptChunk(plaintext []byte) ([]byte, error) {
 	// XOR counter into last 8 bytes of nonce
 	counterBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(counterBytes, e.counter)
+
 	for i := 0; i < 8 && i < len(nonce); i++ {
 		nonce[len(nonce)-8+i] ^= counterBytes[i]
 	}
@@ -469,50 +490,59 @@ func (e *StreamEncryptor) EncryptChunk(plaintext []byte) ([]byte, error) {
 	return e.aead.Seal(nil, nonce, plaintext, nil), nil
 }
 
-// Close clears sensitive data from memory
+// Close clears sensitive data from memory.
 func (e *StreamEncryptor) Close() error {
 	clearBytes(e.dek)
 	return nil
 }
 
-// StreamDecryptor provides streaming decryption for large files
+// StreamDecryptor provides streaming decryption for large files.
 type StreamDecryptor struct {
+	aead      cipher.AEAD
 	service   *Service
 	algorithm kms.Algorithm
 	dek       []byte
 	nonce     []byte
 	counter   uint64
-	aead      cipher.AEAD
 }
 
-// NewStreamDecryptor creates a new stream decryptor
+// NewStreamDecryptor creates a new stream decryptor.
 func (s *Service) NewStreamDecryptor(ctx context.Context, header *EncryptedData) (*StreamDecryptor, error) {
 	// Get DEK from cache or KMS
 	cacheKey := string(header.EncryptedDEK)
+
 	dek := s.cache.get(cacheKey)
 	if dek == nil {
 		var err error
+
 		dek, err = s.provider.DecryptDataKey(ctx, header.KeyID, header.EncryptedDEK)
 		if err != nil {
 			return nil, err
 		}
+
 		s.cache.set(cacheKey, dek, s.config.KeyCacheTTL)
 	}
 
 	// Create AEAD
-	var aead cipher.AEAD
-	var err error
+	var (
+		aead cipher.AEAD
+		err  error
+	)
+
 	switch header.Algorithm {
 	case kms.AlgorithmChaCha20:
 		aead, err = chacha20poly1305.New(dek)
 	default:
 		var block cipher.Block
+
 		block, err = aes.NewCipher(dek)
 		if err != nil {
 			return nil, err
 		}
+
 		aead, err = cipher.NewGCM(block)
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -527,7 +557,7 @@ func (s *Service) NewStreamDecryptor(ctx context.Context, header *EncryptedData)
 	}, nil
 }
 
-// DecryptChunk decrypts a single chunk of data
+// DecryptChunk decrypts a single chunk of data.
 func (d *StreamDecryptor) DecryptChunk(ciphertext []byte) ([]byte, error) {
 	// Create counter-based nonce
 	nonce := make([]byte, len(d.nonce))
@@ -536,6 +566,7 @@ func (d *StreamDecryptor) DecryptChunk(ciphertext []byte) ([]byte, error) {
 	// XOR counter into last 8 bytes of nonce
 	counterBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(counterBytes, d.counter)
+
 	for i := 0; i < 8 && i < len(nonce); i++ {
 		nonce[len(nonce)-8+i] ^= counterBytes[i]
 	}
@@ -545,7 +576,7 @@ func (d *StreamDecryptor) DecryptChunk(ciphertext []byte) ([]byte, error) {
 	return d.aead.Open(nil, nonce, ciphertext, nil)
 }
 
-// Close clears sensitive data from memory
+// Close clears sensitive data from memory.
 func (d *StreamDecryptor) Close() error {
 	clearBytes(d.dek)
 	return nil

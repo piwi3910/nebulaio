@@ -11,166 +11,122 @@ import (
 	"time"
 )
 
-// BatchJobStatus represents the status of a batch replication job
+// Batch manager configuration defaults.
+const (
+	defaultMaxConcurrentJobs = 5
+	defaultHistoryLimit      = 100
+	retryMultiplier          = 2
+	streamingBufferThreshold = 65536 // 64KB
+	nanosecondsPerSecond     = 1e9
+)
+
+// BatchJobStatus represents the status of a batch replication job.
 type BatchJobStatus string
 
 const (
-	BatchJobStatusPending    BatchJobStatus = "Pending"
-	BatchJobStatusRunning    BatchJobStatus = "Running"
-	BatchJobStatusCompleted  BatchJobStatus = "Completed"
-	BatchJobStatusFailed     BatchJobStatus = "Failed"
-	BatchJobStatusCancelled  BatchJobStatus = "Cancelled"
-	BatchJobStatusPaused     BatchJobStatus = "Paused"
+	BatchJobStatusPending   BatchJobStatus = "Pending"
+	BatchJobStatusRunning   BatchJobStatus = "Running"
+	BatchJobStatusCompleted BatchJobStatus = "Completed"
+	BatchJobStatusFailed    BatchJobStatus = "Failed"
+	BatchJobStatusCancelled BatchJobStatus = "Cancelled"
+	BatchJobStatusPaused    BatchJobStatus = "Paused"
 )
 
-// BatchJob represents a batch replication job
+// BatchJob represents a batch replication job.
 type BatchJob struct {
-	// JobID is the unique identifier for this job
-	JobID string `json:"jobId"`
-
-	// Description is an optional description of the job
-	Description string `json:"description,omitempty"`
-
-	// SourceBucket is the source bucket
-	SourceBucket string `json:"sourceBucket"`
-
-	// DestinationBucket is the destination bucket
-	DestinationBucket string `json:"destinationBucket"`
-
-	// DestinationEndpoint is the destination endpoint (optional, for cross-cluster)
-	DestinationEndpoint string `json:"destinationEndpoint,omitempty"`
-
-	// Prefix filters objects by prefix
-	Prefix string `json:"prefix,omitempty"`
-
-	// Tags filters objects by tags
-	Tags map[string]string `json:"tags,omitempty"`
-
-	// CreatedAfter filters objects created after this time
-	CreatedAfter *time.Time `json:"createdAfter,omitempty"`
-
-	// CreatedBefore filters objects created before this time
-	CreatedBefore *time.Time `json:"createdBefore,omitempty"`
-
-	// MinSize filters objects by minimum size
-	MinSize int64 `json:"minSize,omitempty"`
-
-	// MaxSize filters objects by maximum size
-	MaxSize int64 `json:"maxSize,omitempty"`
-
-	// Priority determines job priority (lower = higher priority)
-	Priority int `json:"priority"`
-
-	// Concurrency is the number of parallel workers
-	Concurrency int `json:"concurrency"`
-
-	// MaxRetries is the maximum retries for failed objects
-	MaxRetries int `json:"maxRetries"`
-
-	// RateLimitBytesPerSec limits bandwidth usage
-	RateLimitBytesPerSec int64 `json:"rateLimitBytesPerSec,omitempty"`
-
-	// Status is the current job status
-	Status BatchJobStatus `json:"status"`
-
-	// Progress holds progress information
-	Progress BatchJobProgress `json:"progress"`
-
-	// CreatedAt is when the job was created
-	CreatedAt time.Time `json:"createdAt"`
-
-	// StartedAt is when the job started
-	StartedAt *time.Time `json:"startedAt,omitempty"`
-
-	// CompletedAt is when the job completed
-	CompletedAt *time.Time `json:"completedAt,omitempty"`
-
-	// Error contains the error message if failed
-	Error string `json:"error,omitempty"`
-
-	// internal state
-	cancelFunc context.CancelFunc
-	pauseCh    chan struct{}
-	resumeCh   chan struct{}
+	CreatedAt            time.Time  `json:"createdAt"`
+	StartedAt            *time.Time `json:"startedAt,omitempty"`
+	CreatedBefore        *time.Time `json:"createdBefore,omitempty"`
+	resumeCh             chan struct{}
+	pauseCh              chan struct{}
+	cancelFunc           context.CancelFunc
+	Tags                 map[string]string `json:"tags,omitempty"`
+	CreatedAfter         *time.Time        `json:"createdAfter,omitempty"`
+	CompletedAt          *time.Time        `json:"completedAt,omitempty"`
+	Description          string            `json:"description,omitempty"`
+	JobID                string            `json:"jobId"`
+	SourceBucket         string            `json:"sourceBucket"`
+	DestinationBucket    string            `json:"destinationBucket"`
+	DestinationEndpoint  string            `json:"destinationEndpoint,omitempty"`
+	Prefix               string            `json:"prefix,omitempty"`
+	Status               BatchJobStatus    `json:"status"`
+	Error                string            `json:"error,omitempty"`
+	Progress             BatchJobProgress  `json:"progress"`
+	Concurrency          int               `json:"concurrency"`
+	MaxRetries           int               `json:"maxRetries"`
+	Priority             int               `json:"priority"`
+	RateLimitBytesPerSec int64             `json:"rateLimitBytesPerSec,omitempty"`
+	MaxSize              int64             `json:"maxSize,omitempty"`
+	MinSize              int64             `json:"minSize,omitempty"`
 }
 
-// BatchJobProgress tracks job progress
+// BatchJobProgress tracks job progress.
 type BatchJobProgress struct {
-	TotalObjects     int64 `json:"totalObjects"`
-	ProcessedObjects int64 `json:"processedObjects"`
-	SuccessObjects   int64 `json:"successObjects"`
-	FailedObjects    int64 `json:"failedObjects"`
-	SkippedObjects   int64 `json:"skippedObjects"`
-	TotalBytes       int64 `json:"totalBytes"`
-	ProcessedBytes   int64 `json:"processedBytes"`
-	BytesPerSecond   int64 `json:"bytesPerSecond"`
+	TotalObjects           int64 `json:"totalObjects"`
+	ProcessedObjects       int64 `json:"processedObjects"`
+	SuccessObjects         int64 `json:"successObjects"`
+	FailedObjects          int64 `json:"failedObjects"`
+	SkippedObjects         int64 `json:"skippedObjects"`
+	TotalBytes             int64 `json:"totalBytes"`
+	ProcessedBytes         int64 `json:"processedBytes"`
+	BytesPerSecond         int64 `json:"bytesPerSecond"`
 	EstimatedTimeRemaining int64 `json:"estimatedTimeRemaining"` // seconds
 }
 
-// BatchManager manages batch replication jobs
+// BatchManager manages batch replication jobs.
 type BatchManager struct {
-	mu      sync.RWMutex
-	jobs    map[string]*BatchJob
-	service *Service
-
-	// Object lister for the backend
-	lister ObjectLister
-
-	// Remote client factory for cross-cluster replication
-	clientFactory RemoteClientFactory
-
-	// Maximum concurrent jobs
+	lister            ObjectLister
+	clientFactory     RemoteClientFactory
+	jobs              map[string]*BatchJob
+	service           *Service
 	maxConcurrentJobs int
-
-	// Currently running jobs
-	runningJobs int32
-
-	// Job history limit
-	historyLimit int
+	historyLimit      int
+	mu                sync.RWMutex
+	runningJobs       int32
 }
 
-// ObjectLister lists objects in a bucket
+// ObjectLister lists objects in a bucket.
 type ObjectLister interface {
 	ListObjects(ctx context.Context, bucket, prefix string, recursive bool) (<-chan ObjectListEntry, <-chan error)
 }
 
-// ObjectListEntry represents an object in the list
+// ObjectListEntry represents an object in the list.
 type ObjectListEntry struct {
-	Key          string
-	Size         int64
-	LastModified time.Time
-	VersionID    string
+	LastModified   time.Time
+	Tags           map[string]string
+	Key            string
+	VersionID      string
+	Size           int64
 	IsDeleteMarker bool
-	Tags         map[string]string
 }
 
-// RemoteClientFactory creates clients for remote endpoints
+// RemoteClientFactory creates clients for remote endpoints.
 type RemoteClientFactory interface {
 	GetClient(endpoint, accessKey, secretKey string) (RemoteClient, error)
 }
 
-// RemoteClient is a client for a remote endpoint
+// RemoteClient is a client for a remote endpoint.
 type RemoteClient interface {
 	PutObject(ctx context.Context, bucket, key string, data io.Reader, size int64, contentType string, metadata map[string]string) error
 	DeleteObject(ctx context.Context, bucket, key string) error
 	Close() error
 }
 
-// BatchManagerConfig configures the batch manager
+// BatchManagerConfig configures the batch manager.
 type BatchManagerConfig struct {
 	MaxConcurrentJobs int
 	HistoryLimit      int
 }
 
-// DefaultBatchManagerConfig returns sensible defaults
+// DefaultBatchManagerConfig returns sensible defaults.
 func DefaultBatchManagerConfig() BatchManagerConfig {
 	return BatchManagerConfig{
-		MaxConcurrentJobs: 5,
-		HistoryLimit:      100,
+		MaxConcurrentJobs: defaultMaxConcurrentJobs,
+		HistoryLimit:      defaultHistoryLimit,
 	}
 }
 
-// NewBatchManager creates a new batch manager
+// NewBatchManager creates a new batch manager.
 func NewBatchManager(service *Service, lister ObjectLister, clientFactory RemoteClientFactory, cfg BatchManagerConfig) *BatchManager {
 	return &BatchManager{
 		jobs:              make(map[string]*BatchJob),
@@ -182,14 +138,16 @@ func NewBatchManager(service *Service, lister ObjectLister, clientFactory Remote
 	}
 }
 
-// CreateJob creates a new batch replication job
+// CreateJob creates a new batch replication job.
 func (bm *BatchManager) CreateJob(job *BatchJob) error {
 	if job.JobID == "" {
 		return errors.New("job ID is required")
 	}
+
 	if job.SourceBucket == "" {
 		return errors.New("source bucket is required")
 	}
+
 	if job.DestinationBucket == "" {
 		return errors.New("destination bucket is required")
 	}
@@ -205,9 +163,11 @@ func (bm *BatchManager) CreateJob(job *BatchJob) error {
 	if job.Concurrency <= 0 {
 		job.Concurrency = 10
 	}
+
 	if job.MaxRetries <= 0 {
 		job.MaxRetries = 3
 	}
+
 	if job.Priority <= 0 {
 		job.Priority = 100
 	}
@@ -225,9 +185,10 @@ func (bm *BatchManager) CreateJob(job *BatchJob) error {
 	return nil
 }
 
-// StartJob starts a batch job
+// StartJob starts a batch job.
 func (bm *BatchManager) StartJob(ctx context.Context, jobID string) error {
 	bm.mu.Lock()
+
 	job, exists := bm.jobs[jobID]
 	if !exists {
 		bm.mu.Unlock()
@@ -251,6 +212,7 @@ func (bm *BatchManager) StartJob(ctx context.Context, jobID string) error {
 	job.Status = BatchJobStatusRunning
 	now := time.Now()
 	job.StartedAt = &now
+
 	bm.mu.Unlock()
 
 	// Run job in background
@@ -259,7 +221,7 @@ func (bm *BatchManager) StartJob(ctx context.Context, jobID string) error {
 	return nil
 }
 
-// PauseJob pauses a running job
+// PauseJob pauses a running job.
 func (bm *BatchManager) PauseJob(jobID string) error {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
@@ -279,9 +241,10 @@ func (bm *BatchManager) PauseJob(jobID string) error {
 	return nil
 }
 
-// ResumeJob resumes a paused job
+// ResumeJob resumes a paused job.
 func (bm *BatchManager) ResumeJob(ctx context.Context, jobID string) error {
 	bm.mu.Lock()
+
 	job, exists := bm.jobs[jobID]
 	if !exists {
 		bm.mu.Unlock()
@@ -297,12 +260,13 @@ func (bm *BatchManager) ResumeJob(ctx context.Context, jobID string) error {
 	job.pauseCh = make(chan struct{})
 	close(job.resumeCh)
 	job.resumeCh = make(chan struct{})
+
 	bm.mu.Unlock()
 
 	return nil
 }
 
-// CancelJob cancels a job
+// CancelJob cancels a job.
 func (bm *BatchManager) CancelJob(jobID string) error {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
@@ -327,7 +291,7 @@ func (bm *BatchManager) CancelJob(jobID string) error {
 	return nil
 }
 
-// GetJob returns a job by ID
+// GetJob returns a job by ID.
 func (bm *BatchManager) GetJob(jobID string) (*BatchJob, error) {
 	bm.mu.RLock()
 	defer bm.mu.RUnlock()
@@ -340,7 +304,7 @@ func (bm *BatchManager) GetJob(jobID string) (*BatchJob, error) {
 	return job, nil
 }
 
-// ListJobs returns all jobs
+// ListJobs returns all jobs.
 func (bm *BatchManager) ListJobs() []*BatchJob {
 	bm.mu.RLock()
 	defer bm.mu.RUnlock()
@@ -353,7 +317,7 @@ func (bm *BatchManager) ListJobs() []*BatchJob {
 	return jobs
 }
 
-// DeleteJob deletes a job
+// DeleteJob deletes a job.
 func (bm *BatchManager) DeleteJob(jobID string) error {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
@@ -368,10 +332,11 @@ func (bm *BatchManager) DeleteJob(jobID string) error {
 	}
 
 	delete(bm.jobs, jobID)
+
 	return nil
 }
 
-// runJob executes the batch job
+// runJob executes the batch job.
 func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 	defer atomic.AddInt32(&bm.runningJobs, -1)
 
@@ -382,14 +347,19 @@ func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 	workCh := make(chan ObjectListEntry, job.Concurrency*2)
 
 	// Start workers
-	var wg sync.WaitGroup
-	var bytesProcessed int64
+	var (
+		wg             sync.WaitGroup
+		bytesProcessed int64
+	)
+
 	startTime := time.Now()
 
-	for i := 0; i < job.Concurrency; i++ {
+	for range job.Concurrency {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
+
 			bm.replicationWorker(ctx, job, workCh, &bytesProcessed)
 		}()
 	}
@@ -446,9 +416,12 @@ func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 	case err := <-errCh:
 		if err != nil {
 			bm.mu.Lock()
+
 			job.Status = BatchJobStatusFailed
 			job.Error = err.Error()
+
 			bm.mu.Unlock()
+
 			return
 		}
 	default:
@@ -456,17 +429,19 @@ func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 
 	// Update final status
 	bm.mu.Lock()
+
 	now := time.Now()
 	job.CompletedAt = &now
 
-	if ctx.Err() != nil {
+	switch {
+	case ctx.Err() != nil:
 		if job.Status != BatchJobStatusCancelled {
 			job.Status = BatchJobStatusCancelled
 		}
-	} else if job.Progress.FailedObjects > 0 && job.Progress.SuccessObjects == 0 {
+	case job.Progress.FailedObjects > 0 && job.Progress.SuccessObjects == 0:
 		job.Status = BatchJobStatusFailed
 		job.Error = fmt.Sprintf("all %d objects failed", job.Progress.FailedObjects)
-	} else {
+	default:
 		job.Status = BatchJobStatusCompleted
 	}
 
@@ -475,10 +450,11 @@ func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 	if elapsed > 0 {
 		job.Progress.BytesPerSecond = int64(float64(atomic.LoadInt64(&bytesProcessed)) / elapsed)
 	}
+
 	bm.mu.Unlock()
 }
 
-// replicationWorker processes objects for replication
+// replicationWorker processes objects for replication.
 func (bm *BatchManager) replicationWorker(ctx context.Context, job *BatchJob, workCh <-chan ObjectListEntry, bytesProcessed *int64) {
 	for {
 		select {
@@ -523,7 +499,7 @@ func (bm *BatchManager) replicationWorker(ctx context.Context, job *BatchJob, wo
 	}
 }
 
-// replicateObject replicates a single object
+// replicateObject replicates a single object.
 func (bm *BatchManager) replicateObject(ctx context.Context, job *BatchJob, obj ObjectListEntry) error {
 	if obj.IsDeleteMarker {
 		// Handle delete marker replication
@@ -535,6 +511,7 @@ func (bm *BatchManager) replicateObject(ctx context.Context, job *BatchJob, obj 
 	if err != nil {
 		return fmt.Errorf("failed to get source object: %w", err)
 	}
+
 	defer func() { _ = reader.Close() }()
 
 	// Get object info for metadata
@@ -556,6 +533,7 @@ func (bm *BatchManager) replicateObject(ctx context.Context, job *BatchJob, obj 
 		if err != nil {
 			return fmt.Errorf("failed to get remote client: %w", err)
 		}
+
 		defer func() { _ = client.Close() }()
 
 		return client.PutObject(ctx, job.DestinationBucket, obj.Key, wrappedReader, obj.Size, info.ContentType, info.UserMetadata)
@@ -563,16 +541,18 @@ func (bm *BatchManager) replicateObject(ctx context.Context, job *BatchJob, obj 
 
 	// Same-cluster replication - use the replication service queue
 	_, err = bm.service.queue.Enqueue(ctx, job.SourceBucket, obj.Key, obj.VersionID, "PUT", "batch-"+job.JobID)
+
 	return err
 }
 
-// replicateDeleteMarker replicates a delete marker
+// replicateDeleteMarker replicates a delete marker.
 func (bm *BatchManager) replicateDeleteMarker(ctx context.Context, job *BatchJob, obj ObjectListEntry) error {
 	if job.DestinationEndpoint != "" && bm.clientFactory != nil {
 		client, err := bm.clientFactory.GetClient(job.DestinationEndpoint, "", "")
 		if err != nil {
 			return fmt.Errorf("failed to get remote client: %w", err)
 		}
+
 		defer func() { _ = client.Close() }()
 
 		return client.DeleteObject(ctx, job.DestinationBucket, obj.Key)
@@ -580,15 +560,17 @@ func (bm *BatchManager) replicateDeleteMarker(ctx context.Context, job *BatchJob
 
 	// Same-cluster - queue the delete
 	_, err := bm.service.queue.Enqueue(ctx, job.SourceBucket, obj.Key, obj.VersionID, "DELETE", "batch-"+job.JobID)
+
 	return err
 }
 
-// matchesFilters checks if an object matches job filters
+// matchesFilters checks if an object matches job filters.
 func (bm *BatchManager) matchesFilters(job *BatchJob, obj ObjectListEntry) bool {
 	// Size filters
 	if job.MinSize > 0 && obj.Size < job.MinSize {
 		return false
 	}
+
 	if job.MaxSize > 0 && obj.Size > job.MaxSize {
 		return false
 	}
@@ -597,6 +579,7 @@ func (bm *BatchManager) matchesFilters(job *BatchJob, obj ObjectListEntry) bool 
 	if job.CreatedAfter != nil && obj.LastModified.Before(*job.CreatedAfter) {
 		return false
 	}
+
 	if job.CreatedBefore != nil && obj.LastModified.After(*job.CreatedBefore) {
 		return false
 	}
@@ -613,7 +596,7 @@ func (bm *BatchManager) matchesFilters(job *BatchJob, obj ObjectListEntry) bool 
 	return true
 }
 
-// updateETA updates the estimated time remaining
+// updateETA updates the estimated time remaining.
 func (bm *BatchManager) updateETA(job *BatchJob) {
 	if job.StartedAt == nil {
 		return
@@ -625,6 +608,7 @@ func (bm *BatchManager) updateETA(job *BatchJob) {
 
 	if processed > 0 && elapsed > 0 {
 		remaining := total - processed
+
 		rate := float64(processed) / elapsed
 		if rate > 0 {
 			atomic.StoreInt64(&job.Progress.EstimatedTimeRemaining, int64(float64(remaining)/rate))
@@ -632,10 +616,11 @@ func (bm *BatchManager) updateETA(job *BatchJob) {
 	}
 }
 
-// cleanupOldJobs removes old completed jobs if over the limit
+// cleanupOldJobs removes old completed jobs if over the limit.
 func (bm *BatchManager) cleanupOldJobs() {
 	// Count completed jobs
 	var completedJobs []*BatchJob
+
 	for _, job := range bm.jobs {
 		if job.Status == BatchJobStatusCompleted || job.Status == BatchJobStatusFailed || job.Status == BatchJobStatusCancelled {
 			completedJobs = append(completedJobs, job)
@@ -645,7 +630,7 @@ func (bm *BatchManager) cleanupOldJobs() {
 	// Remove oldest if over limit
 	if len(completedJobs) > bm.historyLimit {
 		// Sort by completion time
-		for i := 0; i < len(completedJobs)-1; i++ {
+		for i := range len(completedJobs) - 1 {
 			for j := i + 1; j < len(completedJobs); j++ {
 				if completedJobs[i].CompletedAt != nil && completedJobs[j].CompletedAt != nil {
 					if completedJobs[i].CompletedAt.After(*completedJobs[j].CompletedAt) {
@@ -657,15 +642,16 @@ func (bm *BatchManager) cleanupOldJobs() {
 
 		// Remove oldest
 		toRemove := len(completedJobs) - bm.historyLimit
-		for i := 0; i < toRemove; i++ {
+		for i := range toRemove {
 			delete(bm.jobs, completedJobs[i].JobID)
 		}
 	}
 }
 
-// MarshalJSON implements json.Marshaler
+// MarshalJSON implements json.Marshaler.
 func (job *BatchJob) MarshalJSON() ([]byte, error) {
 	type Alias BatchJob
+
 	return json.Marshal(&struct {
 		*Alias
 	}{
@@ -673,11 +659,11 @@ func (job *BatchJob) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// rateLimitedReader wraps a reader with rate limiting
+// rateLimitedReader wraps a reader with rate limiting.
 type rateLimitedReader struct {
-	reader      io.Reader
-	bytesPerSec int64
-	lastRead    time.Time
+	lastRead            time.Time
+	reader              io.Reader
+	bytesPerSec         int64
 	bytesSinceLastCheck int64
 }
 
@@ -695,38 +681,40 @@ func (r *rateLimitedReader) Read(p []byte) (int, error) {
 		r.bytesSinceLastCheck += int64(n)
 
 		// Check every 64KB
-		if r.bytesSinceLastCheck >= 65536 {
+		if r.bytesSinceLastCheck >= streamingBufferThreshold {
 			elapsed := time.Since(r.lastRead).Seconds()
 			if elapsed > 0 {
 				currentRate := float64(r.bytesSinceLastCheck) / elapsed
 				if currentRate > float64(r.bytesPerSec) {
 					// Sleep to slow down
-					sleepTime := time.Duration(float64(r.bytesSinceLastCheck)/float64(r.bytesPerSec)*1e9) - time.Since(r.lastRead)
+					sleepTime := time.Duration(float64(r.bytesSinceLastCheck)/float64(r.bytesPerSec)*nanosecondsPerSecond) - time.Since(r.lastRead)
 					if sleepTime > 0 {
 						time.Sleep(sleepTime)
 					}
 				}
 			}
+
 			r.lastRead = time.Now()
 			r.bytesSinceLastCheck = 0
 		}
 	}
+
 	return n, err
 }
 
-// BatchJobSummary returns a summary suitable for listing
+// BatchJobSummary returns a summary suitable for listing.
 type BatchJobSummary struct {
-	JobID            string         `json:"jobId"`
-	Description      string         `json:"description,omitempty"`
-	SourceBucket     string         `json:"sourceBucket"`
-	DestinationBucket string        `json:"destinationBucket"`
-	Status           BatchJobStatus `json:"status"`
-	Progress         BatchJobProgress `json:"progress"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	CompletedAt      *time.Time     `json:"completedAt,omitempty"`
+	CreatedAt         time.Time        `json:"createdAt"`
+	CompletedAt       *time.Time       `json:"completedAt,omitempty"`
+	JobID             string           `json:"jobId"`
+	Description       string           `json:"description,omitempty"`
+	SourceBucket      string           `json:"sourceBucket"`
+	DestinationBucket string           `json:"destinationBucket"`
+	Status            BatchJobStatus   `json:"status"`
+	Progress          BatchJobProgress `json:"progress"`
 }
 
-// Summary returns a summary of the job
+// Summary returns a summary of the job.
 func (job *BatchJob) Summary() BatchJobSummary {
 	return BatchJobSummary{
 		JobID:             job.JobID,

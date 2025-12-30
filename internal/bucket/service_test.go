@@ -1,6 +1,7 @@
 package bucket
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"strings"
@@ -28,14 +29,14 @@ import (
 // These local mocks are retained for backward compatibility with existing tests
 // that directly access internal fields like m.objects[bucket][key].
 
-// MockMetadataStore implements metadata.Store interface for testing
+// MockMetadataStore implements metadata.Store interface for testing.
 type MockMetadataStore struct {
-	mu        sync.RWMutex
-	buckets   map[string]*metadata.Bucket
-	objects   map[string]map[string]*metadata.ObjectMeta
 	createErr error
 	updateErr error
 	deleteErr error
+	buckets   map[string]*metadata.Bucket
+	objects   map[string]map[string]*metadata.ObjectMeta
+	mu        sync.RWMutex
 }
 
 func NewMockMetadataStore() *MockMetadataStore {
@@ -48,60 +49,75 @@ func NewMockMetadataStore() *MockMetadataStore {
 func (m *MockMetadataStore) GetBucket(ctx context.Context, name string) (*metadata.Bucket, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	if bucket, ok := m.buckets[name]; ok {
 		return bucket, nil
 	}
+
 	return nil, s3errors.ErrNoSuchBucket
 }
 
 func (m *MockMetadataStore) CreateBucket(ctx context.Context, bucket *metadata.Bucket) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.createErr != nil {
 		return m.createErr
 	}
+
 	m.buckets[bucket.Name] = bucket
 	m.objects[bucket.Name] = make(map[string]*metadata.ObjectMeta)
+
 	return nil
 }
 
 func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.Bucket) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.updateErr != nil {
 		return m.updateErr
 	}
+
 	m.buckets[bucket.Name] = bucket
+
 	return nil
 }
 
 func (m *MockMetadataStore) DeleteBucket(ctx context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.deleteErr != nil {
 		return m.deleteErr
 	}
+
 	delete(m.buckets, name)
 	delete(m.objects, name)
+
 	return nil
 }
 
 func (m *MockMetadataStore) ListBuckets(ctx context.Context, owner string) ([]*metadata.Bucket, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	buckets := make([]*metadata.Bucket, 0)
 	for _, b := range m.buckets {
 		if owner == "" || b.Owner == owner {
 			buckets = append(buckets, b)
 		}
 	}
+
 	return buckets, nil
 }
 
 func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*metadata.ObjectListing, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	objs := m.objects[bucket]
+
 	listing := &metadata.ObjectListing{
 		Objects: make([]*metadata.ObjectMeta, 0),
 	}
@@ -111,11 +127,13 @@ func (m *MockMetadataStore) ListObjects(ctx context.Context, bucket, prefix, del
 			break
 		}
 	}
+
 	return listing, nil
 }
 
-// Implement remaining interface methods as no-ops
+// Implement remaining interface methods as no-ops.
 func (m *MockMetadataStore) GetObject(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) PutObject(ctx context.Context, bucket string, obj *metadata.ObjectMeta) error {
@@ -123,9 +141,11 @@ func (m *MockMetadataStore) PutObject(ctx context.Context, bucket string, obj *m
 }
 func (m *MockMetadataStore) DeleteObject(ctx context.Context, bucket, key string) error { return nil }
 func (m *MockMetadataStore) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionMarker string, maxKeys int) (*metadata.VersionListing, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) GetObjectVersion(ctx context.Context, bucket, key, versionID string) (*metadata.ObjectMeta, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {
@@ -135,6 +155,7 @@ func (m *MockMetadataStore) CreateMultipartUpload(ctx context.Context, upload *m
 	return nil
 }
 func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*metadata.MultipartUpload, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
@@ -153,6 +174,7 @@ func (m *MockMetadataStore) CompleteMultipartUpload(ctx context.Context, bucket,
 	return nil
 }
 func (m *MockMetadataStore) GetClusterInfo(ctx context.Context) (*metadata.ClusterInfo, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) IsLeader() bool                 { return true }
@@ -161,6 +183,7 @@ func (m *MockMetadataStore) PutObjectMeta(ctx context.Context, meta *metadata.Ob
 	return nil
 }
 func (m *MockMetadataStore) GetObjectMeta(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteObjectMeta(ctx context.Context, bucket, key string) error {
@@ -174,9 +197,11 @@ func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID 
 }
 func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User) error { return nil }
 func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.User, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username string) (*metadata.User, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) UpdateUser(ctx context.Context, user *metadata.User) error { return nil }
@@ -186,6 +211,7 @@ func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.A
 	return nil
 }
 func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string) (*metadata.AccessKey, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID string) error {
@@ -198,6 +224,7 @@ func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.P
 	return nil
 }
 func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metadata.Policy, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) UpdatePolicy(ctx context.Context, policy *metadata.Policy) error {
@@ -216,6 +243,7 @@ func (m *MockMetadataStore) StoreAuditEvent(ctx context.Context, event *audit.Au
 	return nil
 }
 func (m *MockMetadataStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) {
+	//nolint:nilnil // mock returns nil,nil for empty result
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error) {
@@ -223,7 +251,7 @@ func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before tim
 }
 func (m *MockMetadataStore) Close() error { return nil }
 
-// MockStorageBackend implements object.StorageBackend interface for testing
+// MockStorageBackend implements object.StorageBackend interface for testing.
 type MockStorageBackend struct {
 	buckets   map[string]bool
 	createErr error
@@ -240,7 +268,9 @@ func (m *MockStorageBackend) CreateBucket(ctx context.Context, name string) erro
 	if m.createErr != nil {
 		return m.createErr
 	}
+
 	m.buckets[name] = true
+
 	return nil
 }
 
@@ -248,7 +278,9 @@ func (m *MockStorageBackend) DeleteBucket(ctx context.Context, name string) erro
 	if m.deleteErr != nil {
 		return m.deleteErr
 	}
+
 	delete(m.buckets, name)
+
 	return nil
 }
 
@@ -262,6 +294,7 @@ func (m *MockStorageBackend) AbortMultipartUpload(ctx context.Context, bucket, k
 
 func (m *MockStorageBackend) Init(ctx context.Context) error { return nil }
 func (m *MockStorageBackend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
+	//nolint:nilnil // mock returns nil,nil for not-implemented
 	return nil, nil
 }
 func (m *MockStorageBackend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
@@ -272,6 +305,7 @@ func (m *MockStorageBackend) ObjectExists(ctx context.Context, bucket, key strin
 	return false, nil
 }
 func (m *MockStorageBackend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, error) {
+	//nolint:nilnil // mock returns nil,nil for not-implemented
 	return nil, nil
 }
 func (m *MockStorageBackend) ListBuckets(ctx context.Context) ([]string, error) { return nil, nil }
@@ -279,13 +313,13 @@ func (m *MockStorageBackend) CreateMultipartUpload(ctx context.Context, bucket, 
 	return nil
 }
 func (m *MockStorageBackend) PutPart(ctx context.Context, bucket, key, uploadID string, partNumber int, reader io.Reader, size int64) (*backend.PutResult, error) {
-	return nil, nil
+	return &backend.PutResult{}, nil
 }
 func (m *MockStorageBackend) GetPart(ctx context.Context, bucket, key, uploadID string, partNumber int) (io.ReadCloser, error) {
-	return nil, nil
+	return io.NopCloser(bytes.NewReader(nil)), nil
 }
 func (m *MockStorageBackend) CompleteParts(ctx context.Context, bucket, key, uploadID string, parts []int) (*backend.PutResult, error) {
-	return nil, nil
+	return &backend.PutResult{}, nil
 }
 func (m *MockStorageBackend) Close() error { return nil }
 
@@ -304,36 +338,37 @@ func TestValidateBucketName(t *testing.T) {
 	tests := []struct {
 		name        string
 		bucketName  string
-		expectError bool
 		errorMsg    string
+		expectError bool
 	}{
-		{"valid simple name", "my-bucket", false, ""},
-		{"valid with numbers", "bucket123", false, ""},
-		{"valid with dots", "my.bucket.name", false, ""},
-		{"valid exact 3 chars", "abc", false, ""},
-		{"valid exact 63 chars", "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0", false, ""},
-		{"too short", "ab", true, "between 3 and 63"},
-		{"too long", "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz01", true, "between 3 and 63"},
-		{"starts with dot", ".bucket", true, "cannot start or end with a period"},
-		{"ends with dot", "bucket.", true, "cannot start or end with a period"},
-		{"starts with hyphen", "-bucket", true, "cannot start or end with a hyphen"},
-		{"ends with hyphen", "bucket-", true, "cannot start or end with a hyphen"},
-		{"uppercase letters", "MyBucket", true, "lowercase letters"},
-		{"IP address format", "192.168.1.1", true, "cannot be formatted as an IP address"},
-		{"underscore not allowed", "my_bucket", true, "lowercase letters"},
-		{"space not allowed", "my bucket", true, "lowercase letters"},
+		{"valid simple name", "my-bucket", "", false},
+		{"valid with numbers", "bucket123", "", false},
+		{"valid with dots", "my.bucket.name", "", false},
+		{"valid exact 3 chars", "abc", "", false},
+		{"valid exact 63 chars", "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0", "", false},
+		{"too short", "ab", "between 3 and 63", true},
+		{"too long", "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz01", "between 3 and 63", true},
+		{"starts with dot", ".bucket", "cannot start or end with a period", true},
+		{"ends with dot", "bucket.", "cannot start or end with a period", true},
+		{"starts with hyphen", "-bucket", "cannot start or end with a hyphen", true},
+		{"ends with hyphen", "bucket-", "cannot start or end with a hyphen", true},
+		{"uppercase letters", "MyBucket", "lowercase letters", true},
+		{"IP address format", "192.168.1.1", "cannot be formatted as an IP address", true},
+		{"underscore not allowed", "my_bucket", "lowercase letters", true},
+		{"space not allowed", "my bucket", "lowercase letters", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateBucketName(tt.bucketName)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
+
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -341,10 +376,10 @@ func TestValidateBucketName(t *testing.T) {
 
 func TestValidateBucketTags(t *testing.T) {
 	tests := []struct {
-		name        string
 		tags        map[string]string
-		expectError bool
+		name        string
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name:        "valid tags",
@@ -381,6 +416,7 @@ func TestValidateBucketTags(t *testing.T) {
 				for i := 0; i <= MaxTagsPerBucket; i++ {
 					tags[string(rune('a'+i%26))+string(rune(i))] = "value"
 				}
+
 				return tags
 			}(),
 			expectError: true,
@@ -392,12 +428,13 @@ func TestValidateBucketTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateBucketTags(tt.tags)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
+
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -456,6 +493,43 @@ func TestCreateBucket(t *testing.T) {
 		// Try to create again
 		_, err = service.CreateBucket(ctx, "test-bucket", "owner2", "", "")
 		assert.Error(t, err)
+	})
+
+	t.Run("storage failure triggers metadata rollback", func(t *testing.T) {
+		store := NewMockMetadataStore()
+		storage := NewMockStorageBackend()
+		// Simulate storage creation failure
+		storage.createErr = assert.AnError
+		service := NewService(store, storage)
+
+		_, err := service.CreateBucket(ctx, "test-bucket", "owner1", "us-east-1", "STANDARD")
+
+		// Should return an error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "storage")
+
+		// Metadata should be rolled back - bucket should not exist in store
+		store.mu.RLock()
+		_, exists := store.buckets["test-bucket"]
+		store.mu.RUnlock()
+		assert.False(t, exists, "bucket metadata should be rolled back after storage failure")
+	})
+
+	t.Run("storage failure with rollback failure", func(t *testing.T) {
+		store := NewMockMetadataStore()
+		storage := NewMockStorageBackend()
+		// Simulate storage creation failure
+		storage.createErr = assert.AnError
+		// Simulate metadata deletion (rollback) failure
+		store.deleteErr = assert.AnError
+		service := NewService(store, storage)
+
+		_, err := service.CreateBucket(ctx, "test-bucket", "owner1", "us-east-1", "STANDARD")
+
+		// Should return an error that mentions both failures
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "storage")
+		assert.Contains(t, err.Error(), "rollback")
 	})
 }
 
@@ -529,7 +603,7 @@ func TestDeleteBucket(t *testing.T) {
 		store.objects["test-bucket"]["key1"] = &metadata.ObjectMeta{Key: "key1"}
 
 		err = service.DeleteBucket(ctx, "test-bucket")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.True(t, s3errors.IsS3Error(err, "BucketNotEmpty"))
 	})
 }
@@ -705,23 +779,24 @@ func TestCORS(t *testing.T) {
 func TestMatchCORSOrigin(t *testing.T) {
 	tests := []struct {
 		name           string
-		allowedOrigins []string
 		origin         string
-		expectMatch    bool
 		expectedReturn string
+		allowedOrigins []string
+		expectMatch    bool
 	}{
-		{"wildcard", []string{"*"}, "https://example.com", true, "*"},
-		{"exact match", []string{"https://example.com"}, "https://example.com", true, "https://example.com"},
-		{"no match", []string{"https://other.com"}, "https://example.com", false, ""},
-		{"wildcard subdomain", []string{"*.example.com"}, "https://sub.example.com", true, "https://sub.example.com"},
-		{"wildcard subdomain no match", []string{"*.example.com"}, "https://other.com", false, ""},
-		{"multiple origins", []string{"https://one.com", "https://two.com"}, "https://two.com", true, "https://two.com"},
+		{"wildcard", "https://example.com", "*", []string{"*"}, true},
+		{"exact match", "https://example.com", "https://example.com", []string{"https://example.com"}, true},
+		{"no match", "https://example.com", "", []string{"https://other.com"}, false},
+		{"wildcard subdomain", "https://sub.example.com", "https://sub.example.com", []string{"*.example.com"}, true},
+		{"wildcard subdomain no match", "https://other.com", "", []string{"*.example.com"}, false},
+		{"multiple origins", "https://two.com", "https://two.com", []string{"https://one.com", "https://two.com"}, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, matched := MatchCORSOrigin(tt.allowedOrigins, tt.origin)
 			assert.Equal(t, tt.expectMatch, matched)
+
 			if matched {
 				assert.Equal(t, tt.expectedReturn, result)
 			}

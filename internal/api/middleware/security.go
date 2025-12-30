@@ -4,7 +4,7 @@ import (
 	"net/http"
 )
 
-// SecurityHeadersConfig holds configuration for security headers
+// SecurityHeadersConfig holds configuration for security headers.
 type SecurityHeadersConfig struct {
 	// ContentSecurityPolicy sets the Content-Security-Policy header
 	// Default: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'"
@@ -43,7 +43,7 @@ type SecurityHeadersConfig struct {
 	EnableHSTS bool
 }
 
-// DefaultSecurityHeadersConfig returns sensible defaults for security headers
+// DefaultSecurityHeadersConfig returns sensible defaults for security headers.
 func DefaultSecurityHeadersConfig() SecurityHeadersConfig {
 	return SecurityHeadersConfig{
 		ContentSecurityPolicy:   "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'",
@@ -58,7 +58,7 @@ func DefaultSecurityHeadersConfig() SecurityHeadersConfig {
 	}
 }
 
-// SecurityHeaders returns a middleware that adds security headers to responses
+// SecurityHeaders returns a middleware that adds security headers to responses.
 func SecurityHeaders(cfg SecurityHeadersConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +108,7 @@ func SecurityHeaders(cfg SecurityHeadersConfig) func(http.Handler) http.Handler 
 	}
 }
 
-// isStaticAsset checks if the request is for a static asset
+// isStaticAsset checks if the request is for a static asset.
 func isStaticAsset(path string) bool {
 	staticExtensions := []string{".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".woff", ".woff2", ".ttf", ".eot"}
 	for _, ext := range staticExtensions {
@@ -116,11 +116,12 @@ func isStaticAsset(path string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 // S3SecurityHeaders returns a middleware with S3-appropriate security headers
-// S3 has different requirements than the web console
+// S3 has different requirements than the web console.
 func S3SecurityHeaders() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -11,7 +11,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/events"
 )
 
-// NATSConfig configures a NATS target
+// NATSConfig configures a NATS target.
 type NATSConfig struct {
 	events.TargetConfig `yaml:",inline"`
 
@@ -37,10 +37,10 @@ type NATSConfig struct {
 	CredentialsFile string `json:"credentialsFile,omitempty" yaml:"credentialsFile,omitempty"`
 
 	// TLS configuration
-	TLSEnabled    bool   `json:"tlsEnabled,omitempty" yaml:"tlsEnabled,omitempty"`
-	TLSCACert     string `json:"tlsCaCert,omitempty" yaml:"tlsCaCert,omitempty"`
+	TLSEnabled    bool   `json:"tlsEnabled,omitempty"    yaml:"tlsEnabled,omitempty"`
+	TLSCACert     string `json:"tlsCaCert,omitempty"     yaml:"tlsCaCert,omitempty"`
 	TLSClientCert string `json:"tlsClientCert,omitempty" yaml:"tlsClientCert,omitempty"`
-	TLSClientKey  string `json:"-" yaml:"tlsClientKey,omitempty"`
+	TLSClientKey  string `json:"-"                       yaml:"tlsClientKey,omitempty"`
 	TLSSkipVerify bool   `json:"tlsSkipVerify,omitempty" yaml:"tlsSkipVerify,omitempty"`
 
 	// JetStream enables JetStream for at-least-once delivery
@@ -56,13 +56,14 @@ type NATSConfig struct {
 	ReconnectWait time.Duration `json:"reconnectWait,omitempty" yaml:"reconnectWait,omitempty"`
 }
 
-// DefaultNATSConfig returns a default NATS configuration
+// DefaultNATSConfig returns a default NATS configuration.
 func DefaultNATSConfig() NATSConfig {
 	// Use NATS_URL environment variable if set, otherwise use default
 	servers := []string{"nats://localhost:4222"}
 	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
 		servers = strings.Split(natsURL, ",")
 	}
+
 	return NATSConfig{
 		TargetConfig: events.TargetConfig{
 			Type:       "nats",
@@ -79,7 +80,7 @@ func DefaultNATSConfig() NATSConfig {
 
 // NATSTarget publishes events to NATS
 // Note: This is a placeholder implementation. In production, you would use
-// github.com/nats-io/nats.go
+// github.com/nats-io/nats.go.
 type NATSTarget struct {
 	config    NATSConfig
 	mu        sync.RWMutex
@@ -88,11 +89,12 @@ type NATSTarget struct {
 	// In production: conn *nats.Conn, js nats.JetStreamContext
 }
 
-// NewNATSTarget creates a new NATS target
+// NewNATSTarget creates a new NATS target.
 func NewNATSTarget(config NATSConfig) (*NATSTarget, error) {
 	if len(config.Servers) == 0 {
 		return nil, fmt.Errorf("%w: servers are required", events.ErrInvalidConfig)
 	}
+
 	if config.Subject == "" {
 		return nil, fmt.Errorf("%w: subject is required", events.ErrInvalidConfig)
 	}
@@ -110,26 +112,29 @@ func NewNATSTarget(config NATSConfig) (*NATSTarget, error) {
 	// ...
 
 	t.connected = true
+
 	return t, nil
 }
 
-// Name returns the target name
+// Name returns the target name.
 func (t *NATSTarget) Name() string {
 	return t.config.Name
 }
 
-// Type returns the target type
+// Type returns the target type.
 func (t *NATSTarget) Type() string {
 	return "nats"
 }
 
-// Publish sends an event to NATS
+// Publish sends an event to NATS.
 func (t *NATSTarget) Publish(ctx context.Context, event *events.S3Event) error {
 	t.mu.RLock()
+
 	if t.closed {
 		t.mu.RUnlock()
 		return events.ErrTargetClosed
 	}
+
 	t.mu.RUnlock()
 
 	body, err := event.ToJSON()
@@ -148,14 +153,15 @@ func (t *NATSTarget) Publish(ctx context.Context, event *events.S3Event) error {
 	return nil
 }
 
-// IsHealthy checks if the NATS connection is healthy
+// IsHealthy checks if the NATS connection is healthy.
 func (t *NATSTarget) IsHealthy(ctx context.Context) bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
 	return !t.closed && t.connected
 }
 
-// Close closes the NATS target
+// Close closes the NATS target.
 func (t *NATSTarget) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -170,7 +176,7 @@ func (t *NATSTarget) Close() error {
 	return nil
 }
 
-// Ensure NATSTarget implements Target
+// Ensure NATSTarget implements Target.
 var _ events.Target = (*NATSTarget)(nil)
 
 func init() {
@@ -180,6 +186,7 @@ func init() {
 		if name, ok := config["name"].(string); ok {
 			cfg.Name = name
 		}
+
 		if servers, ok := config["servers"].([]interface{}); ok {
 			cfg.Servers = make([]string, len(servers))
 			for i, s := range servers {
@@ -188,18 +195,23 @@ func init() {
 				}
 			}
 		}
+
 		if subject, ok := config["subject"].(string); ok {
 			cfg.Subject = subject
 		}
+
 		if username, ok := config["username"].(string); ok {
 			cfg.Username = username
 		}
+
 		if password, ok := config["password"].(string); ok {
 			cfg.Password = password
 		}
+
 		if jetStream, ok := config["jetStream"].(bool); ok {
 			cfg.JetStream = jetStream
 		}
+
 		if stream, ok := config["stream"].(string); ok {
 			cfg.Stream = stream
 		}

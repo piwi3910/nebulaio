@@ -149,13 +149,13 @@ func TestValidateLegalHoldStatus(t *testing.T) {
 
 func TestValidateRetentionDate(t *testing.T) {
 	tests := []struct {
-		name    string
 		date    time.Time
+		name    string
 		wantErr bool
 	}{
-		{"zero date", time.Time{}, false},
-		{"future date", time.Now().Add(24 * time.Hour), false},
-		{"past date", time.Now().Add(-24 * time.Hour), true},
+		{time.Time{}, "zero date", false},
+		{time.Now().Add(24 * time.Hour), "future date", false},
+		{time.Now().Add(-24 * time.Hour), "past date", true},
 	}
 
 	for _, tt := range tests {
@@ -175,16 +175,16 @@ func TestCanExtendRetention(t *testing.T) {
 	yesterday := now.Add(-24 * time.Hour)
 
 	tests := []struct {
-		name     string
 		current  *time.Time
 		new      *time.Time
+		name     string
 		expected bool
 	}{
-		{"no current, any new", nil, &tomorrow, true},
-		{"current, extend to later", &tomorrow, &nextWeek, true},
-		{"current, try to reduce", &nextWeek, &tomorrow, false},
-		{"current, try to remove", &tomorrow, nil, false},
-		{"current expired, set new", &yesterday, &tomorrow, true},
+		{nil, &tomorrow, "no current, any new", true},
+		{&tomorrow, &nextWeek, "current, extend to later", true},
+		{&nextWeek, &tomorrow, "current, try to reduce", false},
+		{&tomorrow, nil, "current, try to remove", false},
+		{&yesterday, &tomorrow, "current expired, set new", true},
 	}
 
 	for _, tt := range tests {
@@ -201,14 +201,14 @@ func TestRetentionInfo(t *testing.T) {
 	futureDate := time.Now().Add(48 * time.Hour)
 
 	tests := []struct {
-		name         string
-		meta         *metadata.ObjectMeta
-		wantLocked   bool
-		wantReason   string
+		meta       *metadata.ObjectMeta
+		name       string
+		wantReason string
+		wantLocked bool
 	}{
 		{
-			name: "no lock",
-			meta: &metadata.ObjectMeta{},
+			name:       "no lock",
+			meta:       &metadata.ObjectMeta{},
 			wantLocked: false,
 		},
 		{

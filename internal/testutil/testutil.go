@@ -51,11 +51,12 @@ func GetEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
+
 	return defaultValue
 }
 
 // MultipartUploadKey generates a consistent key for multipart upload storage.
-// Format: "bucket/key/uploadID"
+// Format: "bucket/key/uploadID".
 func MultipartUploadKey(bucket, key, uploadID string) string {
 	return bucket + "/" + key + "/" + uploadID
 }

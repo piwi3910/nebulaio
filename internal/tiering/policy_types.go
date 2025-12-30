@@ -2,65 +2,66 @@ package tiering
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
 
-// PolicyType represents the type of policy
+// PolicyType represents the type of policy.
 type PolicyType string
 
 const (
-	// PolicyTypeScheduled runs on a cron-like schedule
+	// PolicyTypeScheduled runs on a cron-like schedule.
 	PolicyTypeScheduled PolicyType = "scheduled"
-	// PolicyTypeRealtime evaluates on every access
+	// PolicyTypeRealtime evaluates on every access.
 	PolicyTypeRealtime PolicyType = "realtime"
-	// PolicyTypeThreshold triggers based on capacity thresholds
+	// PolicyTypeThreshold triggers based on capacity thresholds.
 	PolicyTypeThreshold PolicyType = "threshold"
-	// PolicyTypeS3Lifecycle is S3-compatible lifecycle policy
+	// PolicyTypeS3Lifecycle is S3-compatible lifecycle policy.
 	PolicyTypeS3Lifecycle PolicyType = "s3_lifecycle"
 )
 
-// PolicyScope defines where a policy applies
+// PolicyScope defines where a policy applies.
 type PolicyScope string
 
 const (
-	// PolicyScopeGlobal applies to all buckets
+	// PolicyScopeGlobal applies to all buckets.
 	PolicyScopeGlobal PolicyScope = "global"
-	// PolicyScopeBucket applies to specific buckets
+	// PolicyScopeBucket applies to specific buckets.
 	PolicyScopeBucket PolicyScope = "bucket"
-	// PolicyScopePrefix applies to specific prefixes
+	// PolicyScopePrefix applies to specific prefixes.
 	PolicyScopePrefix PolicyScope = "prefix"
-	// PolicyScopeObject applies to specific objects
+	// PolicyScopeObject applies to specific objects.
 	PolicyScopeObject PolicyScope = "object"
 )
 
-// TierDirection indicates the direction of tier movement
+// TierDirection indicates the direction of tier movement.
 type TierDirection string
 
 const (
-	// TierDirectionDown moves to colder tiers
+	// TierDirectionDown moves to colder tiers.
 	TierDirectionDown TierDirection = "down"
-	// TierDirectionUp moves to hotter tiers (promotion)
+	// TierDirectionUp moves to hotter tiers (promotion).
 	TierDirectionUp TierDirection = "up"
 )
 
-// TriggerType defines what triggers a policy evaluation
+// TriggerType defines what triggers a policy evaluation.
 type TriggerType string
 
 const (
-	// TriggerTypeAge triggers based on object age
+	// TriggerTypeAge triggers based on object age.
 	TriggerTypeAge TriggerType = "age"
-	// TriggerTypeAccess triggers based on access patterns
+	// TriggerTypeAccess triggers based on access patterns.
 	TriggerTypeAccess TriggerType = "access"
-	// TriggerTypeCapacity triggers based on tier capacity
+	// TriggerTypeCapacity triggers based on tier capacity.
 	TriggerTypeCapacity TriggerType = "capacity"
-	// TriggerTypeFrequency triggers based on access frequency
+	// TriggerTypeFrequency triggers based on access frequency.
 	TriggerTypeFrequency TriggerType = "frequency"
-	// TriggerTypeCron triggers on a schedule
+	// TriggerTypeCron triggers on a schedule.
 	TriggerTypeCron TriggerType = "cron"
 )
 
-// AdvancedPolicy is the comprehensive policy model
+// AdvancedPolicy is the comprehensive policy model.
 type AdvancedPolicy struct {
 	// ID is the unique identifier
 	ID string `json:"id" yaml:"id"`
@@ -105,16 +106,16 @@ type AdvancedPolicy struct {
 	Distributed DistributedConfig `json:"distributed,omitempty" yaml:"distributed,omitempty"`
 
 	// Metadata for tracking
-	CreatedAt   time.Time  `json:"createdAt" yaml:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt" yaml:"updatedAt"`
-	LastRunAt   *time.Time `json:"lastRunAt,omitempty" yaml:"lastRunAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"             yaml:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"             yaml:"updatedAt"`
+	LastRunAt   *time.Time `json:"lastRunAt,omitempty"   yaml:"lastRunAt,omitempty"`
 	LastRunNode string     `json:"lastRunNode,omitempty" yaml:"lastRunNode,omitempty"`
 
 	// Version for optimistic locking
 	Version int `json:"version" yaml:"version"`
 }
 
-// PolicySelector defines criteria for selecting objects
+// PolicySelector defines criteria for selecting objects.
 type PolicySelector struct {
 	// Buckets to match (supports wildcards)
 	Buckets []string `json:"buckets,omitempty" yaml:"buckets,omitempty"`
@@ -145,7 +146,7 @@ type PolicySelector struct {
 	StorageClasses []StorageClass `json:"storageClasses,omitempty" yaml:"storageClasses,omitempty"`
 }
 
-// PolicyTrigger defines when a policy evaluates
+// PolicyTrigger defines when a policy evaluates.
 type PolicyTrigger struct {
 	// Type of trigger
 	Type TriggerType `json:"type" yaml:"type"`
@@ -166,7 +167,7 @@ type PolicyTrigger struct {
 	Cron *CronTrigger `json:"cron,omitempty" yaml:"cron,omitempty"`
 }
 
-// AgeTrigger triggers based on object age
+// AgeTrigger triggers based on object age.
 type AgeTrigger struct {
 	// DaysSinceCreation triggers after N days since creation
 	DaysSinceCreation int `json:"daysSinceCreation,omitempty" yaml:"daysSinceCreation,omitempty"`
@@ -181,7 +182,7 @@ type AgeTrigger struct {
 	HoursSinceAccess int `json:"hoursSinceAccess,omitempty" yaml:"hoursSinceAccess,omitempty"`
 }
 
-// AccessTrigger triggers based on access patterns
+// AccessTrigger triggers based on access patterns.
 type AccessTrigger struct {
 	// Operation type to track (GET, HEAD, etc.)
 	Operation string `json:"operation,omitempty" yaml:"operation,omitempty"`
@@ -202,7 +203,7 @@ type AccessTrigger struct {
 	PromoteToCache bool `json:"promoteToCache,omitempty" yaml:"promoteToCache,omitempty"`
 }
 
-// CapacityTrigger triggers based on tier capacity
+// CapacityTrigger triggers based on tier capacity.
 type CapacityTrigger struct {
 	// Tier to monitor
 	Tier TierType `json:"tier" yaml:"tier"`
@@ -220,7 +221,7 @@ type CapacityTrigger struct {
 	ObjectCountThreshold int64 `json:"objectCountThreshold,omitempty" yaml:"objectCountThreshold,omitempty"`
 }
 
-// FrequencyTrigger triggers based on access frequency patterns
+// FrequencyTrigger triggers based on access frequency patterns.
 type FrequencyTrigger struct {
 	// MinAccessesPerDay for hot classification
 	MinAccessesPerDay float64 `json:"minAccessesPerDay,omitempty" yaml:"minAccessesPerDay,omitempty"`
@@ -235,7 +236,7 @@ type FrequencyTrigger struct {
 	Pattern string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
 }
 
-// CronTrigger triggers on a cron schedule
+// CronTrigger triggers on a cron schedule.
 type CronTrigger struct {
 	// Expression is a cron expression (e.g., "0 2 * * *" for 2 AM daily)
 	Expression string `json:"expression" yaml:"expression"`
@@ -244,7 +245,7 @@ type CronTrigger struct {
 	Timezone string `json:"timezone,omitempty" yaml:"timezone,omitempty"`
 }
 
-// PolicyAction defines what happens when conditions are met
+// PolicyAction defines what happens when conditions are met.
 type PolicyAction struct {
 	// Type of action
 	Type PolicyActionType `json:"type" yaml:"type"`
@@ -265,21 +266,21 @@ type PolicyAction struct {
 	StopProcessing bool `json:"stopProcessing,omitempty" yaml:"stopProcessing,omitempty"`
 }
 
-// PolicyActionType defines types of policy actions
+// PolicyActionType defines types of policy actions.
 type PolicyActionType string
 
 const (
-	// ActionTransition moves object to a different tier
+	// ActionTransition moves object to a different tier.
 	ActionTransition PolicyActionType = "transition"
-	// ActionDelete removes the object
+	// ActionDelete removes the object.
 	ActionDelete PolicyActionType = "delete"
-	// ActionReplicate copies to another location
+	// ActionReplicate copies to another location.
 	ActionReplicate PolicyActionType = "replicate"
-	// ActionNotify sends a notification
+	// ActionNotify sends a notification.
 	ActionNotify PolicyActionType = "notify"
 )
 
-// TransitionActionConfig configures tier transitions
+// TransitionActionConfig configures tier transitions.
 type TransitionActionConfig struct {
 	// TargetTier is the destination tier
 	TargetTier TierType `json:"targetTier" yaml:"targetTier"`
@@ -297,7 +298,7 @@ type TransitionActionConfig struct {
 	CompressionAlgorithm string `json:"compressionAlgorithm,omitempty" yaml:"compressionAlgorithm,omitempty"`
 }
 
-// DeleteActionConfig configures object deletion
+// DeleteActionConfig configures object deletion.
 type DeleteActionConfig struct {
 	// DaysAfterTransition deletes N days after transitioning to a tier
 	DaysAfterTransition int `json:"daysAfterTransition,omitempty" yaml:"daysAfterTransition,omitempty"`
@@ -309,7 +310,7 @@ type DeleteActionConfig struct {
 	NonCurrentVersionDays int `json:"nonCurrentVersionDays,omitempty" yaml:"nonCurrentVersionDays,omitempty"`
 }
 
-// ReplicateActionConfig configures replication
+// ReplicateActionConfig configures replication.
 type ReplicateActionConfig struct {
 	// Destination for replication
 	Destination string `json:"destination" yaml:"destination"`
@@ -318,7 +319,7 @@ type ReplicateActionConfig struct {
 	StorageClass StorageClass `json:"storageClass,omitempty" yaml:"storageClass,omitempty"`
 }
 
-// NotifyActionConfig configures notifications
+// NotifyActionConfig configures notifications.
 type NotifyActionConfig struct {
 	// Endpoint URL for webhook
 	Endpoint string `json:"endpoint" yaml:"endpoint"`
@@ -327,7 +328,7 @@ type NotifyActionConfig struct {
 	Events []string `json:"events,omitempty" yaml:"events,omitempty"`
 }
 
-// AntiThrashConfig prevents tier oscillation
+// AntiThrashConfig prevents tier oscillation.
 type AntiThrashConfig struct {
 	// Enabled turns on anti-thrash protection
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -348,31 +349,35 @@ type AntiThrashConfig struct {
 	RequireConsecutiveEvaluations int `json:"requireConsecutiveEvaluations,omitempty" yaml:"requireConsecutiveEvaluations,omitempty"`
 }
 
-// GetMinTimeInTier returns the parsed duration
+// GetMinTimeInTier returns the parsed duration.
 func (c *AntiThrashConfig) GetMinTimeInTier() time.Duration {
 	if c.MinTimeInTier == "" {
 		return 0
 	}
+
 	d, err := time.ParseDuration(c.MinTimeInTier)
 	if err != nil {
 		return 0
 	}
+
 	return d
 }
 
-// GetCooldownAfterTransition returns the parsed duration
+// GetCooldownAfterTransition returns the parsed duration.
 func (c *AntiThrashConfig) GetCooldownAfterTransition() time.Duration {
 	if c.CooldownAfterTransition == "" {
 		return 0
 	}
+
 	d, err := time.ParseDuration(c.CooldownAfterTransition)
 	if err != nil {
 		return 0
 	}
+
 	return d
 }
 
-// ScheduleConfig defines when policies can execute
+// ScheduleConfig defines when policies can execute.
 type ScheduleConfig struct {
 	// Enabled turns on scheduling
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -387,7 +392,7 @@ type ScheduleConfig struct {
 	Timezone string `json:"timezone,omitempty" yaml:"timezone,omitempty"`
 }
 
-// MaintenanceWindow defines a time window
+// MaintenanceWindow defines a time window.
 type MaintenanceWindow struct {
 	// Name of the window
 	Name string `json:"name" yaml:"name"`
@@ -402,7 +407,7 @@ type MaintenanceWindow struct {
 	EndTime string `json:"endTime" yaml:"endTime"`
 }
 
-// RateLimitConfig controls execution rate
+// RateLimitConfig controls execution rate.
 type RateLimitConfig struct {
 	// Enabled turns on rate limiting
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -420,7 +425,7 @@ type RateLimitConfig struct {
 	BurstSize int `json:"burstSize,omitempty" yaml:"burstSize,omitempty"`
 }
 
-// DistributedConfig configures distributed execution
+// DistributedConfig configures distributed execution.
 type DistributedConfig struct {
 	// Enabled turns on distributed execution
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -435,7 +440,7 @@ type DistributedConfig struct {
 	CoordinationKey string `json:"coordinationKey,omitempty" yaml:"coordinationKey,omitempty"`
 }
 
-// PolicyStats tracks policy execution statistics
+// PolicyStats tracks policy execution statistics.
 type PolicyStats struct {
 	PolicyID               string        `json:"policyId"`
 	LastExecuted           time.Time     `json:"lastExecuted"`
@@ -451,7 +456,7 @@ type PolicyStats struct {
 	TotalExecutions        int64         `json:"totalExecutions"`
 }
 
-// ObjectAccessStats tracks object access patterns
+// ObjectAccessStats tracks object access patterns.
 type ObjectAccessStats struct {
 	Bucket       string    `json:"bucket"`
 	Key          string    `json:"key"`
@@ -479,41 +484,47 @@ type ObjectAccessStats struct {
 	ConsecutiveEvaluations int `json:"consecutiveEvaluations"`
 }
 
-// AccessRecord represents a single access event
+// AccessRecord represents a single access event.
 type AccessRecord struct {
 	Timestamp time.Time `json:"timestamp"`
 	Operation string    `json:"operation"` // GET, HEAD, etc.
 	BytesRead int64     `json:"bytesRead,omitempty"`
 }
 
-// Validate validates the policy configuration
+// Validate validates the policy configuration.
 func (p *AdvancedPolicy) Validate() error {
 	if p.ID == "" {
-		return fmt.Errorf("policy ID is required")
+		return errors.New("policy ID is required")
 	}
+
 	if p.Name == "" {
-		return fmt.Errorf("policy name is required")
+		return errors.New("policy name is required")
 	}
+
 	if p.Type == "" {
-		return fmt.Errorf("policy type is required")
+		return errors.New("policy type is required")
 	}
 
 	// Validate triggers
 	if len(p.Triggers) == 0 {
-		return fmt.Errorf("at least one trigger is required")
+		return errors.New("at least one trigger is required")
 	}
+
 	for i, trigger := range p.Triggers {
-		if err := trigger.Validate(); err != nil {
+		err := trigger.Validate()
+		if err != nil {
 			return fmt.Errorf("trigger %d: %w", i, err)
 		}
 	}
 
 	// Validate actions
 	if len(p.Actions) == 0 {
-		return fmt.Errorf("at least one action is required")
+		return errors.New("at least one action is required")
 	}
+
 	for i, action := range p.Actions {
-		if err := action.Validate(); err != nil {
+		err := action.Validate()
+		if err != nil {
 			return fmt.Errorf("action %d: %w", i, err)
 		}
 	}
@@ -521,73 +532,74 @@ func (p *AdvancedPolicy) Validate() error {
 	return nil
 }
 
-// Validate validates a trigger
+// Validate validates a trigger.
 func (t *PolicyTrigger) Validate() error {
 	if t.Type == "" {
-		return fmt.Errorf("trigger type is required")
+		return errors.New("trigger type is required")
 	}
 
 	switch t.Type {
 	case TriggerTypeAge:
 		if t.Age == nil {
-			return fmt.Errorf("age trigger requires age configuration")
+			return errors.New("age trigger requires age configuration")
 		}
 	case TriggerTypeAccess:
 		if t.Access == nil {
-			return fmt.Errorf("access trigger requires access configuration")
+			return errors.New("access trigger requires access configuration")
 		}
 	case TriggerTypeCapacity:
 		if t.Capacity == nil {
-			return fmt.Errorf("capacity trigger requires capacity configuration")
+			return errors.New("capacity trigger requires capacity configuration")
 		}
 	case TriggerTypeFrequency:
 		if t.Frequency == nil {
-			return fmt.Errorf("frequency trigger requires frequency configuration")
+			return errors.New("frequency trigger requires frequency configuration")
 		}
 	case TriggerTypeCron:
 		if t.Cron == nil {
-			return fmt.Errorf("cron trigger requires cron configuration")
+			return errors.New("cron trigger requires cron configuration")
 		}
 	}
 
 	return nil
 }
 
-// Validate validates an action
+// Validate validates an action.
 func (a *PolicyAction) Validate() error {
 	if a.Type == "" {
-		return fmt.Errorf("action type is required")
+		return errors.New("action type is required")
 	}
 
 	switch a.Type {
 	case ActionTransition:
 		if a.Transition == nil {
-			return fmt.Errorf("transition action requires transition configuration")
+			return errors.New("transition action requires transition configuration")
 		}
+
 		if a.Transition.TargetTier == "" {
-			return fmt.Errorf("transition target tier is required")
+			return errors.New("transition target tier is required")
 		}
 	case ActionDelete:
 		// Delete action doesn't require additional configuration
 	case ActionReplicate:
 		if a.Replicate == nil || a.Replicate.Destination == "" {
-			return fmt.Errorf("replicate action requires destination")
+			return errors.New("replicate action requires destination")
 		}
 	case ActionNotify:
 		if a.Notify == nil || a.Notify.Endpoint == "" {
-			return fmt.Errorf("notify action requires endpoint")
+			return errors.New("notify action requires endpoint")
 		}
 	}
 
 	return nil
 }
 
-// ToJSON serializes policy to JSON
+// ToJSON serializes policy to JSON.
 func (p *AdvancedPolicy) ToJSON() ([]byte, error) {
 	return json.MarshalIndent(p, "", "  ")
 }
 
-// FromJSON deserializes policy from JSON
+// FromJSON deserializes policy from JSON.
 func (p *AdvancedPolicy) FromJSON(data []byte) error {
 	return json.Unmarshal(data, p)
 }
