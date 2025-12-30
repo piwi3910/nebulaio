@@ -242,7 +242,7 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 	// Check if compression metadata exists
 	metaReader, err := b.inner.GetObject(ctx, bucket, key+metaKeySuffix)
 	if err != nil {
-		// No metadata = not compressed
+		//nolint:nilerr // Expected: missing metadata means not compressed, return original reader
 		return reader, nil
 	}
 
@@ -250,7 +250,7 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 	_ = metaReader.Close()
 
 	if err != nil {
-		// Can't read metadata, assume not compressed
+		//nolint:nilerr // Fallback: can't read metadata, assume not compressed and return original
 		return reader, nil
 	}
 

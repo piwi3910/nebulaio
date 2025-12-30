@@ -67,7 +67,7 @@ func ZeroRange(file *os.File, offset, length int64) error {
 func Fadvise(file *os.File, offset, length int64, advice int) error {
 	_, _, errno := syscall.Syscall6(
 		syscall.SYS_FADVISE64,
-		uintptr(file.Fd()),
+		file.Fd(),
 		uintptr(offset),
 		uintptr(length),
 		uintptr(advice),

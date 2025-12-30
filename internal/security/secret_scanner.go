@@ -516,6 +516,7 @@ func (s *SecretScanner) ScanObject(ctx context.Context, bucket, key string, read
 		content, err = io.ReadAll(io.LimitReader(reader, s.config.MaxFileSize))
 		if err != nil {
 			result.Error = err.Error()
+			//nolint:nilerr // Error is captured in result.Error, successful scan result returned
 			return result, nil
 		}
 

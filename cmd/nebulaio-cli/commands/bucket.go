@@ -203,9 +203,13 @@ func newBucketInfoCmd() *cobra.Command {
 				Bucket: &bucketName,
 			})
 
+			var paginationErr error
+
 			for paginator.HasMorePages() {
 				page, err := paginator.NextPage(ctx)
 				if err != nil {
+					paginationErr = err
+
 					break
 				}
 
@@ -220,7 +224,7 @@ func newBucketInfoCmd() *cobra.Command {
 			fmt.Printf("Objects: %d\n", objectCount)
 			fmt.Printf("Total Size: %s\n", FormatSize(totalSize))
 
-			return nil
+			return paginationErr
 		},
 	}
 }

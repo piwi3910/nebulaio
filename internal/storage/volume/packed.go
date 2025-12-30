@@ -428,7 +428,7 @@ func (v *Volume) Get(bucket, key string) ([]byte, error) {
 		data := make([]byte, entry.Size)
 		remaining := data
 
-		for i := range uint16(entry.BlockCount) {
+		for i := range entry.BlockCount {
 			block, err := v.readBlock(entry.BlockNum + uint32(i))
 			if err != nil {
 				return nil, err

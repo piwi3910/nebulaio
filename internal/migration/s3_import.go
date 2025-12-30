@@ -128,11 +128,11 @@ type ResumeState struct {
 
 // FailedObject represents a failed migration.
 type FailedObject struct {
-	Timestamp time.Time
-	Bucket    string
-	Key       string
-	Error     string
-	Retries   int
+	Timestamp time.Time `json:"timestamp"`
+	Bucket    string    `json:"bucket"`
+	Key       string    `json:"key"`
+	Error     string    `json:"error"`
+	Retries   int       `json:"retries"`
 }
 
 // MigrationManager manages migration jobs.

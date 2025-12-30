@@ -124,7 +124,7 @@ func (m *AllocationMap) AllocateFirst() (uint32, error) {
 	}
 
 	// Find first free block
-	for i := range uint32(m.total) {
+	for i := range m.total {
 		if !isSet(m.bits, i) {
 			setBit(m.bits, i)
 			m.free--
@@ -154,7 +154,7 @@ func (m *AllocationMap) AllocateConsecutive(n int) (uint32, error) {
 	consecutiveStart := uint32(0)
 	consecutiveCount := 0
 
-	for i := range uint32(m.total) {
+	for i := range m.total {
 		if !isSet(m.bits, i) {
 			if consecutiveCount == 0 {
 				consecutiveStart = i

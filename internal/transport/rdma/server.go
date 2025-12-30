@@ -545,6 +545,7 @@ func (h *S3Handler) handleDeleteObject(ctx context.Context, req *ServerRequest) 
 func (h *S3Handler) handleHeadObject(ctx context.Context, req *ServerRequest) (*ServerResponse, error) {
 	size, metadata, err := h.Storage.HeadObject(ctx, req.Bucket, req.Key)
 	if err != nil {
+		//nolint:nilerr // HTTP 404 response for missing object is a valid response, not an error
 		return &ServerResponse{StatusCode: 404}, nil
 	}
 

@@ -275,6 +275,7 @@ func (b *Backend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, err
 
 	_ = filepath.Walk(b.bucketsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			//nolint:nilerr // Skip files with access errors during walk, continue to next file
 			return nil
 		}
 

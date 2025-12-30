@@ -197,7 +197,7 @@ func (s *Service) DeleteConfig(ctx context.Context, bucket string) error {
 func (s *Service) OnObjectCreated(ctx context.Context, bucket, key, versionID string, tags map[string]string) error {
 	config, err := s.GetConfig(ctx, bucket)
 	if err != nil {
-		// No replication configured, skip
+		//nolint:nilerr // Expected: no replication config means skip replication silently
 		return nil
 	}
 
@@ -231,7 +231,7 @@ func (s *Service) OnObjectCreated(ctx context.Context, bucket, key, versionID st
 func (s *Service) OnObjectDeleted(ctx context.Context, bucket, key, versionID string, tags map[string]string) error {
 	config, err := s.GetConfig(ctx, bucket)
 	if err != nil {
-		// No replication configured, skip
+		//nolint:nilerr // Expected: no replication config means skip replication silently
 		return nil
 	}
 

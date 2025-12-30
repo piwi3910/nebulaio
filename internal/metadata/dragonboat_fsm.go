@@ -59,11 +59,13 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 func (sm *stateMachine) Update(entry statemachine.Entry) (statemachine.Result, error) {
 	var cmd command
 	if err := json.Unmarshal(entry.Cmd, &cmd); err != nil {
+		//nolint:nilerr // Dragonboat pattern: Result.Value indicates error status, not Go error return
 		return statemachine.Result{Value: 1}, nil // Error code
 	}
 
 	err := sm.processCommand(&cmd)
 	if err != nil {
+		//nolint:nilerr // Dragonboat pattern: Result.Value indicates error status, not Go error return
 		return statemachine.Result{Value: 1}, nil // Error code
 	}
 
