@@ -270,7 +270,8 @@ func TestQueue(t *testing.T) {
 		item, _ := q.Enqueue(ctx, "bucket", "key3", "", "PUT", "rule1")
 		_, _ = q.Dequeue(ctx)
 
-		if err := q.Fail(item.ID, io.EOF); err != nil {
+		err := q.Fail(item.ID, io.EOF)
+		if err != nil {
 			t.Errorf("fail failed: %v", err)
 		}
 
@@ -465,7 +466,8 @@ func TestService(t *testing.T) {
 			},
 		}
 
-		if err := svc.SetConfig(ctx, "source-bucket", config); err != nil {
+		err := svc.SetConfig(ctx, "source-bucket", config)
+		if err != nil {
 			t.Fatalf("set config failed: %v", err)
 		}
 

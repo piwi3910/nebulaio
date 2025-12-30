@@ -667,7 +667,8 @@ func (bm *BackupManager) backupObject(job *BackupJob, bucket string, obj *Object
 	}
 
 	// Copy object data
-	if _, err := io.Copy(writer, reader); err != nil {
+	_, err = io.Copy(writer, reader)
+	if err != nil {
 		return fmt.Errorf("failed to copy object data: %w", err)
 	}
 
@@ -679,7 +680,8 @@ func (bm *BackupManager) backupObject(job *BackupJob, bucket string, obj *Object
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	if err := os.WriteFile(metadataPath, metadataData, 0644); err != nil {
+	err = os.WriteFile(metadataPath, metadataData, 0644)
+	if err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
@@ -929,7 +931,8 @@ func (bm *BackupManager) runPITRRestore(job *RestoreJob, baseBackup *BackupMetad
 	job.metadata.Status = RestoreStatusInProgress
 
 	// First, restore from base backup
-	if err := bm.restoreFromBackup(job, baseBackup); err != nil {
+	err := bm.restoreFromBackup(job, baseBackup)
+	if err != nil {
 		job.metadata.Status = RestoreStatusFailed
 		job.metadata.Error = err.Error()
 
@@ -1082,7 +1085,8 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 			Metadata:    objMeta.Metadata,
 		}
 
-		if err := bm.storage.PutObject(job.ctx, targetBucket, key, reader, size, opts); err != nil {
+		err = bm.storage.PutObject(job.ctx, targetBucket, key, reader, size, opts)
+		if err != nil {
 			return fmt.Errorf("failed to restore object: %w", err)
 		}
 

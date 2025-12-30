@@ -279,7 +279,8 @@ func (pr *ParquetReader) readMetadata() error {
 	}
 
 	// Parse metadata (simplified - real implementation would use Thrift)
-	if err := pr.parseMetadata(metadataBytes); err != nil {
+	err = pr.parseMetadata(metadataBytes)
+	if err != nil {
 		return fmt.Errorf("failed to parse metadata: %w", err)
 	}
 
@@ -495,7 +496,8 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 		}
 
 		data := make([]byte, length)
-		if _, err := io.ReadFull(reader, data); err != nil {
+		_, err = io.ReadFull(reader, data)
+		if err != nil {
 			return nil, err
 		}
 
@@ -503,7 +505,8 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 
 	case ParquetTypeFixedLenByteArray:
 		data := make([]byte, desc.Precision) // Use precision as length
-		if _, err := io.ReadFull(reader, data); err != nil {
+		_, err := io.ReadFull(reader, data)
+		if err != nil {
 			return nil, err
 		}
 
@@ -511,7 +514,8 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 
 	case ParquetTypeInt96:
 		data := make([]byte, 12)
-		if _, err := io.ReadFull(reader, data); err != nil {
+		_, err := io.ReadFull(reader, data)
+		if err != nil {
 			return nil, err
 		}
 
@@ -824,8 +828,10 @@ func compareValues(a, b interface{}) int {
 
 	// Try numeric comparison first
 	var aNum, bNum float64
-	if _, err := fmt.Sscanf(aStr, "%f", &aNum); err == nil {
-		if _, err := fmt.Sscanf(bStr, "%f", &bNum); err == nil {
+	_, err := fmt.Sscanf(aStr, "%f", &aNum)
+	if err == nil {
+		_, err := fmt.Sscanf(bStr, "%f", &bNum)
+		if err == nil {
 			if aNum < bNum {
 				return -1
 			} else if aNum > bNum {

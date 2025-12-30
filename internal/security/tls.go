@@ -41,7 +41,8 @@ func NewTLSManager(cfg *config.TLSConfig, hostname string) (*TLSManager, error) 
 	}
 
 	// Ensure cert directory exists
-	if err := os.MkdirAll(cfg.CertDir, 0700); err != nil {
+	err := os.MkdirAll(cfg.CertDir, 0700)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate directory: %w", err)
 	}
 
@@ -168,7 +169,8 @@ func (m *TLSManager) generateCertificates(hostname string) error {
 	}
 
 	// Save CA certificate
-	if err := m.saveCertificate(m.caFile, caCert); err != nil {
+	err = m.saveCertificate(m.caFile, caCert)
+	if err != nil {
 		return fmt.Errorf("failed to save CA certificate: %w", err)
 	}
 
@@ -179,17 +181,20 @@ func (m *TLSManager) generateCertificates(hostname string) error {
 	}
 
 	// Save server certificate and key
-	if err := m.saveCertificate(m.certFile, serverCert); err != nil {
+	err = m.saveCertificate(m.certFile, serverCert)
+	if err != nil {
 		return fmt.Errorf("failed to save server certificate: %w", err)
 	}
 
-	if err := m.saveKey(m.keyFile, serverKey); err != nil {
+	err = m.saveKey(m.keyFile, serverKey)
+	if err != nil {
 		return fmt.Errorf("failed to save server key: %w", err)
 	}
 
 	// Also save CA key for potential future use (cluster operations)
 	caKeyFile := filepath.Join(m.config.CertDir, "ca.key")
-	if err := m.saveKey(caKeyFile, caKey); err != nil {
+	err = m.saveKey(caKeyFile, caKey)
+	if err != nil {
 		return fmt.Errorf("failed to save CA key: %w", err)
 	}
 

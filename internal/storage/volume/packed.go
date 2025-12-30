@@ -215,7 +215,8 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 
 	// Read all data
 	data := make([]byte, size)
-	if _, err := io.ReadFull(r, data); err != nil {
+	_, err := io.ReadFull(r, data)
+	if err != nil {
 		return err
 	}
 
@@ -260,7 +261,8 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 		}
 
 		v.blockTypes[blockNum] = BlockTypeLarge
-		if err := v.writeBlock(blockNum, data); err != nil {
+		err = v.writeBlock(blockNum, data)
+		if err != nil {
 			return err
 		}
 
@@ -372,7 +374,8 @@ func (v *Volume) putPacked(blockType uint8, keyHash [16]byte, key string, data [
 		return 0xFFFFFFFF, 0
 	}
 
-	if err := pb.Save(v); err != nil {
+	err = pb.Save(v)
+	if err != nil {
 		return 0xFFFFFFFF, 0
 	}
 
@@ -481,11 +484,13 @@ func (v *Volume) Delete(bucket, key string) error {
 			return err
 		}
 
-		if err := pb.MarkDeleted(entry.OffsetInBlock); err != nil {
+		err = pb.MarkDeleted(entry.OffsetInBlock)
+		if err != nil {
 			return err
 		}
 
-		if err := pb.Save(v); err != nil {
+		err = pb.Save(v)
+		if err != nil {
 			return err
 		}
 	}

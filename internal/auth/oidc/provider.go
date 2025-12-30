@@ -174,7 +174,8 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string) (*auth.User,
 
 	// Extract claims
 	var claims map[string]interface{}
-	if err := userInfo.Claims(&claims); err != nil {
+	err = userInfo.Claims(&claims)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
 	}
 
@@ -210,7 +211,8 @@ func (p *Provider) ValidateToken(ctx context.Context, idToken string) (*auth.Use
 
 	// Extract claims
 	var claims map[string]interface{}
-	if err := token.Claims(&claims); err != nil {
+	err = token.Claims(&claims)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
 	}
 
@@ -308,7 +310,8 @@ func (p *Provider) GetAuthorizationURL(redirectURI string) (string, *Authorizati
 	authURL := config.AuthCodeURL(state, opts...)
 
 	// Save state for validation
-	if err := p.stateStore.SaveState(authState); err != nil {
+	err = p.stateStore.SaveState(authState)
+	if err != nil {
 		return "", nil, fmt.Errorf("failed to save state: %w", err)
 	}
 
@@ -361,7 +364,8 @@ func (p *Provider) HandleCallback(ctx context.Context, code, stateValue string) 
 
 	// Verify nonce
 	var claims map[string]interface{}
-	if err := idToken.Claims(&claims); err != nil {
+	err = idToken.Claims(&claims)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
 	}
 
@@ -519,7 +523,8 @@ func (p *Provider) isEmailDomainAllowed(email string) bool {
 // generateRandomString generates a random string of specified length.
 func generateRandomString(length int) (string, error) {
 	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
+	_, err := rand.Read(bytes)
+	if err != nil {
 		return "", err
 	}
 

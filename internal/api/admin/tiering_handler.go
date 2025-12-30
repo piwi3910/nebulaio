@@ -594,13 +594,15 @@ func ParsePaginationParams(r *http.Request) (limit int, offset int) {
 	offset = 0
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 1000 {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= 1000 {
 			limit = int(l)
 		}
 	}
 
 	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if o, err := json.Number(offsetStr).Int64(); err == nil && o >= 0 {
+		o, err := json.Number(offsetStr).Int64()
+		if err == nil && o >= 0 {
 			offset = int(o)
 		}
 	}
@@ -672,7 +674,8 @@ func ParseLimitParam(r *http.Request, defaultLimit, maxLimit int) int {
 	limit := defaultLimit
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= int64(maxLimit) {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= int64(maxLimit) {
 			limit = int(l)
 		}
 	}
@@ -685,7 +688,8 @@ func ParseInactiveDaysParam(r *http.Request, defaultDays int) int {
 	inactiveDays := defaultDays
 
 	if daysStr := r.URL.Query().Get("inactive_days"); daysStr != "" {
-		if d, err := json.Number(daysStr).Int64(); err == nil && d > 0 && d <= 365 {
+		d, err := json.Number(daysStr).Int64()
+		if err == nil && d > 0 && d <= 365 {
 			inactiveDays = int(d)
 		}
 	}
@@ -1008,7 +1012,8 @@ func (h *TieringHandler) GetTierRecommendations(w http.ResponseWriter, r *http.R
 	limit := 100
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 1000 {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= 1000 {
 			limit = int(l)
 		}
 	}
@@ -1032,7 +1037,8 @@ func (h *TieringHandler) GetHotObjectsPrediction(w http.ResponseWriter, r *http.
 	limit := 50
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= 500 {
 			limit = int(l)
 		}
 	}
@@ -1062,7 +1068,8 @@ func (h *TieringHandler) GetAccessAnomalies(w http.ResponseWriter, r *http.Reque
 	limit := 50
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= 500 {
 			limit = int(l)
 		}
 	}

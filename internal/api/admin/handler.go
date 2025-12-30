@@ -680,7 +680,8 @@ func (h *Handler) ListNodes(w http.ResponseWriter, r *http.Request) {
 	voterMap := make(map[string]bool)
 
 	if dbStore, ok := h.store.(*metadata.DragonboatStore); ok {
-		if config, err := dbStore.GetClusterConfiguration(); err == nil {
+		config, err := dbStore.GetClusterConfiguration()
+		if err == nil {
 			for _, server := range config.Servers {
 				voterMap[strconv.FormatUint(server.ID, 10)] = server.IsVoter
 			}
@@ -930,14 +931,16 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	// Parse start_time
 	if startStr := r.URL.Query().Get("start_time"); startStr != "" {
-		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+		t, err := time.Parse(time.RFC3339, startStr)
+		if err == nil {
 			filter.StartTime = t
 		}
 	}
 
 	// Parse end_time
 	if endStr := r.URL.Query().Get("end_time"); endStr != "" {
-		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+		t, err := time.Parse(time.RFC3339, endStr)
+		if err == nil {
 			filter.EndTime = t
 		}
 	}
@@ -956,7 +959,8 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	// Parse limit
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
+		limit, err := strconv.Atoi(limitStr)
+		if err == nil && limit > 0 {
 			filter.MaxResults = limit
 		}
 	}

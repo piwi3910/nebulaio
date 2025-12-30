@@ -61,7 +61,8 @@ func (m *ShardManager) WriteShard(ctx context.Context, bucket, key string, shard
 	path := m.ShardPath(bucket, key, shardIndex)
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+	err := os.MkdirAll(filepath.Dir(path), 0750)
+	if err != nil {
 		return "", fmt.Errorf("failed to create shard directory: %w", err)
 	}
 
@@ -77,22 +78,26 @@ func (m *ShardManager) WriteShard(ctx context.Context, bucket, key string, shard
 	defer func() { _ = os.Remove(tmpPath) }() // Clean up on error
 
 	// Write data
-	if _, err := tmpFile.Write(data); err != nil {
+	_, err = tmpFile.Write(data)
+	if err != nil {
 		_ = tmpFile.Close()
 		return "", fmt.Errorf("failed to write shard: %w", err)
 	}
 
-	if err := tmpFile.Sync(); err != nil {
+	err = tmpFile.Sync()
+	if err != nil {
 		_ = tmpFile.Close()
 		return "", fmt.Errorf("failed to sync shard: %w", err)
 	}
 
-	if err := tmpFile.Close(); err != nil {
+	err = tmpFile.Close()
+	if err != nil {
 		return "", fmt.Errorf("failed to close shard: %w", err)
 	}
 
 	// Atomic rename
-	if err := os.Rename(tmpPath, path); err != nil {
+	err = os.Rename(tmpPath, path)
+	if err != nil {
 		return "", fmt.Errorf("failed to rename shard: %w", err)
 	}
 
@@ -254,7 +259,8 @@ func (m *ShardManager) cleanEmptyDirs(dir string) {
 			break
 		}
 
-		if err := os.Remove(dir); err != nil {
+		err = os.Remove(dir)
+		if err != nil {
 			break
 		}
 

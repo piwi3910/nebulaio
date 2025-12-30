@@ -275,7 +275,8 @@ func NewRawDeviceVolume(path string, cfg RawDeviceConfig, tier StorageTier) (*Ra
 	}
 
 	// Check for existing signature or initialize
-	if err := vol.initializeOrLoad(cfg); err != nil {
+	err = vol.initializeOrLoad(cfg)
+	if err != nil {
 		_ = file.Close()
 		return nil, err
 	}
@@ -649,12 +650,14 @@ func (m *TieredDeviceManager) MigrateObject(bucket, key string, targetTier Stora
 	}
 
 	// Write to target
-	if err := targetVol.Put(bucket, key, data); err != nil {
+	err = targetVol.Put(bucket, key, data)
+	if err != nil {
 		return err
 	}
 
 	// Delete from source
-	if err := sourceVol.Delete(bucket, key); err != nil {
+	err = sourceVol.Delete(bucket, key)
+	if err != nil {
 		// Rollback: delete from target
 		_ = targetVol.Delete(bucket, key)
 		return err

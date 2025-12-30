@@ -296,7 +296,8 @@ func (b *SimulatedBackend) aesGCMEncrypt(key, plaintext []byte) ([]byte, error) 
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	_, err = io.ReadFull(rand.Reader, nonce)
+	if err != nil {
 		return nil, err
 	}
 
@@ -378,11 +379,13 @@ func (b *SimulatedBackend) Compress(ctx context.Context, algorithm string, data 
 		return nil, err
 	}
 
-	if _, err := w.Write(data); err != nil {
+	_, err = w.Write(data)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := w.Close(); err != nil {
+	err = w.Close()
+	if err != nil {
 		return nil, err
 	}
 
@@ -419,7 +422,8 @@ func (b *SimulatedBackend) Decompress(ctx context.Context, algorithm string, dat
 
 	var buf bytes.Buffer
 
-	if _, err := io.Copy(&buf, io.LimitReader(r, maxDecompressSize)); err != nil {
+	_, err := io.Copy(&buf, io.LimitReader(r, maxDecompressSize))
+	if err != nil {
 		return nil, err
 	}
 

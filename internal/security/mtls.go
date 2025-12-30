@@ -382,11 +382,13 @@ func (m *MTLSManager) IssueCertificate(ctx context.Context, certType Certificate
 	certPath := filepath.Join(m.config.CertDir, bundle.Info.ID+".crt")
 	keyPath := filepath.Join(m.config.CertDir, bundle.Info.ID+".key")
 
-	if err := os.WriteFile(certPath, certPEM, certFilePermissions); err != nil {
+	err = os.WriteFile(certPath, certPEM, certFilePermissions)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := os.WriteFile(keyPath, keyPEM, keyFilePermissions); err != nil {
+	err = os.WriteFile(keyPath, keyPEM, keyFilePermissions)
+	if err != nil {
 		return nil, err
 	}
 
@@ -693,11 +695,13 @@ func (m *MTLSManager) ExportCertificate(certID string, certPath, keyPath string)
 		return err
 	}
 
-	if err := os.WriteFile(certPath, bundle.CertificatePEM, 0644); err != nil {
+	err = os.WriteFile(certPath, bundle.CertificatePEM, 0644)
+	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(keyPath, bundle.PrivateKeyPEM, 0600); err != nil {
+	err = os.WriteFile(keyPath, bundle.PrivateKeyPEM, 0600)
+	if err != nil {
 		return err
 	}
 

@@ -37,7 +37,8 @@ const (
 // hashNodeID converts a string node ID to a uint64 replica ID.
 func hashNodeID(nodeID string) uint64 {
 	// Try parsing as uint64 first
-	if id, err := strconv.ParseUint(nodeID, 10, 64); err == nil {
+	id, err := strconv.ParseUint(nodeID, 10, 64)
+	if err == nil {
 		return id
 	}
 	// Fall back to hash
@@ -74,15 +75,18 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	nodeHostDir := filepath.Join(cfg.DataDir, "nodehost")
 	walDir := filepath.Join(cfg.DataDir, "wal")
 
-	if err := os.MkdirAll(badgerDir, dirPermissions); err != nil {
+	err := os.MkdirAll(badgerDir, dirPermissions)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create badger directory: %w", err)
 	}
 
-	if err := os.MkdirAll(nodeHostDir, dirPermissions); err != nil {
+	err = os.MkdirAll(nodeHostDir, dirPermissions)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create nodehost directory: %w", err)
 	}
 
-	if err := os.MkdirAll(walDir, dirPermissions); err != nil {
+	err = os.MkdirAll(walDir, dirPermissions)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create wal directory: %w", err)
 	}
 
@@ -180,7 +184,8 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	// Wait for leader election
 	log.Info().Msg("Waiting for Dragonboat leader election...")
 
-	if err := store.WaitForLeader(leaderWaitTimeout); err != nil {
+	err = store.WaitForLeader(leaderWaitTimeout)
+	if err != nil {
 		log.Warn().Err(err).Msg("Timeout waiting for leader election, continuing anyway")
 	} else {
 		leaderID, _, _, _ := nh.GetLeaderID(cfg.ShardID)

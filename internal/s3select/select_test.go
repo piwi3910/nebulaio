@@ -109,7 +109,8 @@ func TestExecuteCSVSelectStar(t *testing.T) {
 
 	// Verify first record
 	var record map[string]interface{}
-	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+	err = json.Unmarshal([]byte(lines[0]), &record)
+	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
@@ -130,7 +131,8 @@ func TestExecuteCSVSelectColumns(t *testing.T) {
 	}
 
 	var record map[string]interface{}
-	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+	err = json.Unmarshal([]byte(lines[0]), &record)
+	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
@@ -184,7 +186,8 @@ func TestExecuteCSVCount(t *testing.T) {
 	}
 
 	var record map[string]interface{}
-	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+	err = json.Unmarshal([]byte(lines[0]), &record)
+	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
@@ -205,7 +208,8 @@ Gizmo,15,4`
 	}
 
 	var record map[string]interface{}
-	if err := json.Unmarshal(result.Records, &record); err != nil {
+	err = json.Unmarshal(result.Records, &record)
+	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
@@ -226,7 +230,8 @@ Gizmo,15,4`
 	}
 
 	var record map[string]interface{}
-	if err := json.Unmarshal(result.Records, &record); err != nil {
+	err = json.Unmarshal(result.Records, &record)
+	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 

@@ -862,17 +862,20 @@ func (t *VerbsTransport) Connect(ctx context.Context, remoteQPN uint32, remoteLI
 	t.qp = qp
 
 	// Transition QP to Init
-	if err := t.backend.ModifyQPToInit(qp, t.config.Port); err != nil {
+	err = t.backend.ModifyQPToInit(qp, t.config.Port)
+	if err != nil {
 		return fmt.Errorf("failed to modify QP to Init: %w", err)
 	}
 
 	// Transition QP to RTR
-	if err := t.backend.ModifyQPToRTR(qp, remoteQPN, remoteLID, remoteGID, t.config.Port); err != nil {
+	err = t.backend.ModifyQPToRTR(qp, remoteQPN, remoteLID, remoteGID, t.config.Port)
+	if err != nil {
 		return fmt.Errorf("failed to modify QP to RTR: %w", err)
 	}
 
 	// Transition QP to RTS
-	if err := t.backend.ModifyQPToRTS(qp); err != nil {
+	err = t.backend.ModifyQPToRTS(qp)
+	if err != nil {
 		return fmt.Errorf("failed to modify QP to RTS: %w", err)
 	}
 

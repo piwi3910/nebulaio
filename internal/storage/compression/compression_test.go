@@ -304,7 +304,8 @@ func TestCompressionBackend(t *testing.T) {
 	mockBE := newMockBackend()
 
 	ctx := context.Background()
-	if err := mockBE.Init(ctx); err != nil {
+	err := mockBE.Init(ctx)
+	if err != nil {
 		t.Fatalf("failed to init mock backend: %v", err)
 	}
 
@@ -318,7 +319,8 @@ func TestCompressionBackend(t *testing.T) {
 	}
 
 	// Create test bucket
-	if err := compBackend.CreateBucket(ctx, "test-bucket"); err != nil {
+	err = compBackend.CreateBucket(ctx, "test-bucket")
+	if err != nil {
 		t.Fatalf("failed to create bucket: %v", err)
 	}
 
@@ -458,7 +460,8 @@ func TestNoCompression(t *testing.T) {
 		t.Fatalf("failed to create compression backend: %v", err)
 	}
 
-	if err := compBackend.CreateBucket(ctx, "test"); err != nil {
+	err = compBackend.CreateBucket(ctx, "test")
+	if err != nil {
 		t.Fatalf("failed to create bucket: %v", err)
 	}
 

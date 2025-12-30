@@ -331,7 +331,8 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 	var dpus []DPUInfo
 
 	// Check if mst is available (Mellanox Software Tools)
-	if _, err := exec.LookPath("mst"); err != nil {
+	_, err := exec.LookPath("mst")
+	if err != nil {
 		return dpus
 	}
 
@@ -384,7 +385,8 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 // getBlueFieldFirmware gets BlueField firmware version.
 func (d *Detector) getBlueFieldFirmware(index int) string {
 	// Verify mlxfwmanager is available before executing
-	if _, err := exec.LookPath("mlxfwmanager"); err != nil {
+	_, err := exec.LookPath("mlxfwmanager")
+	if err != nil {
 		log.Debug().Msg("mlxfwmanager not found, cannot query firmware version")
 		return unknownValue
 	}
@@ -426,7 +428,8 @@ func (d *Detector) detectSysfsDPUs() []DPUInfo {
 		// Check for DPU-specific attributes
 		boardIDPath := filepath.Join(dpuPath, entry.Name(), "board_id")
 		//nolint:gosec // G304: Path constructed from trusted system paths, not user input
-		if data, err := os.ReadFile(boardIDPath); err == nil {
+		data, err := os.ReadFile(boardIDPath)
+		if err == nil {
 			boardID := strings.TrimSpace(string(data))
 			// Check if this is a DPU (BlueField has specific board IDs)
 			if strings.Contains(boardID, "MT4") || strings.Contains(boardID, "BF") {
@@ -476,7 +479,8 @@ func (d *Detector) detectRDMADevices() []RDMAInfo {
 
 		// Count physical ports
 		portsPath := filepath.Join(devicePath, "ports")
-		if portEntries, err := os.ReadDir(portsPath); err == nil {
+		portEntries, err := os.ReadDir(portsPath)
+		if err == nil {
 			device.PhysPortCount = len(portEntries)
 
 			// Get link info from first port

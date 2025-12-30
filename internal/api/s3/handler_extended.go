@@ -156,7 +156,8 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	var selectReq s3types.SelectObjectContentInput
-	if err := xml.NewDecoder(r.Body).Decode(&selectReq); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&selectReq)
+	if err != nil {
 		writeS3Error(w, "InvalidRequest", "Failed to parse request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -333,7 +334,8 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 
 	// Parse restore request
 	var restoreReq s3types.RestoreRequest
-	if err := xml.NewDecoder(r.Body).Decode(&restoreReq); err != nil && err != io.EOF {
+	err := xml.NewDecoder(r.Body).Decode(&restoreReq)
+	if err != nil && err != io.EOF {
 		writeS3Error(w, "InvalidRequest", "Failed to parse restore request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -350,10 +352,7 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if object exists and is in GLACIER or DEEP_ARCHIVE
-	var (
-		meta *metadata.ObjectMeta
-		err  error
-	)
+	var meta *metadata.ObjectMeta
 
 	if versionID != "" {
 		meta, err = h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
