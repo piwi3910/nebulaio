@@ -293,7 +293,8 @@ func (b *SimulatedBackend) Chat(ctx context.Context, req *ChatRequest) (*ChatRes
 	time.Sleep(time.Duration(latency) * time.Millisecond)
 
 	// Check if model exists
-	if _, err := b.GetModel(ctx, req.Model); err != nil {
+	_, err := b.GetModel(ctx, req.Model)
+	if err != nil {
 		return nil, err
 	}
 
@@ -352,7 +353,8 @@ func (b *SimulatedBackend) ChatStream(ctx context.Context, req *ChatRequest) (<-
 	b.mu.RUnlock()
 
 	// Check if model exists
-	if _, err := b.GetModel(ctx, req.Model); err != nil {
+	_, err := b.GetModel(ctx, req.Model)
+	if err != nil {
 		return nil, err
 	}
 
@@ -433,7 +435,8 @@ func (b *SimulatedBackend) Embed(ctx context.Context, req *EmbeddingRequest) (*E
 	time.Sleep(time.Duration(latency) * time.Millisecond)
 
 	// Check if model exists
-	if _, err := b.GetModel(ctx, req.Model); err != nil {
+	_, err := b.GetModel(ctx, req.Model)
+	if err != nil {
 		return nil, err
 	}
 

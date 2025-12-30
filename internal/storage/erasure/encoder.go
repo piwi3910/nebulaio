@@ -86,7 +86,8 @@ func (e *Encoder) Encode(reader io.Reader) (*EncodedData, error) {
 	}
 
 	// Encode parity shards
-	if err := e.encoder.Encode(shards); err != nil {
+	err = e.encoder.Encode(shards)
+	if err != nil {
 		return nil, fmt.Errorf("failed to encode parity: %w", err)
 	}
 
@@ -114,7 +115,8 @@ type contextReader struct {
 
 func (cr *contextReader) Read(p []byte) (n int, err error) {
 	// Check if context is already cancelled before attempting read
-	if err := cr.ctx.Err(); err != nil {
+	err = cr.ctx.Err()
+	if err != nil {
 		return 0, err
 	}
 

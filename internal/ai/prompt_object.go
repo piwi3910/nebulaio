@@ -927,7 +927,8 @@ func (p *OllamaProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 		Done     bool   `json:"done"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
 		return nil, err
 	}
 
@@ -1004,7 +1005,8 @@ func (p *OllamaProvider) Embed(ctx context.Context, content string) ([]float64, 
 		Embedding []float64 `json:"embedding"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
 		return nil, err
 	}
 

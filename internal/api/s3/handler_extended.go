@@ -94,7 +94,8 @@ func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
 			// Part count info from metadata
 			if meta.Metadata != nil {
 				if partsStr, ok := meta.Metadata["x-amz-mp-parts-count"]; ok {
-					if partsCount, err := strconv.Atoi(partsStr); err == nil && partsCount > 0 {
+					partsCount, err := strconv.Atoi(partsStr)
+					if err == nil && partsCount > 0 {
 						response.ObjectParts = &s3types.ObjectParts{
 							PartsCount:      partsCount,
 							TotalPartsCount: partsCount,
@@ -384,7 +385,8 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 
 			if restoreStatus == "completed" {
 				if expiryStr, ok := meta.Metadata["x-amz-restore-expiry"]; ok {
-					if expiryTime, err := time.Parse(time.RFC3339, expiryStr); err == nil && expiryTime.After(time.Now()) {
+					expiryTime, err := time.Parse(time.RFC3339, expiryStr)
+					if err == nil && expiryTime.After(time.Now()) {
 						// Object already restored
 						w.Header().Set("X-Amz-Restore", fmt.Sprintf(`ongoing-request="false", expiry-date="%s"`,
 							expiryTime.Format(time.RFC1123)))
@@ -434,7 +436,8 @@ func (h *Handler) WriteGetObjectResponse(w http.ResponseWriter, r *http.Request)
 	statusCode := http.StatusOK
 
 	if sc := r.Header.Get("X-Amz-Fwd-Status"); sc != "" {
-		if parsed, err := strconv.Atoi(sc); err == nil {
+		parsed, err := strconv.Atoi(sc)
+		if err == nil {
 			statusCode = parsed
 		}
 	}

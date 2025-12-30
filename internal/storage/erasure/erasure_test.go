@@ -383,7 +383,8 @@ func TestBackend(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := backend.Init(ctx); err != nil {
+	err = backend.Init(ctx)
+	if err != nil {
 		t.Fatalf("failed to init backend: %v", err)
 	}
 

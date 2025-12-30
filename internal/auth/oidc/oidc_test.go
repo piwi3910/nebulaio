@@ -264,7 +264,8 @@ func TestInMemoryStateStore(t *testing.T) {
 			ExpiresAt: time.Now().Add(10 * time.Minute),
 		}
 
-		if err := store.SaveState(state); err != nil {
+		err := store.SaveState(state)
+		if err != nil {
 			t.Fatalf("save state failed: %v", err)
 		}
 
@@ -317,12 +318,14 @@ func TestInMemoryStateStore(t *testing.T) {
 		}
 
 		// Expired should be gone
-		if _, err := store.GetState("expired-state"); err == nil {
+		_, err = store.GetState("expired-state")
+		if err == nil {
 			t.Error("expired state should be cleaned up")
 		}
 
 		// Valid should still exist
-		if _, err := store.GetState("valid-state"); err != nil {
+		_, err = store.GetState("valid-state")
+		if err != nil {
 			t.Error("valid state should still exist")
 		}
 	})

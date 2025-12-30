@@ -209,12 +209,14 @@ func (m *Manager) ProcessBucket(ctx context.Context, bucket string) error {
 	rules := convertMetadataRules(bucketMeta.Lifecycle)
 
 	// Process regular objects
-	if err := m.processObjects(ctx, bucket, rules); err != nil {
+	err = m.processObjects(ctx, bucket, rules)
+	if err != nil {
 		return err
 	}
 
 	// Process multipart uploads
-	if err := m.processMultipartUploads(ctx, bucket, rules); err != nil {
+	err = m.processMultipartUploads(ctx, bucket, rules)
+	if err != nil {
 		return err
 	}
 

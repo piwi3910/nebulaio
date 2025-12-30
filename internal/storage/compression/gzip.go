@@ -48,7 +48,8 @@ func (c *GzipCompressor) Compress(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if err := writer.Close(); err != nil {
+	err = writer.Close()
+	if err != nil {
 		return nil, err
 	}
 

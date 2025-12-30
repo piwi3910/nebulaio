@@ -357,7 +357,8 @@ func (h *Handler) ListBucketObjects(w http.ResponseWriter, r *http.Request) {
 	maxKeys := 100
 
 	if maxKeysStr != "" {
-		if mk, err := strconv.Atoi(maxKeysStr); err == nil && mk > 0 && mk <= 1000 {
+		mk, err := strconv.Atoi(maxKeysStr)
+		if err == nil && mk > 0 && mk <= 1000 {
 			maxKeys = mk
 		}
 	}
@@ -715,7 +716,8 @@ func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 	expiration := defaultPresignedExpirySec
 
 	if expirationStr != "" {
-		if exp, err := strconv.Atoi(expirationStr); err == nil && exp > 0 {
+		exp, err := strconv.Atoi(expirationStr)
+		if err == nil && exp > 0 {
 			expiration = exp
 		}
 	}

@@ -879,7 +879,8 @@ func (c *Connection) Execute(ctx context.Context, req *S3Request) (*S3Response, 
 	}
 
 	// Post receive for response
-	if err := c.postReceive(ctx); err != nil {
+	err = c.postReceive(ctx)
+	if err != nil {
 		return nil, err
 	}
 

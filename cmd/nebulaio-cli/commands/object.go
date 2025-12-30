@@ -735,7 +735,8 @@ func downloadSingleFile(ctx context.Context, client *s3.Client, bucket, key, loc
 	defer func() { _ = result.Body.Close() }()
 
 	// Create directory if needed
-	if err := os.MkdirAll(filepath.Dir(localPath), downloadDirPermissions); err != nil {
+	err = os.MkdirAll(filepath.Dir(localPath), downloadDirPermissions)
+	if err != nil {
 		return err
 	}
 
@@ -747,7 +748,8 @@ func downloadSingleFile(ctx context.Context, client *s3.Client, bucket, key, loc
 
 	defer func() { _ = file.Close() }()
 
-	if _, err := io.Copy(file, result.Body); err != nil {
+	_, err = io.Copy(file, result.Body)
+	if err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 

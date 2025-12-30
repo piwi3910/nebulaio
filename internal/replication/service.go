@@ -212,7 +212,8 @@ func (s *Service) OnObjectCreated(ctx context.Context, bucket, key, versionID st
 		}
 
 		// Enqueue replication
-		if _, err := s.queue.Enqueue(ctx, bucket, key, versionID, "PUT", rule.ID); err != nil {
+		_, err = s.queue.Enqueue(ctx, bucket, key, versionID, "PUT", rule.ID)
+		if err != nil {
 			return fmt.Errorf("failed to enqueue replication: %w", err)
 		}
 
@@ -250,7 +251,8 @@ func (s *Service) OnObjectDeleted(ctx context.Context, bucket, key, versionID st
 		}
 
 		// Enqueue delete replication
-		if _, err := s.queue.Enqueue(ctx, bucket, key, versionID, "DELETE", rule.ID); err != nil {
+		_, err = s.queue.Enqueue(ctx, bucket, key, versionID, "DELETE", rule.ID)
+		if err != nil {
 			return fmt.Errorf("failed to enqueue delete replication: %w", err)
 		}
 	}

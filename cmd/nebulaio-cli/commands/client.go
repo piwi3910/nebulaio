@@ -91,7 +91,8 @@ func SaveConfig(cfg *ClientConfig) error {
 	path := configPath()
 
 	// Create directory if needed
-	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
+	err := os.MkdirAll(filepath.Dir(path), dirPermissions)
+	if err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -100,7 +101,8 @@ func SaveConfig(cfg *ClientConfig) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, filePermissions); err != nil {
+	err = os.WriteFile(path, data, filePermissions)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

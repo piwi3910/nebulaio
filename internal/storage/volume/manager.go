@@ -245,7 +245,8 @@ func (m *Manager) Put(bucket, key string, data []byte) error {
 	}
 
 	// Write to volume
-	if err := vol.Put(bucket, key, newBytesReader(data), int64(len(data))); err != nil {
+	err = vol.Put(bucket, key, newBytesReader(data), int64(len(data)))
+	if err != nil {
 		return err
 	}
 

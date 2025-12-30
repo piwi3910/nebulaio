@@ -89,7 +89,8 @@ func (w *Worker) run(ctx context.Context) {
 				continue
 			}
 
-			if err := w.processItem(ctx, item); err != nil {
+			err = w.processItem(ctx, item)
+			if err != nil {
 				_ = w.queue.Fail(item.ID, err)
 			} else {
 				_ = w.queue.Complete(item.ID)
@@ -181,7 +182,8 @@ func (w *Worker) replicateObject(ctx context.Context, client *minio.Client, item
 	}
 
 	// Update replication status on source
-	if err := w.service.updateReplicationStatus(ctx, item.Bucket, item.Key, item.VersionID, rule.Destination.Bucket, ReplicationStatusComplete); err != nil {
+	err = w.service.updateReplicationStatus(ctx, item.Bucket, item.Key, item.VersionID, rule.Destination.Bucket, ReplicationStatusComplete)
+	if err != nil {
 		// Log but don't fail - the replication itself succeeded
 		fmt.Printf("warning: failed to update replication status: %v\n", err)
 	}

@@ -124,7 +124,8 @@ func (b *RawDeviceBackend) PutObject(ctx context.Context, bucket, key string, re
 	}
 
 	// Store in tiered device manager
-	if err := b.manager.Put(bucket, key, data, tier); err != nil {
+	err = b.manager.Put(bucket, key, data, tier)
+	if err != nil {
 		return nil, fmt.Errorf("failed to store object: %w", err)
 	}
 

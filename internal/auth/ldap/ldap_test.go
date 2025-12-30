@@ -464,7 +464,8 @@ func TestUserStore(t *testing.T) {
 			Provider:    "ldap",
 		}
 
-		if err := store.UpsertUser(ctx, user); err != nil {
+		err := store.UpsertUser(ctx, user)
+		if err != nil {
 			t.Fatalf("upsert failed: %v", err)
 		}
 
@@ -490,11 +491,12 @@ func TestUserStore(t *testing.T) {
 	})
 
 	t.Run("DeleteUser", func(t *testing.T) {
-		if err := store.DeleteUser(ctx, "testuser"); err != nil {
+		err := store.DeleteUser(ctx, "testuser")
+		if err != nil {
 			t.Fatalf("delete failed: %v", err)
 		}
 
-		_, err := store.GetUser(ctx, "testuser")
+		_, err = store.GetUser(ctx, "testuser")
 		if err == nil {
 			t.Error("expected error for deleted user")
 		}

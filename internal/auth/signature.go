@@ -77,7 +77,8 @@ func (v *SignatureValidator) validatePresignedRequest(ctx context.Context, r *ht
 	}
 
 	// Check expiration
-	if err := ValidatePresignedExpiration(info); err != nil {
+	err = ValidatePresignedExpiration(info)
+	if err != nil {
 		return nil, err
 	}
 
@@ -88,7 +89,8 @@ func (v *SignatureValidator) validatePresignedRequest(ctx context.Context, r *ht
 	}
 
 	// Validate the signature
-	if err := ValidatePresignedSignature(r, info, accessKey.SecretAccessKey); err != nil {
+	err = ValidatePresignedSignature(r, info, accessKey.SecretAccessKey)
+	if err != nil {
 		return nil, fmt.Errorf("signature validation failed: %w", err)
 	}
 
@@ -150,7 +152,8 @@ func (v *SignatureValidator) validateAuthorizationHeader(ctx context.Context, r 
 	}
 
 	// Validate the signature
-	if err := v.validateHeaderSignature(r, auth, accessKey.SecretAccessKey, amzDate); err != nil {
+	err = v.validateHeaderSignature(r, auth, accessKey.SecretAccessKey, amzDate)
+	if err != nil {
 		return nil, fmt.Errorf("signature validation failed: %w", err)
 	}
 
