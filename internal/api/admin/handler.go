@@ -446,6 +446,7 @@ func (h *Handler) CreateAccessKey(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 
 	var req CreateAccessKeyRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -548,6 +549,7 @@ func (h *Handler) UpdatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CreatePolicyRequest
+
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -599,6 +601,7 @@ func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
 	var req CreateBucketRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -816,6 +819,7 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 
 	var req PresignRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -1292,6 +1296,7 @@ func (h *Handler) AttachPolicyToUser(w http.ResponseWriter, r *http.Request) {
 	policyName := chi.URLParam(r, "name")
 
 	var req AttachPolicyRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -1348,6 +1353,7 @@ func (h *Handler) DetachPolicyFromUser(w http.ResponseWriter, r *http.Request) {
 	policyName := chi.URLParam(r, "name")
 
 	var req AttachPolicyRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)

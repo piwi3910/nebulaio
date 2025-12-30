@@ -229,6 +229,7 @@ func (h *Handler) CreateMyAccessKey(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 
 	var req CreateAccessKeyRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -776,6 +777,7 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	role := metadata.UserRole(r.Header.Get("X-User-Role"))
 
 	var req ConsolePresignRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)

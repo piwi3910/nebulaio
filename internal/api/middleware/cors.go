@@ -210,7 +210,7 @@ func (m *S3CORSMiddleware) areHeadersAllowed(allowedHeaders []string, requestedH
 }
 
 // setDefaultCORSHeaders sets minimal CORS headers for non-bucket operations.
-func (m *S3CORSMiddleware) setDefaultCORSHeaders(w http.ResponseWriter, origin, method string) {
+func (m *S3CORSMiddleware) setDefaultCORSHeaders(w http.ResponseWriter, origin, _method string) {
 	// For root operations (like ListBuckets), we can allow based on origin
 	// In production, this might be more restrictive
 	w.Header().Set("Access-Control-Allow-Origin", origin)

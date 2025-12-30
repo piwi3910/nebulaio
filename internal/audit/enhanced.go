@@ -823,6 +823,7 @@ func (l *EnhancedAuditLogger) exportCEF(events []AuditEvent, writer io.Writer) e
 			e.Resource.Key,
 			e.Result,
 		)
+
 		_, err := writer.Write([]byte(cef))
 		if err != nil {
 			return err
@@ -851,6 +852,7 @@ func newFileOutput(cfg OutputConfig, rotation RotationConfig) (*FileOutput, erro
 
 	// Ensure directory exists with secure permissions
 	dir := filepath.Dir(cfg.Path)
+
 	err := os.MkdirAll(dir, auditDirPermissions)
 	if err != nil {
 		return nil, err
@@ -911,8 +913,8 @@ func (o *FileOutput) rotate() error {
 
 	// Rename current file
 	timestamp := time.Now().Format("20060102-150405")
-
 	rotatedPath := fmt.Sprintf("%s.%s", o.path, timestamp)
+
 	err := os.Rename(o.path, rotatedPath)
 	if err != nil {
 		return err
@@ -1229,7 +1231,6 @@ func (o *WebhookOutput) Name() string {
 	return o.name
 }
 
-// CreateOutput creates an output based on configuration.
 func CreateOutput(cfg OutputConfig) (AuditOutput, error) {
 	switch cfg.Type {
 	case OutputFile:

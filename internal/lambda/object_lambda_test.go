@@ -142,6 +142,7 @@ func TestDeleteAccessPoint(t *testing.T) {
 			{Actions: []string{"GetObject"}, ContentTransformation: ContentTransformation{Type: TransformBuiltIn}},
 		},
 	}
+
 	err := svc.CreateAccessPoint(cfg)
 	if err != nil {
 		t.Fatalf("CreateAccessPoint failed: %v", err)
@@ -225,6 +226,7 @@ func TestPIIMaskTransformer(t *testing.T) {
 	data, _ := io.ReadAll(output)
 
 	var result map[string]interface{}
+
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal result: %v", err)
@@ -295,6 +297,7 @@ func TestFilterFieldsTransformer(t *testing.T) {
 			data, _ := io.ReadAll(output)
 
 			var result map[string]interface{}
+
 			err = json.Unmarshal(data, &result)
 			if err != nil {
 				t.Fatalf("Failed to unmarshal result: %v", err)
@@ -326,6 +329,7 @@ Jane,25,LA`
 	data, _ := io.ReadAll(output)
 
 	var result []map[string]string
+
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		t.Fatalf("Failed to parse output JSON: %v", err)
@@ -362,6 +366,7 @@ func TestBuiltInTransformWithAccessPoint(t *testing.T) {
 			},
 		},
 	}
+
 	err := svc.CreateAccessPoint(cfg)
 	if err != nil {
 		t.Fatalf("CreateAccessPoint failed: %v", err)

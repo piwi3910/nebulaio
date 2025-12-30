@@ -881,7 +881,7 @@ func (e *DLPEngine) getApplicableRules(req *ScanRequest) []*DLPRule {
 }
 
 // scanContent scans content for sensitive data.
-func (e *DLPEngine) scanContent(ctx context.Context, req *ScanRequest, rules []*DLPRule) []*finding {
+func (e *DLPEngine) scanContent(_ctx context.Context, req *ScanRequest, rules []*DLPRule) []*finding {
 	var findings []*finding
 
 	// Build pattern set from rules

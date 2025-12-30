@@ -308,6 +308,7 @@ type ObjectInfo struct {
 	Size         int64
 }
 
+//nolint:unparam // CommonPrefixes (second return) reserved for future S3 list v2 implementation
 func parseListResponse(data []byte) ([]ObjectInfo, []string, string, bool) {
 	// Simple binary format for list response
 	// [Count:4][IsTruncated:1][NextTokenLen:2][NextToken][Objects...]

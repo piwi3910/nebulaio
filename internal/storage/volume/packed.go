@@ -140,7 +140,7 @@ func (pb *PackedBlock) Append(keyHash [16]byte, key string, data []byte) (uint32
 }
 
 // ReadObject reads an object from the packed block.
-func (pb *PackedBlock) ReadObject(offset uint32) (key string, data []byte, flags uint16, err error) {
+func (pb *PackedBlock) ReadObject(offset uint32) (string, []byte, uint16, error) {
 	//nolint:gosec // G115: len(pb.data) bounded by block size
 	if offset+ObjectEntrySize > uint32(len(pb.data)) {
 		return "", nil, 0, ErrInvalidObjectEntry
@@ -161,7 +161,7 @@ func (pb *PackedBlock) ReadObject(offset uint32) (key string, data []byte, flags
 		return "", nil, 0, ErrInvalidObjectEntry
 	}
 
-	key = string(pb.data[keyStart:keyEnd])
+	key := string(pb.data[keyStart:keyEnd])
 
 	// Read data
 	dataStart := keyEnd
@@ -172,7 +172,7 @@ func (pb *PackedBlock) ReadObject(offset uint32) (key string, data []byte, flags
 		return "", nil, 0, ErrInvalidObjectEntry
 	}
 
-	data = make([]byte, entry.DataSize)
+	data := make([]byte, entry.DataSize)
 	copy(data, pb.data[dataStart:dataEnd])
 
 	// Verify checksum
@@ -215,6 +215,7 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 
 	// Read all data
 	data := make([]byte, size)
+
 	_, err := io.ReadFull(r, data)
 	if err != nil {
 		return err
@@ -261,6 +262,7 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 		}
 
 		v.blockTypes[blockNum] = BlockTypeLarge
+
 		err = v.writeBlock(blockNum, data)
 		if err != nil {
 			return err

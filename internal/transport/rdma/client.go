@@ -226,6 +226,8 @@ type GetObjectResult struct {
 
 // getObjectHTTP performs GetObject via HTTP fallback.
 func (c *Client) getObjectHTTP(ctx context.Context, bucket, key string, opts *GetObjectOptions) (*GetObjectResult, error) {
+	_ = opts // Reserved for future HTTP request options (range, version, etc.)
+
 	if c.config.HTTPEndpoint == "" {
 		return nil, errors.New("HTTP fallback endpoint not configured")
 	}

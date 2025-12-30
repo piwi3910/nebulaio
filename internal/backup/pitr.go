@@ -539,7 +539,7 @@ func (bm *BackupManager) runBackup(job *BackupJob) {
 }
 
 // backupBucket backs up a single bucket.
-func (bm *BackupManager) backupBucket(job *BackupJob, bucket string, objectCount, totalSize, compressedSize *int64, hasher io.Writer) error {
+func (bm *BackupManager) backupBucket(job *BackupJob, bucket string, objectCount, totalSize, _compressedSize *int64, hasher io.Writer) error {
 	// List all objects
 	objects, err := bm.storage.ListObjects(job.ctx, bucket, "")
 	if err != nil {

@@ -288,7 +288,10 @@ func (pr *ParquetReader) readMetadata() error {
 }
 
 // parseMetadata parses the file metadata (simplified implementation).
+//
+//nolint:unparam // error return kept for full Thrift parsing in future
 func (pr *ParquetReader) parseMetadata(data []byte) error {
+	_ = data // TODO: parse Thrift-encoded metadata in full implementation
 	// This is a simplified implementation
 	// Real implementation would parse Thrift-encoded metadata
 	pr.metadata = &ParquetMetadata{
@@ -496,6 +499,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 		}
 
 		data := make([]byte, length)
+
 		_, err = io.ReadFull(reader, data)
 		if err != nil {
 			return nil, err
@@ -505,6 +509,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 
 	case ParquetTypeFixedLenByteArray:
 		data := make([]byte, desc.Precision) // Use precision as length
+
 		_, err := io.ReadFull(reader, data)
 		if err != nil {
 			return nil, err
@@ -514,6 +519,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 
 	case ParquetTypeInt96:
 		data := make([]byte, 12)
+
 		_, err := io.ReadFull(reader, data)
 		if err != nil {
 			return nil, err
@@ -613,6 +619,7 @@ func (pr *ParquetReader) convertInt96(data []byte) interface{} {
 
 // decodeDecimal decodes a big-endian decimal.
 func (pr *ParquetReader) decodeDecimal(data []byte, precision, scale int32) float64 {
+	_ = precision // Precision not used in simple implementation
 	// Simple implementation for small decimals
 	var val int64
 	for _, b := range data {
@@ -828,6 +835,7 @@ func compareValues(a, b interface{}) int {
 
 	// Try numeric comparison first
 	var aNum, bNum float64
+
 	_, err := fmt.Sscanf(aStr, "%f", &aNum)
 	if err == nil {
 		_, err := fmt.Sscanf(bStr, "%f", &bNum)

@@ -568,6 +568,7 @@ func (h *TestTieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.
 	}
 
 	var req CreateTieringPolicyRequest
+
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
@@ -783,6 +784,7 @@ func (h *TestTieringHandler) ManualTransition(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 
 	var req ManualTransitionRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)

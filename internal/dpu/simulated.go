@@ -296,6 +296,7 @@ func (b *SimulatedBackend) aesGCMEncrypt(key, plaintext []byte) ([]byte, error) 
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
+
 	_, err = io.ReadFull(rand.Reader, nonce)
 	if err != nil {
 		return nil, err

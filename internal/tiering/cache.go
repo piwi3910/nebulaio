@@ -341,12 +341,12 @@ type bytesReader struct {
 	pos  int
 }
 
-func (r *bytesReader) Read(p []byte) (n int, err error) {
+func (r *bytesReader) Read(p []byte) (int, error) {
 	if r.pos >= len(r.data) {
 		return 0, io.EOF
 	}
 
-	n = copy(p, r.data[r.pos:])
+	n := copy(p, r.data[r.pos:])
 	r.pos += n
 
 	return n, nil

@@ -318,7 +318,7 @@ type PolicyMatch struct {
 }
 
 // matchesSelector checks if an object matches a policy selector.
-func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessStats, sel PolicySelector) bool {
+func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, _stats *ObjectAccessStats, sel PolicySelector) bool {
 	// Check buckets
 	if len(sel.Buckets) > 0 {
 		matched := false
@@ -654,7 +654,7 @@ func (e *PolicyEngine) isInWindow(t time.Time, window MaintenanceWindow) bool {
 }
 
 // realtimeWorker processes real-time access events.
-func (e *PolicyEngine) realtimeWorker(id int) {
+func (e *PolicyEngine) realtimeWorker(_id int) {
 	defer e.workerWg.Done()
 
 	for {
@@ -839,7 +839,7 @@ func (e *PolicyEngine) executeScheduledPolicy(policy *AdvancedPolicy) {
 }
 
 // getBucketsForPolicy returns buckets that match a policy.
-func (e *PolicyEngine) getBucketsForPolicy(ctx context.Context, policy *AdvancedPolicy) []string {
+func (e *PolicyEngine) getBucketsForPolicy(_ctx context.Context, policy *AdvancedPolicy) []string {
 	// In a real implementation, this would query the metadata store
 	// For now, return the buckets from the selector
 	if len(policy.Selector.Buckets) > 0 {

@@ -331,6 +331,7 @@ func (p *Policy) Evaluate(ctx EvalContext) (EvalResult, error) {
 }
 
 // matchStatement checks if a statement matches the given parameters.
+//nolint:unparam // error return is kept for future condition evaluation extensions and API consistency
 func matchStatement(stmt *Statement, principal, action, resource string, conditions map[string]string) (bool, error) {
 	// Match principal
 	if !matchPrincipal(stmt.Principal, principal) {

@@ -679,7 +679,7 @@ func TestConcurrentAccess(t *testing.T) {
 	for i := range numGoroutines {
 		wg.Add(1)
 
-		go func(id int) {
+		go func(_id int) {
 			defer wg.Done()
 
 			for range requestsPerGoroutine {

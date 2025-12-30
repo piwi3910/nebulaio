@@ -598,7 +598,7 @@ func (m *MockVaultClient) Decrypt(ctx context.Context, name string, ciphertext s
 }
 
 // GenerateDataKey generates a data key in the mock.
-func (m *MockVaultClient) GenerateDataKey(ctx context.Context, name string, bits int) (plaintext, ciphertext []byte, err error) {
+func (m *MockVaultClient) GenerateDataKey(ctx context.Context, name string, bits int) ([]byte, []byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -607,13 +607,13 @@ func (m *MockVaultClient) GenerateDataKey(ctx context.Context, name string, bits
 	}
 
 	// Generate random plaintext
-	plaintext = make([]byte, bits/8)
+	plaintext := make([]byte, bits/8)
 	for i := range plaintext {
 		plaintext[i] = byte(i)
 	}
 
 	// Mock ciphertext
-	ciphertext = []byte("vault:v1:" + base64.StdEncoding.EncodeToString(plaintext))
+	ciphertext := []byte("vault:v1:" + base64.StdEncoding.EncodeToString(plaintext))
 
 	if m.data[name] == nil {
 		m.data[name] = make(map[string][]byte)

@@ -37,6 +37,7 @@ func (s *DragonboatStore) GetBucket(ctx context.Context, name string) (*Bucket, 
 	}
 
 	var bucket Bucket
+
 	err = json.Unmarshal(data, &bucket)
 	if err != nil {
 		return nil, err
@@ -115,6 +116,7 @@ func (s *DragonboatStore) GetObjectMeta(ctx context.Context, bucket, key string)
 	}
 
 	var meta ObjectMeta
+
 	err = json.Unmarshal(data, &meta)
 	if err != nil {
 		return nil, err
@@ -191,6 +193,7 @@ func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delim
 			}
 
 			var meta ObjectMeta
+
 			err = json.Unmarshal(val, &meta)
 			if err != nil {
 				continue
@@ -256,6 +259,7 @@ func (s *DragonboatStore) GetObjectVersion(ctx context.Context, bucket, key, ver
 	}
 
 	var meta ObjectMeta
+
 	err = json.Unmarshal(data, &meta)
 	if err != nil {
 		return nil, err
@@ -346,6 +350,7 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 			}
 
 			var meta ObjectMeta
+
 			err = json.Unmarshal(val, &meta)
 			if err != nil {
 				continue
@@ -409,6 +414,7 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 			}
 
 			var meta ObjectMeta
+
 			err = json.Unmarshal(val, &meta)
 			if err != nil {
 				continue
@@ -532,6 +538,7 @@ func (s *DragonboatStore) GetMultipartUpload(ctx context.Context, bucket, key, u
 	}
 
 	var upload MultipartUpload
+
 	err = json.Unmarshal(data, &upload)
 	if err != nil {
 		return nil, err
@@ -627,6 +634,7 @@ func (s *DragonboatStore) GetUser(ctx context.Context, id string) (*User, error)
 	}
 
 	var user User
+
 	err = json.Unmarshal(data, &user)
 	if err != nil {
 		return nil, err
@@ -718,6 +726,7 @@ func (s *DragonboatStore) GetAccessKey(ctx context.Context, accessKeyID string) 
 	}
 
 	var accessKey AccessKey
+
 	err = json.Unmarshal(data, &accessKey)
 	if err != nil {
 		return nil, err
@@ -782,6 +791,7 @@ func (s *DragonboatStore) GetPolicy(ctx context.Context, name string) (*Policy, 
 	}
 
 	var policy Policy
+
 	err = json.Unmarshal(data, &policy)
 	if err != nil {
 		return nil, err
@@ -962,6 +972,7 @@ func (s *DragonboatStore) ListAuditEvents(ctx context.Context, filter audit.Audi
 			}
 
 			var event audit.AuditEvent
+
 			err = json.Unmarshal(val, &event)
 			if err != nil {
 				continue
@@ -1045,6 +1056,7 @@ func (s *DragonboatStore) DeleteOldAuditEvents(ctx context.Context, before time.
 			}
 
 			var event audit.AuditEvent
+
 			err = json.Unmarshal(val, &event)
 			if err != nil {
 				continue

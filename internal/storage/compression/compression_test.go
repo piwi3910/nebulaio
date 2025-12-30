@@ -302,8 +302,8 @@ func (m *mockBackend) GetStorageInfo(_ context.Context) (*backend.StorageInfo, e
 
 func TestCompressionBackend(t *testing.T) {
 	mockBE := newMockBackend()
-
 	ctx := context.Background()
+
 	err := mockBE.Init(ctx)
 	if err != nil {
 		t.Fatalf("failed to init mock backend: %v", err)

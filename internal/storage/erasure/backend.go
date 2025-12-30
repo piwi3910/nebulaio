@@ -195,6 +195,7 @@ func (b *Backend) metadataPath(bucket, key string) string {
 // writeObjectMetadata stores object metadata to a file.
 func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) error {
 	path := b.metadataPath(bucket, key)
+
 	err := os.MkdirAll(filepath.Dir(path), dirPermissions)
 	if err != nil {
 		return fmt.Errorf("failed to create metadata directory: %w", err)
@@ -236,6 +237,7 @@ func (b *Backend) readObjectMetadata(bucket, key string) (*objectMetadata, error
 	}
 
 	var meta objectMetadata
+
 	err = json.Unmarshal(data, &meta)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
@@ -317,6 +319,8 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		go func(index int, data []byte, assignment NodeAssignment) {
 			defer wg.Done()
 
+			_ = assignment // TODO: use assignment for distributed shard placement
+
 			// Check for context cancellation before writing
 			select {
 			case <-ctx.Done():
@@ -378,6 +382,7 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		DataShards:       b.config.DataShards,
 		ParityShards:     b.config.ParityShards,
 	}
+
 	err = b.writeObjectMetadata(bucket, key, objMeta)
 	if err != nil {
 		log.Warn().

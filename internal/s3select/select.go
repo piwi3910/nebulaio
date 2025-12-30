@@ -625,6 +625,8 @@ func ParseSQL(sql string) (*Query, error) {
 }
 
 // parseColumns parses the column list.
+//
+//nolint:unparam // error return kept for consistency with other parse functions
 func parseColumns(columnsStr string) ([]Column, error) {
 	// Handle simple cases
 	columnsStr = strings.TrimSpace(columnsStr)

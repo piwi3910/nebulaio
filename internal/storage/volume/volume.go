@@ -139,6 +139,7 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 
 	// Write superblock
 	superBytes := super.Marshal()
+
 	_, err = file.WriteAt(superBytes, 0)
 	if err != nil {
 		_ = file.Close()
@@ -149,6 +150,7 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 
 	// Initialize allocation map (all zeros = all free)
 	allocMap := NewAllocationMap(totalBlocks)
+
 	err = allocMap.WriteTo(file, BitmapOffset)
 	if err != nil {
 		_ = file.Close()
@@ -159,6 +161,7 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 
 	// Initialize block type map (all zeros = all free)
 	blockTypes := make([]byte, totalBlocks)
+
 	_, err = file.WriteAt(blockTypes, BlockTypeMapOffset)
 	if err != nil {
 		_ = file.Close()
@@ -219,6 +222,7 @@ func OpenVolume(path string) (*Volume, error) {
 
 	// Read superblock
 	superBytes := make([]byte, 128)
+
 	_, err = file.ReadAt(superBytes, 0)
 	if err != nil {
 		_ = file.Close()
@@ -246,6 +250,7 @@ func OpenVolume(path string) (*Volume, error) {
 
 	// Read block type map
 	blockTypes := make([]byte, super.TotalBlocks)
+
 	_, err = file.ReadAt(blockTypes, BlockTypeMapOffset)
 	if err != nil {
 		_ = file.Close()
@@ -318,6 +323,7 @@ func OpenVolumeWithConfig(path string, dioConfig DirectIOConfig) (*Volume, error
 
 	// Read superblock
 	superBytes := make([]byte, 128)
+
 	_, err = file.ReadAt(superBytes, 0)
 	if err != nil {
 		_ = file.Close()
@@ -345,6 +351,7 @@ func OpenVolumeWithConfig(path string, dioConfig DirectIOConfig) (*Volume, error
 
 	// Read block type map
 	blockTypes := make([]byte, super.TotalBlocks)
+
 	_, err = file.ReadAt(blockTypes, BlockTypeMapOffset)
 	if err != nil {
 		_ = file.Close()

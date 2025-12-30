@@ -174,6 +174,7 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string) (*auth.User,
 
 	// Extract claims
 	var claims map[string]interface{}
+
 	err = userInfo.Claims(&claims)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
@@ -211,6 +212,7 @@ func (p *Provider) ValidateToken(ctx context.Context, idToken string) (*auth.Use
 
 	// Extract claims
 	var claims map[string]interface{}
+
 	err = token.Claims(&claims)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
@@ -364,6 +366,7 @@ func (p *Provider) HandleCallback(ctx context.Context, code, stateValue string) 
 
 	// Verify nonce
 	var claims map[string]interface{}
+
 	err = idToken.Claims(&claims)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
@@ -523,6 +526,7 @@ func (p *Provider) isEmailDomainAllowed(email string) bool {
 // generateRandomString generates a random string of specified length.
 func generateRandomString(length int) (string, error) {
 	bytes := make([]byte, length)
+
 	_, err := rand.Read(bytes)
 	if err != nil {
 		return "", err

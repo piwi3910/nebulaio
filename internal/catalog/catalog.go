@@ -678,7 +678,7 @@ func (s *CatalogService) matchesFilter(obj ObjectInfo, filter *InventoryFilter) 
 }
 
 // objectToRecord converts ObjectInfo to InventoryRecord.
-func (s *CatalogService) objectToRecord(obj ObjectInfo, fields []string) InventoryRecord {
+func (s *CatalogService) objectToRecord(obj ObjectInfo, _fields []string) InventoryRecord {
 	return InventoryRecord{
 		Bucket:                    obj.Bucket,
 		Key:                       obj.Key,

@@ -1082,6 +1082,7 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 
 	// Parse request body
 	var req s3types.CompleteMultipartUploadRequest
+
 	err := xml.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -1434,6 +1435,7 @@ func (h *Handler) PutBucketTagging(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	var tagging s3types.Tagging
+
 	err := xml.NewDecoder(r.Body).Decode(&tagging)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", "The XML you provided was not well-formed", http.StatusBadRequest)
@@ -1533,6 +1535,7 @@ func (h *Handler) PutObjectTagging(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	var tagging s3types.Tagging
+
 	err := xml.NewDecoder(r.Body).Decode(&tagging)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", "The XML you provided was not well-formed", http.StatusBadRequest)
@@ -1764,6 +1767,7 @@ func (h *Handler) PutBucketCORS(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 
 	var corsConfig s3types.CORSConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&corsConfig)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -1917,6 +1921,7 @@ func (h *Handler) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 
 	// Parse the XML request body
 	var req s3types.DeleteRequest
+
 	err := xml.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", "The XML you provided was not well-formed", http.StatusBadRequest)
@@ -2922,6 +2927,7 @@ func (h *Handler) PutObjectAcl(w http.ResponseWriter, r *http.Request) {
 
 	// Parse XML body
 	var aclPolicy s3types.AccessControlPolicy
+
 	err = xml.NewDecoder(r.Body).Decode(&aclPolicy)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -3001,6 +3007,7 @@ func (h *Handler) PutObjectRetention(w http.ResponseWriter, r *http.Request) {
 	versionID := r.URL.Query().Get("versionId")
 
 	var retention s3types.ObjectRetention
+
 	err := xml.NewDecoder(r.Body).Decode(&retention)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)

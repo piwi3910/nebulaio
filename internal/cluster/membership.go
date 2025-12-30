@@ -285,7 +285,7 @@ func (m *Membership) SendReliable(node *memberlist.Node, msg []byte) error {
 // memberlistLogAdapter adapts memberlist logging to zerolog.
 type memberlistLogAdapter struct{}
 
-func (l *memberlistLogAdapter) Write(p []byte) (n int, err error) {
+func (l *memberlistLogAdapter) Write(p []byte) (int, error) {
 	// Filter out verbose memberlist logs
 	log.Trace().Str("source", "memberlist").Msg(string(p))
 	return len(p), nil

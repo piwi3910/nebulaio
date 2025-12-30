@@ -442,7 +442,10 @@ func (m *Manager) syncBucket(ctx context.Context, site Site, bucket string) erro
 }
 
 // syncObject syncs a single object from a remote site.
+//
+//nolint:unparam // error always nil in simplified implementation
 func (m *Manager) syncObject(ctx context.Context, site Site, bucket string, remote minio.ObjectInfo) error {
+	_ = ctx // TODO: use context for cancellation in full implementation
 	// This is a simplified implementation
 	// In a real implementation, we would:
 	// 1. Check if we have the object locally

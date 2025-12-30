@@ -271,6 +271,7 @@ func (s *HybridPolicyStore) syncFromMetadata() error {
 		}
 
 		var policy AdvancedPolicy
+
 		err = json.Unmarshal(data, &policy)
 		if err != nil {
 			continue

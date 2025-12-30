@@ -598,7 +598,7 @@ func (e *S3Error) Error() string {
 }
 
 // ParseCopySource parses the X-Amz-Copy-Source header.
-func ParseCopySource(copySource string) (bucket, key, versionID string, err error) {
+func ParseCopySource(copySource string) (string, string, string, error) {
 	// Remove leading slash if present
 	copySource = strings.TrimPrefix(copySource, "/")
 
@@ -610,6 +610,8 @@ func ParseCopySource(copySource string) (bucket, key, versionID string, err erro
 
 	// Check for version ID
 	parts := strings.SplitN(decoded, "?versionId=", 2)
+	versionID := ""
+
 	if len(parts) == 2 {
 		versionID = parts[1]
 	}
@@ -624,7 +626,7 @@ func ParseCopySource(copySource string) (bucket, key, versionID string, err erro
 }
 
 // ParseCopySourceRange parses the X-Amz-Copy-Source-Range header.
-func ParseCopySourceRange(rangeHeader string) (start, end int64, err error) {
+func ParseCopySourceRange(rangeHeader string) (int64, int64, error) {
 	if rangeHeader == "" {
 		return 0, 0, nil
 	}
@@ -641,12 +643,12 @@ func ParseCopySourceRange(rangeHeader string) (start, end int64, err error) {
 		return 0, 0, errors.New("invalid range format")
 	}
 
-	start, err = strconv.ParseInt(parts[0], 10, 64)
+	start, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
 		return 0, 0, fmt.Errorf("invalid range start: %w", err)
 	}
 
-	end, err = strconv.ParseInt(parts[1], 10, 64)
+	end, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
 		return 0, 0, fmt.Errorf("invalid range end: %w", err)
 	}

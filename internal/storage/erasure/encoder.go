@@ -113,9 +113,9 @@ type contextReader struct {
 	r   io.Reader
 }
 
-func (cr *contextReader) Read(p []byte) (n int, err error) {
+func (cr *contextReader) Read(p []byte) (int, error) {
 	// Check if context is already cancelled before attempting read
-	err = cr.ctx.Err()
+	err := cr.ctx.Err()
 	if err != nil {
 		return 0, err
 	}

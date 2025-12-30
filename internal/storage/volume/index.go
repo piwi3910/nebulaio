@@ -57,6 +57,7 @@ func (idx *Index) WriteTo(file *os.File, offset int64) (int64, error) {
 	defer idx.mu.RUnlock()
 
 	data := idx.marshal()
+
 	_, err := file.WriteAt(data, offset)
 	if err != nil {
 		return 0, err
@@ -156,6 +157,7 @@ func unmarshalIndex(data []byte) (*Index, error) {
 
 		// Read variable key
 		keyBytes := make([]byte, entry.KeyLen)
+
 		_, err = io.ReadFull(r, keyBytes)
 		if err != nil {
 			return nil, ErrIndexCorrupted

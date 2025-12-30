@@ -289,7 +289,7 @@ func (d *Detector) checkGDSSupport(gpu GPUInfo) bool {
 }
 
 // checkP2PSupport checks if P2P transfers are supported between GPUs.
-func (d *Detector) checkP2PSupport(gpuIndex int) bool {
+func (d *Detector) checkP2PSupport(_gpuIndex int) bool {
 	// Verify nvidia-smi is available before executing
 	_, err := exec.LookPath("nvidia-smi")
 	if err != nil {
@@ -383,7 +383,7 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 }
 
 // getBlueFieldFirmware gets BlueField firmware version.
-func (d *Detector) getBlueFieldFirmware(index int) string {
+func (d *Detector) getBlueFieldFirmware(_index int) string {
 	// Verify mlxfwmanager is available before executing
 	_, err := exec.LookPath("mlxfwmanager")
 	if err != nil {
@@ -479,6 +479,7 @@ func (d *Detector) detectRDMADevices() []RDMAInfo {
 
 		// Count physical ports
 		portsPath := filepath.Join(devicePath, "ports")
+
 		portEntries, err := os.ReadDir(portsPath)
 		if err == nil {
 			device.PhysPortCount = len(portEntries)

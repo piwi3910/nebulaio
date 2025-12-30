@@ -791,6 +791,7 @@ func (c *Catalog) validateRequirement(table *Table, req *TableRequirement) error
 	return nil
 }
 
+//nolint:unparam // error return is kept for future extensibility and consistency with API design
 func (c *Catalog) applyUpdate(metadata *TableMetadata, update *TableUpdate) error {
 	switch update.Action {
 	case "upgrade-format-version":
@@ -883,6 +884,7 @@ func (c *Catalog) copyMetadata(m *TableMetadata) (*TableMetadata, error) {
 	}
 
 	var tableCopy TableMetadata
+
 	err = json.Unmarshal(data, &tableCopy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal table metadata copy: %w", err)
@@ -1160,6 +1162,7 @@ func (h *RESTHandler) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 			Properties map[string]string `json:"properties"`
 			Namespace  []string          `json:"namespace"`
 		}
+
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1248,6 +1251,7 @@ func (h *RESTHandler) handleTables(w http.ResponseWriter, r *http.Request) {
 			Name       string            `json:"name"`
 			Location   string            `json:"location"`
 		}
+
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1306,6 +1310,7 @@ func (h *RESTHandler) handleTable(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		// Commit updates
 		var req UpdateTableRequest
+
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

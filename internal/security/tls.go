@@ -193,6 +193,7 @@ func (m *TLSManager) generateCertificates(hostname string) error {
 
 	// Also save CA key for potential future use (cluster operations)
 	caKeyFile := filepath.Join(m.config.CertDir, "ca.key")
+
 	err = m.saveKey(caKeyFile, caKey)
 	if err != nil {
 		return fmt.Errorf("failed to save CA key: %w", err)

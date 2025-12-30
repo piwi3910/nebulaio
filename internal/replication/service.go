@@ -271,6 +271,8 @@ func (s *Service) GetReplicationStatus(ctx context.Context, bucket, key, version
 
 // getSourceObject retrieves an object from the source backend.
 func (s *Service) getSourceObject(ctx context.Context, bucket, key, versionID string) (io.ReadCloser, error) {
+	_ = versionID // TODO: version-aware replication not yet implemented
+
 	if s.backend == nil {
 		return nil, errors.New("backend not configured")
 	}
@@ -280,6 +282,8 @@ func (s *Service) getSourceObject(ctx context.Context, bucket, key, versionID st
 
 // getSourceObjectInfo retrieves object info from the source backend.
 func (s *Service) getSourceObjectInfo(ctx context.Context, bucket, key, versionID string) (*ObjectInfo, error) {
+	_ = versionID // TODO: version-aware replication not yet implemented
+
 	if s.backend == nil {
 		return nil, errors.New("backend not configured")
 	}

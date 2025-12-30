@@ -384,6 +384,7 @@ func (h *TieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req CreateTieringPolicyRequest
+
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
@@ -589,9 +590,9 @@ func (h *TieringHandler) GetTieringPolicyStats(w http.ResponseWriter, r *http.Re
 
 // ParsePaginationParams parses limit and offset query parameters with validation.
 // Returns (limit, offset) with defaults of (100, 0) if not provided or invalid.
-func ParsePaginationParams(r *http.Request) (limit int, offset int) {
-	limit = 100
-	offset = 0
+func ParsePaginationParams(r *http.Request) (int, int) {
+	limit := 100
+	offset := 0
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		l, err := json.Number(limitStr).Int64()
@@ -779,6 +780,7 @@ func (h *TieringHandler) ManualTransition(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 
 	var req ManualTransitionRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
@@ -847,6 +849,7 @@ func (h *TieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Request) 
 	if strings.Contains(contentType, "application/xml") || strings.Contains(contentType, "text/xml") {
 		// Parse XML body
 		xmlData := make([]byte, r.ContentLength)
+
 		_, err = r.Body.Read(xmlData)
 		if err != nil {
 			writeError(w, "Failed to read request body", http.StatusBadRequest)

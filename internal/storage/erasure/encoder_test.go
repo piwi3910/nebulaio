@@ -239,14 +239,14 @@ type slowReader struct {
 	delay time.Duration
 }
 
-func (s *slowReader) Read(p []byte) (n int, err error) {
+func (s *slowReader) Read(p []byte) (int, error) {
 	if s.pos >= len(s.data) {
 		return 0, io.EOF
 	}
 
 	time.Sleep(s.delay)
 
-	n = copy(p, s.data[s.pos:])
+	n := copy(p, s.data[s.pos:])
 	s.pos += n
 
 	if s.pos >= len(s.data) {
@@ -261,6 +261,6 @@ type errorReader struct {
 	err error
 }
 
-func (e *errorReader) Read(p []byte) (n int, err error) {
+func (e *errorReader) Read(p []byte) (int, error) {
 	return 0, e.err
 }

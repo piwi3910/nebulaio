@@ -326,14 +326,14 @@ func (e *PredictiveEngine) aggregateToHourly(records []AccessRecord) []float64 {
 }
 
 // decomposeTimeSeries performs STL-like decomposition.
-func (e *PredictiveEngine) decomposeTimeSeries(data []float64) (trend, seasonal, residual []float64) {
+func (e *PredictiveEngine) decomposeTimeSeries(data []float64) ([]float64, []float64, []float64) {
 	n := len(data)
 	if n == 0 {
 		return nil, nil, nil
 	}
 
 	// Calculate trend using moving average
-	trend = make([]float64, n)
+	trend := make([]float64, n)
 
 	window := e.config.SeasonalityPeriod
 	if window > n {
@@ -361,7 +361,7 @@ func (e *PredictiveEngine) decomposeTimeSeries(data []float64) (trend, seasonal,
 	}
 
 	// Calculate seasonal component
-	seasonal = make([]float64, n)
+	seasonal := make([]float64, n)
 
 	detrended := make([]float64, n)
 	for i := range n {
@@ -391,7 +391,7 @@ func (e *PredictiveEngine) decomposeTimeSeries(data []float64) (trend, seasonal,
 	}
 
 	// Calculate residual
-	residual = make([]float64, n)
+	residual := make([]float64, n)
 	for i := range n {
 		residual[i] = data[i] - trend[i] - seasonal[i]
 	}
@@ -400,7 +400,7 @@ func (e *PredictiveEngine) decomposeTimeSeries(data []float64) (trend, seasonal,
 }
 
 // linearRegression performs simple linear regression.
-func (e *PredictiveEngine) linearRegression(data []float64) (slope, intercept float64) {
+func (e *PredictiveEngine) linearRegression(data []float64) (float64, float64) {
 	n := len(data)
 	if n == 0 {
 		return 0, 0
@@ -432,8 +432,8 @@ func (e *PredictiveEngine) linearRegression(data []float64) (slope, intercept fl
 		return 0, meanY
 	}
 
-	slope = numerator / denominator
-	intercept = meanY - slope*meanX
+	slope := numerator / denominator
+	intercept := meanY - slope*meanX
 
 	return slope, intercept
 }

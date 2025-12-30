@@ -229,8 +229,13 @@ func (m *ShardManager) ListShards(ctx context.Context, bucket string) ([]string,
 }
 
 // GetStorageInfo returns storage statistics.
-func (m *ShardManager) GetStorageInfo(ctx context.Context) (totalBytes, usedBytes int64, shardCount int, err error) {
-	err = filepath.Walk(m.dataDir, func(path string, info os.FileInfo, walkErr error) error {
+func (m *ShardManager) GetStorageInfo(ctx context.Context) (int64, int64, int, error) {
+	var (
+		usedBytes  int64
+		shardCount int
+	)
+
+	err := filepath.Walk(m.dataDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}

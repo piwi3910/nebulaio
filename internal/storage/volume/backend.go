@@ -191,12 +191,12 @@ type bytesReadCloser struct {
 	pos  int
 }
 
-func (r *bytesReadCloser) Read(p []byte) (n int, err error) {
+func (r *bytesReadCloser) Read(p []byte) (int, error) {
 	if r.pos >= len(r.data) {
 		return 0, io.EOF
 	}
 
-	n = copy(p, r.data[r.pos:])
+	n := copy(p, r.data[r.pos:])
 	r.pos += n
 
 	return n, nil

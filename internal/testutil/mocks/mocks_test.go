@@ -146,18 +146,18 @@ func TestMockMetadataStore_ThreadSafety(t *testing.T) {
 	for i := range iterations {
 		wg.Add(3)
 
-		go func(n int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			bucket := &metadata.Bucket{Name: "test-bucket", Owner: "owner"}
 			_ = store.CreateBucket(ctx, bucket)
 		}(i)
-		go func(n int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			_, _ = store.GetBucket(ctx, "test-bucket")
 		}(i)
-		go func(n int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			_, _ = store.ListBuckets(ctx, "")

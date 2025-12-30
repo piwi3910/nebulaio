@@ -296,6 +296,7 @@ func (s *Service) DeleteBucketPolicy(ctx context.Context, name string) error {
 	}
 
 	bucket.Policy = ""
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete bucket policy: " + err.Error())
@@ -318,6 +319,7 @@ func (s *Service) PutBucketTagging(ctx context.Context, name string, tags map[st
 	}
 
 	bucket.Tags = tags
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set bucket tags: " + err.Error())
@@ -349,6 +351,7 @@ func (s *Service) DeleteBucketTagging(ctx context.Context, name string) error {
 	}
 
 	bucket.Tags = nil
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete bucket tags: " + err.Error())
@@ -380,6 +383,7 @@ func (s *Service) SetCORS(ctx context.Context, name string, rules []metadata.COR
 	}
 
 	bucket.CORS = rules
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set CORS configuration: " + err.Error())
@@ -410,6 +414,7 @@ func (s *Service) DeleteCORS(ctx context.Context, name string) error {
 	}
 
 	bucket.CORS = nil
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete CORS configuration: " + err.Error())
@@ -426,6 +431,7 @@ func (s *Service) SetLifecycle(ctx context.Context, name string, rules []metadat
 	}
 
 	bucket.Lifecycle = rules
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set lifecycle configuration: " + err.Error())
@@ -456,6 +462,7 @@ func (s *Service) DeleteLifecycle(ctx context.Context, name string) error {
 	}
 
 	bucket.Lifecycle = nil
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete lifecycle configuration: " + err.Error())
@@ -645,6 +652,7 @@ func (s *Service) SetBucketACL(ctx context.Context, name string, acl *metadata.B
 	}
 
 	bucket.ACL = acl
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set bucket ACL: " + err.Error())
@@ -675,6 +683,7 @@ func (s *Service) SetEncryption(ctx context.Context, name string, config *metada
 	}
 
 	bucket.Encryption = config
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set encryption configuration: " + err.Error())
@@ -691,6 +700,7 @@ func (s *Service) DeleteEncryption(ctx context.Context, name string) error {
 	}
 
 	bucket.Encryption = nil
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete encryption configuration: " + err.Error())
@@ -721,6 +731,7 @@ func (s *Service) SetWebsite(ctx context.Context, name string, config *metadata.
 	}
 
 	bucket.Website = config
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set website configuration: " + err.Error())
@@ -737,6 +748,7 @@ func (s *Service) DeleteWebsite(ctx context.Context, name string) error {
 	}
 
 	bucket.Website = nil
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete website configuration: " + err.Error())
@@ -775,6 +787,7 @@ func (s *Service) SetLogging(ctx context.Context, name string, config *metadata.
 	}
 
 	bucket.Logging = config
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set logging configuration: " + err.Error())
@@ -805,6 +818,7 @@ func (s *Service) SetNotification(ctx context.Context, name string, config *meta
 	}
 
 	bucket.Notification = config
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set notification configuration: " + err.Error())
@@ -840,6 +854,7 @@ func (s *Service) SetReplication(ctx context.Context, name string, config *metad
 	}
 
 	bucket.Replication = config
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set replication configuration: " + err.Error())
@@ -856,6 +871,7 @@ func (s *Service) DeleteReplication(ctx context.Context, name string) error {
 	}
 
 	bucket.Replication = nil
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete replication configuration: " + err.Error())
@@ -891,6 +907,7 @@ func (s *Service) SetObjectLockConfiguration(ctx context.Context, name string, c
 	}
 
 	bucket.ObjectLockConfig = config
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set object lock configuration: " + err.Error())
@@ -921,6 +938,7 @@ func (s *Service) SetPublicAccessBlock(ctx context.Context, name string, config 
 	}
 
 	bucket.PublicAccessBlock = config
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set public access block configuration: " + err.Error())
@@ -937,6 +955,7 @@ func (s *Service) DeletePublicAccessBlock(ctx context.Context, name string) erro
 	}
 
 	bucket.PublicAccessBlock = nil
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete public access block configuration: " + err.Error())
@@ -967,6 +986,7 @@ func (s *Service) SetOwnershipControls(ctx context.Context, name string, config 
 	}
 
 	bucket.OwnershipControls = config
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set ownership controls: " + err.Error())
@@ -983,6 +1003,7 @@ func (s *Service) DeleteOwnershipControls(ctx context.Context, name string) erro
 	}
 
 	bucket.OwnershipControls = nil
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete ownership controls: " + err.Error())
@@ -1014,6 +1035,7 @@ func (s *Service) SetAccelerate(ctx context.Context, name string, status string)
 	}
 
 	bucket.Accelerate = status
+
 	err = s.store.UpdateBucket(ctx, bucket)
 	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to set accelerate configuration: " + err.Error())

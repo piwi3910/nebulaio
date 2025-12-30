@@ -642,6 +642,7 @@ func (d *Discovery) RemoveVoter(nodeID string) error {
 
 	// Remove the replica
 	replicaID := hashNodeID(nodeID)
+
 	err = nodeHost.SyncRequestDeleteReplica(ctx, shardID, replicaID, membership.ConfigChangeID)
 	if err != nil {
 		return fmt.Errorf("failed to remove replica: %w", err)

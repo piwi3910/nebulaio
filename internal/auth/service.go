@@ -640,14 +640,16 @@ func (s *Service) evaluateUserPolicies(ctx context.Context, user *metadata.User,
 // - arn:aws:s3:::bucket
 // - arn:aws:s3:::bucket/key
 // - arn:aws:s3:::bucket/prefix/key.
-func parseResourceARN(resourceARN string) (bucket, key string) {
+func parseResourceARN(resourceARN string) (string, string) {
 	// Remove the ARN prefix if present
 	resourceARN = strings.TrimPrefix(resourceARN, "arn:aws:s3:::")
 
 	// Split bucket and key
 	parts := strings.SplitN(resourceARN, "/", arnSplitParts)
 
-	bucket = parts[0]
+	bucket := parts[0]
+	key := ""
+
 	if len(parts) > 1 {
 		key = parts[1]
 	}
@@ -659,6 +661,7 @@ func parseResourceARN(resourceARN string) (bucket, key string) {
 
 func generateID(prefix string) string {
 	b := make([]byte, idByteSize)
+
 	_, err := rand.Read(b)
 	if err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak IDs
@@ -671,6 +674,7 @@ func generateID(prefix string) string {
 
 func generateAccessKeyID() string {
 	b := make([]byte, accessKeyIDByteSize)
+
 	_, err := rand.Read(b)
 	if err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak access keys
@@ -683,6 +687,7 @@ func generateAccessKeyID() string {
 
 func generateSecretAccessKey() string {
 	b := make([]byte, secretKeyByteSize)
+
 	_, err := rand.Read(b)
 	if err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak secret keys

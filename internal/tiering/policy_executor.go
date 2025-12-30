@@ -249,7 +249,7 @@ func (s *PolicyScheduler) runSchedule(entry *scheduleEntry) {
 }
 
 // parseAndCalculateNext parses cron expression and calculates next run time.
-func (s *PolicyScheduler) parseAndCalculateNext(cronExpr string) time.Time {
+func (s *PolicyScheduler) parseAndCalculateNext(_cronExpr string) time.Time {
 	// Simplified cron parsing - in production use a proper cron library
 	// Format: minute hour day-of-month month day-of-week
 	// For now, just schedule for next hour

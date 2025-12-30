@@ -584,6 +584,7 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 	}
 
 	var obj map[string]interface{}
+
 	err = json.Unmarshal(data, &obj)
 	if err != nil {
 		// Not JSON, try text redaction
@@ -659,6 +660,7 @@ func (t *FilterFieldsTransformer) Transform(ctx context.Context, input io.Reader
 	}
 
 	var obj map[string]interface{}
+
 	err = json.Unmarshal(data, &obj)
 	if err != nil {
 		return nil, nil, fmt.Errorf("input must be JSON: %w", err)
@@ -1171,6 +1173,7 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 }
 
 // transformStreaming performs streaming decompression for large files.
+//nolint:unparam // headers map[string]string is always nil for decompression (no headers to set), but kept for consistency with compression API
 func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io.Reader, algorithm string) (io.Reader, map[string]string, error) {
 	pr, pw := io.Pipe()
 

@@ -1025,6 +1025,8 @@ func (s *Server) handleRequest(ctx context.Context, req *JSONRPCRequest) (interf
 }
 
 func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (*InitializeResult, error) {
+	_ = ctx // Context reserved for future use (e.g., timeout handling)
+
 	var initParams InitializeParams
 
 	err := json.Unmarshal(params, &initParams)
@@ -1065,6 +1067,8 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 }
 
 func (s *Server) handleListTools(ctx context.Context) (map[string]interface{}, error) {
+	_ = ctx // Context reserved for future use (e.g., timeout handling)
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -1218,6 +1222,8 @@ func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage)
 }
 
 func (s *Server) handleListPrompts(ctx context.Context) (map[string]interface{}, error) {
+	_ = ctx // Context reserved for future use (e.g., timeout handling)
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -1232,6 +1238,8 @@ func (s *Server) handleListPrompts(ctx context.Context) (map[string]interface{},
 }
 
 func (s *Server) handleGetPrompt(ctx context.Context, params json.RawMessage) (map[string]interface{}, error) {
+	_ = ctx // Context reserved for future use (e.g., timeout handling)
+
 	var getParams struct {
 		Arguments map[string]interface{} `json:"arguments"`
 		Name      string                 `json:"name"`

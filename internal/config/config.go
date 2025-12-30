@@ -844,6 +844,7 @@ func (c *Config) validate() error {
 			c.Auth.JWTSecret = string(data)
 		} else {
 			c.Auth.JWTSecret = generateSecret(32)
+
 			err = os.WriteFile(jwtSecretPath, []byte(c.Auth.JWTSecret), 0600)
 			if err != nil {
 				return fmt.Errorf("failed to write JWT secret: %w", err)
@@ -866,6 +867,7 @@ func (c *Config) validate() error {
 		if err == nil {
 			// Parse stored replica ID
 			var replicaID uint64
+
 			_, parseErr := fmt.Sscanf(string(data), "%d", &replicaID)
 			if parseErr == nil && replicaID > 0 {
 				c.Cluster.ReplicaID = replicaID
@@ -874,6 +876,7 @@ func (c *Config) validate() error {
 		// Generate new replica ID if still not set
 		if c.Cluster.ReplicaID == 0 {
 			c.Cluster.ReplicaID = generateReplicaID()
+
 			err = os.WriteFile(replicaIDPath, []byte(strconv.FormatUint(c.Cluster.ReplicaID, 10)), 0644)
 			if err != nil {
 				return fmt.Errorf("failed to write replica ID: %w", err)
@@ -1046,6 +1049,7 @@ func generateSecret(length int) string {
 
 func randomByte() byte {
 	var b [1]byte
+
 	_, err := rand.Read(b[:])
 	if err != nil {
 		// This should never happen with crypto/rand, but if it does,

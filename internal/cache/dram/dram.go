@@ -543,12 +543,12 @@ type entryReader struct {
 	pos  int
 }
 
-func (r *entryReader) Read(p []byte) (n int, err error) {
+func (r *entryReader) Read(p []byte) (int, error) {
 	if r.pos >= len(r.data) {
 		return 0, io.EOF
 	}
 
-	n = copy(p, r.data[r.pos:])
+	n := copy(p, r.data[r.pos:])
 	r.pos += n
 
 	return n, nil
@@ -712,7 +712,7 @@ func (c *Cache) discoverPeers() {
 	}
 }
 
-func (c *Cache) getFromPeer(ctx context.Context, key string) (*Entry, bool) {
+func (c *Cache) getFromPeer(_ctx context.Context, _key string) (*Entry, bool) {
 	c.peerClientMu.RLock()
 	defer c.peerClientMu.RUnlock()
 
@@ -721,7 +721,7 @@ func (c *Cache) getFromPeer(ctx context.Context, key string) (*Entry, bool) {
 	return nil, false
 }
 
-func (c *Cache) replicateToPeers(key string, entry *Entry) {
+func (c *Cache) replicateToPeers(_key string, _entry *Entry) {
 	c.peerClientMu.RLock()
 	defer c.peerClientMu.RUnlock()
 
@@ -729,7 +729,7 @@ func (c *Cache) replicateToPeers(key string, entry *Entry) {
 	// Using consistent hashing to determine which peers
 }
 
-func (c *Cache) invalidateOnPeers(key string) {
+func (c *Cache) invalidateOnPeers(_key string) {
 	c.peerClientMu.RLock()
 	defer c.peerClientMu.RUnlock()
 
@@ -738,25 +738,26 @@ func (c *Cache) invalidateOnPeers(key string) {
 
 // Helper functions
 
-func extractBucketPrefix(key string) (bucket, prefix string) {
+func extractBucketPrefix(key string) (string, string) {
 	// Key format: bucket/key
 	for i := range len(key) {
 		if key[i] == '/' {
-			bucket = key[:i]
+			bucket := key[:i]
+			prefix := ""
+
 			if i+1 < len(key) {
 				// Get prefix (first path segment after bucket)
 				rest := key[i+1:]
 				for j := range len(rest) {
 					if rest[j] == '/' {
-						prefix = rest[:j]
-						return
+						return bucket, rest[:j]
 					}
 				}
 
 				prefix = rest
 			}
 
-			return
+			return bucket, prefix
 		}
 	}
 

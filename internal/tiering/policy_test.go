@@ -633,8 +633,8 @@ func TestScheduleWindow(t *testing.T) {
 	_ = currentMinute // Silence unused variable warning
 }
 
-func formatTime(hour, minute int) string {
-	return time.Date(2000, 1, 1, hour, minute, 0, 0, time.UTC).Format("15:04")
+func formatTime(hour, _minute int) string {
+	return time.Date(2000, 1, 1, hour, _minute, 0, 0, time.UTC).Format("15:04")
 }
 
 func TestAntiThrashConfig(t *testing.T) {

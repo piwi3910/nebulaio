@@ -322,6 +322,8 @@ func (t *Transport) initRDMA() error {
 }
 
 // detectDevices discovers available RDMA devices.
+//
+//nolint:unparam // error return reserved for real libibverbs device enumeration errors
 func (t *Transport) detectDevices() ([]*Device, error) {
 	// In a real implementation, this would use libibverbs to enumerate devices
 	// For now, return simulated devices for development/testing
@@ -464,6 +466,8 @@ func (t *Transport) createMemoryPool() (*MemoryPool, error) {
 }
 
 // allocateRegion allocates and registers a memory region.
+//
+//nolint:unparam // error return reserved for real ibv_reg_mr() memory registration failures
 func (p *MemoryPool) allocateRegion(size int) (*MemoryRegion, error) {
 	// Allocate aligned memory for DMA
 	buffer := make([]byte, size)
@@ -602,6 +606,8 @@ func (t *Transport) Connect(ctx context.Context, addr string) (*Connection, erro
 }
 
 // createQueuePair creates an RDMA queue pair.
+//
+//nolint:unparam // error return reserved for real ibv_create_qp() and ibv_create_cq() failures
 func (t *Transport) createQueuePair() (*QueuePair, error) {
 	// Create completion queues
 	sendCQ := &CompletionQueue{
@@ -632,7 +638,11 @@ func (t *Transport) createQueuePair() (*QueuePair, error) {
 }
 
 // exchangeConnectionInfo exchanges RDMA connection info with remote.
+//
+//nolint:unparam // error return reserved for real TCP connection exchange failures
 func (t *Transport) exchangeConnectionInfo(ctx context.Context, conn *Connection) error {
+	_ = ctx // Reserved for context-aware TCP connection exchange timeout
+
 	// In a real implementation, this would:
 	// 1. Get local GID/LID from the port
 	// 2. Get local QP number
@@ -647,6 +657,8 @@ func (t *Transport) exchangeConnectionInfo(ctx context.Context, conn *Connection
 }
 
 // transitionQPToRTS transitions QP through RESET -> INIT -> RTR -> RTS.
+//
+//nolint:unparam // error return reserved for real ibv_modify_qp() state transition failures
 func (t *Transport) transitionQPToRTS(qp *QueuePair) error {
 	// TODO: Real implementation would call ibv_modify_qp() for each transition
 	states := []string{"INIT", "RTR", "RTS"}
@@ -1008,17 +1020,17 @@ type bytesReaderAt struct {
 	data []byte
 }
 
-func (r *bytesReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
+func (r *bytesReaderAt) ReadAt(p []byte, off int64) (int, error) {
 	if off >= int64(len(r.data)) {
 		return 0, io.EOF
 	}
 
-	n = copy(p, r.data[off:])
+	n := copy(p, r.data[off:])
 	if n < len(p) {
-		err = io.EOF
+		return n, io.EOF
 	}
 
-	return
+	return n, nil
 }
 
 // postSend posts a send work request.
@@ -1035,6 +1047,8 @@ func (c *Connection) postReceive(ctx context.Context) error {
 
 // waitCompletion waits for a work completion.
 func (c *Connection) waitCompletion(ctx context.Context, cq *CompletionQueue) error {
+	_ = cq // Reserved for real ibv_poll_cq() completion queue polling
+
 	// TODO: Real implementation would poll/wait on CQ
 	select {
 	case <-ctx.Done():

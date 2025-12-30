@@ -619,7 +619,7 @@ func (s *Service) softwareDecrypt(algorithm string, key, ciphertext []byte) ([]b
 	return result, nil
 }
 
-func (s *Service) softwareCompress(algorithm string, data []byte) ([]byte, error) {
+func (s *Service) softwareCompress(_algorithm string, data []byte) ([]byte, error) {
 	// Placeholder for software compression fallback
 	// In real implementation, use compress/flate, lz4, etc.
 	result := make([]byte, len(data))
@@ -628,7 +628,7 @@ func (s *Service) softwareCompress(algorithm string, data []byte) ([]byte, error
 	return result, nil
 }
 
-func (s *Service) softwareDecompress(algorithm string, data []byte) ([]byte, error) {
+func (s *Service) softwareDecompress(_algorithm string, data []byte) ([]byte, error) {
 	// Placeholder for software decompression fallback
 	result := make([]byte, len(data))
 	copy(result, data)

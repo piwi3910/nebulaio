@@ -58,6 +58,7 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 // Update updates the state machine with a log entry.
 func (sm *stateMachine) Update(entry statemachine.Entry) (statemachine.Result, error) {
 	var cmd command
+
 	err := json.Unmarshal(entry.Cmd, &cmd)
 	if err != nil {
 		//nolint:nilerr // Dragonboat pattern: Result.Value indicates error status, not Go error return
@@ -545,6 +546,7 @@ func (sm *stateMachine) applyPutObjectMetaVersioned(meta *ObjectMeta, preserveOl
 
 					// Store old version with compound key: objver:{bucket}/{key}#{versionID}
 					oldVersionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID))
+
 					err = txn.Set(oldVersionKey, oldData)
 					if err != nil {
 						return err
@@ -585,6 +587,7 @@ func (sm *stateMachine) applyDeleteObjectVersion(bucket, objKey, versionID strin
 	return sm.db.Update(func(txn *badger.Txn) error {
 		// Delete the specific version
 		versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID))
+
 		err := txn.Delete(versionKey)
 		if err != nil && err != badger.ErrKeyNotFound {
 			return err
@@ -634,6 +637,7 @@ func (sm *stateMachine) applyDeleteObjectVersion(bucket, objKey, versionID strin
 				}
 
 				var newLatest ObjectMeta
+
 				err = json.Unmarshal(val, &newLatest)
 				if err != nil {
 					return err
@@ -720,6 +724,7 @@ func (sm *stateMachine) applyDeleteUser(id string) error {
 
 		// Delete username mapping
 		usernameKey := []byte(prefixUsername + user.Username)
+
 		err = txn.Delete(usernameKey)
 		if err != nil {
 			return err
@@ -893,6 +898,7 @@ func (sm *stateMachine) applyDeleteAuditEvent(eventID string) error {
 			}
 
 			var event audit.AuditEvent
+
 			err = json.Unmarshal(val, &event)
 			if err != nil {
 				continue

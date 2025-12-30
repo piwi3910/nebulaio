@@ -101,6 +101,8 @@ func (a *S3LifecycleAdapter) ConvertFromS3(bucket string, config *S3LifecycleCon
 }
 
 // convertRule converts a single S3 lifecycle rule to a NebulaIO policy.
+//
+//nolint:unparam // error return reserved for future validation logic
 func (a *S3LifecycleAdapter) convertRule(bucket string, rule *S3LifecycleRule) (*AdvancedPolicy, error) {
 	policy := &AdvancedPolicy{
 		ID:          fmt.Sprintf("s3-lifecycle-%s-%s", bucket, rule.ID),

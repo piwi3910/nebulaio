@@ -491,7 +491,7 @@ func (p *connPool) get(ctx context.Context) (*ldap.Conn, error) {
 	return p.create(ctx)
 }
 
-func (p *connPool) create(ctx context.Context) (*ldap.Conn, error) {
+func (p *connPool) create(_ctx context.Context) (*ldap.Conn, error) {
 	var (
 		conn *ldap.Conn
 		err  error
