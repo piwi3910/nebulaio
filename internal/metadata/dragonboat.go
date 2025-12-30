@@ -18,6 +18,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Dragonboat configuration constants.
+const (
+	dirPermissions           = 0750                   // Directory permissions for metadata storage
+	defaultRTTMillisecond    = 200                    // RTT in milliseconds for Raft
+	defaultElectionRTT       = 10                     // Election RTT multiplier
+	defaultSnapshotEntries   = 1024                   // Entries before snapshot
+	defaultCompactionOverhead = 500                   // Compaction overhead entries
+	leaderWaitTimeout        = 30 * time.Second       // Timeout waiting for leader election
+	operationTimeout         = 30 * time.Second       // Timeout for Raft operations
+	shortOperationTimeout    = 5 * time.Second        // Short timeout for quick operations
+	syncReadTimeout          = 10 * time.Second       // Timeout for sync read operations
+	listOperationTimeout     = 60 * time.Second       // Timeout for list operations
+	defaultListMaxKeys       = 100                    // Default max keys for list operations
+	pollingInterval          = 100 * time.Millisecond // Polling interval for leader checks
+)
+
 // hashNodeID converts a string node ID to a uint64 replica ID.
 func hashNodeID(nodeID string) uint64 {
 	// Try parsing as uint64 first
@@ -58,15 +74,15 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	nodeHostDir := filepath.Join(cfg.DataDir, "nodehost")
 	walDir := filepath.Join(cfg.DataDir, "wal")
 
-	if err := os.MkdirAll(badgerDir, 0750); err != nil {
+	if err := os.MkdirAll(badgerDir, dirPermissions); err != nil {
 		return nil, fmt.Errorf("failed to create badger directory: %w", err)
 	}
 
-	if err := os.MkdirAll(nodeHostDir, 0750); err != nil {
+	if err := os.MkdirAll(nodeHostDir, dirPermissions); err != nil {
 		return nil, fmt.Errorf("failed to create nodehost directory: %w", err)
 	}
 
-	if err := os.MkdirAll(walDir, 0750); err != nil {
+	if err := os.MkdirAll(walDir, dirPermissions); err != nil {
 		return nil, fmt.Errorf("failed to create wal directory: %w", err)
 	}
 
@@ -83,7 +99,7 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	nhConfig := config.NodeHostConfig{
 		WALDir:         walDir,
 		NodeHostDir:    nodeHostDir,
-		RTTMillisecond: 200,
+		RTTMillisecond: defaultRTTMillisecond,
 		RaftAddress:    cfg.RaftAddress,
 	}
 
@@ -102,11 +118,11 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	rc := config.Config{
 		ReplicaID:          cfg.NodeID,
 		ShardID:            cfg.ShardID,
-		ElectionRTT:        10,
+		ElectionRTT:        defaultElectionRTT,
 		HeartbeatRTT:       1,
 		CheckQuorum:        true,
-		SnapshotEntries:    1024,
-		CompactionOverhead: 500,
+		SnapshotEntries:    defaultSnapshotEntries,
+		CompactionOverhead: defaultCompactionOverhead,
 	}
 
 	// Create state machine factory
@@ -164,7 +180,7 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 	// Wait for leader election
 	log.Info().Msg("Waiting for Dragonboat leader election...")
 
-	if err := store.WaitForLeader(30 * time.Second); err != nil {
+	if err := store.WaitForLeader(leaderWaitTimeout); err != nil {
 		log.Warn().Err(err).Msg("Timeout waiting for leader election, continuing anyway")
 	} else {
 		leaderID, _, _, _ := nh.GetLeaderID(cfg.ShardID)
@@ -276,7 +292,7 @@ func (s *DragonboatStore) AddVoter(nodeID string, raftAddr string) error {
 		Str("raft_addr", raftAddr).
 		Msg("Adding voter to Dragonboat cluster")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
 	defer cancel()
 
 	err := s.nodeHost.SyncRequestAddReplica(ctx, s.shardID, replicaID, raftAddr, 0)
@@ -306,7 +322,7 @@ func (s *DragonboatStore) AddNonvoter(nodeID string, raftAddr string) error {
 		Str("raft_addr", raftAddr).
 		Msg("Adding non-voter to Dragonboat cluster")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
 	defer cancel()
 
 	err := s.nodeHost.SyncRequestAddNonVoting(ctx, s.shardID, replicaID, raftAddr, 0)
@@ -330,7 +346,7 @@ func (s *DragonboatStore) RemoveServer(nodeID string) error {
 		Uint64("replica_id", replicaID).
 		Msg("Removing server from Dragonboat cluster")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
 	defer cancel()
 
 	err := s.nodeHost.SyncRequestDeleteReplica(ctx, s.shardID, replicaID, 0)
@@ -347,7 +363,7 @@ func (s *DragonboatStore) RemoveServer(nodeID string) error {
 
 // GetConfiguration returns the current cluster configuration.
 func (s *DragonboatStore) GetConfiguration() (*dragonboat.Membership, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), shortOperationTimeout)
 	defer cancel()
 
 	membership, err := s.nodeHost.SyncGetShardMembership(ctx, s.shardID)
@@ -430,7 +446,7 @@ func (s *DragonboatStore) TransferLeadership(targetID string, targetAddr string)
 		Str("target_addr", targetAddr).
 		Msg("Requesting leadership transfer")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
 	defer cancel()
 
 	// Request leadership transfer
@@ -440,7 +456,7 @@ func (s *DragonboatStore) TransferLeadership(targetID string, targetAddr string)
 	}
 
 	// Wait for the transfer to complete
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(pollingInterval)
 	defer ticker.Stop()
 
 	for {
@@ -465,7 +481,7 @@ func (s *DragonboatStore) WaitForLeader(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(pollingInterval)
 	defer ticker.Stop()
 
 	for {
@@ -483,7 +499,7 @@ func (s *DragonboatStore) WaitForLeader(timeout time.Duration) error {
 
 // Snapshot triggers a manual snapshot.
 func (s *DragonboatStore) Snapshot() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), listOperationTimeout)
 	defer cancel()
 
 	_, err := s.nodeHost.SyncRequestSnapshot(ctx, s.shardID, dragonboat.SnapshotOption{})
@@ -516,7 +532,7 @@ func (s *DragonboatStore) apply(cmd *command) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), syncReadTimeout)
 	defer cancel()
 
 	result, err := s.nodeHost.SyncPropose(ctx, s.nodeHost.GetNoOPSession(s.shardID), data)
