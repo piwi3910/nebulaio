@@ -258,6 +258,7 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 	metaStr := string(metaBytes)
 
 	var algorithm Algorithm
+
 	switch {
 	case strings.Contains(metaStr, `"algorithm":"zstd"`):
 		algorithm = AlgorithmZstd

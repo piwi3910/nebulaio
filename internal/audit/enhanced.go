@@ -288,8 +288,8 @@ func (l *EnhancedAuditLogger) Stop() error {
 		if err != nil {
 			errs = append(errs, err)
 		}
-		err = output.Close()
 
+		err = output.Close()
 		if err != nil {
 			errs = append(errs, err)
 		}

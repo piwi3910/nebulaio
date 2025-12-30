@@ -416,6 +416,7 @@ func (b *SimulatedBackend) Decompress(ctx context.Context, algorithm string, dat
 
 	// Limit decompression size to prevent decompression bombs (100MB max)
 	const maxDecompressSize = 100 * 1024 * 1024
+
 	var buf bytes.Buffer
 
 	if _, err := io.Copy(&buf, io.LimitReader(r, maxDecompressSize)); err != nil {

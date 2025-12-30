@@ -310,7 +310,6 @@ func (wm *WALManager) syncLoop() {
 	for range wm.syncTicker.C {
 		wm.mu.Lock()
 		err := wm.file.Sync()
-
 		if err != nil {
 			log.Error().
 				Err(err).

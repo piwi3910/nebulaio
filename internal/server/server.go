@@ -256,6 +256,7 @@ func New(cfg *config.Config) (*Server, error) {
 			// Erasure coding provides redundancy through Reed-Solomon encoding
 			// Data is split into data shards + parity shards across the tier
 			var erasureCfg erasure.Config
+
 			switch {
 			case tierErasureConfig != nil:
 				// Use tier-specific erasure configuration

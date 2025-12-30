@@ -662,6 +662,7 @@ func ValidateTierType(tier tiering.TierType) bool {
 // ParseLimitParam parses the limit query parameter with a given default and max.
 func ParseLimitParam(r *http.Request, defaultLimit, maxLimit int) int {
 	limit := defaultLimit
+
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= int64(maxLimit) {
 			limit = int(l)
@@ -673,6 +674,7 @@ func ParseLimitParam(r *http.Request, defaultLimit, maxLimit int) int {
 // ParseInactiveDaysParam parses the inactive_days query parameter.
 func ParseInactiveDaysParam(r *http.Request, defaultDays int) int {
 	inactiveDays := defaultDays
+
 	if daysStr := r.URL.Query().Get("inactive_days"); daysStr != "" {
 		if d, err := json.Number(daysStr).Int64(); err == nil && d > 0 && d <= 365 {
 			inactiveDays = int(d)
@@ -717,6 +719,7 @@ func (h *TieringHandler) GetObjectAccessStats(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		stats = nil
 	}
+
 	WriteObjectAccessStatsResponse(w, bucket, key, stats)
 }
 
@@ -738,14 +741,17 @@ func ValidateManualTransitionRequest(w http.ResponseWriter, req *ManualTransitio
 		writeError(w, "bucket is required", http.StatusBadRequest)
 		return false
 	}
+
 	if req.Key == "" {
 		writeError(w, "key is required", http.StatusBadRequest)
 		return false
 	}
+
 	if req.TargetTier == "" {
 		writeError(w, "target_tier is required", http.StatusBadRequest)
 		return false
 	}
+
 	if !ValidateTierType(req.TargetTier) {
 		writeError(w, "invalid target_tier: must be hot, warm, cold, or archive", http.StatusBadRequest)
 		return false

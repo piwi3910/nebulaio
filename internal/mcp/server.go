@@ -1310,7 +1310,6 @@ func (s *Server) sendError(w http.ResponseWriter, id interface{}, code int, mess
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK) // JSON-RPC always returns 200
 	err := json.NewEncoder(w).Encode(resp)
-
 	if err != nil {
 		// Response already started, log error but can't do much
 		_ = err

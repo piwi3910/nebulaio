@@ -34,7 +34,7 @@ const (
 	minPresignExpiration = 1
 
 	// awsCredentialParts is the expected number of parts in an AWS credential string.
-	// Format: ACCESS_KEY/YYYYMMDD/region/service/aws4_request
+	// Format: ACCESS_KEY/YYYYMMDD/region/service/aws4_request.
 	awsCredentialParts = 5
 )
 

@@ -621,7 +621,6 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 		mm.activeJob = nil
 		mm.mu.Unlock()
 		saveErr := mm.saveJobs()
-
 		if saveErr != nil {
 			log.Error().
 				Err(saveErr).

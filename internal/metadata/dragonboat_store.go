@@ -915,6 +915,7 @@ func (s *DragonboatStore) ListAuditEvents(ctx context.Context, filter audit.Audi
 
 		// Determine seek position
 		var seekKey []byte
+
 		switch {
 		case filter.NextToken != "":
 			seekKey = []byte(filter.NextToken)

@@ -768,6 +768,7 @@ func (h *TestTieringHandler) GetObjectAccessStats(w http.ResponseWriter, r *http
 	if err != nil {
 		stats = nil
 	}
+
 	WriteObjectAccessStatsResponse(w, bucket, key, stats)
 }
 

@@ -42,6 +42,7 @@ func ReadAllocationMap(file *os.File, offset int64, totalBlocks uint32) (*Alloca
 
 	// Count free blocks
 	free := uint32(0)
+
 	for i := range totalBlocks {
 		if !isSet(bits, i) {
 			free++

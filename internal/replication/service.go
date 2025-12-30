@@ -114,7 +114,6 @@ func (s *Service) Stop() error {
 
 	s.workerPool.Stop()
 	closeErr := s.queue.Close()
-
 	if closeErr != nil {
 		log.Error().
 			Err(closeErr).

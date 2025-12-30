@@ -124,7 +124,6 @@ func NewPlacementGroupManager(config PlacementGroupConfig) (*PlacementGroupManag
 		// Initialize status based on node count
 		// This ensures groups have a valid status from creation
 		if group.Status == "" {
-			//nolint:gocritic // ifElseChain: complex node count checks not suitable for switch
 			switch {
 			case len(group.Nodes) == 0:
 				group.Status = PlacementGroupStatusOffline
