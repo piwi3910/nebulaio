@@ -135,7 +135,8 @@ func TestStateMachineOperations(t *testing.T) {
 		}
 
 		// Close should succeed
-		if err := sm.Close(); err != nil {
+		err = sm.Close()
+		if err != nil {
 			t.Errorf("Close failed: %v", err)
 		}
 	})
@@ -153,7 +154,8 @@ func TestStateMachineOperations(t *testing.T) {
 		defer db.Close()
 
 		sm := newStateMachine(db)
-		if _, err := sm.Open(make(chan struct{})); err != nil {
+		_, err = sm.Open(make(chan struct{}))
+		if err != nil {
 			t.Fatalf("Failed to open state machine: %v", err)
 		}
 
@@ -257,7 +259,8 @@ func TestStateMachineSnapshot(t *testing.T) {
 		defer db.Close()
 
 		sm := newStateMachine(db)
-		if _, err := sm.Open(make(chan struct{})); err != nil {
+		_, err = sm.Open(make(chan struct{}))
+		if err != nil {
 			t.Fatalf("Failed to open state machine: %v", err)
 		}
 
@@ -304,7 +307,8 @@ func TestStateMachineSnapshot(t *testing.T) {
 		defer db2.Close()
 
 		sm2 := newStateMachine(db2)
-		if _, err := sm2.Open(make(chan struct{})); err != nil {
+		_, err = sm2.Open(make(chan struct{}))
+		if err != nil {
 			t.Fatalf("Failed to open second state machine: %v", err)
 		}
 
@@ -360,7 +364,8 @@ func TestStateMachineSnapshot(t *testing.T) {
 		defer db.Close()
 
 		sm := newStateMachine(db)
-		if _, err := sm.Open(make(chan struct{})); err != nil {
+		_, err = sm.Open(make(chan struct{}))
+		if err != nil {
 			t.Fatalf("Failed to open state machine: %v", err)
 		}
 
@@ -546,7 +551,8 @@ func TestObjectMetadataOperations(t *testing.T) {
 		CreatedAt: time.Now(),
 		Region:    "us-east-1",
 	}
-	if err := store.CreateBucket(ctx, bucket); err != nil && store.IsLeader() {
+	err = store.CreateBucket(ctx, bucket)
+	if err != nil && store.IsLeader() {
 		t.Fatalf("Failed to create test bucket: %v", err)
 	}
 
@@ -1489,7 +1495,8 @@ func TestErrorHandling(t *testing.T) {
 		defer db.Close()
 
 		sm := newStateMachine(db)
-		if _, err := sm.Open(make(chan struct{})); err != nil {
+		_, err = sm.Open(make(chan struct{}))
+		if err != nil {
 			t.Fatalf("Failed to open state machine: %v", err)
 		}
 
@@ -1559,7 +1566,8 @@ func BenchmarkStateMachineUpdate(b *testing.B) {
 	defer db.Close()
 
 	sm := newStateMachine(db)
-	if _, err := sm.Open(make(chan struct{})); err != nil {
+	_, err = sm.Open(make(chan struct{}))
+	if err != nil {
 		b.Fatalf("Failed to open state machine: %v", err)
 	}
 
@@ -1602,7 +1610,8 @@ func BenchmarkSnapshotSave(b *testing.B) {
 	defer db.Close()
 
 	sm := newStateMachine(db)
-	if _, err := sm.Open(make(chan struct{})); err != nil {
+	_, err = sm.Open(make(chan struct{}))
+	if err != nil {
 		b.Fatalf("Failed to open state machine: %v", err)
 	}
 

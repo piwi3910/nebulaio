@@ -384,7 +384,8 @@ func (h *TieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req CreateTieringPolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -443,7 +444,8 @@ func (h *TieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.Requ
 	existing.Distributed = distributed
 	existing.UpdatedAt = time.Now()
 
-	if err := h.service.UpdatePolicy(ctx, existing); err != nil {
+	err = h.service.UpdatePolicy(ctx, existing)
+	if err != nil {
 		if strings.Contains(err.Error(), "version conflict") {
 			writeError(w, err.Error(), http.StatusConflict)
 			return
@@ -496,7 +498,8 @@ func (h *TieringHandler) EnableTieringPolicy(w http.ResponseWriter, r *http.Requ
 	policy.Enabled = true
 	policy.UpdatedAt = time.Now()
 
-	if err := h.service.UpdatePolicy(ctx, policy); err != nil {
+	err = h.service.UpdatePolicy(ctx, policy)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -522,7 +525,8 @@ func (h *TieringHandler) DisableTieringPolicy(w http.ResponseWriter, r *http.Req
 	policy.Enabled = false
 	policy.UpdatedAt = time.Now()
 
-	if err := h.service.UpdatePolicy(ctx, policy); err != nil {
+	err = h.service.UpdatePolicy(ctx, policy)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -771,7 +775,8 @@ func (h *TieringHandler) ManualTransition(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 
 	var req ManualTransitionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -780,7 +785,8 @@ func (h *TieringHandler) ManualTransition(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.service.TransitionObject(ctx, req.Bucket, req.Key, req.TargetTier); err != nil {
+	err = h.service.TransitionObject(ctx, req.Bucket, req.Key, req.TargetTier)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -837,7 +843,8 @@ func (h *TieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Request) 
 	if strings.Contains(contentType, "application/xml") || strings.Contains(contentType, "text/xml") {
 		// Parse XML body
 		xmlData := make([]byte, r.ContentLength)
-		if _, err := r.Body.Read(xmlData); err != nil {
+		_, err = r.Body.Read(xmlData)
+		if err != nil {
 			writeError(w, "Failed to read request body", http.StatusBadRequest)
 			return
 		}
@@ -856,7 +863,8 @@ func (h *TieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	if err := h.service.SetS3LifecycleConfiguration(ctx, bucket, config); err != nil {
+	err = h.service.SetS3LifecycleConfiguration(ctx, bucket, config)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

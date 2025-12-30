@@ -37,7 +37,8 @@ func (s *DragonboatStore) GetBucket(ctx context.Context, name string) (*Bucket, 
 	}
 
 	var bucket Bucket
-	if err := json.Unmarshal(data, &bucket); err != nil {
+	err = json.Unmarshal(data, &bucket)
+	if err != nil {
 		return nil, err
 	}
 
@@ -114,7 +115,8 @@ func (s *DragonboatStore) GetObjectMeta(ctx context.Context, bucket, key string)
 	}
 
 	var meta ObjectMeta
-	if err := json.Unmarshal(data, &meta); err != nil {
+	err = json.Unmarshal(data, &meta)
+	if err != nil {
 		return nil, err
 	}
 
@@ -189,7 +191,8 @@ func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delim
 			}
 
 			var meta ObjectMeta
-			if err := json.Unmarshal(val, &meta); err != nil {
+			err = json.Unmarshal(val, &meta)
+			if err != nil {
 				continue
 			}
 
@@ -253,7 +256,8 @@ func (s *DragonboatStore) GetObjectVersion(ctx context.Context, bucket, key, ver
 	}
 
 	var meta ObjectMeta
-	if err := json.Unmarshal(data, &meta); err != nil {
+	err = json.Unmarshal(data, &meta)
+	if err != nil {
 		return nil, err
 	}
 
@@ -342,7 +346,8 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 			}
 
 			var meta ObjectMeta
-			if err := json.Unmarshal(val, &meta); err != nil {
+			err = json.Unmarshal(val, &meta)
+			if err != nil {
 				continue
 			}
 
@@ -404,7 +409,8 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 			}
 
 			var meta ObjectMeta
-			if err := json.Unmarshal(val, &meta); err != nil {
+			err = json.Unmarshal(val, &meta)
+			if err != nil {
 				continue
 			}
 
@@ -526,7 +532,8 @@ func (s *DragonboatStore) GetMultipartUpload(ctx context.Context, bucket, key, u
 	}
 
 	var upload MultipartUpload
-	if err := json.Unmarshal(data, &upload); err != nil {
+	err = json.Unmarshal(data, &upload)
+	if err != nil {
 		return nil, err
 	}
 
@@ -620,7 +627,8 @@ func (s *DragonboatStore) GetUser(ctx context.Context, id string) (*User, error)
 	}
 
 	var user User
-	if err := json.Unmarshal(data, &user); err != nil {
+	err = json.Unmarshal(data, &user)
+	if err != nil {
 		return nil, err
 	}
 
@@ -710,7 +718,8 @@ func (s *DragonboatStore) GetAccessKey(ctx context.Context, accessKeyID string) 
 	}
 
 	var accessKey AccessKey
-	if err := json.Unmarshal(data, &accessKey); err != nil {
+	err = json.Unmarshal(data, &accessKey)
+	if err != nil {
 		return nil, err
 	}
 
@@ -773,7 +782,8 @@ func (s *DragonboatStore) GetPolicy(ctx context.Context, name string) (*Policy, 
 	}
 
 	var policy Policy
-	if err := json.Unmarshal(data, &policy); err != nil {
+	err = json.Unmarshal(data, &policy)
+	if err != nil {
 		return nil, err
 	}
 
@@ -952,7 +962,8 @@ func (s *DragonboatStore) ListAuditEvents(ctx context.Context, filter audit.Audi
 			}
 
 			var event audit.AuditEvent
-			if err := json.Unmarshal(val, &event); err != nil {
+			err = json.Unmarshal(val, &event)
+			if err != nil {
 				continue
 			}
 
@@ -1034,7 +1045,8 @@ func (s *DragonboatStore) DeleteOldAuditEvents(ctx context.Context, before time.
 			}
 
 			var event audit.AuditEvent
-			if err := json.Unmarshal(val, &event); err != nil {
+			err = json.Unmarshal(val, &event)
+			if err != nil {
 				continue
 			}
 
@@ -1058,7 +1070,8 @@ func (s *DragonboatStore) DeleteOldAuditEvents(ctx context.Context, before time.
 			continue
 		}
 
-		if err := s.apply(&command{Type: cmdDeleteAuditEvent, Data: data}); err != nil {
+		err = s.apply(&command{Type: cmdDeleteAuditEvent, Data: data})
+		if err != nil {
 			continue
 		}
 

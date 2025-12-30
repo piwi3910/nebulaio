@@ -156,7 +156,8 @@ func (s *HybridPolicyStore) loadFromConfig() error {
 		Policies []*AdvancedPolicy `json:"policies" yaml:"policies"`
 	}
 
-	if err := json.Unmarshal(data, &config); err != nil {
+	err = json.Unmarshal(data, &config)
+	if err != nil {
 		return fmt.Errorf("failed to parse config: %w", err)
 	}
 
@@ -212,11 +213,13 @@ func (s *HybridPolicyStore) saveToConfig() error {
 	}
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(s.configPath), 0750); err != nil {
+	err = os.MkdirAll(filepath.Dir(s.configPath), 0750)
+	if err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	if err := os.WriteFile(s.configPath, data, 0644); err != nil {
+	err = os.WriteFile(s.configPath, data, 0644)
+	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -267,7 +270,8 @@ func (s *HybridPolicyStore) syncFromMetadata() error {
 		}
 
 		var policy AdvancedPolicy
-		if err := json.Unmarshal(data, &policy); err != nil {
+		err = json.Unmarshal(data, &policy)
+		if err != nil {
 			continue
 		}
 
@@ -313,7 +317,8 @@ func (s *HybridPolicyStore) Create(ctx context.Context, policy *AdvancedPolicy) 
 			return err
 		}
 
-		if err := s.metaStore.Put(ctx, "policies/"+policy.ID, string(data)); err != nil {
+		err = s.metaStore.Put(ctx, "policies/"+policy.ID, string(data))
+		if err != nil {
 			return err
 		}
 	}
@@ -396,7 +401,8 @@ func (s *HybridPolicyStore) Update(ctx context.Context, policy *AdvancedPolicy) 
 			return err
 		}
 
-		if err := s.metaStore.Put(ctx, "policies/"+policy.ID, string(data)); err != nil {
+		err = s.metaStore.Put(ctx, "policies/"+policy.ID, string(data))
+		if err != nil {
 			return err
 		}
 	}

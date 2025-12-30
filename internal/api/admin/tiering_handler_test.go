@@ -568,7 +568,8 @@ func (h *TestTieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.
 	}
 
 	var req CreateTieringPolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -626,7 +627,8 @@ func (h *TestTieringHandler) UpdateTieringPolicy(w http.ResponseWriter, r *http.
 	existing.Distributed = distributed
 	existing.UpdatedAt = time.Now()
 
-	if err := h.policyStore.Update(ctx, existing); err != nil {
+	err = h.policyStore.Update(ctx, existing)
+	if err != nil {
 		if containsString(err.Error(), "version conflict") {
 			writeError(w, err.Error(), http.StatusConflict)
 			return
@@ -672,7 +674,8 @@ func (h *TestTieringHandler) EnableTieringPolicy(w http.ResponseWriter, r *http.
 	policy.Enabled = true
 	policy.UpdatedAt = time.Now()
 
-	if err := h.policyStore.Update(ctx, policy); err != nil {
+	err = h.policyStore.Update(ctx, policy)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -697,7 +700,8 @@ func (h *TestTieringHandler) DisableTieringPolicy(w http.ResponseWriter, r *http
 	policy.Enabled = false
 	policy.UpdatedAt = time.Now()
 
-	if err := h.policyStore.Update(ctx, policy); err != nil {
+	err = h.policyStore.Update(ctx, policy)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -779,7 +783,8 @@ func (h *TestTieringHandler) ManualTransition(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 
 	var req ManualTransitionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -788,7 +793,8 @@ func (h *TestTieringHandler) ManualTransition(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := h.tierManager.TransitionObject(ctx, req.Bucket, req.Key, req.TargetTier); err != nil {
+	err = h.tierManager.TransitionObject(ctx, req.Bucket, req.Key, req.TargetTier)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -917,7 +923,8 @@ func (h *TestTieringHandler) GetTierRecommendations(w http.ResponseWriter, r *ht
 	limit := 100
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 1000 {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= 1000 {
 			limit = int(l)
 		}
 	}
@@ -936,7 +943,8 @@ func (h *TestTieringHandler) GetHotObjectsPrediction(w http.ResponseWriter, r *h
 	limit := 50
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= 500 {
 			limit = int(l)
 		}
 	}
@@ -962,7 +970,8 @@ func (h *TestTieringHandler) GetAccessAnomalies(w http.ResponseWriter, r *http.R
 	limit := 50
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := json.Number(limitStr).Int64(); err == nil && l > 0 && l <= 500 {
+		l, err := json.Number(limitStr).Int64()
+		if err == nil && l > 0 && l <= 500 {
 			limit = int(l)
 		}
 	}

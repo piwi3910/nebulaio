@@ -100,7 +100,8 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 
 	// Pre-allocate the file
 	//nolint:gosec // G115: cfg.Size is validated to reasonable range
-	if err := file.Truncate(int64(cfg.Size)); err != nil {
+	err = file.Truncate(int64(cfg.Size))
+	if err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
 
@@ -137,7 +138,8 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 
 	// Write superblock
 	superBytes := super.Marshal()
-	if _, err := file.WriteAt(superBytes, 0); err != nil {
+	_, err = file.WriteAt(superBytes, 0)
+	if err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
 
@@ -146,7 +148,8 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 
 	// Initialize allocation map (all zeros = all free)
 	allocMap := NewAllocationMap(totalBlocks)
-	if err := allocMap.WriteTo(file, BitmapOffset); err != nil {
+	err = allocMap.WriteTo(file, BitmapOffset)
+	if err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
 
@@ -155,7 +158,8 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 
 	// Initialize block type map (all zeros = all free)
 	blockTypes := make([]byte, totalBlocks)
-	if _, err := file.WriteAt(blockTypes, BlockTypeMapOffset); err != nil {
+	_, err = file.WriteAt(blockTypes, BlockTypeMapOffset)
+	if err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
 
@@ -163,7 +167,8 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 	}
 
 	// Sync to disk
-	if err := file.Sync(); err != nil {
+	err = file.Sync()
+	if err != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
 
@@ -213,7 +218,8 @@ func OpenVolume(path string) (*Volume, error) {
 
 	// Read superblock
 	superBytes := make([]byte, 128)
-	if _, err := file.ReadAt(superBytes, 0); err != nil {
+	_, err = file.ReadAt(superBytes, 0)
+	if err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("failed to read superblock: %w", err)
 	}
@@ -239,7 +245,8 @@ func OpenVolume(path string) (*Volume, error) {
 
 	// Read block type map
 	blockTypes := make([]byte, super.TotalBlocks)
-	if _, err := file.ReadAt(blockTypes, BlockTypeMapOffset); err != nil {
+	_, err = file.ReadAt(blockTypes, BlockTypeMapOffset)
+	if err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("failed to read block type map: %w", err)
 	}
@@ -310,7 +317,8 @@ func OpenVolumeWithConfig(path string, dioConfig DirectIOConfig) (*Volume, error
 
 	// Read superblock
 	superBytes := make([]byte, 128)
-	if _, err := file.ReadAt(superBytes, 0); err != nil {
+	_, err = file.ReadAt(superBytes, 0)
+	if err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("failed to read superblock: %w", err)
 	}
@@ -336,7 +344,8 @@ func OpenVolumeWithConfig(path string, dioConfig DirectIOConfig) (*Volume, error
 
 	// Read block type map
 	blockTypes := make([]byte, super.TotalBlocks)
-	if _, err := file.ReadAt(blockTypes, BlockTypeMapOffset); err != nil {
+	_, err = file.ReadAt(blockTypes, BlockTypeMapOffset)
+	if err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("failed to read block type map: %w", err)
 	}
@@ -440,12 +449,14 @@ func (v *Volume) flushLocked() error {
 	v.super.Modified = time.Now().UnixNano()
 
 	// Write allocation map
-	if err := v.allocMap.WriteTo(v.file, BitmapOffset); err != nil {
+	err := v.allocMap.WriteTo(v.file, BitmapOffset)
+	if err != nil {
 		return fmt.Errorf("failed to write allocation map: %w", err)
 	}
 
 	// Write block type map
-	if _, err := v.file.WriteAt(v.blockTypes, BlockTypeMapOffset); err != nil {
+	_, err = v.file.WriteAt(v.blockTypes, BlockTypeMapOffset)
+	if err != nil {
 		return fmt.Errorf("failed to write block type map: %w", err)
 	}
 
@@ -460,12 +471,14 @@ func (v *Volume) flushLocked() error {
 	v.super.IndexSize = uint64(indexSize)
 
 	// Write superblock last (after updating IndexSize)
-	if _, err := v.file.WriteAt(v.super.Marshal(), 0); err != nil {
+	_, err = v.file.WriteAt(v.super.Marshal(), 0)
+	if err != nil {
 		return fmt.Errorf("failed to write superblock: %w", err)
 	}
 
 	// Sync to disk
-	if err := v.file.Sync(); err != nil {
+	err = v.file.Sync()
+	if err != nil {
 		return fmt.Errorf("failed to sync: %w", err)
 	}
 

@@ -344,17 +344,20 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 		return nil, fmt.Errorf("failed to write part: %w", err)
 	}
 
-	if err := tmpFile.Sync(); err != nil {
+	err = tmpFile.Sync()
+	if err != nil {
 		_ = tmpFile.Close()
 		return nil, fmt.Errorf("failed to sync part: %w", err)
 	}
 
-	if err := tmpFile.Close(); err != nil {
+	err = tmpFile.Close()
+	if err != nil {
 		return nil, fmt.Errorf("failed to close temp file: %w", err)
 	}
 
 	// Atomic rename
-	if err := os.Rename(tmpPath, path); err != nil {
+	err = os.Rename(tmpPath, path)
+	if err != nil {
 		return nil, fmt.Errorf("failed to rename part: %w", err)
 	}
 
@@ -392,7 +395,8 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 	objectPath := b.objectPath(bucket, key)
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(objectPath), 0750); err != nil {
+	err := os.MkdirAll(filepath.Dir(objectPath), 0750)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create object directory: %w", err)
 	}
 
@@ -454,16 +458,19 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 		totalSize += written
 	}
 
-	if err := tmpFile.Sync(); err != nil {
+	err = tmpFile.Sync()
+	if err != nil {
 		return nil, fmt.Errorf("failed to sync object: %w", err)
 	}
 
-	if err := tmpFile.Close(); err != nil {
+	err = tmpFile.Close()
+	if err != nil {
 		return nil, fmt.Errorf("failed to close temp file: %w", err)
 	}
 
 	// Atomic rename
-	if err := os.Rename(tmpPath, objectPath); err != nil {
+	err = os.Rename(tmpPath, objectPath)
+	if err != nil {
 		return nil, fmt.Errorf("failed to rename object: %w", err)
 	}
 
@@ -491,13 +498,14 @@ func (b *Backend) AbortMultipartUpload(ctx context.Context, bucket, key, uploadI
 	uploadPath := b.uploadPath(bucket, key, uploadID)
 
 	// Check if upload directory exists
-	if _, err := os.Stat(uploadPath); os.IsNotExist(err) {
+	_, err := os.Stat(uploadPath)
+	if os.IsNotExist(err) {
 		// Already cleaned up or never existed - not an error
 		return nil
 	}
 
 	// Remove all parts and the upload directory
-	err := os.RemoveAll(uploadPath)
+	err = os.RemoveAll(uploadPath)
 	if err != nil {
 		return fmt.Errorf("failed to remove upload directory: %w", err)
 	}
@@ -540,7 +548,8 @@ func (b *Backend) cleanEmptyDirs(dir, stopDir string) {
 			break
 		}
 
-		if err := os.Remove(dir); err != nil {
+		err = os.Remove(dir)
+		if err != nil {
 			break
 		}
 

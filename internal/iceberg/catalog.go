@@ -454,9 +454,9 @@ func (c *Catalog) UpdateNamespace(ctx context.Context, namespace []string, remov
 
 	ns.UpdatedAt = time.Now()
 
-	putErr := c.store.PutNamespace(ctx, ns)
-	if putErr != nil {
-		return nil, putErr
+	err = c.store.PutNamespace(ctx, ns)
+	if err != nil {
+		return nil, err
 	}
 
 	c.namespaces.Store(ns.NamespaceName(), ns)
@@ -469,14 +469,14 @@ func (c *Catalog) DropNamespace(ctx context.Context, namespace []string) error {
 	name := strings.Join(namespace, ".")
 
 	// Check for tables in namespace
-	tables, listErr := c.store.ListTables(ctx, name)
-	if listErr == nil && len(tables) > 0 {
+	tables, err := c.store.ListTables(ctx, name)
+	if err == nil && len(tables) > 0 {
 		return errors.New("namespace is not empty")
 	}
 
-	deleteErr := c.store.DeleteNamespace(ctx, name)
-	if deleteErr != nil {
-		return deleteErr
+	err = c.store.DeleteNamespace(ctx, name)
+	if err != nil {
+		return err
 	}
 
 	c.namespaces.Delete(name)
@@ -491,9 +491,9 @@ func (c *Catalog) CreateTable(ctx context.Context, namespace []string, name stri
 	tableKey := nsName + "." + name
 
 	// Check namespace exists
-	_, nsErr := c.GetNamespace(ctx, namespace)
-	if nsErr != nil {
-		return nil, nsErr
+	_, err := c.GetNamespace(ctx, namespace)
+	if err != nil {
+		return nil, err
 	}
 
 	// Check table doesn't exist
@@ -543,7 +543,8 @@ func (c *Catalog) CreateTable(ctx context.Context, namespace []string, name stri
 		return nil, err
 	}
 
-	if err := c.warehouse.WriteMetadata(ctx, metadataPath, metadataBytes); err != nil {
+	err = c.warehouse.WriteMetadata(ctx, metadataPath, metadataBytes)
+	if err != nil {
 		return nil, err
 	}
 
@@ -556,7 +557,8 @@ func (c *Catalog) CreateTable(ctx context.Context, namespace []string, name stri
 		MetadataLocation: metadataPath,
 	}
 
-	if err := c.store.PutTable(ctx, table); err != nil {
+	err = c.store.PutTable(ctx, table)
+	if err != nil {
 		return nil, err
 	}
 
@@ -627,13 +629,14 @@ func (c *Catalog) DropTable(ctx context.Context, namespace []string, name string
 
 	// If purge, delete data files
 	if purge {
-		err := c.warehouse.DeleteMetadata(ctx, table.Metadata.Location)
+		err = c.warehouse.DeleteMetadata(ctx, table.Metadata.Location)
 		if err != nil {
 			// Log but continue
 		}
 	}
 
-	if err := c.store.DeleteTable(ctx, nsName, name); err != nil {
+	err = c.store.DeleteTable(ctx, nsName, name)
+	if err != nil {
 		return err
 	}
 
@@ -689,7 +692,7 @@ func (c *Catalog) CommitTable(ctx context.Context, request *UpdateTableRequest) 
 
 	// Validate requirements
 	for _, req := range request.Requirements {
-		err := c.validateRequirement(table, &req)
+		err = c.validateRequirement(table, &req)
 		if err != nil {
 			atomic.AddInt64(&c.metrics.CommitConflicts, 1)
 			atomic.AddInt64(&c.metrics.CommitsFailed, 1)
@@ -706,7 +709,7 @@ func (c *Catalog) CommitTable(ctx context.Context, request *UpdateTableRequest) 
 	}
 
 	for _, update := range request.Updates {
-		err := c.applyUpdate(newMetadata, &update)
+		err = c.applyUpdate(newMetadata, &update)
 		if err != nil {
 			atomic.AddInt64(&c.metrics.CommitsFailed, 1)
 			return nil, err
@@ -724,7 +727,8 @@ func (c *Catalog) CommitTable(ctx context.Context, request *UpdateTableRequest) 
 		return nil, err
 	}
 
-	if err := c.warehouse.WriteMetadata(ctx, metadataPath, metadataBytes); err != nil {
+	err = c.warehouse.WriteMetadata(ctx, metadataPath, metadataBytes)
+	if err != nil {
 		return nil, err
 	}
 
@@ -737,7 +741,8 @@ func (c *Catalog) CommitTable(ctx context.Context, request *UpdateTableRequest) 
 	table.Metadata = newMetadata
 	table.MetadataLocation = metadataPath
 
-	if err := c.store.PutTable(ctx, table); err != nil {
+	err = c.store.PutTable(ctx, table)
+	if err != nil {
 		return nil, err
 	}
 
@@ -878,7 +883,8 @@ func (c *Catalog) copyMetadata(m *TableMetadata) (*TableMetadata, error) {
 	}
 
 	var tableCopy TableMetadata
-	if err := json.Unmarshal(data, &tableCopy); err != nil {
+	err = json.Unmarshal(data, &tableCopy)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal table metadata copy: %w", err)
 	}
 
@@ -902,7 +908,8 @@ func (c *Catalog) RenameTable(ctx context.Context, fromNamespace []string, fromN
 	fromKey := strings.Join(fromNamespace, ".") + "." + fromName
 	toKey := strings.Join(toNamespace, ".") + "." + toName
 
-	if err := c.store.PutTable(ctx, table); err != nil {
+	err = c.store.PutTable(ctx, table)
+	if err != nil {
 		return err
 	}
 
@@ -919,7 +926,8 @@ func (c *Catalog) CreateView(ctx context.Context, namespace []string, name strin
 	viewKey := nsName + "." + name
 
 	// Check namespace exists
-	if _, err := c.GetNamespace(ctx, namespace); err != nil {
+	_, err := c.GetNamespace(ctx, namespace)
+	if err != nil {
 		return nil, err
 	}
 
@@ -963,7 +971,7 @@ func (c *Catalog) CreateView(ctx context.Context, namespace []string, name strin
 		MetadataLocation: location + "/metadata/v1.metadata.json",
 	}
 
-	err := c.store.PutView(ctx, view)
+	err = c.store.PutView(ctx, view)
 	if err != nil {
 		return nil, err
 	}
@@ -1152,7 +1160,8 @@ func (h *RESTHandler) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 			Properties map[string]string `json:"properties"`
 			Namespace  []string          `json:"namespace"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -1239,7 +1248,8 @@ func (h *RESTHandler) handleTables(w http.ResponseWriter, r *http.Request) {
 			Name       string            `json:"name"`
 			Location   string            `json:"location"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -1296,7 +1306,8 @@ func (h *RESTHandler) handleTable(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		// Commit updates
 		var req UpdateTableRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

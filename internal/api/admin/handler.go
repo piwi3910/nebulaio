@@ -359,7 +359,8 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	user.UpdatedAt = time.Now()
 
-	if err := h.store.UpdateUser(r.Context(), user); err != nil {
+	err = h.store.UpdateUser(r.Context(), user)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -445,7 +446,8 @@ func (h *Handler) CreateAccessKey(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 
 	var req CreateAccessKeyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -546,7 +548,8 @@ func (h *Handler) UpdatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CreatePolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -555,7 +558,8 @@ func (h *Handler) UpdatePolicy(w http.ResponseWriter, r *http.Request) {
 	policy.Document = req.Document
 	policy.UpdatedAt = time.Now()
 
-	if err := h.store.UpdatePolicy(r.Context(), policy); err != nil {
+	err = h.store.UpdatePolicy(r.Context(), policy)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -595,7 +599,8 @@ func (h *Handler) ListBuckets(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateBucket(w http.ResponseWriter, r *http.Request) {
 	var req CreateBucketRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -810,7 +815,8 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 
 	var req PresignRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -835,7 +841,8 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	req.Method = strings.ToUpper(req.Method)
 
 	// Validate bucket exists
-	if _, err := h.bucket.GetBucket(ctx, req.Bucket); err != nil {
+	_, err = h.bucket.GetBucket(ctx, req.Bucket)
+	if err != nil {
 		writeError(w, "Bucket not found", http.StatusNotFound)
 		return
 	}
@@ -1281,7 +1288,8 @@ func (h *Handler) AttachPolicyToUser(w http.ResponseWriter, r *http.Request) {
 	policyName := chi.URLParam(r, "name")
 
 	var req AttachPolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -1292,7 +1300,8 @@ func (h *Handler) AttachPolicyToUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify policy exists
-	if _, err := h.store.GetPolicy(r.Context(), policyName); err != nil {
+	_, err = h.store.GetPolicy(r.Context(), policyName)
+	if err != nil {
 		writeError(w, "Policy not found", http.StatusNotFound)
 		return
 	}
@@ -1319,7 +1328,8 @@ func (h *Handler) AttachPolicyToUser(w http.ResponseWriter, r *http.Request) {
 	user.Policies = append(user.Policies, policyName)
 	user.UpdatedAt = time.Now()
 
-	if err := h.store.UpdateUser(r.Context(), user); err != nil {
+	err = h.store.UpdateUser(r.Context(), user)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1334,7 +1344,8 @@ func (h *Handler) DetachPolicyFromUser(w http.ResponseWriter, r *http.Request) {
 	policyName := chi.URLParam(r, "name")
 
 	var req AttachPolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -1375,7 +1386,8 @@ func (h *Handler) DetachPolicyFromUser(w http.ResponseWriter, r *http.Request) {
 	user.Policies = newPolicies
 	user.UpdatedAt = time.Now()
 
-	if err := h.store.UpdateUser(r.Context(), user); err != nil {
+	err = h.store.UpdateUser(r.Context(), user)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

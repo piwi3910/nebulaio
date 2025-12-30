@@ -58,12 +58,13 @@ func (sm *stateMachine) Open(stopc <-chan struct{}) (uint64, error) {
 // Update updates the state machine with a log entry.
 func (sm *stateMachine) Update(entry statemachine.Entry) (statemachine.Result, error) {
 	var cmd command
-	if err := json.Unmarshal(entry.Cmd, &cmd); err != nil {
+	err := json.Unmarshal(entry.Cmd, &cmd)
+	if err != nil {
 		//nolint:nilerr // Dragonboat pattern: Result.Value indicates error status, not Go error return
 		return statemachine.Result{Value: 1}, nil // Error code
 	}
 
-	err := sm.processCommand(&cmd)
+	err = sm.processCommand(&cmd)
 	if err != nil {
 		//nolint:nilerr // Dragonboat pattern: Result.Value indicates error status, not Go error return
 		return statemachine.Result{Value: 1}, nil // Error code
@@ -395,7 +396,8 @@ func (sm *stateMachine) SaveSnapshot(w io.Writer, fc statemachine.ISnapshotFileC
 				Value []byte `json:"value"`
 			}{Key: key, Value: val}
 
-			if err := encoder.Encode(&kv); err != nil {
+			err = encoder.Encode(&kv)
+			if err != nil {
 				return err
 			}
 		}
@@ -543,7 +545,8 @@ func (sm *stateMachine) applyPutObjectMetaVersioned(meta *ObjectMeta, preserveOl
 
 					// Store old version with compound key: objver:{bucket}/{key}#{versionID}
 					oldVersionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID))
-					if err := txn.Set(oldVersionKey, oldData); err != nil {
+					err = txn.Set(oldVersionKey, oldData)
+					if err != nil {
 						return err
 					}
 				}
@@ -562,7 +565,8 @@ func (sm *stateMachine) applyPutObjectMetaVersioned(meta *ObjectMeta, preserveOl
 				return err
 			}
 
-			if err := txn.Set(versionKey, versionData); err != nil {
+			err = txn.Set(versionKey, versionData)
+			if err != nil {
 				return err
 			}
 		}
@@ -581,7 +585,8 @@ func (sm *stateMachine) applyDeleteObjectVersion(bucket, objKey, versionID strin
 	return sm.db.Update(func(txn *badger.Txn) error {
 		// Delete the specific version
 		versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID))
-		if err := txn.Delete(versionKey); err != nil && err != badger.ErrKeyNotFound {
+		err := txn.Delete(versionKey)
+		if err != nil && err != badger.ErrKeyNotFound {
 			return err
 		}
 
@@ -629,7 +634,8 @@ func (sm *stateMachine) applyDeleteObjectVersion(bucket, objKey, versionID strin
 				}
 
 				var newLatest ObjectMeta
-				if err := json.Unmarshal(val, &newLatest); err != nil {
+				err = json.Unmarshal(val, &newLatest)
+				if err != nil {
 					return err
 				}
 
@@ -641,7 +647,8 @@ func (sm *stateMachine) applyDeleteObjectVersion(bucket, objKey, versionID strin
 				}
 
 				// Update version store
-				if err := txn.Set(item.KeyCopy(nil), data); err != nil {
+				err = txn.Set(item.KeyCopy(nil), data)
+				if err != nil {
 					return err
 				}
 
@@ -667,7 +674,8 @@ func (sm *stateMachine) applyCreateUser(user *User) error {
 			return err
 		}
 
-		if err := txn.Set(key, data); err != nil {
+		err = txn.Set(key, data)
+		if err != nil {
 			return err
 		}
 
@@ -712,7 +720,8 @@ func (sm *stateMachine) applyDeleteUser(id string) error {
 
 		// Delete username mapping
 		usernameKey := []byte(prefixUsername + user.Username)
-		if err := txn.Delete(usernameKey); err != nil {
+		err = txn.Delete(usernameKey)
+		if err != nil {
 			return err
 		}
 
@@ -884,7 +893,8 @@ func (sm *stateMachine) applyDeleteAuditEvent(eventID string) error {
 			}
 
 			var event audit.AuditEvent
-			if err := json.Unmarshal(val, &event); err != nil {
+			err = json.Unmarshal(val, &event)
+			if err != nil {
 				continue
 			}
 

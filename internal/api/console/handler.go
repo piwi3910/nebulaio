@@ -229,7 +229,8 @@ func (h *Handler) CreateMyAccessKey(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 
 	var req CreateAccessKeyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -269,7 +270,8 @@ func (h *Handler) DeleteMyAccessKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete the access key
-	if err := h.store.DeleteAccessKey(ctx, accessKeyID); err != nil {
+	err = h.store.DeleteAccessKey(ctx, accessKeyID)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -593,7 +595,8 @@ func (h *Handler) UploadObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse multipart form
-	if err := r.ParseMultipartForm(maxMultipartFormSize); err != nil {
+	err := r.ParseMultipartForm(maxMultipartFormSize)
+	if err != nil {
 		writeError(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
@@ -648,7 +651,8 @@ func (h *Handler) DeleteObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.object.DeleteObject(ctx, bucketName, key); err != nil {
+	_, err := h.object.DeleteObject(ctx, bucketName, key)
+	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -672,7 +676,8 @@ func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 
 	// Verify object exists
-	if _, err := h.object.HeadObject(ctx, bucketName, key); err != nil {
+	_, err := h.object.HeadObject(ctx, bucketName, key)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, "Object not found", http.StatusNotFound)
 			return
@@ -769,7 +774,8 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	role := metadata.UserRole(r.Header.Get("X-User-Role"))
 
 	var req ConsolePresignRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}

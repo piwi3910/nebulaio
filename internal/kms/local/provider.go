@@ -245,7 +245,8 @@ func (p *Provider) GenerateDataKey(ctx context.Context, keyID string, keySpec km
 
 	// Generate random data key
 	plaintext := make([]byte, keySize)
-	if _, err := rand.Read(plaintext); err != nil {
+	_, err := rand.Read(plaintext)
+	if err != nil {
 		return nil, &kms.WrapError{Op: "GenerateDataKey", KeyID: keyID, Err: err}
 	}
 
@@ -394,7 +395,8 @@ func (p *Provider) CreateKey(ctx context.Context, spec kms.KeySpec) (*kms.KeyInf
 
 	// Generate key ID
 	keyIDBytes := make([]byte, 16)
-	if _, err := rand.Read(keyIDBytes); err != nil {
+	_, err := rand.Read(keyIDBytes)
+	if err != nil {
 		return nil, &kms.WrapError{Op: "CreateKey", Err: err}
 	}
 
@@ -416,7 +418,8 @@ func (p *Provider) CreateKey(ctx context.Context, spec kms.KeySpec) (*kms.KeyInf
 
 	// Generate key material
 	keyMaterial := make([]byte, keySize)
-	if _, err := rand.Read(keyMaterial); err != nil {
+	_, err = rand.Read(keyMaterial)
+	if err != nil {
 		return nil, &kms.WrapError{Op: "CreateKey", Err: err}
 	}
 
@@ -445,7 +448,8 @@ func (p *Provider) CreateKey(ctx context.Context, spec kms.KeySpec) (*kms.KeyInf
 	}
 
 	// Save to disk
-	if err := p.saveKey(sk); err != nil {
+	err = p.saveKey(sk)
+	if err != nil {
 		return nil, &kms.WrapError{Op: "CreateKey", Err: err}
 	}
 
@@ -474,7 +478,8 @@ func (p *Provider) RotateKey(ctx context.Context, keyID string) (*kms.KeyInfo, e
 
 	// Generate new key material
 	keyMaterial := make([]byte, len(key.PlainMaterial))
-	if _, err := rand.Read(keyMaterial); err != nil {
+	_, err := rand.Read(keyMaterial)
+	if err != nil {
 		return nil, &kms.WrapError{Op: "RotateKey", KeyID: keyID, Err: err}
 	}
 
@@ -491,7 +496,8 @@ func (p *Provider) RotateKey(ctx context.Context, keyID string) (*kms.KeyInfo, e
 	key.Info.RotatedAt = &now
 
 	// Save to disk
-	if err := p.saveKey(key); err != nil {
+	err = p.saveKey(key)
+	if err != nil {
 		return nil, &kms.WrapError{Op: "RotateKey", KeyID: keyID, Err: err}
 	}
 
@@ -585,7 +591,8 @@ func (p *Provider) encryptWithKey(key, plaintext []byte) ([]byte, error) {
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	_, err = io.ReadFull(rand.Reader, nonce)
+	if err != nil {
 		return nil, err
 	}
 

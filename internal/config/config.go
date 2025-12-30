@@ -530,9 +530,9 @@ func Load(configPath string, opts Options) (*Config, error) {
 	if configPath != "" {
 		v.SetConfigFile(configPath)
 
-		readErr := v.ReadInConfig()
-		if readErr != nil {
-			return nil, fmt.Errorf("failed to read config file: %w", readErr)
+		err := v.ReadInConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
 	} else {
 		// Try to find config in standard locations
@@ -571,15 +571,15 @@ func Load(configPath string, opts Options) (*Config, error) {
 	// Unmarshal config
 	var cfg Config
 
-	unmarshalErr := v.Unmarshal(&cfg)
-	if unmarshalErr != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", unmarshalErr)
+	err := v.Unmarshal(&cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	// Validate and set derived values
-	validateErr := cfg.validate()
-	if validateErr != nil {
-		return nil, validateErr
+	err = cfg.validate()
+	if err != nil {
+		return nil, err
 	}
 
 	return &cfg, nil
@@ -813,24 +813,24 @@ func setDefaults(v *viper.Viper) {
 
 func (c *Config) validate() error {
 	// Ensure data directory exists
-	mkdirErr := os.MkdirAll(c.DataDir, 0750)
-	if mkdirErr != nil {
-		return fmt.Errorf("failed to create data directory: %w", mkdirErr)
+	err := os.MkdirAll(c.DataDir, 0750)
+	if err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	// Generate node ID if not set
 	if c.NodeID == "" {
 		nodeIDPath := filepath.Join(c.DataDir, "node-id")
 		//nolint:gosec // G304: nodeIDPath is constructed from trusted config
-		data, readErr := os.ReadFile(nodeIDPath)
-		if readErr == nil {
+		data, err := os.ReadFile(nodeIDPath)
+		if err == nil {
 			c.NodeID = string(data)
 		} else {
 			c.NodeID = generateNodeID()
 
-			writeErr := os.WriteFile(nodeIDPath, []byte(c.NodeID), 0644)
-			if writeErr != nil {
-				return fmt.Errorf("failed to write node ID: %w", writeErr)
+			err = os.WriteFile(nodeIDPath, []byte(c.NodeID), 0644)
+			if err != nil {
+				return fmt.Errorf("failed to write node ID: %w", err)
 			}
 		}
 	}
@@ -839,11 +839,13 @@ func (c *Config) validate() error {
 	if c.Auth.JWTSecret == "" {
 		jwtSecretPath := filepath.Join(c.DataDir, "jwt-secret")
 		//nolint:gosec // G304: jwtSecretPath is constructed from trusted config
-		if data, err := os.ReadFile(jwtSecretPath); err == nil {
+		data, err := os.ReadFile(jwtSecretPath)
+		if err == nil {
 			c.Auth.JWTSecret = string(data)
 		} else {
 			c.Auth.JWTSecret = generateSecret(32)
-			if err := os.WriteFile(jwtSecretPath, []byte(c.Auth.JWTSecret), 0600); err != nil {
+			err = os.WriteFile(jwtSecretPath, []byte(c.Auth.JWTSecret), 0600)
+			if err != nil {
 				return fmt.Errorf("failed to write JWT secret: %w", err)
 			}
 		}
@@ -851,7 +853,8 @@ func (c *Config) validate() error {
 
 	// Validate root password - fail fast if missing or weak
 	// Password must be: min 12 chars, with uppercase, lowercase, and number
-	if err := auth.ValidatePasswordStrength(c.Auth.RootPassword); err != nil {
+	err = auth.ValidatePasswordStrength(c.Auth.RootPassword)
+	if err != nil {
 		return fmt.Errorf("invalid root password: %w. Set via NEBULAIO_AUTH_ROOT_PASSWORD environment variable", err)
 	}
 
@@ -859,17 +862,20 @@ func (c *Config) validate() error {
 	if c.Cluster.ReplicaID == 0 {
 		replicaIDPath := filepath.Join(c.DataDir, "replica-id")
 		//nolint:gosec // G304: replicaIDPath is constructed from trusted config
-		if data, err := os.ReadFile(replicaIDPath); err == nil {
+		data, err := os.ReadFile(replicaIDPath)
+		if err == nil {
 			// Parse stored replica ID
 			var replicaID uint64
-			if _, err := fmt.Sscanf(string(data), "%d", &replicaID); err == nil && replicaID > 0 {
+			_, parseErr := fmt.Sscanf(string(data), "%d", &replicaID)
+			if parseErr == nil && replicaID > 0 {
 				c.Cluster.ReplicaID = replicaID
 			}
 		}
 		// Generate new replica ID if still not set
 		if c.Cluster.ReplicaID == 0 {
 			c.Cluster.ReplicaID = generateReplicaID()
-			if err := os.WriteFile(replicaIDPath, []byte(strconv.FormatUint(c.Cluster.ReplicaID, 10)), 0644); err != nil {
+			err = os.WriteFile(replicaIDPath, []byte(strconv.FormatUint(c.Cluster.ReplicaID, 10)), 0644)
+			if err != nil {
 				return fmt.Errorf("failed to write replica ID: %w", err)
 			}
 		}
@@ -881,17 +887,20 @@ func (c *Config) validate() error {
 	}
 
 	// Ensure WAL directory exists
-	if err := os.MkdirAll(c.Cluster.WALDir, 0750); err != nil {
+	err = os.MkdirAll(c.Cluster.WALDir, 0750)
+	if err != nil {
 		return fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 
 	// Validate placement group configuration
-	if err := c.Storage.PlacementGroups.validate(); err != nil {
+	err = c.Storage.PlacementGroups.validate()
+	if err != nil {
 		return fmt.Errorf("invalid placement group configuration: %w", err)
 	}
 
 	// Validate redundancy settings against available nodes
-	if err := c.validateRedundancyVsNodes(); err != nil {
+	err = c.validateRedundancyVsNodes()
+	if err != nil {
 		return fmt.Errorf("invalid redundancy configuration: %w", err)
 	}
 
@@ -1037,7 +1046,8 @@ func generateSecret(length int) string {
 
 func randomByte() byte {
 	var b [1]byte
-	if _, err := rand.Read(b[:]); err != nil {
+	_, err := rand.Read(b[:])
+	if err != nil {
 		// This should never happen with crypto/rand, but if it does,
 		// panic is appropriate since we cannot safely generate secrets
 		panic(fmt.Sprintf("failed to generate random bytes: %v", err))

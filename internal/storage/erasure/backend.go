@@ -195,7 +195,8 @@ func (b *Backend) metadataPath(bucket, key string) string {
 // writeObjectMetadata stores object metadata to a file.
 func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) error {
 	path := b.metadataPath(bucket, key)
-	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
+	err := os.MkdirAll(filepath.Dir(path), dirPermissions)
+	if err != nil {
 		return fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
@@ -206,11 +207,13 @@ func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) 
 
 	tmpPath := path + ".tmp"
 	// Use metadataPermissions to protect metadata from unauthorized access
-	if err := os.WriteFile(tmpPath, data, metadataPermissions); err != nil {
+	err = os.WriteFile(tmpPath, data, metadataPermissions)
+	if err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, path); err != nil {
+	err = os.Rename(tmpPath, path)
+	if err != nil {
 		_ = os.Remove(tmpPath) // Best effort cleanup
 		return fmt.Errorf("failed to rename metadata: %w", err)
 	}
@@ -233,7 +236,8 @@ func (b *Backend) readObjectMetadata(bucket, key string) (*objectMetadata, error
 	}
 
 	var meta objectMetadata
-	if err := json.Unmarshal(data, &meta); err != nil {
+	err = json.Unmarshal(data, &meta)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
 
@@ -374,7 +378,8 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		DataShards:       b.config.DataShards,
 		ParityShards:     b.config.ParityShards,
 	}
-	if err := b.writeObjectMetadata(bucket, key, objMeta); err != nil {
+	err = b.writeObjectMetadata(bucket, key, objMeta)
+	if err != nil {
 		log.Warn().
 			Err(err).
 			Str("bucket", bucket).
@@ -579,7 +584,8 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 	path := b.partPath(bucket, key, uploadID, partNumber)
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
+	err := os.MkdirAll(filepath.Dir(path), dirPermissions)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create part directory: %w", err)
 	}
 
@@ -603,17 +609,20 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 		return nil, fmt.Errorf("failed to write part: %w", err)
 	}
 
-	if err := tmpFile.Sync(); err != nil {
+	err = tmpFile.Sync()
+	if err != nil {
 		_ = tmpFile.Close()
 		return nil, fmt.Errorf("failed to sync part: %w", err)
 	}
 
-	if err := tmpFile.Close(); err != nil {
+	err = tmpFile.Close()
+	if err != nil {
 		return nil, fmt.Errorf("failed to close part: %w", err)
 	}
 
 	// Atomic rename
-	if err := os.Rename(tmpPath, path); err != nil {
+	err = os.Rename(tmpPath, path)
+	if err != nil {
 		return nil, fmt.Errorf("failed to rename part: %w", err)
 	}
 
@@ -662,7 +671,8 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 			return nil, fmt.Errorf("failed to open part %d: %w", partNum, err)
 		}
 
-		if _, err := io.Copy(writer, file); err != nil {
+		_, err = io.Copy(writer, file)
+		if err != nil {
 			_ = file.Close()
 			return nil, fmt.Errorf("failed to read part %d: %w", partNum, err)
 		}
@@ -695,11 +705,12 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 func (b *Backend) AbortMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	uploadPath := b.uploadPath(bucket, key, uploadID)
 
-	if _, err := os.Stat(uploadPath); os.IsNotExist(err) {
+	_, err := os.Stat(uploadPath)
+	if os.IsNotExist(err) {
 		return nil
 	}
 
-	err := os.RemoveAll(uploadPath)
+	err = os.RemoveAll(uploadPath)
 	if err != nil {
 		return fmt.Errorf("failed to remove upload: %w", err)
 	}
@@ -717,7 +728,8 @@ func (b *Backend) cleanEmptyDirs(dir string) {
 			break
 		}
 
-		if err := os.Remove(dir); err != nil {
+		err = os.Remove(dir)
+		if err != nil {
 			break
 		}
 

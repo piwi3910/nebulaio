@@ -276,12 +276,14 @@ func (s *Service) CreateUser(ctx context.Context, username, password, email stri
 	}
 
 	// Validate password strength
-	if err := ValidatePasswordStrength(password); err != nil {
+	err := ValidatePasswordStrength(password)
+	if err != nil {
 		return nil, fmt.Errorf("invalid password: %w", err)
 	}
 
 	// Validate email format if provided
-	if err := ValidateEmail(email); err != nil {
+	err = ValidateEmail(email)
+	if err != nil {
 		return nil, fmt.Errorf("invalid email: %w", err)
 	}
 
@@ -291,7 +293,8 @@ func (s *Service) CreateUser(ctx context.Context, username, password, email stri
 	}
 
 	// Check if username already exists
-	if _, err := s.store.GetUserByUsername(ctx, username); err == nil {
+	_, err = s.store.GetUserByUsername(ctx, username)
+	if err == nil {
 		return nil, errors.New("username already exists")
 	}
 
@@ -312,7 +315,8 @@ func (s *Service) CreateUser(ctx context.Context, username, password, email stri
 		UpdatedAt:    time.Now(),
 	}
 
-	if err := s.store.CreateUser(ctx, user); err != nil {
+	err = s.store.CreateUser(ctx, user)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -332,7 +336,8 @@ func isValidRole(role metadata.UserRole) bool {
 // UpdatePassword updates a user's password with validation.
 func (s *Service) UpdatePassword(ctx context.Context, userID, newPassword string) error {
 	// Validate password strength
-	if err := ValidatePasswordStrength(newPassword); err != nil {
+	err := ValidatePasswordStrength(newPassword)
+	if err != nil {
 		return fmt.Errorf("invalid password: %w", err)
 	}
 
@@ -355,7 +360,8 @@ func (s *Service) UpdatePassword(ctx context.Context, userID, newPassword string
 // CreateAccessKey creates a new S3-compatible access key for a user.
 func (s *Service) CreateAccessKey(ctx context.Context, userID, description string) (*metadata.AccessKey, string, error) {
 	// Verify user exists
-	if _, err := s.store.GetUser(ctx, userID); err != nil {
+	_, err := s.store.GetUser(ctx, userID)
+	if err != nil {
 		return nil, "", fmt.Errorf("user not found: %w", err)
 	}
 
@@ -371,7 +377,7 @@ func (s *Service) CreateAccessKey(ctx context.Context, userID, description strin
 		CreatedAt:       time.Now(),
 	}
 
-	err := s.store.CreateAccessKey(ctx, key)
+	err = s.store.CreateAccessKey(ctx, key)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create access key: %w", err)
 	}
@@ -472,7 +478,8 @@ func (s *Service) DeleteUser(ctx context.Context, id string) error {
 		}
 	}
 
-	if err := s.store.DeleteUser(ctx, id); err != nil {
+	err = s.store.DeleteUser(ctx, id)
+	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
@@ -493,7 +500,8 @@ func (s *Service) EnableUser(ctx context.Context, id string) error {
 	user.Enabled = true
 	user.UpdatedAt = time.Now()
 
-	if err := s.store.UpdateUser(ctx, user); err != nil {
+	err = s.store.UpdateUser(ctx, user)
+	if err != nil {
 		return fmt.Errorf("failed to enable user: %w", err)
 	}
 
@@ -519,7 +527,8 @@ func (s *Service) DisableUser(ctx context.Context, id string) error {
 	user.Enabled = false
 	user.UpdatedAt = time.Now()
 
-	if err := s.store.UpdateUser(ctx, user); err != nil {
+	err = s.store.UpdateUser(ctx, user)
+	if err != nil {
 		return fmt.Errorf("failed to disable user: %w", err)
 	}
 
@@ -650,7 +659,8 @@ func parseResourceARN(resourceARN string) (bucket, key string) {
 
 func generateID(prefix string) string {
 	b := make([]byte, idByteSize)
-	if _, err := rand.Read(b); err != nil {
+	_, err := rand.Read(b)
+	if err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak IDs
 		log.Error().Err(err).Str("prefix", prefix).Msg("crypto/rand.Read failed while generating ID - this indicates a serious system entropy problem; check that /dev/urandom is available and the system has sufficient entropy")
 		panic(fmt.Sprintf("crypto/rand.Read failed for prefix %s: %v - ensure /dev/urandom is accessible", prefix, err))
@@ -661,7 +671,8 @@ func generateID(prefix string) string {
 
 func generateAccessKeyID() string {
 	b := make([]byte, accessKeyIDByteSize)
-	if _, err := rand.Read(b); err != nil {
+	_, err := rand.Read(b)
+	if err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak access keys
 		log.Error().Err(err).Msg("crypto/rand.Read failed while generating access key ID - this indicates a serious system entropy problem; check that /dev/urandom is available")
 		panic(fmt.Sprintf("crypto/rand.Read failed for access key ID generation: %v - ensure /dev/urandom is accessible", err))
@@ -672,7 +683,8 @@ func generateAccessKeyID() string {
 
 func generateSecretAccessKey() string {
 	b := make([]byte, secretKeyByteSize)
-	if _, err := rand.Read(b); err != nil {
+	_, err := rand.Read(b)
+	if err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak secret keys
 		log.Error().Err(err).Msg("crypto/rand.Read failed while generating secret access key - this indicates a serious system entropy problem; check that /dev/urandom is available")
 		panic(fmt.Sprintf("crypto/rand.Read failed for secret access key generation: %v - ensure /dev/urandom is accessible", err))

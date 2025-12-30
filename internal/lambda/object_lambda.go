@@ -584,7 +584,8 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 	}
 
 	var obj map[string]interface{}
-	if err := json.Unmarshal(data, &obj); err != nil {
+	err = json.Unmarshal(data, &obj)
+	if err != nil {
 		// Not JSON, try text redaction
 		redactor := &RedactTransformer{}
 		return redactor.Transform(ctx, bytes.NewReader(data), params)
@@ -658,7 +659,8 @@ func (t *FilterFieldsTransformer) Transform(ctx context.Context, input io.Reader
 	}
 
 	var obj map[string]interface{}
-	if err := json.Unmarshal(data, &obj); err != nil {
+	err = json.Unmarshal(data, &obj)
+	if err != nil {
 		return nil, nil, fmt.Errorf("input must be JSON: %w", err)
 	}
 
@@ -934,7 +936,8 @@ func (t *CompressTransformer) transformStreaming(ctx context.Context, input io.R
 
 				n, err := input.Read(buf)
 				if n > 0 {
-					if _, werr := writer.Write(buf[:n]); werr != nil {
+					_, werr := writer.Write(buf[:n])
+					if werr != nil {
 						pw.CloseWithError(fmt.Errorf("failed to write gzip data: %w", werr))
 						return
 					}
@@ -987,7 +990,8 @@ func (t *CompressTransformer) transformStreaming(ctx context.Context, input io.R
 
 				n, err := input.Read(buf)
 				if n > 0 {
-					if _, werr := writer.Write(buf[:n]); werr != nil {
+					_, werr := writer.Write(buf[:n])
+					if werr != nil {
 						pw.CloseWithError(fmt.Errorf("failed to write zstd data: %w", werr))
 						return
 					}
@@ -1193,7 +1197,8 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 
 				n, err := reader.Read(buf)
 				if n > 0 {
-					if _, werr := pw.Write(buf[:n]); werr != nil {
+					_, werr := pw.Write(buf[:n])
+					if werr != nil {
 						pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", werr))
 						return
 					}
@@ -1233,7 +1238,8 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 
 				n, err := decoder.Read(buf)
 				if n > 0 {
-					if _, werr := pw.Write(buf[:n]); werr != nil {
+					_, werr := pw.Write(buf[:n])
+					if werr != nil {
 						pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", werr))
 						return
 					}

@@ -823,7 +823,8 @@ func (l *EnhancedAuditLogger) exportCEF(events []AuditEvent, writer io.Writer) e
 			e.Resource.Key,
 			e.Result,
 		)
-		if _, err := writer.Write([]byte(cef)); err != nil {
+		_, err := writer.Write([]byte(cef))
+		if err != nil {
 			return err
 		}
 	}
@@ -850,7 +851,8 @@ func newFileOutput(cfg OutputConfig, rotation RotationConfig) (*FileOutput, erro
 
 	// Ensure directory exists with secure permissions
 	dir := filepath.Dir(cfg.Path)
-	if err := os.MkdirAll(dir, auditDirPermissions); err != nil {
+	err := os.MkdirAll(dir, auditDirPermissions)
+	if err != nil {
 		return nil, err
 	}
 
@@ -911,7 +913,8 @@ func (o *FileOutput) rotate() error {
 	timestamp := time.Now().Format("20060102-150405")
 
 	rotatedPath := fmt.Sprintf("%s.%s", o.path, timestamp)
-	if err := os.Rename(o.path, rotatedPath); err != nil {
+	err := os.Rename(o.path, rotatedPath)
+	if err != nil {
 		return err
 	}
 
@@ -996,7 +999,8 @@ func (o *FileOutput) compressFile(filePath string) error {
 
 	// Stream compress the file instead of loading it all into memory
 	// This significantly reduces memory pressure for large audit logs
-	if _, err := io.Copy(gzWriter, inFile); err != nil {
+	_, err = io.Copy(gzWriter, inFile)
+	if err != nil {
 		// Close both writers before cleaning up (errors ignored during cleanup)
 		_ = gzWriter.Close()
 		_ = outFile.Close()
@@ -1006,7 +1010,8 @@ func (o *FileOutput) compressFile(filePath string) error {
 	}
 
 	// Close gzip writer to flush all data
-	if err := gzWriter.Close(); err != nil {
+	err = gzWriter.Close()
+	if err != nil {
 		_ = outFile.Close()
 		_ = os.Remove(compressedPath)
 
@@ -1014,13 +1019,15 @@ func (o *FileOutput) compressFile(filePath string) error {
 	}
 
 	// Close the output file
-	if err := outFile.Close(); err != nil {
+	err = outFile.Close()
+	if err != nil {
 		_ = os.Remove(compressedPath)
 		return fmt.Errorf("failed to close compressed log file: %w", err)
 	}
 
 	// Remove the original uncompressed file
-	if err := os.Remove(filePath); err != nil {
+	err = os.Remove(filePath)
+	if err != nil {
 		// Don't fail the entire compression if we can't remove the original
 		// Log the warning but return success since compression itself succeeded
 		log.Warn().Err(err).Str("file", filePath).Msg("Failed to remove original log file after compression")

@@ -1081,7 +1081,8 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 
 	// Parse request body
 	var req s3types.CompleteMultipartUploadRequest
-	if err := xml.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1431,7 +1432,8 @@ func (h *Handler) PutBucketTagging(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	var tagging s3types.Tagging
-	if err := xml.NewDecoder(r.Body).Decode(&tagging); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&tagging)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", "The XML you provided was not well-formed", http.StatusBadRequest)
 		return
 	}
@@ -1448,7 +1450,7 @@ func (h *Handler) PutBucketTagging(w http.ResponseWriter, r *http.Request) {
 		tags[tag.Key] = tag.Value
 	}
 
-	err := h.bucket.PutBucketTagging(ctx, bucketName, tags)
+	err = h.bucket.PutBucketTagging(ctx, bucketName, tags)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
@@ -1529,7 +1531,8 @@ func (h *Handler) PutObjectTagging(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	var tagging s3types.Tagging
-	if err := xml.NewDecoder(r.Body).Decode(&tagging); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&tagging)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", "The XML you provided was not well-formed", http.StatusBadRequest)
 		return
 	}
@@ -1546,7 +1549,7 @@ func (h *Handler) PutObjectTagging(w http.ResponseWriter, r *http.Request) {
 		tags[tag.Key] = tag.Value
 	}
 
-	err := h.object.PutObjectTagging(ctx, bucketName, key, tags)
+	err = h.object.PutObjectTagging(ctx, bucketName, key, tags)
 	if err != nil {
 		if strings.Contains(err.Error(), "bucket not found") {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
@@ -1711,13 +1714,15 @@ func (h *Handler) PutBucketPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := p.Validate(); err != nil {
+	err = p.Validate()
+	if err != nil {
 		writeS3Error(w, "MalformedPolicy", err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Store the policy
-	if err := h.bucket.SetBucketPolicy(ctx, bucketName, policyStr); err != nil {
+	err = h.bucket.SetBucketPolicy(ctx, bucketName, policyStr)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
@@ -1757,7 +1762,8 @@ func (h *Handler) PutBucketCORS(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 
 	var corsConfig s3types.CORSConfiguration
-	if err := xml.NewDecoder(r.Body).Decode(&corsConfig); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&corsConfig)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1769,7 +1775,8 @@ func (h *Handler) PutBucketCORS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.bucket.SetCORS(ctx, bucketName, rules); err != nil {
+	err = h.bucket.SetCORS(ctx, bucketName, rules)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchBucket", err.Error(), http.StatusNotFound)
 			return
@@ -1908,7 +1915,8 @@ func (h *Handler) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 
 	// Parse the XML request body
 	var req s3types.DeleteRequest
-	if err := xml.NewDecoder(r.Body).Decode(&req); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", "The XML you provided was not well-formed", http.StatusBadRequest)
 		return
 	}
@@ -2912,7 +2920,8 @@ func (h *Handler) PutObjectAcl(w http.ResponseWriter, r *http.Request) {
 
 	// Parse XML body
 	var aclPolicy s3types.AccessControlPolicy
-	if err := xml.NewDecoder(r.Body).Decode(&aclPolicy); err != nil {
+	err = xml.NewDecoder(r.Body).Decode(&aclPolicy)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -2931,7 +2940,8 @@ func (h *Handler) PutObjectAcl(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := h.object.SetObjectACL(ctx, bucketName, key, acl); err != nil {
+	err = h.object.SetObjectACL(ctx, bucketName, key, acl)
+	if err != nil {
 		writeS3Error(w, "InternalError", err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -2989,7 +2999,8 @@ func (h *Handler) PutObjectRetention(w http.ResponseWriter, r *http.Request) {
 	versionID := r.URL.Query().Get("versionId")
 
 	var retention s3types.ObjectRetention
-	if err := xml.NewDecoder(r.Body).Decode(&retention); err != nil {
+	err := xml.NewDecoder(r.Body).Decode(&retention)
+	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -3000,7 +3011,8 @@ func (h *Handler) PutObjectRetention(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.object.SetObjectRetention(ctx, bucketName, key, versionID, retention.Mode, retainUntil); err != nil {
+	err = h.object.SetObjectRetention(ctx, bucketName, key, versionID, retention.Mode, retainUntil)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeS3Error(w, "NoSuchKey", err.Error(), http.StatusNotFound)
 			return
