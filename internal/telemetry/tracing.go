@@ -146,6 +146,19 @@ const (
 	spanContextKey contextKey = "span"
 )
 
+// Telemetry configuration constants.
+const (
+	defaultMaxSpansPerTrace   = 10000
+	defaultBatchTimeoutSec    = 5
+	defaultMaxExportBatchSize = 512
+	samplingHashMultiplier    = 31
+	samplingModuloDivisor     = 1000
+	exporterTimeoutSec        = 30
+	defaultHTTPStatusOK       = 200
+	httpStatusErrorThreshold  = 400
+	truncateIDLen             = 8
+)
+
 // NewTracer creates a new tracer.
 func NewTracer(config *TracerConfig) (*Tracer, error) {
 	if config == nil {
@@ -154,10 +167,10 @@ func NewTracer(config *TracerConfig) (*Tracer, error) {
 			ServiceVersion:     "1.0.0",
 			Environment:        "development",
 			SamplingRate:       1.0,
-			MaxSpansPerTrace:   10000,
+			MaxSpansPerTrace:   defaultMaxSpansPerTrace,
 			ExporterType:       "console",
-			BatchTimeout:       5 * time.Second,
-			MaxExportBatchSize: 512,
+			BatchTimeout:       defaultBatchTimeoutSec * time.Second,
+			MaxExportBatchSize: defaultMaxExportBatchSize,
 			PropagatorType:     "w3c",
 		}
 	}
@@ -180,7 +193,7 @@ func NewTracer(config *TracerConfig) (*Tracer, error) {
 	t := &Tracer{
 		config:      config,
 		resource:    resource,
-		spans:       make(chan *Span, 10000),
+		spans:       make(chan *Span, defaultMaxSpansPerTrace),
 		exporters:   make([]SpanExporter, 0),
 		activeSpans: make(map[string]*Span),
 		stopChan:    make(chan struct{}),
@@ -547,10 +560,10 @@ func (s *ProbabilitySampler) ShouldSample(ctx context.Context, traceID string, n
 	// Simple hash-based sampling
 	hash := 0
 	for _, c := range traceID {
-		hash = hash*31 + int(c)
+		hash = hash*samplingHashMultiplier + int(c)
 	}
 
-	return float64(hash%1000)/1000.0 < s.rate
+	return float64(hash%samplingModuloDivisor)/float64(samplingModuloDivisor) < s.rate
 }
 
 // W3CTraceContextPropagator implements W3C Trace Context propagation.
@@ -739,7 +752,7 @@ func NewOTLPExporter(endpoint string, headers map[string]string) *OTLPExporter {
 		endpoint: endpoint,
 		headers:  headers,
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: exporterTimeoutSec * time.Second,
 		},
 	}
 }
@@ -768,7 +781,7 @@ func NewJaegerExporter(endpoint string) *JaegerExporter {
 	return &JaegerExporter{
 		endpoint: endpoint,
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: exporterTimeoutSec * time.Second,
 		},
 	}
 }
@@ -796,7 +809,7 @@ func NewZipkinExporter(endpoint string) *ZipkinExporter {
 	return &ZipkinExporter{
 		endpoint: endpoint,
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: exporterTimeoutSec * time.Second,
 		},
 	}
 }
@@ -832,7 +845,7 @@ func (t *Tracer) HTTPMiddleware(next http.Handler) http.Handler {
 		defer span.End()
 
 		// Wrap response writer to capture status code
-		wrapped := &responseWriterWrapper{ResponseWriter: w, statusCode: 200}
+		wrapped := &responseWriterWrapper{ResponseWriter: w, statusCode: defaultHTTPStatusOK}
 
 		// Call next handler
 		next.ServeHTTP(wrapped, r.WithContext(ctx))
@@ -840,7 +853,7 @@ func (t *Tracer) HTTPMiddleware(next http.Handler) http.Handler {
 		// Set response attributes
 		span.SetAttribute("http.status_code", wrapped.statusCode)
 
-		if wrapped.statusCode >= 400 {
+		if wrapped.statusCode >= httpStatusErrorThreshold {
 			span.SetStatus(SpanStatusError, fmt.Sprintf("HTTP %d", wrapped.statusCode))
 		} else {
 			span.SetStatus(SpanStatusOK, "")
@@ -893,8 +906,8 @@ func generateSpanID() string {
 }
 
 func truncateID(id string) string {
-	if len(id) > 8 {
-		return id[:8]
+	if len(id) > truncateIDLen {
+		return id[:truncateIDLen]
 	}
 
 	if id == "" {

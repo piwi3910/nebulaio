@@ -25,6 +25,15 @@ import (
 	"github.com/piwi3910/nebulaio/internal/s3select"
 )
 
+// Test constants.
+const (
+	testBucket     = "test-bucket"
+	statusCompleted  = "completed"
+	statusInProgress = "in_progress"
+	statusPaused     = "paused"
+	statusPending    = "pending"
+)
+
 // TestDRAMCacheWithFirewall tests that DRAM cache respects firewall rules.
 func TestDRAMCacheWithFirewall(t *testing.T) {
 	// Create firewall with rate limiting
@@ -50,7 +59,7 @@ func TestDRAMCacheWithFirewall(t *testing.T) {
 
 	// Simulate requests going through firewall then cache
 	ctx := context.Background()
-	bucket := "test-bucket"
+	bucket := testBucket
 
 	// Track cache hits
 	hits := 0
@@ -973,14 +982,14 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 
 	// Initial state: 3 objects being tiered
 	transfers := []transferState{
-		{objectKey: "obj1", shardsTotal: 14, shardsWritten: 14, targetPG: "pg-cold", pgHealthy: true, transferStatus: "completed"},
-		{objectKey: "obj2", shardsTotal: 14, shardsWritten: 7, targetPG: "pg-cold", pgHealthy: true, transferStatus: "in_progress"},
-		{objectKey: "obj3", shardsTotal: 14, shardsWritten: 0, targetPG: "pg-cold", pgHealthy: true, transferStatus: "pending"},
+		{objectKey: "obj1", shardsTotal: 14, shardsWritten: 14, targetPG: "pg-cold", pgHealthy: true, transferStatus: statusCompleted},
+		{objectKey: "obj2", shardsTotal: 14, shardsWritten: 7, targetPG: "pg-cold", pgHealthy: true, transferStatus: statusInProgress},
+		{objectKey: "obj3", shardsTotal: 14, shardsWritten: 0, targetPG: "pg-cold", pgHealthy: true, transferStatus: statusPending},
 	}
 
 	// Simulate placement group degradation
 	for i := range transfers {
-		if transfers[i].transferStatus != "completed" {
+		if transfers[i].transferStatus != statusCompleted {
 			transfers[i].pgHealthy = false
 		}
 	}
@@ -989,12 +998,12 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 	for i := range transfers {
 		if !transfers[i].pgHealthy {
 			switch transfers[i].transferStatus {
-			case "in_progress":
+			case statusInProgress:
 				// Pause in-progress transfers until PG recovers
-				transfers[i].transferStatus = "paused"
-			case "pending":
+				transfers[i].transferStatus = statusPaused
+			case statusPending:
 				// Keep pending transfers in queue
-				transfers[i].transferStatus = "pending"
+				transfers[i].transferStatus = statusPending
 			}
 		}
 	}
@@ -1006,11 +1015,11 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 
 	for _, tr := range transfers {
 		switch tr.transferStatus {
-		case "completed":
+		case statusCompleted:
 			completedCount++
-		case "paused":
+		case statusPaused:
 			pausedCount++
-		case "pending":
+		case statusPending:
 			pendingCount++
 		}
 	}
@@ -1034,26 +1043,26 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 
 	// Resume paused transfers
 	for i := range transfers {
-		if transfers[i].transferStatus == "paused" {
-			transfers[i].transferStatus = "in_progress"
+		if transfers[i].transferStatus == statusPaused {
+			transfers[i].transferStatus = statusInProgress
 			// Complete the transfer
 			transfers[i].shardsWritten = transfers[i].shardsTotal
-			transfers[i].transferStatus = "completed"
+			transfers[i].transferStatus = statusCompleted
 		}
 	}
 
 	// Process pending transfers
 	for i := range transfers {
-		if transfers[i].transferStatus == "pending" {
-			transfers[i].transferStatus = "in_progress"
+		if transfers[i].transferStatus == statusPending {
+			transfers[i].transferStatus = statusInProgress
 			transfers[i].shardsWritten = transfers[i].shardsTotal
-			transfers[i].transferStatus = "completed"
+			transfers[i].transferStatus = statusCompleted
 		}
 	}
 
 	// Verify all transfers completed after recovery
 	for _, tr := range transfers {
-		if tr.transferStatus != "completed" {
+		if tr.transferStatus != statusCompleted {
 			t.Errorf("Transfer %s should be completed, got %s", tr.objectKey, tr.transferStatus)
 		}
 	}

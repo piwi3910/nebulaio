@@ -20,6 +20,10 @@ const (
 	serviceS3               = "s3"
 	requestTypeAWS4         = "aws4_request"
 
+	// Header and payload constants.
+	headerHost      = "host"
+	unsignedPayload = "UNSIGNED-PAYLOAD"
+
 	// Maximum presigned URL expiration (7 days in seconds).
 	maxPresignExpiration = 7 * 24 * 60 * 60
 
@@ -122,12 +126,12 @@ func (g *PresignedURLGenerator) GeneratePresignedURL(params PresignParams) (stri
 	host := g.getHost(params.Endpoint, params.Bucket)
 
 	// Build signed headers
-	signedHeaders := "host"
+	signedHeaders := headerHost
 
 	if len(params.Headers) > 0 {
 		headers := make([]string, 0, len(params.Headers)+1)
 
-		headers = append(headers, "host")
+		headers = append(headers, headerHost)
 		for h := range params.Headers {
 			headers = append(headers, strings.ToLower(h))
 		}
@@ -167,7 +171,7 @@ func (g *PresignedURLGenerator) GeneratePresignedURL(params PresignParams) (stri
 		headerBuilder.WriteString(fmt.Sprintf("host:%s\n", host))
 
 		for _, k := range headerKeys {
-			if k == "host" {
+			if k == headerHost {
 				continue
 			}
 
@@ -178,7 +182,7 @@ func (g *PresignedURLGenerator) GeneratePresignedURL(params PresignParams) (stri
 	}
 
 	// For presigned URLs, we use UNSIGNED-PAYLOAD
-	payloadHash := "UNSIGNED-PAYLOAD"
+	payloadHash := unsignedPayload
 
 	// Build canonical request
 	canonicalRequest := strings.Join([]string{
@@ -413,7 +417,7 @@ func ValidatePresignedSignature(r *http.Request, info *PresignedURLInfo, secretK
 
 	for _, h := range info.SignedHeaders {
 		var headerValue string
-		if h == "host" {
+		if h == headerHost {
 			headerValue = r.Host
 		} else {
 			headerValue = r.Header.Get(h)
@@ -434,7 +438,7 @@ func ValidatePresignedSignature(r *http.Request, info *PresignedURLInfo, secretK
 	canonicalQueryString := buildSortedQueryString(queryParams)
 
 	// For presigned URLs, we use UNSIGNED-PAYLOAD
-	payloadHash := "UNSIGNED-PAYLOAD"
+	payloadHash := unsignedPayload
 
 	// Build canonical request
 	canonicalRequest := strings.Join([]string{

@@ -14,6 +14,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Default port configurations.
+const (
+	defaultS3Port      = 9000
+	defaultAdminPort   = 9001
+	defaultConsolePort = 9002
+)
+
 var (
 	version   = "dev"
 	commit    = "none"
@@ -24,9 +31,9 @@ func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "", "Path to configuration file")
 	dataDir := flag.String("data", "./data", "Data directory path")
-	s3Port := flag.Int("s3-port", 9000, "S3 API port")
-	adminPort := flag.Int("admin-port", 9001, "Admin/Console API port")
-	consolePort := flag.Int("console-port", 9002, "Web console port")
+	s3Port := flag.Int("s3-port", defaultS3Port, "S3 API port")
+	adminPort := flag.Int("admin-port", defaultAdminPort, "Admin/Console API port")
+	consolePort := flag.Int("console-port", defaultConsolePort, "Web console port")
 	debug := flag.Bool("debug", false, "Enable debug logging")
 	showVersion := flag.Bool("version", false, "Show version information")
 	flag.Parse()

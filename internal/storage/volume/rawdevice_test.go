@@ -9,6 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test constants.
+const (
+	testBucket = "test-bucket"
+	testKey    = "test-key"
+)
+
 func TestRawDeviceConfig(t *testing.T) {
 	// Test default configuration
 	cfg := DefaultRawDeviceConfig()
@@ -144,8 +150,8 @@ func TestRawDeviceVolumeWithFile(t *testing.T) {
 
 	// Test basic I/O operations
 	testData := []byte("Hello, Raw Device!")
-	bucket := "test-bucket"
-	key := "test-key"
+	bucket := testBucket
+	key := testKey
 
 	// Write data
 	err = vol.Put(bucket, key, testData)

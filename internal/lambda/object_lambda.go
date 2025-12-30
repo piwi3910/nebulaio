@@ -53,6 +53,12 @@ const (
 	BuiltInDecrypt      BuiltInTransform = "decrypt"       // Client-side decryption
 )
 
+// Compression algorithm constants.
+const (
+	compressionAlgGzip = "gzip"
+	compressionAlgZstd = "zstd"
+)
+
 // AccessPointConfig defines an Object Lambda access point configuration.
 type AccessPointConfig struct {
 	CreatedAt                    time.Time              `json:"created_at"`
@@ -805,9 +811,9 @@ const (
 func detectCompressionAlgorithm(data []byte) string {
 	switch {
 	case len(data) >= 2 && data[0] == gzipMagic1 && data[1] == gzipMagic2:
-		return "gzip"
+		return compressionAlgGzip
 	case len(data) >= 4 && data[0] == zstdMagic1 && data[1] == zstdMagic2 && data[2] == zstdMagic3 && data[3] == zstdMagic4:
-		return "zstd"
+		return compressionAlgZstd
 	default:
 		return ""
 	}
@@ -815,7 +821,7 @@ func detectCompressionAlgorithm(data []byte) string {
 
 func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
 	// Get compression algorithm from params (default: gzip)
-	algorithm := "gzip"
+	algorithm := compressionAlgGzip
 	if alg, ok := params["algorithm"].(string); ok {
 		algorithm = alg
 	}
@@ -868,21 +874,21 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 	)
 
 	switch strings.ToLower(algorithm) {
-	case "gzip":
+	case compressionAlgGzip:
 		err := compressGzip(&buf, data, level)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		contentEncoding = "gzip"
+		contentEncoding = compressionAlgGzip
 
-	case "zstd":
+	case compressionAlgZstd:
 		err := compressZstd(&buf, data, level)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		contentEncoding = "zstd"
+		contentEncoding = compressionAlgZstd
 
 	default:
 		return nil, nil, fmt.Errorf("unsupported compression algorithm: %s", algorithm)
@@ -898,8 +904,8 @@ func (t *CompressTransformer) transformStreaming(ctx context.Context, input io.R
 	var contentEncoding string
 
 	switch strings.ToLower(algorithm) {
-	case "gzip":
-		contentEncoding = "gzip"
+	case compressionAlgGzip:
+		contentEncoding = compressionAlgGzip
 
 		go func() {
 			defer pw.Close()
@@ -945,8 +951,8 @@ func (t *CompressTransformer) transformStreaming(ctx context.Context, input io.R
 			}
 		}()
 
-	case "zstd":
-		contentEncoding = "zstd"
+	case compressionAlgZstd:
+		contentEncoding = compressionAlgZstd
 
 		go func() {
 			defer pw.Close()
@@ -1114,7 +1120,7 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 	var result []byte
 
 	switch algorithm {
-	case "gzip":
+	case compressionAlgGzip:
 		reader, err := gzip.NewReader(bytes.NewReader(data))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create gzip reader: %w", err)
@@ -1133,7 +1139,7 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
 		}
 
-	case "zstd":
+	case compressionAlgZstd:
 		decoder, err := zstd.NewReader(bytes.NewReader(data))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create zstd decoder: %w", err)
@@ -1163,7 +1169,7 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 	pr, pw := io.Pipe()
 
 	switch algorithm {
-	case "gzip":
+	case compressionAlgGzip:
 		go func() {
 			defer pw.Close()
 
@@ -1204,7 +1210,7 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 			}
 		}()
 
-	case "zstd":
+	case compressionAlgZstd:
 		go func() {
 			defer pw.Close()
 

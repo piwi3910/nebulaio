@@ -35,6 +35,11 @@ import (
 	"github.com/piwi3910/nebulaio/internal/kms"
 )
 
+// Vault key type constants.
+const (
+	keyTypeAES256GCM96 = "aes256-gcm96"
+)
+
 // Config holds Vault KMS provider configuration.
 type Config struct {
 	Address            string `json:"address" yaml:"address"`
@@ -425,7 +430,7 @@ func algorithmToVaultType(algo kms.Algorithm) string {
 	case kms.AlgorithmAES128:
 		return "aes128-gcm96"
 	case kms.AlgorithmAES256, kms.AlgorithmAES256GCM:
-		return "aes256-gcm96"
+		return keyTypeAES256GCM96
 	case kms.AlgorithmChaCha20:
 		return "chacha20-poly1305"
 	case kms.AlgorithmRSA2048:
@@ -439,7 +444,7 @@ func algorithmToVaultType(algo kms.Algorithm) string {
 	case kms.AlgorithmECDSAP384:
 		return "ecdsa-p384"
 	default:
-		return "aes256-gcm96"
+		return keyTypeAES256GCM96
 	}
 }
 
@@ -448,7 +453,7 @@ func vaultTypeToAlgorithm(vaultType string) kms.Algorithm {
 	switch vaultType {
 	case "aes128-gcm96":
 		return kms.AlgorithmAES128
-	case "aes256-gcm96":
+	case keyTypeAES256GCM96:
 		return kms.AlgorithmAES256GCM
 	case "chacha20-poly1305":
 		return kms.AlgorithmChaCha20

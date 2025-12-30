@@ -11,6 +11,11 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metadata"
 )
 
+// Status constants for cluster members.
+const (
+	statusAlive = "alive"
+)
+
 // ClusterStore defines the interface for cluster operations.
 type ClusterStore interface {
 	IsLeader() bool
@@ -125,7 +130,7 @@ func (h *ClusterHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
 			}
 			nodes = append(nodes, node)
 
-			if member.Status == "alive" {
+			if member.Status == statusAlive {
 				healthyCount++
 			}
 		}
@@ -432,7 +437,7 @@ func (h *ClusterHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request
 
 		totalNodes = len(members)
 		for _, m := range members {
-			if m.Status == "alive" {
+			if m.Status == statusAlive {
 				healthyNodes++
 			}
 		}

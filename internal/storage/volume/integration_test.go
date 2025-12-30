@@ -12,6 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Integration test constants - uses same values as unit tests.
+const (
+	intTestBucket = "test-bucket"
+	intTestKey    = "test-key"
+)
+
 // TestVolumeBackendWithDRAMCache tests the volume backend with DRAM cache layer.
 func TestVolumeBackendWithDRAMCache(t *testing.T) {
 	dir := t.TempDir()
@@ -39,8 +45,8 @@ func TestVolumeBackendWithDRAMCache(t *testing.T) {
 	defer cache.Close()
 
 	// Store object in volume backend
-	bucket := "test-bucket"
-	key := "test-key"
+	bucket := intTestBucket
+	key := intTestKey
 	data := []byte("Hello, Volume Backend with DRAM Cache!")
 
 	err = volumeBackend.CreateBucket(ctx, bucket)

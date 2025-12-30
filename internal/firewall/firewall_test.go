@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// Test constants.
+const actionDeny = "deny"
+
 func TestNewFirewall(t *testing.T) {
 	config := DefaultConfig()
 	config.Enabled = true
@@ -214,7 +217,7 @@ func TestIPv6MixedRules(t *testing.T) {
 			Name:     "Deny IPv6 Uploads",
 			Priority: 1,
 			Enabled:  true,
-			Action:   "deny",
+			Action:   actionDeny,
 			Match: RuleMatch{
 				SourceIPs:  []string{"2001:db8::/32"},
 				Operations: []string{"PutObject"},
@@ -267,7 +270,7 @@ func TestRuleMatching(t *testing.T) {
 			Name:     "Deny Uploads to Logs",
 			Priority: 1,
 			Enabled:  true,
-			Action:   "deny",
+			Action:   actionDeny,
 			Match: RuleMatch{
 				Buckets:    []string{"logs*"},
 				Operations: []string{"PutObject"},
@@ -350,7 +353,7 @@ func TestTimeWindowRule(t *testing.T) {
 			Name:     "Allow During Business Hours",
 			Priority: 1,
 			Enabled:  true,
-			Action:   "deny",
+			Action:   actionDeny,
 			Match: RuleMatch{
 				TimeWindow: &TimeWindow{
 					StartHour: 18, // 6 PM
@@ -392,7 +395,7 @@ func TestTimeWindowRule(t *testing.T) {
 func TestDefaultPolicyDeny(t *testing.T) {
 	config := DefaultConfig()
 	config.Enabled = true
-	config.DefaultPolicy = "deny"
+	config.DefaultPolicy = actionDeny
 
 	fw, err := New(config)
 	if err != nil {
@@ -629,7 +632,7 @@ func TestUpdateConfig(t *testing.T) {
 func TestResetStats(t *testing.T) {
 	config := DefaultConfig()
 	config.Enabled = true
-	config.DefaultPolicy = "deny"
+	config.DefaultPolicy = actionDeny
 
 	fw, err := New(config)
 	if err != nil {
@@ -761,7 +764,7 @@ func TestKeyPrefixMatching(t *testing.T) {
 			Name:     "Block Access to Secrets",
 			Priority: 1,
 			Enabled:  true,
-			Action:   "deny",
+			Action:   actionDeny,
 			Match: RuleMatch{
 				KeyPrefixes: []string{"secrets/", ".hidden/"},
 			},
@@ -812,7 +815,7 @@ func TestContentTypeFiltering(t *testing.T) {
 			Name:     "Block Executables",
 			Priority: 1,
 			Enabled:  true,
-			Action:   "deny",
+			Action:   actionDeny,
 			Match: RuleMatch{
 				ContentTypes: []string{"application/x-executable", "application/x-msdownload"},
 				Operations:   []string{"PutObject"},

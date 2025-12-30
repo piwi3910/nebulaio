@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+// Access trend constants.
+const (
+	trendIncreasing = "increasing"
+	trendStable     = "stable"
+	trendDeclining  = "declining"
+)
+
 // AccessTracker tracks object access patterns for tiering decisions.
 type AccessTracker struct {
 	persistStore    AccessStatsStore
@@ -289,21 +296,21 @@ func (t *AccessTracker) detectTrend(stats *ObjectAccessStats) string {
 	// Determine trend
 	if previousCount == 0 {
 		if recentCount > 0 {
-			return "increasing"
+			return trendIncreasing
 		}
 
-		return "stable"
+		return trendStable
 	}
 
 	ratio := float64(recentCount) / float64(previousCount)
 
 	if ratio > 1.3 {
-		return "increasing"
+		return trendIncreasing
 	} else if ratio < 0.7 {
-		return "declining"
+		return trendDeclining
 	}
 
-	return "stable"
+	return trendStable
 }
 
 // evictLRU removes the least recently used entry.

@@ -7,6 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test constants.
+const testValidPassword = "ValidPassword123"
+
 func TestValidatePasswordStrength(t *testing.T) {
 	tests := []struct {
 		errorType   error
@@ -377,21 +380,21 @@ func TestValidateEmail(t *testing.T) {
 
 // Benchmark tests.
 func BenchmarkValidatePasswordStrength(b *testing.B) {
-	password := "ValidPassword123"
+	password := testValidPassword
 	for range b.N {
 		_ = ValidatePasswordStrength(password)
 	}
 }
 
 func BenchmarkHashPassword(b *testing.B) {
-	password := "ValidPassword123"
+	password := testValidPassword
 	for range b.N {
 		_, _ = HashPassword(password)
 	}
 }
 
 func BenchmarkVerifyPassword(b *testing.B) {
-	password := "ValidPassword123"
+	password := testValidPassword
 	hash, _ := HashPassword(password)
 
 	b.ResetTimer()

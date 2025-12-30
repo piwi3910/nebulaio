@@ -26,6 +26,9 @@ const (
 	TransportAuto       = "auto" // Auto-detect best available
 )
 
+// Device mode constants.
+const deviceSimulated = "simulated"
+
 // Connection type constants.
 const (
 	ConnTypeRC = "RC" // Reliable Connection
@@ -325,7 +328,7 @@ func (t *Transport) detectDevices() ([]*Device, error) {
 	devices := []*Device{}
 
 	// Check if we're in simulation mode or have actual hardware
-	if t.config.DeviceName == "simulated" {
+	if t.config.DeviceName == deviceSimulated {
 		devices = append(devices, &Device{
 			Name:          "sim0",
 			GUID:          0x0001020304050607,
@@ -367,7 +370,7 @@ func (t *Transport) selectDevice(devices []*Device) *Device {
 	}
 
 	// If specific device requested, find it
-	if t.config.DeviceName != "" && t.config.DeviceName != "simulated" {
+	if t.config.DeviceName != "" && t.config.DeviceName != deviceSimulated {
 		for _, d := range devices {
 			if d.Name == t.config.DeviceName {
 				return d

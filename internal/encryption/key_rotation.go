@@ -42,6 +42,11 @@ const (
 	KeyStatusDeleted         KeyStatus = "DELETED"
 )
 
+// Event and job status constants.
+const (
+	statusFailed = "failed"
+)
+
 // KeyAlgorithm represents the encryption algorithm.
 type KeyAlgorithm string
 
@@ -436,7 +441,7 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 	// Generate new key material
 	newKeyMaterial, err := krm.generateKeyMaterial(key.Algorithm)
 	if err != nil {
-		event.Status = "failed"
+		event.Status = statusFailed
 		event.Error = err.Error()
 		krm.storeRotationEvent(ctx, event)
 
@@ -449,7 +454,7 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 
 	wrappedKey, err := krm.wrapKey(newKeyMaterial)
 	if err != nil {
-		event.Status = "failed"
+		event.Status = statusFailed
 		event.Error = err.Error()
 		krm.storeRotationEvent(ctx, event)
 
@@ -500,7 +505,7 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 	if krm.storage != nil {
 		err := krm.storage.StoreKey(ctx, key)
 		if err != nil {
-			event.Status = "failed"
+			event.Status = statusFailed
 			event.Error = err.Error()
 
 			return event, err
@@ -508,7 +513,7 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 		err = krm.storage.StoreKeyVersion(ctx, keyID, newVersion)
 
 		if err != nil {
-			event.Status = "failed"
+			event.Status = statusFailed
 			event.Error = err.Error()
 
 			return event, err
@@ -954,7 +959,7 @@ func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *Reen
 	// Get old and new key versions
 	oldKey, err := krm.GetKeyVersion(ctx, job.KeyID, job.OldVersion)
 	if err != nil {
-		job.Status = "failed"
+		job.Status = statusFailed
 		job.ErrorMessage = err.Error()
 
 		return
@@ -962,7 +967,7 @@ func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *Reen
 
 	newKeyData, err := krm.GetKey(ctx, job.KeyID)
 	if err != nil {
-		job.Status = "failed"
+		job.Status = statusFailed
 		job.ErrorMessage = err.Error()
 
 		return
@@ -978,7 +983,7 @@ func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *Reen
 	// List objects encrypted with old key version
 	objects, err := reencryptor.ListObjectsForKey(ctx, job.KeyID, job.OldVersion)
 	if err != nil {
-		job.Status = "failed"
+		job.Status = statusFailed
 		job.ErrorMessage = err.Error()
 
 		return
@@ -997,7 +1002,7 @@ func (krm *KeyRotationManager) runReencryptionJob(ctx context.Context, job *Reen
 	for _, objectRef := range objects {
 		select {
 		case <-ctx.Done():
-			job.Status = "failed"
+			job.Status = statusFailed
 			job.ErrorMessage = ctx.Err().Error()
 
 			return

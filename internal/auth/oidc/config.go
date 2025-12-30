@@ -8,6 +8,12 @@ import (
 	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
+// OIDC claim and scope constants.
+const (
+	claimGroups = "groups"
+	scopeOpenID = "openid"
+)
+
 // Config holds OIDC provider configuration.
 type Config struct {
 	ClaimsMapping       ClaimsMapping `json:"claimsMapping,omitempty" yaml:"claimsMapping,omitempty"`
@@ -82,7 +88,7 @@ func KeycloakConfig() Config {
 func OktaConfig() Config {
 	cfg := DefaultConfig()
 	cfg.Scopes = []string{"openid", "profile", "email", "groups"}
-	cfg.ClaimsMapping.Groups = "groups"
+	cfg.ClaimsMapping.Groups = claimGroups
 
 	return cfg
 }
@@ -92,7 +98,7 @@ func AzureADConfig() Config {
 	cfg := DefaultConfig()
 	cfg.Scopes = []string{"openid", "profile", "email"}
 	cfg.ClaimsMapping.Username = "preferred_username"
-	cfg.ClaimsMapping.Groups = "groups"
+	cfg.ClaimsMapping.Groups = claimGroups
 
 	return cfg
 }
@@ -138,14 +144,14 @@ func (c *Config) Validate() error {
 	hasOpenID := false
 
 	for _, scope := range c.Scopes {
-		if scope == "openid" {
+		if scope == scopeOpenID {
 			hasOpenID = true
 			break
 		}
 	}
 
 	if !hasOpenID {
-		return errors.New("'openid' scope is required")
+		return errors.New("'" + scopeOpenID + "' scope is required")
 	}
 
 	// Validate token endpoint auth method

@@ -12,6 +12,74 @@ import (
 	"time"
 )
 
+// Simulated backend configuration constants.
+const (
+	// Default latencies.
+	simDefaultLatencyMs  = 50
+	simStreamDelayMs     = 20
+	simLatencyFast       = 15
+	simLatencyMedium     = 80
+	simLatencyNormal     = 100
+	simLatencyModerate   = 150
+	simLatencySlow       = 200
+	simLatencySlower     = 250
+	simLatencyHigh       = 300
+	simLatencyVeryHigh   = 400
+
+	// Model token limits.
+	simTokensSmall    = 2048
+	simTokensMedium   = 4096
+	simTokensLarge    = 8192
+	simTokensVeryLarge = 32768
+
+	// Batch sizes.
+	simBatchTiny    = 4
+	simBatchSmall   = 8
+	simBatchMedium  = 16
+	simBatchNormal  = 32
+	simBatchLarge   = 64
+	simBatchXLarge  = 128
+	simBatchXXLarge = 256
+
+	// Channel and buffer sizes.
+	simChanBufferSize = 10
+	simIDByteSize     = 16
+
+	// Token estimation.
+	simCharsPerToken    = 4
+	simTokenOverhead    = 4
+	simEmbeddingDim     = 1024
+	simHashMultiplier    = 31
+	simSineScaleFactor   = 0.001
+	simContentTruncLen   = 50
+	simHashIndexModifier = 17
+
+	// Confidence scores.
+	simHighConfidence      = 0.95
+	simConfidence92        = 0.92
+	simConfidence89        = 0.89
+	simMediumConfidence    = 0.88
+	simConfidence85        = 0.85
+	simConfidence78        = 0.78
+	simConfidence65        = 0.65
+	simLowConfidence       = 0.50
+
+	// Token usage values.
+	simTokensLLMResponse        = 15
+	simTokensEmbeddingResponse  = 10
+	simTokensMultimodalResponse = 20
+
+	// Bounding box coordinates.
+	simBboxX1Person = 100
+	simBboxY1Person = 50
+	simBboxX2Person = 300
+	simBboxY2Person = 400
+	simBboxX1Car    = 400
+	simBboxY1Car    = 200
+	simBboxX2Car    = 600
+	simBboxY2Car    = 350
+)
+
 // SimulatedBackend provides a simulated NIM backend for testing.
 type SimulatedBackend struct {
 	models      map[string]*ModelInfo
@@ -25,7 +93,7 @@ type SimulatedBackend struct {
 func NewSimulatedBackend() *SimulatedBackend {
 	b := &SimulatedBackend{
 		models:    make(map[string]*ModelInfo),
-		latencyMs: 50, // 50ms simulated latency
+		latencyMs: simDefaultLatencyMs, // simulated latency
 	}
 	b.initModels()
 
@@ -42,10 +110,10 @@ func (b *SimulatedBackend) initModels() {
 			Type:         ModelTypeLLM,
 			Version:      "3.1",
 			Description:  "Meta's Llama 3.1 70B instruction-tuned model",
-			MaxTokens:    8192,
-			MaxBatchSize: 32,
+			MaxTokens:    simTokensLarge,
+			MaxBatchSize: simBatchNormal,
 			Status:       "ready",
-			AvgLatencyMs: 200,
+			AvgLatencyMs: simLatencySlow,
 		},
 		"meta/llama-3.1-8b-instruct": {
 			ID:           "meta/llama-3.1-8b-instruct",
@@ -53,10 +121,10 @@ func (b *SimulatedBackend) initModels() {
 			Type:         ModelTypeLLM,
 			Version:      "3.1",
 			Description:  "Meta's Llama 3.1 8B instruction-tuned model",
-			MaxTokens:    8192,
-			MaxBatchSize: 64,
+			MaxTokens:    simTokensLarge,
+			MaxBatchSize: simBatchLarge,
 			Status:       "ready",
-			AvgLatencyMs: 50,
+			AvgLatencyMs: simDefaultLatencyMs,
 		},
 		"nvidia/nemotron-4-340b-instruct": {
 			ID:           "nvidia/nemotron-4-340b-instruct",
@@ -64,10 +132,10 @@ func (b *SimulatedBackend) initModels() {
 			Type:         ModelTypeLLM,
 			Version:      "4.0",
 			Description:  "NVIDIA's Nemotron-4 340B instruction model",
-			MaxTokens:    4096,
-			MaxBatchSize: 16,
+			MaxTokens:    simTokensMedium,
+			MaxBatchSize: simBatchMedium,
 			Status:       "ready",
-			AvgLatencyMs: 400,
+			AvgLatencyMs: simLatencyVeryHigh,
 		},
 		"mistralai/mixtral-8x22b-instruct-v0.1": {
 			ID:           "mistralai/mixtral-8x22b-instruct-v0.1",
@@ -75,10 +143,10 @@ func (b *SimulatedBackend) initModels() {
 			Type:         ModelTypeLLM,
 			Version:      "0.1",
 			Description:  "Mistral AI's Mixtral 8x22B sparse MoE model",
-			MaxTokens:    32768,
-			MaxBatchSize: 32,
+			MaxTokens:    simTokensVeryLarge,
+			MaxBatchSize: simBatchNormal,
 			Status:       "ready",
-			AvgLatencyMs: 150,
+			AvgLatencyMs: simLatencyModerate,
 		},
 		// Embedding Models
 		"nvidia/nv-embedqa-e5-v5": {
@@ -87,9 +155,9 @@ func (b *SimulatedBackend) initModels() {
 			Type:         ModelTypeEmbedding,
 			Version:      "5.0",
 			Description:  "NVIDIA embedding model optimized for Q&A retrieval",
-			MaxBatchSize: 128,
+			MaxBatchSize: simBatchXLarge,
 			Status:       "ready",
-			AvgLatencyMs: 20,
+			AvgLatencyMs: simStreamDelayMs,
 		},
 		"nvidia/nv-embed-v2": {
 			ID:           "nvidia/nv-embed-v2",
@@ -97,9 +165,9 @@ func (b *SimulatedBackend) initModels() {
 			Type:         ModelTypeEmbedding,
 			Version:      "2.0",
 			Description:  "NVIDIA general-purpose embedding model",
-			MaxBatchSize: 256,
+			MaxBatchSize: simBatchXXLarge,
 			Status:       "ready",
-			AvgLatencyMs: 15,
+			AvgLatencyMs: simLatencyFast,
 		},
 		// Vision Models
 		"nvidia/grounding-dino": {
@@ -108,10 +176,10 @@ func (b *SimulatedBackend) initModels() {
 			Type:             ModelTypeVision,
 			Version:          "1.0",
 			Description:      "Open-set object detection with text prompts",
-			MaxBatchSize:     16,
+			MaxBatchSize:     simBatchMedium,
 			SupportedFormats: []string{"image/jpeg", "image/png", "image/webp"},
 			Status:           "ready",
-			AvgLatencyMs:     100,
+			AvgLatencyMs:     simLatencyNormal,
 		},
 		"nvidia/deplot": {
 			ID:               "nvidia/deplot",
@@ -119,10 +187,10 @@ func (b *SimulatedBackend) initModels() {
 			Type:             ModelTypeVision,
 			Version:          "1.0",
 			Description:      "Chart and plot understanding model",
-			MaxBatchSize:     8,
+			MaxBatchSize:     simBatchSmall,
 			SupportedFormats: []string{"image/jpeg", "image/png"},
 			Status:           "ready",
-			AvgLatencyMs:     150,
+			AvgLatencyMs:     simLatencyModerate,
 		},
 		// Multimodal Models
 		"nvidia/llama-3.2-neva-72b-preview": {
@@ -131,11 +199,11 @@ func (b *SimulatedBackend) initModels() {
 			Type:             ModelTypeMultimodal,
 			Version:          "3.2-preview",
 			Description:      "Vision-language model for image understanding",
-			MaxTokens:        4096,
-			MaxBatchSize:     8,
+			MaxTokens:        simTokensMedium,
+			MaxBatchSize:     simBatchSmall,
 			SupportedFormats: []string{"image/jpeg", "image/png", "image/webp"},
 			Status:           "ready",
-			AvgLatencyMs:     300,
+			AvgLatencyMs:     simLatencyHigh,
 		},
 		"nvidia/vila-1.5": {
 			ID:               "nvidia/vila-1.5",
@@ -143,11 +211,11 @@ func (b *SimulatedBackend) initModels() {
 			Type:             ModelTypeMultimodal,
 			Version:          "1.5",
 			Description:      "Visual language model for complex reasoning",
-			MaxTokens:        2048,
-			MaxBatchSize:     4,
+			MaxTokens:        simTokensSmall,
+			MaxBatchSize:     simBatchTiny,
 			SupportedFormats: []string{"image/jpeg", "image/png"},
 			Status:           "ready",
-			AvgLatencyMs:     250,
+			AvgLatencyMs:     simLatencySlower,
 		},
 		// Audio Models
 		"nvidia/canary-1b-asr": {
@@ -156,10 +224,10 @@ func (b *SimulatedBackend) initModels() {
 			Type:             ModelTypeAudio,
 			Version:          "1.0",
 			Description:      "Automatic speech recognition model",
-			MaxBatchSize:     16,
+			MaxBatchSize:     simBatchMedium,
 			SupportedFormats: []string{"audio/wav", "audio/mp3", "audio/flac"},
 			Status:           "ready",
-			AvgLatencyMs:     100,
+			AvgLatencyMs:     simLatencyNormal,
 		},
 		"nvidia/parakeet-tdt-1.1b": {
 			ID:               "nvidia/parakeet-tdt-1.1b",
@@ -167,10 +235,10 @@ func (b *SimulatedBackend) initModels() {
 			Type:             ModelTypeAudio,
 			Version:          "1.1",
 			Description:      "Text-to-speech model with natural voices",
-			MaxBatchSize:     8,
+			MaxBatchSize:     simBatchSmall,
 			SupportedFormats: []string{"text/plain"},
 			Status:           "ready",
-			AvgLatencyMs:     80,
+			AvgLatencyMs:     simLatencyMedium,
 		},
 	}
 }
@@ -288,7 +356,7 @@ func (b *SimulatedBackend) ChatStream(ctx context.Context, req *ChatRequest) (<-
 		return nil, err
 	}
 
-	ch := make(chan *ChatResponse, 10)
+	ch := make(chan *ChatResponse, simChanBufferSize)
 
 	go func() {
 		defer close(ch)
@@ -341,7 +409,7 @@ func (b *SimulatedBackend) ChatStream(ctx context.Context, req *ChatRequest) (<-
 				}
 
 				// Simulate streaming delay
-				time.Sleep(20 * time.Millisecond)
+				time.Sleep(simStreamDelayMs * time.Millisecond)
 			}
 		}
 	}()
@@ -472,14 +540,14 @@ func (b *SimulatedBackend) Infer(ctx context.Context, req *InferenceRequest) (*I
 	switch model.Type {
 	case ModelTypeLLM:
 		output = "This is a simulated inference response for your input."
-		tokensUsed = 15
+		tokensUsed = simTokensLLMResponse
 	case ModelTypeEmbedding:
 		output = b.generateEmbedding(fmt.Sprintf("%v", req.Input))
-		tokensUsed = 10
+		tokensUsed = simTokensEmbeddingResponse
 	case ModelTypeVision:
 		output = map[string]interface{}{
 			"detections": []map[string]interface{}{
-				{"label": "object", "confidence": 0.95},
+				{"label": "object", "confidence": simHighConfidence},
 			},
 		}
 	case ModelTypeAudio:
@@ -488,7 +556,7 @@ func (b *SimulatedBackend) Infer(ctx context.Context, req *InferenceRequest) (*I
 		}
 	case ModelTypeMultimodal:
 		output = "Based on the image, I can see various elements that suggest..."
-		tokensUsed = 20
+		tokensUsed = simTokensMultimodalResponse
 	default:
 		output = "Simulated inference result"
 	}
@@ -600,7 +668,7 @@ func (b *SimulatedBackend) AddModel(model *ModelInfo) {
 // Helper functions
 
 func generateID() string {
-	bytes := make([]byte, 16)
+	bytes := make([]byte, simIDByteSize)
 	rand.Read(bytes)
 
 	return "chatcmpl-" + hex.EncodeToString(bytes)
@@ -628,7 +696,7 @@ func (b *SimulatedBackend) generateChatResponse(req *ChatRequest) string {
 	case strings.Contains(content, "translate"):
 		return "Translation services are available through NIM. This simulated response demonstrates the translation capability."
 	default:
-		return fmt.Sprintf("I understand you're asking about: %s. In simulation mode, I provide generic responses. Configure the NIM API for actual inference capabilities.", content[:min(len(content), 50)])
+		return fmt.Sprintf("I understand you're asking about: %s. In simulation mode, I provide generic responses. Configure the NIM API for actual inference capabilities.", content[:min(len(content), simContentTruncLen)])
 	}
 }
 
@@ -636,8 +704,8 @@ func (b *SimulatedBackend) estimateTokens(messages []ChatMessage) int {
 	total := 0
 	for _, msg := range messages {
 		// Rough estimate: 1 token per 4 characters
-		total += len(msg.Content) / 4
-		total += 4 // Role and formatting overhead
+		total += len(msg.Content) / simCharsPerToken
+		total += simTokenOverhead // Role and formatting overhead
 	}
 
 	return max(total, 1)
@@ -646,18 +714,18 @@ func (b *SimulatedBackend) estimateTokens(messages []ChatMessage) int {
 func (b *SimulatedBackend) generateEmbedding(input string) []float64 {
 	// Generate a 1024-dimensional embedding
 	// Use a simple hash-based approach for deterministic results
-	embedding := make([]float64, 1024)
+	embedding := make([]float64, simEmbeddingDim)
 
 	// Create a simple hash of the input
 	hash := 0
 	for _, c := range input {
-		hash = hash*31 + int(c)
+		hash = hash*simHashMultiplier + int(c)
 	}
 
 	// Generate embedding values
 	for i := range embedding {
 		// Use sine/cosine for varied but deterministic values
-		embedding[i] = math.Sin(float64(hash+i*17) * 0.001)
+		embedding[i] = math.Sin(float64(hash+i*simHashIndexModifier) * simSineScaleFactor)
 	}
 
 	// Normalize the embedding
@@ -702,26 +770,26 @@ func (b *SimulatedBackend) generateVisionResults(task string) []struct {
 		}{
 			{
 				Label:      "person",
-				Confidence: 0.95,
+				Confidence: simHighConfidence,
 				BoundingBox: &struct {
 					X1 float64 `json:"x1"`
 					Y1 float64 `json:"y1"`
 					X2 float64 `json:"x2"`
 					Y2 float64 `json:"y2"`
 				}{
-					X1: 100, Y1: 50, X2: 300, Y2: 400,
+					X1: simBboxX1Person, Y1: simBboxY1Person, X2: simBboxX2Person, Y2: simBboxY2Person,
 				},
 			},
 			{
 				Label:      "car",
-				Confidence: 0.88,
+				Confidence: simMediumConfidence,
 				BoundingBox: &struct {
 					X1 float64 `json:"x1"`
 					Y1 float64 `json:"y1"`
 					X2 float64 `json:"x2"`
 					Y2 float64 `json:"y2"`
 				}{
-					X1: 400, Y1: 200, X2: 600, Y2: 350,
+					X1: simBboxX1Car, Y1: simBboxY1Car, X2: simBboxX2Car, Y2: simBboxY2Car,
 				},
 			},
 		}
@@ -737,9 +805,9 @@ func (b *SimulatedBackend) generateVisionResults(task string) []struct {
 			} `json:"bounding_box,omitempty"`
 			Mask [][]int `json:"mask,omitempty"`
 		}{
-			{Label: "landscape", Confidence: 0.85},
-			{Label: "outdoor", Confidence: 0.78},
-			{Label: "nature", Confidence: 0.65},
+			{Label: "landscape", Confidence: simConfidence85},
+			{Label: "outdoor", Confidence: simConfidence78},
+			{Label: "nature", Confidence: simConfidence65},
 		}
 	case "segmentation":
 		// Return a simple 3x3 mask for testing
@@ -756,12 +824,12 @@ func (b *SimulatedBackend) generateVisionResults(task string) []struct {
 		}{
 			{
 				Label:      "sky",
-				Confidence: 0.92,
+				Confidence: simConfidence92,
 				Mask:       [][]int{{1, 1, 1}, {0, 0, 0}, {0, 0, 0}},
 			},
 			{
 				Label:      "ground",
-				Confidence: 0.89,
+				Confidence: simConfidence89,
 				Mask:       [][]int{{0, 0, 0}, {0, 0, 0}, {1, 1, 1}},
 			},
 		}
@@ -777,7 +845,7 @@ func (b *SimulatedBackend) generateVisionResults(task string) []struct {
 			} `json:"bounding_box,omitempty"`
 			Mask [][]int `json:"mask,omitempty"`
 		}{
-			{Label: "unknown", Confidence: 0.50},
+			{Label: "unknown", Confidence: simLowConfidence},
 		}
 	}
 }

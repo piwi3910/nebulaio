@@ -11,6 +11,11 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metrics"
 )
 
+// HTTP method constants.
+const (
+	methodGET = "GET"
+)
+
 // MetricsMiddleware records request metrics.
 func MetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +73,7 @@ func extractS3Operation(r *http.Request) string {
 	query := r.URL.Query()
 
 	// Service-level operations
-	if path == "/" && method == "GET" {
+	if path == "/" && method == methodGET {
 		return "ListBuckets"
 	}
 
@@ -86,7 +91,7 @@ func extractS3Operation(r *http.Request) string {
 			return "DeleteBucket"
 		case "HEAD":
 			return "HeadBucket"
-		case "GET":
+		case methodGET:
 			// Check for subresources
 			if _, ok := query["versioning"]; ok {
 				return "GetBucketVersioning"
@@ -137,7 +142,7 @@ func extractS3Operation(r *http.Request) string {
 			}
 
 			return "PutObject"
-		case "GET":
+		case methodGET:
 			if _, ok := query["uploadId"]; ok {
 				return "ListParts"
 			}

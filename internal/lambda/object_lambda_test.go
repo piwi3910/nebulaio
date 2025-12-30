@@ -14,6 +14,12 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
+// Test constants.
+const (
+	compressionGzip = "gzip"
+	compressionZstd = "zstd"
+)
+
 func TestCreateAccessPoint(t *testing.T) {
 	svc := NewObjectLambdaService()
 
@@ -559,27 +565,27 @@ func TestCompressTransformer(t *testing.T) {
 		{
 			name:      "gzip default",
 			params:    nil,
-			algorithm: "gzip",
+			algorithm: compressionGzip,
 		},
 		{
 			name:      "gzip explicit",
-			params:    map[string]interface{}{"algorithm": "gzip"},
-			algorithm: "gzip",
+			params:    map[string]interface{}{"algorithm": compressionGzip},
+			algorithm: compressionGzip,
 		},
 		{
 			name:      "gzip with level",
-			params:    map[string]interface{}{"algorithm": "gzip", "level": 9},
-			algorithm: "gzip",
+			params:    map[string]interface{}{"algorithm": compressionGzip, "level": 9},
+			algorithm: compressionGzip,
 		},
 		{
 			name:      "zstd",
-			params:    map[string]interface{}{"algorithm": "zstd"},
-			algorithm: "zstd",
+			params:    map[string]interface{}{"algorithm": compressionZstd},
+			algorithm: compressionZstd,
 		},
 		{
 			name:      "zstd with level",
-			params:    map[string]interface{}{"algorithm": "zstd", "level": 5},
-			algorithm: "zstd",
+			params:    map[string]interface{}{"algorithm": compressionZstd, "level": 5},
+			algorithm: compressionZstd,
 		},
 	}
 
@@ -605,7 +611,7 @@ func TestCompressTransformer(t *testing.T) {
 			var decompressed []byte
 
 			switch tt.algorithm {
-			case "gzip":
+			case compressionGzip:
 				reader, err := gzip.NewReader(bytes.NewReader(compressed))
 				if err != nil {
 					t.Fatalf("Failed to create gzip reader: %v", err)
@@ -617,7 +623,7 @@ func TestCompressTransformer(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to decompress gzip: %v", err)
 				}
-			case "zstd":
+			case compressionZstd:
 				decoder, err := zstd.NewReader(bytes.NewReader(compressed))
 				if err != nil {
 					t.Fatalf("Failed to create zstd decoder: %v", err)
@@ -685,7 +691,7 @@ func TestDecompressTransformer(t *testing.T) {
 
 				return buf.Bytes()
 			},
-			params: map[string]interface{}{"algorithm": "gzip"},
+			params: map[string]interface{}{"algorithm": compressionGzip},
 		},
 		{
 			name: "zstd auto-detect",
@@ -701,7 +707,7 @@ func TestDecompressTransformer(t *testing.T) {
 				encoder, _ := zstd.NewWriter(nil)
 				return encoder.EncodeAll(data, nil)
 			},
-			params: map[string]interface{}{"algorithm": "zstd"},
+			params: map[string]interface{}{"algorithm": compressionZstd},
 		},
 	}
 
@@ -871,7 +877,7 @@ func TestCompressionSizeLimit(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			testData := bytes.Repeat([]byte("B"), tc.inputSize)
-			params := map[string]interface{}{"algorithm": "gzip"}
+			params := map[string]interface{}{"algorithm": compressionGzip}
 
 			_, _, err := transformer.Transform(context.Background(), bytes.NewReader(testData), params)
 

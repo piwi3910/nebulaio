@@ -28,6 +28,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// Status constants for metrics labels.
+const (
+	statusSuccess = "success"
+	statusFailure = "failure"
+)
+
 var (
 	// RequestsTotal counts total number of requests.
 	RequestsTotal = promauto.NewCounterVec(
@@ -566,9 +572,9 @@ func SetRaftLeader(shardID string, isLeader bool) {
 
 // RecordRaftProposal records a Raft proposal with its duration and status.
 func RecordRaftProposal(shardID string, duration time.Duration, success bool) {
-	status := "success"
+	status := statusSuccess
 	if !success {
-		status = "failure"
+		status = statusFailure
 	}
 
 	RaftProposalLatency.WithLabelValues(shardID).Observe(duration.Seconds())
@@ -654,9 +660,9 @@ func SetPlacementGroupShardCount(groupID, nodeID string, count int) {
 
 // RecordErasureEncode records an erasure encoding operation.
 func RecordErasureEncode(groupID string, success bool, duration time.Duration) {
-	status := "success"
+	status := statusSuccess
 	if !success {
-		status = "failure"
+		status = statusFailure
 	}
 
 	ErasureEncodeOperationsTotal.WithLabelValues(groupID, status).Inc()
@@ -668,9 +674,9 @@ func RecordErasureEncode(groupID string, success bool, duration time.Duration) {
 
 // RecordErasureDecode records an erasure decoding operation.
 func RecordErasureDecode(groupID string, success bool) {
-	status := "success"
+	status := statusSuccess
 	if !success {
-		status = "failure"
+		status = statusFailure
 	}
 
 	ErasureDecodeOperationsTotal.WithLabelValues(groupID, status).Inc()

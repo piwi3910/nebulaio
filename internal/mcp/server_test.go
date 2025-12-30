@@ -17,6 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test constants.
+const testContentTypeOctetStream = "application/octet-stream"
+
 // Errors for mock service.
 var (
 	errBucketNotFound = errors.New("bucket not found")
@@ -122,7 +125,7 @@ func (m *MockObjectStore) PutObject(ctx context.Context, bucket, key string, dat
 		m.objects[bucket] = make(map[string]*mockObject)
 	}
 
-	contentType := "application/octet-stream"
+	contentType := testContentTypeOctetStream
 	if ct, ok := metadata["Content-Type"]; ok {
 		contentType = ct
 	}

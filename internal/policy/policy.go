@@ -34,6 +34,9 @@ import (
 	"strings"
 )
 
+// Boolean string constant.
+const boolTrue = "true"
+
 // Policy represents an S3 bucket policy document.
 type Policy struct {
 	Version   string      `json:"Version"`
@@ -481,14 +484,14 @@ func matchConditions(stmtConditions map[string]map[string]interface{}, condition
 					return false
 				}
 
-				expectedBool := fmt.Sprintf("%v", expectedValue) == "true"
+				expectedBool := fmt.Sprintf("%v", expectedValue) == boolTrue
 
-				actualBool := actualValue == "true"
+				actualBool := actualValue == boolTrue
 				if expectedBool != actualBool {
 					return false
 				}
 			case "Null":
-				expectedNull := fmt.Sprintf("%v", expectedValue) == "true"
+				expectedNull := fmt.Sprintf("%v", expectedValue) == boolTrue
 				if expectedNull && exists {
 					return false
 				}

@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// Test constants.
+const (
+	testCacheKey       = "test-bucket/test-key"
+	testContentTypeVal = "text/plain"
+)
+
 func TestNewCache(t *testing.T) {
 	config := DefaultConfig()
 	config.MaxSize = 1024 * 1024 * 100 // 100MB for testing
@@ -34,9 +40,9 @@ func TestPutAndGet(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
-	key := "test-bucket/test-key"
+	key := testCacheKey
 	data := []byte("test data content")
-	contentType := "text/plain"
+	contentType := testContentTypeVal
 	etag := "abc123"
 
 	// Put entry
@@ -72,7 +78,7 @@ func TestHas(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
-	key := "test-bucket/test-key"
+	key := testCacheKey
 
 	// Should not exist initially
 	if cache.Has(ctx, key) {
@@ -95,7 +101,7 @@ func TestDelete(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
-	key := "test-bucket/test-key"
+	key := testCacheKey
 
 	// Put entry
 	cache.Put(ctx, key, []byte("data"), "", "")
@@ -126,7 +132,7 @@ func TestExpiration(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
-	key := "test-bucket/test-key"
+	key := testCacheKey
 
 	// Put entry
 	cache.Put(ctx, key, []byte("data"), "", "")
@@ -312,18 +318,18 @@ func TestGetReader(t *testing.T) {
 	defer cache.Close()
 
 	ctx := context.Background()
-	key := "test-bucket/test-key"
+	key := testCacheKey
 	data := []byte("test data for streaming")
 
-	cache.Put(ctx, key, data, "text/plain", "abc123")
+	cache.Put(ctx, key, data, testContentTypeVal, "abc123")
 
 	reader, entry, ok := cache.GetReader(ctx, key)
 	if !ok {
 		t.Fatal("expected entry to be found")
 	}
 
-	if entry.ContentType != "text/plain" {
-		t.Errorf("expected content type text/plain, got %s", entry.ContentType)
+	if entry.ContentType != testContentTypeVal {
+		t.Errorf("expected content type %s, got %s", testContentTypeVal, entry.ContentType)
 	}
 
 	// Read data from reader
@@ -355,7 +361,7 @@ func TestWarmCache(t *testing.T) {
 
 	// Define warmup source
 	source := func(ctx context.Context, key string) ([]byte, string, string, error) {
-		return []byte("warmed data for " + key), "text/plain", "etag-" + key, nil
+		return []byte("warmed data for " + key), testContentTypeVal, "etag-" + key, nil
 	}
 
 	keys := []string{"bucket/warm-1", "bucket/warm-2", "bucket/warm-3"}
@@ -375,10 +381,10 @@ func TestWarmCache(t *testing.T) {
 
 func TestEntryMarshalUnmarshal(t *testing.T) {
 	entry := &Entry{
-		Key:         "test-bucket/test-key",
+		Key:         testCacheKey,
 		Data:        []byte("test data content"),
 		Size:        17,
-		ContentType: "text/plain",
+		ContentType: testContentTypeVal,
 		ETag:        "abc123",
 		Checksum:    12345,
 	}

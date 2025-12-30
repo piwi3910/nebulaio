@@ -25,6 +25,12 @@ import (
 	"github.com/piwi3910/nebulaio/pkg/s3types"
 )
 
+// Test constants.
+const (
+	testContentHelloWorld = "Hello, World!"
+	testContentTypePlain  = "text/plain"
+)
+
 // MockMetadataStore implements metadata.Store for testing.
 type MockMetadataStore struct {
 	buckets          map[string]*metadata.Bucket
@@ -948,9 +954,9 @@ func TestPutObject(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	content := "Hello, World!"
+	content := testContentHelloWorld
 	req := httptest.NewRequest(http.MethodPut, "/test-bucket/test-key", strings.NewReader(content))
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", testContentTypePlain)
 	req.ContentLength = int64(len(content))
 	w := httptest.NewRecorder()
 
@@ -973,9 +979,9 @@ func TestPutObjectWithMetadata(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	content := "Hello, World!"
+	content := testContentHelloWorld
 	req := httptest.NewRequest(http.MethodPut, "/test-bucket/test-key", strings.NewReader(content))
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", testContentTypePlain)
 	req.Header.Set("X-Amz-Meta-Custom", "value")
 	req.ContentLength = int64(len(content))
 	w := httptest.NewRecorder()
@@ -1000,9 +1006,9 @@ func TestPutObjectWithTags(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	content := "Hello, World!"
+	content := testContentHelloWorld
 	req := httptest.NewRequest(http.MethodPut, "/test-bucket/test-key", strings.NewReader(content))
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", testContentTypePlain)
 	req.Header.Set("X-Amz-Tagging", "key1=value1&key2=value2")
 	req.ContentLength = int64(len(content))
 	w := httptest.NewRecorder()
@@ -1027,8 +1033,8 @@ func TestGetObject(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	content := "Hello, World!"
-	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader(content), int64(len(content)), "text/plain", "test-owner", nil)
+	content := testContentHelloWorld
+	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader(content), int64(len(content)), testContentTypePlain, "test-owner", nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/test-bucket/test-key", nil)
 	w := httptest.NewRecorder()
@@ -1043,8 +1049,8 @@ func TestGetObject(t *testing.T) {
 		t.Errorf("Expected body '%s', got '%s'", content, w.Body.String())
 	}
 
-	if w.Header().Get("Content-Type") != "text/plain" {
-		t.Errorf("Expected Content-Type 'text/plain', got '%s'", w.Header().Get("Content-Type"))
+	if w.Header().Get("Content-Type") != testContentTypePlain {
+		t.Errorf("Expected Content-Type '%s', got '%s'", testContentTypePlain, w.Header().Get("Content-Type"))
 	}
 }
 
@@ -1072,8 +1078,8 @@ func TestHeadObject(t *testing.T) {
 	ctx := context.Background()
 	tc.bucket.CreateBucket(ctx, "test-bucket", "test-owner", "", "")
 
-	content := "Hello, World!"
-	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader(content), int64(len(content)), "text/plain", "test-owner", nil)
+	content := testContentHelloWorld
+	tc.object.PutObject(ctx, "test-bucket", "test-key", strings.NewReader(content), int64(len(content)), testContentTypePlain, "test-owner", nil)
 
 	req := httptest.NewRequest(http.MethodHead, "/test-bucket/test-key", nil)
 	w := httptest.NewRecorder()
@@ -1084,8 +1090,8 @@ func TestHeadObject(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 
-	if w.Header().Get("Content-Type") != "text/plain" {
-		t.Errorf("Expected Content-Type 'text/plain', got '%s'", w.Header().Get("Content-Type"))
+	if w.Header().Get("Content-Type") != testContentTypePlain {
+		t.Errorf("Expected Content-Type '%s', got '%s'", testContentTypePlain, w.Header().Get("Content-Type"))
 	}
 
 	if w.Header().Get("Content-Length") != "13" {

@@ -32,7 +32,7 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestNewTransportSimulated(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 
 	transport, err := NewTransport(cfg)
 	if err != nil {
@@ -71,7 +71,7 @@ func TestNewTransportWithFallback(t *testing.T) {
 
 func TestMemoryPool(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 	cfg.PreAllocateRegions = 5
 	cfg.MemoryRegionSize = 1024
 
@@ -120,7 +120,7 @@ func TestMemoryPool(t *testing.T) {
 
 func TestMemoryPoolTimeout(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 	cfg.PreAllocateRegions = 1
 	cfg.MemoryRegionSize = 1024
 
@@ -159,7 +159,7 @@ func TestMemoryPoolTimeout(t *testing.T) {
 
 func TestDeviceSelection(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 
 	transport, err := NewTransport(cfg)
 	if err != nil {
@@ -221,7 +221,7 @@ func TestDeviceSelection(t *testing.T) {
 
 func TestConnection(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 
 	transport, err := NewTransport(cfg)
 	if err != nil {
@@ -262,7 +262,7 @@ func TestConnection(t *testing.T) {
 
 func TestReconnect(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 
 	transport, err := NewTransport(cfg)
 	if err != nil {
@@ -296,7 +296,7 @@ func TestReconnect(t *testing.T) {
 
 func TestMetrics(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 
 	transport, err := NewTransport(cfg)
 	if err != nil {
@@ -324,7 +324,7 @@ func TestMetrics(t *testing.T) {
 
 func TestListener(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 
 	transport, err := NewTransport(cfg)
 	if err != nil {
@@ -350,7 +350,7 @@ func TestListener(t *testing.T) {
 
 func TestSerializeRequest(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 
 	transport, err := NewTransport(cfg)
 	if err != nil {
@@ -389,7 +389,7 @@ func TestSerializeRequest(t *testing.T) {
 
 func TestDeserializeResponse(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 
 	transport, err := NewTransport(cfg)
 	if err != nil {
@@ -429,7 +429,7 @@ func TestDeserializeResponse(t *testing.T) {
 
 func TestS3Operations(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 
 	transport, err := NewTransport(cfg)
 	if err != nil {
@@ -451,7 +451,7 @@ func TestS3Operations(t *testing.T) {
 
 func TestClient(t *testing.T) {
 	cfg := DefaultClientConfig()
-	cfg.RDMAConfig.DeviceName = "simulated"
+	cfg.RDMAConfig.DeviceName = deviceSimulated
 	cfg.FallbackHTTP = true
 	cfg.HTTPEndpoint = "http://localhost:9000"
 
@@ -473,7 +473,7 @@ func TestClient(t *testing.T) {
 
 func TestClientMetrics(t *testing.T) {
 	cfg := DefaultClientConfig()
-	cfg.RDMAConfig.DeviceName = "simulated"
+	cfg.RDMAConfig.DeviceName = deviceSimulated
 
 	client, err := NewClient([]string{"rdma://localhost:9100"}, cfg)
 	if err != nil {
@@ -493,7 +493,7 @@ func TestClientMetrics(t *testing.T) {
 
 func TestAllocateBuffer(t *testing.T) {
 	cfg := DefaultClientConfig()
-	cfg.RDMAConfig.DeviceName = "simulated"
+	cfg.RDMAConfig.DeviceName = deviceSimulated
 
 	client, err := NewClient([]string{"rdma://localhost:9100"}, cfg)
 	if err != nil {
@@ -553,7 +553,7 @@ func TestBytesReaderAt(t *testing.T) {
 
 func TestZeroCopyOperations(t *testing.T) {
 	cfg := DefaultClientConfig()
-	cfg.RDMAConfig.DeviceName = "simulated"
+	cfg.RDMAConfig.DeviceName = deviceSimulated
 
 	client, err := NewClient([]string{"rdma://localhost:9100"}, cfg)
 	if err != nil {
@@ -580,7 +580,7 @@ func TestZeroCopyOperations(t *testing.T) {
 
 func TestStreamGetObject(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.DeviceName = "simulated"
+	cfg.DeviceName = deviceSimulated
 
 	transport, err := NewTransport(cfg)
 	if err != nil {

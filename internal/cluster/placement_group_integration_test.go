@@ -10,6 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test constants.
+const testBucketName = "test-bucket"
+
 // TestMultiNodePlacementGroupSimulation simulates a multi-node cluster
 // with placement groups and verifies correct behavior under various scenarios.
 func TestMultiNodePlacementGroupSimulation(t *testing.T) {
@@ -222,7 +225,7 @@ func TestPlacementGroupShardDistribution(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("deterministic shard placement", func(t *testing.T) {
-		bucket := "test-bucket"
+		bucket := testBucketName
 		key := "test-object"
 		numShards := 3
 
@@ -242,7 +245,7 @@ func TestPlacementGroupShardDistribution(t *testing.T) {
 		numShards := 3
 
 		for i := range numObjects {
-			bucket := "test-bucket"
+			bucket := testBucketName
 			key := "object-" + string(rune(i))
 
 			nodes, err := mgr.GetShardPlacementNodesForObject(bucket, key, numShards)
@@ -274,7 +277,7 @@ func TestPlacementGroupShardDistribution(t *testing.T) {
 	})
 
 	t.Run("shard placement after node changes", func(t *testing.T) {
-		bucket := "test-bucket"
+		bucket := testBucketName
 		key := "stable-object"
 		numShards := 3
 

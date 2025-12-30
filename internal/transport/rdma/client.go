@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+// Transport type names for metrics.
+const (
+	transportTypeRDMA = "rdma"
+	transportTypeHTTP = "http"
+)
+
 // Client provides a high-level S3-compatible client with RDMA support.
 type Client struct {
 	config     *ClientConfig
@@ -192,7 +198,7 @@ func (c *Client) GetObjectWithOptions(ctx context.Context, bucket, key string, o
 				ETag:        output.ETag,
 				Size:        output.Size,
 				Latency:     output.Latency,
-				Transport:   "rdma",
+				Transport:   transportTypeRDMA,
 			}, nil
 		}
 
@@ -249,7 +255,7 @@ func (c *Client) getObjectHTTP(ctx context.Context, bucket, key string, opts *Ge
 		ETag:        resp.Header.Get("ETag"),
 		Size:        resp.ContentLength,
 		Latency:     time.Since(start),
-		Transport:   "http",
+		Transport:   transportTypeHTTP,
 	}, nil
 }
 
@@ -292,7 +298,7 @@ func (c *Client) PutObjectWithOptions(ctx context.Context, bucket, key string, b
 			return &PutObjectResult{
 				ETag:      output.ETag,
 				Latency:   output.Latency,
-				Transport: "rdma",
+				Transport: transportTypeRDMA,
 			}, nil
 		}
 
@@ -348,7 +354,7 @@ func (c *Client) putObjectHTTP(ctx context.Context, bucket, key string, body io.
 	return &PutObjectResult{
 		ETag:      resp.Header.Get("ETag"),
 		Latency:   time.Since(start),
-		Transport: "http",
+		Transport: transportTypeHTTP,
 	}, nil
 }
 
@@ -424,7 +430,7 @@ func (c *Client) HeadObject(ctx context.Context, bucket, key string) (*HeadObjec
 			ETag:        output.ETag,
 			Size:        output.Size,
 			Latency:     output.Latency,
-			Transport:   "rdma",
+			Transport:   transportTypeRDMA,
 		}, nil
 	}
 
@@ -476,7 +482,7 @@ func (c *Client) headObjectHTTP(ctx context.Context, bucket, key string) (*HeadO
 		ETag:        resp.Header.Get("ETag"),
 		Size:        resp.ContentLength,
 		Latency:     time.Since(start),
-		Transport:   "http",
+		Transport:   transportTypeHTTP,
 	}, nil
 }
 
@@ -502,7 +508,7 @@ func (c *Client) ListObjects(ctx context.Context, bucket string, opts *ListObjec
 			NextContinuationToken: output.NextContinuationToken,
 			IsTruncated:           output.IsTruncated,
 			Latency:               output.Latency,
-			Transport:             "rdma",
+			Transport:             transportTypeRDMA,
 		}, nil
 	}
 
@@ -619,9 +625,9 @@ func (c *Client) GetMetrics() *ClientMetrics {
 		metrics.AverageLatency = tm.AverageLatency()
 		metrics.MemoryUsed = tm.MemoryUsed
 		metrics.MemoryTotal = tm.MemoryTotal
-		metrics.Transport = "rdma"
+		metrics.Transport = transportTypeRDMA
 	} else {
-		metrics.Transport = "http"
+		metrics.Transport = transportTypeHTTP
 	}
 
 	return metrics
@@ -678,8 +684,8 @@ func (c *Client) IsRDMAEnabled() bool {
 // GetTransportType returns the active transport type.
 func (c *Client) GetTransportType() string {
 	if c.useRDMA() {
-		return "rdma"
+		return transportTypeRDMA
 	}
 
-	return "http"
+	return transportTypeHTTP
 }

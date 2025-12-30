@@ -57,6 +57,15 @@ var (
 	ErrBatchTooLarge      = errors.New("batch size exceeds limit")
 )
 
+// Default configuration values.
+const (
+	defaultTimeoutSeconds    = 60
+	defaultMaxRetries        = 3
+	defaultMaxBatchSize      = 100
+	modelLoadTimeoutSeconds  = 10
+	defaultVisionMaxTokens   = 1024
+)
+
 // ModelType represents the type of AI model.
 type ModelType string
 
@@ -108,9 +117,9 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Endpoints:       []string{"https://integrate.api.nvidia.com/v1"},
-		Timeout:         60 * time.Second,
-		MaxRetries:      3,
-		MaxBatchSize:    100,
+		Timeout:         defaultTimeoutSeconds * time.Second,
+		MaxRetries:      defaultMaxRetries,
+		MaxBatchSize:    defaultMaxBatchSize,
 		EnableStreaming: true,
 		CacheResults:    true,
 		CacheTTL:        1 * time.Hour,
@@ -395,7 +404,7 @@ func NewClient(config *Config, backend NIMBackend) (*Client, error) {
 	}
 
 	// Load available models
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), modelLoadTimeoutSeconds*time.Second)
 	defer cancel()
 
 	models, err := backend.ListModels(ctx)
@@ -670,7 +679,7 @@ func (o *ObjectInference) DescribeImage(ctx context.Context, bucket, key, prompt
 				Content: fmt.Sprintf("<image s3://%s/%s> %s", bucket, key, prompt),
 			},
 		},
-		MaxTokens: 1024,
+		MaxTokens: defaultVisionMaxTokens,
 	}
 
 	return o.client.Chat(ctx, req)
@@ -790,7 +799,7 @@ func (c *Client) _doRequest(ctx context.Context, method, path string, body inter
 
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		return nil, fmt.Errorf("NIM API error: %s", resp.Status)
 	}
 

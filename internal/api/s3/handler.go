@@ -37,6 +37,11 @@ import (
 	"github.com/piwi3910/nebulaio/pkg/s3types"
 )
 
+// Status constants for S3 features.
+const (
+	statusEnabled = "Enabled"
+)
+
 // Handler handles S3 API requests.
 type Handler struct {
 	auth   *auth.Service
@@ -1195,7 +1200,7 @@ func (h *Handler) PutBucketVersioning(w http.ResponseWriter, r *http.Request) {
 	var status metadata.VersioningStatus
 
 	switch config.Status {
-	case "Enabled":
+	case statusEnabled:
 		status = metadata.VersioningEnabled
 	case "Suspended":
 		status = metadata.VersioningSuspended
@@ -1643,7 +1648,7 @@ func (h *Handler) GetBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	for _, rule := range rules {
 		status := "Disabled"
 		if rule.Enabled {
-			status = "Enabled"
+			status = statusEnabled
 		}
 
 		s3Rule := s3types.LifecycleRule{
@@ -1823,7 +1828,7 @@ func (h *Handler) PutBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	for i, r := range lifecycleConfig.Rule {
 		rule := metadata.LifecycleRule{
 			ID:      r.ID,
-			Enabled: strings.EqualFold(r.Status, "Enabled"),
+			Enabled: strings.EqualFold(r.Status, statusEnabled),
 		}
 
 		// Get prefix from Filter or deprecated Prefix field

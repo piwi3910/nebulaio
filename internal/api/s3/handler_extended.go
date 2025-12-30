@@ -16,6 +16,11 @@ import (
 	"github.com/piwi3910/nebulaio/pkg/s3types"
 )
 
+// Format type constants for S3 Select.
+const (
+	formatTypeJSON = "JSON"
+)
+
 // GetObjectAttributes returns object metadata without the object body
 // This is a lighter-weight alternative to HeadObject when you only need specific attributes.
 func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
@@ -240,7 +245,7 @@ func buildInputFormat(input s3types.InputSerialization) s3select.InputFormat {
 			format.CSVConfig.RecordDelimiter = "\n"
 		}
 	} else if input.JSON != nil {
-		format.Type = "JSON"
+		format.Type = formatTypeJSON
 
 		format.JSONConfig = &s3select.JSONConfig{
 			Type: input.JSON.Type,
@@ -285,7 +290,7 @@ func buildOutputFormat(output s3types.OutputSerialization) s3select.OutputFormat
 			format.CSVConfig.QuoteFields = "ASNEEDED"
 		}
 	} else if output.JSON != nil {
-		format.Type = "JSON"
+		format.Type = formatTypeJSON
 
 		format.JSONConfig = &s3select.JSONOutputConfig{
 			RecordDelimiter: output.JSON.RecordDelimiter,
@@ -295,7 +300,7 @@ func buildOutputFormat(output s3types.OutputSerialization) s3select.OutputFormat
 		}
 	} else {
 		// Default to JSON output
-		format.Type = "JSON"
+		format.Type = formatTypeJSON
 		format.JSONConfig = &s3select.JSONOutputConfig{
 			RecordDelimiter: "\n",
 		}

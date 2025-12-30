@@ -25,6 +25,10 @@ const (
 	DeviceTypeRDMA DeviceType = "rdma"
 )
 
+const (
+	unknownValue = "unknown"
+)
+
 // GPUInfo contains information about a detected GPU.
 type GPUInfo struct {
 	Name         string `json:"name"`
@@ -368,7 +372,7 @@ func (d *Detector) getBlueFieldFirmware(index int) string {
 	// Verify mlxfwmanager is available before executing
 	if _, err := exec.LookPath("mlxfwmanager"); err != nil {
 		log.Debug().Msg("mlxfwmanager not found, cannot query firmware version")
-		return "unknown"
+		return unknownValue
 	}
 
 	// Query firmware version
@@ -377,7 +381,7 @@ func (d *Detector) getBlueFieldFirmware(index int) string {
 
 	output, err := cmd.Output()
 	if err != nil {
-		return "unknown"
+		return unknownValue
 	}
 
 	// Parse firmware version from output
@@ -386,7 +390,7 @@ func (d *Detector) getBlueFieldFirmware(index int) string {
 		return match[1]
 	}
 
-	return "unknown"
+	return unknownValue
 }
 
 // detectSysfsDPUs detects DPUs via sysfs.

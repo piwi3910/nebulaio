@@ -20,6 +20,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// Directive constants for copy operations.
+const directiveReplace = "REPLACE"
+
 // CopyPartResult represents the result of a copy part operation.
 type CopyPartResult struct {
 	XMLName      xml.Name `xml:"CopyPartResult"`
@@ -322,7 +325,7 @@ func (m *MultipartCopyManager) simpleCopy(ctx context.Context, opts *MultipartCo
 	metadata := sourceMetadata.Metadata
 	contentType := sourceMetadata.ContentType
 
-	if opts.MetadataDirective == "REPLACE" {
+	if opts.MetadataDirective == directiveReplace {
 		metadata = opts.Metadata
 		if opts.ContentType != "" {
 			contentType = opts.ContentType
@@ -336,7 +339,7 @@ func (m *MultipartCopyManager) simpleCopy(ctx context.Context, opts *MultipartCo
 		StorageClass: opts.StorageClass,
 	}
 
-	if opts.TaggingDirective == "REPLACE" && opts.Tagging != "" {
+	if opts.TaggingDirective == directiveReplace && opts.Tagging != "" {
 		putOpts.Tagging = opts.Tagging
 	}
 
@@ -402,7 +405,7 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 	metadata := sourceMetadata.Metadata
 	contentType := sourceMetadata.ContentType
 
-	if opts.MetadataDirective == "REPLACE" {
+	if opts.MetadataDirective == directiveReplace {
 		metadata = opts.Metadata
 		if opts.ContentType != "" {
 			contentType = opts.ContentType
@@ -416,7 +419,7 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 		StorageClass: opts.StorageClass,
 	}
 
-	if opts.TaggingDirective == "REPLACE" && opts.Tagging != "" {
+	if opts.TaggingDirective == directiveReplace && opts.Tagging != "" {
 		mpOpts.Tagging = opts.Tagging
 	}
 

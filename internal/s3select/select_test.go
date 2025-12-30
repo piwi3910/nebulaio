@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+// Test data constants.
+const testCSVData = `name,age,city
+Alice,30,New York
+Bob,25,Los Angeles
+Charlie,35,Chicago`
+
 func TestParseSQL(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -90,12 +96,7 @@ func TestParseSQL(t *testing.T) {
 }
 
 func TestExecuteCSVSelectStar(t *testing.T) {
-	csvData := `name,age,city
-Alice,30,New York
-Bob,25,Los Angeles
-Charlie,35,Chicago`
-
-	result, err := ExecuteCSV([]byte(csvData), "SELECT * FROM s3object", true)
+	result, err := ExecuteCSV([]byte(testCSVData), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
@@ -117,12 +118,7 @@ Charlie,35,Chicago`
 }
 
 func TestExecuteCSVSelectColumns(t *testing.T) {
-	csvData := `name,age,city
-Alice,30,New York
-Bob,25,Los Angeles
-Charlie,35,Chicago`
-
-	result, err := ExecuteCSV([]byte(csvData), "SELECT name, city FROM s3object", true)
+	result, err := ExecuteCSV([]byte(testCSVData), "SELECT name, city FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
@@ -143,12 +139,7 @@ Charlie,35,Chicago`
 }
 
 func TestExecuteCSVWithWhere(t *testing.T) {
-	csvData := `name,age,city
-Alice,30,New York
-Bob,25,Los Angeles
-Charlie,35,Chicago`
-
-	result, err := ExecuteCSV([]byte(csvData), "SELECT * FROM s3object WHERE age > 28", true)
+	result, err := ExecuteCSV([]byte(testCSVData), "SELECT * FROM s3object WHERE age > 28", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
@@ -179,12 +170,7 @@ Eve,32,Boston`
 }
 
 func TestExecuteCSVCount(t *testing.T) {
-	csvData := `name,age,city
-Alice,30,New York
-Bob,25,Los Angeles
-Charlie,35,Chicago`
-
-	result, err := ExecuteCSV([]byte(csvData), "SELECT COUNT(*) FROM s3object", true)
+	result, err := ExecuteCSV([]byte(testCSVData), "SELECT COUNT(*) FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
@@ -349,12 +335,7 @@ Charlie,35,Chicago`
 }
 
 func TestExecuteWithORCondition(t *testing.T) {
-	csvData := `name,age,city
-Alice,30,New York
-Bob,25,Los Angeles
-Charlie,35,Chicago`
-
-	result, err := ExecuteCSV([]byte(csvData), "SELECT name FROM s3object WHERE age < 26 OR age > 34", true)
+	result, err := ExecuteCSV([]byte(testCSVData), "SELECT name FROM s3object WHERE age < 26 OR age > 34", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}

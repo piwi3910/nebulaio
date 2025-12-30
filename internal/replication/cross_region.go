@@ -321,7 +321,7 @@ func (rm *ReplicationManager) validateConfiguration(config *ReplicationConfigura
 
 		priorities[rule.Priority] = true
 
-		if rule.Status != "Enabled" && rule.Status != "Disabled" {
+		if rule.Status != string(RuleStatusEnabled) && rule.Status != string(RuleStatusDisabled) {
 			return fmt.Errorf("invalid rule status: %s", rule.Status)
 		}
 
@@ -345,7 +345,7 @@ func (rm *ReplicationManager) OnObjectCreated(ctx context.Context, bucket, key s
 
 	// Find matching rules
 	for _, rule := range config.Rules {
-		if rule.Status != "Enabled" {
+		if rule.Status != string(RuleStatusEnabled) {
 			continue
 		}
 
@@ -388,12 +388,12 @@ func (rm *ReplicationManager) OnObjectDeleted(ctx context.Context, bucket, key, 
 	}
 
 	for _, rule := range config.Rules {
-		if rule.Status != "Enabled" {
+		if rule.Status != string(RuleStatusEnabled) {
 			continue
 		}
 
 		// Check if delete marker replication is enabled
-		if rule.DeleteMarkerReplication != nil && rule.DeleteMarkerReplication.Status == "Enabled" {
+		if rule.DeleteMarkerReplication != nil && rule.DeleteMarkerReplication.Status == string(RuleStatusEnabled) {
 			if rm.matchesPrefixFilter(&rule, key) {
 				// Queue delete replication
 				task := &ReplicationTask{

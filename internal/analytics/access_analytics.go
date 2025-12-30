@@ -55,6 +55,31 @@ const (
 	SeverityCritical Severity = "CRITICAL"
 )
 
+// Analytics configuration constants.
+const (
+	defaultMinEventsForBaseline   = 100
+	defaultAnomalyThreshold       = 3.0
+	defaultBatchSize              = 1000
+	defaultEventChannelSize       = 10000
+	thresholdUnusualTime          = 2.0
+	thresholdHighVolume           = 5.0
+	thresholdHighVolumeWindowMins = 15
+	thresholdBulkDelete           = 100
+	thresholdBulkDeleteWindowMins = 5
+	thresholdGeoVelocity          = 500
+	thresholdDataExfiltration     = 10
+	thresholdRapidChanges         = 5
+	thresholdRapidChangesWindowMins = 10
+	baselineDays                  = 24
+	minBaselineEvents             = 2
+	heatmapDegrees                = 180
+	embeddingDim                  = 1024
+	minGeoEventsForCheck          = 2
+	degreesToRadiansDivisor       = 180
+	haversineDivisor              = 2
+	bytesPerGB                    = 1024 * 1024 * 1024
+)
+
 // AccessEvent represents a single access event.
 type AccessEvent struct {
 	Timestamp    time.Time         `json:"timestamp"`
@@ -249,12 +274,12 @@ func NewAccessAnalytics(config *AnalyticsConfig, storage AnalyticsStorage, alert
 	if config == nil {
 		config = &AnalyticsConfig{
 			BaselineWindow:       7 * 24 * time.Hour, // 7 days
-			MinEventsForBaseline: 100,
-			AnomalyThreshold:     3.0,                 // 3 standard deviations
-			RetentionPeriod:      30 * 24 * time.Hour, // 30 days
-			SamplingRate:         1.0,                 // 100%
+			MinEventsForBaseline: defaultMinEventsForBaseline,
+			AnomalyThreshold:     defaultAnomalyThreshold,      // 3 standard deviations
+			RetentionPeriod:      30 * 24 * time.Hour,          // 30 days
+			SamplingRate:         1.0,                          // 100%
 			EnableRealTime:       true,
-			BatchSize:            1000,
+			BatchSize:            defaultBatchSize,
 			FlushInterval:        time.Minute,
 		}
 	}
@@ -273,7 +298,7 @@ func NewAccessAnalytics(config *AnalyticsConfig, storage AnalyticsStorage, alert
 		},
 		storage:      storage,
 		alertHandler: alertHandler,
-		eventChan:    make(chan *AccessEvent, 10000),
+		eventChan:    make(chan *AccessEvent, defaultEventChannelSize),
 		stopChan:     make(chan struct{}),
 	}
 
@@ -299,7 +324,7 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeUnusualTime,
 			Enabled:     true,
 			Severity:    SeverityMedium,
-			Threshold:   2.0,
+			Threshold:   thresholdUnusualTime,
 			Window:      time.Hour,
 			Description: "Detects access during unusual hours for a user",
 		},
@@ -309,8 +334,8 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeHighVolume,
 			Enabled:     true,
 			Severity:    SeverityHigh,
-			Threshold:   5.0,
-			Window:      15 * time.Minute,
+			Threshold:   thresholdHighVolume,
+			Window:      thresholdHighVolumeWindowMins * time.Minute,
 			Description: "Detects unusually high request volume",
 		},
 		{
@@ -319,8 +344,8 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeBulkOperation,
 			Enabled:     true,
 			Severity:    SeverityCritical,
-			Threshold:   100,
-			Window:      5 * time.Minute,
+			Threshold:   thresholdBulkDelete,
+			Window:      thresholdBulkDeleteWindowMins * time.Minute,
 			Description: "Detects bulk delete operations",
 			Conditions: []RuleCondition{
 				{Field: "access_type", Operator: "eq", Value: "DELETE"},
@@ -332,7 +357,7 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeGeoVelocity,
 			Enabled:     true,
 			Severity:    SeverityCritical,
-			Threshold:   500, // 500 km/h max velocity
+			Threshold:   thresholdGeoVelocity, // 500 km/h max velocity
 			Window:      time.Hour,
 			Description: "Detects impossible travel based on location changes",
 		},
@@ -342,7 +367,7 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeDataExfiltration,
 			Enabled:     true,
 			Severity:    SeverityCritical,
-			Threshold:   10, // 10GB
+			Threshold:   thresholdDataExfiltration, // 10GB
 			Window:      time.Hour,
 			Description: "Detects large data downloads",
 		},
@@ -353,7 +378,7 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Enabled:     true,
 			Severity:    SeverityLow,
 			Threshold:   1,
-			Window:      24 * time.Hour,
+			Window:      baselineDays * time.Hour,
 			Description: "Detects first-time access to a bucket",
 		},
 		{
@@ -372,8 +397,8 @@ func (aa *AccessAnalytics) initializeDefaultRules() {
 			Type:        AnomalyTypeRapidChanges,
 			Enabled:     true,
 			Severity:    SeverityHigh,
-			Threshold:   5,
-			Window:      10 * time.Minute,
+			Threshold:   thresholdRapidChanges,
+			Window:      thresholdRapidChangesWindowMins * time.Minute,
 			Description: "Detects rapid ACL or policy changes",
 			Conditions: []RuleCondition{
 				{Field: "access_type", Operator: "in", Value: []string{"ACL", "POLICY"}},
@@ -765,7 +790,7 @@ func (aa *AccessAnalytics) checkGeoVelocity(rule *AnomalyRule, userID string, ev
 		}
 	}
 
-	if len(geoEvents) < 2 {
+	if len(geoEvents) < minGeoEventsForCheck {
 		return nil
 	}
 
@@ -821,14 +846,14 @@ func (aa *AccessAnalytics) checkGeoVelocity(rule *AnomalyRule, userID string, ev
 func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
 	const earthRadius = 6371 // km
 
-	dLat := (lat2 - lat1) * math.Pi / 180
-	dLon := (lon2 - lon1) * math.Pi / 180
+	dLat := (lat2 - lat1) * math.Pi / degreesToRadiansDivisor
+	dLon := (lon2 - lon1) * math.Pi / degreesToRadiansDivisor
 
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
-		math.Cos(lat1*math.Pi/180)*math.Cos(lat2*math.Pi/180)*
-			math.Sin(dLon/2)*math.Sin(dLon/2)
+	a := math.Sin(dLat/haversineDivisor)*math.Sin(dLat/haversineDivisor) +
+		math.Cos(lat1*math.Pi/degreesToRadiansDivisor)*math.Cos(lat2*math.Pi/degreesToRadiansDivisor)*
+			math.Sin(dLon/haversineDivisor)*math.Sin(dLon/haversineDivisor)
 
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	c := haversineDivisor * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 
 	return earthRadius * c
 }
@@ -851,7 +876,7 @@ func (aa *AccessAnalytics) checkDataExfiltration(rule *AnomalyRule, userID strin
 	}
 
 	// Convert threshold from GB to bytes
-	thresholdBytes := int64(rule.Threshold * 1024 * 1024 * 1024)
+	thresholdBytes := int64(rule.Threshold * bytesPerGB)
 
 	if totalBytesRead < thresholdBytes {
 		return nil

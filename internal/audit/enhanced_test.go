@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// Test constants.
+const maskedValue = "***MASKED***"
+
 // mockAuditStore implements AuditStore for testing.
 type mockAuditStore struct {
 	events []*AuditEvent
@@ -391,19 +394,19 @@ func TestEnhancedAuditLoggerMasking(t *testing.T) {
 	logger.Stop()
 
 	// Check that sensitive data is masked
-	if event.Extra["password"] != "***MASKED***" {
+	if event.Extra["password"] != maskedValue {
 		t.Error("Password should be masked")
 	}
 
-	if event.Extra["username"] == "***MASKED***" {
+	if event.Extra["username"] == maskedValue {
 		t.Error("Username should not be masked")
 	}
 
-	if event.RequestHeaders["Authorization"] != "***MASKED***" {
+	if event.RequestHeaders["Authorization"] != maskedValue {
 		t.Error("Authorization header should be masked")
 	}
 
-	if event.RequestHeaders["Content-Type"] == "***MASKED***" {
+	if event.RequestHeaders["Content-Type"] == maskedValue {
 		t.Error("Content-Type should not be masked")
 	}
 }

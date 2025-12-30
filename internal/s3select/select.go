@@ -12,6 +12,13 @@ import (
 	"strings"
 )
 
+// Format type constants.
+const (
+	formatCSV     = "CSV"
+	formatJSON    = "JSON"
+	formatParquet = "Parquet"
+)
+
 // Query represents a parsed S3 Select SQL query.
 type Query struct {
 	Where     *Condition
@@ -107,7 +114,7 @@ type Engine struct {
 // NewEngine creates a new S3 Select engine.
 func NewEngine(input InputFormat, output OutputFormat) *Engine {
 	// Set defaults
-	if input.CSVConfig == nil && input.Type == "CSV" {
+	if input.CSVConfig == nil && input.Type == formatCSV {
 		input.CSVConfig = &CSVConfig{
 			FileHeaderInfo:  "USE",
 			RecordDelimiter: "\n",
@@ -116,13 +123,13 @@ func NewEngine(input InputFormat, output OutputFormat) *Engine {
 		}
 	}
 
-	if input.JSONConfig == nil && input.Type == "JSON" {
+	if input.JSONConfig == nil && input.Type == formatJSON {
 		input.JSONConfig = &JSONConfig{
 			Type: "LINES",
 		}
 	}
 
-	if output.CSVConfig == nil && output.Type == "CSV" {
+	if output.CSVConfig == nil && output.Type == formatCSV {
 		output.CSVConfig = &CSVOutputConfig{
 			QuoteFields:     "ASNEEDED",
 			RecordDelimiter: "\n",
@@ -131,7 +138,7 @@ func NewEngine(input InputFormat, output OutputFormat) *Engine {
 		}
 	}
 
-	if output.JSONConfig == nil && output.Type == "JSON" {
+	if output.JSONConfig == nil && output.Type == formatJSON {
 		output.JSONConfig = &JSONOutputConfig{
 			RecordDelimiter: "\n",
 		}
@@ -157,11 +164,11 @@ func (e *Engine) Execute(data []byte, sql string) (*Result, error) {
 	var records []Record
 
 	switch e.inputFormat.Type {
-	case "CSV":
+	case formatCSV:
 		records, err = e.parseCSV(data)
-	case "JSON":
+	case formatJSON:
 		records, err = e.parseJSON(data)
-	case "Parquet":
+	case formatParquet:
 		records, err = e.parseParquet(data)
 	default:
 		return nil, fmt.Errorf("unsupported input format: %s", e.inputFormat.Type)
@@ -513,7 +520,7 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 		}
 
 		switch e.outputFormat.Type {
-		case "JSON":
+		case formatJSON:
 			obj := make(map[string]interface{})
 
 			for i, key := range keys {
@@ -530,7 +537,7 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 			output.Write(jsonBytes)
 			output.WriteString(e.outputFormat.JSONConfig.RecordDelimiter)
 
-		case "CSV":
+		case formatCSV:
 			for i, val := range values {
 				if i > 0 {
 					output.WriteString(e.outputFormat.CSVConfig.FieldDelimiter)
@@ -970,7 +977,7 @@ func ExecuteCSV(data []byte, sql string, hasHeader bool) (*Result, error) {
 
 	engine := NewEngine(
 		InputFormat{
-			Type: "CSV",
+			Type: formatCSV,
 			CSVConfig: &CSVConfig{
 				FileHeaderInfo:  headerInfo,
 				RecordDelimiter: "\n",
@@ -979,7 +986,7 @@ func ExecuteCSV(data []byte, sql string, hasHeader bool) (*Result, error) {
 			},
 		},
 		OutputFormat{
-			Type: "JSON",
+			Type: formatJSON,
 			JSONConfig: &JSONOutputConfig{
 				RecordDelimiter: "\n",
 			},
@@ -998,13 +1005,13 @@ func ExecuteJSON(data []byte, sql string, isDocument bool) (*Result, error) {
 
 	engine := NewEngine(
 		InputFormat{
-			Type: "JSON",
+			Type: formatJSON,
 			JSONConfig: &JSONConfig{
 				Type: jsonType,
 			},
 		},
 		OutputFormat{
-			Type: "JSON",
+			Type: formatJSON,
 			JSONConfig: &JSONOutputConfig{
 				RecordDelimiter: "\n",
 			},

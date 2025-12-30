@@ -14,6 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test constants.
+const testAuditLogFile = "audit.log"
+
 // TestFileOutputRotation_NormalFlow tests the normal rotation flow with successful compression.
 func TestFileOutputRotation_NormalFlow(t *testing.T) {
 	// Create temporary directory for test files
@@ -60,7 +63,7 @@ func TestFileOutputRotation_NormalFlow(t *testing.T) {
 	var rotatedFile string
 
 	for _, entry := range entries {
-		if entry.Name() != "audit.log" && strings.HasPrefix(entry.Name(), "audit.log.") {
+		if entry.Name() != testAuditLogFile && strings.HasPrefix(entry.Name(), testAuditLogFile+".") {
 			rotatedFile = filepath.Join(tmpDir, entry.Name())
 			break
 		}
