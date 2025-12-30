@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+// Configuration constants.
+const (
+	defaultHealthCheckInterval = 30 * time.Second // Default health check interval
+)
+
 // Site represents a remote site in the replication cluster.
 type Site struct {
 	LastSeen  time.Time  `json:"lastSeen,omitempty" yaml:"lastSeen,omitempty"`
@@ -62,7 +67,7 @@ func DefaultConfig() Config {
 	return Config{
 		Sites:               []Site{},
 		SyncInterval:        time.Minute,
-		HealthCheckInterval: 30 * time.Second,
+		HealthCheckInterval: defaultHealthCheckInterval,
 		ConflictResolution:  ConflictLastWriteWins,
 		SyncIAM:             true,
 		SyncBucketConfig:    true,

@@ -89,11 +89,17 @@ type ManagerConfig struct {
 	EventBufferSize int
 }
 
+// Manager configuration constants.
+const (
+	defaultSyncWorkers     = 4    // Default number of sync workers
+	defaultEventBufferSize = 1000 // Default event buffer size
+)
+
 // DefaultManagerConfig returns sensible defaults.
 func DefaultManagerConfig() ManagerConfig {
 	return ManagerConfig{
-		SyncWorkers:     4,
-		EventBufferSize: 1000,
+		SyncWorkers:     defaultSyncWorkers,
+		EventBufferSize: defaultEventBufferSize,
 	}
 }
 
