@@ -33,6 +33,9 @@ import (
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 )
 
+// Directory permission constant.
+const dirPermissions = 0750
+
 // Config holds filesystem backend configuration.
 type Config struct {
 	DataDir string
@@ -54,11 +57,11 @@ func New(config Config) (*Backend, error) {
 	}
 
 	// Create directories
-	err := os.MkdirAll(b.bucketsDir, 0750)
+	err := os.MkdirAll(b.bucketsDir, dirPermissions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buckets directory: %w", err)
 	}
-	err = os.MkdirAll(b.uploadsDir, 0750)
+	err = os.MkdirAll(b.uploadsDir, dirPermissions)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create uploads directory: %w", err)
@@ -102,7 +105,7 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 	path := b.objectPath(bucket, key)
 
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
 		return nil, fmt.Errorf("failed to create object directory: %w", err)
 	}
 

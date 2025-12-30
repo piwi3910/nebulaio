@@ -12,6 +12,12 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+// Worker configuration defaults.
+const (
+	defaultNumWorkers      = 4
+	defaultProcessInterval = 100 * time.Millisecond
+)
+
 // Worker processes replication queue items.
 type Worker struct {
 	queue     *Queue
@@ -34,8 +40,8 @@ type WorkerConfig struct {
 // DefaultWorkerConfig returns sensible defaults.
 func DefaultWorkerConfig() WorkerConfig {
 	return WorkerConfig{
-		NumWorkers:      4,
-		ProcessInterval: 100 * time.Millisecond,
+		NumWorkers:      defaultNumWorkers,
+		ProcessInterval: defaultProcessInterval,
 	}
 }
 

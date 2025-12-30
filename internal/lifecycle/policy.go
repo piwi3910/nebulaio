@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// Lifecycle configuration limits.
+const (
+	maxLifecycleRules = 1000
+	maxRuleIDLength   = 255
+)
+
 // LifecycleConfiguration represents the complete lifecycle configuration for a bucket.
 type LifecycleConfiguration struct {
 	XMLName xml.Name        `json:"-"     xml:"LifecycleConfiguration"`
@@ -117,7 +123,7 @@ func (c *LifecycleConfiguration) Validate() error {
 		return errors.New("lifecycle configuration must have at least one rule")
 	}
 
-	if len(c.Rules) > 1000 {
+	if len(c.Rules) > maxLifecycleRules {
 		return errors.New("lifecycle configuration cannot have more than 1000 rules")
 	}
 
@@ -145,7 +151,7 @@ func (c *LifecycleConfiguration) Validate() error {
 // Validate validates a single lifecycle rule.
 func (r *LifecycleRule) Validate() error {
 	// Validate ID
-	if len(r.ID) > 255 {
+	if len(r.ID) > maxRuleIDLength {
 		return errors.New("rule ID must be 255 characters or less")
 	}
 

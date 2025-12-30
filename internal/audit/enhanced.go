@@ -45,6 +45,24 @@ const (
 	OutputS3      OutputType = "s3"
 )
 
+// Default configuration values.
+const (
+	defaultRetentionDays      = 90
+	defaultBufferSize         = 10000
+	defaultRotationMaxSizeMB  = 100
+	defaultRotationMaxBackups = 10
+	defaultRotationMaxAgeDays = 30
+	// File permission constants.
+	auditDirPermissions  = 0750
+	auditFilePermissions = 0600
+	// Default flush interval in seconds.
+	defaultFlushIntervalSec = 30
+	// HTTP client timeout threshold.
+	httpTimeoutThreshold = 400
+	// Default webhook batch size.
+	defaultWebhookBatchSize = 100
+)
+
 // EnhancedConfig holds enhanced audit configuration.
 type EnhancedConfig struct {
 	IntegritySecret     string         `json:"integritySecret" yaml:"integrity_secret"`
@@ -200,16 +218,16 @@ func DefaultEnhancedConfig() EnhancedConfig {
 	return EnhancedConfig{
 		Enabled:           true,
 		ComplianceMode:    ComplianceNone,
-		RetentionDays:     90,
-		BufferSize:        10000,
+		RetentionDays:     defaultRetentionDays,
+		BufferSize:        defaultBufferSize,
 		IntegrityEnabled:  true,
 		MaskSensitiveData: true,
 		SensitiveFields:   []string{"password", "secret", "token", "credential", "key"},
 		Rotation: RotationConfig{
 			Enabled:    true,
-			MaxSizeMB:  100,
-			MaxBackups: 10,
-			MaxAgeDays: 30,
+			MaxSizeMB:  defaultRotationMaxSizeMB,
+			MaxBackups: defaultRotationMaxBackups,
+			MaxAgeDays: defaultRotationMaxAgeDays,
 			Compress:   true,
 		},
 	}
@@ -218,7 +236,7 @@ func DefaultEnhancedConfig() EnhancedConfig {
 // NewEnhancedAuditLogger creates a new enhanced audit logger.
 func NewEnhancedAuditLogger(config EnhancedConfig, store AuditStore, geoLookup GeoLookup) (*EnhancedAuditLogger, error) {
 	if config.BufferSize <= 0 {
-		config.BufferSize = 10000
+		config.BufferSize = defaultBufferSize
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -827,11 +845,11 @@ func newFileOutput(cfg OutputConfig, rotation RotationConfig) (*FileOutput, erro
 
 	// Ensure directory exists with secure permissions
 	dir := filepath.Dir(cfg.Path)
-	if err := os.MkdirAll(dir, 0750); err != nil {
+	if err := os.MkdirAll(dir, auditDirPermissions); err != nil {
 		return nil, err
 	}
 
-	f, err := os.OpenFile(cfg.Path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(cfg.Path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, auditFilePermissions)
 	if err != nil {
 		return nil, err
 	}
@@ -893,7 +911,7 @@ func (o *FileOutput) rotate() error {
 	}
 
 	// Open new file with secure permissions
-	f, err := os.OpenFile(o.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(o.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, auditFilePermissions)
 	if err != nil {
 		return err
 	}
@@ -1123,14 +1141,14 @@ func newWebhookOutput(cfg OutputConfig) (*WebhookOutput, error) {
 
 	batchSize := cfg.BatchSize
 	if batchSize <= 0 {
-		batchSize = 100
+		batchSize = defaultWebhookBatchSize
 	}
 
 	return &WebhookOutput{
 		name:      cfg.Name,
 		url:       cfg.URL,
 		authToken: cfg.AuthToken,
-		client:    &http.Client{Timeout: 30 * time.Second},
+		client:    &http.Client{Timeout: defaultFlushIntervalSec * time.Second},
 		batch:     make([]*EnhancedAuditEvent, 0, batchSize),
 		batchSize: batchSize,
 	}, nil
@@ -1184,7 +1202,7 @@ func (o *WebhookOutput) Flush(ctx context.Context) error {
 
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= httpTimeoutThreshold {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
 	}
 

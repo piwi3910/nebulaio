@@ -13,6 +13,29 @@ import (
 	"github.com/google/uuid"
 )
 
+// Default quota constants.
+const (
+	defaultMaxStorageBytes      = 100 * 1024 * 1024 * 1024 * 1024 // 100 TB
+	defaultMaxBuckets           = 100
+	defaultMaxObjectsPerBucket  = 10000000                       // 10 million
+	defaultMaxObjectSize        = 5 * 1024 * 1024 * 1024 * 1024  // 5 TB
+	defaultMaxRequestsPerSecond = 10000
+	defaultMaxConcurrentUploads = 100
+	defaultMaxBandwidthBps      = 10 * 1024 * 1024 * 1024        // 10 Gbps
+	defaultMaxUsers             = 100
+	defaultMaxAccessKeys        = 10
+	defaultQuotaWarningThreshold = 0.8
+)
+
+// Slug validation constants.
+const (
+	minSlugLength = 3
+	maxSlugLength = 63
+)
+
+// Percentage multiplier for display.
+const percentMultiplierTenant = 100
+
 // TenantStatus represents the status of a tenant.
 type TenantStatus string
 
@@ -132,15 +155,15 @@ const tenantContextKey contextKey = "tenant"
 // DefaultQuota returns the default quota for new tenants.
 func DefaultQuota() *TenantQuota {
 	return &TenantQuota{
-		MaxStorageBytes:      100 * 1024 * 1024 * 1024 * 1024, // 100 TB
-		MaxBuckets:           100,
-		MaxObjectsPerBucket:  10000000,                      // 10 million
-		MaxObjectSize:        5 * 1024 * 1024 * 1024 * 1024, // 5 TB
-		MaxRequestsPerSecond: 10000,
-		MaxConcurrentUploads: 100,
-		MaxBandwidthBps:      10 * 1024 * 1024 * 1024, // 10 Gbps
-		MaxUsers:             100,
-		MaxAccessKeys:        10,
+		MaxStorageBytes:      defaultMaxStorageBytes,
+		MaxBuckets:           defaultMaxBuckets,
+		MaxObjectsPerBucket:  defaultMaxObjectsPerBucket,
+		MaxObjectSize:        defaultMaxObjectSize,
+		MaxRequestsPerSecond: defaultMaxRequestsPerSecond,
+		MaxConcurrentUploads: defaultMaxConcurrentUploads,
+		MaxBandwidthBps:      defaultMaxBandwidthBps,
+		MaxUsers:             defaultMaxUsers,
+		MaxAccessKeys:        defaultMaxAccessKeys,
 		EnableVersioning:     true,
 		EnableReplication:    true,
 		EnableEncryption:     true,
@@ -160,7 +183,7 @@ func DefaultSettings() *TenantSettings {
 		EnforceEncryption:     false,
 		EnforceBucketPrefix:   true,
 		NotifyOnQuotaWarning:  true,
-		QuotaWarningThreshold: 0.8,
+		QuotaWarningThreshold: defaultQuotaWarningThreshold,
 	}
 }
 
@@ -305,12 +328,12 @@ func (tm *TenantManager) generateSlug(name string) string {
 	slug = regexp.MustCompile(`-+`).ReplaceAllString(slug, "-")
 	slug = strings.Trim(slug, "-")
 
-	if len(slug) < 3 {
+	if len(slug) < minSlugLength {
 		slug += "-tenant"
 	}
 
-	if len(slug) > 63 {
-		slug = slug[:63]
+	if len(slug) > maxSlugLength {
+		slug = slug[:maxSlugLength]
 	}
 
 	return slug
@@ -635,7 +658,7 @@ func (tm *TenantManager) sendQuotaWarning(tenant *Tenant, resource string, perce
 	// Implementation would send webhook/email notification
 	// For now, just log
 	fmt.Printf("Quota warning: tenant %s is at %.1f%% of %s quota\n",
-		tenant.Name, percent*100, resource)
+		tenant.Name, percent*percentMultiplierTenant, resource)
 }
 
 // CheckQuota checks if an operation would exceed quota.

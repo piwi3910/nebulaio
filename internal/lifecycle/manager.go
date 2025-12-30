@@ -40,6 +40,12 @@ import (
 // DefaultInterval is the default interval for lifecycle evaluation.
 const DefaultInterval = time.Hour
 
+// Processing batch sizes.
+const (
+	objectBatchSize  = 1000
+	versionBatchSize = 10000
+)
+
 // ObjectService defines the interface for object operations needed by lifecycle.
 type ObjectService interface {
 	DeleteObject(ctx context.Context, bucket, key string) error
@@ -227,7 +233,7 @@ func (m *Manager) ProcessBucket(ctx context.Context, bucket string) error {
 func (m *Manager) processObjects(ctx context.Context, bucket string, rules []LifecycleRule) error {
 	var continuationToken string
 
-	batchSize := 1000
+	batchSize := objectBatchSize
 
 	for {
 		listing, err := m.store.ListObjects(ctx, bucket, "", "", batchSize, continuationToken)
@@ -263,7 +269,7 @@ func (m *Manager) processObjects(ctx context.Context, bucket string, rules []Lif
 
 // processVersions processes object versions for noncurrent version expiration.
 func (m *Manager) processVersions(ctx context.Context, bucket string, rules []LifecycleRule) error {
-	listing, err := m.store.ListObjectVersions(ctx, bucket, "", "", "", "", 10000)
+	listing, err := m.store.ListObjectVersions(ctx, bucket, "", "", "", "", versionBatchSize)
 	if err != nil {
 		return err
 	}

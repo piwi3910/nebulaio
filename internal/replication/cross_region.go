@@ -21,6 +21,19 @@ import (
 	"github.com/google/uuid"
 )
 
+// Cross-region replication configuration constants.
+const (
+	taskChannelBufferSize   = 10000
+	arnBucketPartsCount     = 2
+	arnRegionPartsCount     = 4
+	replicationTaskTimeout  = 5 * time.Minute
+	maxReplicationRetries   = 3
+	latencyHistorySize      = 1000
+	latencyHistoryTrimStart = 500
+	replicationHTTPTimeout  = 30 * time.Minute
+	httpErrorStatusThreshold = 400
+)
+
 // S3ReplicationStatus represents the status of replication for S3 API responses.
 type S3ReplicationStatus string
 
@@ -227,7 +240,7 @@ func NewReplicationManager(storage ReplicationStorage, maxWorkers int) *Replicat
 
 	rm := &ReplicationManager{
 		configs:    make(map[string]*ReplicationConfiguration),
-		tasks:      make(chan *ReplicationTask, 10000),
+		tasks:      make(chan *ReplicationTask, taskChannelBufferSize),
 		maxWorkers: maxWorkers,
 		endpoints:  make(map[string]*RegionEndpoint),
 		storage:    storage,
@@ -490,7 +503,7 @@ func (rm *ReplicationManager) matchesPrefixFilter(rule *ReplicationRule, key str
 func (rm *ReplicationManager) extractBucketName(arn string) string {
 	// Format: arn:aws:s3:::bucket-name
 	parts := strings.Split(arn, ":::")
-	if len(parts) == 2 {
+	if len(parts) == arnBucketPartsCount {
 		return parts[1]
 	}
 
@@ -501,7 +514,7 @@ func (rm *ReplicationManager) extractBucketName(arn string) string {
 func (rm *ReplicationManager) extractRegion(arn string) string {
 	// Format: arn:aws:s3:region:account:bucket
 	parts := strings.Split(arn, ":")
-	if len(parts) >= 4 {
+	if len(parts) >= arnRegionPartsCount {
 		return parts[3]
 	}
 
@@ -531,7 +544,7 @@ func (rm *ReplicationManager) processTask(task *ReplicationTask) {
 	task.Attempts++
 	task.LastAttempt = time.Now()
 
-	ctx, cancel := context.WithTimeout(rm.ctx, 5*time.Minute)
+	ctx, cancel := context.WithTimeout(rm.ctx, replicationTaskTimeout)
 	defer cancel()
 
 	err := rm.replicateObject(ctx, task)
@@ -542,7 +555,7 @@ func (rm *ReplicationManager) processTask(task *ReplicationTask) {
 		atomic.AddInt64(&rm.metrics.objectsFailed, 1)
 
 		// Retry logic
-		if task.Attempts < 3 {
+		if task.Attempts < maxReplicationRetries {
 			time.Sleep(time.Duration(task.Attempts) * time.Second)
 
 			select {
@@ -561,8 +574,8 @@ func (rm *ReplicationManager) processTask(task *ReplicationTask) {
 		rm.metrics.mu.Lock()
 
 		rm.metrics.replicationLatency = append(rm.metrics.replicationLatency, time.Since(start))
-		if len(rm.metrics.replicationLatency) > 1000 {
-			rm.metrics.replicationLatency = rm.metrics.replicationLatency[500:]
+		if len(rm.metrics.replicationLatency) > latencyHistorySize {
+			rm.metrics.replicationLatency = rm.metrics.replicationLatency[latencyHistoryTrimStart:]
 		}
 
 		rm.metrics.lastReplicationTime = time.Now()
@@ -655,7 +668,7 @@ func (rm *ReplicationManager) putObjectRemote(ctx context.Context, endpoint *Reg
 	rm.signRequest(req, endpoint)
 
 	// Execute request
-	client := &http.Client{Timeout: 30 * time.Minute}
+	client := &http.Client{Timeout: replicationHTTPTimeout}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -664,7 +677,7 @@ func (rm *ReplicationManager) putObjectRemote(ctx context.Context, endpoint *Reg
 
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= httpErrorStatusThreshold {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("put failed: %s - %s", resp.Status, string(body))
 	}

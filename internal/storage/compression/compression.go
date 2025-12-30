@@ -47,6 +47,9 @@ const (
 	AlgorithmGzip Algorithm = "gzip"
 )
 
+// percentMultiplier is used for percentage calculations.
+const percentMultiplier = 100
+
 // Level represents compression level.
 type Level int
 
@@ -361,7 +364,7 @@ func (s *CompressionStats) SpaceSaved() int64 {
 // SpaceSavedPercent returns percentage of space saved.
 func (s *CompressionStats) SpaceSavedPercent() float64 {
 	if s.OriginalSize > 0 {
-		return (1 - s.CompressionRatio) * 100
+		return (1 - s.CompressionRatio) * percentMultiplier
 	}
 
 	return 0

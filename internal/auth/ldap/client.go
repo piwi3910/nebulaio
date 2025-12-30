@@ -34,6 +34,13 @@ import (
 	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
+// Default pool configuration constants.
+const (
+	defaultMaxConnections  = 10
+	defaultConnectTimeout  = 10 * time.Second
+	defaultRequestTimeout  = 30 * time.Second
+)
+
 // Provider implements auth.Provider for LDAP/Active Directory.
 type Provider struct {
 	pool      *connPool
@@ -59,15 +66,15 @@ func NewProvider(cfg Config) (*Provider, error) {
 
 	// Set defaults
 	if cfg.Pool.MaxConnections <= 0 {
-		cfg.Pool.MaxConnections = 10
+		cfg.Pool.MaxConnections = defaultMaxConnections
 	}
 
 	if cfg.Pool.ConnectTimeout <= 0 {
-		cfg.Pool.ConnectTimeout = 10 * time.Second
+		cfg.Pool.ConnectTimeout = defaultConnectTimeout
 	}
 
 	if cfg.Pool.RequestTimeout <= 0 {
-		cfg.Pool.RequestTimeout = 30 * time.Second
+		cfg.Pool.RequestTimeout = defaultRequestTimeout
 	}
 
 	// Build TLS config

@@ -11,6 +11,15 @@ import (
 	"time"
 )
 
+// Batch manager configuration defaults.
+const (
+	defaultMaxConcurrentJobs = 5
+	defaultHistoryLimit      = 100
+	retryMultiplier          = 2
+	streamingBufferThreshold = 65536 // 64KB
+	nanosecondsPerSecond     = 1e9
+)
+
 // BatchJobStatus represents the status of a batch replication job.
 type BatchJobStatus string
 
@@ -112,8 +121,8 @@ type BatchManagerConfig struct {
 // DefaultBatchManagerConfig returns sensible defaults.
 func DefaultBatchManagerConfig() BatchManagerConfig {
 	return BatchManagerConfig{
-		MaxConcurrentJobs: 5,
-		HistoryLimit:      100,
+		MaxConcurrentJobs: defaultMaxConcurrentJobs,
+		HistoryLimit:      defaultHistoryLimit,
 	}
 }
 
@@ -672,13 +681,13 @@ func (r *rateLimitedReader) Read(p []byte) (int, error) {
 		r.bytesSinceLastCheck += int64(n)
 
 		// Check every 64KB
-		if r.bytesSinceLastCheck >= 65536 {
+		if r.bytesSinceLastCheck >= streamingBufferThreshold {
 			elapsed := time.Since(r.lastRead).Seconds()
 			if elapsed > 0 {
 				currentRate := float64(r.bytesSinceLastCheck) / elapsed
 				if currentRate > float64(r.bytesPerSec) {
 					// Sleep to slow down
-					sleepTime := time.Duration(float64(r.bytesSinceLastCheck)/float64(r.bytesPerSec)*1e9) - time.Since(r.lastRead)
+					sleepTime := time.Duration(float64(r.bytesSinceLastCheck)/float64(r.bytesPerSec)*nanosecondsPerSecond) - time.Since(r.lastRead)
 					if sleepTime > 0 {
 						time.Sleep(sleepTime)
 					}

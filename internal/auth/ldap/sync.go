@@ -11,6 +11,12 @@ import (
 	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
+// Sync configuration constants.
+const (
+	defaultSyncInterval = 15 * time.Minute
+	defaultPageSize     = 500
+)
+
 // UserSyncService synchronizes LDAP users with the local database.
 type UserSyncService struct {
 	lastSync   time.Time
@@ -59,11 +65,11 @@ func DefaultSyncConfig() SyncConfig {
 // NewUserSyncService creates a new user sync service.
 func NewUserSyncService(provider *Provider, store UserStore, cfg SyncConfig) *UserSyncService {
 	if cfg.Interval <= 0 {
-		cfg.Interval = 15 * time.Minute
+		cfg.Interval = defaultSyncInterval
 	}
 
 	if cfg.PageSize <= 0 {
-		cfg.PageSize = 500
+		cfg.PageSize = defaultPageSize
 	}
 
 	return &UserSyncService{

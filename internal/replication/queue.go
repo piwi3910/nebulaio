@@ -11,6 +11,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// Queue configuration defaults.
+const (
+	defaultQueueMaxSize  = 10000
+	defaultQueueMaxRetry = 3
+)
+
 // Queue manages replication tasks.
 type Queue struct {
 	ctx      context.Context
@@ -34,19 +40,19 @@ type QueueConfig struct {
 // DefaultQueueConfig returns sensible defaults.
 func DefaultQueueConfig() QueueConfig {
 	return QueueConfig{
-		MaxSize:  10000,
-		MaxRetry: 3,
+		MaxSize:  defaultQueueMaxSize,
+		MaxRetry: defaultQueueMaxRetry,
 	}
 }
 
 // NewQueue creates a new replication queue.
 func NewQueue(cfg QueueConfig) *Queue {
 	if cfg.MaxSize <= 0 {
-		cfg.MaxSize = 10000
+		cfg.MaxSize = defaultQueueMaxSize
 	}
 
 	if cfg.MaxRetry <= 0 {
-		cfg.MaxRetry = 3
+		cfg.MaxRetry = defaultQueueMaxRetry
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

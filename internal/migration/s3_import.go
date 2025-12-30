@@ -26,6 +26,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// File permission constants.
+const (
+	stateDirPermissions  = 0750
+	jobsFilePermissions  = 0644
+	failedLogPermissions = 0600
+)
+
+// Migration operation constants.
+const (
+	defaultHTTPTimeout = 30 * time.Minute
+	listMaxKeys        = 1000
+)
+
 // SourceType represents the type of source system.
 type SourceType string
 
@@ -203,14 +216,14 @@ type S3Object struct {
 
 // NewMigrationManager creates a new migration manager.
 func NewMigrationManager(destStorage DestinationStorage, stateDir string) (*MigrationManager, error) {
-	if err := os.MkdirAll(stateDir, 0750); err != nil {
+	if err := os.MkdirAll(stateDir, stateDirPermissions); err != nil {
 		return nil, fmt.Errorf("failed to create state directory: %w", err)
 	}
 
 	failedLogPath := filepath.Join(stateDir, "failed.log")
 
 	//nolint:gosec // G304: failedLogPath is constructed from trusted config
-	failedLog, err := os.OpenFile(failedLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	failedLog, err := os.OpenFile(failedLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, failedLogPermissions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open failed log: %w", err)
 	}
@@ -274,7 +287,7 @@ func (mm *MigrationManager) saveJobs() error {
 
 	jobsPath := filepath.Join(mm.stateDir, "jobs.json")
 
-	return os.WriteFile(jobsPath, data, 0644)
+	return os.WriteFile(jobsPath, data, jobsFilePermissions)
 }
 
 // CreateMigration creates a new migration job.
@@ -385,7 +398,7 @@ func NewS3Client(endpoint, accessKey, secretKey, region string, secure bool) *S3
 		secretKey: secretKey,
 		region:    region,
 		secure:    secure,
-		client:    &http.Client{Timeout: 30 * time.Minute},
+		client:    &http.Client{Timeout: defaultHTTPTimeout},
 	}
 }
 
@@ -691,7 +704,7 @@ func (mm *MigrationManager) countObjects(activeJob *activeMigrationJob) error {
 				bucket,
 				job.Config.SourcePrefix,
 				marker,
-				1000,
+				listMaxKeys,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to list objects in %s: %w", bucket, err)
@@ -767,7 +780,7 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 				sourceBucket,
 				job.Config.SourcePrefix,
 				marker,
-				1000,
+				listMaxKeys,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to list objects: %w", err)

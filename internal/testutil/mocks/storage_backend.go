@@ -12,6 +12,12 @@ import (
 	"github.com/piwi3910/nebulaio/pkg/s3errors"
 )
 
+// Mock storage size constants for testing.
+const (
+	mockTotalBytes = 1000000000 // 1 GB
+	mockUsedBytes  = 500000000  // 500 MB
+)
+
 // MockStorageBackend implements backend.Backend and backend.MultipartBackend for testing.
 // It provides thread-safe in-memory storage with configurable error injection.
 type MockStorageBackend struct {
@@ -44,8 +50,8 @@ func NewMockStorageBackend() *MockStorageBackend {
 		objects: make(map[string]map[string][]byte),
 		parts:   make(map[string]map[int][]byte),
 		storageInfo: &backend.StorageInfo{
-			TotalBytes: 1000000000,
-			UsedBytes:  500000000,
+			TotalBytes: mockTotalBytes,
+			UsedBytes:  mockUsedBytes,
 		},
 	}
 }
@@ -224,8 +230,8 @@ func (m *MockStorageBackend) Reset() {
 	m.objects = make(map[string]map[string][]byte)
 	m.parts = make(map[string]map[int][]byte)
 	m.storageInfo = &backend.StorageInfo{
-		TotalBytes: 1000000000,
-		UsedBytes:  500000000,
+		TotalBytes: mockTotalBytes,
+		UsedBytes:  mockUsedBytes,
 	}
 	// Reset error injections
 	m.initErr = nil
@@ -401,8 +407,8 @@ func (m *MockStorageBackend) GetStorageInfo(ctx context.Context) (*backend.Stora
 
 	if m.storageInfo == nil {
 		return &backend.StorageInfo{
-			TotalBytes: 1000000000,
-			UsedBytes:  500000000,
+			TotalBytes: mockTotalBytes,
+			UsedBytes:  mockUsedBytes,
 		}, nil
 	}
 

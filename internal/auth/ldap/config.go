@@ -7,6 +7,13 @@ import (
 	"github.com/piwi3910/nebulaio/internal/auth"
 )
 
+// LDAP search scope constants.
+const (
+	scopeBaseObject    = 0 // ldap.ScopeBaseObject
+	scopeSingleLevel   = 1 // ldap.ScopeSingleLevel
+	scopeWholeSubtree  = 2 // ldap.ScopeWholeSubtree
+)
+
 // Config holds LDAP provider configuration.
 type Config struct {
 	// Base configuration
@@ -214,12 +221,12 @@ func (c *Config) Validate() error {
 func SearchScope(scope string) int {
 	switch scope {
 	case "base":
-		return 0 // ldap.ScopeBaseObject
+		return scopeBaseObject
 	case "one":
-		return 1 // ldap.ScopeSingleLevel
+		return scopeSingleLevel
 	case "sub":
-		return 2 // ldap.ScopeWholeSubtree
+		return scopeWholeSubtree
 	default:
-		return 2 // Default to subtree
+		return scopeWholeSubtree // Default to subtree
 	}
 }
