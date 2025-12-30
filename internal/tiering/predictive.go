@@ -77,25 +77,25 @@ type ObjectModel struct {
 
 // AccessPrediction represents a prediction for an object.
 type AccessPrediction struct {
-	Timestamp            time.Time
-	Bucket               string
-	Key                  string
-	Reasoning            string
-	RecommendedTier      TierType
-	CurrentTier          TierType
-	TrendDirection       string
-	LongTermConfidence   float64
-	LongTermAccessRate   float64
-	MediumTermConfidence float64
-	TrendStrength        float64
-	PeakAccessHour       int
-	PeakAccessDay        int
-	MediumTermAccessRate float64
-	ShortTermConfidence  float64
-	Confidence           float64
-	ShortTermAccessRate  float64
-	HasDailyPattern      bool
-	HasWeeklyPattern     bool
+	Timestamp            time.Time `json:"timestamp"`
+	Bucket               string    `json:"bucket"`
+	Key                  string    `json:"key"`
+	Reasoning            string    `json:"reasoning"`
+	RecommendedTier      TierType  `json:"recommendedTier"`
+	CurrentTier          TierType  `json:"currentTier"`
+	TrendDirection       string    `json:"trendDirection"`
+	LongTermConfidence   float64   `json:"longTermConfidence"`
+	LongTermAccessRate   float64   `json:"longTermAccessRate"`
+	MediumTermConfidence float64   `json:"mediumTermConfidence"`
+	TrendStrength        float64   `json:"trendStrength"`
+	PeakAccessHour       int       `json:"peakAccessHour"`
+	PeakAccessDay        int       `json:"peakAccessDay"`
+	MediumTermAccessRate float64   `json:"mediumTermAccessRate"`
+	ShortTermConfidence  float64   `json:"shortTermConfidence"`
+	Confidence           float64   `json:"confidence"`
+	ShortTermAccessRate  float64   `json:"shortTermAccessRate"`
+	HasDailyPattern      bool      `json:"hasDailyPattern"`
+	HasWeeklyPattern     bool      `json:"hasWeeklyPattern"`
 }
 
 // NewPredictiveEngine creates a new predictive engine.

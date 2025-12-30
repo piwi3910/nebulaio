@@ -301,7 +301,8 @@ func NewService(config *Config, backend DPUBackend) (*Service, error) {
 	}
 
 	// Initialize the backend
-	if err := s.backend.Init(); err != nil {
+	err := s.backend.Init()
+	if err != nil {
 		return nil, fmt.Errorf("failed to initialize DPU backend: %w", err)
 	}
 

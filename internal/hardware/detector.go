@@ -186,7 +186,8 @@ func (d *Detector) detectGPUs() []GPUInfo {
 	var gpus []GPUInfo
 
 	// Check if nvidia-smi is available
-	if _, err := exec.LookPath("nvidia-smi"); err != nil {
+	_, err := exec.LookPath("nvidia-smi")
+	if err != nil {
 		log.Debug().Msg("nvidia-smi not found, GPU detection disabled")
 		return gpus
 	}
@@ -273,7 +274,8 @@ func (d *Detector) checkGDSSupport(gpu GPUInfo) bool {
 	}
 
 	for _, path := range gdsLibPaths {
-		if _, err := os.Stat(path); err == nil {
+		_, err := os.Stat(path)
+		if err == nil {
 			return true
 		}
 	}
@@ -284,7 +286,8 @@ func (d *Detector) checkGDSSupport(gpu GPUInfo) bool {
 // checkP2PSupport checks if P2P transfers are supported between GPUs.
 func (d *Detector) checkP2PSupport(gpuIndex int) bool {
 	// Verify nvidia-smi is available before executing
-	if _, err := exec.LookPath("nvidia-smi"); err != nil {
+	_, err := exec.LookPath("nvidia-smi")
+	if err != nil {
 		log.Debug().Msg("nvidia-smi not found, cannot check P2P support")
 		return false
 	}

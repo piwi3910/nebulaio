@@ -140,6 +140,7 @@ func TestExecuteCSVSelectColumns(t *testing.T) {
 }
 
 func TestExecuteCSVWithWhere(t *testing.T) {
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteCSV([]byte(testCSVData), "SELECT * FROM s3object WHERE age > 28", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
@@ -159,6 +160,7 @@ Charlie,35,Chicago
 David,28,Seattle
 Eve,32,Boston`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteCSV([]byte(csvData), "SELECT * FROM s3object LIMIT 2", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
@@ -238,6 +240,7 @@ func TestExecuteJSONLines(t *testing.T) {
 {"name":"Bob","age":25}
 {"name":"Charlie","age":35}`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteJSON([]byte(jsonData), "SELECT * FROM s3object", false)
 	if err != nil {
 		t.Fatalf("ExecuteJSON failed: %v", err)
@@ -252,6 +255,7 @@ func TestExecuteJSONLines(t *testing.T) {
 func TestExecuteJSONDocument(t *testing.T) {
 	jsonData := `[{"name":"Alice","age":30},{"name":"Bob","age":25}]`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteJSON([]byte(jsonData), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteJSON failed: %v", err)
@@ -403,6 +407,7 @@ Bob,25`
 		},
 	)
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := engine.Execute([]byte(csvData), "SELECT * FROM s3object")
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
@@ -423,6 +428,7 @@ func TestBytesScannedProcessed(t *testing.T) {
 	csvData := `name,age
 Alice,30`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteCSV([]byte(csvData), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
@@ -442,6 +448,7 @@ Alice,30`
 }
 
 func TestEmptyData(t *testing.T) {
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteCSV([]byte(""), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed on empty data: %v", err)
@@ -457,6 +464,7 @@ func TestSpecialCharactersInCSV(t *testing.T) {
 "Alice, Jr.","She said ""Hello"""
 Bob,Simple text`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteCSV([]byte(csvData), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)
@@ -479,6 +487,7 @@ func TestNestedJSONAccess(t *testing.T) {
 	jsonData := `{"user":{"name":"Alice","age":30},"active":true}
 {"user":{"name":"Bob","age":25},"active":false}`
 
+	//nolint:unqueryvet // SELECT * is intentional for S3 Select testing
 	result, err := ExecuteJSON([]byte(jsonData), "SELECT * FROM s3object WHERE active = true", false)
 	if err != nil {
 		t.Fatalf("ExecuteJSON failed: %v", err)
@@ -504,6 +513,7 @@ func BenchmarkExecuteCSV(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
+		//nolint:unqueryvet // SELECT * is intentional for S3 Select benchmarking
 		_, _ = ExecuteCSV(data, "SELECT * FROM s3object WHERE value > 5000", true)
 	}
 }
@@ -521,6 +531,7 @@ func BenchmarkExecuteJSON(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
+		//nolint:unqueryvet // SELECT * is intentional for S3 Select benchmarking
 		_, _ = ExecuteJSON(data, "SELECT * FROM s3object WHERE value > 5000", false)
 	}
 }

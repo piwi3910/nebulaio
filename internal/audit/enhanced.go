@@ -503,7 +503,8 @@ func (l *EnhancedAuditLogger) enrichEvent(event *EnhancedAuditEvent) {
 
 	// Add geo location
 	if l.geoLookup != nil && event.SourceIP != "" {
-		if geo, err := l.geoLookup.Lookup(event.SourceIP); err == nil {
+		geo, err := l.geoLookup.Lookup(event.SourceIP)
+		if err == nil {
 			event.GeoLocation = geo
 		}
 	}
@@ -774,7 +775,9 @@ func (l *EnhancedAuditLogger) maskSensitiveData(event *EnhancedAuditEvent) {
 func (l *EnhancedAuditLogger) exportCSV(events []AuditEvent, writer io.Writer) error {
 	// Write header
 	header := "id,timestamp,event_type,user,source_ip,bucket,key,result,duration_ms\n"
-	if _, err := writer.Write([]byte(header)); err != nil {
+
+	_, err := writer.Write([]byte(header))
+	if err != nil {
 		return err
 	}
 
@@ -791,7 +794,9 @@ func (l *EnhancedAuditLogger) exportCSV(events []AuditEvent, writer io.Writer) e
 			e.Result,
 			e.DurationMS,
 		)
-		if _, err := writer.Write([]byte(row)); err != nil {
+
+		_, err := writer.Write([]byte(row))
+		if err != nil {
 			return err
 		}
 	}

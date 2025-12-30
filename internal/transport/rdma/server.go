@@ -195,7 +195,8 @@ func (s *Server) handleRequest(conn *Connection) error {
 	conn.mu.Lock()
 
 	// Post receive
-	if err := conn.postReceive(ctx); err != nil {
+	err := conn.postReceive(ctx)
+	if err != nil {
 		conn.mu.Unlock()
 		return err
 	}
@@ -237,7 +238,8 @@ func (s *Server) handleRequest(conn *Connection) error {
 	}
 
 	// Send response
-	if err := s.sendResponse(conn, resp); err != nil {
+	err = s.sendResponse(conn, resp)
+	if err != nil {
 		atomic.AddInt64(&s.metrics.RequestsFailed, 1)
 		return err
 	}

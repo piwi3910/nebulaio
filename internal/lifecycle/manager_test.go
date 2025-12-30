@@ -95,6 +95,7 @@ func (m *MockMetadataStore) UpdateBucket(ctx context.Context, bucket *metadata.B
 }
 func (m *MockMetadataStore) DeleteBucket(ctx context.Context, name string) error { return nil }
 func (m *MockMetadataStore) GetObject(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) PutObject(ctx context.Context, bucket string, obj *metadata.ObjectMeta) error {
@@ -102,6 +103,7 @@ func (m *MockMetadataStore) PutObject(ctx context.Context, bucket string, obj *m
 }
 func (m *MockMetadataStore) DeleteObject(ctx context.Context, bucket, key string) error { return nil }
 func (m *MockMetadataStore) GetObjectVersion(ctx context.Context, bucket, key, versionID string) (*metadata.ObjectMeta, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {
@@ -111,6 +113,7 @@ func (m *MockMetadataStore) CreateMultipartUpload(ctx context.Context, upload *m
 	return nil
 }
 func (m *MockMetadataStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*metadata.MultipartUpload, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
@@ -135,6 +138,7 @@ func (m *MockMetadataStore) GetParts(ctx context.Context, bucket, key, uploadID 
 	return nil, nil
 }
 func (m *MockMetadataStore) GetClusterInfo(ctx context.Context) (*metadata.ClusterInfo, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) LeaderAddress() (string, error) { return "", nil }
@@ -142,6 +146,7 @@ func (m *MockMetadataStore) PutObjectMeta(ctx context.Context, meta *metadata.Ob
 	return nil
 }
 func (m *MockMetadataStore) GetObjectMeta(ctx context.Context, bucket, key string) (*metadata.ObjectMeta, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteObjectMeta(ctx context.Context, bucket, key string) error {
@@ -152,9 +157,11 @@ func (m *MockMetadataStore) PutObjectMetaVersioned(ctx context.Context, meta *me
 }
 func (m *MockMetadataStore) CreateUser(ctx context.Context, user *metadata.User) error { return nil }
 func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.User, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username string) (*metadata.User, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) UpdateUser(ctx context.Context, user *metadata.User) error { return nil }
@@ -164,6 +171,7 @@ func (m *MockMetadataStore) CreateAccessKey(ctx context.Context, key *metadata.A
 	return nil
 }
 func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string) (*metadata.AccessKey, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteAccessKey(ctx context.Context, accessKeyID string) error {
@@ -176,6 +184,7 @@ func (m *MockMetadataStore) CreatePolicy(ctx context.Context, policy *metadata.P
 	return nil
 }
 func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metadata.Policy, error) {
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 func (m *MockMetadataStore) UpdatePolicy(ctx context.Context, policy *metadata.Policy) error {
@@ -193,6 +202,7 @@ func (m *MockMetadataStore) StoreAuditEvent(ctx context.Context, event *audit.Au
 	return nil
 }
 func (m *MockMetadataStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) {
+	//nolint:nilnil // mock returns nil,nil for empty result
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error) {

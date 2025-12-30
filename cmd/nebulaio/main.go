@@ -90,7 +90,8 @@ func main() {
 	}()
 
 	// Start server
-	if err := srv.Start(ctx); err != nil {
+	err = srv.Start(ctx)
+	if err != nil {
 		log.Error().Err(err).Msg("Server error")
 		cancel()   // Ensure cleanup before exit
 		os.Exit(1) //nolint:gocritic // exitAfterDefer: cancel() called explicitly above

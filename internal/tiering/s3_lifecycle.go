@@ -16,72 +16,72 @@ func NewS3LifecycleAdapter() *S3LifecycleAdapter {
 
 // S3LifecycleConfiguration represents an S3 lifecycle configuration.
 type S3LifecycleConfiguration struct {
-	XMLName xml.Name          `xml:"LifecycleConfiguration"`
-	Rules   []S3LifecycleRule `xml:"Rule"`
+	XMLName xml.Name          `xml:"LifecycleConfiguration" json:"-"`
+	Rules   []S3LifecycleRule `xml:"Rule" json:"rules"`
 }
 
 // S3LifecycleRule represents an S3 lifecycle rule.
 type S3LifecycleRule struct {
-	Filter                         *S3LifecycleFilter              `xml:"Filter,omitempty"`
-	Expiration                     *S3LifecycleExpiration          `xml:"Expiration,omitempty"`
-	NoncurrentVersionExpiration    *S3NoncurrentVersionExpiration  `xml:"NoncurrentVersionExpiration,omitempty"`
-	AbortIncompleteMultipartUpload *S3AbortIncompleteUpload        `xml:"AbortIncompleteMultipartUpload,omitempty"`
-	ID                             string                          `xml:"ID"`
-	Status                         string                          `xml:"Status"`
-	Prefix                         string                          `xml:"Prefix,omitempty"`
-	Transitions                    []S3LifecycleTransition         `xml:"Transition,omitempty"`
-	NoncurrentVersionTransition    []S3NoncurrentVersionTransition `xml:"NoncurrentVersionTransition,omitempty"`
+	Filter                         *S3LifecycleFilter              `xml:"Filter,omitempty" json:"filter,omitempty"`
+	Expiration                     *S3LifecycleExpiration          `xml:"Expiration,omitempty" json:"expiration,omitempty"`
+	NoncurrentVersionExpiration    *S3NoncurrentVersionExpiration  `xml:"NoncurrentVersionExpiration,omitempty" json:"noncurrent_version_expiration,omitempty"`
+	AbortIncompleteMultipartUpload *S3AbortIncompleteUpload        `xml:"AbortIncompleteMultipartUpload,omitempty" json:"abort_incomplete_multipart_upload,omitempty"`
+	ID                             string                          `xml:"ID" json:"id"`
+	Status                         string                          `xml:"Status" json:"status"`
+	Prefix                         string                          `xml:"Prefix,omitempty" json:"prefix,omitempty"`
+	Transitions                    []S3LifecycleTransition         `xml:"Transition,omitempty" json:"transitions,omitempty"`
+	NoncurrentVersionTransition    []S3NoncurrentVersionTransition `xml:"NoncurrentVersionTransition,omitempty" json:"noncurrent_version_transition,omitempty"`
 }
 
 // S3LifecycleFilter defines the filter for a lifecycle rule.
 type S3LifecycleFilter struct {
-	Tag    *S3Tag       `xml:"Tag,omitempty"`
-	And    *S3FilterAnd `xml:"And,omitempty"`
-	Prefix string       `xml:"Prefix,omitempty"`
+	Tag    *S3Tag       `xml:"Tag,omitempty" json:"tag,omitempty"`
+	And    *S3FilterAnd `xml:"And,omitempty" json:"and,omitempty"`
+	Prefix string       `xml:"Prefix,omitempty" json:"prefix,omitempty"`
 }
 
 // S3Tag represents an S3 tag.
 type S3Tag struct {
-	Key   string `xml:"Key"`
-	Value string `xml:"Value"`
+	Key   string `xml:"Key" json:"key"`
+	Value string `xml:"Value" json:"value"`
 }
 
 // S3FilterAnd combines multiple filter conditions.
 type S3FilterAnd struct {
-	Prefix string  `xml:"Prefix,omitempty"`
-	Tags   []S3Tag `xml:"Tag,omitempty"`
+	Prefix string  `xml:"Prefix,omitempty" json:"prefix,omitempty"`
+	Tags   []S3Tag `xml:"Tag,omitempty" json:"tags,omitempty"`
 }
 
 // S3LifecycleTransition defines a transition rule.
 type S3LifecycleTransition struct {
-	Date         string `xml:"Date,omitempty"`
-	StorageClass string `xml:"StorageClass"`
-	Days         int    `xml:"Days,omitempty"`
+	Date         string `xml:"Date,omitempty" json:"date,omitempty"`
+	StorageClass string `xml:"StorageClass" json:"storage_class"`
+	Days         int    `xml:"Days,omitempty" json:"days,omitempty"`
 }
 
 // S3LifecycleExpiration defines an expiration rule.
 type S3LifecycleExpiration struct {
-	Date                      string `xml:"Date,omitempty"`
-	Days                      int    `xml:"Days,omitempty"`
-	ExpiredObjectDeleteMarker bool   `xml:"ExpiredObjectDeleteMarker,omitempty"`
+	Date                      string `xml:"Date,omitempty" json:"date,omitempty"`
+	Days                      int    `xml:"Days,omitempty" json:"days,omitempty"`
+	ExpiredObjectDeleteMarker bool   `xml:"ExpiredObjectDeleteMarker,omitempty" json:"expired_object_delete_marker,omitempty"`
 }
 
 // S3NoncurrentVersionTransition defines transition for non-current versions.
 type S3NoncurrentVersionTransition struct {
-	StorageClass            string `xml:"StorageClass"`
-	NoncurrentDays          int    `xml:"NoncurrentDays"`
-	NewerNoncurrentVersions int    `xml:"NewerNoncurrentVersions,omitempty"`
+	StorageClass            string `xml:"StorageClass" json:"storage_class"`
+	NoncurrentDays          int    `xml:"NoncurrentDays" json:"noncurrent_days"`
+	NewerNoncurrentVersions int    `xml:"NewerNoncurrentVersions,omitempty" json:"newer_noncurrent_versions,omitempty"`
 }
 
 // S3NoncurrentVersionExpiration defines expiration for non-current versions.
 type S3NoncurrentVersionExpiration struct {
-	NoncurrentDays          int `xml:"NoncurrentDays"`
-	NewerNoncurrentVersions int `xml:"NewerNoncurrentVersions,omitempty"`
+	NoncurrentDays          int `xml:"NoncurrentDays" json:"noncurrent_days"`
+	NewerNoncurrentVersions int `xml:"NewerNoncurrentVersions,omitempty" json:"newer_noncurrent_versions,omitempty"`
 }
 
 // S3AbortIncompleteUpload defines abort rules for incomplete multipart uploads.
 type S3AbortIncompleteUpload struct {
-	DaysAfterInitiation int `xml:"DaysAfterInitiation"`
+	DaysAfterInitiation int `xml:"DaysAfterInitiation" json:"days_after_initiation"`
 }
 
 // ConvertFromS3 converts an S3 lifecycle configuration to NebulaIO policies.

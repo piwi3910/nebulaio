@@ -826,13 +826,13 @@ func (rm *ReplicationManager) GetMetrics() *ReplicationMetricsSnapshot {
 
 // ReplicationMetricsSnapshot contains a snapshot of replication metrics.
 type ReplicationMetricsSnapshot struct {
-	ObjectsReplicated int64
-	BytesReplicated   int64
-	ObjectsFailed     int64
-	PendingCount      int64
-	AverageLatency    time.Duration
-	LastReplication   time.Time
-	ActiveWorkers     int
+	ObjectsReplicated int64         `json:"objectsReplicated"`
+	BytesReplicated   int64         `json:"bytesReplicated"`
+	ObjectsFailed     int64         `json:"objectsFailed"`
+	PendingCount      int64         `json:"pendingCount"`
+	AverageLatency    time.Duration `json:"averageLatency"`
+	LastReplication   time.Time     `json:"lastReplication"`
+	ActiveWorkers     int           `json:"activeWorkers"`
 }
 
 // Stop stops the replication manager.

@@ -138,20 +138,24 @@ func (p *Provider) initMasterKey() error {
 
 	// Option 3: Generate new master key and save it
 	masterKeyPath := filepath.Join(p.config.KeyStorePath, ".master.key")
+
 	//nolint:gosec // G304: masterKeyPath is constructed from trusted config
-	if data, err := os.ReadFile(masterKeyPath); err == nil {
+	data, readErr := os.ReadFile(masterKeyPath)
+	if readErr == nil {
 		p.masterKey = data
 		return nil
 	}
 
 	// Generate new master key
 	p.masterKey = make([]byte, 32)
-	if _, err := rand.Read(p.masterKey); err != nil {
+
+	_, err := rand.Read(p.masterKey)
+	if err != nil {
 		return fmt.Errorf("failed to generate master key: %w", err)
 	}
 
 	// Save master key
-	err := os.WriteFile(masterKeyPath, p.masterKey, 0600)
+	err = os.WriteFile(masterKeyPath, p.masterKey, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to save master key: %w", err)
 	}
@@ -180,7 +184,9 @@ func (p *Provider) loadKeys() error {
 		}
 
 		var sk storedKey
-		if err := json.Unmarshal(data, &sk); err != nil {
+
+		err = json.Unmarshal(data, &sk)
+		if err != nil {
 			continue
 		}
 

@@ -132,7 +132,8 @@ func (s *Site) Validate() error {
 	}
 
 	// Validate endpoint URL
-	if _, err := url.Parse(s.Endpoint); err != nil {
+	_, err := url.Parse(s.Endpoint)
+	if err != nil {
 		return errors.New("invalid endpoint URL: " + err.Error())
 	}
 

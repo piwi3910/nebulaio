@@ -194,6 +194,7 @@ func (m *MockAccessTracker) GetStats(ctx context.Context, bucket, key string) (*
 
 	stats, exists := m.stats[bucket+"/"+key]
 	if !exists {
+		//nolint:nilnil // mock returns nil,nil for not-found case
 		return nil, nil
 	}
 

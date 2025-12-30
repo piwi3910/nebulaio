@@ -244,12 +244,15 @@ func (pr *ParquetReader) readMetadata() error {
 	}
 
 	// Read footer magic and metadata length
-	if _, err := pr.reader.Seek(size-8, io.SeekStart); err != nil {
+	_, err := pr.reader.Seek(size-8, io.SeekStart)
+	if err != nil {
 		return fmt.Errorf("failed to seek to footer: %w", err)
 	}
 
 	footer := make([]byte, 8)
-	if _, err := io.ReadFull(pr.reader, footer); err != nil {
+
+	_, err = io.ReadFull(pr.reader, footer)
+	if err != nil {
 		return fmt.Errorf("failed to read footer: %w", err)
 	}
 
@@ -262,12 +265,16 @@ func (pr *ParquetReader) readMetadata() error {
 
 	// Read metadata
 	metadataOffset := size - 8 - int64(metadataLen)
-	if _, err := pr.reader.Seek(metadataOffset, io.SeekStart); err != nil {
+
+	_, err = pr.reader.Seek(metadataOffset, io.SeekStart)
+	if err != nil {
 		return fmt.Errorf("failed to seek to metadata: %w", err)
 	}
 
 	metadataBytes := make([]byte, metadataLen)
-	if _, err := io.ReadFull(pr.reader, metadataBytes); err != nil {
+
+	_, err = io.ReadFull(pr.reader, metadataBytes)
+	if err != nil {
 		return fmt.Errorf("failed to read metadata: %w", err)
 	}
 

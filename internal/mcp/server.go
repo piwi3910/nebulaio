@@ -1000,6 +1000,7 @@ func (s *Server) handleRequest(ctx context.Context, req *JSONRPCRequest) (interf
 	case "initialize":
 		return s.handleInitialize(ctx, req.Params)
 	case "initialized":
+		//nolint:nilnil // MCP protocol: initialized notification requires no response
 		return nil, nil
 	case "tools/list":
 		return s.handleListTools(ctx)

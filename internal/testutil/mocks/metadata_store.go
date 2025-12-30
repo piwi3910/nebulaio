@@ -932,6 +932,7 @@ func (m *MockMetadataStore) GetUser(ctx context.Context, id string) (*metadata.U
 		return user, nil
 	}
 
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 
@@ -946,6 +947,7 @@ func (m *MockMetadataStore) GetUserByUsername(ctx context.Context, username stri
 		}
 	}
 
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 
@@ -1017,6 +1019,7 @@ func (m *MockMetadataStore) GetAccessKey(ctx context.Context, accessKeyID string
 		return key, nil
 	}
 
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 
@@ -1076,6 +1079,7 @@ func (m *MockMetadataStore) GetPolicy(ctx context.Context, name string) (*metada
 		return policy, nil
 	}
 
+	//nolint:nilnil // mock returns nil,nil for not-found case
 	return nil, nil
 }
 

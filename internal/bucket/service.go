@@ -99,7 +99,8 @@ func (s *Service) CreateBucket(ctx context.Context, name, owner, region, storage
 	}
 
 	// Check if bucket already exists
-	if _, err := s.store.GetBucket(ctx, name); err == nil {
+	_, err = s.store.GetBucket(ctx, name)
+	if err == nil {
 		return nil, s3errors.ErrBucketAlreadyExists.WithResource(name)
 	}
 
@@ -162,7 +163,8 @@ func (s *Service) GetBucket(ctx context.Context, name string) (*metadata.Bucket,
 // DeleteBucket deletes a bucket.
 func (s *Service) DeleteBucket(ctx context.Context, name string) error {
 	// Check if bucket exists
-	if _, err := s.store.GetBucket(ctx, name); err != nil {
+	_, err := s.store.GetBucket(ctx, name)
+	if err != nil {
 		return s3errors.ErrNoSuchBucket.WithResource(name)
 	}
 
@@ -177,12 +179,14 @@ func (s *Service) DeleteBucket(ctx context.Context, name string) error {
 	}
 
 	// Delete storage
-	if err := s.storage.DeleteBucket(ctx, name); err != nil {
+	err = s.storage.DeleteBucket(ctx, name)
+	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete bucket storage: " + err.Error())
 	}
 
 	// Delete metadata
-	if err := s.store.DeleteBucket(ctx, name); err != nil {
+	err = s.store.DeleteBucket(ctx, name)
+	if err != nil {
 		return s3errors.ErrInternalError.WithMessage("failed to delete bucket metadata: " + err.Error())
 	}
 

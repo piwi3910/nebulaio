@@ -757,7 +757,8 @@ func (s *CatalogService) writeInventoryFile(ctx context.Context, cfg *InventoryC
 		contentType = "application/json"
 	}
 
-	if err := s.writer.PutObject(ctx, cfg.DestinationBucket, filename, tmpFile, size, contentType); err != nil {
+	err = s.writer.PutObject(ctx, cfg.DestinationBucket, filename, tmpFile, size, contentType)
+	if err != nil {
 		return ManifestFile{}, fmt.Errorf("failed to upload inventory file: %w", err)
 	}
 
@@ -897,7 +898,8 @@ func (s *CatalogService) writeManifest(ctx context.Context, bucket, key string, 
 	defer func() { _ = os.Remove(tmpFile.Name()) }()
 	defer func() { _ = tmpFile.Close() }()
 
-	if _, err := tmpFile.Write(data); err != nil {
+	_, err = tmpFile.Write(data)
+	if err != nil {
 		return err
 	}
 

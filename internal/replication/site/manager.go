@@ -516,7 +516,8 @@ func (m *Manager) GetAllSyncStates() map[string]*SyncState {
 
 // AddSite adds a new site to the cluster.
 func (m *Manager) AddSite(ctx context.Context, site Site) error {
-	if err := site.Validate(); err != nil {
+	err := site.Validate()
+	if err != nil {
 		return err
 	}
 

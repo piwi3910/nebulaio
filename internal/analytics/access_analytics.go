@@ -1016,7 +1016,8 @@ func (aa *AccessAnalytics) getBaseline(ctx context.Context, userID string) *User
 
 	// Try to load from storage
 	if aa.storage != nil {
-		if stored, err := aa.storage.GetBaseline(ctx, userID); err == nil && stored != nil {
+		stored, err := aa.storage.GetBaseline(ctx, userID)
+		if err == nil && stored != nil {
 			aa.mu.Lock()
 			aa.baselines[userID] = stored
 			aa.mu.Unlock()
@@ -1266,6 +1267,7 @@ func (aa *AccessAnalytics) GetStats(ctx context.Context) (*AnalyticsStats, error
 func (aa *AccessAnalytics) GetUserBaseline(ctx context.Context, userID string) (*UserBaseline, error) {
 	baseline := aa.getBaseline(ctx, userID)
 	if baseline == nil {
+		//nolint:nilnil // nil,nil indicates no baseline found (not an error condition)
 		return nil, nil
 	}
 

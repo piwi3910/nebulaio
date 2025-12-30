@@ -64,30 +64,30 @@ const (
 
 // MigrationConfig contains configuration for a migration job.
 type MigrationConfig struct {
-	ModifiedAfter    *time.Time
-	ModifiedBefore   *time.Time
-	DestPrefix       string
-	SourceEndpoint   string
-	SourceAccessKey  string
-	SourceSecretKey  string
-	SourceRegion     string
-	SourceType       SourceType
-	SourcePrefix     string
-	SourceBuckets    []string
-	DestBuckets      []string
-	SourceExclude    []string
-	ContentTypes     []string
-	MinSize          int64
-	MaxBandwidth     int64
-	MaxSize          int64
-	Concurrency      int
-	PreserveMetadata bool
-	PreserveTags     bool
-	DryRun           bool
-	Overwrite        bool
-	SkipExisting     bool
-	SourceSecure     bool
-	VerifyChecksum   bool
+	ModifiedAfter    *time.Time `json:"modifiedAfter,omitempty"`
+	ModifiedBefore   *time.Time `json:"modifiedBefore,omitempty"`
+	DestPrefix       string     `json:"destPrefix"`
+	SourceEndpoint   string     `json:"sourceEndpoint"`
+	SourceAccessKey  string     `json:"sourceAccessKey"`
+	SourceSecretKey  string     `json:"sourceSecretKey"`
+	SourceRegion     string     `json:"sourceRegion"`
+	SourceType       SourceType `json:"sourceType"`
+	SourcePrefix     string     `json:"sourcePrefix"`
+	SourceBuckets    []string   `json:"sourceBuckets"`
+	DestBuckets      []string   `json:"destBuckets"`
+	SourceExclude    []string   `json:"sourceExclude,omitempty"`
+	ContentTypes     []string   `json:"contentTypes,omitempty"`
+	MinSize          int64      `json:"minSize,omitempty"`
+	MaxBandwidth     int64      `json:"maxBandwidth,omitempty"`
+	MaxSize          int64      `json:"maxSize,omitempty"`
+	Concurrency      int        `json:"concurrency"`
+	PreserveMetadata bool       `json:"preserveMetadata"`
+	PreserveTags     bool       `json:"preserveTags"`
+	DryRun           bool       `json:"dryRun"`
+	Overwrite        bool       `json:"overwrite"`
+	SkipExisting     bool       `json:"skipExisting"`
+	SourceSecure     bool       `json:"sourceSecure"`
+	VerifyChecksum   bool       `json:"verifyChecksum"`
 }
 
 // MigrationJob represents a migration job.

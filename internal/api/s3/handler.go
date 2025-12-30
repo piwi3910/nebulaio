@@ -721,7 +721,8 @@ func (h *Handler) ListParts(w http.ResponseWriter, r *http.Request) {
 	maxParts := 1000
 
 	if maxPartsStr := query.Get("max-parts"); maxPartsStr != "" {
-		if mp, err := strconv.Atoi(maxPartsStr); err == nil && mp > 0 && mp <= 1000 {
+		mp, err := strconv.Atoi(maxPartsStr)
+		if err == nil && mp > 0 && mp <= 1000 {
 			maxParts = mp
 		}
 	}
@@ -729,7 +730,8 @@ func (h *Handler) ListParts(w http.ResponseWriter, r *http.Request) {
 	partNumberMarker := 0
 
 	if markerStr := query.Get("part-number-marker"); markerStr != "" {
-		if pm, err := strconv.Atoi(markerStr); err == nil && pm >= 0 {
+		pm, err := strconv.Atoi(markerStr)
+		if err == nil && pm >= 0 {
 			partNumberMarker = pm
 		}
 	}

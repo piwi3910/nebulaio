@@ -573,7 +573,8 @@ func (t *Transport) Connect(ctx context.Context, addr string) (*Connection, erro
 
 	// Exchange connection info with remote (simulated)
 	// Real implementation would use a side-channel (TCP) for this exchange
-	if err := t.exchangeConnectionInfo(ctx, conn); err != nil {
+	err = t.exchangeConnectionInfo(ctx, conn)
+	if err != nil {
 		t.memPool.ReleaseRegion(sendMR)
 		t.memPool.ReleaseRegion(recvMR)
 

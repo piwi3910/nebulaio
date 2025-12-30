@@ -101,7 +101,8 @@ func (h *ClusterHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
 	voterMap := make(map[string]bool)
 
 	if h.store != nil {
-		if config, err := h.store.GetClusterConfiguration(); err == nil {
+		config, err := h.store.GetClusterConfiguration()
+		if err == nil {
 			for _, server := range config.Servers {
 				voterMap[strconv.FormatUint(server.ID, 10)] = server.IsVoter
 			}
@@ -172,7 +173,9 @@ func (h *ClusterHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req AddNodeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -182,7 +185,6 @@ func (h *ClusterHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var err error
 	if req.AsVoter {
 		err = h.store.AddVoter(req.NodeID, req.RaftAddr)
 	} else {
@@ -501,7 +503,8 @@ func (h *ClusterHandler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) 
 	voterMap := make(map[string]bool)
 
 	if h.store != nil {
-		if config, err := h.store.GetClusterConfiguration(); err == nil {
+		config, err := h.store.GetClusterConfiguration()
+		if err == nil {
 			for _, server := range config.Servers {
 				voterMap[strconv.FormatUint(server.ID, 10)] = server.IsVoter
 			}

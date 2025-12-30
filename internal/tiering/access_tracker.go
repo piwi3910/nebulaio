@@ -535,6 +535,7 @@ func (s *InMemoryAccessStatsStore) Get(ctx context.Context, bucket, key string) 
 
 	stats, exists := s.data[bucket+"/"+key]
 	if !exists {
+		//nolint:nilnil // nil,nil indicates not found (not an error condition)
 		return nil, nil
 	}
 
