@@ -46,6 +46,7 @@ func DefaultManagerConfig(dataDir string) ManagerConfig {
 func NewManager(cfg ManagerConfig) (*Manager, error) {
 	// Ensure data directory exists
 	volumeDir := filepath.Join(cfg.DataDir, "volumes")
+
 	err := os.MkdirAll(volumeDir, 0750)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create volume directory: %w", err)

@@ -80,8 +80,10 @@ func extractS3Operation(r *http.Request) string {
 	// Check for bucket-level vs object-level
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 
-	const minBucketParts = 1
-	const minKeyParts = 2
+	const (
+		minBucketParts = 1
+		minKeyParts    = 2
+	)
 
 	hasBucket := len(parts) >= minBucketParts && parts[0] != ""
 	hasKey := len(parts) >= minKeyParts && parts[1] != ""

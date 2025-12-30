@@ -278,8 +278,10 @@ func testAsyncTransfer(t *testing.T, asyncOp func(*Service) asyncTransferOperati
 	wg.Add(1)
 
 	op := asyncOp(service)
+
 	err = op(handle, buf, 0, 64<<10, func(err error) {
 		opErr = err
+
 		wg.Done()
 	})
 	require.NoError(t, err)

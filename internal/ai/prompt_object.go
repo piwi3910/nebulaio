@@ -1029,6 +1029,7 @@ func (p *ContentProcessor) ProcessForLLM(content io.Reader, contentType string, 
 	case strings.HasPrefix(contentType, "application/json"):
 		// Pretty print JSON for better readability
 		var v interface{}
+
 		err := json.Unmarshal(data, &v)
 		if err == nil {
 			pretty, _ := json.MarshalIndent(v, "", "  ")

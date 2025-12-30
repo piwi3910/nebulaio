@@ -173,6 +173,7 @@ func TestBatchManagerListJobs(t *testing.T) {
 			SourceBucket:      "source",
 			DestinationBucket: "dest",
 		}
+
 		err := bm.CreateJob(job)
 		if err != nil {
 			t.Fatalf("Failed to create job: %v", err)
@@ -474,6 +475,7 @@ func TestMaxConcurrentJobs(t *testing.T) {
 			DestinationBucket: "dest",
 			Concurrency:       1,
 		}
+
 		err := bm.CreateJob(job)
 		if err != nil {
 			t.Fatalf("Failed to create job: %v", err)
@@ -516,6 +518,7 @@ func TestJobHistoryCleanup(t *testing.T) {
 			SourceBucket:      "source",
 			DestinationBucket: "dest",
 		}
+
 		err := bm.CreateJob(job)
 		if err != nil {
 			t.Fatalf("Failed to create job: %v", err)

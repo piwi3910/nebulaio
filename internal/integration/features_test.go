@@ -158,7 +158,7 @@ Charlie,35,Chicago
 Diana,28,Houston`
 
 	// Execute S3 Select query
-	result, err := engine.Execute([]byte(csvData), "SELECT * FROM s3object WHERE age > 26")
+	result, err := engine.Execute([]byte(csvData), "SELECT name, age, city FROM s3object WHERE age > 26")
 	if err != nil {
 		t.Fatalf("S3 Select failed: %v", err)
 	}
@@ -185,7 +185,7 @@ Diana,28,Houston`
 			},
 		},
 	}
-	event.WithExtra("query", "SELECT * FROM s3object s WHERE s.age > 26")
+	event.WithExtra("query", "SELECT s.name, s.age, s.city FROM s3object s WHERE s.age > 26")
 	event.WithExtra("bytes_returned", strconv.FormatInt(result.BytesReturned, 10))
 
 	err = auditLogger.LogSync(context.Background(), event)

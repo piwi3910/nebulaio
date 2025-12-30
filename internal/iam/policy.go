@@ -66,6 +66,7 @@ type StringOrSlice []string
 // UnmarshalJSON handles unmarshaling both string and []string.
 func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 	var single string
+
 	err := json.Unmarshal(data, &single)
 	if err == nil {
 		*s = []string{single}
@@ -73,6 +74,7 @@ func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 	}
 
 	var multiple []string
+
 	err = json.Unmarshal(data, &multiple)
 	if err != nil {
 		return err
@@ -84,17 +86,25 @@ func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalJSON returns a string if single element, otherwise a slice.
-func (s StringOrSlice) MarshalJSON() ([]byte, error) {
-	if len(s) == 1 {
-		return json.Marshal(s[0])
+func (s *StringOrSlice) MarshalJSON() ([]byte, error) {
+	if s == nil || len(*s) == 0 {
+		return json.Marshal([]string{})
 	}
 
-	return json.Marshal([]string(s))
+	if len(*s) == 1 {
+		return json.Marshal((*s)[0])
+	}
+
+	return json.Marshal([]string(*s))
 }
 
 // Contains checks if the slice contains a value.
-func (s StringOrSlice) Contains(value string) bool {
-	for _, v := range s {
+func (s *StringOrSlice) Contains(value string) bool {
+	if s == nil {
+		return false
+	}
+
+	for _, v := range *s {
 		if v == value {
 			return true
 		}

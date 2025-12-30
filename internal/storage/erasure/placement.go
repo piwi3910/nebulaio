@@ -150,7 +150,7 @@ func (p *ConsistentHashPlacement) findBestNode(shardKey string, nodes []NodeInfo
 		return ring[i].hash >= shardHash
 	})
 
-	for i := range len(ring) {
+	for i := range ring {
 		idx := (startIdx + i) % len(ring)
 		entry := ring[idx]
 

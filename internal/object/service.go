@@ -96,7 +96,7 @@ func ValidateTags(tags map[string]string) error {
 // ParseTaggingHeader parses the x-amz-tagging header format (key1=value1&key2=value2).
 func ParseTaggingHeader(header string) (map[string]string, error) {
 	if header == "" {
-		return nil, nil
+		return map[string]string{}, nil
 	}
 
 	tags := make(map[string]string)
@@ -1098,6 +1098,7 @@ func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []De
 				Owner:        bucketInfo.Owner,
 				ModifiedAt:   time.Now(),
 			}
+
 			err := s.store.PutObjectMetaVersioned(ctx, meta, true)
 			if err != nil {
 				result.Errors = append(result.Errors, DeleteError{

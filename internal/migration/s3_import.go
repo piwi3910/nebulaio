@@ -620,6 +620,7 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 		mm.mu.Lock()
 		mm.activeJob = nil
 		mm.mu.Unlock()
+
 		saveErr := mm.saveJobs()
 		if saveErr != nil {
 			log.Error().
@@ -854,6 +855,7 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 				LastBucket: sourceBucket,
 				LastKey:    marker,
 			}
+
 			saveErr := mm.saveJobs()
 			if saveErr != nil {
 				log.Warn().

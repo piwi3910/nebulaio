@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -11,6 +12,9 @@ import (
 	"github.com/piwi3910/nebulaio/internal/audit"
 	"github.com/rs/zerolog/log"
 )
+
+// ErrLookupNotSupported is returned when Lookup is called but not supported.
+var ErrLookupNotSupported = errors.New("lookup not supported, reads go directly to storage")
 
 // stateMachine implements statemachine.IStateMachine for Dragonboat.
 type stateMachine struct {
@@ -97,6 +101,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 	switch cmd.Type {
 	case cmdCreateBucket:
 		var bucket Bucket
+
 		err := json.Unmarshal(cmd.Data, &bucket)
 		if err != nil {
 			return err
@@ -106,6 +111,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdDeleteBucket:
 		var name string
+
 		err := json.Unmarshal(cmd.Data, &name)
 		if err != nil {
 			return err
@@ -115,6 +121,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdUpdateBucket:
 		var bucket Bucket
+
 		err := json.Unmarshal(cmd.Data, &bucket)
 		if err != nil {
 			return err
@@ -124,6 +131,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdPutObjectMeta:
 		var meta ObjectMeta
+
 		err := json.Unmarshal(cmd.Data, &meta)
 		if err != nil {
 			return err
@@ -136,6 +144,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 			Bucket string `json:"bucket"`
 			Key    string `json:"key"`
 		}
+
 		err := json.Unmarshal(cmd.Data, &data)
 		if err != nil {
 			return err
@@ -148,6 +157,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 			Meta                *ObjectMeta `json:"meta"`
 			PreserveOldVersions bool        `json:"preserve_old_versions"`
 		}
+
 		err := json.Unmarshal(cmd.Data, &data)
 		if err != nil {
 			return err
@@ -161,6 +171,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 			Key       string `json:"key"`
 			VersionID string `json:"version_id"`
 		}
+
 		err := json.Unmarshal(cmd.Data, &data)
 		if err != nil {
 			return err
@@ -170,6 +181,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdCreateUser:
 		var user User
+
 		err := json.Unmarshal(cmd.Data, &user)
 		if err != nil {
 			return err
@@ -179,6 +191,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdUpdateUser:
 		var user User
+
 		err := json.Unmarshal(cmd.Data, &user)
 		if err != nil {
 			return err
@@ -188,6 +201,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdDeleteUser:
 		var id string
+
 		err := json.Unmarshal(cmd.Data, &id)
 		if err != nil {
 			return err
@@ -197,6 +211,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdCreateAccessKey:
 		var key AccessKey
+
 		err := json.Unmarshal(cmd.Data, &key)
 		if err != nil {
 			return err
@@ -206,6 +221,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdDeleteAccessKey:
 		var id string
+
 		err := json.Unmarshal(cmd.Data, &id)
 		if err != nil {
 			return err
@@ -215,6 +231,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdCreatePolicy:
 		var policy Policy
+
 		err := json.Unmarshal(cmd.Data, &policy)
 		if err != nil {
 			return err
@@ -224,6 +241,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdUpdatePolicy:
 		var policy Policy
+
 		err := json.Unmarshal(cmd.Data, &policy)
 		if err != nil {
 			return err
@@ -233,6 +251,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdDeletePolicy:
 		var name string
+
 		err := json.Unmarshal(cmd.Data, &name)
 		if err != nil {
 			return err
@@ -242,6 +261,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdCreateMultipartUpload:
 		var upload MultipartUpload
+
 		err := json.Unmarshal(cmd.Data, &upload)
 		if err != nil {
 			return err
@@ -255,6 +275,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 			Key      string `json:"key"`
 			UploadID string `json:"upload_id"`
 		}
+
 		err := json.Unmarshal(cmd.Data, &data)
 		if err != nil {
 			return err
@@ -268,6 +289,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 			Key      string `json:"key"`
 			UploadID string `json:"upload_id"`
 		}
+
 		err := json.Unmarshal(cmd.Data, &data)
 		if err != nil {
 			return err
@@ -282,6 +304,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 			UploadID string     `json:"upload_id"`
 			Part     UploadPart `json:"part"`
 		}
+
 		err := json.Unmarshal(cmd.Data, &data)
 		if err != nil {
 			return err
@@ -291,6 +314,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdAddNode:
 		var node NodeInfo
+
 		err := json.Unmarshal(cmd.Data, &node)
 		if err != nil {
 			return err
@@ -300,6 +324,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdRemoveNode:
 		var nodeID string
+
 		err := json.Unmarshal(cmd.Data, &nodeID)
 		if err != nil {
 			return err
@@ -309,6 +334,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdStoreAuditEvent:
 		var event audit.AuditEvent
+
 		err := json.Unmarshal(cmd.Data, &event)
 		if err != nil {
 			return err
@@ -318,6 +344,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 
 	case cmdDeleteAuditEvent:
 		var eventID string
+
 		err := json.Unmarshal(cmd.Data, &eventID)
 		if err != nil {
 			return err
@@ -333,7 +360,7 @@ func (sm *stateMachine) processCommand(cmd *command) error {
 func (sm *stateMachine) Lookup(query interface{}) (interface{}, error) {
 	// Dragonboat read queries are not used in our implementation
 	// All reads go directly to BadgerDB
-	return nil, nil
+	return nil, ErrLookupNotSupported
 }
 
 // SaveSnapshot saves a snapshot of the state machine.
@@ -400,14 +427,15 @@ func (sm *stateMachine) RecoverFromSnapshot(r io.Reader, files []statemachine.Sn
 				Key   []byte `json:"key"`
 				Value []byte `json:"value"`
 			}
+
 			err := decoder.Decode(&kv)
 			if err == io.EOF {
 				break
 			} else if err != nil {
 				return err
 			}
-			err = txn.Set(kv.Key, kv.Value)
 
+			err = txn.Set(kv.Key, kv.Value)
 			if err != nil {
 				return err
 			}

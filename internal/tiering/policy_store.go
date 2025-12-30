@@ -343,6 +343,7 @@ func (s *HybridPolicyStore) Get(ctx context.Context, id string) (*AdvancedPolicy
 		data, err := s.metaStore.Get(ctx, "policies/"+id)
 		if err == nil {
 			var policy AdvancedPolicy
+
 			err := json.Unmarshal(data, &policy)
 			if err == nil {
 				s.cacheMu.Lock()

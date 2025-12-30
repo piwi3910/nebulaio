@@ -410,7 +410,7 @@ func (pr *ParquetReader) readPage(page *Page, desc *ColumnDescriptor) ([]interfa
 	values := make([]interface{}, 0, page.NumValues)
 
 	reader := bytes.NewReader(data)
-	for range int32(page.NumValues) {
+	for range page.NumValues {
 		val, err := pr.readValue(reader, desc)
 		if err != nil {
 			if err == io.EOF {
@@ -431,6 +431,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 	switch desc.Type {
 	case ParquetTypeBoolean:
 		var b byte
+
 		err := binary.Read(reader, binary.LittleEndian, &b)
 		if err != nil {
 			return nil, err
@@ -440,6 +441,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 
 	case ParquetTypeInt32:
 		var val int32
+
 		err := binary.Read(reader, binary.LittleEndian, &val)
 		if err != nil {
 			return nil, err
@@ -449,6 +451,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 
 	case ParquetTypeInt64:
 		var val int64
+
 		err := binary.Read(reader, binary.LittleEndian, &val)
 		if err != nil {
 			return nil, err
@@ -458,6 +461,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 
 	case ParquetTypeFloat:
 		var val float32
+
 		err := binary.Read(reader, binary.LittleEndian, &val)
 		if err != nil {
 			return nil, err
@@ -467,6 +471,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 
 	case ParquetTypeDouble:
 		var val float64
+
 		err := binary.Read(reader, binary.LittleEndian, &val)
 		if err != nil {
 			return nil, err
@@ -476,6 +481,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 
 	case ParquetTypeByteArray:
 		var length int32
+
 		err := binary.Read(reader, binary.LittleEndian, &length)
 		if err != nil {
 			return nil, err
@@ -561,6 +567,7 @@ func (pr *ParquetReader) convertByteArray(data []byte, desc *ColumnDescriptor) i
 		return string(data)
 	case ConvertedTypeJSON:
 		var result interface{}
+
 		err := json.Unmarshal(data, &result)
 		if err != nil {
 			return string(data)

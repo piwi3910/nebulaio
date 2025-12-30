@@ -248,6 +248,7 @@ func (m *Manager) processObjects(ctx context.Context, bucket string, rules []Lif
 			}
 
 			action := m.EvaluateObject(rules, obj)
+
 			err := m.applyAction(ctx, bucket, obj, action)
 			if err != nil {
 				log.Error().Err(err).

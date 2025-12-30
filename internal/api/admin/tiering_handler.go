@@ -255,6 +255,7 @@ func (h *TieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 
 	var req CreateTieringPolicyRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
@@ -609,6 +610,7 @@ func GetObjectKeyFromRequest(r *http.Request) string {
 	if queryKey := r.URL.Query().Get("key"); queryKey != "" {
 		key = queryKey
 	}
+
 	return key
 }
 
@@ -621,6 +623,7 @@ func WriteObjectAccessStatsResponse(w http.ResponseWriter, bucket, key string, s
 			"tracked": false,
 			"message": "No access stats tracked for this object",
 		})
+
 		return
 	}
 
@@ -656,6 +659,7 @@ func ValidateTierType(tier tiering.TierType) bool {
 		tiering.TierCold:    true,
 		tiering.TierArchive: true,
 	}
+
 	return validTiers[tier]
 }
 
@@ -668,6 +672,7 @@ func ParseLimitParam(r *http.Request, defaultLimit, maxLimit int) int {
 			limit = int(l)
 		}
 	}
+
 	return limit
 }
 
@@ -680,6 +685,7 @@ func ParseInactiveDaysParam(r *http.Request, defaultDays int) int {
 			inactiveDays = int(d)
 		}
 	}
+
 	return inactiveDays
 }
 
@@ -756,6 +762,7 @@ func ValidateManualTransitionRequest(w http.ResponseWriter, req *ManualTransitio
 		writeError(w, "invalid target_tier: must be hot, warm, cold, or archive", http.StatusBadRequest)
 		return false
 	}
+
 	return true
 }
 

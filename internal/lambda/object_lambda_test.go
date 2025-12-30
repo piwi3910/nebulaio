@@ -119,6 +119,7 @@ func TestListAccessPoints(t *testing.T) {
 				{Actions: []string{"GetObject"}, ContentTransformation: ContentTransformation{Type: TransformBuiltIn}},
 			},
 		}
+
 		err := svc.CreateAccessPoint(cfg)
 		if err != nil {
 			t.Fatalf("CreateAccessPoint failed: %v", err)

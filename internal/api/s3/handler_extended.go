@@ -513,6 +513,7 @@ func (h *Handler) PutBucketIntelligentTieringConfiguration(w http.ResponseWriter
 	}
 
 	var config s3types.IntelligentTieringConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&config)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", "Failed to parse configuration: "+err.Error(), http.StatusBadRequest)

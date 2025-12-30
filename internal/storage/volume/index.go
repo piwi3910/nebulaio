@@ -114,11 +114,12 @@ func unmarshalIndex(data []byte) (*Index, error) {
 		if _, err := io.ReadFull(r, entry.KeyHash[:]); err != nil {
 			return nil, ErrIndexCorrupted
 		}
-		err := binary.Read(r, binary.LittleEndian, &entry.BlockNum)
 
+		err := binary.Read(r, binary.LittleEndian, &entry.BlockNum)
 		if err != nil {
 			return nil, ErrIndexCorrupted
 		}
+
 		err = binary.Read(r, binary.LittleEndian, &entry.BlockCount)
 		if err != nil {
 			return nil, ErrIndexCorrupted
@@ -145,7 +146,6 @@ func unmarshalIndex(data []byte) (*Index, error) {
 		}
 
 		err = binary.Read(r, binary.LittleEndian, &entry.KeyLen)
-
 		if err != nil {
 			return nil, ErrIndexCorrupted
 		}

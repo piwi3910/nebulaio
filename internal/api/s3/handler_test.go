@@ -749,6 +749,8 @@ type testContext struct {
 }
 
 func setupTestContext(t *testing.T) *testContext {
+	t.Helper()
+
 	store := NewMockMetadataStore()
 	storage := NewMockStorageBackend()
 
@@ -812,6 +814,7 @@ func TestListBuckets(t *testing.T) {
 	}
 
 	var result s3types.ListAllMyBucketsResult
+
 	err := xml.Unmarshal(w.Body.Bytes(), &result)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
@@ -1181,6 +1184,7 @@ func TestListObjectsV2(t *testing.T) {
 	}
 
 	var result s3types.ListBucketResult
+
 	err := xml.Unmarshal(w.Body.Bytes(), &result)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)

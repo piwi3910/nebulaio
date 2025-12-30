@@ -61,8 +61,8 @@ func New(config Config) (*Backend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buckets directory: %w", err)
 	}
-	err = os.MkdirAll(b.uploadsDir, dirPermissions)
 
+	err = os.MkdirAll(b.uploadsDir, dirPermissions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create uploads directory: %w", err)
 	}
@@ -207,6 +207,7 @@ func (b *Backend) ObjectExists(ctx context.Context, bucket, key string) (bool, e
 // CreateBucket creates storage for a bucket.
 func (b *Backend) CreateBucket(ctx context.Context, bucket string) error {
 	path := filepath.Join(b.bucketPath(bucket), "objects")
+
 	err := os.MkdirAll(path, 0750)
 	if err != nil {
 		return fmt.Errorf("failed to create bucket directory: %w", err)
@@ -257,6 +258,7 @@ func (b *Backend) BucketExists(ctx context.Context, bucket string) (bool, error)
 // GetStorageInfo returns storage statistics.
 func (b *Backend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, error) {
 	var stat syscall.Statfs_t
+
 	err := syscall.Statfs(b.config.DataDir, &stat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get filesystem stats: %w", err)
@@ -297,6 +299,7 @@ func (b *Backend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, err
 // CreateMultipartUpload creates storage for a multipart upload.
 func (b *Backend) CreateMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	path := b.uploadPath(bucket, key, uploadID)
+
 	err := os.MkdirAll(path, 0750)
 	if err != nil {
 		return fmt.Errorf("failed to create upload directory: %w", err)

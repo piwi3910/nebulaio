@@ -364,6 +364,7 @@ func (s *Server) sendResponse(conn *Connection, resp *ServerResponse) error {
 
 	// Post send
 	ctx := context.Background()
+
 	err := conn.postSend(ctx, respData.Len())
 	if err != nil {
 		return err

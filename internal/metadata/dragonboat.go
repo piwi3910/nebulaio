@@ -144,8 +144,8 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 		err := nh.StartReplica(cfg.InitialMembers, false, smFactory, rc)
 		if err != nil {
 			nh.Close()
-			closeErr := db.Close()
 
+			closeErr := db.Close()
 			if closeErr != nil {
 				log.Error().Err(closeErr).Msg("failed to close BadgerDB during cleanup after replica start failed")
 			}
@@ -162,8 +162,8 @@ func NewDragonboatStore(cfg DragonboatConfig) (*DragonboatStore, error) {
 		err := nh.StartReplica(nil, true, smFactory, rc)
 		if err != nil {
 			nh.Close()
-			closeErr := db.Close()
 
+			closeErr := db.Close()
 			if closeErr != nil {
 				log.Error().Err(closeErr).Msg("failed to close BadgerDB during cleanup after replica join failed")
 			}

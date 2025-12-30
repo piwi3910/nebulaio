@@ -755,7 +755,7 @@ func (a *BlockAllocator) Allocate(n int) (uint32, error) {
 	consecutive := 0
 	startBlock := uint32(0)
 
-	for block := range uint32(a.totalBlocks) {
+	for block := range a.totalBlocks {
 		if a.isBlockFree(block) {
 			if consecutive == 0 {
 				startBlock = block

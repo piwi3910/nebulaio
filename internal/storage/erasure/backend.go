@@ -240,6 +240,7 @@ func (b *Backend) readObjectMetadata(bucket, key string) (*objectMetadata, error
 // deleteObjectMetadata deletes object metadata.
 func (b *Backend) deleteObjectMetadata(bucket, key string) error {
 	path := b.metadataPath(bucket, key)
+
 	err := os.Remove(path)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete metadata: %w", err)
@@ -454,8 +455,8 @@ func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 
 		go func(shardIndex int) {
 			defer wg.Done()
-			err := b.shardManager.DeleteShard(ctx, bucket, key, shardIndex)
 
+			err := b.shardManager.DeleteShard(ctx, bucket, key, shardIndex)
 			if err != nil {
 				errChan <- err
 			}
@@ -497,7 +498,7 @@ func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 func (b *Backend) ObjectExists(ctx context.Context, bucket, key string) (bool, error) {
 	available := 0
 
-	for i := 0; i < b.config.TotalShards(); i++ {
+	for i := range b.config.TotalShards() {
 		if b.shardManager.ShardExists(ctx, bucket, key, i) {
 			available++
 			if available >= b.config.DataShards {

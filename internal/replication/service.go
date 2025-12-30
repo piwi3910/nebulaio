@@ -113,6 +113,7 @@ func (s *Service) Stop() error {
 	}
 
 	s.workerPool.Stop()
+
 	closeErr := s.queue.Close()
 	if closeErr != nil {
 		log.Error().
@@ -529,6 +530,7 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 		Role  string `json:"role"`
 		Rules []Rule `json:"rules"`
 	}
+
 	err := json.Unmarshal(data, &raw)
 	if err != nil {
 		return err

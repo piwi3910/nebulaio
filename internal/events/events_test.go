@@ -327,6 +327,7 @@ func TestEmitter(t *testing.T) {
 			Enabled:     true,
 			QueueConfig: events.DefaultQueueConfig(),
 		})
+
 		emitter.Start()
 		defer emitter.Stop()
 

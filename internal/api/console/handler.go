@@ -512,7 +512,7 @@ func (h *Handler) GetObjectContent(w http.ResponseWriter, r *http.Request) {
 }
 
 // copyBuffer copies from src to dst using a buffer.
-func copyBuffer(dst http.ResponseWriter, src interface{ Read([]byte) (int, error) }) (int64, error) {
+func copyBuffer(dst http.ResponseWriter, src interface{ Read(p []byte) (n int, err error) }) (int64, error) {
 	buf := make([]byte, copyBufferSize)
 
 	var written int64

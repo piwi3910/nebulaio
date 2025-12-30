@@ -331,8 +331,10 @@ func parseListResponse(data []byte) ([]ObjectInfo, []string, string, bool) {
 	_, _ = r.Read(nextToken)
 
 	objects := make([]ObjectInfo, 0, count)
+
 	for range count {
 		var keyLen uint16
+
 		err := binary.Read(r, binary.BigEndian, &keyLen)
 		if err != nil {
 			break

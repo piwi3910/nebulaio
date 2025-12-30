@@ -519,8 +519,8 @@ func (krm *KeyRotationManager) RotateKey(ctx context.Context, keyID string, trig
 
 			return event, err
 		}
-		err = krm.storage.StoreKeyVersion(ctx, keyID, newVersion)
 
+		err = krm.storage.StoreKeyVersion(ctx, keyID, newVersion)
 		if err != nil {
 			event.Status = statusFailed
 			event.Error = err.Error()

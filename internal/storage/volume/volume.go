@@ -257,7 +257,7 @@ func OpenVolume(path string) (*Volume, error) {
 	activeSmall := uint32(0xFFFFFFFF)
 	activeMedium := uint32(0xFFFFFFFF)
 
-	for i := range uint32(super.TotalBlocks) {
+	for i := range super.TotalBlocks {
 		switch blockTypes[i] {
 		case BlockTypePackedTiny:
 			if activeTiny == 0xFFFFFFFF {
@@ -354,7 +354,7 @@ func OpenVolumeWithConfig(path string, dioConfig DirectIOConfig) (*Volume, error
 	activeSmall := uint32(0xFFFFFFFF)
 	activeMedium := uint32(0xFFFFFFFF)
 
-	for i := range uint32(super.TotalBlocks) {
+	for i := range super.TotalBlocks {
 		switch blockTypes[i] {
 		case BlockTypePackedTiny:
 			if activeTiny == 0xFFFFFFFF {

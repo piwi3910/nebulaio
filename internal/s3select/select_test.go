@@ -96,6 +96,7 @@ func TestParseSQL(t *testing.T) {
 }
 
 func TestExecuteCSVSelectStar(t *testing.T) {
+	//nolint:unqueryvet // Testing SELECT * functionality which is valid in S3 Select
 	result, err := ExecuteCSV([]byte(testCSVData), "SELECT * FROM s3object", true)
 	if err != nil {
 		t.Fatalf("ExecuteCSV failed: %v", err)

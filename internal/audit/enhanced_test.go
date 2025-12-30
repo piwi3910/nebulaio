@@ -171,6 +171,7 @@ func TestEnhancedAuditLoggerWithFileOutput(t *testing.T) {
 				},
 			},
 		}
+
 		err := logger.LogSync(context.Background(), event)
 		if err != nil {
 			t.Fatalf("Failed to log event: %v", err)
@@ -195,6 +196,7 @@ func TestEnhancedAuditLoggerWithFileOutput(t *testing.T) {
 	// Verify JSON parsing
 	for _, line := range lines {
 		var event EnhancedAuditEvent
+
 		err := json.Unmarshal([]byte(line), &event)
 		if err != nil {
 			t.Errorf("Failed to parse log line: %v", err)
@@ -234,6 +236,7 @@ func TestEnhancedAuditLoggerIntegrity(t *testing.T) {
 				},
 			},
 		}
+
 		err := logger.LogSync(context.Background(), events[i])
 		if err != nil {
 			t.Fatalf("Failed to log event: %v", err)

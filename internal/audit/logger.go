@@ -323,8 +323,8 @@ func (l *AuditLogger) processEvents() {
 
 				return
 			}
-			err := l.processEvent(l.ctx, event)
 
+			err := l.processEvent(l.ctx, event)
 			if err != nil {
 				log.Error().Err(err).Str("event_id", event.ID).Msg("Failed to process audit event")
 			}

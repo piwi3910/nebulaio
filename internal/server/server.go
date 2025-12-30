@@ -754,13 +754,13 @@ func (s *Server) Start(ctx context.Context) error {
 		if err != nil {
 			log.Error().Err(err).Msg("Error shutting down S3 server")
 		}
-		err = s.adminServer.Shutdown(shutdownCtx)
 
+		err = s.adminServer.Shutdown(shutdownCtx)
 		if err != nil {
 			log.Error().Err(err).Msg("Error shutting down Admin server")
 		}
-		err = s.consoleServer.Shutdown(shutdownCtx)
 
+		err = s.consoleServer.Shutdown(shutdownCtx)
 		if err != nil {
 			log.Error().Err(err).Msg("Error shutting down Console server")
 		}

@@ -47,6 +47,7 @@ func TestConfig(t *testing.T) {
 		cfg := DefaultConfig()
 
 		cfg.DataDir = "/data"
+
 		err := cfg.Validate()
 		if err != nil {
 			t.Errorf("valid config should not error: %v", err)
@@ -56,6 +57,7 @@ func TestConfig(t *testing.T) {
 		invalid := cfg
 
 		invalid.DataShards = 0
+
 		err = invalid.Validate()
 		if err == nil {
 			t.Error("expected error for DataShards=0")
@@ -64,6 +66,7 @@ func TestConfig(t *testing.T) {
 		invalid = cfg
 
 		invalid.ParityShards = 0
+
 		err = invalid.Validate()
 		if err == nil {
 			t.Error("expected error for ParityShards=0")
@@ -72,6 +75,7 @@ func TestConfig(t *testing.T) {
 		invalid = cfg
 
 		invalid.DataDir = ""
+
 		err = invalid.Validate()
 		if err == nil {
 			t.Error("expected error for empty DataDir")

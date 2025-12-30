@@ -1190,6 +1190,7 @@ func (h *Handler) PutBucketVersioning(w http.ResponseWriter, r *http.Request) {
 
 	// Parse the versioning configuration from request body
 	var config s3types.VersioningConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&config)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -1806,6 +1807,7 @@ func (h *Handler) PutBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 
 	var lifecycleConfig s3types.LifecycleConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&lifecycleConfig)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -2084,6 +2086,7 @@ func (h *Handler) PutBucketAcl(w http.ResponseWriter, r *http.Request) {
 
 	// Parse XML body
 	var aclPolicy s3types.AccessControlPolicy
+
 	err := xml.NewDecoder(r.Body).Decode(&aclPolicy)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -2144,6 +2147,7 @@ func (h *Handler) PutBucketEncryption(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 
 	var sseConfig s3types.ServerSideEncryptionConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&sseConfig)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -2239,6 +2243,7 @@ func (h *Handler) PutBucketWebsite(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 
 	var websiteConfig s3types.WebsiteConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&websiteConfig)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -2337,6 +2342,7 @@ func (h *Handler) PutBucketLogging(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 
 	var loggingStatus s3types.BucketLoggingStatus
+
 	err := xml.NewDecoder(r.Body).Decode(&loggingStatus)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -2405,6 +2411,7 @@ func (h *Handler) PutBucketNotificationConfiguration(w http.ResponseWriter, r *h
 	bucketName := chi.URLParam(r, "bucket")
 
 	var notifConfig s3types.NotificationConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&notifConfig)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -2488,6 +2495,7 @@ func (h *Handler) PutBucketReplication(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 
 	var replConfig s3types.ReplicationConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&replConfig)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -2576,6 +2584,7 @@ func (h *Handler) PutObjectLockConfiguration(w http.ResponseWriter, r *http.Requ
 	bucketName := chi.URLParam(r, "bucket")
 
 	var lockConfig s3types.ObjectLockConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&lockConfig)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -2629,6 +2638,7 @@ func (h *Handler) PutPublicAccessBlock(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "bucket")
 
 	var pabConfig s3types.PublicAccessBlockConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&pabConfig)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -2694,6 +2704,7 @@ func (h *Handler) PutBucketOwnershipControls(w http.ResponseWriter, r *http.Requ
 	bucketName := chi.URLParam(r, "bucket")
 
 	var ownershipConfig s3types.OwnershipControls
+
 	err := xml.NewDecoder(r.Body).Decode(&ownershipConfig)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -2754,6 +2765,7 @@ func (h *Handler) PutBucketAccelerateConfiguration(w http.ResponseWriter, r *htt
 	bucketName := chi.URLParam(r, "bucket")
 
 	var accelConfig s3types.AccelerateConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&accelConfig)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)
@@ -3049,6 +3061,7 @@ func (h *Handler) PutObjectLegalHold(w http.ResponseWriter, r *http.Request) {
 	versionID := r.URL.Query().Get("versionId")
 
 	var legalHold s3types.LegalHold
+
 	err := xml.NewDecoder(r.Body).Decode(&legalHold)
 	if err != nil {
 		writeS3Error(w, "MalformedXML", err.Error(), http.StatusBadRequest)

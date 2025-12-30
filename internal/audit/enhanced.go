@@ -441,8 +441,8 @@ func (l *EnhancedAuditLogger) processEvents() {
 
 				return
 			}
-			err := l.processEvent(l.ctx, event)
 
+			err := l.processEvent(l.ctx, event)
 			if err != nil {
 				atomic.AddInt64(&l.stats.EventsFailed, 1)
 			}

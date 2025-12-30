@@ -379,6 +379,7 @@ func (h *Handler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req UpdatePasswordRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -491,6 +492,7 @@ func (h *Handler) ListPolicies(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 	var req CreatePolicyRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -992,6 +994,7 @@ func (h *Handler) SetBucketVersioning(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
 
 	var req SetBucketVersioningRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -1046,6 +1049,7 @@ func (h *Handler) SetBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
 
 	var req SetBucketLifecycleRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -1066,6 +1070,7 @@ func (h *Handler) SetBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 // DeleteBucketLifecycle deletes lifecycle configuration for a bucket.
 func (h *Handler) DeleteBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	err := h.bucket.SetLifecycle(r.Context(), bucketName, nil)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -1104,6 +1109,7 @@ func (h *Handler) SetBucketCORS(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
 
 	var req SetBucketCORSRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -1124,6 +1130,7 @@ func (h *Handler) SetBucketCORS(w http.ResponseWriter, r *http.Request) {
 // DeleteBucketCORS deletes CORS configuration for a bucket.
 func (h *Handler) DeleteBucketCORS(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	err := h.bucket.SetCORS(r.Context(), bucketName, nil)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -1162,6 +1169,7 @@ func (h *Handler) SetBucketPolicy(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
 
 	var req SetBucketPolicyRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -1182,6 +1190,7 @@ func (h *Handler) SetBucketPolicy(w http.ResponseWriter, r *http.Request) {
 // DeleteBucketPolicy deletes bucket policy.
 func (h *Handler) DeleteBucketPolicy(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	err := h.bucket.SetBucketPolicy(r.Context(), bucketName, "")
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -1220,6 +1229,7 @@ func (h *Handler) SetBucketTags(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
 
 	var req SetBucketTagsRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -1240,6 +1250,7 @@ func (h *Handler) SetBucketTags(w http.ResponseWriter, r *http.Request) {
 // DeleteBucketTags deletes bucket tags.
 func (h *Handler) DeleteBucketTags(w http.ResponseWriter, r *http.Request) {
 	bucketName := chi.URLParam(r, "name")
+
 	err := h.bucket.SetBucketTags(r.Context(), bucketName, nil)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

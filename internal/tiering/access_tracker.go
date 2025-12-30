@@ -3,9 +3,13 @@ package tiering
 import (
 	"container/list"
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
+
+// ErrStatsNotFound is returned when access stats are not found for an object.
+var ErrStatsNotFound = errors.New("access stats not found")
 
 // Access trend constants.
 const (
@@ -174,7 +178,7 @@ func (t *AccessTracker) GetStats(ctx context.Context, bucket, key string) (*Obje
 		return t.persistStore.Get(ctx, bucket, key)
 	}
 
-	return nil, nil
+	return nil, ErrStatsNotFound
 }
 
 // UpdateTier updates the current tier for an object.

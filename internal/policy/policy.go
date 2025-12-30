@@ -107,6 +107,7 @@ func ParsePolicy(jsonData string) (*Policy, error) {
 	}
 
 	var p Policy
+
 	err := json.Unmarshal([]byte(jsonData), &p)
 	if err != nil {
 		return nil, fmt.Errorf("invalid policy JSON: %w", err)

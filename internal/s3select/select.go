@@ -294,10 +294,12 @@ func (e *Engine) parseJSON(data []byte) ([]Record, error) {
 			}
 
 			var obj map[string]interface{}
+
 			err := json.Unmarshal([]byte(line), &obj)
 			if err != nil {
 				// Try as array
 				var arr []interface{}
+
 				err := json.Unmarshal([]byte(line), &arr)
 				if err != nil {
 					continue
@@ -317,6 +319,7 @@ func (e *Engine) parseJSON(data []byte) ([]Record, error) {
 	} else {
 		// DOCUMENT format - single JSON object or array
 		var obj interface{}
+
 		err := json.Unmarshal(data, &obj)
 		if err != nil {
 			return nil, err

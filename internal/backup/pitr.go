@@ -146,15 +146,15 @@ type BackupStorage interface {
 
 // ObjectInfo contains object metadata.
 type ObjectInfo struct {
-	LastModified time.Time
-	Metadata     map[string]string
-	Key          string
-	ETag         string
-	ContentType  string
-	VersionID    string
-	Size         int64
-	IsLatest     bool
-	DeleteMarker bool
+	LastModified time.Time         `json:"last_modified"`
+	Metadata     map[string]string `json:"metadata"`
+	Key          string            `json:"key"`
+	ETag         string            `json:"etag"`
+	ContentType  string            `json:"content_type"`
+	VersionID    string            `json:"version_id"`
+	Size         int64             `json:"size"`
+	IsLatest     bool              `json:"is_latest"`
+	DeleteMarker bool              `json:"delete_marker"`
 }
 
 // PutObjectOptions contains options for PutObject.
@@ -200,7 +200,8 @@ type RestoreJob struct {
 // NewBackupManager creates a new backup manager.
 func NewBackupManager(config *BackupConfig, storage BackupStorage) (*BackupManager, error) {
 	// Create destination directory
-	if err := os.MkdirAll(config.DestinationPath, 0750); err != nil {
+	err := os.MkdirAll(config.DestinationPath, 0750)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -219,7 +220,8 @@ func NewBackupManager(config *BackupConfig, storage BackupStorage) (*BackupManag
 	}
 
 	// Load existing backup metadata
-	if err := bm.loadMetadata(); err != nil {
+	err = bm.loadMetadata()
+	if err != nil {
 		return nil, fmt.Errorf("failed to load metadata: %w", err)
 	}
 
@@ -228,7 +230,8 @@ func NewBackupManager(config *BackupConfig, storage BackupStorage) (*BackupManag
 
 // NewWALManager creates a new WAL manager.
 func NewWALManager(path string, syncInterval, retention time.Duration) (*WALManager, error) {
-	if err := os.MkdirAll(path, 0750); err != nil {
+	err := os.MkdirAll(path, 0750)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 
@@ -309,6 +312,7 @@ func (wm *WALManager) GetEntriesUntil(t time.Time) ([]*WALEntry, error) {
 func (wm *WALManager) syncLoop() {
 	for range wm.syncTicker.C {
 		wm.mu.Lock()
+
 		err := wm.file.Sync()
 		if err != nil {
 			log.Error().
@@ -988,6 +992,7 @@ func (bm *BackupManager) restoreFromBackup(job *RestoreJob, backup *BackupMetada
 		}
 
 		bucketPath := filepath.Join(backup.Location, bucket)
+
 		err := bm.restoreBucket(job, bucketPath, targetBucket)
 		if err != nil {
 			return err

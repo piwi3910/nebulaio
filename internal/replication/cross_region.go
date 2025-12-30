@@ -875,6 +875,7 @@ func (h *ReplicationHandler) HandlePutReplication(w http.ResponseWriter, r *http
 	bucket := r.PathValue("bucket")
 
 	var config ReplicationConfiguration
+
 	err := xml.NewDecoder(r.Body).Decode(&config)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

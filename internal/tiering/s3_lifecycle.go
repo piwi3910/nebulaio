@@ -411,6 +411,7 @@ func (a *S3LifecycleAdapter) convertSelectorToFilter(selector PolicySelector) *S
 // ParseS3LifecycleXML parses S3 lifecycle XML configuration.
 func ParseS3LifecycleXML(data []byte) (*S3LifecycleConfiguration, error) {
 	var config S3LifecycleConfiguration
+
 	err := xml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse lifecycle configuration: %w", err)

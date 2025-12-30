@@ -124,7 +124,7 @@ func TestHashPassword(t *testing.T) {
 		},
 		{
 			name:     "unicode password",
-			password: "Pässwörd123日本語",
+			password: "Pässwörd123ΩΨΣΦ",
 		},
 	}
 

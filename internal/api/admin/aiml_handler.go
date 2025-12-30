@@ -400,6 +400,7 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 // UpdateConfig updates the server configuration.
 func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	var config map[string]interface{}
+
 	err := json.NewDecoder(r.Body).Decode(&config)
 	if err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)

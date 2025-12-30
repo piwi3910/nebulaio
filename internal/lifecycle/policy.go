@@ -109,6 +109,7 @@ type ActionResult struct {
 // ParseLifecycleConfig parses XML lifecycle configuration.
 func ParseLifecycleConfig(data []byte) (*LifecycleConfiguration, error) {
 	var config LifecycleConfiguration
+
 	err := xml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse lifecycle configuration: %w", err)

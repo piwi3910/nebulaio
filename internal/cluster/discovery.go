@@ -427,6 +427,7 @@ func (d *Discovery) LeaderID() string {
 // onNodeJoin is called when a new node joins the cluster.
 func (d *Discovery) onNodeJoin(nodeID string, meta []byte) {
 	var nodeMeta NodeMeta
+
 	err := json.Unmarshal(meta, &nodeMeta)
 	if err != nil {
 		log.Error().Err(err).Str("node_id", nodeID).Msg("Failed to unmarshal node metadata")
@@ -480,6 +481,7 @@ func (d *Discovery) onNodeLeave(nodeID string) {
 // onNodeUpdate is called when a node's metadata is updated.
 func (d *Discovery) onNodeUpdate(nodeID string, meta []byte) {
 	var nodeMeta NodeMeta
+
 	err := json.Unmarshal(meta, &nodeMeta)
 	if err != nil {
 		log.Error().Err(err).Str("node_id", nodeID).Msg("Failed to unmarshal node metadata")

@@ -312,9 +312,9 @@ func (p *WorkerPool) Stop() {
 
 // ReplicationMetrics holds replication metrics.
 type ReplicationMetrics struct {
-	LastReplicationTime time.Time
-	TotalReplicated     int64
-	TotalFailed         int64
-	BytesReplicated     int64
-	AverageLatency      time.Duration
+	LastReplicationTime time.Time     `json:"last_replication_time"`
+	TotalReplicated     int64         `json:"total_replicated"`
+	TotalFailed         int64         `json:"total_failed"`
+	BytesReplicated     int64         `json:"bytes_replicated"`
+	AverageLatency      time.Duration `json:"average_latency"`
 }

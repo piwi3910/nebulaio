@@ -1610,6 +1610,7 @@ func BenchmarkSnapshotSave(b *testing.B) {
 			key := []byte(string(rune('k')) + string(rune(i)))
 
 			val := []byte(string(rune('v')) + string(rune(i)))
+
 			err := txn.Set(key, val)
 			if err != nil {
 				return err

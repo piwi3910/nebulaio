@@ -601,6 +601,7 @@ done:
 	}
 
 	manifestKey := fmt.Sprintf("%s/%s/manifest.json", prefix, timestamp)
+
 	err := s.writeManifest(ctx, cfg.DestinationBucket, manifestKey, manifest)
 	if err != nil {
 		s.updateJobError(job, err.Error())
@@ -779,6 +780,7 @@ func (s *CatalogService) writeCSV(w io.Writer, records []InventoryRecord, fields
 	// Write records
 	for _, rec := range records {
 		row := s.recordToRow(rec, fields)
+
 		err := cw.Write(row)
 		if err != nil {
 			return 0, err

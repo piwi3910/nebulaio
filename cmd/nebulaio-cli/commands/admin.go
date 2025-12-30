@@ -220,6 +220,7 @@ func newPolicyGetCmd() *cobra.Command {
 			if result.Policy != nil {
 				// Pretty print JSON
 				var prettyJSON map[string]interface{}
+
 				err := json.Unmarshal([]byte(*result.Policy), &prettyJSON)
 				if err == nil {
 					pretty, _ := json.MarshalIndent(prettyJSON, "", "  ")
@@ -270,6 +271,7 @@ func readConfigFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
+
 	return data, nil
 }
 
@@ -301,6 +303,7 @@ func newBucketConfigSetCmd(use, short, configType string, setter bucketConfigSet
 			}
 
 			fmt.Printf("%s configuration set for bucket '%s'\n", configType, bucket)
+
 			return nil
 		},
 	}
@@ -331,6 +334,7 @@ func newReplicationSetCmd() *cobra.Command {
 			if err := json.Unmarshal(configData, &config); err != nil {
 				return fmt.Errorf("failed to parse replication config: %w", err)
 			}
+
 			_, err := client.PutBucketReplication(ctx, &s3.PutBucketReplicationInput{
 				Bucket:                   &bucket,
 				ReplicationConfiguration: &config,
@@ -338,6 +342,7 @@ func newReplicationSetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to set replication: %w", err)
 			}
+
 			return nil
 		},
 	)
@@ -430,6 +435,7 @@ func newLifecycleSetCmd() *cobra.Command {
 			if err := json.Unmarshal(configData, &lifecycleConfig); err != nil {
 				return fmt.Errorf("failed to parse lifecycle config: %w", err)
 			}
+
 			_, err := client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 				Bucket:                 &bucket,
 				LifecycleConfiguration: &lifecycleConfig,
@@ -437,6 +443,7 @@ func newLifecycleSetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to set lifecycle config: %w", err)
 			}
+
 			return nil
 		},
 	)

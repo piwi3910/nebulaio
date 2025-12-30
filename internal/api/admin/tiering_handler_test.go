@@ -444,6 +444,7 @@ func (h *TestTieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.
 	ctx := r.Context()
 
 	var req CreateTieringPolicyRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
@@ -805,6 +806,7 @@ func (h *TestTieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Reque
 	bucket := chi.URLParam(r, "bucket")
 
 	var config tiering.S3LifecycleConfiguration
+
 	err := json.NewDecoder(r.Body).Decode(&config)
 	if err != nil {
 		writeError(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)

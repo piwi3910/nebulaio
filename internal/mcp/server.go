@@ -1022,6 +1022,7 @@ func (s *Server) handleRequest(ctx context.Context, req *JSONRPCRequest) (interf
 
 func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (*InitializeResult, error) {
 	var initParams InitializeParams
+
 	err := json.Unmarshal(params, &initParams)
 	if err != nil {
 		return nil, err
@@ -1309,6 +1310,7 @@ func (s *Server) sendError(w http.ResponseWriter, id interface{}, code int, mess
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK) // JSON-RPC always returns 200
+
 	err := json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		// Response already started, log error but can't do much

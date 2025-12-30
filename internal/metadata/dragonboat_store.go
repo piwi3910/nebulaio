@@ -62,6 +62,7 @@ func (s *DragonboatStore) ListBuckets(ctx context.Context, owner string) ([]*Buc
 	var buckets []*Bucket
 	for _, data := range results {
 		var bucket Bucket
+
 		err := json.Unmarshal(data, &bucket)
 		if err != nil {
 			continue
@@ -583,6 +584,7 @@ func (s *DragonboatStore) ListMultipartUploads(ctx context.Context, bucket strin
 	var uploads []*MultipartUpload
 	for _, data := range results {
 		var upload MultipartUpload
+
 		err := json.Unmarshal(data, &upload)
 		if err != nil {
 			continue
@@ -668,6 +670,7 @@ func (s *DragonboatStore) ListUsers(ctx context.Context) ([]*User, error) {
 	var users []*User
 	for _, data := range results {
 		var user User
+
 		err := json.Unmarshal(data, &user)
 		if err != nil {
 			continue
@@ -732,6 +735,7 @@ func (s *DragonboatStore) ListAccessKeys(ctx context.Context, userID string) ([]
 	var keys []*AccessKey
 	for _, data := range results {
 		var key AccessKey
+
 		err := json.Unmarshal(data, &key)
 		if err != nil {
 			continue
@@ -803,6 +807,7 @@ func (s *DragonboatStore) ListPolicies(ctx context.Context) ([]*Policy, error) {
 	var policies []*Policy
 	for _, data := range results {
 		var policy Policy
+
 		err := json.Unmarshal(data, &policy)
 		if err != nil {
 			continue
@@ -865,6 +870,7 @@ func (s *DragonboatStore) ListNodes(ctx context.Context) ([]*NodeInfo, error) {
 	var nodes []*NodeInfo
 	for _, data := range results {
 		var node NodeInfo
+
 		err := json.Unmarshal(data, &node)
 		if err != nil {
 			continue

@@ -136,7 +136,7 @@ func TestObjectKeyValidation(t *testing.T) {
 		"path/to/object",
 		"file.txt",
 		"folder/subfolder/file.json",
-		"unicode-日本語.txt",
+		"unicode-αβγδ.txt",
 		strings.Repeat("a", 1024), // max length
 	}
 
@@ -538,6 +538,7 @@ func validateJWTFormat(token string) (bool, error) {
 
 func isTokenExpired(payload string) bool {
 	var claims map[string]interface{}
+
 	err := json.Unmarshal([]byte(payload), &claims)
 	if err != nil {
 		return true
