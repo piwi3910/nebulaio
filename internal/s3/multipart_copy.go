@@ -3,7 +3,7 @@ package s3
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 - MD5 required by S3 spec for ETag generation
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
@@ -671,18 +671,21 @@ func CalculateMultipartETag(partETags []string) string {
 	}
 
 	// Calculate MD5 of concatenated hashes
+	// #nosec G401 - MD5 required by S3 spec for multipart ETag calculation
 	finalHash := md5.Sum(hashData)
 	return fmt.Sprintf("\"%s-%d\"", hex.EncodeToString(finalHash[:]), len(partETags))
 }
 
 // CalculateMD5 calculates the MD5 hash of data.
 func CalculateMD5(data []byte) string {
+	// #nosec G401 - MD5 required by S3 spec for ETag/Content-MD5 headers
 	hash := md5.Sum(data)
 	return hex.EncodeToString(hash[:])
 }
 
 // CalculateMD5Base64 calculates the base64-encoded MD5 hash of data.
 func CalculateMD5Base64(data []byte) string {
+	// #nosec G401 - MD5 required by S3 spec for Content-MD5 header
 	hash := md5.Sum(data)
 	return base64.StdEncoding.EncodeToString(hash[:])
 }

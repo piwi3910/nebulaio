@@ -18,32 +18,33 @@ import (
 
 // PromptObjectService provides AI/LLM integration for querying objects
 type PromptObjectService struct {
-	mu        sync.RWMutex
 	providers map[string]LLMProvider
 	configs   map[string]*AIConfig
 	cache     *ResponseCache
 	metrics   *AIMetrics
+	mu        sync.RWMutex
 }
 
 // AIConfig stores AI configuration for a bucket or globally
+// Fields ordered by size to minimize padding.
 type AIConfig struct {
-	ID              string            `json:"id"`
-	Name            string            `json:"name"`
-	Provider        string            `json:"provider"`        // openai, anthropic, bedrock, ollama, custom
-	Model           string            `json:"model"`           // gpt-4, claude-3, etc.
-	Endpoint        string            `json:"endpoint"`        // Custom endpoint URL
-	APIKey          string            `json:"api_key"`         // API key (encrypted)
-	MaxTokens       int               `json:"max_tokens"`      // Max response tokens
-	Temperature     float64           `json:"temperature"`     // Model temperature
-	SystemPrompt    string            `json:"system_prompt"`   // Default system prompt
-	EnableCache     bool              `json:"enable_cache"`    // Cache responses
-	CacheTTL        time.Duration     `json:"cache_ttl"`       // Cache TTL
-	RateLimitRPM    int               `json:"rate_limit_rpm"`  // Requests per minute
+	Metadata        map[string]string `json:"metadata"`
 	AllowedBuckets  []string          `json:"allowed_buckets"` // Restrict to buckets
 	EnabledFeatures []string          `json:"enabled_features"`
-	Metadata        map[string]string `json:"metadata"`
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	Provider        string            `json:"provider"`      // openai, anthropic, bedrock, ollama, custom
+	Model           string            `json:"model"`         // gpt-4, claude-3, etc.
+	Endpoint        string            `json:"endpoint"`      // Custom endpoint URL
+	APIKey          string            `json:"api_key"`       // API key (encrypted)
+	SystemPrompt    string            `json:"system_prompt"` // Default system prompt
+	CacheTTL        time.Duration     `json:"cache_ttl"`     // Cache TTL
 	CreatedAt       time.Time         `json:"created_at"`
 	UpdatedAt       time.Time         `json:"updated_at"`
+	Temperature     float64           `json:"temperature"`    // Model temperature
+	MaxTokens       int               `json:"max_tokens"`     // Max response tokens
+	RateLimitRPM    int               `json:"rate_limit_rpm"` // Requests per minute
+	EnableCache     bool              `json:"enable_cache"`   // Cache responses
 }
 
 // LLMProvider interface for different AI providers
@@ -65,48 +66,54 @@ type LLMProvider interface {
 }
 
 // PromptRequest represents a prompt query request
+// Fields ordered by size to minimize padding.
 type PromptRequest struct {
-	// Object context
-	Bucket    string `json:"bucket"`
-	Key       string `json:"key"`
-	VersionID string `json:"version_id,omitempty"`
+	// Maps, slices, and interfaces (largest)
+	Parameters    map[string]string `json:"parameters,omitempty"`
+	SelectFields  []string          `json:"select_fields,omitempty"` // For structured data
+	ObjectContent io.Reader         `json:"-"`
 
-	// Object content (provided by caller)
-	ObjectContent     io.Reader `json:"-"`
-	ObjectContentType string    `json:"object_content_type"`
-	ObjectSize        int64     `json:"object_size"`
+	// Strings (16 bytes on 64-bit)
+	Bucket            string `json:"bucket"`
+	Key               string `json:"key"`
+	VersionID         string `json:"version_id,omitempty"`
+	ObjectContentType string `json:"object_content_type"`
+	Prompt            string `json:"prompt"`
+	SystemPrompt      string `json:"system_prompt,omitempty"`
+	Model             string `json:"model,omitempty"`
 
-	// Prompt details
-	Prompt       string            `json:"prompt"`
-	SystemPrompt string            `json:"system_prompt,omitempty"`
-	Model        string            `json:"model,omitempty"`
-	MaxTokens    int               `json:"max_tokens,omitempty"`
-	Temperature  float64           `json:"temperature,omitempty"`
-	Stream       bool              `json:"stream,omitempty"`
-	Parameters   map[string]string `json:"parameters,omitempty"`
+	// int64 (8 bytes)
+	ObjectSize int64 `json:"object_size"`
 
-	// Context options
-	IncludeMetadata bool     `json:"include_metadata,omitempty"`
-	ChunkSize       int      `json:"chunk_size,omitempty"`
-	ChunkOverlap    int      `json:"chunk_overlap,omitempty"`
-	MaxChunks       int      `json:"max_chunks,omitempty"`
-	SelectFields    []string `json:"select_fields,omitempty"` // For structured data
+	// float64 (8 bytes)
+	Temperature float64 `json:"temperature,omitempty"`
+
+	// int (4 bytes on 64-bit)
+	MaxTokens    int `json:"max_tokens,omitempty"`
+	ChunkSize    int `json:"chunk_size,omitempty"`
+	ChunkOverlap int `json:"chunk_overlap,omitempty"`
+	MaxChunks    int `json:"max_chunks,omitempty"`
+
+	// bool (1 byte)
+	Stream          bool `json:"stream,omitempty"`
+	IncludeMetadata bool `json:"include_metadata,omitempty"`
 }
 
 // PromptResponse contains the AI response
+// Fields ordered by size to minimize padding.
 type PromptResponse struct {
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Citations      []Citation             `json:"citations,omitempty"`
+	Usage          *TokenUsage            `json:"usage,omitempty"`
 	RequestID      string                 `json:"request_id"`
 	Bucket         string                 `json:"bucket"`
 	Key            string                 `json:"key"`
 	Model          string                 `json:"model"`
 	Response       string                 `json:"response"`
 	FinishReason   string                 `json:"finish_reason"`
-	Usage          *TokenUsage            `json:"usage,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
-	Citations      []Citation             `json:"citations,omitempty"`
 	ProcessingTime time.Duration          `json:"processing_time"`
-	Cached         bool                   `json:"cached"`
 	CreatedAt      time.Time              `json:"created_at"`
+	Cached         bool                   `json:"cached"`
 }
 
 // TokenUsage tracks token consumption
@@ -117,6 +124,7 @@ type TokenUsage struct {
 }
 
 // Citation references a specific part of the object
+// Fields ordered by size to minimize padding.
 type Citation struct {
 	Text      string `json:"text"`
 	StartChar int    `json:"start_char"`
@@ -125,18 +133,20 @@ type Citation struct {
 }
 
 // StreamChunk represents a streaming response chunk
+// Fields ordered by size to minimize padding.
 type StreamChunk struct {
+	Error        error  `json:"-"`
 	RequestID    string `json:"request_id"`
-	Index        int    `json:"index"`
 	Content      string `json:"content"`
 	FinishReason string `json:"finish_reason,omitempty"`
-	Error        error  `json:"-"`
+	Index        int    `json:"index"`
 }
 
 // ResponseCache caches AI responses
+// Fields ordered by size to minimize padding.
 type ResponseCache struct {
-	mu      sync.RWMutex
 	entries map[string]*CacheEntry
+	mu      sync.RWMutex
 	maxSize int
 }
 
@@ -147,7 +157,10 @@ type CacheEntry struct {
 }
 
 // AIMetrics tracks AI usage metrics
+// Fields ordered by size to minimize padding.
 type AIMetrics struct {
+	RequestsByModel  map[string]int64
+	RequestsByBucket map[string]int64
 	mu               sync.RWMutex
 	TotalRequests    int64
 	CacheHits        int64
@@ -155,8 +168,6 @@ type AIMetrics struct {
 	TotalTokens      int64
 	TotalLatencyMs   int64
 	ErrorCount       int64
-	RequestsByModel  map[string]int64
-	RequestsByBucket map[string]int64
 }
 
 // NewPromptObjectService creates a new prompt object service

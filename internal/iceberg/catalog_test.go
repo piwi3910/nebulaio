@@ -9,11 +9,12 @@ import (
 )
 
 // MockMetadataStore implements MetadataStore for testing
+// Fields ordered by size to minimize padding.
 type MockMetadataStore struct {
-	mu         sync.RWMutex
 	namespaces map[string]*Namespace
 	tables     map[string]*Table
 	views      map[string]*View
+	mu         sync.RWMutex
 }
 
 func newMockMetadataStore() *MockMetadataStore {
@@ -152,9 +153,10 @@ func (m *MockMetadataStore) ListViews(ctx context.Context, namespace string) ([]
 }
 
 // MockWarehouseStore implements WarehouseStore for testing
+// Fields ordered by size to minimize padding.
 type MockWarehouseStore struct {
-	mu    sync.RWMutex
 	files map[string][]byte
+	mu    sync.RWMutex
 }
 
 func newMockWarehouseStore() *MockWarehouseStore {
@@ -561,7 +563,7 @@ func TestAddSnapshot(t *testing.T) {
 		TimestampMs:    time.Now().UnixMilli(),
 		ManifestList:   "s3://warehouse/testdb/snaptest/metadata/snap-12345.avro",
 		Summary: map[string]string{
-			"operation": "append",
+			"operation":     "append",
 			"added-records": "100",
 		},
 	}

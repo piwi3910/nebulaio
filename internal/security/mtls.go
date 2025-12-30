@@ -34,30 +34,30 @@ const ClientCertContextKey contextKey = "client_cert"
 type CertificateType string
 
 const (
-	CertTypeCA       CertificateType = "CA"
-	CertTypeServer   CertificateType = "SERVER"
-	CertTypeClient   CertificateType = "CLIENT"
-	CertTypePeer     CertificateType = "PEER" // Both server and client
+	CertTypeCA     CertificateType = "CA"
+	CertTypeServer CertificateType = "SERVER"
+	CertTypeClient CertificateType = "CLIENT"
+	CertTypePeer   CertificateType = "PEER" // Both server and client
 )
 
 // CertificateInfo contains information about a certificate
 type CertificateInfo struct {
-	ID            string          `json:"id"`
-	Type          CertificateType `json:"type"`
-	CommonName    string          `json:"common_name"`
-	Organization  []string        `json:"organization"`
-	DNSNames      []string        `json:"dns_names"`
-	IPAddresses   []net.IP        `json:"ip_addresses"`
-	SerialNumber  string          `json:"serial_number"`
-	NotBefore     time.Time       `json:"not_before"`
-	NotAfter      time.Time       `json:"not_after"`
-	IssuedBy      string          `json:"issued_by"`
-	Fingerprint   string          `json:"fingerprint"`
-	KeyUsage      x509.KeyUsage   `json:"key_usage"`
+	ID            string             `json:"id"`
+	Type          CertificateType    `json:"type"`
+	CommonName    string             `json:"common_name"`
+	Organization  []string           `json:"organization"`
+	DNSNames      []string           `json:"dns_names"`
+	IPAddresses   []net.IP           `json:"ip_addresses"`
+	SerialNumber  string             `json:"serial_number"`
+	NotBefore     time.Time          `json:"not_before"`
+	NotAfter      time.Time          `json:"not_after"`
+	IssuedBy      string             `json:"issued_by"`
+	Fingerprint   string             `json:"fingerprint"`
+	KeyUsage      x509.KeyUsage      `json:"key_usage"`
 	ExtKeyUsage   []x509.ExtKeyUsage `json:"ext_key_usage"`
-	IsRevoked     bool            `json:"is_revoked"`
-	RevokedAt     *time.Time      `json:"revoked_at,omitempty"`
-	RevokedReason string          `json:"revoked_reason,omitempty"`
+	IsRevoked     bool               `json:"is_revoked"`
+	RevokedAt     *time.Time         `json:"revoked_at,omitempty"`
+	RevokedReason string             `json:"revoked_reason,omitempty"`
 }
 
 // CertificateBundle contains a certificate and its private key
@@ -429,11 +429,17 @@ func (m *MTLSManager) GetServerTLSConfig(bundle *CertificateBundle) (*tls.Config
 		clientAuth = tls.VerifyClientCertIfGiven
 	}
 
+	// Ensure MinTLSVersion is at least TLS 1.2
+	minVersion := m.config.MinTLSVersion
+	if minVersion < tls.VersionTLS12 {
+		minVersion = tls.VersionTLS12
+	}
+
 	config := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		ClientCAs:    m.certPool,
 		ClientAuth:   clientAuth,
-		MinVersion:   m.config.MinTLSVersion,
+		MinVersion:   minVersion,
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
@@ -460,10 +466,16 @@ func (m *MTLSManager) GetClientTLSConfig(bundle *CertificateBundle) (*tls.Config
 		return nil, err
 	}
 
+	// Ensure MinTLSVersion is at least TLS 1.2
+	minVersion := m.config.MinTLSVersion
+	if minVersion < tls.VersionTLS12 {
+		minVersion = tls.VersionTLS12
+	}
+
 	config := &tls.Config{
 		Certificates:          []tls.Certificate{cert},
 		RootCAs:               m.certPool,
-		MinVersion:            m.config.MinTLSVersion,
+		MinVersion:            minVersion,
 		VerifyPeerCertificate: m.verifyPeerCertificate,
 	}
 
@@ -516,9 +528,10 @@ func (m *MTLSManager) CreateHTTPServer(bundle *CertificateBundle, addr string, h
 	}
 
 	return &http.Server{
-		Addr:      addr,
-		Handler:   handler,
-		TLSConfig: tlsConfig,
+		Addr:              addr,
+		Handler:           handler,
+		TLSConfig:         tlsConfig,
+		ReadHeaderTimeout: 10 * time.Second, // Prevent Slowloris attacks
 	}, nil
 }
 

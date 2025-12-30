@@ -2,7 +2,7 @@ package erasure
 
 import (
 	"bytes"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -47,7 +47,7 @@ type DecodeInput struct {
 	// OriginalSize is the original size of the data (needed for trimming)
 	OriginalSize int64
 
-	// ExpectedChecksum is the expected MD5 of the reconstructed data (optional)
+	// ExpectedChecksum is the expected SHA256 of the reconstructed data (optional)
 	ExpectedChecksum string
 }
 
@@ -56,7 +56,7 @@ type DecodeResult struct {
 	// Data is the reconstructed data
 	Data []byte
 
-	// Checksum is the MD5 of the reconstructed data
+	// Checksum is the SHA256 of the reconstructed data
 	Checksum string
 
 	// ReconstructedShards is the indices of shards that were reconstructed
@@ -106,8 +106,8 @@ func (d *Decoder) Decode(input *DecodeInput) (*DecodeResult, error) {
 		data = data[:input.OriginalSize]
 	}
 
-	// Calculate checksum
-	hash := md5.Sum(data)
+	// Calculate checksum using SHA256 for better security
+	hash := sha256.Sum256(data)
 	checksum := hex.EncodeToString(hash[:])
 
 	// Verify checksum if expected checksum is provided
@@ -152,7 +152,7 @@ func (d *Decoder) VerifyAndRepair(shards [][]byte, checksums []string) ([]int, e
 			continue
 		}
 		if i < len(checksums) && checksums[i] != "" {
-			hash := md5.Sum(shard)
+			hash := sha256.Sum256(shard)
 			if hex.EncodeToString(hash[:]) != checksums[i] {
 				// Mark as corrupted by setting to nil
 				shards[i] = nil

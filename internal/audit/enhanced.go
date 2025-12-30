@@ -879,18 +879,18 @@ func newFileOutput(cfg OutputConfig, rotation RotationConfig) (*FileOutput, erro
 		return nil, fmt.Errorf("file path is required")
 	}
 
-	// Ensure directory exists
+	// Ensure directory exists with secure permissions
 	dir := filepath.Dir(cfg.Path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return nil, err
 	}
 
-	f, err := os.OpenFile(cfg.Path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(cfg.Path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, err
 	}
 
-	info, _ := f.Stat()
+	info, _ := file.Stat()
 	size := int64(0)
 	if info != nil {
 		size = info.Size()
@@ -899,7 +899,7 @@ func newFileOutput(cfg OutputConfig, rotation RotationConfig) (*FileOutput, erro
 	return &FileOutput{
 		name:     cfg.Name,
 		path:     cfg.Path,
-		file:     f,
+		file:     file,
 		rotation: rotation,
 		size:     size,
 	}, nil
@@ -941,8 +941,8 @@ func (o *FileOutput) rotate() error {
 		return err
 	}
 
-	// Open new file
-	f, err := os.OpenFile(o.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	// Open new file with secure permissions
+	f, err := os.OpenFile(o.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -992,7 +992,9 @@ func (o *FileOutput) rotate() error {
 // Returns an error if compression fails, allowing the caller to handle the failure appropriately
 func (o *FileOutput) compressFile(filePath string) error {
 	// Open the original file for streaming read
-	inFile, err := os.Open(filePath)
+	// filePath is derived from o.path (set during initialization) and rotation timestamp,
+	// so it's a trusted path constructed internally
+	inFile, err := os.Open(filePath) // #nosec G304 - path is internally generated from configured audit log path
 	if err != nil {
 		return fmt.Errorf("failed to open log file for compression: %w", err)
 	}

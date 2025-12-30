@@ -1210,15 +1210,19 @@ func setDefaults(v *viper.Viper) {
 }
 
 func (c *Config) validate() error {
-	// Ensure data directory exists
-	if err := os.MkdirAll(c.DataDir, 0755); err != nil {
+	// Ensure data directory exists with secure permissions
+	if err := os.MkdirAll(c.DataDir, 0750); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	// Generate node ID if not set
 	if c.NodeID == "" {
 		nodeIDPath := filepath.Join(c.DataDir, "node-id")
-		if data, err := os.ReadFile(nodeIDPath); err == nil {
+		// Validate path to prevent path traversal
+		if err := validatePath(c.DataDir, nodeIDPath); err != nil {
+			return fmt.Errorf("invalid node ID path: %w", err)
+		}
+		if data, err := os.ReadFile(nodeIDPath); err == nil { // #nosec G304 - path validated above
 			c.NodeID = string(data)
 		} else {
 			c.NodeID = generateNodeID()
@@ -1231,7 +1235,11 @@ func (c *Config) validate() error {
 	// Generate JWT secret if not set
 	if c.Auth.JWTSecret == "" {
 		jwtSecretPath := filepath.Join(c.DataDir, "jwt-secret")
-		if data, err := os.ReadFile(jwtSecretPath); err == nil {
+		// Validate path to prevent path traversal
+		if err := validatePath(c.DataDir, jwtSecretPath); err != nil {
+			return fmt.Errorf("invalid JWT secret path: %w", err)
+		}
+		if data, err := os.ReadFile(jwtSecretPath); err == nil { // #nosec G304 - path validated above
 			c.Auth.JWTSecret = string(data)
 		} else {
 			c.Auth.JWTSecret = generateSecret(32)
@@ -1250,7 +1258,11 @@ func (c *Config) validate() error {
 	// Generate or load replica ID if not set
 	if c.Cluster.ReplicaID == 0 {
 		replicaIDPath := filepath.Join(c.DataDir, "replica-id")
-		if data, err := os.ReadFile(replicaIDPath); err == nil {
+		// Validate path to prevent path traversal
+		if err := validatePath(c.DataDir, replicaIDPath); err != nil {
+			return fmt.Errorf("invalid replica ID path: %w", err)
+		}
+		if data, err := os.ReadFile(replicaIDPath); err == nil { // #nosec G304 - path validated above
 			// Parse stored replica ID
 			var replicaID uint64
 			if _, err := fmt.Sscanf(string(data), "%d", &replicaID); err == nil && replicaID > 0 {
@@ -1271,8 +1283,8 @@ func (c *Config) validate() error {
 		c.Cluster.WALDir = filepath.Join(c.DataDir, "wal")
 	}
 
-	// Ensure WAL directory exists
-	if err := os.MkdirAll(c.Cluster.WALDir, 0755); err != nil {
+	// Ensure WAL directory exists with secure permissions
+	if err := os.MkdirAll(c.Cluster.WALDir, 0750); err != nil {
 		return fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 
@@ -1284,6 +1296,27 @@ func (c *Config) validate() error {
 	// Validate redundancy settings against available nodes
 	if err := c.validateRedundancyVsNodes(); err != nil {
 		return fmt.Errorf("invalid redundancy configuration: %w", err)
+	}
+
+	return nil
+}
+
+// validatePath ensures a file path is within a base directory to prevent path traversal attacks.
+func validatePath(basePath, filePath string) error {
+	// Clean and resolve both paths
+	cleanBase, err := filepath.Abs(filepath.Clean(basePath))
+	if err != nil {
+		return fmt.Errorf("failed to resolve base path: %w", err)
+	}
+
+	cleanFile, err := filepath.Abs(filepath.Clean(filePath))
+	if err != nil {
+		return fmt.Errorf("failed to resolve file path: %w", err)
+	}
+
+	// Check if file path is within base directory
+	if !strings.HasPrefix(cleanFile, cleanBase) {
+		return fmt.Errorf("path traversal detected: %s is outside %s", filePath, basePath) // nolint:err113 // dynamic error with context
 	}
 
 	return nil

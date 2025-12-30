@@ -20,28 +20,30 @@ import (
 
 // Iceberg Catalog Errors
 var (
-	ErrNamespaceNotFound     = errors.New("namespace not found")
+	ErrNamespaceNotFound      = errors.New("namespace not found")
 	ErrNamespaceAlreadyExists = errors.New("namespace already exists")
-	ErrTableNotFound         = errors.New("table not found")
-	ErrTableAlreadyExists    = errors.New("table already exists")
-	ErrInvalidSchema         = errors.New("invalid schema")
-	ErrCommitConflict        = errors.New("commit conflict: table was modified")
-	ErrViewNotFound          = errors.New("view not found")
-	ErrRequirementFailed     = errors.New("requirement failed")
+	ErrTableNotFound          = errors.New("table not found")
+	ErrTableAlreadyExists     = errors.New("table already exists")
+	ErrInvalidSchema          = errors.New("invalid schema")
+	ErrCommitConflict         = errors.New("commit conflict: table was modified")
+	ErrViewNotFound           = errors.New("view not found")
+	ErrRequirementFailed      = errors.New("requirement failed")
 )
 
 // Catalog implements the Iceberg REST Catalog API
+// Fields ordered by size to minimize padding.
 type Catalog struct {
 	config     *CatalogConfig
 	store      MetadataStore
 	warehouse  WarehouseStore
+	metrics    *CatalogMetrics
 	namespaces sync.Map // map[string]*Namespace
 	tables     sync.Map // map[string]*Table
 	views      sync.Map // map[string]*View
-	metrics    *CatalogMetrics
 }
 
 // CatalogConfig configures the Iceberg catalog
+// Fields ordered by size to minimize padding.
 type CatalogConfig struct {
 	// CatalogName is the name of this catalog
 	CatalogName string
@@ -58,11 +60,11 @@ type CatalogConfig struct {
 	// S3Region for object storage
 	S3Region string
 
-	// EnableCaching enables metadata caching
-	EnableCaching bool
-
 	// CacheTTL is the cache time-to-live
 	CacheTTL time.Duration
+
+	// EnableCaching enables metadata caching
+	EnableCaching bool
 }
 
 // DefaultCatalogConfig returns sensible defaults
@@ -103,9 +105,10 @@ type WarehouseStore interface {
 }
 
 // Namespace represents an Iceberg namespace (database)
+// Fields ordered by size to minimize padding.
 type Namespace struct {
-	Name       []string          `json:"namespace"`
 	Properties map[string]string `json:"properties,omitempty"`
+	Name       []string          `json:"namespace"`
 	CreatedAt  time.Time         `json:"created_at"`
 	UpdatedAt  time.Time         `json:"updated_at"`
 }
@@ -116,14 +119,16 @@ func (n *Namespace) NamespaceName() string {
 }
 
 // Table represents an Iceberg table
+// Fields ordered by size to minimize padding.
 type Table struct {
-	Identifier      TableIdentifier   `json:"identifier"`
-	Metadata        *TableMetadata    `json:"metadata"`
-	MetadataLocation string           `json:"metadata-location"`
-	Config          map[string]string `json:"config,omitempty"`
+	Config           map[string]string `json:"config,omitempty"`
+	Metadata         *TableMetadata    `json:"metadata"`
+	Identifier       TableIdentifier   `json:"identifier"`
+	MetadataLocation string            `json:"metadata-location"`
 }
 
 // TableIdentifier identifies a table
+// Fields ordered by size to minimize padding.
 type TableIdentifier struct {
 	Namespace []string `json:"namespace"`
 	Name      string   `json:"name"`
@@ -135,71 +140,77 @@ func (t *TableIdentifier) FullName() string {
 }
 
 // TableMetadata contains Iceberg table metadata
+// Fields ordered by size to minimize padding.
 type TableMetadata struct {
-	FormatVersion       int                    `json:"format-version"`
-	TableUUID           string                 `json:"table-uuid"`
-	Location            string                 `json:"location"`
-	LastUpdatedMs       int64                  `json:"last-updated-ms"`
-	LastColumnID        int                    `json:"last-column-id"`
-	Schema              *Schema                `json:"schema"`
-	Schemas             []*Schema              `json:"schemas,omitempty"`
-	CurrentSchemaID     int                    `json:"current-schema-id"`
-	PartitionSpecs      []*PartitionSpec       `json:"partition-specs"`
-	DefaultSpecID       int                    `json:"default-spec-id"`
-	LastPartitionID     int                    `json:"last-partition-id"`
-	Properties          map[string]string      `json:"properties,omitempty"`
-	CurrentSnapshotID   *int64                 `json:"current-snapshot-id,omitempty"`
-	Snapshots           []*Snapshot            `json:"snapshots,omitempty"`
-	SnapshotLog         []*SnapshotLogEntry    `json:"snapshot-log,omitempty"`
-	MetadataLog         []*MetadataLogEntry    `json:"metadata-log,omitempty"`
-	SortOrders          []*SortOrder           `json:"sort-orders,omitempty"`
-	DefaultSortOrderID  int                    `json:"default-sort-order-id"`
+	Properties          map[string]string       `json:"properties,omitempty"`
 	Refs                map[string]*SnapshotRef `json:"refs,omitempty"`
-	StatisticsFiles     []*StatisticsFile      `json:"statistics,omitempty"`
-	PartitionStatistics []*PartitionStatistics `json:"partition-statistics,omitempty"`
+	StatisticsFiles     []*StatisticsFile       `json:"statistics,omitempty"`
+	PartitionStatistics []*PartitionStatistics  `json:"partition-statistics,omitempty"`
+	Schemas             []*Schema               `json:"schemas,omitempty"`
+	PartitionSpecs      []*PartitionSpec        `json:"partition-specs"`
+	Snapshots           []*Snapshot             `json:"snapshots,omitempty"`
+	SnapshotLog         []*SnapshotLogEntry     `json:"snapshot-log,omitempty"`
+	MetadataLog         []*MetadataLogEntry     `json:"metadata-log,omitempty"`
+	SortOrders          []*SortOrder            `json:"sort-orders,omitempty"`
+	CurrentSnapshotID   *int64                  `json:"current-snapshot-id,omitempty"`
+	Schema              *Schema                 `json:"schema"`
+	TableUUID           string                  `json:"table-uuid"`
+	Location            string                  `json:"location"`
+	LastUpdatedMs       int64                   `json:"last-updated-ms"`
+	FormatVersion       int                     `json:"format-version"`
+	LastColumnID        int                     `json:"last-column-id"`
+	CurrentSchemaID     int                     `json:"current-schema-id"`
+	DefaultSpecID       int                     `json:"default-spec-id"`
+	LastPartitionID     int                     `json:"last-partition-id"`
+	DefaultSortOrderID  int                     `json:"default-sort-order-id"`
 }
 
 // Schema represents an Iceberg schema
+// Fields ordered by size to minimize padding.
 type Schema struct {
-	SchemaID         int      `json:"schema-id"`
-	IdentifierFieldIDs []int  `json:"identifier-field-ids,omitempty"`
-	Fields           []*Field `json:"fields"`
+	IdentifierFieldIDs []int    `json:"identifier-field-ids,omitempty"`
+	Fields             []*Field `json:"fields"`
+	SchemaID           int      `json:"schema-id"`
 }
 
 // Field represents a schema field
+// Fields ordered by size to minimize padding.
 type Field struct {
-	ID             int         `json:"id"`
-	Name           string      `json:"name"`
-	Required       bool        `json:"required"`
 	Type           interface{} `json:"type"` // Can be string or nested type
-	Doc            string      `json:"doc,omitempty"`
 	InitialDefault interface{} `json:"initial-default,omitempty"`
 	WriteDefault   interface{} `json:"write-default,omitempty"`
+	Name           string      `json:"name"`
+	Doc            string      `json:"doc,omitempty"`
+	ID             int         `json:"id"`
+	Required       bool        `json:"required"`
 }
 
 // PartitionSpec defines table partitioning
+// Fields ordered by size to minimize padding.
 type PartitionSpec struct {
-	SpecID int              `json:"spec-id"`
 	Fields []*PartitionField `json:"fields"`
+	SpecID int               `json:"spec-id"`
 }
 
 // PartitionField defines a partition field
+// Fields ordered by size to minimize padding.
 type PartitionField struct {
-	SourceID  int    `json:"source-id"`
-	FieldID   int    `json:"field-id"`
 	Name      string `json:"name"`
 	Transform string `json:"transform"`
+	SourceID  int    `json:"source-id"`
+	FieldID   int    `json:"field-id"`
 }
 
 // Snapshot represents a table snapshot
+// Fields ordered by size to minimize padding.
 type Snapshot struct {
-	SnapshotID       int64             `json:"snapshot-id"`
+	Summary          map[string]string `json:"summary"`
 	ParentSnapshotID *int64            `json:"parent-snapshot-id,omitempty"`
+	SchemaID         *int              `json:"schema-id,omitempty"`
+	ManifestList     string            `json:"manifest-list"`
+	SnapshotID       int64             `json:"snapshot-id"`
 	SequenceNumber   int64             `json:"sequence-number"`
 	TimestampMs      int64             `json:"timestamp-ms"`
-	ManifestList     string            `json:"manifest-list"`
-	Summary          map[string]string `json:"summary"`
-	SchemaID         *int              `json:"schema-id,omitempty"`
 }
 
 // SnapshotLogEntry records snapshot history
@@ -209,90 +220,101 @@ type SnapshotLogEntry struct {
 }
 
 // MetadataLogEntry records metadata file history
+// Fields ordered by size to minimize padding.
 type MetadataLogEntry struct {
-	TimestampMs      int64  `json:"timestamp-ms"`
-	MetadataFile     string `json:"metadata-file"`
+	MetadataFile string `json:"metadata-file"`
+	TimestampMs  int64  `json:"timestamp-ms"`
 }
 
 // SortOrder defines table sort order
+// Fields ordered by size to minimize padding.
 type SortOrder struct {
-	OrderID int          `json:"order-id"`
 	Fields  []*SortField `json:"fields"`
+	OrderID int          `json:"order-id"`
 }
 
 // SortField defines a sort field
+// Fields ordered by size to minimize padding.
 type SortField struct {
-	SourceID      int    `json:"source-id"`
-	Transform     string `json:"transform"`
-	Direction     string `json:"direction"`
-	NullOrder     string `json:"null-order"`
+	Transform string `json:"transform"`
+	Direction string `json:"direction"`
+	NullOrder string `json:"null-order"`
+	SourceID  int    `json:"source-id"`
 }
 
 // SnapshotRef is a named reference to a snapshot
+// Fields ordered by size to minimize padding.
 type SnapshotRef struct {
-	SnapshotID          int64  `json:"snapshot-id"`
-	Type                string `json:"type"` // "branch" or "tag"
-	MaxRefAgeMs         *int64 `json:"max-ref-age-ms,omitempty"`
-	MaxSnapshotAgeMs    *int64 `json:"max-snapshot-age-ms,omitempty"`
-	MinSnapshotsToKeep  *int   `json:"min-snapshots-to-keep,omitempty"`
+	MaxRefAgeMs        *int64 `json:"max-ref-age-ms,omitempty"`
+	MaxSnapshotAgeMs   *int64 `json:"max-snapshot-age-ms,omitempty"`
+	MinSnapshotsToKeep *int   `json:"min-snapshots-to-keep,omitempty"`
+	Type               string `json:"type"` // "branch" or "tag"
+	SnapshotID         int64  `json:"snapshot-id"`
 }
 
 // StatisticsFile contains table statistics
+// Fields ordered by size to minimize padding.
 type StatisticsFile struct {
-	SnapshotID      int64  `json:"snapshot-id"`
-	StatisticsPath  string `json:"statistics-path"`
-	FileSizeInBytes int64  `json:"file-size-in-bytes"`
-	FileFooterSizeInBytes int64 `json:"file-footer-size-in-bytes"`
-	BlobMetadata    []BlobMetadata `json:"blob-metadata"`
+	BlobMetadata          []BlobMetadata `json:"blob-metadata"`
+	StatisticsPath        string         `json:"statistics-path"`
+	SnapshotID            int64          `json:"snapshot-id"`
+	FileSizeInBytes       int64          `json:"file-size-in-bytes"`
+	FileFooterSizeInBytes int64          `json:"file-footer-size-in-bytes"`
 }
 
 // BlobMetadata for statistics
+// Fields ordered by size to minimize padding.
 type BlobMetadata struct {
-	Type       string            `json:"type"`
-	SnapshotID int64             `json:"snapshot-id"`
-	SequenceNumber int64         `json:"sequence-number"`
-	Fields     []int             `json:"fields"`
-	Properties map[string]string `json:"properties,omitempty"`
+	Properties     map[string]string `json:"properties,omitempty"`
+	Fields         []int             `json:"fields"`
+	Type           string            `json:"type"`
+	SnapshotID     int64             `json:"snapshot-id"`
+	SequenceNumber int64             `json:"sequence-number"`
 }
 
 // PartitionStatistics contains partition-level statistics
+// Fields ordered by size to minimize padding.
 type PartitionStatistics struct {
-	SnapshotID         int64  `json:"snapshot-id"`
-	StatisticsPath     string `json:"statistics-path"`
-	FileSizeInBytes    int64  `json:"file-size-in-bytes"`
+	StatisticsPath  string `json:"statistics-path"`
+	SnapshotID      int64  `json:"snapshot-id"`
+	FileSizeInBytes int64  `json:"file-size-in-bytes"`
 }
 
 // View represents an Iceberg view
+// Fields ordered by size to minimize padding.
 type View struct {
-	Identifier       TableIdentifier `json:"identifier"`
 	ViewMetadata     *ViewMetadata   `json:"metadata"`
+	Identifier       TableIdentifier `json:"identifier"`
 	MetadataLocation string          `json:"metadata-location"`
 }
 
 // ViewMetadata contains Iceberg view metadata
+// Fields ordered by size to minimize padding.
 type ViewMetadata struct {
-	FormatVersion   int                    `json:"format-version"`
-	ViewUUID        string                 `json:"view-uuid"`
-	Location        string                 `json:"location"`
-	CurrentVersionID int                   `json:"current-version-id"`
-	Versions        []*ViewVersion         `json:"versions"`
-	VersionLog      []*ViewVersionLog      `json:"version-log"`
-	Schemas         []*Schema              `json:"schemas"`
-	Properties      map[string]string      `json:"properties,omitempty"`
+	Properties       map[string]string `json:"properties,omitempty"`
+	Versions         []*ViewVersion    `json:"versions"`
+	VersionLog       []*ViewVersionLog `json:"version-log"`
+	Schemas          []*Schema         `json:"schemas"`
+	ViewUUID         string            `json:"view-uuid"`
+	Location         string            `json:"location"`
+	FormatVersion    int               `json:"format-version"`
+	CurrentVersionID int               `json:"current-version-id"`
 }
 
 // ViewVersion represents a view version
+// Fields ordered by size to minimize padding.
 type ViewVersion struct {
-	VersionID         int               `json:"version-id"`
-	SchemaID          int               `json:"schema-id"`
-	TimestampMs       int64             `json:"timestamp-ms"`
-	Summary           map[string]string `json:"summary"`
-	Representations   []*ViewRepresentation `json:"representations"`
-	DefaultCatalog    string            `json:"default-catalog,omitempty"`
-	DefaultNamespace  []string          `json:"default-namespace,omitempty"`
+	Summary          map[string]string     `json:"summary"`
+	Representations  []*ViewRepresentation `json:"representations"`
+	DefaultNamespace []string              `json:"default-namespace,omitempty"`
+	DefaultCatalog   string                `json:"default-catalog,omitempty"`
+	TimestampMs      int64                 `json:"timestamp-ms"`
+	VersionID        int                   `json:"version-id"`
+	SchemaID         int                   `json:"schema-id"`
 }
 
 // ViewRepresentation is a SQL representation of a view
+// Fields ordered by size to minimize padding.
 type ViewRepresentation struct {
 	Type    string `json:"type"` // "sql"
 	SQL     string `json:"sql"`
@@ -300,27 +322,29 @@ type ViewRepresentation struct {
 }
 
 // ViewVersionLog records view version history
+// Fields ordered by size to minimize padding.
 type ViewVersionLog struct {
 	TimestampMs int64 `json:"timestamp-ms"`
 	VersionID   int   `json:"version-id"`
 }
 
 // CatalogMetrics tracks catalog performance
+// Fields ordered by size to minimize padding.
 type CatalogMetrics struct {
-	mu                    sync.RWMutex
-	NamespacesCreated     int64
-	NamespacesDeleted     int64
-	TablesCreated         int64
-	TablesUpdated         int64
-	TablesDeleted         int64
-	SnapshotsCreated      int64
-	CommitsSucceeded      int64
-	CommitsFailed         int64
-	CommitConflicts       int64
-	ViewsCreated          int64
-	ViewsUpdated          int64
-	CacheHits             int64
-	CacheMisses           int64
+	mu                sync.RWMutex
+	NamespacesCreated int64
+	NamespacesDeleted int64
+	TablesCreated     int64
+	TablesUpdated     int64
+	TablesDeleted     int64
+	SnapshotsCreated  int64
+	CommitsSucceeded  int64
+	CommitsFailed     int64
+	CommitConflicts   int64
+	ViewsCreated      int64
+	ViewsUpdated      int64
+	CacheHits         int64
+	CacheMisses       int64
 }
 
 // NewCatalog creates a new Iceberg catalog
@@ -340,7 +364,7 @@ func NewCatalog(store MetadataStore, warehouse WarehouseStore, config *CatalogCo
 // GetConfig returns the catalog configuration
 func (c *Catalog) GetConfig(ctx context.Context) (*CatalogConfigResponse, error) {
 	return &CatalogConfigResponse{
-		Defaults:  map[string]string{
+		Defaults: map[string]string{
 			"warehouse": c.config.WarehouseLocation,
 		},
 		Overrides: map[string]string{},
@@ -424,9 +448,10 @@ func (c *Catalog) ListNamespaces(ctx context.Context, parent []string) (*Namespa
 }
 
 // NamespaceListResponse is the response for listing namespaces
+// Fields ordered by size to minimize padding.
 type NamespaceListResponse struct {
-	Namespaces [][]string `json:"namespaces"`
-	NextPageToken string  `json:"next-page-token,omitempty"`
+	Namespaces    [][]string `json:"namespaces"`
+	NextPageToken string     `json:"next-page-token,omitempty"`
 }
 
 // UpdateNamespace updates namespace properties
@@ -603,6 +628,7 @@ func (c *Catalog) ListTables(ctx context.Context, namespace []string) (*TableLis
 }
 
 // TableListResponse is the response for listing tables
+// Fields ordered by size to minimize padding.
 type TableListResponse struct {
 	Identifiers   []TableIdentifier `json:"identifiers"`
 	NextPageToken string            `json:"next-page-token,omitempty"`
@@ -636,40 +662,43 @@ func (c *Catalog) DropTable(ctx context.Context, namespace []string, name string
 }
 
 // UpdateTableRequest contains table update operations
+// Fields ordered by size to minimize padding.
 type UpdateTableRequest struct {
-	Identifier   TableIdentifier   `json:"identifier"`
 	Requirements []TableRequirement `json:"requirements"`
 	Updates      []TableUpdate      `json:"updates"`
+	Identifier   TableIdentifier    `json:"identifier"`
 }
 
 // TableRequirement defines a precondition for updates
+// Fields ordered by size to minimize padding.
 type TableRequirement struct {
-	Type              string  `json:"type"`
-	Ref               string  `json:"ref,omitempty"`
-	UUID              string  `json:"uuid,omitempty"`
-	SnapshotID        *int64  `json:"snapshot-id,omitempty"`
-	LastAssignedFieldID *int  `json:"last-assigned-field-id,omitempty"`
-	LastAssignedPartitionID *int `json:"last-assigned-partition-id,omitempty"`
-	DefaultSpecID     *int    `json:"default-spec-id,omitempty"`
-	DefaultSortOrderID *int   `json:"default-sort-order-id,omitempty"`
-	CurrentSchemaID   *int    `json:"current-schema-id,omitempty"`
+	SnapshotID              *int64 `json:"snapshot-id,omitempty"`
+	LastAssignedFieldID     *int   `json:"last-assigned-field-id,omitempty"`
+	LastAssignedPartitionID *int   `json:"last-assigned-partition-id,omitempty"`
+	DefaultSpecID           *int   `json:"default-spec-id,omitempty"`
+	DefaultSortOrderID      *int   `json:"default-sort-order-id,omitempty"`
+	CurrentSchemaID         *int   `json:"current-schema-id,omitempty"`
+	Type                    string `json:"type"`
+	Ref                     string `json:"ref,omitempty"`
+	UUID                    string `json:"uuid,omitempty"`
 }
 
 // TableUpdate defines a table update operation
+// Fields ordered by size to minimize padding.
 type TableUpdate struct {
-	Action            string            `json:"action"`
-	Schema            *Schema           `json:"schema,omitempty"`
-	Spec              *PartitionSpec    `json:"spec,omitempty"`
-	SortOrder         *SortOrder        `json:"sort-order,omitempty"`
-	Location          string            `json:"location,omitempty"`
-	Properties        map[string]string `json:"properties,omitempty"`
-	Removals          []string          `json:"removals,omitempty"`
-	Snapshot          *Snapshot         `json:"snapshot,omitempty"`
-	RefName           string            `json:"ref-name,omitempty"`
-	Ref               *SnapshotRef      `json:"ref,omitempty"`
-	SchemaID          *int              `json:"schema-id,omitempty"`
-	SpecID            *int              `json:"spec-id,omitempty"`
-	OrderID           *int              `json:"order-id,omitempty"`
+	Properties map[string]string `json:"properties,omitempty"`
+	Removals   []string          `json:"removals,omitempty"`
+	Schema     *Schema           `json:"schema,omitempty"`
+	Spec       *PartitionSpec    `json:"spec,omitempty"`
+	SortOrder  *SortOrder        `json:"sort-order,omitempty"`
+	Snapshot   *Snapshot         `json:"snapshot,omitempty"`
+	Ref        *SnapshotRef      `json:"ref,omitempty"`
+	SchemaID   *int              `json:"schema-id,omitempty"`
+	SpecID     *int              `json:"spec-id,omitempty"`
+	OrderID    *int              `json:"order-id,omitempty"`
+	Action     string            `json:"action"`
+	Location   string            `json:"location,omitempty"`
+	RefName    string            `json:"ref-name,omitempty"`
 }
 
 // CommitTable commits table updates
@@ -1009,19 +1038,19 @@ func (c *Catalog) GetMetrics() *CatalogMetrics {
 	defer c.metrics.mu.RUnlock()
 
 	return &CatalogMetrics{
-		NamespacesCreated:  atomic.LoadInt64(&c.metrics.NamespacesCreated),
-		NamespacesDeleted:  atomic.LoadInt64(&c.metrics.NamespacesDeleted),
-		TablesCreated:      atomic.LoadInt64(&c.metrics.TablesCreated),
-		TablesUpdated:      atomic.LoadInt64(&c.metrics.TablesUpdated),
-		TablesDeleted:      atomic.LoadInt64(&c.metrics.TablesDeleted),
-		SnapshotsCreated:   atomic.LoadInt64(&c.metrics.SnapshotsCreated),
-		CommitsSucceeded:   atomic.LoadInt64(&c.metrics.CommitsSucceeded),
-		CommitsFailed:      atomic.LoadInt64(&c.metrics.CommitsFailed),
-		CommitConflicts:    atomic.LoadInt64(&c.metrics.CommitConflicts),
-		ViewsCreated:       atomic.LoadInt64(&c.metrics.ViewsCreated),
-		ViewsUpdated:       atomic.LoadInt64(&c.metrics.ViewsUpdated),
-		CacheHits:          atomic.LoadInt64(&c.metrics.CacheHits),
-		CacheMisses:        atomic.LoadInt64(&c.metrics.CacheMisses),
+		NamespacesCreated: atomic.LoadInt64(&c.metrics.NamespacesCreated),
+		NamespacesDeleted: atomic.LoadInt64(&c.metrics.NamespacesDeleted),
+		TablesCreated:     atomic.LoadInt64(&c.metrics.TablesCreated),
+		TablesUpdated:     atomic.LoadInt64(&c.metrics.TablesUpdated),
+		TablesDeleted:     atomic.LoadInt64(&c.metrics.TablesDeleted),
+		SnapshotsCreated:  atomic.LoadInt64(&c.metrics.SnapshotsCreated),
+		CommitsSucceeded:  atomic.LoadInt64(&c.metrics.CommitsSucceeded),
+		CommitsFailed:     atomic.LoadInt64(&c.metrics.CommitsFailed),
+		CommitConflicts:   atomic.LoadInt64(&c.metrics.CommitConflicts),
+		ViewsCreated:      atomic.LoadInt64(&c.metrics.ViewsCreated),
+		ViewsUpdated:      atomic.LoadInt64(&c.metrics.ViewsUpdated),
+		CacheHits:         atomic.LoadInt64(&c.metrics.CacheHits),
+		CacheMisses:       atomic.LoadInt64(&c.metrics.CacheMisses),
 	}
 }
 

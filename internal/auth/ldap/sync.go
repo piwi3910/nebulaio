@@ -11,14 +11,15 @@ import (
 )
 
 // UserSyncService synchronizes LDAP users with the local database
+// Fields ordered by size to minimize padding.
 type UserSyncService struct {
+	syncErrors []error
+	stopCh     chan struct{}
 	provider   *Provider
 	store      UserStore
 	config     SyncConfig
 	mu         sync.RWMutex
 	lastSync   time.Time
-	syncErrors []error
-	stopCh     chan struct{}
 	started    bool
 }
 
@@ -35,24 +36,25 @@ type UserStore interface {
 }
 
 // SyncConfig holds user synchronization configuration
+// Fields ordered by size to minimize padding.
 type SyncConfig struct {
-	// Enabled indicates if sync is enabled
-	Enabled bool `json:"enabled" yaml:"enabled"`
+	// Filter is an additional LDAP filter to apply
+	Filter string `json:"filter,omitempty" yaml:"filter,omitempty"`
 
 	// Interval is how often to sync
 	Interval time.Duration `json:"interval" yaml:"interval"`
+
+	// PageSize is the page size for paged searches
+	PageSize int `json:"pageSize" yaml:"pageSize"`
+
+	// Enabled indicates if sync is enabled
+	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// SyncOnStartup triggers a sync when the service starts
 	SyncOnStartup bool `json:"syncOnStartup" yaml:"syncOnStartup"`
 
 	// DeleteOrphans deletes users that no longer exist in LDAP
 	DeleteOrphans bool `json:"deleteOrphans" yaml:"deleteOrphans"`
-
-	// Filter is an additional LDAP filter to apply
-	Filter string `json:"filter,omitempty" yaml:"filter,omitempty"`
-
-	// PageSize is the page size for paged searches
-	PageSize int `json:"pageSize" yaml:"pageSize"`
 }
 
 // DefaultSyncConfig returns sensible defaults
@@ -231,7 +233,13 @@ func (s *UserSyncService) fetchAllUsers(ctx context.Context) ([]*auth.User, erro
 	var users []*auth.User
 
 	// Use paged search for large directories
-	pagingControl := ldap.NewControlPaging(uint32(s.config.PageSize))
+	// Validate PageSize is within uint32 range
+	pageSize := s.config.PageSize
+	const maxPageSize = ^uint32(0)
+	if pageSize < 0 || pageSize > int(maxPageSize) {
+		return nil, fmt.Errorf("invalid page size: %d (must be between 0 and %d)", pageSize, maxPageSize) // nolint:err113 // dynamic error with context
+	}
+	pagingControl := ldap.NewControlPaging(uint32(pageSize)) // #nosec G115 - validated above
 
 	for {
 		searchReq := ldap.NewSearchRequest(

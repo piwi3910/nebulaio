@@ -215,12 +215,12 @@ type S3Object struct {
 
 // NewMigrationManager creates a new migration manager.
 func NewMigrationManager(destStorage DestinationStorage, stateDir string) (*MigrationManager, error) {
-	if err := os.MkdirAll(stateDir, 0755); err != nil {
+	if err := os.MkdirAll(stateDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create state directory: %w", err)
 	}
 
 	failedLogPath := filepath.Join(stateDir, "failed.log")
-	failedLog, err := os.OpenFile(failedLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	failedLog, err := os.OpenFile(failedLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open failed log: %w", err)
 	}

@@ -34,20 +34,22 @@ import (
 )
 
 // Provider implements auth.Provider for LDAP/Active Directory
+// Fields ordered by size to minimize padding.
 type Provider struct {
-	config     Config
-	pool       *connPool
-	mu         sync.RWMutex
-	tlsConfig  *tls.Config
-	closed     bool
+	pool      *connPool
+	tlsConfig *tls.Config
+	config    Config
+	mu        sync.RWMutex
+	closed    bool
 }
 
 // connPool manages a pool of LDAP connections
+// Fields ordered by size to minimize padding.
 type connPool struct {
 	connections chan *ldap.Conn
-	maxSize     int
-	config      Config
 	tlsConfig   *tls.Config
+	config      Config
+	maxSize     int
 }
 
 // NewProvider creates a new LDAP provider
@@ -404,7 +406,10 @@ func extractCNFromDN(dn string) string {
 // buildTLSConfig builds the TLS configuration
 func buildTLSConfig(cfg TLSConfig) (*tls.Config, error) {
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: cfg.InsecureSkipVerify,
+		// Only skip verification if explicitly configured (e.g., for development/testing)
+		// In production, InsecureSkipVerify should always be false
+		InsecureSkipVerify: cfg.InsecureSkipVerify, // #nosec G402 - configurable by user
+		MinVersion:         tls.VersionTLS12,       // Enforce TLS 1.2 minimum
 	}
 
 	// Load CA certificate if specified

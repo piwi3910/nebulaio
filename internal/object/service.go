@@ -20,7 +20,7 @@ package object
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 - MD5 required by S3 specification for ETag generation
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -860,6 +860,7 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 	}
 
 	// Combined ETag for multipart uploads: MD5(concat(part_etags)) + "-" + num_parts
+	// #nosec G401 - MD5 required by S3 spec for multipart ETag calculation
 	combinedHash := md5.Sum(etagBytes)
 	finalETag := fmt.Sprintf(`"%s-%d"`, hex.EncodeToString(combinedHash[:]), len(partNumbers))
 

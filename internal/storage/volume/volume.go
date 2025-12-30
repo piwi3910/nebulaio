@@ -35,15 +35,15 @@ type Volume struct {
 	readBytes  uint64
 
 	// State
-	closed   bool
-	dirty    bool
+	closed    bool
+	dirty     bool
 	dioConfig DirectIOConfig
 }
 
 // VolumeConfig holds configuration for creating a new volume
 type VolumeConfig struct {
-	Size      uint64       // Volume size (default: 32GB)
-	BlockSize uint32       // Block size (default: 4MB)
+	Size      uint64         // Volume size (default: 32GB)
+	BlockSize uint32         // Block size (default: 4MB)
 	DirectIO  DirectIOConfig // Direct I/O configuration
 }
 
@@ -84,8 +84,8 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 		return nil, ErrInvalidVolumeSize
 	}
 
-	// Create the file
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0644)
+	// Create the file with secure permissions
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create volume file: %w", err)
 	}
@@ -185,7 +185,7 @@ func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 
 // OpenVolume opens an existing volume file
 func OpenVolume(path string) (*Volume, error) {
-	file, err := os.OpenFile(path, os.O_RDWR, 0644)
+	file, err := os.OpenFile(path, os.O_RDWR, 0600)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrVolumeNotFound

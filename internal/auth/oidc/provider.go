@@ -76,7 +76,8 @@ func NewProvider(cfg Config) (*Provider, error) {
 			Msg("WARNING: TLS certificate verification disabled for OIDC provider - this should only be used in development/testing")
 		httpClient.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
+				InsecureSkipVerify: true,             // #nosec G402 - configurable for dev/test environments
+				MinVersion:         tls.VersionTLS12, // Enforce TLS 1.2 minimum even when skipping verification
 			},
 		}
 	}

@@ -115,7 +115,7 @@ func TestFileOutputRotation_CompressionSuccess(t *testing.T) {
 
 		// Reopen for next iteration
 		if i < 3 {
-			f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
+			f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0600)
 			require.NoError(t, err)
 			output.file = f
 		}

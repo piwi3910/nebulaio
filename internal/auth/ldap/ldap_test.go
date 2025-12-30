@@ -190,7 +190,7 @@ func TestSearchScope(t *testing.T) {
 		{"base", 0},
 		{"one", 1},
 		{"sub", 2},
-		{"", 2},      // Default
+		{"", 2},        // Default
 		{"invalid", 2}, // Default for invalid
 	}
 
@@ -313,9 +313,10 @@ func TestSyncConfig(t *testing.T) {
 }
 
 // mockUserStore is a mock implementation of UserStore for testing
+// Fields ordered by size to minimize padding.
 type mockUserStore struct {
-	mu    sync.RWMutex
 	users map[string]*auth.User
+	mu    sync.RWMutex
 }
 
 func newMockUserStore() *mockUserStore {

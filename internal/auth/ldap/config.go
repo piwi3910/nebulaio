@@ -35,10 +35,8 @@ type Config struct {
 }
 
 // TLSConfig holds TLS settings for LDAP
+// Fields ordered by size to minimize padding.
 type TLSConfig struct {
-	// InsecureSkipVerify disables certificate verification
-	InsecureSkipVerify bool `json:"insecureSkipVerify" yaml:"insecureSkipVerify"`
-
 	// CACertFile is the path to the CA certificate file
 	CACertFile string `json:"caCertFile,omitempty" yaml:"caCertFile,omitempty"`
 
@@ -48,12 +46,19 @@ type TLSConfig struct {
 	// ClientKeyFile is the path to the client key
 	ClientKeyFile string `json:"clientKeyFile,omitempty" yaml:"clientKeyFile,omitempty"`
 
+	// InsecureSkipVerify disables certificate verification
+	InsecureSkipVerify bool `json:"insecureSkipVerify" yaml:"insecureSkipVerify"`
+
 	// StartTLS enables STARTTLS upgrade
 	StartTLS bool `json:"startTls" yaml:"startTls"`
 }
 
 // UserSearchConfig holds user search settings
+// Fields ordered by size to minimize padding.
 type UserSearchConfig struct {
+	// Attributes to retrieve
+	Attributes AttributeMapping `json:"attributes" yaml:"attributes"`
+
 	// BaseDN is the base DN for user searches
 	BaseDN string `json:"baseDn" yaml:"baseDn"`
 
@@ -64,17 +69,15 @@ type UserSearchConfig struct {
 	// Scope is the search scope (base, one, sub)
 	Scope string `json:"scope" yaml:"scope"`
 
-	// Attributes to retrieve
-	Attributes AttributeMapping `json:"attributes" yaml:"attributes"`
+	// TimeLimit limits the search time
+	TimeLimit time.Duration `json:"timeLimit,omitempty" yaml:"timeLimit,omitempty"`
 
 	// SizeLimit limits the number of results
 	SizeLimit int `json:"sizeLimit,omitempty" yaml:"sizeLimit,omitempty"`
-
-	// TimeLimit limits the search time
-	TimeLimit time.Duration `json:"timeLimit,omitempty" yaml:"timeLimit,omitempty"`
 }
 
 // GroupSearchConfig holds group search settings
+// Fields ordered by size to minimize padding.
 type GroupSearchConfig struct {
 	// BaseDN is the base DN for group searches
 	BaseDN string `json:"baseDn" yaml:"baseDn"`
@@ -89,11 +92,11 @@ type GroupSearchConfig struct {
 	// NameAttribute is the attribute containing the group name
 	NameAttribute string `json:"nameAttribute" yaml:"nameAttribute"`
 
-	// SizeLimit limits the number of results
-	SizeLimit int `json:"sizeLimit,omitempty" yaml:"sizeLimit,omitempty"`
-
 	// TimeLimit limits the search time
 	TimeLimit time.Duration `json:"timeLimit,omitempty" yaml:"timeLimit,omitempty"`
+
+	// SizeLimit limits the number of results
+	SizeLimit int `json:"sizeLimit,omitempty" yaml:"sizeLimit,omitempty"`
 }
 
 // AttributeMapping maps LDAP attributes to user fields

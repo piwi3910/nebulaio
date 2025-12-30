@@ -385,13 +385,23 @@ func (b *SimulatedBackend) Decompress(ctx context.Context, algorithm string, dat
 	// Simulate processing latency
 	time.Sleep(time.Duration(latency))
 
-	// Perform actual decompression
+	// Perform actual decompression with size limit to prevent decompression bombs
 	r := flate.NewReader(bytes.NewReader(data))
 	defer func() { _ = r.Close() }()
 
 	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
+	// Limit decompressed size to 100MB to prevent decompression bomb attacks
+	const maxDecompressedSize = 100 * 1024 * 1024
+	limitedReader := io.LimitReader(r, maxDecompressedSize)
+
+	written, err := io.Copy(&buf, limitedReader)
+	if err != nil {
 		return nil, err
+	}
+
+	// Check if we hit the limit (potential decompression bomb)
+	if written >= maxDecompressedSize {
+		return nil, fmt.Errorf("decompressed data exceeds maximum size limit (%d bytes)", maxDecompressedSize) // nolint:err113 // dynamic error with context
 	}
 
 	return buf.Bytes(), nil

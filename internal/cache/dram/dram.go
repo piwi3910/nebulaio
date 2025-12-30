@@ -6,6 +6,7 @@ import (
 	"container/list"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"hash/fnv"
 	"io"
 	"sync"
@@ -823,17 +824,26 @@ func UnmarshalEntry(data []byte) (*Entry, error) {
 	// Data
 	dataLen := binary.BigEndian.Uint64(data[offset:])
 	offset += 8
-	if offset+int(dataLen) > len(data) {
+
+	// Validate dataLen doesn't overflow int
+	// maxInt is the maximum value for int type
+	const maxInt = int(^uint(0) >> 1)
+	if dataLen > uint64(maxInt) {
+		return nil, fmt.Errorf("data length too large: %d", dataLen) // nolint:err113 // dynamic error with context
+	}
+
+	dataLenInt := int(dataLen) // #nosec G115 - validated above
+	if offset+dataLenInt > len(data) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	entryData := make([]byte, dataLen)
-	copy(entryData, data[offset:offset+int(dataLen)])
-	offset += int(dataLen)
+	copy(entryData, data[offset:offset+dataLenInt])
+	offset += dataLenInt
 
 	entry := &Entry{
 		Key:  key,
 		Data: entryData,
-		Size: int64(dataLen),
+		Size: int64(dataLen), // #nosec G115 - dataLen already validated to fit in int
 	}
 
 	// Content type

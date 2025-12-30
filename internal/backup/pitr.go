@@ -25,8 +25,8 @@ import (
 type BackupType string
 
 const (
-	BackupTypeFull        BackupType = "full"
-	BackupTypeIncremental BackupType = "incremental"
+	BackupTypeFull         BackupType = "full"
+	BackupTypeIncremental  BackupType = "incremental"
 	BackupTypeDifferential BackupType = "differential"
 )
 
@@ -90,17 +90,17 @@ type RestoreMetadata struct {
 
 // WALEntry represents a write-ahead log entry for point-in-time recovery.
 type WALEntry struct {
-	ID          string    `json:"id"`
-	Timestamp   time.Time `json:"timestamp"`
-	Operation   string    `json:"operation"` // PUT, DELETE, COPY
-	Bucket      string    `json:"bucket"`
-	Key         string    `json:"key"`
-	VersionID   string    `json:"versionId,omitempty"`
-	Size        int64     `json:"size,omitempty"`
-	ETag        string    `json:"etag,omitempty"`
-	ContentType string    `json:"contentType,omitempty"`
+	ID          string            `json:"id"`
+	Timestamp   time.Time         `json:"timestamp"`
+	Operation   string            `json:"operation"` // PUT, DELETE, COPY
+	Bucket      string            `json:"bucket"`
+	Key         string            `json:"key"`
+	VersionID   string            `json:"versionId,omitempty"`
+	Size        int64             `json:"size,omitempty"`
+	ETag        string            `json:"etag,omitempty"`
+	ContentType string            `json:"contentType,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
-	DataPath    string    `json:"dataPath,omitempty"`
+	DataPath    string            `json:"dataPath,omitempty"`
 }
 
 // BackupConfig contains backup configuration.
@@ -121,13 +121,13 @@ type BackupConfig struct {
 	MaxBackups    int
 
 	// Performance settings
-	Concurrency   int
-	ChunkSize     int64
+	Concurrency int
+	ChunkSize   int64
 
 	// WAL settings
-	WALPath       string
+	WALPath         string
 	WALSyncInterval time.Duration
-	WALRetention  time.Duration
+	WALRetention    time.Duration
 }
 
 // BackupManager manages backup and restore operations.
@@ -175,42 +175,42 @@ type PutObjectOptions struct {
 
 // WALManager manages write-ahead log for PITR.
 type WALManager struct {
-	mu          sync.Mutex
-	path        string
-	entries     []*WALEntry
-	file        *os.File
-	encoder     *json.Encoder
-	syncTicker  *time.Ticker
-	retention   time.Duration
-	lastSync    time.Time
+	mu         sync.Mutex
+	path       string
+	entries    []*WALEntry
+	file       *os.File
+	encoder    *json.Encoder
+	syncTicker *time.Ticker
+	retention  time.Duration
+	lastSync   time.Time
 }
 
 // BackupJob represents an active backup operation.
 type BackupJob struct {
-	metadata       *BackupMetadata
-	ctx            context.Context
-	cancel         context.CancelFunc
-	_progress      int64
-	_totalObjects  int64
-	_errors        []error
-	_mu            sync.Mutex
+	metadata      *BackupMetadata
+	ctx           context.Context
+	cancel        context.CancelFunc
+	_progress     int64
+	_totalObjects int64
+	_errors       []error
+	_mu           sync.Mutex
 }
 
 // RestoreJob represents an active restore operation.
 type RestoreJob struct {
-	metadata       *RestoreMetadata
-	ctx            context.Context
-	cancel         context.CancelFunc
-	_progress      int64
-	_totalObjects  int64
-	_errors        []error
-	_mu            sync.Mutex
+	metadata      *RestoreMetadata
+	ctx           context.Context
+	cancel        context.CancelFunc
+	_progress     int64
+	_totalObjects int64
+	_errors       []error
+	_mu           sync.Mutex
 }
 
 // NewBackupManager creates a new backup manager.
 func NewBackupManager(config *BackupConfig, storage BackupStorage) (*BackupManager, error) {
-	// Create destination directory
-	if err := os.MkdirAll(config.DestinationPath, 0755); err != nil {
+	// Create destination directory with secure permissions
+	if err := os.MkdirAll(config.DestinationPath, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -238,7 +238,7 @@ func NewBackupManager(config *BackupConfig, storage BackupStorage) (*BackupManag
 
 // NewWALManager creates a new WAL manager.
 func NewWALManager(path string, syncInterval, retention time.Duration) (*WALManager, error) {
-	if err := os.MkdirAll(path, 0755); err != nil {
+	if err := os.MkdirAll(path, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create WAL directory: %w", err)
 	}
 

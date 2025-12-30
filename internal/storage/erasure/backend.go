@@ -21,7 +21,7 @@ package erasure
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -178,7 +178,8 @@ func (b *Backend) GetPlacementGroupID() string {
 
 // metadataPath returns the filesystem path for object metadata
 func (b *Backend) metadataPath(bucket, key string) string {
-	hash := md5.Sum([]byte(fmt.Sprintf("%s/%s", bucket, key)))
+	// Use SHA256 for path distribution (more secure than MD5)
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s/%s", bucket, key)))
 	hashHex := hex.EncodeToString(hash[:])
 	dir := filepath.Join(b.config.DataDir, "metadata", hashHex[:2], hashHex[2:4])
 	return filepath.Join(dir, fmt.Sprintf("%s_%s.meta", bucket, sanitizeKey(key)))
@@ -554,7 +555,8 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 	}
 	defer func() { _ = os.Remove(tmpPath) }()
 
-	hash := md5.New()
+	// Use SHA256 for integrity checking (more secure than MD5)
+	hash := sha256.New()
 	writer := io.MultiWriter(tmpFile, hash)
 
 	written, err := io.Copy(writer, reader)
@@ -605,7 +607,8 @@ func (b *Backend) CompleteParts(ctx context.Context, bucket, key, uploadID strin
 
 	// First, combine all parts into a single buffer
 	var combined bytes.Buffer
-	originalHash := md5.New()
+	// Use SHA256 for checksums (more secure than MD5)
+	originalHash := sha256.New()
 	writer := io.MultiWriter(&combined, originalHash)
 
 	for _, partNum := range parts {

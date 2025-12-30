@@ -2,7 +2,7 @@ package volume
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 - MD5 used for S3 ETag compatibility
 	"encoding/hex"
 	"fmt"
 	"io"
