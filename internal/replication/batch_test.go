@@ -372,7 +372,9 @@ func TestBatchJobProgress(t *testing.T) {
 	// Wait for job to complete or timeout
 	for range 50 {
 		job, _ := bm.GetJob("progress-test")
-		if job.Status == BatchJobStatusCompleted || job.Status == BatchJobStatusFailed {
+
+		status := job.GetStatus()
+		if status == BatchJobStatusCompleted || status == BatchJobStatusFailed {
 			break
 		}
 
