@@ -7,6 +7,17 @@ import (
 	"github.com/piwi3910/nebulaio/internal/cluster"
 )
 
+// Configuration constants for erasure coding.
+const (
+	defaultDataShards   = 10
+	defaultParityShards = 4
+	defaultShardSize    = 1024 * 1024 // 1MB
+	minDataShards       = 2
+	maxTotalShards      = 256
+	minShardSize        = 1024
+	percentMultiplierEC = 100
+)
+
 // Config holds erasure coding configuration.
 type Config struct {
 	PlacementGroupManager *cluster.PlacementGroupManager `json:"-" mapstructure:"-"`
@@ -19,9 +30,9 @@ type Config struct {
 // DefaultConfig returns the default erasure coding configuration.
 func DefaultConfig() Config {
 	return Config{
-		DataShards:   10,
-		ParityShards: 4,
-		ShardSize:    1024 * 1024, // 1MB
+		DataShards:   defaultDataShards,
+		ParityShards: defaultParityShards,
+		ShardSize:    defaultShardSize,
 		DataDir:      "/data/shards",
 	}
 }
@@ -66,28 +77,28 @@ func ConfigFromPreset(preset Preset, dataDir string) Config {
 
 // Validate validates the configuration.
 func (c *Config) Validate() error {
-	if c.DataShards < 2 {
-		return fmt.Errorf("data_shards must be at least 2, got %d", c.DataShards)
+	if c.DataShards < minDataShards {
+		return fmt.Errorf("data_shards must be at least %d, got %d", minDataShards, c.DataShards)
 	}
 
-	if c.DataShards > 256 {
-		return fmt.Errorf("data_shards must be at most 256, got %d", c.DataShards)
+	if c.DataShards > maxTotalShards {
+		return fmt.Errorf("data_shards must be at most %d, got %d", maxTotalShards, c.DataShards)
 	}
 
 	if c.ParityShards < 1 {
 		return fmt.Errorf("parity_shards must be at least 1, got %d", c.ParityShards)
 	}
 
-	if c.ParityShards > 256 {
-		return fmt.Errorf("parity_shards must be at most 256, got %d", c.ParityShards)
+	if c.ParityShards > maxTotalShards {
+		return fmt.Errorf("parity_shards must be at most %d, got %d", maxTotalShards, c.ParityShards)
 	}
 
-	if c.DataShards+c.ParityShards > 256 {
-		return fmt.Errorf("total shards (data + parity) must be at most 256, got %d", c.DataShards+c.ParityShards)
+	if c.DataShards+c.ParityShards > maxTotalShards {
+		return fmt.Errorf("total shards (data + parity) must be at most %d, got %d", maxTotalShards, c.DataShards+c.ParityShards)
 	}
 
-	if c.ShardSize < 1024 {
-		return fmt.Errorf("shard_size must be at least 1024 bytes, got %d", c.ShardSize)
+	if c.ShardSize < minShardSize {
+		return fmt.Errorf("shard_size must be at least %d bytes, got %d", minShardSize, c.ShardSize)
 	}
 
 	if c.DataDir == "" {
@@ -114,5 +125,5 @@ func (c *Config) MaxLoss() int {
 
 // StorageOverhead returns the storage overhead as a percentage.
 func (c *Config) StorageOverhead() float64 {
-	return float64(c.ParityShards) / float64(c.DataShards) * 100
+	return float64(c.ParityShards) / float64(c.DataShards) * percentMultiplierEC
 }

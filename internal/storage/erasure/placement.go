@@ -8,6 +8,11 @@ import (
 	"sort"
 )
 
+// Placement configuration constants.
+const (
+	defaultPlacementVirtualNodes = 100 // Default virtual nodes per physical node for consistent hashing
+)
+
 // NodeInfo represents a storage node in the cluster.
 type NodeInfo struct {
 	ID       string
@@ -41,7 +46,7 @@ type ConsistentHashPlacement struct {
 // NewConsistentHashPlacement creates a new consistent hash placement strategy.
 func NewConsistentHashPlacement(virtualNodes int) *ConsistentHashPlacement {
 	if virtualNodes <= 0 {
-		virtualNodes = 100 // Default virtual nodes per physical node
+		virtualNodes = defaultPlacementVirtualNodes
 	}
 
 	return &ConsistentHashPlacement{
@@ -228,7 +233,7 @@ type CapacityAwarePlacement struct {
 // NewCapacityAwarePlacement creates a capacity-aware placement strategy.
 func NewCapacityAwarePlacement() *CapacityAwarePlacement {
 	return &CapacityAwarePlacement{
-		base: NewConsistentHashPlacement(100),
+		base: NewConsistentHashPlacement(defaultPlacementVirtualNodes),
 	}
 }
 

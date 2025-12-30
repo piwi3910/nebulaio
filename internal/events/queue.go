@@ -8,6 +8,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Queue configuration constants.
+const (
+	defaultQueueSize          = 10000                   // Default event queue size
+	defaultMaxRetries         = 3                       // Default maximum retries for failed events
+	defaultWorkers            = 4                       // Default number of worker goroutines
+	eventPublishTimeout       = 30 * time.Second        // Timeout for publishing events
+	retryProcessorInterval    = 500 * time.Millisecond  // Interval for retry processor
+)
+
 // QueuedEvent represents an event in the queue.
 type QueuedEvent struct {
 	NextRetry  time.Time
@@ -50,21 +59,21 @@ type EventQueueConfig struct {
 // DefaultQueueConfig returns a default queue configuration.
 func DefaultQueueConfig() EventQueueConfig {
 	return EventQueueConfig{
-		QueueSize:  10000,
-		MaxRetries: 3,
+		QueueSize:  defaultQueueSize,
+		MaxRetries: defaultMaxRetries,
 		RetryDelay: 1 * time.Second,
-		Workers:    4,
+		Workers:    defaultWorkers,
 	}
 }
 
 // NewEventQueue creates a new event queue.
 func NewEventQueue(config EventQueueConfig) *EventQueue {
 	if config.QueueSize == 0 {
-		config.QueueSize = 10000
+		config.QueueSize = defaultQueueSize
 	}
 
 	if config.MaxRetries == 0 {
-		config.MaxRetries = 3
+		config.MaxRetries = defaultMaxRetries
 	}
 
 	if config.RetryDelay == 0 {
@@ -72,7 +81,7 @@ func NewEventQueue(config EventQueueConfig) *EventQueue {
 	}
 
 	if config.Workers == 0 {
-		config.Workers = 4
+		config.Workers = defaultWorkers
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -234,7 +243,7 @@ func (q *EventQueue) processEvent(qe *QueuedEvent) {
 
 	qe.Attempts++
 
-	ctx, cancel := context.WithTimeout(q.ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(q.ctx, eventPublishTimeout)
 	defer cancel()
 
 	err := target.Publish(ctx, qe.Event)
@@ -278,7 +287,7 @@ func (q *EventQueue) scheduleRetry(qe *QueuedEvent) {
 func (q *EventQueue) retryProcessor() {
 	defer q.wg.Done()
 
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(retryProcessorInterval)
 	defer ticker.Stop()
 
 	for {

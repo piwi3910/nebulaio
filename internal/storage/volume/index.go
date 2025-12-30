@@ -9,6 +9,12 @@ import (
 	"sync"
 )
 
+// Index configuration constants.
+const (
+	initialIndexCapacity = 1024 // Initial capacity for index entries
+	minIndexHeaderSize   = 4    // Minimum size for index header (entry count)
+)
+
 // Index is an in-memory sorted index of objects in a volume
 // Uses a sorted slice for O(log n) lookups via binary search.
 type Index struct {
@@ -25,7 +31,7 @@ type IndexEntryFull struct {
 // NewIndex creates a new empty index.
 func NewIndex() *Index {
 	return &Index{
-		entries: make([]IndexEntryFull, 0, 1024),
+		entries: make([]IndexEntryFull, 0, initialIndexCapacity),
 	}
 }
 
@@ -90,7 +96,7 @@ func (idx *Index) marshal() []byte {
 
 // unmarshalIndex deserializes an index from bytes.
 func unmarshalIndex(data []byte) (*Index, error) {
-	if len(data) < 4 {
+	if len(data) < minIndexHeaderSize {
 		return nil, ErrIndexCorrupted
 	}
 

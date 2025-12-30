@@ -29,6 +29,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Password and username validation constants.
+const (
+	minPasswordLength = 12 // Minimum password length for security
+	minUsernameLength = 3  // Minimum username length
+	maxUsernameLength = 32 // Maximum username length
+)
+
 // Password validation errors.
 var (
 	ErrPasswordEmpty    = errors.New("password is required and cannot be empty")
@@ -69,7 +76,7 @@ func ValidatePasswordStrength(password string) error {
 		return ErrPasswordEmpty
 	}
 
-	if len(password) < 12 {
+	if len(password) < minPasswordLength {
 		return ErrPasswordTooShort
 	}
 
@@ -134,11 +141,11 @@ func VerifyPassword(hash, password string) error {
 // - Between 3 and 32 characters
 // - Only alphanumeric characters, underscores, and hyphens.
 func ValidateUsername(username string) error {
-	if len(username) < 3 {
+	if len(username) < minUsernameLength {
 		return ErrUsernameTooShort
 	}
 
-	if len(username) > 32 {
+	if len(username) > maxUsernameLength {
 		return ErrUsernameTooLong
 	}
 

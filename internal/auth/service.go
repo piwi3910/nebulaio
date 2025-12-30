@@ -38,6 +38,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Service configuration constants.
+const (
+	initialRetryDelay   = 500 * time.Millisecond // Initial delay for retry backoff
+	backoffMultiplier   = 1.5                    // Exponential backoff multiplier
+	maxRetryDelay       = 5 * time.Second        // Maximum retry delay
+	maxRetries          = 10                     // Maximum number of retry attempts
+	idByteSize          = 16                     // Size in bytes for generated IDs
+	accessKeyIDByteSize = 10                     // Size in bytes for access key ID
+	secretKeyByteSize   = 30                     // Size in bytes for secret access key
+	arnSplitParts       = 2                      // Number of parts when splitting ARN by /
+)
+
 // Config holds auth service configuration.
 type Config struct {
 	JWTSecret          string
@@ -109,8 +121,7 @@ func (s *Service) EnsureRootUser(ctx context.Context) (bool, error) {
 	}
 
 	// Try to create the user with retries for "not leader" errors
-	maxRetries := 10
-	retryDelay := 500 * time.Millisecond
+	retryDelay := initialRetryDelay
 
 	for range maxRetries {
 		err := s.store.CreateUser(ctx, rootUser)
@@ -125,9 +136,9 @@ func (s *Service) EnsureRootUser(ctx context.Context) (bool, error) {
 				return false, ctx.Err()
 			case <-time.After(retryDelay):
 				// Exponential backoff with a cap
-				retryDelay = time.Duration(float64(retryDelay) * 1.5)
-				if retryDelay > 5*time.Second {
-					retryDelay = 5 * time.Second
+				retryDelay = time.Duration(float64(retryDelay) * backoffMultiplier)
+				if retryDelay > maxRetryDelay {
+					retryDelay = maxRetryDelay
 				}
 
 				continue
@@ -622,7 +633,7 @@ func parseResourceARN(resourceARN string) (bucket, key string) {
 	resourceARN = strings.TrimPrefix(resourceARN, "arn:aws:s3:::")
 
 	// Split bucket and key
-	parts := strings.SplitN(resourceARN, "/", 2)
+	parts := strings.SplitN(resourceARN, "/", arnSplitParts)
 
 	bucket = parts[0]
 	if len(parts) > 1 {
@@ -635,7 +646,7 @@ func parseResourceARN(resourceARN string) (bucket, key string) {
 // Helper functions
 
 func generateID(prefix string) string {
-	b := make([]byte, 16)
+	b := make([]byte, idByteSize)
 	if _, err := rand.Read(b); err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak IDs
 		log.Error().Err(err).Str("prefix", prefix).Msg("crypto/rand.Read failed while generating ID - this indicates a serious system entropy problem; check that /dev/urandom is available and the system has sufficient entropy")
@@ -646,23 +657,23 @@ func generateID(prefix string) string {
 }
 
 func generateAccessKeyID() string {
-	b := make([]byte, 10)
+	b := make([]byte, accessKeyIDByteSize)
 	if _, err := rand.Read(b); err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak access keys
 		log.Error().Err(err).Msg("crypto/rand.Read failed while generating access key ID - this indicates a serious system entropy problem; check that /dev/urandom is available")
 		panic(fmt.Sprintf("crypto/rand.Read failed for access key ID generation: %v - ensure /dev/urandom is accessible", err))
 	}
 
-	return "AKIA" + strings.ToUpper(hex.EncodeToString(b))[:16]
+	return "AKIA" + strings.ToUpper(hex.EncodeToString(b))[:idByteSize]
 }
 
 func generateSecretAccessKey() string {
-	b := make([]byte, 30)
+	b := make([]byte, secretKeyByteSize)
 	if _, err := rand.Read(b); err != nil {
 		// Cryptographic failure is unrecoverable - log and panic to prevent weak secret keys
 		log.Error().Err(err).Msg("crypto/rand.Read failed while generating secret access key - this indicates a serious system entropy problem; check that /dev/urandom is available")
 		panic(fmt.Sprintf("crypto/rand.Read failed for secret access key generation: %v - ensure /dev/urandom is accessible", err))
 	}
 
-	return hex.EncodeToString(b)[:40]
+	return hex.EncodeToString(b)[:secretKeyByteSize+idByteSize]
 }

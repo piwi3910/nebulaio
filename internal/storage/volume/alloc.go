@@ -5,6 +5,12 @@ import (
 	"sync"
 )
 
+// Bitmap allocation constants.
+const (
+	bitsPerByte       = 8 // Number of bits per byte
+	byteAlignmentMask = 7 // Mask for byte alignment (bitsPerByte - 1)
+)
+
 // AllocationMap tracks which blocks are allocated using a bitmap.
 type AllocationMap struct {
 	bits  []byte
@@ -16,7 +22,7 @@ type AllocationMap struct {
 // NewAllocationMap creates a new allocation map with all blocks free.
 func NewAllocationMap(totalBlocks uint32) *AllocationMap {
 	// Round up to bytes
-	numBytes := (totalBlocks + 7) / 8
+	numBytes := (totalBlocks + byteAlignmentMask) / bitsPerByte
 
 	return &AllocationMap{
 		bits:  make([]byte, numBytes),
@@ -27,7 +33,7 @@ func NewAllocationMap(totalBlocks uint32) *AllocationMap {
 
 // ReadAllocationMap reads an allocation map from disk.
 func ReadAllocationMap(file *os.File, offset int64, totalBlocks uint32) (*AllocationMap, error) {
-	numBytes := (totalBlocks + 7) / 8
+	numBytes := (totalBlocks + byteAlignmentMask) / bitsPerByte
 	bits := make([]byte, numBytes)
 
 	if _, err := file.ReadAt(bits, offset); err != nil {
@@ -204,13 +210,13 @@ func (m *AllocationMap) FindFreeBlocks(limit int) []uint32 {
 
 // Helper functions for bit manipulation.
 func isSet(bits []byte, n uint32) bool {
-	return bits[n/8]&(1<<(n%8)) != 0
+	return bits[n/bitsPerByte]&(1<<(n%bitsPerByte)) != 0
 }
 
 func setBit(bits []byte, n uint32) {
-	bits[n/8] |= 1 << (n % 8)
+	bits[n/bitsPerByte] |= 1 << (n % bitsPerByte)
 }
 
 func clearBit(bits []byte, n uint32) {
-	bits[n/8] &^= 1 << (n % 8)
+	bits[n/bitsPerByte] &^= 1 << (n % bitsPerByte)
 }

@@ -32,6 +32,10 @@ const (
 
 	// Minimum expiration (1 second).
 	minPresignExpiration = 1
+
+	// awsCredentialParts is the expected number of parts in an AWS credential string.
+	// Format: ACCESS_KEY/YYYYMMDD/region/service/aws4_request
+	awsCredentialParts = 5
 )
 
 // PresignParams contains parameters for generating a presigned URL.
@@ -317,7 +321,7 @@ func ParsePresignedURL(r *http.Request) (*PresignedURLInfo, error) {
 
 	// Parse credential: ACCESS_KEY/YYYYMMDD/region/service/aws4_request
 	credParts := strings.Split(credential, "/")
-	if len(credParts) != 5 {
+	if len(credParts) != awsCredentialParts {
 		return nil, errors.New("invalid credential format")
 	}
 

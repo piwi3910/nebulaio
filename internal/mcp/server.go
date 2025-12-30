@@ -18,6 +18,16 @@ import (
 	"github.com/google/uuid"
 )
 
+// Configuration constants.
+const (
+	defaultMaxRequestSize     = 10 << 20 // 10MB
+	defaultRateLimitPerMinute = 100
+	searchMaxKeys             = 1000
+	bucketListMaxKeys         = 100
+	readWriteMultiplier       = 2
+	pathMinParts              = 2
+)
+
 // MCP Protocol Version.
 const MCPVersion = "2024-11-05"
 
@@ -73,9 +83,9 @@ func DefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
 		ServerName:         "nebulaio-mcp",
 		ServerVersion:      "1.0.0",
-		MaxRequestSize:     10 << 20, // 10MB
+		MaxRequestSize:     defaultMaxRequestSize,
 		SessionTimeout:     1 * time.Hour,
-		RateLimitPerMinute: 100,
+		RateLimitPerMinute: defaultRateLimitPerMinute,
 		EnableLogging:      true,
 		EnableMetrics:      true,
 	}
@@ -738,7 +748,7 @@ func (s *Server) handleSearchObjects(ctx context.Context, args map[string]interf
 		prefix = pattern[:idx]
 	}
 
-	objects, err := s.store.ListObjects(ctx, bucket, prefix, 1000)
+	objects, err := s.store.ListObjects(ctx, bucket, prefix, searchMaxKeys)
 	if err != nil {
 		return &ToolResult{
 			Content: []ContentBlock{{Type: "text", Text: fmt.Sprintf("Error searching objects: %v", err)}},
@@ -834,7 +844,7 @@ func (s *Server) handleCopyObject(ctx context.Context, args map[string]interface
 		}, nil
 	}
 
-	atomic.AddInt64(&s.metrics.BytesTransferred, int64(len(data)*2)) // Read + Write
+	atomic.AddInt64(&s.metrics.BytesTransferred, int64(len(data)*readWriteMultiplier)) // Read + Write
 
 	return &ToolResult{
 		Content: []ContentBlock{
@@ -1134,7 +1144,7 @@ func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage)
 
 	path := strings.TrimPrefix(readParams.URI, "s3://")
 
-	parts := strings.SplitN(path, "/", 2)
+	parts := strings.SplitN(path, "/", pathMinParts)
 	if len(parts) < 1 {
 		return nil, ErrResourceNotFound
 	}
@@ -1148,7 +1158,7 @@ func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage)
 
 	if key == "" {
 		// List bucket contents
-		objects, err := s.store.ListObjects(ctx, bucket, "", 100)
+		objects, err := s.store.ListObjects(ctx, bucket, "", bucketListMaxKeys)
 		if err != nil {
 			return nil, err
 		}

@@ -71,11 +71,13 @@ const (
 
 // Header sizes.
 const (
-	BlockHeaderSize   = 64 // Size of packed block header
-	ObjectEntrySize   = 32 // Size of object entry header (before key and data)
-	IndexEntrySize    = 64 // Size of fixed part of index entry
-	SuperblockMagic   = "NEBULAVL"
-	SuperblockVersion = 1
+	BlockHeaderSize      = 64 // Size of packed block header
+	ObjectEntrySize      = 32 // Size of object entry header (before key and data)
+	IndexEntrySize       = 64 // Size of fixed part of index entry
+	SuperblockMagic      = "NEBULAVL"
+	SuperblockVersion    = 1
+	superblockBufferSize = 128 // Size of superblock buffer for serialization
+	alignTo8Mask         = 7   // Mask for 8-byte alignment
 )
 
 // Object flags.
@@ -141,7 +143,7 @@ type IndexEntry struct {
 
 // MarshalSuperblock serializes a Superblock to bytes.
 func (s *Superblock) Marshal() []byte {
-	buf := make([]byte, 128)
+	buf := make([]byte, superblockBufferSize)
 	copy(buf[0:8], s.Magic[:])
 	binary.LittleEndian.PutUint32(buf[8:12], s.Version)
 	copy(buf[12:28], s.VolumeID[:])
@@ -166,7 +168,7 @@ func (s *Superblock) Marshal() []byte {
 
 // UnmarshalSuperblock deserializes a Superblock from bytes.
 func UnmarshalSuperblock(buf []byte) (*Superblock, error) {
-	if len(buf) < 128 {
+	if len(buf) < superblockBufferSize {
 		return nil, ErrInvalidSuperblock
 	}
 
@@ -269,7 +271,7 @@ func BlockOffset(blockNum uint32) int64 {
 
 // AlignTo8 rounds up to the next 8-byte boundary.
 func AlignTo8(n int) int {
-	return (n + 7) &^ 7
+	return (n + alignTo8Mask) &^ alignTo8Mask
 }
 
 // ObjectEntryTotalSize calculates the total size of an object entry including key and data.

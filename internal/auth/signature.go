@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+// Signature validation constants.
+const (
+	regexMatchParts        = 2  // Expected number of parts in a regex match (full match + capture group)
+	signatureCredParts     = 5  // Number of parts in AWS Signature credential
+	timeSkewMinutes        = 15 // Maximum allowed time difference in minutes
+)
+
 // SignatureValidator validates AWS Signature Version 4 requests.
 type SignatureValidator struct {
 	authService *Service
@@ -138,7 +145,7 @@ func (v *SignatureValidator) validateAuthorizationHeader(ctx context.Context, r 
 	now := time.Now().UTC()
 
 	timeDiff := now.Sub(date)
-	if timeDiff < -15*time.Minute || timeDiff > 15*time.Minute {
+	if timeDiff < -timeSkewMinutes*time.Minute || timeDiff > timeSkewMinutes*time.Minute {
 		return nil, errors.New("request time too skewed")
 	}
 
@@ -249,19 +256,19 @@ func parseAuthorizationHeader(header string) (*AuthorizationHeader, error) {
 	signedHeadersRe := regexp.MustCompile(`SignedHeaders=([^,\s]+)`)
 	signatureRe := regexp.MustCompile(`Signature=([^,\s]+)`)
 
-	if match := credentialRe.FindStringSubmatch(header); len(match) == 2 {
+	if match := credentialRe.FindStringSubmatch(header); len(match) == regexMatchParts {
 		auth.Credential = match[1]
 	} else {
 		return nil, errors.New("missing Credential")
 	}
 
-	if match := signedHeadersRe.FindStringSubmatch(header); len(match) == 2 {
+	if match := signedHeadersRe.FindStringSubmatch(header); len(match) == regexMatchParts {
 		auth.SignedHeaders = strings.Split(match[1], ";")
 	} else {
 		return nil, errors.New("missing SignedHeaders")
 	}
 
-	if match := signatureRe.FindStringSubmatch(header); len(match) == 2 {
+	if match := signatureRe.FindStringSubmatch(header); len(match) == regexMatchParts {
 		auth.Signature = match[1]
 	} else {
 		return nil, errors.New("missing Signature")
@@ -269,7 +276,7 @@ func parseAuthorizationHeader(header string) (*AuthorizationHeader, error) {
 
 	// Parse credential: ACCESS_KEY/YYYYMMDD/region/service/aws4_request
 	credParts := strings.Split(auth.Credential, "/")
-	if len(credParts) != 5 {
+	if len(credParts) != signatureCredParts {
 		return nil, errors.New("invalid credential format")
 	}
 

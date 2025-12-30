@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// Request ID generation constants.
+const (
+	requestIDHexLength         = 8  // Length of random hex for request ID
+	extendedRequestIDHexLength = 32 // Length of random hex for extended request ID
+)
+
 // S3Event represents an S3 event notification.
 type S3Event struct {
 	// Records contains the event records
@@ -233,12 +239,12 @@ func (e *S3Event) ToJSON() ([]byte, error) {
 
 // generateRequestID generates a unique request ID.
 func generateRequestID() string {
-	return time.Now().Format("20060102150405") + "-" + randomHex(8)
+	return time.Now().Format("20060102150405") + "-" + randomHex(requestIDHexLength)
 }
 
 // generateExtendedRequestID generates an extended request ID.
 func generateExtendedRequestID() string {
-	return randomHex(32)
+	return randomHex(extendedRequestIDHexLength)
 }
 
 // generateSequencer generates a sequencer value.

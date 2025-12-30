@@ -36,6 +36,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// File permission constants.
+const (
+	dirPermissions      = 0750 // Directory permissions for shards and uploads
+	metadataPermissions = 0600 // Metadata file permissions (more restrictive)
+	defaultVirtualNodes = 100  // Default virtual nodes for consistent hash placement
+)
+
 // objectMetadata stores metadata for an erasure-coded object.
 type objectMetadata struct {
 	OriginalChecksum string `json:"original_checksum"`
@@ -80,7 +87,7 @@ func New(config Config, localNodeID string) (*Backend, error) {
 	}
 
 	uploadsDir := filepath.Join(config.DataDir, "uploads")
-	if err := os.MkdirAll(uploadsDir, 0750); err != nil {
+	if err := os.MkdirAll(uploadsDir, dirPermissions); err != nil {
 		return nil, fmt.Errorf("failed to create uploads directory: %w", err)
 	}
 
@@ -89,7 +96,7 @@ func New(config Config, localNodeID string) (*Backend, error) {
 		encoder:           encoder,
 		decoder:           decoder,
 		shardManager:      shardManager,
-		placement:         NewConsistentHashPlacement(100),
+		placement:         NewConsistentHashPlacement(defaultVirtualNodes),
 		nodes:             make([]NodeInfo, 0),
 		uploadsDir:        uploadsDir,
 		localNodeID:       localNodeID,
@@ -185,7 +192,7 @@ func (b *Backend) metadataPath(bucket, key string) string {
 // writeObjectMetadata stores object metadata to a file.
 func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) error {
 	path := b.metadataPath(bucket, key)
-	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
 		return fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
@@ -195,8 +202,8 @@ func (b *Backend) writeObjectMetadata(bucket, key string, meta *objectMetadata) 
 	}
 
 	tmpPath := path + ".tmp"
-	// Use 0600 permissions to protect metadata from unauthorized access
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+	// Use metadataPermissions to protect metadata from unauthorized access
+	if err := os.WriteFile(tmpPath, data, metadataPermissions); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
@@ -560,7 +567,7 @@ func (b *Backend) partPath(bucket, key, uploadID string, partNumber int) string 
 func (b *Backend) CreateMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
 	path := b.uploadPath(bucket, key, uploadID)
 
-	return os.MkdirAll(path, 0750)
+	return os.MkdirAll(path, dirPermissions)
 }
 
 // PutPart stores a part (temporarily stored as regular file, encoded on completion).
@@ -568,7 +575,7 @@ func (b *Backend) PutPart(ctx context.Context, bucket, key, uploadID string, par
 	path := b.partPath(bucket, key, uploadID, partNumber)
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
 		return nil, fmt.Errorf("failed to create part directory: %w", err)
 	}
 
