@@ -1156,13 +1156,11 @@ func (s *Service) deleteSpecificVersion(ctx context.Context, bucket, key, versio
 	// If this is a delete marker, we're removing the delete marker
 	if meta.DeleteMarker {
 		result.DeleteMarker = true
-	} else {
+	} else if meta.StorageInfo != nil {
 		// Delete the actual object data from storage
-		if meta.StorageInfo != nil {
-			err := s.storage.DeleteObject(ctx, bucket, key)
-			if err != nil {
-				// Log but continue - metadata will still be cleaned up
-			}
+		err := s.storage.DeleteObject(ctx, bucket, key)
+		if err != nil {
+			// Log but continue - metadata will still be cleaned up
 		}
 	}
 

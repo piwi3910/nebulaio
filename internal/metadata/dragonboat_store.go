@@ -915,14 +915,17 @@ func (s *DragonboatStore) ListAuditEvents(ctx context.Context, filter audit.Audi
 
 		// Determine seek position
 		var seekKey []byte
-		if filter.NextToken != "" {
+		switch {
+		case filter.NextToken != "":
 			seekKey = []byte(filter.NextToken)
-		} else if !filter.EndTime.IsZero() {
+		case !filter.EndTime.IsZero():
 			// Create a key that will be after any events at EndTime
 			seekKey = []byte(fmt.Sprintf("%s%s", prefixAudit, filter.EndTime.Format(time.RFC3339Nano)+"~"))
-		} else {
+		default:
 			// Seek to the end to iterate in reverse
-			seekKey = append(prefix, 0xFF)
+			seekKey = make([]byte, len(prefix)+1)
+			copy(seekKey, prefix)
+			seekKey[len(prefix)] = 0xFF
 		}
 
 		count := 0

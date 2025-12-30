@@ -491,29 +491,31 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 			for _, col := range query.Columns {
 				var name string
 
-				if col.Function != "" {
+				switch {
+				case col.Function != "":
 					// For aggregate functions, use the function expression as key
 					if col.Alias != "" {
 						name = col.Alias
 					} else {
 						name = fmt.Sprintf("%s(%s)", col.Function, col.Name)
 					}
-				} else if col.Alias != "" {
+				case col.Alias != "":
 					name = col.Alias
-				} else {
+				default:
 					name = col.Name
 				}
 
 				keys = append(keys, name)
 
-				if col.Function != "" {
+				switch {
+				case col.Function != "":
 					// Aggregate result - value stored under the formatted key
 					key := name
 					values = append(values, record.Fields[key])
-				} else if col.IsIndex {
+				case col.IsIndex:
 					key := fmt.Sprintf("_%d", col.Index)
 					values = append(values, record.Fields[key])
-				} else {
+				default:
 					values = append(values, record.Fields[col.Name])
 				}
 			}

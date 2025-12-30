@@ -10,6 +10,12 @@ import (
 	"sync"
 )
 
+// Conversion constants.
+const (
+	// Microseconds per millisecond for time conversion.
+	microsecondsPerMs = 1000.0
+)
+
 // S3Integration provides GPUDirect-aware S3 operations.
 type S3Integration struct {
 	service *Service
@@ -168,7 +174,7 @@ func (s *S3Integration) GetObject(ctx context.Context, bucket, key string, req *
 	resp.Used = true
 	resp.DeviceID = req.DeviceID
 	resp.BytesTransferred = result.BytesTransferred
-	resp.TransferTimeMs = float64(result.Duration.Microseconds()) / 1000.0
+	resp.TransferTimeMs = float64(result.Duration.Microseconds()) / microsecondsPerMs
 
 	return resp, nil
 }
@@ -233,7 +239,7 @@ func (s *S3Integration) PutObject(ctx context.Context, bucket, key string, req *
 	resp.Used = true
 	resp.DeviceID = req.DeviceID
 	resp.BytesTransferred = result.BytesTransferred
-	resp.TransferTimeMs = float64(result.Duration.Microseconds()) / 1000.0
+	resp.TransferTimeMs = float64(result.Duration.Microseconds()) / microsecondsPerMs
 
 	return resp, nil
 }

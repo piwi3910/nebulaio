@@ -159,7 +159,9 @@ func (m *S3CORSMiddleware) handleActualRequest(w http.ResponseWriter, r *http.Re
 	// Merge S3-specific headers with user-defined expose headers
 	currentExpose := w.Header().Get("Access-Control-Expose-Headers")
 	if currentExpose != "" {
-		allHeaders := append(s3ExposeHeaders, strings.Split(currentExpose, ", ")...)
+		allHeaders := make([]string, 0, len(s3ExposeHeaders)+1)
+		allHeaders = append(allHeaders, s3ExposeHeaders...)
+		allHeaders = append(allHeaders, strings.Split(currentExpose, ", ")...)
 		w.Header().Set("Access-Control-Expose-Headers", strings.Join(unique(allHeaders), ", "))
 	} else {
 		w.Header().Set("Access-Control-Expose-Headers", strings.Join(s3ExposeHeaders, ", "))

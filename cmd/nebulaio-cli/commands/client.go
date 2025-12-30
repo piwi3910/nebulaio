@@ -14,6 +14,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// File permission constants.
+const (
+	dirPermissions  = 0700
+	filePermissions = 0600
+	// S3 URI prefix length ("s3://").
+	s3URIPrefixLen = 5
+)
+
 // ClientConfig holds the CLI configuration.
 type ClientConfig struct {
 	Endpoint   string `yaml:"endpoint"`
@@ -83,7 +91,7 @@ func SaveConfig(cfg *ClientConfig) error {
 	path := configPath()
 
 	// Create directory if needed
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), dirPermissions); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -92,7 +100,7 @@ func SaveConfig(cfg *ClientConfig) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := os.WriteFile(path, data, filePermissions); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
@@ -134,11 +142,11 @@ func NewS3Client(ctx context.Context) (*s3.Client, error) {
 
 // ParseS3URI parses an S3 URI (s3://bucket/key) into bucket and key.
 func ParseS3URI(uri string) (bucket, key string, isS3 bool) {
-	if len(uri) < 5 || uri[:5] != "s3://" {
+	if len(uri) < s3URIPrefixLen || uri[:s3URIPrefixLen] != "s3://" {
 		return "", "", false
 	}
 
-	path := uri[5:]
+	path := uri[s3URIPrefixLen:]
 	if path == "" {
 		return "", "", false
 	}

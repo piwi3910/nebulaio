@@ -424,14 +424,15 @@ func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 	now := time.Now()
 	job.CompletedAt = &now
 
-	if ctx.Err() != nil {
+	switch {
+	case ctx.Err() != nil:
 		if job.Status != BatchJobStatusCancelled {
 			job.Status = BatchJobStatusCancelled
 		}
-	} else if job.Progress.FailedObjects > 0 && job.Progress.SuccessObjects == 0 {
+	case job.Progress.FailedObjects > 0 && job.Progress.SuccessObjects == 0:
 		job.Status = BatchJobStatusFailed
 		job.Error = fmt.Sprintf("all %d objects failed", job.Progress.FailedObjects)
-	} else {
+	default:
 		job.Status = BatchJobStatusCompleted
 	}
 

@@ -23,6 +23,22 @@ import (
 	"time"
 )
 
+// GPUDirect configuration constants.
+const (
+	// Default buffer pool size: 1GB per GPU.
+	defaultBufferPoolSize = 1 << 30
+	// Default max single buffer: 128MB.
+	defaultMaxBufferSize = 128 << 20
+	// Minimum transfer size for GDS: 4KB.
+	defaultMinTransferSize = 4 << 10
+	// Default batch timeout in milliseconds.
+	defaultBatchTimeoutMs = 1
+	// Default number of CUDA streams.
+	defaultCUDAStreams = 4
+	// Pending transfer queue size.
+	pendingQueueSize = 1000
+)
+
 // Common errors.
 var (
 	ErrGDSNotAvailable  = errors.New("gpudirect storage not available")
@@ -54,14 +70,14 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Enable:                true,
-		MaxGPUs:               0,         // Use all available
-		BufferPoolSize:        1 << 30,   // 1GB buffer pool per GPU
-		MaxBufferSize:         128 << 20, // 128MB max single buffer
-		MinTransferSize:       4 << 10,   // 4KB minimum for GDS
+		MaxGPUs:               0, // Use all available
+		BufferPoolSize:        defaultBufferPoolSize,
+		MaxBufferSize:         defaultMaxBufferSize,
+		MinTransferSize:       defaultMinTransferSize,
 		EnableBatchOperations: true,
-		BatchTimeoutMs:        1,
+		BatchTimeoutMs:        defaultBatchTimeoutMs,
 		EnableAsyncTransfers:  true,
-		CUDAStreams:           4,
+		CUDAStreams:           defaultCUDAStreams,
 		FallbackToStandardIO:  true,
 	}
 }
@@ -212,7 +228,7 @@ func NewService(config *Config, backend GDSBackend) (*Service, error) {
 		metrics: &Metrics{},
 		backend: backend,
 		streams: make(map[int][]uintptr),
-		pending: make(chan *TransferRequest, 1000),
+		pending: make(chan *TransferRequest, pendingQueueSize),
 	}
 
 	// Initialize the backend

@@ -124,11 +124,13 @@ func NewPlacementGroupManager(config PlacementGroupConfig) (*PlacementGroupManag
 		// Initialize status based on node count
 		// This ensures groups have a valid status from creation
 		if group.Status == "" {
-			if len(group.Nodes) == 0 {
+			//nolint:gocritic // ifElseChain: complex node count checks not suitable for switch
+			switch {
+			case len(group.Nodes) == 0:
 				group.Status = PlacementGroupStatusOffline
-			} else if group.MinNodes > 0 && len(group.Nodes) < group.MinNodes {
+			case group.MinNodes > 0 && len(group.Nodes) < group.MinNodes:
 				group.Status = PlacementGroupStatusDegraded
-			} else {
+			default:
 				group.Status = PlacementGroupStatusHealthy
 			}
 		}

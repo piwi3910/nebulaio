@@ -12,6 +12,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Default configuration constants.
+const (
+	defaultRequestsPerSecond        = 1000
+	defaultRateLimitBurstSize       = 100
+	defaultMaxBytesPerSecond        = 1024 * 1024 * 1024  // 1 GB/s
+	defaultMaxBytesPerSecondPerUser = 100 * 1024 * 1024   // 100 MB/s
+	defaultMaxBytesPerSecondBucket  = 500 * 1024 * 1024   // 500 MB/s
+	defaultMaxConnections           = 10000
+	defaultMaxConnectionsPerIP      = 100
+	defaultMaxConnectionsPerUser    = 500
+	defaultIdleTimeoutSeconds       = 60
+)
+
 // Config configures the data firewall.
 type Config struct {
 	Bandwidth     BandwidthConfig  `json:"bandwidth" yaml:"bandwidth"`
@@ -163,24 +176,24 @@ func DefaultConfig() Config {
 		DefaultPolicy: "allow",
 		RateLimiting: RateLimitConfig{
 			Enabled:           false,
-			RequestsPerSecond: 1000,
-			BurstSize:         100,
+			RequestsPerSecond: defaultRequestsPerSecond,
+			BurstSize:         defaultRateLimitBurstSize,
 			PerUser:           true,
 			PerIP:             true,
 			PerBucket:         false,
 		},
 		Bandwidth: BandwidthConfig{
 			Enabled:                    false,
-			MaxBytesPerSecond:          1024 * 1024 * 1024, // 1 GB/s
-			MaxBytesPerSecondPerUser:   100 * 1024 * 1024,  // 100 MB/s
-			MaxBytesPerSecondPerBucket: 500 * 1024 * 1024,  // 500 MB/s
+			MaxBytesPerSecond:          defaultMaxBytesPerSecond,        // 1 GB/s
+			MaxBytesPerSecondPerUser:   defaultMaxBytesPerSecondPerUser, // 100 MB/s
+			MaxBytesPerSecondPerBucket: defaultMaxBytesPerSecondBucket,  // 500 MB/s
 		},
 		Connections: ConnectionConfig{
 			Enabled:               false,
-			MaxConnections:        10000,
-			MaxConnectionsPerIP:   100,
-			MaxConnectionsPerUser: 500,
-			IdleTimeout:           60 * time.Second,
+			MaxConnections:        defaultMaxConnections,
+			MaxConnectionsPerIP:   defaultMaxConnectionsPerIP,
+			MaxConnectionsPerUser: defaultMaxConnectionsPerUser,
+			IdleTimeout:           defaultIdleTimeoutSeconds * time.Second,
 		},
 		AuditEnabled: true,
 	}

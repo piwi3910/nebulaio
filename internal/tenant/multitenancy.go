@@ -306,7 +306,7 @@ func (tm *TenantManager) generateSlug(name string) string {
 	slug = strings.Trim(slug, "-")
 
 	if len(slug) < 3 {
-		slug = slug + "-tenant"
+		slug += "-tenant"
 	}
 
 	if len(slug) > 63 {

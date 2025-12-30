@@ -46,7 +46,8 @@ func NewTLSManager(cfg *config.TLSConfig, hostname string) (*TLSManager, error) 
 	}
 
 	// Determine certificate paths
-	if cfg.CertFile != "" && cfg.KeyFile != "" {
+	switch {
+	case cfg.CertFile != "" && cfg.KeyFile != "":
 		// Use provided certificates
 		m.certFile = cfg.CertFile
 		m.keyFile = cfg.KeyFile
@@ -55,7 +56,7 @@ func NewTLSManager(cfg *config.TLSConfig, hostname string) (*TLSManager, error) 
 			Str("cert_file", cfg.CertFile).
 			Str("key_file", cfg.KeyFile).
 			Msg("Using provided TLS certificates")
-	} else if cfg.AutoGenerate {
+	case cfg.AutoGenerate:
 		// Auto-generate certificates
 		m.certFile = filepath.Join(cfg.CertDir, "server.crt")
 		m.keyFile = filepath.Join(cfg.CertDir, "server.key")
@@ -65,7 +66,7 @@ func NewTLSManager(cfg *config.TLSConfig, hostname string) (*TLSManager, error) 
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate certificates: %w", err)
 		}
-	} else {
+	default:
 		return nil, errors.New("TLS enabled but no certificates provided and auto_generate is disabled")
 	}
 

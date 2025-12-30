@@ -256,7 +256,8 @@ func New(cfg *config.Config) (*Server, error) {
 			// Erasure coding provides redundancy through Reed-Solomon encoding
 			// Data is split into data shards + parity shards across the tier
 			var erasureCfg erasure.Config
-			if tierErasureConfig != nil {
+			switch {
+			case tierErasureConfig != nil:
 				// Use tier-specific erasure configuration
 				erasureCfg = erasure.Config{
 					DataDir:      dataDir,
@@ -267,7 +268,7 @@ func New(cfg *config.Config) (*Server, error) {
 				if erasureCfg.ShardSize == 0 {
 					erasureCfg.ShardSize = defaultShardSizeBytes // 64MB default
 				}
-			} else if cfg.Storage.DefaultRedundancy.Enabled {
+			case cfg.Storage.DefaultRedundancy.Enabled:
 				// Use default redundancy configuration
 				erasureCfg = erasure.Config{
 					DataDir:      dataDir,
@@ -275,7 +276,7 @@ func New(cfg *config.Config) (*Server, error) {
 					ParityShards: cfg.Storage.DefaultRedundancy.ParityShards,
 					ShardSize:    defaultShardSizeBytes, // 64MB default
 				}
-			} else {
+			default:
 				// Fallback to preset
 				erasureCfg = erasure.ConfigFromPreset(erasure.PresetStandard, dataDir)
 			}

@@ -751,11 +751,12 @@ func (m *MTLSManager) loadCertificateFromDisk(certPath, keyPath string) (*Certif
 			}
 		}
 
-		if hasServer && hasClient {
+		switch {
+		case hasServer && hasClient:
 			certType = CertTypePeer
-		} else if hasServer {
+		case hasServer:
 			certType = CertTypeServer
-		} else if hasClient {
+		case hasClient:
 			certType = CertTypeClient
 		}
 	}

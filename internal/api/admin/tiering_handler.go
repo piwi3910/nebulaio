@@ -114,11 +114,12 @@ func (h *TieringHandler) ListTieringPolicies(w http.ResponseWriter, r *http.Requ
 		err      error
 	)
 
-	if policyType != "" {
+	switch {
+	case policyType != "":
 		policies, err = h.service.ListPoliciesByType(ctx, tiering.PolicyType(policyType))
-	} else if scope != "" {
+	case scope != "":
 		policies, err = h.service.ListPoliciesByScope(ctx, tiering.PolicyScope(scope))
-	} else {
+	default:
 		policies, err = h.service.ListPolicies(ctx)
 	}
 

@@ -16,6 +16,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Object operation constants.
+const (
+	// Default maximum keys for listing objects.
+	defaultMaxKeys = 1000
+	// Metadata key-value pair split limit.
+	metadataKeyValueParts = 2
+	// Directory permission for creating local directories.
+	downloadDirPermissions = 0750
+)
+
 // NewObjectCmd creates the object command group.
 func NewObjectCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -92,8 +102,8 @@ func newObjectPutCmd() *cobra.Command {
 				input.Metadata = make(map[string]string)
 
 				for _, m := range metadata {
-					parts := strings.SplitN(m, "=", 2)
-					if len(parts) == 2 {
+					parts := strings.SplitN(m, "=", metadataKeyValueParts)
+					if len(parts) == metadataKeyValueParts {
 						input.Metadata[parts[0]] = parts[1]
 					}
 				}
@@ -320,7 +330,7 @@ func newObjectListCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&recursive, "recursive", false, "List recursively")
-	cmd.Flags().IntVar(&maxKeys, "max-keys", 1000, "Maximum number of keys to return")
+	cmd.Flags().IntVar(&maxKeys, "max-keys", defaultMaxKeys, "Maximum number of keys to return")
 
 	return cmd
 }
@@ -725,7 +735,7 @@ func downloadSingleFile(ctx context.Context, client *s3.Client, bucket, key, loc
 	defer func() { _ = result.Body.Close() }()
 
 	// Create directory if needed
-	if err := os.MkdirAll(filepath.Dir(localPath), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(localPath), downloadDirPermissions); err != nil {
 		return err
 	}
 

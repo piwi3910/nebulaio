@@ -248,10 +248,8 @@ func TestAnomalyDetector(t *testing.T) {
 		anomaly := detector.DetectAnomaly("bucket", "spike-key", 1000, 1)
 		if anomaly == nil {
 			t.Error("expected anomaly for massive spike")
-		} else {
-			if anomaly.AnomalyType != "spike" {
-				t.Errorf("expected spike type, got %s", anomaly.AnomalyType)
-			}
+		} else if anomaly.AnomalyType != "spike" {
+			t.Errorf("expected spike type, got %s", anomaly.AnomalyType)
 		}
 	})
 }

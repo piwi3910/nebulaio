@@ -223,7 +223,8 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 func buildInputFormat(input s3types.InputSerialization) s3select.InputFormat {
 	format := s3select.InputFormat{}
 
-	if input.CSV != nil {
+	switch {
+	case input.CSV != nil:
 		format.Type = "CSV"
 
 		format.CSVConfig = &s3select.CSVConfig{
@@ -244,7 +245,7 @@ func buildInputFormat(input s3types.InputSerialization) s3select.InputFormat {
 		if format.CSVConfig.RecordDelimiter == "" {
 			format.CSVConfig.RecordDelimiter = "\n"
 		}
-	} else if input.JSON != nil {
+	case input.JSON != nil:
 		format.Type = formatTypeJSON
 
 		format.JSONConfig = &s3select.JSONConfig{
@@ -253,7 +254,7 @@ func buildInputFormat(input s3types.InputSerialization) s3select.InputFormat {
 		if format.JSONConfig.Type == "" {
 			format.JSONConfig.Type = "LINES"
 		}
-	} else if input.Parquet != nil {
+	case input.Parquet != nil:
 		format.Type = "Parquet"
 		format.ParquetConfig = &s3select.ParquetConfig{}
 	}
@@ -269,7 +270,8 @@ func buildInputFormat(input s3types.InputSerialization) s3select.InputFormat {
 func buildOutputFormat(output s3types.OutputSerialization) s3select.OutputFormat {
 	format := s3select.OutputFormat{}
 
-	if output.CSV != nil {
+	switch {
+	case output.CSV != nil:
 		format.Type = "CSV"
 
 		format.CSVConfig = &s3select.CSVOutputConfig{
@@ -289,7 +291,7 @@ func buildOutputFormat(output s3types.OutputSerialization) s3select.OutputFormat
 		if format.CSVConfig.QuoteFields == "" {
 			format.CSVConfig.QuoteFields = "ASNEEDED"
 		}
-	} else if output.JSON != nil {
+	case output.JSON != nil:
 		format.Type = formatTypeJSON
 
 		format.JSONConfig = &s3select.JSONOutputConfig{
@@ -298,7 +300,7 @@ func buildOutputFormat(output s3types.OutputSerialization) s3select.OutputFormat
 		if format.JSONConfig.RecordDelimiter == "" {
 			format.JSONConfig.RecordDelimiter = "\n"
 		}
-	} else {
+	default:
 		// Default to JSON output
 		format.Type = formatTypeJSON
 		format.JSONConfig = &s3select.JSONOutputConfig{

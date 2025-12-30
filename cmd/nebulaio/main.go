@@ -91,7 +91,9 @@ func main() {
 
 	// Start server
 	if err := srv.Start(ctx); err != nil {
-		log.Fatal().Err(err).Msg("Server error")
+		log.Error().Err(err).Msg("Server error")
+		cancel()   // Ensure cleanup before exit
+		os.Exit(1) //nolint:gocritic // exitAfterDefer: cancel() called explicitly above
 	}
 
 	log.Info().Msg("NebulaIO shutdown complete")

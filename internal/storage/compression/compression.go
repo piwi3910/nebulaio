@@ -255,13 +255,14 @@ func (b *Backend) GetObject(ctx context.Context, bucket, key string) (io.ReadClo
 	metaStr := string(metaBytes)
 
 	var algorithm Algorithm
-	if strings.Contains(metaStr, `"algorithm":"zstd"`) {
+	switch {
+	case strings.Contains(metaStr, `"algorithm":"zstd"`):
 		algorithm = AlgorithmZstd
-	} else if strings.Contains(metaStr, `"algorithm":"lz4"`) {
+	case strings.Contains(metaStr, `"algorithm":"lz4"`):
 		algorithm = AlgorithmLZ4
-	} else if strings.Contains(metaStr, `"algorithm":"gzip"`) {
+	case strings.Contains(metaStr, `"algorithm":"gzip"`):
 		algorithm = AlgorithmGzip
-	} else {
+	default:
 		// Unknown or no compression
 		return reader, nil
 	}
