@@ -493,6 +493,11 @@ func (v *Volume) ID() string {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
+	return v.idLocked()
+}
+
+// idLocked returns the volume ID (caller must hold at least a read lock).
+func (v *Volume) idLocked() string {
 	id, _ := uuid.FromBytes(v.super.VolumeID[:])
 
 	return id.String()
@@ -508,8 +513,9 @@ func (v *Volume) Stats() VolumeStats {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
+	// Use idLocked() to avoid nested RLock (ID() would try to acquire its own lock)
 	stats := VolumeStats{
-		VolumeID:    v.ID(),
+		VolumeID:    v.idLocked(),
 		Path:        v.path,
 		TotalSize:   v.super.VolumeSize,
 		UsedSize:    uint64(v.super.TotalBlocks-v.super.FreeBlocks) * uint64(v.super.BlockSize),

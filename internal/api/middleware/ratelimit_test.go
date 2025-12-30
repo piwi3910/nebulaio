@@ -179,47 +179,83 @@ func TestRateLimitMiddleware(t *testing.T) {
 }
 
 func TestExtractClientIP(t *testing.T) {
+	// Create a rate limiter with 127.0.0.1 as trusted proxy for tests that use XFF/XRI headers
+	trustedConfig := RateLimitConfig{
+		Enabled:        true,
+		TrustedProxies: []string{"127.0.0.1", "::1"},
+	}
+	rlTrusted := NewRateLimiter(trustedConfig)
+	defer rlTrusted.Close()
+
+	// Create a rate limiter without trusted proxies
+	untrustedConfig := RateLimitConfig{
+		Enabled: true,
+	}
+	rlUntrusted := NewRateLimiter(untrustedConfig)
+	defer rlUntrusted.Close()
+
 	tests := []struct {
 		name       string
 		remoteAddr string
 		xff        string
 		xri        string
 		expected   string
+		useTrusted bool // whether to use the rate limiter with trusted proxies
 	}{
 		{
 			name:       "RemoteAddr only",
 			remoteAddr: "192.168.1.1:12345",
 			expected:   "192.168.1.1",
+			useTrusted: false,
 		},
 		{
-			name:       "X-Forwarded-For single IP",
+			name:       "X-Forwarded-For single IP (trusted proxy)",
 			remoteAddr: "127.0.0.1:12345",
 			xff:        "203.0.113.1",
 			expected:   "203.0.113.1",
+			useTrusted: true,
 		},
 		{
-			name:       "X-Forwarded-For multiple IPs",
+			name:       "X-Forwarded-For single IP (untrusted proxy)",
+			remoteAddr: "127.0.0.1:12345",
+			xff:        "203.0.113.1",
+			expected:   "127.0.0.1", // Uses direct IP when proxy not trusted
+			useTrusted: false,
+		},
+		{
+			name:       "X-Forwarded-For multiple IPs (trusted proxy)",
 			remoteAddr: "127.0.0.1:12345",
 			xff:        "203.0.113.1, 198.51.100.1, 192.0.2.1",
 			expected:   "203.0.113.1",
+			useTrusted: true,
 		},
 		{
-			name:       "X-Real-IP",
+			name:       "X-Real-IP (trusted proxy)",
 			remoteAddr: "127.0.0.1:12345",
 			xri:        "203.0.113.5",
 			expected:   "203.0.113.5",
+			useTrusted: true,
 		},
 		{
-			name:       "X-Forwarded-For takes precedence",
+			name:       "X-Real-IP (untrusted proxy)",
+			remoteAddr: "127.0.0.1:12345",
+			xri:        "203.0.113.5",
+			expected:   "127.0.0.1", // Uses direct IP when proxy not trusted
+			useTrusted: false,
+		},
+		{
+			name:       "X-Forwarded-For takes precedence (trusted proxy)",
 			remoteAddr: "127.0.0.1:12345",
 			xff:        "203.0.113.1",
 			xri:        "203.0.113.5",
 			expected:   "203.0.113.1",
+			useTrusted: true,
 		},
 		{
 			name:       "IPv6 RemoteAddr",
 			remoteAddr: "[2001:db8::1]:12345",
 			expected:   "2001:db8::1",
+			useTrusted: false,
 		},
 	}
 
@@ -236,7 +272,34 @@ func TestExtractClientIP(t *testing.T) {
 				req.Header.Set("X-Real-IP", tc.xri)
 			}
 
-			ip := extractClientIP(req)
+			var ip string
+			if tc.useTrusted {
+				ip = rlTrusted.extractClientIP(req)
+			} else {
+				ip = rlUntrusted.extractClientIP(req)
+			}
+
+			assert.Equal(t, tc.expected, ip)
+		})
+	}
+}
+
+func TestExtractDirectIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		expected   string
+	}{
+		{"IPv4 with port", "192.168.1.1:12345", "192.168.1.1"},
+		{"IPv6 with port", "[2001:db8::1]:12345", "2001:db8::1"},
+		{"IPv4 without port", "192.168.1.1", "192.168.1.1"},
+		{"IPv6 without port", "2001:db8::1", "2001:db8::1"},
+		{"localhost with port", "127.0.0.1:8080", "127.0.0.1"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ip := extractDirectIP(tc.remoteAddr)
 			assert.Equal(t, tc.expected, ip)
 		})
 	}

@@ -231,33 +231,56 @@ func (c *Cache) logPeerCacheFailure(key string, err error) {
 	// Allow first 5 logs (burst), then 1 per 100 failures
 	// Resets after configurable interval (default 5 minutes) of no logs
 	now := time.Now().UnixNano()
-	lastLogTime := atomic.LoadInt64(&c.peerCacheLastLogTime)
 
 	resetInterval := c.config.PeerCacheLogResetInterval
 	if resetInterval <= 0 {
 		resetInterval = peerCacheLogBurstMax * time.Minute
 	}
 
-	// Check if we should reset the rate limiter due to time elapsed
-	if lastLogTime > 0 && now-lastLogTime > resetInterval.Nanoseconds() {
-		// Reset the burst allowance and count after quiet period
-		atomic.StoreInt64(&c.peerCacheLogBurstLeft, peerCacheLogBurstMax)
-		atomic.StoreInt64(&c.peerCacheLogCount, 0)
+	// Check if we should reset the rate limiter due to time elapsed.
+	// Use CAS on lastLogTime to ensure only one goroutine performs the reset,
+	// preventing race conditions between reset and count operations.
+	for {
+		lastLogTime := atomic.LoadInt64(&c.peerCacheLastLogTime)
+		if lastLogTime > 0 && now-lastLogTime > resetInterval.Nanoseconds() {
+			// Try to claim the reset by updating lastLogTime
+			if atomic.CompareAndSwapInt64(&c.peerCacheLastLogTime, lastLogTime, now) {
+				// We won the race, reset the burst allowance and count
+				atomic.StoreInt64(&c.peerCacheLogBurstLeft, peerCacheLogBurstMax)
+				atomic.StoreInt64(&c.peerCacheLogCount, 0)
+
+				break
+			}
+			// Another goroutine is resetting, retry the check
+			continue
+		}
+
+		break
 	}
 
 	count := atomic.AddInt64(&c.peerCacheLogCount, 1)
-	burstLeft := atomic.LoadInt64(&c.peerCacheLogBurstLeft)
 
 	shouldLog := false
 
-	if burstLeft > 0 {
-		// Use burst allowance
-		if atomic.CompareAndSwapInt64(&c.peerCacheLogBurstLeft, burstLeft, burstLeft-1) {
+	// Try to use burst allowance with CAS loop to prevent race conditions
+	for {
+		burstLeft := atomic.LoadInt64(&c.peerCacheLogBurstLeft)
+		if burstLeft > 0 {
+			if atomic.CompareAndSwapInt64(&c.peerCacheLogBurstLeft, burstLeft, burstLeft-1) {
+				shouldLog = true
+
+				break
+			}
+			// CAS failed, retry
+			continue
+		}
+
+		// No burst left, check if we should log every Nth failure
+		if count%logEveryNthFailure == 0 {
 			shouldLog = true
 		}
-	} else if count%logEveryNthFailure == 0 {
-		// Log every 100th failure after burst exhausted
-		shouldLog = true
+
+		break
 	}
 
 	if shouldLog {

@@ -745,6 +745,10 @@ const DefaultMaxTransformSize = 100 * 1024 * 1024
 // DefaultStreamingThreshold is the default size threshold above which streaming mode is used (10MB).
 const DefaultStreamingThreshold = 10 * 1024 * 1024
 
+// DefaultMaxDecompressSize is the default maximum size of decompressed output (1GB).
+// This protects against decompression bomb attacks where small compressed files expand to huge sizes.
+const DefaultMaxDecompressSize = 1024 * 1024 * 1024
+
 // maxTransformSize is the configurable maximum transform size (defaults to DefaultMaxTransformSize).
 // Uses atomic operations for thread-safe access.
 var maxTransformSize atomic.Int64
@@ -753,9 +757,14 @@ var maxTransformSize atomic.Int64
 // Uses atomic operations for thread-safe access.
 var streamingThreshold atomic.Int64
 
+// maxDecompressSize is the configurable maximum decompressed output size (defaults to DefaultMaxDecompressSize).
+// Uses atomic operations for thread-safe access.
+var maxDecompressSize atomic.Int64
+
 func init() {
 	maxTransformSize.Store(DefaultMaxTransformSize)
 	streamingThreshold.Store(DefaultStreamingThreshold)
+	maxDecompressSize.Store(DefaultMaxDecompressSize)
 }
 
 // SetMaxTransformSize sets the maximum size of data that can be transformed in memory.
@@ -797,6 +806,29 @@ func SetStreamingThreshold(size int64) {
 func GetStreamingThreshold() int64 {
 	return streamingThreshold.Load()
 }
+
+// SetMaxDecompressSize sets the maximum size of decompressed output.
+// This function is thread-safe and can be called at any time.
+// Warning: Setting this too high may allow decompression bomb attacks to succeed.
+func SetMaxDecompressSize(size int64) {
+	if size > 0 {
+		maxDecompressSize.Store(size)
+	} else {
+		log.Warn().
+			Int64("size", size).
+			Int64("current", maxDecompressSize.Load()).
+			Msg("SetMaxDecompressSize called with invalid size (<= 0), ignoring")
+	}
+}
+
+// GetMaxDecompressSize returns the current maximum decompressed output size.
+// This function is thread-safe.
+func GetMaxDecompressSize() int64 {
+	return maxDecompressSize.Load()
+}
+
+// ErrDecompressSizeLimitExceeded is returned when decompressed output exceeds the configured limit.
+var ErrDecompressSizeLimitExceeded = errors.New("decompressed size exceeds maximum allowed limit (potential decompression bomb)")
 
 // Compression magic bytes for auto-detection.
 const (
@@ -1171,8 +1203,12 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 }
 
 // transformStreaming performs streaming decompression for large files.
+// It enforces a maximum decompressed size limit to protect against decompression bombs.
+//
+//nolint:unparam // headers map[string]string is always nil for decompression (no headers to set), but kept for consistency with compression API
 func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io.Reader, algorithm string) (io.Reader, map[string]string, error) {
 	pr, pw := io.Pipe()
+	maxSize := GetMaxDecompressSize()
 
 	switch algorithm {
 	case compressionAlgGzip:
@@ -1188,6 +1224,7 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 			defer func() { _ = reader.Close() }()
 
 			buf := make([]byte, 32*1024) // 32KB buffer for streaming
+			var totalWritten int64
 
 			for {
 				select {
@@ -1199,11 +1236,19 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 
 				n, err := reader.Read(buf)
 				if n > 0 {
+					// Check decompression bomb protection before writing
+					if totalWritten+int64(n) > maxSize {
+						pw.CloseWithError(fmt.Errorf("%w: limit is %d bytes", ErrDecompressSizeLimitExceeded, maxSize))
+						return
+					}
+
 					_, werr := pw.Write(buf[:n])
 					if werr != nil {
 						pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", werr))
 						return
 					}
+
+					totalWritten += int64(n)
 				}
 
 				if err == io.EOF {
@@ -1229,6 +1274,7 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 			defer decoder.Close()
 
 			buf := make([]byte, 32*1024) // 32KB buffer for streaming
+			var totalWritten int64
 
 			for {
 				select {
@@ -1240,11 +1286,19 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 
 				n, err := decoder.Read(buf)
 				if n > 0 {
+					// Check decompression bomb protection before writing
+					if totalWritten+int64(n) > maxSize {
+						pw.CloseWithError(fmt.Errorf("%w: limit is %d bytes", ErrDecompressSizeLimitExceeded, maxSize))
+						return
+					}
+
 					_, werr := pw.Write(buf[:n])
 					if werr != nil {
 						pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", werr))
 						return
 					}
+
+					totalWritten += int64(n)
 				}
 
 				if err == io.EOF {
@@ -1264,7 +1318,8 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 
 	log.Debug().
 		Str("algorithm", algorithm).
-		Msg("Started streaming decompression")
+		Int64("max_decompress_size", maxSize).
+		Msg("Started streaming decompression with size limit")
 
 	return pr, nil, nil
 }

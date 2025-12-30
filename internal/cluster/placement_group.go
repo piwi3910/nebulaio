@@ -83,6 +83,8 @@ type PlacementGroupManager struct {
 	cachedLocalNodesHash uint64
 	cacheGeneration      uint64
 	mu                   sync.RWMutex
+	closedMu             sync.RWMutex // Protects closed flag and callbackPool operations
+	closed               bool         // Indicates if the manager has been closed
 }
 
 // NewPlacementGroupManager creates a new placement group manager.
@@ -222,6 +224,7 @@ func (m *PlacementGroupManager) LocalGroupNodes() []string {
 
 	if m.localGroup == nil {
 		m.mu.RUnlock()
+
 		return nil
 	}
 
@@ -241,9 +244,17 @@ func (m *PlacementGroupManager) LocalGroupNodes() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Double-check after acquiring write lock
+	// Double-check after acquiring write lock - state may have changed
 	if m.localGroup == nil {
 		return nil
+	}
+
+	// Re-check cache - another goroutine may have populated it while we waited for the lock
+	if m.cachedLocalNodes != nil {
+		nodes := make([]string, len(m.cachedLocalNodes))
+		copy(nodes, m.cachedLocalNodes)
+
+		return nodes
 	}
 
 	// Update cache
@@ -287,11 +298,21 @@ func (m *PlacementGroupManager) ReplicationTargets() []*PlacementGroup {
 
 // AddNodeToGroup adds a node to a placement group.
 func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID string) error {
+	// Validate inputs
+	if groupID == "" {
+		return errors.New("groupID cannot be empty")
+	}
+
+	if nodeID == "" {
+		return errors.New("nodeID cannot be empty")
+	}
+
 	m.mu.Lock()
 
 	group, ok := m.groups[groupID]
 	if !ok {
 		m.mu.Unlock()
+
 		return fmt.Errorf("placement group %s not found", groupID)
 	}
 
@@ -379,11 +400,21 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 
 // RemoveNodeFromGroup removes a node from a placement group.
 func (m *PlacementGroupManager) RemoveNodeFromGroup(groupID PlacementGroupID, nodeID string) error {
+	// Validate inputs
+	if groupID == "" {
+		return errors.New("groupID cannot be empty")
+	}
+
+	if nodeID == "" {
+		return errors.New("nodeID cannot be empty")
+	}
+
 	m.mu.Lock()
 
 	group, ok := m.groups[groupID]
 	if !ok {
 		m.mu.Unlock()
+
 		return fmt.Errorf("placement group %s not found", groupID)
 	}
 
@@ -468,11 +499,29 @@ func (m *PlacementGroupManager) RemoveNodeFromGroup(groupID PlacementGroupID, no
 
 // UpdateGroupStatus updates the status of a placement group.
 func (m *PlacementGroupManager) UpdateGroupStatus(groupID PlacementGroupID, status PlacementGroupStatus) error {
+	// Validate inputs
+	if groupID == "" {
+		return errors.New("groupID cannot be empty")
+	}
+
+	if status == "" {
+		return errors.New("status cannot be empty")
+	}
+
+	// Validate status is a known value
+	switch status {
+	case PlacementGroupStatusHealthy, PlacementGroupStatusDegraded, PlacementGroupStatusOffline, PlacementGroupStatusUnknown:
+		// Valid status
+	default:
+		return fmt.Errorf("invalid placement group status: %s", status)
+	}
+
 	m.mu.Lock()
 
 	group, ok := m.groups[groupID]
 	if !ok {
 		m.mu.Unlock()
+
 		return fmt.Errorf("placement group %s not found", groupID)
 	}
 
@@ -795,10 +844,21 @@ func (m *PlacementGroupManager) safeCallback(fn func()) {
 
 // Close gracefully shuts down the placement group manager, cancelling any pending callbacks.
 func (m *PlacementGroupManager) Close() error {
+	// Set closed flag first to prevent new callbacks from being scheduled
+	m.closedMu.Lock()
+	if m.closed {
+		m.closedMu.Unlock()
+		return nil // Already closed
+	}
+
+	m.closed = true
+	m.closedMu.Unlock()
+
 	// Cancel context to stop accepting new callbacks
 	m.cancel()
 
 	// Close the callback pool to signal workers to exit
+	// This is now safe because closed flag prevents new sends
 	close(m.callbackPool)
 
 	// Wait for all workers to complete
@@ -828,13 +888,27 @@ func (m *PlacementGroupManager) callbackWorker() {
 // If the pool is full, the callback is dropped and a warning is logged.
 // This provides backpressure during high-churn scenarios.
 func (m *PlacementGroupManager) scheduleCallback(fn func()) {
+	// Check closed flag under lock to prevent race with Close()
+	m.closedMu.RLock()
+	if m.closed {
+		m.closedMu.RUnlock()
+		log.Debug().Msg("Skipping callback - manager closed")
+
+		return
+	}
+
+	// Keep the lock while sending to prevent Close() from closing the channel
 	select {
 	case <-m.ctx.Done():
+		m.closedMu.RUnlock()
 		log.Debug().Msg("Skipping callback - context cancelled")
+
 		return
 	case m.callbackPool <- fn:
+		m.closedMu.RUnlock()
 		// Callback queued successfully
 	default:
+		m.closedMu.RUnlock()
 		// Pool is full - apply backpressure by dropping the callback
 		log.Warn().Msg("Callback pool full - dropping callback (high churn scenario)")
 	}
