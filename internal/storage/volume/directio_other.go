@@ -3,7 +3,15 @@
 package volume
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
+)
+
+var (
+	// ErrInvalidPath is returned when a path contains directory traversal patterns.
+	ErrInvalidPath = errors.New("invalid path: potential directory traversal detected")
 )
 
 // directIOSupported returns false on non-Linux platforms
@@ -15,12 +23,36 @@ func directIOSupported() bool {
 // OpenFileDirect opens a file without direct I/O on non-Linux platforms
 // Falls back to regular file open
 func OpenFileDirect(path string, flag int, perm os.FileMode) (*os.File, error) {
-	return os.OpenFile(path, flag, perm)
+	// G304: Clean path to prevent directory traversal
+	cleanPath := filepath.Clean(path)
+	if cleanPath != path {
+		return nil, ErrInvalidPath
+	}
+
+	// #nosec G304 - Path is cleaned and validated above, used for internal volume operations
+	file, err := os.OpenFile(cleanPath, flag, perm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+
+	return file, nil
 }
 
 // CreateFileDirect creates a file without direct I/O on non-Linux platforms
 func CreateFileDirect(path string, perm os.FileMode) (*os.File, error) {
-	return os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, perm)
+	// G304: Clean path to prevent directory traversal
+	cleanPath := filepath.Clean(path)
+	if cleanPath != path {
+		return nil, ErrInvalidPath
+	}
+
+	// #nosec G304 - Path is cleaned and validated above, used for internal volume operations
+	file, err := os.OpenFile(cleanPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file: %w", err)
+	}
+
+	return file, nil
 }
 
 // Fallocate is not supported on non-Linux platforms

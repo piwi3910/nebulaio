@@ -63,35 +63,22 @@ const (
 
 // AdvancedPolicy is the comprehensive policy model.
 type AdvancedPolicy struct {
-	// ID is the unique identifier
-	ID string `json:"id" yaml:"id"`
-
-	// Name is a human-readable name
-	Name string `json:"name" yaml:"name"`
-
-	// Description explains the policy purpose
-	Description string `json:"description,omitempty" yaml:"description,omitempty"`
-
-	// Type of policy (scheduled, realtime, threshold, s3_lifecycle)
-	Type PolicyType `json:"type" yaml:"type"`
-
-	// Scope defines where the policy applies
-	Scope PolicyScope `json:"scope" yaml:"scope"`
-
-	// Enabled determines if the policy is active
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// Priority determines evaluation order (lower = higher priority)
-	Priority int `json:"priority" yaml:"priority"`
-
-	// Selector defines which objects this policy applies to
-	Selector PolicySelector `json:"selector" yaml:"selector"`
-
+	// 8-byte fields (pointers, slices)
 	// Triggers define when the policy should evaluate
 	Triggers []PolicyTrigger `json:"triggers" yaml:"triggers"`
 
 	// Actions define what happens when conditions are met
 	Actions []PolicyAction `json:"actions" yaml:"actions"`
+
+	LastRunAt *time.Time `json:"lastRunAt,omitempty" yaml:"lastRunAt,omitempty"`
+
+	// Metadata for tracking
+	CreatedAt time.Time `json:"createdAt" yaml:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt" yaml:"updatedAt"`
+
+	// Structs
+	// Selector defines which objects this policy applies to
+	Selector PolicySelector `json:"selector" yaml:"selector"`
 
 	// AntiThrash prevents oscillation between tiers
 	AntiThrash AntiThrashConfig `json:"antiThrash,omitempty" yaml:"antiThrash,omitempty"`
@@ -105,18 +92,42 @@ type AdvancedPolicy struct {
 	// Distributed execution configuration
 	Distributed DistributedConfig `json:"distributed,omitempty" yaml:"distributed,omitempty"`
 
-	// Metadata for tracking
-	CreatedAt   time.Time  `json:"createdAt"             yaml:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"             yaml:"updatedAt"`
-	LastRunAt   *time.Time `json:"lastRunAt,omitempty"   yaml:"lastRunAt,omitempty"`
-	LastRunNode string     `json:"lastRunNode,omitempty" yaml:"lastRunNode,omitempty"`
+	// Scope defines where the policy applies
+	Scope PolicyScope `json:"scope" yaml:"scope"`
+
+	// Strings
+	// ID is the unique identifier
+	ID string `json:"id" yaml:"id"`
+
+	// Name is a human-readable name
+	Name string `json:"name" yaml:"name"`
+
+	// Description explains the policy purpose
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
+	LastRunNode string `json:"lastRunNode,omitempty" yaml:"lastRunNode,omitempty"`
+
+	// Type of policy (scheduled, realtime, threshold, s3_lifecycle)
+	Type PolicyType `json:"type" yaml:"type"`
+
+	// 4-byte fields (int)
+	// Priority determines evaluation order (lower = higher priority)
+	Priority int `json:"priority" yaml:"priority"`
 
 	// Version for optimistic locking
 	Version int `json:"version" yaml:"version"`
+
+	// 1-byte fields (bool)
+	// Enabled determines if the policy is active
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // PolicySelector defines criteria for selecting objects.
 type PolicySelector struct {
+	// 8-byte fields (maps, slices, int64)
+	// Tags to match (all must match)
+	Tags map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
+
 	// Buckets to match (supports wildcards)
 	Buckets []string `json:"buckets,omitempty" yaml:"buckets,omitempty"`
 
@@ -125,13 +136,6 @@ type PolicySelector struct {
 
 	// Suffix patterns to match
 	Suffixes []string `json:"suffixes,omitempty" yaml:"suffixes,omitempty"`
-
-	// Tags to match (all must match)
-	Tags map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
-
-	// Size constraints
-	MinSize int64 `json:"minSize,omitempty" yaml:"minSize,omitempty"`
-	MaxSize int64 `json:"maxSize,omitempty" yaml:"maxSize,omitempty"`
 
 	// Content types (supports wildcards)
 	ContentTypes []string `json:"contentTypes,omitempty" yaml:"contentTypes,omitempty"`
@@ -144,13 +148,15 @@ type PolicySelector struct {
 
 	// StorageClasses filters by S3 storage class
 	StorageClasses []StorageClass `json:"storageClasses,omitempty" yaml:"storageClasses,omitempty"`
+
+	// Size constraints
+	MinSize int64 `json:"minSize,omitempty" yaml:"minSize,omitempty"`
+	MaxSize int64 `json:"maxSize,omitempty" yaml:"maxSize,omitempty"`
 }
 
 // PolicyTrigger defines when a policy evaluates.
 type PolicyTrigger struct {
-	// Type of trigger
-	Type TriggerType `json:"type" yaml:"type"`
-
+	// 8-byte fields (pointers)
 	// Age-based trigger configuration
 	Age *AgeTrigger `json:"age,omitempty" yaml:"age,omitempty"`
 
@@ -165,6 +171,9 @@ type PolicyTrigger struct {
 
 	// Cron-based trigger configuration
 	Cron *CronTrigger `json:"cron,omitempty" yaml:"cron,omitempty"`
+
+	// Type of trigger
+	Type TriggerType `json:"type" yaml:"type"`
 }
 
 // AgeTrigger triggers based on object age.
@@ -223,17 +232,20 @@ type CapacityTrigger struct {
 
 // FrequencyTrigger triggers based on access frequency patterns.
 type FrequencyTrigger struct {
+	// 8-byte fields (float64)
 	// MinAccessesPerDay for hot classification
 	MinAccessesPerDay float64 `json:"minAccessesPerDay,omitempty" yaml:"minAccessesPerDay,omitempty"`
 
 	// MaxAccessesPerDay for cold classification
 	MaxAccessesPerDay float64 `json:"maxAccessesPerDay,omitempty" yaml:"maxAccessesPerDay,omitempty"`
 
-	// SlidingWindowDays for frequency calculation
-	SlidingWindowDays int `json:"slidingWindowDays,omitempty" yaml:"slidingWindowDays,omitempty"`
-
+	// Strings
 	// Pattern detection (e.g., "declining", "increasing", "stable")
 	Pattern string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+
+	// 4-byte fields (int)
+	// SlidingWindowDays for frequency calculation
+	SlidingWindowDays int `json:"slidingWindowDays,omitempty" yaml:"slidingWindowDays,omitempty"`
 }
 
 // CronTrigger triggers on a cron schedule.
@@ -247,9 +259,7 @@ type CronTrigger struct {
 
 // PolicyAction defines what happens when conditions are met.
 type PolicyAction struct {
-	// Type of action
-	Type PolicyActionType `json:"type" yaml:"type"`
-
+	// 8-byte fields (pointers)
 	// Transition configuration
 	Transition *TransitionActionConfig `json:"transition,omitempty" yaml:"transition,omitempty"`
 
@@ -262,6 +272,10 @@ type PolicyAction struct {
 	// Notify configuration
 	Notify *NotifyActionConfig `json:"notify,omitempty" yaml:"notify,omitempty"`
 
+	// Type of action
+	Type PolicyActionType `json:"type" yaml:"type"`
+
+	// 1-byte fields (bool)
 	// StopProcessing prevents other policies from executing
 	StopProcessing bool `json:"stopProcessing,omitempty" yaml:"stopProcessing,omitempty"`
 }

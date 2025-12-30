@@ -39,11 +39,21 @@ const (
 
 // InventoryConfig defines the configuration for an inventory job.
 type InventoryConfig struct {
+	// 8-byte fields (pointers, slices)
+	// IncludedFields specifies which fields to include
+	IncludedFields []string `json:"included_fields"`
+
+	// Filter optionally filters objects to include
+	Filter *InventoryFilter `json:"filter,omitempty"`
+
+	// LastRun is when inventory was last generated
+	LastRun *time.Time `json:"last_run,omitempty"`
+
+	// CreatedAt is when this config was created
+	CreatedAt time.Time `json:"created_at"`
+
 	// ID is the unique identifier for this inventory configuration
 	ID string `json:"id"`
-
-	// Enabled determines if inventory generation is active
-	Enabled bool `json:"enabled"`
 
 	// SourceBucket is the bucket to inventory
 	SourceBucket string `json:"source_bucket"`
@@ -54,26 +64,17 @@ type InventoryConfig struct {
 	// DestinationPrefix is the prefix for inventory files
 	DestinationPrefix string `json:"destination_prefix"`
 
+	// Schedule for inventory generation (cron expression)
+	Schedule string `json:"schedule,omitempty"`
+
 	// Format is the output format (CSV, Parquet, JSON, ORC)
 	Format OutputFormat `json:"format"`
 
 	// Frequency determines how often inventory is generated
 	Frequency Frequency `json:"frequency"`
 
-	// IncludedFields specifies which fields to include
-	IncludedFields []string `json:"included_fields"`
-
-	// Filter optionally filters objects to include
-	Filter *InventoryFilter `json:"filter,omitempty"`
-
-	// Schedule for inventory generation (cron expression)
-	Schedule string `json:"schedule,omitempty"`
-
-	// CreatedAt is when this config was created
-	CreatedAt time.Time `json:"created_at"`
-
-	// LastRun is when inventory was last generated
-	LastRun *time.Time `json:"last_run,omitempty"`
+	// Enabled determines if inventory generation is active
+	Enabled bool `json:"enabled"`
 }
 
 // InventoryFilter defines filtering criteria for inventory.
@@ -150,24 +151,27 @@ func AllInventoryFields() []InventoryField {
 
 // InventoryRecord represents a single object in the inventory.
 type InventoryRecord struct {
-	Bucket                    string     `json:"bucket"                                  parquet:"name=bucket, type=BYTE_ARRAY, convertedtype=UTF8"`
-	Key                       string     `json:"key"                                     parquet:"name=key, type=BYTE_ARRAY, convertedtype=UTF8"`
-	VersionID                 string     `json:"version_id,omitempty"                    parquet:"name=version_id, type=BYTE_ARRAY, convertedtype=UTF8"`
-	IsLatest                  bool       `json:"is_latest"                               parquet:"name=is_latest, type=BOOLEAN"`
-	IsDeleteMarker            bool       `json:"is_delete_marker"                        parquet:"name=is_delete_marker, type=BOOLEAN"`
+	// 8-byte fields (pointers, int64)
+	ObjectLockRetainUntilDate *time.Time `json:"object_lock_retain_until_date,omitempty" parquet:"name=object_lock_retain_until_date, type=INT64, convertedtype=TIMESTAMP_MILLIS"`
 	Size                      int64      `json:"size"                                    parquet:"name=size, type=INT64"`
 	LastModified              time.Time  `json:"last_modified"                           parquet:"name=last_modified, type=INT64, convertedtype=TIMESTAMP_MILLIS"`
-	ETag                      string     `json:"etag"                                    parquet:"name=etag, type=BYTE_ARRAY, convertedtype=UTF8"`
-	StorageClass              string     `json:"storage_class"                           parquet:"name=storage_class, type=BYTE_ARRAY, convertedtype=UTF8"`
-	IsMultipartUploaded       bool       `json:"is_multipart_uploaded"                   parquet:"name=is_multipart_uploaded, type=BOOLEAN"`
-	ReplicationStatus         string     `json:"replication_status,omitempty"            parquet:"name=replication_status, type=BYTE_ARRAY, convertedtype=UTF8"`
-	EncryptionStatus          string     `json:"encryption_status,omitempty"             parquet:"name=encryption_status, type=BYTE_ARRAY, convertedtype=UTF8"`
-	ObjectLockRetainUntilDate *time.Time `json:"object_lock_retain_until_date,omitempty" parquet:"name=object_lock_retain_until_date, type=INT64, convertedtype=TIMESTAMP_MILLIS"`
-	ObjectLockMode            string     `json:"object_lock_mode,omitempty"              parquet:"name=object_lock_mode, type=BYTE_ARRAY, convertedtype=UTF8"`
-	ObjectLockLegalHoldStatus string     `json:"object_lock_legal_hold_status,omitempty" parquet:"name=object_lock_legal_hold_status, type=BYTE_ARRAY, convertedtype=UTF8"`
-	IntelligentTieringAccess  string     `json:"intelligent_tiering_access,omitempty"    parquet:"name=intelligent_tiering_access, type=BYTE_ARRAY, convertedtype=UTF8"`
-	BucketKeyStatus           string     `json:"bucket_key_status,omitempty"             parquet:"name=bucket_key_status, type=BYTE_ARRAY, convertedtype=UTF8"`
-	ChecksumAlgorithm         string     `json:"checksum_algorithm,omitempty"            parquet:"name=checksum_algorithm, type=BYTE_ARRAY, convertedtype=UTF8"`
+	// Strings
+	Bucket                    string `json:"bucket"                                  parquet:"name=bucket, type=BYTE_ARRAY, convertedtype=UTF8"`
+	Key                       string `json:"key"                                     parquet:"name=key, type=BYTE_ARRAY, convertedtype=UTF8"`
+	VersionID                 string `json:"version_id,omitempty"                    parquet:"name=version_id, type=BYTE_ARRAY, convertedtype=UTF8"`
+	ETag                      string `json:"etag"                                    parquet:"name=etag, type=BYTE_ARRAY, convertedtype=UTF8"`
+	StorageClass              string `json:"storage_class"                           parquet:"name=storage_class, type=BYTE_ARRAY, convertedtype=UTF8"`
+	ReplicationStatus         string `json:"replication_status,omitempty"            parquet:"name=replication_status, type=BYTE_ARRAY, convertedtype=UTF8"`
+	EncryptionStatus          string `json:"encryption_status,omitempty"             parquet:"name=encryption_status, type=BYTE_ARRAY, convertedtype=UTF8"`
+	ObjectLockMode            string `json:"object_lock_mode,omitempty"              parquet:"name=object_lock_mode, type=BYTE_ARRAY, convertedtype=UTF8"`
+	ObjectLockLegalHoldStatus string `json:"object_lock_legal_hold_status,omitempty" parquet:"name=object_lock_legal_hold_status, type=BYTE_ARRAY, convertedtype=UTF8"`
+	IntelligentTieringAccess  string `json:"intelligent_tiering_access,omitempty"    parquet:"name=intelligent_tiering_access, type=BYTE_ARRAY, convertedtype=UTF8"`
+	BucketKeyStatus           string `json:"bucket_key_status,omitempty"             parquet:"name=bucket_key_status, type=BYTE_ARRAY, convertedtype=UTF8"`
+	ChecksumAlgorithm         string `json:"checksum_algorithm,omitempty"            parquet:"name=checksum_algorithm, type=BYTE_ARRAY, convertedtype=UTF8"`
+	// 1-byte fields (bool)
+	IsLatest            bool `json:"is_latest"            parquet:"name=is_latest, type=BOOLEAN"`
+	IsDeleteMarker      bool `json:"is_delete_marker"     parquet:"name=is_delete_marker, type=BOOLEAN"`
+	IsMultipartUploaded bool `json:"is_multipart_uploaded" parquet:"name=is_multipart_uploaded, type=BOOLEAN"`
 }
 
 // InventoryManifest describes the inventory output.
@@ -208,29 +212,30 @@ type ManifestFile struct {
 
 // InventoryJob represents a running inventory job.
 type InventoryJob struct {
+	// 8-byte fields (pointers)
+	// CompletedAt is when the job finished
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+
+	// StartedAt is when the job started
+	StartedAt time.Time `json:"started_at"`
+
+	// Progress tracks job progress
+	Progress JobProgress `json:"progress"`
+
 	// ID is the unique job identifier
 	ID string `json:"id"`
 
 	// ConfigID references the inventory configuration
 	ConfigID string `json:"config_id"`
 
-	// Status is the current job status
-	Status JobStatus `json:"status"`
-
-	// StartedAt is when the job started
-	StartedAt time.Time `json:"started_at"`
-
-	// CompletedAt is when the job finished
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
-
-	// Progress tracks job progress
-	Progress JobProgress `json:"progress"`
-
 	// Error contains error details if failed
 	Error string `json:"error,omitempty"`
 
 	// ManifestKey is the S3 key of the manifest file
 	ManifestKey string `json:"manifest_key,omitempty"`
+
+	// Status is the current job status
+	Status JobStatus `json:"status"`
 }
 
 // JobStatus represents the status of an inventory job.
@@ -260,25 +265,28 @@ type ObjectLister interface {
 
 // ObjectInfo contains metadata about an object.
 type ObjectInfo struct {
+	// 8-byte fields (pointers, maps, int64)
+	ObjectLockRetainUntilDate *time.Time
+	Tags                      map[string]string
+	Size                      int64
+	LastModified              time.Time
+	// Strings
 	Bucket                    string
 	Key                       string
 	VersionID                 string
-	IsLatest                  bool
-	IsDeleteMarker            bool
-	Size                      int64
-	LastModified              time.Time
 	ETag                      string
 	StorageClass              string
-	IsMultipartUploaded       bool
 	ReplicationStatus         string
 	EncryptionStatus          string
-	ObjectLockRetainUntilDate *time.Time
 	ObjectLockMode            string
 	ObjectLockLegalHoldStatus string
 	IntelligentTieringAccess  string
 	BucketKeyStatus           string
 	ChecksumAlgorithm         string
-	Tags                      map[string]string
+	// 1-byte fields (bool)
+	IsLatest            bool
+	IsDeleteMarker      bool
+	IsMultipartUploaded bool
 }
 
 // ObjectWriter provides an interface to write inventory files.
@@ -288,19 +296,19 @@ type ObjectWriter interface {
 
 // CatalogService manages inventory generation.
 type CatalogService struct {
-	lister ObjectLister
-	writer ObjectWriter
-
+	// 8-byte fields (interfaces, maps)
+	lister      ObjectLister
+	writer      ObjectWriter
 	configs     map[string]*InventoryConfig
 	jobs        map[string]*InventoryJob
-	configMu    sync.RWMutex
-	jobMu       sync.RWMutex
+	cancelFuncs map[string]context.CancelFunc
+	// Mutexes and structs
+	configMu sync.RWMutex
+	jobMu    sync.RWMutex
+	cancelMu sync.Mutex
+	// 4-byte fields (int)
 	concurrency int
 	batchSize   int
-
-	// For cancellation
-	cancelFuncs map[string]context.CancelFunc
-	cancelMu    sync.Mutex
 }
 
 // CatalogConfig holds configuration for the catalog service.
@@ -973,11 +981,12 @@ func (s *CatalogService) QueryInventory(ctx context.Context, manifestKey string,
 
 // AnalyzeInventory provides analytics on inventory data.
 type InventoryAnalytics struct {
-	TotalObjects     int64            `json:"total_objects"`
-	TotalSize        int64            `json:"total_size"`
+	// 8-byte fields (maps, int64)
 	ByStorageClass   map[string]int64 `json:"by_storage_class"`
 	BySizeRange      map[string]int64 `json:"by_size_range"`
 	ByLastModified   map[string]int64 `json:"by_last_modified"`
+	TotalObjects     int64            `json:"total_objects"`
+	TotalSize        int64            `json:"total_size"`
 	EncryptedObjects int64            `json:"encrypted_objects"`
 	VersionedObjects int64            `json:"versioned_objects"`
 	DeleteMarkers    int64            `json:"delete_markers"`

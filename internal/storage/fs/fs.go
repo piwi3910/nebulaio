@@ -36,6 +36,11 @@ import (
 // Directory permission constant.
 const dirPermissions = 0750
 
+var (
+	// ErrInvalidFilesystemStats is returned when filesystem statistics are invalid.
+	ErrInvalidFilesystemStats = errors.New("invalid filesystem statistics")
+)
+
 // Config holds filesystem backend configuration.
 type Config struct {
 	DataDir string
@@ -269,10 +274,14 @@ func (b *Backend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, err
 		return nil, fmt.Errorf("failed to get filesystem stats: %w", err)
 	}
 
-	//nolint:gosec // G115: filesystem stats are always positive
-	total := stat.Blocks * uint64(stat.Bsize)
-	//nolint:gosec // G115: filesystem stats are always positive
-	free := stat.Bfree * uint64(stat.Bsize)
+	// G115: Safe conversion - validate block size to prevent issues
+	if stat.Bsize == 0 {
+		return nil, fmt.Errorf("%w: block size is zero", ErrInvalidFilesystemStats)
+	}
+
+	blockSize := uint64(stat.Bsize)
+	total := stat.Blocks * blockSize
+	free := stat.Bfree * blockSize
 	used := total - free
 
 	// Count objects

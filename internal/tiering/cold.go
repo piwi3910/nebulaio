@@ -26,15 +26,7 @@ const (
 
 // ColdStorageConfig configures a cold storage backend.
 type ColdStorageConfig struct {
-	// Type of cold storage
-	Type ColdStorageType `json:"type" yaml:"type"`
-
-	// Name for this cold storage tier
-	Name string `json:"name" yaml:"name"`
-
-	// Enabled determines if this cold storage is active
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
+	// 8-byte fields (pointers)
 	// S3 configuration
 	S3 *S3ColdConfig `json:"s3,omitempty" yaml:"s3,omitempty"`
 
@@ -47,8 +39,18 @@ type ColdStorageConfig struct {
 	// Filesystem configuration
 	Filesystem *FilesystemColdConfig `json:"filesystem,omitempty" yaml:"filesystem,omitempty"`
 
+	// Name for this cold storage tier
+	Name string `json:"name" yaml:"name"`
+
+	// Type of cold storage
+	Type ColdStorageType `json:"type" yaml:"type"`
+
 	// RetentionDays is how long to keep objects in cold storage
 	RetentionDays int `json:"retentionDays,omitempty" yaml:"retentionDays,omitempty"`
+
+	// 1-byte fields (bool)
+	// Enabled determines if this cold storage is active
+	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// CompressionEnabled compresses objects before storing
 	CompressionEnabled bool `json:"compressionEnabled,omitempty" yaml:"compressionEnabled,omitempty"`
@@ -59,14 +61,16 @@ type ColdStorageConfig struct {
 
 // S3ColdConfig configures S3-compatible cold storage.
 type S3ColdConfig struct {
+	// Strings
 	Endpoint        string `json:"endpoint"               yaml:"endpoint"`
 	Region          string `json:"region"                 yaml:"region"`
 	Bucket          string `json:"bucket"                 yaml:"bucket"`
 	Prefix          string `json:"prefix,omitempty"       yaml:"prefix,omitempty"`
 	AccessKeyID     string `json:"-"                      yaml:"accessKeyId,omitempty"`
 	SecretAccessKey string `json:"-"                      yaml:"secretAccessKey,omitempty"`
-	UseSSL          bool   `json:"useSsl,omitempty"       yaml:"useSsl,omitempty"`
 	StorageClass    string `json:"storageClass,omitempty" yaml:"storageClass,omitempty"`
+	// 1-byte fields (bool)
+	UseSSL bool `json:"useSsl,omitempty" yaml:"useSsl,omitempty"`
 }
 
 // AzureColdConfig configures Azure Blob cold storage.
@@ -94,10 +98,13 @@ type FilesystemColdConfig struct {
 
 // ColdStorage represents a cold storage backend.
 type ColdStorage struct {
-	config  ColdStorageConfig
+	// 8-byte fields (interfaces)
 	backend backend.Backend
-	mu      sync.RWMutex
-	closed  bool
+	// Structs
+	config ColdStorageConfig
+	mu     sync.RWMutex
+	// 1-byte fields (bool)
+	closed bool
 }
 
 // NewColdStorage creates a new cold storage backend.

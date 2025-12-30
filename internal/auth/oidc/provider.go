@@ -77,10 +77,12 @@ func NewProvider(cfg Config) (*Provider, error) {
 			Str("issuer", cfg.IssuerURL).
 			Msg("WARNING: TLS certificate verification disabled for OIDC provider - this should only be used in development/testing")
 
-		//nolint:gosec // G402: InsecureSkipVerify is user-configurable for dev/test environments
+		// G402: InsecureSkipVerify is user-configurable for dev/test environments
+		// Even when skipping verification, we still enforce TLS 1.2+ for encryption
 		httpClient.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
+				InsecureSkipVerify: true, //nolint:gosec // G402: User-configured for development/testing only
+				MinVersion:         tls.VersionTLS12,
 			},
 		}
 	}

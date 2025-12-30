@@ -53,16 +53,19 @@ type objectMetadata struct {
 
 // Backend implements the storage backend using erasure coding.
 type Backend struct {
-	config            Config
+	// 8-byte fields (interfaces, pointers, slices)
 	placement         PlacementStrategy
 	encoder           *Encoder
 	decoder           *Decoder
 	shardManager      *ShardManager
 	placementGroupMgr *cluster.PlacementGroupManager
-	uploadsDir        string
-	localNodeID       string
 	nodes             []NodeInfo
-	mu                sync.RWMutex
+	// Strings
+	uploadsDir  string
+	localNodeID string
+	// Structs
+	config Config
+	mu     sync.RWMutex
 }
 
 // New creates a new erasure coding backend.

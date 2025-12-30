@@ -22,21 +22,26 @@ type LifecycleConfiguration struct {
 
 // LifecycleRule represents a single lifecycle rule.
 type LifecycleRule struct {
-	ID                             string                          `json:"id"                                       xml:"ID"`
-	Status                         string                          `json:"status"                                   xml:"Status"` // Enabled/Disabled
-	Filter                         Filter                          `json:"filter"                                   xml:"Filter"`
+	// 8-byte fields (pointers, slices)
 	Expiration                     *Expiration                     `json:"expiration,omitempty"                     xml:"Expiration,omitempty"`
 	Transition                     []Transition                    `json:"transitions,omitempty"                    xml:"Transition,omitempty"`
 	NoncurrentVersionExpiration    *NoncurrentVersionExpiration    `json:"noncurrentVersionExpiration,omitempty"    xml:"NoncurrentVersionExpiration,omitempty"`
 	NoncurrentVersionTransition    []NoncurrentVersionTransition   `json:"noncurrentVersionTransitions,omitempty"   xml:"NoncurrentVersionTransition,omitempty"`
 	AbortIncompleteMultipartUpload *AbortIncompleteMultipartUpload `json:"abortIncompleteMultipartUpload,omitempty" xml:"AbortIncompleteMultipartUpload,omitempty"`
+	// Structs
+	Filter Filter `json:"filter" xml:"Filter"`
+	// Strings
+	ID     string `json:"id"     xml:"ID"`
+	Status string `json:"status" xml:"Status"` // Enabled/Disabled
 }
 
 // Filter specifies which objects the rule applies to.
 type Filter struct {
+	// 8-byte fields (pointers)
+	Tag *Tag `json:"tag,omitempty" xml:"Tag,omitempty"`
+	And *And `json:"and,omitempty" xml:"And,omitempty"`
+	// Strings
 	Prefix string `json:"prefix,omitempty" xml:"Prefix,omitempty"`
-	Tag    *Tag   `json:"tag,omitempty"    xml:"Tag,omitempty"`
-	And    *And   `json:"and,omitempty"    xml:"And,omitempty"`
 }
 
 // Tag represents a key-value tag filter.
@@ -53,16 +58,22 @@ type And struct {
 
 // Expiration specifies when objects should be deleted.
 type Expiration struct {
-	Days                      int       `json:"days,omitempty"                      xml:"Days,omitempty"`
-	Date                      time.Time `json:"date,omitempty"                      xml:"Date,omitempty"`
-	ExpiredObjectDeleteMarker bool      `json:"expiredObjectDeleteMarker,omitempty" xml:"ExpiredObjectDeleteMarker,omitempty"`
+	// 8-byte fields
+	Date time.Time `json:"date,omitempty" xml:"Date,omitempty"`
+	// 4-byte fields (int)
+	Days int `json:"days,omitempty" xml:"Days,omitempty"`
+	// 1-byte fields (bool)
+	ExpiredObjectDeleteMarker bool `json:"expiredObjectDeleteMarker,omitempty" xml:"ExpiredObjectDeleteMarker,omitempty"`
 }
 
 // Transition specifies when objects should transition to a different storage class.
 type Transition struct {
-	Days         int       `json:"days,omitempty" xml:"Days,omitempty"`
-	Date         time.Time `json:"date,omitempty" xml:"Date,omitempty"`
-	StorageClass string    `json:"storageClass"   xml:"StorageClass"`
+	// 8-byte fields
+	Date time.Time `json:"date,omitempty" xml:"Date,omitempty"`
+	// Strings
+	StorageClass string `json:"storageClass" xml:"StorageClass"`
+	// 4-byte fields (int)
+	Days int `json:"days,omitempty" xml:"Days,omitempty"`
 }
 
 // NoncurrentVersionExpiration specifies when noncurrent versions should be deleted.
@@ -73,8 +84,10 @@ type NoncurrentVersionExpiration struct {
 
 // NoncurrentVersionTransition specifies when noncurrent versions should transition.
 type NoncurrentVersionTransition struct {
-	NoncurrentDays int    `json:"noncurrentDays" xml:"NoncurrentDays"`
-	StorageClass   string `json:"storageClass"   xml:"StorageClass"`
+	// Strings
+	StorageClass string `json:"storageClass" xml:"StorageClass"`
+	// 4-byte fields (int)
+	NoncurrentDays int `json:"noncurrentDays" xml:"NoncurrentDays"`
 }
 
 // AbortIncompleteMultipartUpload specifies when to abort incomplete multipart uploads.
@@ -100,9 +113,12 @@ const (
 
 // ActionResult contains the result of evaluating a lifecycle rule.
 type ActionResult struct {
-	Action       Action
-	TargetClass  string // For transition actions
-	RuleID       string
+	// Strings
+	TargetClass string // For transition actions
+	RuleID      string
+	// 4-byte fields (Action is int)
+	Action Action
+	// 1-byte fields (bool)
 	DeleteMarker bool // Whether this is a delete marker cleanup
 }
 

@@ -341,8 +341,8 @@ func (m *TLSManager) buildTLSConfig() (*tls.Config, error) {
 		return nil, fmt.Errorf("failed to load server certificate: %w", err)
 	}
 
-	// Determine minimum TLS version
-	minVersion := tls.VersionTLS12
+	// Determine minimum TLS version - G402: Always TLS 1.2 or higher for security
+	var minVersion uint16 = tls.VersionTLS12
 	if m.config.MinVersion == "1.3" {
 		minVersion = tls.VersionTLS13
 	}
@@ -368,10 +368,9 @@ func (m *TLSManager) buildTLSConfig() (*tls.Config, error) {
 		}
 	}
 
-	//nolint:gosec // G402,G115: MinVersion is user-configurable, defaults to TLS 1.2
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		MinVersion:   uint16(minVersion), //nolint:gosec // Safe conversion, validated above
+		MinVersion:   minVersion, // TLS 1.2+ enforced, constants are already uint16
 		ClientAuth:   clientAuth,
 		ClientCAs:    clientCAs,
 		CipherSuites: []uint16{

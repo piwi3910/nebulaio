@@ -61,11 +61,13 @@ type DragonboatConfig struct {
 // DragonboatStore implements the Store interface using Dragonboat for consensus
 // and BadgerDB for the underlying key-value storage.
 type DragonboatStore struct {
-	config   DragonboatConfig
+	// 8-byte fields (pointers, uint64)
 	nodeHost *dragonboat.NodeHost
 	badger   *badger.DB
 	shardID  uint64
 	nodeID   uint64
+	// Structs
+	config DragonboatConfig
 }
 
 // NewDragonboatStore creates a new Dragonboat-backed metadata store.

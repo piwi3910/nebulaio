@@ -232,12 +232,13 @@ func (w *Worker) getClient(dest Destination) (*minio.Client, error) {
 		return client, nil
 	}
 
-	// Create new client
-	//nolint:gosec // G402: InsecureSkipVerify only true for non-SSL connections (no TLS used)
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: !dest.UseSSL, // Only skip for non-SSL
-		},
+	// Create new client with appropriate TLS configuration
+	// G402: Only configure TLS when SSL is enabled, ensure TLS 1.2+ minimum
+	transport := &http.Transport{}
+	if dest.UseSSL {
+		transport.TLSClientConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12, // Enforce TLS 1.2+ for security
+		}
 	}
 
 	opts := &minio.Options{
