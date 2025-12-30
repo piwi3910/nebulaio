@@ -296,20 +296,22 @@ const (
 
 // TransitionActionConfig configures tier transitions.
 type TransitionActionConfig struct {
+	// Strings
+	// CompressionAlgorithm specifies compression type
+	CompressionAlgorithm string `json:"compressionAlgorithm,omitempty" yaml:"compressionAlgorithm,omitempty"`
+
 	// TargetTier is the destination tier
 	TargetTier TierType `json:"targetTier" yaml:"targetTier"`
 
 	// TargetStorageClass is the S3 storage class
 	TargetStorageClass StorageClass `json:"targetStorageClass,omitempty" yaml:"targetStorageClass,omitempty"`
 
+	// 1-byte fields (bool)
 	// PreserveCopy keeps original after transition
 	PreserveCopy bool `json:"preserveCopy,omitempty" yaml:"preserveCopy,omitempty"`
 
 	// Compression enables compression during transition
 	Compression bool `json:"compression,omitempty" yaml:"compression,omitempty"`
-
-	// CompressionAlgorithm specifies compression type
-	CompressionAlgorithm string `json:"compressionAlgorithm,omitempty" yaml:"compressionAlgorithm,omitempty"`
 }
 
 // DeleteActionConfig configures object deletion.
@@ -393,26 +395,31 @@ func (c *AntiThrashConfig) GetCooldownAfterTransition() time.Duration {
 
 // ScheduleConfig defines when policies can execute.
 type ScheduleConfig struct {
-	// Enabled turns on scheduling
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
+	// 8-byte fields (slices)
 	// MaintenanceWindows define allowed execution times
 	MaintenanceWindows []MaintenanceWindow `json:"maintenanceWindows,omitempty" yaml:"maintenanceWindows,omitempty"`
 
 	// BlackoutWindows define forbidden execution times
 	BlackoutWindows []MaintenanceWindow `json:"blackoutWindows,omitempty" yaml:"blackoutWindows,omitempty"`
 
+	// Strings
 	// Timezone for window evaluation
 	Timezone string `json:"timezone,omitempty" yaml:"timezone,omitempty"`
+
+	// 1-byte fields (bool)
+	// Enabled turns on scheduling
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // MaintenanceWindow defines a time window.
 type MaintenanceWindow struct {
-	// Name of the window
-	Name string `json:"name" yaml:"name"`
-
+	// 8-byte fields (slices)
 	// DaysOfWeek (0=Sunday, 6=Saturday)
 	DaysOfWeek []int `json:"daysOfWeek,omitempty" yaml:"daysOfWeek,omitempty"`
+
+	// Strings
+	// Name of the window
+	Name string `json:"name" yaml:"name"`
 
 	// StartTime in HH:MM format
 	StartTime string `json:"startTime" yaml:"startTime"`
@@ -441,6 +448,11 @@ type RateLimitConfig struct {
 
 // DistributedConfig configures distributed execution.
 type DistributedConfig struct {
+	// Strings
+	// CoordinationKey for distributed locking
+	CoordinationKey string `json:"coordinationKey,omitempty" yaml:"coordinationKey,omitempty"`
+
+	// 1-byte fields (bool)
 	// Enabled turns on distributed execution
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
@@ -449,38 +461,41 @@ type DistributedConfig struct {
 
 	// RequireLeaderElection for certain policies
 	RequireLeaderElection bool `json:"requireLeaderElection,omitempty" yaml:"requireLeaderElection,omitempty"`
-
-	// CoordinationKey for distributed locking
-	CoordinationKey string `json:"coordinationKey,omitempty" yaml:"coordinationKey,omitempty"`
 }
 
 // PolicyStats tracks policy execution statistics.
 type PolicyStats struct {
-	PolicyID               string        `json:"policyId"`
+	// 8-byte fields (time.Time, time.Duration, int64, float64)
 	LastExecuted           time.Time     `json:"lastExecuted"`
 	LastDuration           time.Duration `json:"lastDuration"`
 	ObjectsEvaluated       int64         `json:"objectsEvaluated"`
 	ObjectsTransitioned    int64         `json:"objectsTransitioned"`
 	BytesTransitioned      int64         `json:"bytesTransitioned"`
 	Errors                 int64         `json:"errors"`
-	LastError              string        `json:"lastError,omitempty"`
-	ConsecutiveSuccesses   int           `json:"consecutiveSuccesses"`
-	ConsecutiveFailures    int           `json:"consecutiveFailures"`
-	AverageExecutionTimeMs float64       `json:"averageExecutionTimeMs"`
 	TotalExecutions        int64         `json:"totalExecutions"`
+	AverageExecutionTimeMs float64       `json:"averageExecutionTimeMs"`
+	// Strings
+	PolicyID  string `json:"policyId"`
+	LastError string `json:"lastError,omitempty"`
+	// 4-byte fields (int)
+	ConsecutiveSuccesses int `json:"consecutiveSuccesses"`
+	ConsecutiveFailures  int `json:"consecutiveFailures"`
 }
 
 // ObjectAccessStats tracks object access patterns.
 type ObjectAccessStats struct {
-	Bucket       string    `json:"bucket"`
-	Key          string    `json:"key"`
-	CurrentTier  TierType  `json:"currentTier"`
-	LastAccessed time.Time `json:"lastAccessed"`
-	LastModified time.Time `json:"lastModified"`
-	AccessCount  int64     `json:"accessCount"`
-
+	// 8-byte fields (slices, int64)
 	// Time-series access data
 	AccessHistory []AccessRecord `json:"accessHistory,omitempty"`
+	AccessCount   int64          `json:"accessCount"`
+	LastAccessed  time.Time      `json:"lastAccessed"`
+	LastModified  time.Time      `json:"lastModified"`
+
+	// Strings
+	Bucket string `json:"bucket"`
+	Key    string `json:"key"`
+
+	CurrentTier TierType `json:"currentTier"`
 
 	// Computed metrics
 	AccessesLast24h    int     `json:"accessesLast24h"`

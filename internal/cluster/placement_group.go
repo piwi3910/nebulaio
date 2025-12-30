@@ -68,16 +68,16 @@ type PlacementGroupConfig struct {
 // PlacementGroupManager manages placement groups and node assignments.
 type PlacementGroupManager struct {
 	// 8-byte fields (interfaces, pointers, maps, channels, functions, uint64)
-	auditLogger         PlacementGroupAuditLogger
-	ctx                 context.Context
-	cancel              context.CancelFunc
-	nodeToGroup         map[string]PlacementGroupID
-	groups              map[PlacementGroupID]*PlacementGroup
-	localGroup          *PlacementGroup
-	onNodeLeftGroup     func(groupID PlacementGroupID, nodeID string)
-	onGroupStatusChange func(groupID PlacementGroupID, status PlacementGroupStatus)
-	callbackPool        chan func()
-	onNodeJoinedGroup   func(groupID PlacementGroupID, nodeID string)
+	auditLogger          PlacementGroupAuditLogger
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	nodeToGroup          map[string]PlacementGroupID
+	groups               map[PlacementGroupID]*PlacementGroup
+	localGroup           *PlacementGroup
+	onNodeLeftGroup      func(groupID PlacementGroupID, nodeID string)
+	onGroupStatusChange  func(groupID PlacementGroupID, status PlacementGroupStatus)
+	callbackPool         chan func()
+	onNodeJoinedGroup    func(groupID PlacementGroupID, nodeID string)
 	cachedLocalNodesHash uint64
 	cacheGeneration      uint64
 	// Slices

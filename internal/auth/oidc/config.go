@@ -17,22 +17,22 @@ const (
 // Config holds OIDC provider configuration.
 type Config struct {
 	// 8-byte fields (slices, time.Duration = int64)
-	Scopes         []string      `json:"scopes,omitempty" yaml:"scopes,omitempty"`
+	Scopes         []string      `json:"scopes,omitempty"         yaml:"scopes,omitempty"`
 	AllowedDomains []string      `json:"allowedDomains,omitempty" yaml:"allowedDomains,omitempty"`
-	AdminGroups    []string      `json:"adminGroups,omitempty" yaml:"adminGroups,omitempty"`
-	RequestTimeout time.Duration `json:"requestTimeout" yaml:"requestTimeout"`
+	AdminGroups    []string      `json:"adminGroups,omitempty"    yaml:"adminGroups,omitempty"`
+	RequestTimeout time.Duration `json:"requestTimeout"           yaml:"requestTimeout"`
 	// Structs
 	ClaimsMapping       ClaimsMapping `json:"claimsMapping,omitempty" yaml:"claimsMapping,omitempty"`
 	auth.ProviderConfig `yaml:",inline"`
 	// Strings
-	ClientSecret      string `json:"clientSecret" yaml:"clientSecret"`
-	ClientID          string `json:"clientId" yaml:"clientId"`
-	RedirectURL       string `json:"redirectUrl" yaml:"redirectUrl"`
-	IssuerURL         string `json:"issuerUrl" yaml:"issuerUrl"`
+	ClientSecret      string `json:"clientSecret"                yaml:"clientSecret"`
+	ClientID          string `json:"clientId"                    yaml:"clientId"`
+	RedirectURL       string `json:"redirectUrl"                 yaml:"redirectUrl"`
+	IssuerURL         string `json:"issuerUrl"                   yaml:"issuerUrl"`
 	TokenEndpointAuth string `json:"tokenEndpointAuth,omitempty" yaml:"tokenEndpointAuth,omitempty"`
 	// 1-byte fields (bool)
-	PKCE               bool `json:"pkce" yaml:"pkce"`
-	SkipIssuerCheck    bool `json:"skipIssuerCheck" yaml:"skipIssuerCheck"`
+	PKCE               bool `json:"pkce"               yaml:"pkce"`
+	SkipIssuerCheck    bool `json:"skipIssuerCheck"    yaml:"skipIssuerCheck"`
 	InsecureSkipVerify bool `json:"insecureSkipVerify" yaml:"insecureSkipVerify"`
 }
 

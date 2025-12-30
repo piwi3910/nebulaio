@@ -57,7 +57,7 @@ type Policy struct {
 	// Structs
 	Filter PolicyFilter `json:"filter" yaml:"filter"`
 	// Strings
-	Name        string `json:"name" yaml:"name"`
+	Name        string `json:"name"                  yaml:"name"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 	// 4-byte fields (int)
 	Priority int `json:"priority" yaml:"priority"`

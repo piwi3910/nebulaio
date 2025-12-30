@@ -20,18 +20,18 @@ import (
 
 // Dragonboat configuration constants.
 const (
-	dirPermissions           = 0750                   // Directory permissions for metadata storage
-	defaultRTTMillisecond    = 200                    // RTT in milliseconds for Raft
-	defaultElectionRTT       = 10                     // Election RTT multiplier
-	defaultSnapshotEntries   = 1024                   // Entries before snapshot
-	defaultCompactionOverhead = 500                   // Compaction overhead entries
-	leaderWaitTimeout        = 30 * time.Second       // Timeout waiting for leader election
-	operationTimeout         = 30 * time.Second       // Timeout for Raft operations
-	shortOperationTimeout    = 5 * time.Second        // Short timeout for quick operations
-	syncReadTimeout          = 10 * time.Second       // Timeout for sync read operations
-	listOperationTimeout     = 60 * time.Second       // Timeout for list operations
-	defaultListMaxKeys       = 100                    // Default max keys for list operations
-	pollingInterval          = 100 * time.Millisecond // Polling interval for leader checks
+	dirPermissions            = 0750                   // Directory permissions for metadata storage
+	defaultRTTMillisecond     = 200                    // RTT in milliseconds for Raft
+	defaultElectionRTT        = 10                     // Election RTT multiplier
+	defaultSnapshotEntries    = 1024                   // Entries before snapshot
+	defaultCompactionOverhead = 500                    // Compaction overhead entries
+	leaderWaitTimeout         = 30 * time.Second       // Timeout waiting for leader election
+	operationTimeout          = 30 * time.Second       // Timeout for Raft operations
+	shortOperationTimeout     = 5 * time.Second        // Short timeout for quick operations
+	syncReadTimeout           = 10 * time.Second       // Timeout for sync read operations
+	listOperationTimeout      = 60 * time.Second       // Timeout for list operations
+	defaultListMaxKeys        = 100                    // Default max keys for list operations
+	pollingInterval           = 100 * time.Millisecond // Polling interval for leader checks
 )
 
 // hashNodeID converts a string node ID to a uint64 replica ID.

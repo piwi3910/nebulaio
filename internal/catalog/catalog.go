@@ -169,8 +169,8 @@ type InventoryRecord struct {
 	BucketKeyStatus           string `json:"bucket_key_status,omitempty"             parquet:"name=bucket_key_status, type=BYTE_ARRAY, convertedtype=UTF8"`
 	ChecksumAlgorithm         string `json:"checksum_algorithm,omitempty"            parquet:"name=checksum_algorithm, type=BYTE_ARRAY, convertedtype=UTF8"`
 	// 1-byte fields (bool)
-	IsLatest            bool `json:"is_latest"            parquet:"name=is_latest, type=BOOLEAN"`
-	IsDeleteMarker      bool `json:"is_delete_marker"     parquet:"name=is_delete_marker, type=BOOLEAN"`
+	IsLatest            bool `json:"is_latest"             parquet:"name=is_latest, type=BOOLEAN"`
+	IsDeleteMarker      bool `json:"is_delete_marker"      parquet:"name=is_delete_marker, type=BOOLEAN"`
 	IsMultipartUploaded bool `json:"is_multipart_uploaded" parquet:"name=is_multipart_uploaded, type=BOOLEAN"`
 }
 

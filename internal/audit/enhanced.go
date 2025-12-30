@@ -131,19 +131,19 @@ type FilterRule struct {
 type EnhancedAuditEvent struct {
 	AuditEvent
 	// 8-byte fields (pointers, int64)
-	Integrity      *IntegrityInfo    `json:"integrity,omitempty"`
-	Compliance     *ComplianceInfo   `json:"compliance,omitempty"`
-	GeoLocation    *GeoLocation      `json:"geoLocation,omitempty"`
-	SequenceNumber int64             `json:"sequenceNumber"`
+	Integrity      *IntegrityInfo  `json:"integrity,omitempty"`
+	Compliance     *ComplianceInfo `json:"compliance,omitempty"`
+	GeoLocation    *GeoLocation    `json:"geoLocation,omitempty"`
+	SequenceNumber int64           `json:"sequenceNumber"`
 	// Map fields (8 bytes on 64-bit)
 	ResponseHeaders map[string]string `json:"responseHeaders,omitempty"`
 	RequestHeaders  map[string]string `json:"requestHeaders,omitempty"`
 	// String fields
-	RequestPath    string `json:"requestPath,omitempty"`
-	RequestMethod  string `json:"requestMethod,omitempty"`
-	SessionID      string `json:"sessionId,omitempty"`
-	PreviousHash   string `json:"previousHash,omitempty"`
-	EventHash      string `json:"eventHash,omitempty"`
+	RequestPath   string `json:"requestPath,omitempty"`
+	RequestMethod string `json:"requestMethod,omitempty"`
+	SessionID     string `json:"sessionId,omitempty"`
+	PreviousHash  string `json:"previousHash,omitempty"`
+	EventHash     string `json:"eventHash,omitempty"`
 	// 4-byte fields
 	ResponseStatus int `json:"responseStatus,omitempty"`
 }

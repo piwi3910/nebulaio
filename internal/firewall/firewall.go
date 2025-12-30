@@ -16,9 +16,9 @@ import (
 const (
 	defaultRequestsPerSecond        = 1000
 	defaultRateLimitBurstSize       = 100
-	defaultMaxBytesPerSecond        = 1024 * 1024 * 1024  // 1 GB/s
-	defaultMaxBytesPerSecondPerUser = 100 * 1024 * 1024   // 100 MB/s
-	defaultMaxBytesPerSecondBucket  = 500 * 1024 * 1024   // 500 MB/s
+	defaultMaxBytesPerSecond        = 1024 * 1024 * 1024 // 1 GB/s
+	defaultMaxBytesPerSecondPerUser = 100 * 1024 * 1024  // 100 MB/s
+	defaultMaxBytesPerSecondBucket  = 500 * 1024 * 1024  // 500 MB/s
 	defaultMaxConnections           = 10000
 	defaultMaxConnectionsPerIP      = 100
 	defaultMaxConnectionsPerUser    = 500
@@ -28,17 +28,17 @@ const (
 // Config configures the data firewall.
 type Config struct {
 	// 8-byte fields (slices)
-	Rules       []Rule   `json:"rules" yaml:"rules"`
+	Rules       []Rule   `json:"rules"       yaml:"rules"`
 	IPAllowlist []string `json:"ipAllowlist" yaml:"ip_allowlist"`
 	IPBlocklist []string `json:"ipBlocklist" yaml:"ip_blocklist"`
 	// Structs
-	Bandwidth    BandwidthConfig  `json:"bandwidth" yaml:"bandwidth"`
+	Bandwidth    BandwidthConfig  `json:"bandwidth"    yaml:"bandwidth"`
 	RateLimiting RateLimitConfig  `json:"rateLimiting" yaml:"rate_limiting"`
-	Connections  ConnectionConfig `json:"connections" yaml:"connections"`
+	Connections  ConnectionConfig `json:"connections"  yaml:"connections"`
 	// Strings
 	DefaultPolicy string `json:"defaultPolicy" yaml:"default_policy"`
 	// 1-byte fields (bool)
-	Enabled      bool `json:"enabled" yaml:"enabled"`
+	Enabled      bool `json:"enabled"      yaml:"enabled"`
 	AuditEnabled bool `json:"auditEnabled" yaml:"audit_enabled"`
 }
 
@@ -88,13 +88,13 @@ type ConnectionConfig struct {
 // Rule represents a firewall rule.
 type Rule struct {
 	// 8-byte fields (pointers)
-	RateLimit      *int   `json:"rateLimit,omitempty" yaml:"rate_limit,omitempty"`
+	RateLimit      *int   `json:"rateLimit,omitempty"      yaml:"rate_limit,omitempty"`
 	BandwidthLimit *int64 `json:"bandwidthLimit,omitempty" yaml:"bandwidth_limit,omitempty"`
 	// Structs
 	Match RuleMatch `json:"match" yaml:"match"`
 	// Strings
-	ID     string `json:"id" yaml:"id"`
-	Name   string `json:"name" yaml:"name"`
+	ID     string `json:"id"     yaml:"id"`
+	Name   string `json:"name"   yaml:"name"`
 	Action string `json:"action" yaml:"action"`
 	// 4-byte fields (int)
 	Priority int `json:"priority" yaml:"priority"`

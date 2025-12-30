@@ -36,12 +36,14 @@ type ListAllMyBucketsResult struct {
 
 // ObjectInfo represents object information in list response.
 type ObjectInfo struct {
+	// 8-byte fields (pointers, int64)
+	Owner *Owner `xml:"Owner,omitempty"`
+	Size  int64  `xml:"Size"`
+	// Strings
 	Key          string `xml:"Key"`
 	LastModified string `xml:"LastModified"`
 	ETag         string `xml:"ETag"`
-	Size         int64  `xml:"Size"`
 	StorageClass string `xml:"StorageClass"`
-	Owner        *Owner `xml:"Owner,omitempty"`
 }
 
 // CommonPrefix represents a common prefix in list response.
@@ -51,17 +53,22 @@ type CommonPrefix struct {
 
 // ListBucketResult is the response for ListObjectsV2.
 type ListBucketResult struct {
-	XMLName               xml.Name       `xml:"ListBucketResult"`
-	Name                  string         `xml:"Name"`
-	Prefix                string         `xml:"Prefix"`
-	Delimiter             string         `xml:"Delimiter,omitempty"`
-	MaxKeys               int            `xml:"MaxKeys"`
-	IsTruncated           bool           `xml:"IsTruncated"`
-	ContinuationToken     string         `xml:"ContinuationToken,omitempty"`
-	NextContinuationToken string         `xml:"NextContinuationToken,omitempty"`
-	KeyCount              int            `xml:"KeyCount"`
-	Contents              []ObjectInfo   `xml:"Contents"`
-	CommonPrefixes        []CommonPrefix `xml:"CommonPrefixes,omitempty"`
+	// 8-byte fields (slices)
+	Contents       []ObjectInfo   `xml:"Contents"`
+	CommonPrefixes []CommonPrefix `xml:"CommonPrefixes,omitempty"`
+	// Structs
+	XMLName xml.Name `xml:"ListBucketResult"`
+	// Strings
+	Name                  string `xml:"Name"`
+	Prefix                string `xml:"Prefix"`
+	Delimiter             string `xml:"Delimiter,omitempty"`
+	ContinuationToken     string `xml:"ContinuationToken,omitempty"`
+	NextContinuationToken string `xml:"NextContinuationToken,omitempty"`
+	// 4-byte fields (int)
+	MaxKeys  int `xml:"MaxKeys"`
+	KeyCount int `xml:"KeyCount"`
+	// 1-byte fields (bool)
+	IsTruncated bool `xml:"IsTruncated"`
 }
 
 // CopyObjectResult is the response for CopyObject.
@@ -81,11 +88,13 @@ type InitiateMultipartUploadResult struct {
 
 // CompleteMultipartUploadRequest is the request for CompleteMultipartUpload.
 type CompleteMultipartUploadRequest struct {
-	XMLName xml.Name `xml:"CompleteMultipartUpload"`
-	Part    []struct {
-		PartNumber int    `xml:"PartNumber"`
+	// 8-byte fields (slices)
+	Part []struct {
 		ETag       string `xml:"ETag"`
+		PartNumber int    `xml:"PartNumber"`
 	} `xml:"Part"`
+	// Structs
+	XMLName xml.Name `xml:"CompleteMultipartUpload"`
 }
 
 // CompleteMultipartUploadResult is the response for CompleteMultipartUpload.
@@ -126,18 +135,23 @@ type PartInfo struct {
 
 // ListPartsResult is the response for ListParts.
 type ListPartsResult struct {
-	XMLName              xml.Name   `xml:"ListPartsResult"`
-	Bucket               string     `xml:"Bucket"`
-	Key                  string     `xml:"Key"`
-	UploadId             string     `xml:"UploadId"`
-	Initiator            *Owner     `xml:"Initiator,omitempty"`
-	Owner                *Owner     `xml:"Owner,omitempty"`
-	StorageClass         string     `xml:"StorageClass,omitempty"`
-	PartNumberMarker     int        `xml:"PartNumberMarker"`
-	NextPartNumberMarker int        `xml:"NextPartNumberMarker,omitempty"`
-	MaxParts             int        `xml:"MaxParts"`
-	IsTruncated          bool       `xml:"IsTruncated"`
-	Part                 []PartInfo `xml:"Part"`
+	// 8-byte fields (pointers, slices)
+	Initiator *Owner     `xml:"Initiator,omitempty"`
+	Owner     *Owner     `xml:"Owner,omitempty"`
+	Part      []PartInfo `xml:"Part"`
+	// Structs
+	XMLName xml.Name `xml:"ListPartsResult"`
+	// Strings
+	Bucket       string `xml:"Bucket"`
+	Key          string `xml:"Key"`
+	UploadId     string `xml:"UploadId"`
+	StorageClass string `xml:"StorageClass,omitempty"`
+	// 4-byte fields (int)
+	PartNumberMarker     int `xml:"PartNumberMarker"`
+	NextPartNumberMarker int `xml:"NextPartNumberMarker,omitempty"`
+	MaxParts             int `xml:"MaxParts"`
+	// 1-byte fields (bool)
+	IsTruncated bool `xml:"IsTruncated"`
 }
 
 // ListPartsRequest represents query parameters for ListParts API.
@@ -246,15 +260,17 @@ type AbortIncompleteMultipartUpload struct {
 
 // LifecycleRule represents a lifecycle rule.
 type LifecycleRule struct {
-	ID                             string                          `xml:"ID,omitempty"`
-	Status                         string                          `xml:"Status"`
+	// 8-byte fields (pointers, slices)
 	Filter                         *LifecycleFilter                `xml:"Filter,omitempty"`
-	Prefix                         string                          `xml:"Prefix,omitempty"` // Deprecated, use Filter
 	Expiration                     *LifecycleExpiration            `xml:"Expiration,omitempty"`
 	Transition                     []LifecycleTransition           `xml:"Transition,omitempty"`
 	NoncurrentVersionExpiration    *NoncurrentVersionExpiration    `xml:"NoncurrentVersionExpiration,omitempty"`
 	NoncurrentVersionTransition    []NoncurrentVersionTransition   `xml:"NoncurrentVersionTransition,omitempty"`
 	AbortIncompleteMultipartUpload *AbortIncompleteMultipartUpload `xml:"AbortIncompleteMultipartUpload,omitempty"`
+	// Strings
+	ID     string `xml:"ID,omitempty"`
+	Status string `xml:"Status"`
+	Prefix string `xml:"Prefix,omitempty"` // Deprecated, use Filter
 }
 
 // LifecycleConfiguration represents bucket lifecycle configuration.
