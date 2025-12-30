@@ -16,6 +16,21 @@ import (
 	"time"
 )
 
+// Configuration constants.
+const (
+	defaultMaxAppendSize          = 5 << 30   // 5GB
+	defaultStreamingListBatchSize = 1000
+	resultChannelBuffer           = 10
+	sessionCleanupInterval        = 5 * time.Minute
+	sessionIDBytes                = 16
+	accessKeyBytes                = 10
+	secretKeyBytes                = 20
+	sessionTokenBytes             = 64
+	etagBytes                     = 16
+	crcMultiplier                 = 31
+	checksumBufSize               = 4
+)
+
 // S3 Express API Errors.
 var (
 	ErrOffsetConflict     = errors.New("offset conflict: another write already claimed this offset")
@@ -50,9 +65,9 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		SessionDuration:        1 * time.Hour,
-		MaxAppendSize:          5 << 30, // 5GB
+		MaxAppendSize:          defaultMaxAppendSize,
 		EnableLightweightETags: true,
-		StreamingListBatchSize: 1000,
+		StreamingListBatchSize: defaultStreamingListBatchSize,
 		EnableAtomicAppend:     true,
 	}
 }
@@ -394,7 +409,7 @@ type StreamingListResult struct {
 
 // ExpressListObjects performs a streaming LIST operation.
 func (s *ExpressService) ExpressListObjects(ctx context.Context, bucket, prefix string, opts ListOptions) (<-chan StreamingListResult, <-chan error) {
-	resultChan := make(chan StreamingListResult, 10)
+	resultChan := make(chan StreamingListResult, resultChannelBuffer)
 	errChan := make(chan error, 1)
 
 	go func() {
@@ -592,7 +607,7 @@ func (m *Metrics) AverageListLatency() time.Duration {
 
 // cleanupExpiredSessions periodically removes expired sessions.
 func (s *ExpressService) cleanupExpiredSessions() {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(sessionCleanupInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -617,35 +632,35 @@ func (s *ExpressService) cleanupExpiredSessions() {
 // Helper functions
 
 func generateSessionID() string {
-	b := make([]byte, 16)
+	b := make([]byte, sessionIDBytes)
 	rand.Read(b)
 
 	return hex.EncodeToString(b)
 }
 
 func generateAccessKey() string {
-	b := make([]byte, 10)
+	b := make([]byte, accessKeyBytes)
 	rand.Read(b)
 
-	return "AKIA" + hex.EncodeToString(b)[:16]
+	return "AKIA" + hex.EncodeToString(b)[:sessionIDBytes]
 }
 
 func generateSecretKey() string {
-	b := make([]byte, 20)
+	b := make([]byte, secretKeyBytes)
 	rand.Read(b)
 
 	return hex.EncodeToString(b)
 }
 
 func generateSessionToken() string {
-	b := make([]byte, 64)
+	b := make([]byte, sessionTokenBytes)
 	rand.Read(b)
 
 	return hex.EncodeToString(b)
 }
 
 func generateLightweightETag() string {
-	b := make([]byte, 16)
+	b := make([]byte, etagBytes)
 	rand.Read(b)
 
 	return fmt.Sprintf("\"%s\"", hex.EncodeToString(b))
@@ -840,10 +855,10 @@ func CreateChecksum(data []byte) *ChecksumHeader {
 	// Use lightweight CRC32 instead of SHA256 for express mode
 	var crc uint32
 	for _, b := range data {
-		crc = crc*31 + uint32(b)
+		crc = crc*crcMultiplier + uint32(b)
 	}
 
-	buf := make([]byte, 4)
+	buf := make([]byte, checksumBufSize)
 	binary.BigEndian.PutUint32(buf, crc)
 
 	return &ChecksumHeader{

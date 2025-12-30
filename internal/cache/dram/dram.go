@@ -16,6 +16,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Cache configuration defaults.
+const (
+	defaultMaxSize       = 8 * 1024 * 1024 * 1024  // 8GB
+	defaultShardCount    = 256
+	defaultEntryMaxSize  = 256 * 1024 * 1024       // 256MB
+	peerCacheLogBurstMax = 5
+	lastKeysCapacity     = 10
+	sequentialThreshold  = 3
+	metadataBufferExtra  = 256
+	minMarshalDataLen    = 12
+	logEveryNthFailure   = 100
+)
+
 // Config configures the DRAM cache.
 type Config struct {
 	EvictionPolicy            string        `json:"evictionPolicy" yaml:"eviction_policy"`
@@ -40,9 +53,9 @@ type Config struct {
 // DefaultConfig returns sensible defaults for production workloads.
 func DefaultConfig() Config {
 	return Config{
-		MaxSize:                   8 * 1024 * 1024 * 1024, // 8GB
-		ShardCount:                256,
-		EntryMaxSize:              256 * 1024 * 1024, // 256MB
+		MaxSize:                   defaultMaxSize,
+		ShardCount:                defaultShardCount,
+		EntryMaxSize:              defaultEntryMaxSize,
 		TTL:                       time.Hour,
 		EvictionPolicy:            "arc",
 		PrefetchEnabled:           true,
@@ -54,7 +67,7 @@ func DefaultConfig() Config {
 		ReplicationFactor:         2,
 		WarmupEnabled:             false,
 		MetricsEnabled:            true,
-		PeerCacheLogResetInterval: 5 * time.Minute, // Reset log rate limiter every 5 minutes
+		PeerCacheLogResetInterval: peerCacheLogBurstMax * time.Minute, // Reset log rate limiter every 5 minutes
 	}
 }
 
@@ -144,15 +157,15 @@ type peerClient struct {
 // New creates a new DRAM cache.
 func New(config Config) *Cache {
 	if config.ShardCount <= 0 {
-		config.ShardCount = 256
+		config.ShardCount = defaultShardCount
 	}
 
 	if config.MaxSize <= 0 {
-		config.MaxSize = 8 * 1024 * 1024 * 1024
+		config.MaxSize = defaultMaxSize
 	}
 
 	if config.EntryMaxSize <= 0 {
-		config.EntryMaxSize = 256 * 1024 * 1024
+		config.EntryMaxSize = defaultEntryMaxSize
 	}
 
 	if config.TTL <= 0 {
@@ -222,13 +235,13 @@ func (c *Cache) logPeerCacheFailure(key string, err error) {
 
 	resetInterval := c.config.PeerCacheLogResetInterval
 	if resetInterval <= 0 {
-		resetInterval = 5 * time.Minute
+		resetInterval = peerCacheLogBurstMax * time.Minute
 	}
 
 	// Check if we should reset the rate limiter due to time elapsed
 	if lastLogTime > 0 && now-lastLogTime > resetInterval.Nanoseconds() {
 		// Reset the burst allowance and count after quiet period
-		atomic.StoreInt64(&c.peerCacheLogBurstLeft, 5)
+		atomic.StoreInt64(&c.peerCacheLogBurstLeft, peerCacheLogBurstMax)
 		atomic.StoreInt64(&c.peerCacheLogCount, 0)
 	}
 
@@ -242,7 +255,7 @@ func (c *Cache) logPeerCacheFailure(key string, err error) {
 		if atomic.CompareAndSwapInt64(&c.peerCacheLogBurstLeft, burstLeft, burstLeft-1) {
 			shouldLog = true
 		}
-	} else if count%100 == 0 {
+	} else if count%logEveryNthFailure == 0 {
 		// Log every 100th failure after burst exhausted
 		shouldLog = true
 	}
@@ -588,20 +601,20 @@ func (c *Cache) trackAccess(key string) {
 		pattern = &accessPattern{
 			bucket:   bucket,
 			prefix:   prefix,
-			lastKeys: make([]string, 0, 10),
+			lastKeys: make([]string, 0, lastKeysCapacity),
 		}
 		c.accessPatterns[patternKey] = pattern
 	}
 
 	pattern.lastKeys = append(pattern.lastKeys, key)
-	if len(pattern.lastKeys) > 10 {
+	if len(pattern.lastKeys) > lastKeysCapacity {
 		pattern.lastKeys = pattern.lastKeys[1:]
 	}
 
 	pattern.accessCount++
 
 	// Detect sequential access pattern
-	if len(pattern.lastKeys) >= 3 {
+	if len(pattern.lastKeys) >= sequentialThreshold {
 		pattern.sequential = c.isSequentialAccess(pattern.lastKeys)
 	}
 }
@@ -779,7 +792,7 @@ func extractNumericSuffix(s string) int64 {
 func (e *Entry) Marshal() []byte {
 	// Simple binary format: key_len(4) + key + data_len(8) + data + metadata
 	keyBytes := []byte(e.Key)
-	buf := make([]byte, 4+len(keyBytes)+8+len(e.Data)+256) // Extra for metadata
+	buf := make([]byte, 4+len(keyBytes)+8+len(e.Data)+metadataBufferExtra) // Extra for metadata
 
 	offset := 0
 
@@ -820,7 +833,7 @@ func (e *Entry) Marshal() []byte {
 }
 
 func UnmarshalEntry(data []byte) (*Entry, error) {
-	if len(data) < 12 {
+	if len(data) < minMarshalDataLen {
 		return nil, io.ErrUnexpectedEOF
 	}
 
