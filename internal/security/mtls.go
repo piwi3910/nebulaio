@@ -33,6 +33,13 @@ const ClientCertContextKey contextKey = "client_cert"
 // CertificateType represents the type of certificate.
 type CertificateType string
 
+// File permission constants.
+const (
+	certDirPermissions   = 0700 // Directory permissions for cert storage
+	certFilePermissions  = 0644 // Public cert file permissions
+	keyFilePermissions   = 0600 // Private key file permissions
+)
+
 const (
 	CertTypeCA     CertificateType = "CA"
 	CertTypeServer CertificateType = "SERVER"
@@ -127,7 +134,7 @@ func NewMTLSManager(config *MTLSConfig, storage CertificateStorage) (*MTLSManage
 
 	// Create cert directory if needed
 	if config.CertDir != "" {
-		err := os.MkdirAll(config.CertDir, 0700)
+		err := os.MkdirAll(config.CertDir, certDirPermissions)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cert directory: %w", err)
 		}
@@ -260,11 +267,11 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 	m.certPool.AddCert(cert)
 
 	// Save to disk
-	if err := os.WriteFile(caCertPath, certPEM, 0644); err != nil {
+	if err := os.WriteFile(caCertPath, certPEM, certFilePermissions); err != nil {
 		return nil, err
 	}
 
-	if err := os.WriteFile(caKeyPath, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(caKeyPath, keyPEM, keyFilePermissions); err != nil {
 		return nil, err
 	}
 
@@ -372,11 +379,11 @@ func (m *MTLSManager) IssueCertificate(ctx context.Context, certType Certificate
 	certPath := filepath.Join(m.config.CertDir, bundle.Info.ID+".crt")
 	keyPath := filepath.Join(m.config.CertDir, bundle.Info.ID+".key")
 
-	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
+	if err := os.WriteFile(certPath, certPEM, certFilePermissions); err != nil {
 		return nil, err
 	}
 
-	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(keyPath, keyPEM, keyFilePermissions); err != nil {
 		return nil, err
 	}
 

@@ -25,6 +25,18 @@ import (
 	"github.com/piwi3910/nebulaio/internal/object"
 )
 
+// Console handler constants.
+const (
+	// Default presigned URL expiration in seconds.
+	defaultPresignedExpirySec = 3600 // 1 hour
+	// Copy buffer size in bytes.
+	copyBufferSize = 32 * 1024 // 32KB
+	// Maximum presigned URL expiry in seconds (7 days).
+	maxPresignedExpirySec = 604800
+	// Maximum multipart form size in bytes (32MB).
+	maxMultipartFormSize = 32 << 20
+)
+
 // Handler handles Console API requests (user-facing, non-admin).
 type Handler struct {
 	auth   *auth.Service
@@ -446,7 +458,7 @@ func (h *Handler) GetObjectInfo(w http.ResponseWriter, r *http.Request) {
 				Method:      "GET",
 				Bucket:      bucketName,
 				Key:         key,
-				Expiration:  3600 * time.Second, // 1 hour default
+				Expiration:  defaultPresignedExpirySec * time.Second,
 				AccessKeyID: accessKey.AccessKeyID,
 				SecretKey:   accessKey.SecretAccessKey,
 				Region:      "us-east-1",
@@ -501,7 +513,7 @@ func (h *Handler) GetObjectContent(w http.ResponseWriter, r *http.Request) {
 
 // copyBuffer copies from src to dst using a buffer.
 func copyBuffer(dst http.ResponseWriter, src interface{ Read([]byte) (int, error) }) (int64, error) {
-	buf := make([]byte, 32*1024) // 32KB buffer
+	buf := make([]byte, copyBufferSize)
 
 	var written int64
 
@@ -577,7 +589,7 @@ func (h *Handler) UploadObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse multipart form
-	if err := r.ParseMultipartForm(32 << 20); err != nil { // 32MB max
+	if err := r.ParseMultipartForm(maxMultipartFormSize); err != nil {
 		writeError(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
@@ -691,7 +703,7 @@ func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 
 	// Get expiration from query param (default 1 hour, max 7 days)
 	expirationStr := r.URL.Query().Get("expiration")
-	expiration := 3600 // 1 hour default
+	expiration := defaultPresignedExpirySec
 
 	if expirationStr != "" {
 		if exp, err := strconv.Atoi(expirationStr); err == nil && exp > 0 {
@@ -699,8 +711,8 @@ func (h *Handler) GetDownloadURL(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if expiration > 604800 { // 7 days max
-		expiration = 604800
+	if expiration > maxPresignedExpirySec {
+		expiration = maxPresignedExpirySec
 	}
 
 	// Generate the presigned URL
@@ -806,11 +818,11 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 
 	// Set default expiration (1 hour)
 	if req.Expiration <= 0 {
-		req.Expiration = 3600
+		req.Expiration = defaultPresignedExpirySec
 	}
 	// Max 7 days
-	if req.Expiration > 604800 {
-		req.Expiration = 604800
+	if req.Expiration > maxPresignedExpirySec {
+		req.Expiration = maxPresignedExpirySec
 	}
 
 	// Get user's access key

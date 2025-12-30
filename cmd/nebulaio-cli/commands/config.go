@@ -8,6 +8,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Secret masking constants.
+const (
+	// Minimum length before partial masking.
+	secretMinMaskLength = 8
+	// Number of visible characters at each end.
+	secretVisibleChars = 4
+)
+
 // NewConfigCmd creates the config command.
 func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -137,9 +145,9 @@ func maskSecret(key, value string) string {
 		return value
 	}
 
-	if len(value) <= 8 {
+	if len(value) <= secretMinMaskLength {
 		return "****"
 	}
 
-	return value[:4] + "****" + value[len(value)-4:]
+	return value[:secretVisibleChars] + "****" + value[len(value)-secretVisibleChars:]
 }
