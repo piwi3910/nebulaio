@@ -261,7 +261,8 @@ func TestQueue(t *testing.T) {
 			t.Errorf("complete failed: %v", err)
 		}
 
-		if _, err := q.Get(item.ID); err == nil {
+		_, err = q.Get(item.ID)
+		if err == nil {
 			t.Error("item should be removed after completion")
 		}
 	})
@@ -487,7 +488,8 @@ func TestService(t *testing.T) {
 			t.Fatalf("delete config failed: %v", err)
 		}
 
-		if _, err := svc.GetConfig(ctx, "source-bucket"); err == nil {
+		_, err = svc.GetConfig(ctx, "source-bucket")
+		if err == nil {
 			t.Error("config should be deleted")
 		}
 	})

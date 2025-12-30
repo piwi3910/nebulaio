@@ -143,7 +143,8 @@ func (s *HybridPolicyStore) loadFromConfig() error {
 	}
 
 	// Check if file exists
-	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
+	_, err := os.Stat(s.configPath)
+	if os.IsNotExist(err) {
 		return nil // No config file, that's OK
 	}
 

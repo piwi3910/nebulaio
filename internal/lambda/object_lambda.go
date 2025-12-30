@@ -1034,7 +1034,8 @@ func compressGzip(buf *bytes.Buffer, data []byte, level int) (err error) {
 		}
 	}()
 
-	if _, err = writer.Write(data); err != nil {
+	_, err = writer.Write(data)
+	if err != nil {
 		return fmt.Errorf("failed to write gzip data: %w", err)
 	}
 
@@ -1061,7 +1062,8 @@ func compressZstd(buf *bytes.Buffer, data []byte, level int) (err error) {
 		}
 	}()
 
-	if _, err = writer.Write(data); err != nil {
+	_, err = writer.Write(data)
+	if err != nil {
 		return fmt.Errorf("failed to write zstd data: %w", err)
 	}
 

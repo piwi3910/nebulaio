@@ -49,7 +49,8 @@ func TestNewProvider_InsecureSkipVerify(t *testing.T) {
 
 			// The important part is that the function doesn't panic when InsecureSkipVerify
 			// is set, and that the configuration is accepted
-			if err := cfg.Validate(); err != nil {
+			err = cfg.Validate()
+			if err != nil {
 				t.Errorf("Config should be valid: %v", err)
 			}
 		})

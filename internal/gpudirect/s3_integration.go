@@ -70,14 +70,16 @@ func ParseGPUDirectRequest(r *http.Request) *GPUDirectRequest {
 
 	// Parse GPU device ID
 	if deviceStr := r.Header.Get(HeaderGPUDeviceID); deviceStr != "" {
-		if deviceID, err := strconv.Atoi(deviceStr); err == nil {
+		deviceID, err := strconv.Atoi(deviceStr)
+		if err == nil {
 			req.DeviceID = deviceID
 		}
 	}
 
 	// Parse buffer size
 	if sizeStr := r.Header.Get(HeaderGPUBufferSize); sizeStr != "" {
-		if size, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
+		size, err := strconv.ParseInt(sizeStr, 10, 64)
+		if err == nil {
 			req.BufferSize = size
 		}
 	}

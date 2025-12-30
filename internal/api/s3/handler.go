@@ -445,7 +445,8 @@ func (h *Handler) ListObjectsV2(w http.ResponseWriter, r *http.Request) {
 	maxKeys := 1000
 
 	if maxKeysStr != "" {
-		if mk, err := strconv.Atoi(maxKeysStr); err == nil && mk > 0 && mk <= 1000 {
+		mk, err := strconv.Atoi(maxKeysStr)
+		if err == nil && mk > 0 && mk <= 1000 {
 			maxKeys = mk
 		}
 	}
@@ -1252,7 +1253,8 @@ func (h *Handler) ListObjectVersions(w http.ResponseWriter, r *http.Request) {
 	maxKeys := 1000
 
 	if maxKeysStr != "" {
-		if mk, err := strconv.Atoi(maxKeysStr); err == nil && mk > 0 && mk <= 1000 {
+		mk, err := strconv.Atoi(maxKeysStr)
+		if err == nil && mk > 0 && mk <= 1000 {
 			maxKeys = mk
 		}
 	}

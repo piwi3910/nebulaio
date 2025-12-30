@@ -347,7 +347,8 @@ func (l *AuditLogger) processEvent(ctx context.Context, event *AuditEvent) error
 		}
 
 		data = append(data, '\n')
-		if _, err := l.file.Write(data); err != nil {
+		_, err = l.file.Write(data)
+		if err != nil {
 			l.mu.Unlock()
 			return err
 		}

@@ -485,16 +485,18 @@ func TestMaxConcurrentJobs(t *testing.T) {
 	ctx := context.Background()
 
 	// Start first 2 jobs - should succeed
-	if err := bm.StartJob(ctx, "job-a"); err != nil {
+	err := bm.StartJob(ctx, "job-a")
+	if err != nil {
 		t.Fatalf("Failed to start job-a: %v", err)
 	}
 
-	if err := bm.StartJob(ctx, "job-b"); err != nil {
+	err = bm.StartJob(ctx, "job-b")
+	if err != nil {
 		t.Fatalf("Failed to start job-b: %v", err)
 	}
 
 	// Third job should fail due to max concurrent limit
-	err := bm.StartJob(ctx, "job-c")
+	err = bm.StartJob(ctx, "job-c")
 	if err == nil {
 		t.Error("Expected error when starting third job")
 	}

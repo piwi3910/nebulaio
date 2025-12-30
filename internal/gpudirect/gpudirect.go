@@ -232,7 +232,8 @@ func NewService(config *Config, backend GDSBackend) (*Service, error) {
 	}
 
 	// Initialize the backend
-	if err := s.backend.Init(); err != nil {
+	err := s.backend.Init()
+	if err != nil {
 		return nil, fmt.Errorf("failed to initialize GDS backend: %w", err)
 	}
 

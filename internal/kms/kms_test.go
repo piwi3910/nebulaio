@@ -815,7 +815,8 @@ func TestKeyFileStorage(t *testing.T) {
 
 		// Verify master key file exists when no password provided
 		masterPath := filepath.Join(tmpDir, ".master.key")
-		if _, err := os.Stat(masterPath); os.IsNotExist(err) {
+		_, err = os.Stat(masterPath)
+		if os.IsNotExist(err) {
 			t.Error("Master key file should exist when no password provided")
 		}
 	})

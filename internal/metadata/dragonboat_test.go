@@ -101,7 +101,8 @@ func TestDragonboatStoreCreation(t *testing.T) {
 		}
 
 		for _, dir := range expectedDirs {
-			if _, err := os.Stat(dir); os.IsNotExist(err) {
+			_, statErr := os.Stat(dir)
+			if os.IsNotExist(statErr) {
 				t.Errorf("Expected directory %s to exist", dir)
 			}
 		}

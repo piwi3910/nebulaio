@@ -444,7 +444,8 @@ func (s *Service) NewStreamEncryptor(ctx context.Context, keyID string) (*Stream
 
 	// Generate random base nonce
 	nonce := make([]byte, aead.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	_, err = io.ReadFull(rand.Reader, nonce)
+	if err != nil {
 		return nil, err
 	}
 

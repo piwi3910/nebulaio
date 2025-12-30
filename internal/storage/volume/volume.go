@@ -65,7 +65,8 @@ func DefaultVolumeConfig() VolumeConfig {
 // CreateVolume creates a new volume file at the given path.
 func CreateVolume(path string, cfg VolumeConfig) (*Volume, error) {
 	// Check if file already exists
-	if _, err := os.Stat(path); err == nil {
+	_, err := os.Stat(path)
+	if err == nil {
 		return nil, ErrVolumeExists
 	}
 

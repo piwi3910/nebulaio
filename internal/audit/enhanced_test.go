@@ -511,7 +511,8 @@ func TestEnhancedAuditLoggerExport(t *testing.T) {
 		}
 
 		var events []AuditEvent
-		if err := json.Unmarshal([]byte(buf.String()), &events); err != nil {
+		err = json.Unmarshal([]byte(buf.String()), &events)
+		if err != nil {
 			t.Fatalf("Failed to parse JSON: %v", err)
 		}
 

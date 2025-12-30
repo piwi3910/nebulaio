@@ -525,7 +525,8 @@ func validateJWTFormat(token string) (bool, error) {
 	}
 
 	var header map[string]interface{}
-	if err := json.Unmarshal(headerBytes, &header); err != nil {
+	err = json.Unmarshal(headerBytes, &header)
+	if err != nil {
 		return false, assert.AnError
 	}
 

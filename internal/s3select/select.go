@@ -878,7 +878,8 @@ func toFloat64(v interface{}) float64 {
 	case int32:
 		return float64(val)
 	case string:
-		if f, err := strconv.ParseFloat(val, 64); err == nil {
+		f, err := strconv.ParseFloat(val, 64)
+		if err == nil {
 			return f
 		}
 	}

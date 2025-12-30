@@ -518,7 +518,8 @@ func (c *Cache) WarmCache(ctx context.Context, keys []string, source func(ctx co
 			continue // Skip failed entries
 		}
 
-		if err := c.Put(ctx, key, data, contentType, etag); err != nil {
+		err = c.Put(ctx, key, data, contentType, etag)
+		if err != nil {
 			continue
 		}
 	}

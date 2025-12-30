@@ -262,7 +262,8 @@ func (w *ByteCountingResponseWriter) StatusCode() int {
 // ContentLengthFromHeader extracts content length from request header.
 func ContentLengthFromHeader(r *http.Request) int64 {
 	if cl := r.Header.Get("Content-Length"); cl != "" {
-		if length, err := strconv.ParseInt(cl, 10, 64); err == nil {
+		length, err := strconv.ParseInt(cl, 10, 64)
+		if err == nil {
 			return length
 		}
 	}

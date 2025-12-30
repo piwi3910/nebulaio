@@ -67,7 +67,8 @@ func newConfigSetCmd() *cobra.Command {
 				return fmt.Errorf("unknown configuration key: %s", key)
 			}
 
-			if err := SaveConfig(cfg); err != nil {
+			err = SaveConfig(cfg)
+			if err != nil {
 				return err
 			}
 
