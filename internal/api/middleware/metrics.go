@@ -59,7 +59,7 @@ func MetricsMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Record errors
-		if ww.Status() >= 400 {
+		if ww.Status() >= http.StatusBadRequest {
 			errorType := getErrorType(ww.Status())
 			metrics.RecordError(operation, errorType)
 		}
@@ -79,8 +79,10 @@ func extractS3Operation(r *http.Request) string {
 
 	// Check for bucket-level vs object-level
 	parts := strings.Split(strings.Trim(path, "/"), "/")
-	hasBucket := len(parts) >= 1 && parts[0] != ""
-	hasKey := len(parts) >= 2 && parts[1] != ""
+	const minBucketParts = 1
+	const minKeyParts = 2
+	hasBucket := len(parts) >= minBucketParts && parts[0] != ""
+	hasKey := len(parts) >= minKeyParts && parts[1] != ""
 
 	// Bucket-level operations
 	if hasBucket && !hasKey {
@@ -187,27 +189,27 @@ func extractS3Operation(r *http.Request) string {
 // getErrorType returns an error type string based on HTTP status code.
 func getErrorType(status int) string {
 	switch {
-	case status == 400:
+	case status == http.StatusBadRequest:
 		return "BadRequest"
-	case status == 401:
+	case status == http.StatusUnauthorized:
 		return "Unauthorized"
-	case status == 403:
+	case status == http.StatusForbidden:
 		return "Forbidden"
-	case status == 404:
+	case status == http.StatusNotFound:
 		return "NotFound"
-	case status == 405:
+	case status == http.StatusMethodNotAllowed:
 		return "MethodNotAllowed"
-	case status == 409:
+	case status == http.StatusConflict:
 		return "Conflict"
-	case status == 500:
+	case status == http.StatusInternalServerError:
 		return "InternalError"
-	case status == 501:
+	case status == http.StatusNotImplemented:
 		return "NotImplemented"
-	case status == 503:
+	case status == http.StatusServiceUnavailable:
 		return "ServiceUnavailable"
-	case status >= 400 && status < 500:
+	case status >= http.StatusBadRequest && status < http.StatusInternalServerError:
 		return "ClientError"
-	case status >= 500:
+	case status >= http.StatusInternalServerError:
 		return "ServerError"
 	default:
 		return "Unknown"

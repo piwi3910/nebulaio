@@ -18,6 +18,18 @@ const (
 	requestIDKey contextKey = iota
 )
 
+// Request ID generation constants.
+const (
+	requestIDBufferSize  = 16
+	extendedIDBufferSize = 48
+	// Bit shift positions for timestamp encoding.
+	shiftBits40 = 40
+	shiftBits32 = 32
+	shiftBits24 = 24
+	shiftBits16 = 16
+	shiftBits8  = 8
+)
+
 // requestCounter provides a monotonically increasing counter for request IDs.
 var requestCounter uint64
 
@@ -69,20 +81,20 @@ func generateRequestID() string {
 	timestamp := uint64(time.Now().UnixNano() / int64(time.Millisecond))
 
 	// Create a buffer with timestamp, counter, and random bytes
-	buf := make([]byte, 16)
+	buf := make([]byte, requestIDBufferSize)
 
 	// First 6 bytes: timestamp (48 bits, covers ~8900 years)
-	buf[0] = byte(timestamp >> 40)
-	buf[1] = byte(timestamp >> 32)
-	buf[2] = byte(timestamp >> 24)
-	buf[3] = byte(timestamp >> 16)
-	buf[4] = byte(timestamp >> 8)
+	buf[0] = byte(timestamp >> shiftBits40)
+	buf[1] = byte(timestamp >> shiftBits32)
+	buf[2] = byte(timestamp >> shiftBits24)
+	buf[3] = byte(timestamp >> shiftBits16)
+	buf[4] = byte(timestamp >> shiftBits8)
 	buf[5] = byte(timestamp)
 
 	// Next 4 bytes: counter
-	buf[6] = byte(counter >> 24)
-	buf[7] = byte(counter >> 16)
-	buf[8] = byte(counter >> 8)
+	buf[6] = byte(counter >> shiftBits24)
+	buf[7] = byte(counter >> shiftBits16)
+	buf[8] = byte(counter >> shiftBits8)
 	buf[9] = byte(counter)
 
 	// Last 6 bytes: random
@@ -95,7 +107,7 @@ func generateRequestID() string {
 // generateExtendedRequestID generates the extended request ID (x-amz-id-2).
 // This is typically a longer identifier used for troubleshooting.
 func generateExtendedRequestID() string {
-	buf := make([]byte, 48)
+	buf := make([]byte, extendedIDBufferSize)
 	rand.Read(buf)
 
 	return base64.StdEncoding.EncodeToString(buf)

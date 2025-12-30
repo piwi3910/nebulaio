@@ -276,7 +276,7 @@ func DefaultSimpleS3CORSHeaders() *SimpleS3CORSHeaders {
 			"X-Amz-Id-2",
 		},
 		AllowCredentials: false,
-		MaxAge:           86400,
+		MaxAge:           86400, //nolint:mnd // 24 hours in seconds, standard CORS max age
 	}
 }
 

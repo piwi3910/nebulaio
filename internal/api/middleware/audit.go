@@ -118,7 +118,7 @@ func (m *AuditMiddleware) Handler(next http.Handler) http.Handler {
 		event.BytesOut = rw.bytesWritten
 
 		// Set result based on status code
-		if rw.statusCode >= 400 {
+		if rw.statusCode >= http.StatusBadRequest {
 			event.Result = audit.ResultFailure
 			event.ErrorCode = http.StatusText(rw.statusCode)
 		} else {
