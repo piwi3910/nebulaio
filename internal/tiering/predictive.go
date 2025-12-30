@@ -2,6 +2,7 @@ package tiering
 
 import (
 	"context"
+	"errors"
 	"math"
 	"sort"
 	"sync"
@@ -229,6 +230,12 @@ func (e *PredictiveEngine) updateModel(ctx context.Context, model *ObjectModel) 
 	// Get access stats
 	stats, err := e.accessData.GetStats(ctx, model.Bucket, model.Key)
 	if err != nil || stats == nil {
+		// If no stats found, return zero confidence prediction (not an error)
+		if errors.Is(err, ErrStatsNotFound) || stats == nil {
+			model.PredictionConfidence = 0
+			return nil
+		}
+
 		return err
 	}
 

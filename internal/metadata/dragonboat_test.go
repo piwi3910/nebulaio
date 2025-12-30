@@ -230,10 +230,10 @@ func TestStateMachineOperations(t *testing.T) {
 
 		sm := newStateMachine(db)
 
-		// Lookup is not used in our implementation, should return nil
+		// Lookup is not used in our implementation, should return ErrLookupNotSupported
 		result, err := sm.Lookup(nil)
-		if err != nil {
-			t.Errorf("Lookup failed: %v", err)
+		if err != ErrLookupNotSupported {
+			t.Errorf("Expected ErrLookupNotSupported, got %v", err)
 		}
 
 		if result != nil {

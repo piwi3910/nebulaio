@@ -86,16 +86,16 @@ func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalJSON returns a string if single element, otherwise a slice.
-func (s *StringOrSlice) MarshalJSON() ([]byte, error) {
-	if s == nil || len(*s) == 0 {
+func (s StringOrSlice) MarshalJSON() ([]byte, error) {
+	if len(s) == 0 {
 		return json.Marshal([]string{})
 	}
 
-	if len(*s) == 1 {
-		return json.Marshal((*s)[0])
+	if len(s) == 1 {
+		return json.Marshal(s[0])
 	}
 
-	return json.Marshal([]string(*s))
+	return json.Marshal([]string(s))
 }
 
 // Contains checks if the slice contains a value.
