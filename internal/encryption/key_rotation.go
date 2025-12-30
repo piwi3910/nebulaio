@@ -47,6 +47,15 @@ const (
 	statusFailed = "failed"
 )
 
+// Key rotation configuration constants.
+const (
+	defaultRetainVersionsMaster       = 3  // Default versions to retain for master keys
+	defaultRetainVersionsData         = 5  // Default versions to retain for data keys
+	defaultRetainVersionsBucket       = 3  // Default versions to retain for bucket keys
+	defaultReencryptionConcurrency    = 10 // Default concurrency for reencryption jobs
+	minKeyVersionPartsForDeletion     = 2  // Minimum parts needed to identify key version
+)
+
 // KeyAlgorithm represents the encryption algorithm.
 type KeyAlgorithm string
 
@@ -193,8 +202,8 @@ func NewKeyRotationManager(config *KeyRotationConfig, storage KeyStorage, notifi
 		config = &KeyRotationConfig{
 			DefaultRotationInterval: 90 * 24 * time.Hour, // 90 days
 			DefaultGracePeriod:      7 * 24 * time.Hour,  // 7 days
-			DefaultRetainVersions:   5,
-			ReencryptionConcurrency: 10,
+			DefaultRetainVersions:   defaultRetainVersionsData,
+			ReencryptionConcurrency: defaultReencryptionConcurrency,
 			CheckInterval:           time.Hour,
 			EnableAutoRotation:      true,
 		}
@@ -238,7 +247,7 @@ func (krm *KeyRotationManager) initializeDefaultPolicies() {
 			GracePeriod:         30 * 24 * time.Hour,
 			AutoRotate:          true,
 			NotifyBeforeExpiry:  30 * 24 * time.Hour,
-			RetainVersions:      3,
+			RetainVersions:      defaultRetainVersionsMaster,
 			RequireReencryption: true,
 			Enabled:             true,
 		},
@@ -251,7 +260,7 @@ func (krm *KeyRotationManager) initializeDefaultPolicies() {
 			GracePeriod:         7 * 24 * time.Hour,
 			AutoRotate:          true,
 			NotifyBeforeExpiry:  14 * 24 * time.Hour,
-			RetainVersions:      5,
+			RetainVersions:      defaultRetainVersionsData,
 			RequireReencryption: true,
 			Enabled:             true,
 		},
@@ -264,7 +273,7 @@ func (krm *KeyRotationManager) initializeDefaultPolicies() {
 			GracePeriod:         14 * 24 * time.Hour,
 			AutoRotate:          true,
 			NotifyBeforeExpiry:  21 * 24 * time.Hour,
-			RetainVersions:      3,
+			RetainVersions:      defaultRetainVersionsBucket,
 			RequireReencryption: false,
 			Enabled:             true,
 		},

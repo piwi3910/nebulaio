@@ -15,6 +15,12 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
+// Service configuration constants.
+const (
+	defaultKeyCacheTTL     = 5 * time.Minute // Default TTL for cached keys
+	defaultKeyCacheMaxSize = 1000            // Default maximum number of cached keys
+)
+
 // Config holds encryption service configuration.
 type Config struct {
 	// DefaultKeyID is the default KMS key to use for encryption
@@ -34,8 +40,8 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		Algorithm:       kms.AlgorithmAES256GCM,
-		KeyCacheTTL:     5 * time.Minute,
-		KeyCacheMaxSize: 1000,
+		KeyCacheTTL:     defaultKeyCacheTTL,
+		KeyCacheMaxSize: defaultKeyCacheMaxSize,
 	}
 }
 
@@ -65,11 +71,11 @@ func NewService(config Config, provider kms.Provider) (*Service, error) {
 	}
 
 	if config.KeyCacheMaxSize == 0 {
-		config.KeyCacheMaxSize = 1000
+		config.KeyCacheMaxSize = defaultKeyCacheMaxSize
 	}
 
 	if config.KeyCacheTTL == 0 {
-		config.KeyCacheTTL = 5 * time.Minute
+		config.KeyCacheTTL = defaultKeyCacheTTL
 	}
 
 	return &Service{
