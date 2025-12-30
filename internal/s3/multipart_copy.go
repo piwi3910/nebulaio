@@ -660,7 +660,7 @@ func ParseCopySourceRange(rangeHeader string) (start, end int64, err error) {
 // CalculateMultipartETag calculates the ETag for a multipart object.
 func CalculateMultipartETag(partETags []string) string {
 	// Remove quotes from ETags
-	var cleanETags []string
+	cleanETags := make([]string, 0, len(partETags))
 	for _, etag := range partETags {
 		cleanETags = append(cleanETags, strings.Trim(etag, "\""))
 	}

@@ -1093,7 +1093,7 @@ func (h *Handler) CompleteMultipartUpload(w http.ResponseWriter, r *http.Request
 	}
 
 	// Convert to service layer format with ETag validation support
-	var parts []object.CompletePart
+	parts := make([]object.CompletePart, 0, len(req.Part))
 	for _, part := range req.Part {
 		parts = append(parts, object.CompletePart{
 			PartNumber: part.PartNumber,

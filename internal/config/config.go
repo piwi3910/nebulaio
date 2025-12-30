@@ -530,8 +530,9 @@ func Load(configPath string, opts Options) (*Config, error) {
 	if configPath != "" {
 		v.SetConfigFile(configPath)
 
-		if err := v.ReadInConfig(); err != nil {
-			return nil, fmt.Errorf("failed to read config file: %w", err)
+		readErr := v.ReadInConfig()
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read config file: %w", readErr)
 		}
 	} else {
 		// Try to find config in standard locations
@@ -569,13 +570,16 @@ func Load(configPath string, opts Options) (*Config, error) {
 
 	// Unmarshal config
 	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+
+	unmarshalErr := v.Unmarshal(&cfg)
+	if unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", unmarshalErr)
 	}
 
 	// Validate and set derived values
-	if err := cfg.validate(); err != nil {
-		return nil, err
+	validateErr := cfg.validate()
+	if validateErr != nil {
+		return nil, validateErr
 	}
 
 	return &cfg, nil

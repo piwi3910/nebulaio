@@ -1370,7 +1370,7 @@ func TestGetPolicyStats(t *testing.T) {
 		err := json.NewDecoder(rr.Body).Decode(&stats)
 		require.NoError(t, err)
 		assert.Equal(t, "test-policy-1", stats["policy_id"])
-		assert.Equal(t, float64(100), stats["total_executions"])
+		assert.InDelta(t, float64(100), stats["total_executions"], 0.001)
 	})
 
 	t.Run("policy not found", func(t *testing.T) {
@@ -1472,7 +1472,7 @@ func TestGetObjectAccessStats(t *testing.T) {
 		assert.Equal(t, true, response["tracked"])
 		assert.Equal(t, "my-bucket", response["bucket"])
 		assert.Equal(t, "my-key.txt", response["key"])
-		assert.Equal(t, float64(150), response["access_count"])
+		assert.InDelta(t, float64(150), response["access_count"], 0.001)
 	})
 
 	t.Run("stats not found", func(t *testing.T) {
@@ -1529,7 +1529,7 @@ func TestGetHotObjects(t *testing.T) {
 
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, float64(2), response["count"])
+	assert.InDelta(t, float64(2), response["count"], 0.001)
 }
 
 func TestGetColdObjects(t *testing.T) {
@@ -1551,8 +1551,8 @@ func TestGetColdObjects(t *testing.T) {
 
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, float64(2), response["count"])
-	assert.Equal(t, float64(30), response["inactive_days"])
+	assert.InDelta(t, float64(2), response["count"], 0.001)
+	assert.InDelta(t, float64(30), response["inactive_days"], 0.001)
 }
 
 // ====================
@@ -1786,7 +1786,7 @@ func TestSetS3LifecycleConfiguration(t *testing.T) {
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, "my-bucket", response["bucket"])
-		assert.Equal(t, float64(1), response["rules"])
+		assert.InDelta(t, float64(1), response["rules"], 0.001)
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
@@ -1858,7 +1858,7 @@ func TestGetAccessPrediction(t *testing.T) {
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, "my-bucket", response.Bucket)
-		assert.Equal(t, 5.0, response.ShortTermAccessRate)
+		assert.InDelta(t, 5.0, response.ShortTermAccessRate, 0.001)
 		assert.Equal(t, tiering.TierWarm, response.RecommendedTier)
 	})
 
@@ -1914,7 +1914,7 @@ func TestGetTierRecommendations(t *testing.T) {
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(2), response["count"])
+		assert.InDelta(t, float64(2), response["count"], 0.001)
 	})
 
 	t.Run("with limit parameter", func(t *testing.T) {
@@ -1943,7 +1943,7 @@ func TestGetTierRecommendations(t *testing.T) {
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(5), response["count"])
+		assert.InDelta(t, float64(5), response["count"], 0.001)
 	})
 }
 
@@ -1975,7 +1975,7 @@ func TestGetAccessAnomalies(t *testing.T) {
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(1), response["count"])
+		assert.InDelta(t, float64(1), response["count"], 0.001)
 	})
 
 	t.Run("no anomalies", func(t *testing.T) {
@@ -1992,7 +1992,7 @@ func TestGetAccessAnomalies(t *testing.T) {
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(0), response["count"])
+		assert.InDelta(t, float64(0), response["count"], 0.001)
 	})
 
 	t.Run("with limit parameter", func(t *testing.T) {
@@ -2020,7 +2020,7 @@ func TestGetAccessAnomalies(t *testing.T) {
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(10), response["count"])
+		assert.InDelta(t, float64(10), response["count"], 0.001)
 	})
 }
 
@@ -2052,8 +2052,8 @@ func TestGetTieringStatus(t *testing.T) {
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
 	assert.Equal(t, "running", response["status"])
-	assert.Equal(t, float64(2), response["total_policies"])
-	assert.Equal(t, float64(1), response["enabled_policies"])
+	assert.InDelta(t, float64(2), response["total_policies"], 0.001)
+	assert.InDelta(t, float64(1), response["enabled_policies"], 0.001)
 }
 
 func TestGetTieringMetrics(t *testing.T) {
@@ -2081,10 +2081,10 @@ func TestGetTieringMetrics(t *testing.T) {
 
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
-	assert.Equal(t, float64(50), response["total_executions"])
-	assert.Equal(t, float64(200), response["total_objects_transitioned"])
-	assert.Equal(t, float64(500000), response["total_bytes_transitioned"])
-	assert.Equal(t, float64(5), response["total_errors"])
+	assert.InDelta(t, float64(50), response["total_executions"], 0.001)
+	assert.InDelta(t, float64(200), response["total_objects_transitioned"], 0.001)
+	assert.InDelta(t, float64(500000), response["total_bytes_transitioned"], 0.001)
+	assert.InDelta(t, float64(5), response["total_errors"], 0.001)
 }
 
 // ====================
@@ -2106,8 +2106,8 @@ func TestPaginationParameters(t *testing.T) {
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, float64(50), response["limit"])
-		assert.Equal(t, float64(10), response["offset"])
+		assert.InDelta(t, float64(50), response["limit"], 0.001)
+		assert.InDelta(t, float64(10), response["offset"], 0.001)
 	})
 
 	t.Run("limit clamping", func(t *testing.T) {

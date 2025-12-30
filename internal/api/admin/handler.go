@@ -265,7 +265,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var response []*UserResponse
+	response := make([]*UserResponse, 0, len(users))
 	for _, user := range users {
 		response = append(response, userToResponse(user))
 	}
@@ -419,7 +419,7 @@ func (h *Handler) ListAccessKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var response []*AccessKeyResponse
+	response := make([]*AccessKeyResponse, 0, len(keys))
 	for _, key := range keys {
 		response = append(response, &AccessKeyResponse{
 			AccessKeyID: key.AccessKeyID,
@@ -660,11 +660,6 @@ func (h *Handler) ListNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var (
-		nodes        []*NodeResponse
-		healthyCount int
-	)
-
 	// Get leader ID
 	leaderID := h.discovery.LeaderID()
 
@@ -680,7 +675,11 @@ func (h *Handler) ListNodes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get nodes from discovery
-	for _, member := range h.discovery.Members() {
+	members := h.discovery.Members()
+	nodes := make([]*NodeResponse, 0, len(members))
+	healthyCount := 0
+
+	for _, member := range members {
 		isLeader := member.NodeID == leaderID
 		isVoter := voterMap[member.NodeID]
 

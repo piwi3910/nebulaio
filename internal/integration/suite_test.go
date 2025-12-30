@@ -80,11 +80,17 @@ func (s *IntegrationTestSuite) authenticate() {
 	}
 	jsonBody, _ := json.Marshal(body)
 
-	resp, err := http.Post(
+	req, err := http.NewRequestWithContext(s.ctx, http.MethodPost,
 		s.adminURL+"/api/v1/admin/auth/login",
-		"application/json",
-		bytes.NewReader(jsonBody),
-	)
+		bytes.NewReader(jsonBody))
+	if err != nil {
+		s.T().Skipf("Failed to create request: %v", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.T().Skipf("Server not available: %v", err)
 		return
@@ -148,11 +154,17 @@ func (s *AuthTestSuite) TestLoginWithValidCredentials() {
 	}
 	jsonBody, _ := json.Marshal(body)
 
-	resp, err := http.Post(
+	req, err := http.NewRequestWithContext(s.ctx, http.MethodPost,
 		s.adminURL+"/api/v1/admin/auth/login",
-		"application/json",
-		bytes.NewReader(jsonBody),
-	)
+		bytes.NewReader(jsonBody))
+	if err != nil {
+		s.T().Skipf("Failed to create request: %v", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.T().Skipf("Server not available: %v", err)
 		return
@@ -175,11 +187,17 @@ func (s *AuthTestSuite) TestLoginWithInvalidCredentials() {
 	}
 	jsonBody, _ := json.Marshal(body)
 
-	resp, err := http.Post(
+	req, err := http.NewRequestWithContext(s.ctx, http.MethodPost,
 		s.adminURL+"/api/v1/admin/auth/login",
-		"application/json",
-		bytes.NewReader(jsonBody),
-	)
+		bytes.NewReader(jsonBody))
+	if err != nil {
+		s.T().Skipf("Failed to create request: %v", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.T().Skipf("Server not available: %v", err)
 		return
@@ -190,7 +208,14 @@ func (s *AuthTestSuite) TestLoginWithInvalidCredentials() {
 }
 
 func (s *AuthTestSuite) TestProtectedEndpointWithoutToken() {
-	resp, err := http.Get(s.adminURL + "/api/v1/admin/users")
+	req, err := http.NewRequestWithContext(s.ctx, http.MethodGet,
+		s.adminURL+"/api/v1/admin/users", nil)
+	if err != nil {
+		s.T().Skipf("Failed to create request: %v", err)
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.T().Skipf("Server not available: %v", err)
 		return
@@ -465,7 +490,14 @@ type HealthTestSuite struct {
 }
 
 func (s *HealthTestSuite) TestHealthEndpoint() {
-	resp, err := http.Get(s.adminURL + "/health")
+	req, err := http.NewRequestWithContext(s.ctx, http.MethodGet,
+		s.adminURL+"/health", nil)
+	if err != nil {
+		s.T().Skipf("Failed to create request: %v", err)
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.T().Skipf("Server not available: %v", err)
 		return
@@ -476,7 +508,14 @@ func (s *HealthTestSuite) TestHealthEndpoint() {
 }
 
 func (s *HealthTestSuite) TestReadyEndpoint() {
-	resp, err := http.Get(s.adminURL + "/health/ready")
+	req, err := http.NewRequestWithContext(s.ctx, http.MethodGet,
+		s.adminURL+"/health/ready", nil)
+	if err != nil {
+		s.T().Skipf("Failed to create request: %v", err)
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.T().Skipf("Server not available: %v", err)
 		return
@@ -532,8 +571,14 @@ func (s *MockServerTestSuite) TearDownSuite() {
 }
 
 func (s *MockServerTestSuite) TestMockHealth() {
-	resp, err := http.Get(s.server.URL + "/health")
-	s.NoError(err)
+	ctx := context.Background()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		s.server.URL+"/health", nil)
+	s.Require().NoError(err)
+
+	resp, err := http.DefaultClient.Do(req)
+	s.Require().NoError(err)
 
 	defer resp.Body.Close()
 
@@ -541,18 +586,23 @@ func (s *MockServerTestSuite) TestMockHealth() {
 }
 
 func (s *MockServerTestSuite) TestMockLogin() {
+	ctx := context.Background()
+
 	body := map[string]string{
 		"username": mockTestUser,
 		"password": mockTestPassword,
 	}
 	jsonBody, _ := json.Marshal(body)
 
-	resp, err := http.Post(
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		s.server.URL+"/api/v1/admin/auth/login",
-		"application/json",
-		bytes.NewReader(jsonBody),
-	)
-	s.NoError(err)
+		bytes.NewReader(jsonBody))
+	s.Require().NoError(err)
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	s.Require().NoError(err)
 
 	defer resp.Body.Close()
 

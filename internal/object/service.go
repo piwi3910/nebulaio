@@ -846,7 +846,7 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 	}
 
 	// Verify all parts exist and ETags match
-	var partNumbers []int
+	partNumbers := make([]int, 0, len(requestParts))
 
 	for i, reqPart := range requestParts {
 		uploadedPart, exists := partMap[reqPart.PartNumber]

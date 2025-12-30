@@ -122,16 +122,16 @@ func ValidateRetentionDate(date time.Time) error {
 }
 
 // CanExtendRetention checks if retention can be extended (only longer periods allowed).
-func CanExtendRetention(current, new *time.Time) bool {
+func CanExtendRetention(current, newRetention *time.Time) bool {
 	if current == nil || current.IsZero() {
 		return true // No current retention, any new retention is valid
 	}
 
-	if new == nil || new.IsZero() {
+	if newRetention == nil || newRetention.IsZero() {
 		return false // Cannot remove existing retention
 	}
 
-	return new.After(*current) // New date must be after current date
+	return newRetention.After(*current) // New date must be after current date
 }
 
 // ApplyDefaultRetention applies bucket default retention to an object if not already set.

@@ -327,12 +327,12 @@ func TestServiceClose(t *testing.T) {
 	require.NoError(t, err)
 
 	err = service.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Operations should fail after close
 	ctx := context.Background()
 	_, err = service.Encrypt(ctx, "aes-gcm", []byte("key"), []byte("data"))
-	assert.ErrorIs(t, err, ErrAlreadyClosed)
+	require.ErrorIs(t, err, ErrAlreadyClosed)
 
 	// Double close should return error
 	err = service.Close()
@@ -362,11 +362,11 @@ func TestSimulatedBackendInit(t *testing.T) {
 	backend := NewSimulatedBackend()
 
 	err := backend.Init()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Double init should be ok
 	err = backend.Init()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = backend.Close()
 	assert.NoError(t, err)
@@ -395,7 +395,7 @@ func TestSimulatedBackendNotInitialized(t *testing.T) {
 	backend := NewSimulatedBackend()
 
 	_, err := backend.DetectDPUs()
-	assert.ErrorIs(t, err, ErrDPUNotInitialized)
+	require.ErrorIs(t, err, ErrDPUNotInitialized)
 
 	_, err = backend.SelectDPU(0)
 	assert.ErrorIs(t, err, ErrDPUNotInitialized)
@@ -426,11 +426,11 @@ func TestSimulatedBackendStartStopService(t *testing.T) {
 
 	// Start service
 	err := backend.StartService(OffloadCrypto, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Start again should fail
 	err = backend.StartService(OffloadCrypto, nil)
-	assert.ErrorIs(t, err, ErrServiceRunning)
+	require.ErrorIs(t, err, ErrServiceRunning)
 
 	// Check status
 	svc, err := backend.GetServiceStatus(OffloadCrypto)
@@ -440,7 +440,7 @@ func TestSimulatedBackendStartStopService(t *testing.T) {
 
 	// Stop service
 	err = backend.StopService(OffloadCrypto)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Stop again should fail
 	err = backend.StopService(OffloadCrypto)
@@ -524,7 +524,7 @@ func TestSimulatedBackendHealthCheck(t *testing.T) {
 
 	// No DPU selected
 	err := backend.HealthCheck()
-	assert.ErrorIs(t, err, ErrDPUNotAvailable)
+	require.ErrorIs(t, err, ErrDPUNotAvailable)
 
 	// Select DPU
 	backend.SelectDPU(0)

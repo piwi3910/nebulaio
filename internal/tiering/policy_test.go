@@ -218,7 +218,7 @@ func TestPolicyStoreVersionConflict(t *testing.T) {
 
 	// Try to update with wrong version
 	err = store.Update(ctx, &stalePolicy)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "version conflict")
 }
 

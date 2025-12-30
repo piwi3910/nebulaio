@@ -2,6 +2,7 @@
 package security
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"net"
@@ -40,7 +41,7 @@ func TestTLSManagerCreation(t *testing.T) {
 
 	t.Run("fails with nil config", func(t *testing.T) {
 		manager, err := NewTLSManager(nil, "test-host")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, manager)
 	})
 
@@ -53,7 +54,7 @@ func TestTLSManagerCreation(t *testing.T) {
 		}
 
 		manager, err := NewTLSManager(cfg, "test-host")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, manager)
 	})
 }
@@ -349,7 +350,7 @@ func TestCertificateValidation(t *testing.T) {
 
 		// Certificate should be valid (just generated)
 		valid, err := manager.verifyCertificate()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, valid, "Newly generated certificate should be valid")
 	})
 }
@@ -442,7 +443,12 @@ func TestTLSHandshake(t *testing.T) {
 		ServerName: "localhost",
 	}
 
-	conn, err := tls.Dial("tcp", addr, clientConfig)
+	dialer := tls.Dialer{Config: clientConfig}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	require.NoError(t, err, "TLS handshake should succeed")
 
 	defer conn.Close()

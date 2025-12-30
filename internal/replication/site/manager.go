@@ -557,8 +557,7 @@ func (m *Manager) RemoveSite(siteName string) error {
 	defer m.mu.Unlock()
 
 	// Find and remove site
-	var newSites []Site
-
+	newSites := make([]Site, 0, len(m.config.Sites))
 	found := false
 
 	for _, site := range m.config.Sites {

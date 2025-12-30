@@ -86,7 +86,7 @@ type S3AbortIncompleteUpload struct {
 
 // ConvertFromS3 converts an S3 lifecycle configuration to NebulaIO policies.
 func (a *S3LifecycleAdapter) ConvertFromS3(bucket string, config *S3LifecycleConfiguration) ([]*AdvancedPolicy, error) {
-	var policies []*AdvancedPolicy
+	policies := make([]*AdvancedPolicy, 0, len(config.Rules))
 
 	for _, rule := range config.Rules {
 		policy, err := a.convertRule(bucket, &rule)

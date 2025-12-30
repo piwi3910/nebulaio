@@ -269,8 +269,10 @@ func TestInventoryFilter(t *testing.T) {
 
 func TestCancelInventoryJob(t *testing.T) {
 	// Create many objects to ensure job takes time
-	var objects []ObjectInfo
-	for i := range 10000 {
+	const numObjects = 10000
+
+	objects := make([]ObjectInfo, 0, numObjects)
+	for i := range numObjects {
 		objects = append(objects, ObjectInfo{
 			Bucket:       "test-bucket",
 			Key:          "file" + string(rune(i)) + ".txt",

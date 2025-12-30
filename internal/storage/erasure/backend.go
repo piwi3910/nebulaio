@@ -67,7 +67,8 @@ type Backend struct {
 
 // New creates a new erasure coding backend.
 func New(config Config, localNodeID string) (*Backend, error) {
-	if err := config.Validate(); err != nil {
+	err := config.Validate()
+	if err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
@@ -87,7 +88,9 @@ func New(config Config, localNodeID string) (*Backend, error) {
 	}
 
 	uploadsDir := filepath.Join(config.DataDir, "uploads")
-	if err := os.MkdirAll(uploadsDir, dirPermissions); err != nil {
+
+	err = os.MkdirAll(uploadsDir, dirPermissions)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create uploads directory: %w", err)
 	}
 
@@ -467,7 +470,7 @@ func (b *Backend) DeleteObject(ctx context.Context, bucket, key string) error {
 	close(errChan)
 
 	// Collect errors
-	var errs []error
+	errs := make([]error, 0, totalShards)
 	for err := range errChan {
 		errs = append(errs, err)
 	}

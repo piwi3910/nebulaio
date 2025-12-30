@@ -95,13 +95,13 @@ func TestLifecycleConfigurationValidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -213,13 +213,13 @@ func TestLifecycleRuleValidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.rule.Validate()
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -305,13 +305,13 @@ func TestFilterValidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.filter.Validate()
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -370,13 +370,13 @@ func TestExpirationValidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.exp.Validate()
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -451,7 +451,7 @@ func TestTransitionValidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.transition.Validate()
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)

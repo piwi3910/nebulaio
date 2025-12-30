@@ -344,19 +344,19 @@ func TestServiceClose(t *testing.T) {
 
 	// Close service
 	err = service.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Operations should fail after close
 	ctx := context.Background()
 	_, err = service.GetBuffer(ctx, 0, 64<<10)
-	assert.ErrorIs(t, err, ErrAlreadyClosed)
+	require.ErrorIs(t, err, ErrAlreadyClosed)
 
 	_, err = service.RegisterFile("/test")
-	assert.ErrorIs(t, err, ErrAlreadyClosed)
+	require.ErrorIs(t, err, ErrAlreadyClosed)
 
 	// Double close should return error
 	err = service.Close()
-	assert.ErrorIs(t, err, ErrAlreadyClosed)
+	require.ErrorIs(t, err, ErrAlreadyClosed)
 }
 
 func TestServiceFallbackToStandardIO(t *testing.T) {
@@ -672,14 +672,14 @@ func TestSimulatedBackendInit(t *testing.T) {
 	backend := NewSimulatedBackend()
 
 	err := backend.Init()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Double init should be ok
 	err = backend.Init()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = backend.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestSimulatedBackendDetectGPUs(t *testing.T) {
@@ -697,10 +697,10 @@ func TestSimulatedBackendNotInitialized(t *testing.T) {
 	backend := NewSimulatedBackend()
 
 	_, err := backend.DetectGPUs()
-	assert.ErrorIs(t, err, ErrNotInitialized)
+	require.ErrorIs(t, err, ErrNotInitialized)
 
 	_, err = backend.AllocateBuffer(0, 1024)
-	assert.ErrorIs(t, err, ErrNotInitialized)
+	require.ErrorIs(t, err, ErrNotInitialized)
 }
 
 func TestSimulatedBackendAllocateBuffer(t *testing.T) {

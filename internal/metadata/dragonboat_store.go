@@ -581,7 +581,7 @@ func (s *DragonboatStore) ListMultipartUploads(ctx context.Context, bucket strin
 		return nil, err
 	}
 
-	var uploads []*MultipartUpload
+	uploads := make([]*MultipartUpload, 0, len(results))
 	for _, data := range results {
 		var upload MultipartUpload
 
@@ -667,7 +667,7 @@ func (s *DragonboatStore) ListUsers(ctx context.Context) ([]*User, error) {
 		return nil, err
 	}
 
-	var users []*User
+	users := make([]*User, 0, len(results))
 	for _, data := range results {
 		var user User
 
@@ -804,7 +804,7 @@ func (s *DragonboatStore) ListPolicies(ctx context.Context) ([]*Policy, error) {
 		return nil, err
 	}
 
-	var policies []*Policy
+	policies := make([]*Policy, 0, len(results))
 	for _, data := range results {
 		var policy Policy
 
@@ -867,7 +867,7 @@ func (s *DragonboatStore) ListNodes(ctx context.Context) ([]*NodeInfo, error) {
 		return nil, err
 	}
 
-	var nodes []*NodeInfo
+	nodes := make([]*NodeInfo, 0, len(results))
 	for _, data := range results {
 		var node NodeInfo
 

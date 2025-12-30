@@ -261,12 +261,12 @@ func (v *VectorClock) Compare(other *VectorClock) int {
 
 // Copy creates a copy of the vector clock.
 func (v *VectorClock) Copy() *VectorClock {
-	copy := NewVectorClock()
+	clockCopy := NewVectorClock()
 	for site, clock := range v.Clocks {
-		copy.Clocks[site] = clock
+		clockCopy.Clocks[site] = clock
 	}
 
-	return copy
+	return clockCopy
 }
 
 // ObjectVersion tracks version information for an object.

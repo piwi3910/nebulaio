@@ -155,7 +155,9 @@ func (h *Handler) UpdateMyPassword(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 
 	var req UpdatePasswordRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+
+	decodeErr := json.NewDecoder(r.Body).Decode(&req)
+	if decodeErr != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -168,14 +170,16 @@ func (h *Handler) UpdateMyPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify current password matches
-	if err := auth.VerifyPassword(user.PasswordHash, req.CurrentPassword); err != nil {
+	verifyErr := auth.VerifyPassword(user.PasswordHash, req.CurrentPassword)
+	if verifyErr != nil {
 		writeError(w, "Current password is incorrect", http.StatusUnauthorized)
 		return
 	}
 
 	// Update password
-	if err := h.auth.UpdatePassword(ctx, userID, req.NewPassword); err != nil {
-		writeError(w, err.Error(), http.StatusInternalServerError)
+	updateErr := h.auth.UpdatePassword(ctx, userID, req.NewPassword)
+	if updateErr != nil {
+		writeError(w, updateErr.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -204,7 +208,7 @@ func (h *Handler) ListMyAccessKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Transform to response format (without exposing secrets)
-	var response []AccessKeyResponse
+	response := make([]AccessKeyResponse, 0, len(keys))
 	for _, key := range keys {
 		response = append(response, AccessKeyResponse{
 			AccessKeyID: key.AccessKeyID,
@@ -303,7 +307,7 @@ func (h *Handler) ListMyBuckets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Transform to summary with permissions
-	var response []BucketSummary
+	response := make([]BucketSummary, 0, len(buckets))
 	for _, b := range buckets {
 		summary := BucketSummary{
 			Name:      b.Name,

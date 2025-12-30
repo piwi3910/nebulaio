@@ -1,6 +1,7 @@
 package bucket
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"strings"
@@ -242,6 +243,7 @@ func (m *MockMetadataStore) StoreAuditEvent(ctx context.Context, event *audit.Au
 	return nil
 }
 func (m *MockMetadataStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) {
+	//nolint:nilnil // mock returns nil,nil for empty result
 	return nil, nil
 }
 func (m *MockMetadataStore) DeleteOldAuditEvents(ctx context.Context, before time.Time) (int, error) {
@@ -292,6 +294,7 @@ func (m *MockStorageBackend) AbortMultipartUpload(ctx context.Context, bucket, k
 
 func (m *MockStorageBackend) Init(ctx context.Context) error { return nil }
 func (m *MockStorageBackend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
+	//nolint:nilnil // mock returns nil,nil for not-implemented
 	return nil, nil
 }
 func (m *MockStorageBackend) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
@@ -302,6 +305,7 @@ func (m *MockStorageBackend) ObjectExists(ctx context.Context, bucket, key strin
 	return false, nil
 }
 func (m *MockStorageBackend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, error) {
+	//nolint:nilnil // mock returns nil,nil for not-implemented
 	return nil, nil
 }
 func (m *MockStorageBackend) ListBuckets(ctx context.Context) ([]string, error) { return nil, nil }
@@ -309,13 +313,13 @@ func (m *MockStorageBackend) CreateMultipartUpload(ctx context.Context, bucket, 
 	return nil
 }
 func (m *MockStorageBackend) PutPart(ctx context.Context, bucket, key, uploadID string, partNumber int, reader io.Reader, size int64) (*backend.PutResult, error) {
-	return nil, nil
+	return &backend.PutResult{}, nil
 }
 func (m *MockStorageBackend) GetPart(ctx context.Context, bucket, key, uploadID string, partNumber int) (io.ReadCloser, error) {
-	return nil, nil
+	return io.NopCloser(bytes.NewReader(nil)), nil
 }
 func (m *MockStorageBackend) CompleteParts(ctx context.Context, bucket, key, uploadID string, parts []int) (*backend.PutResult, error) {
-	return nil, nil
+	return &backend.PutResult{}, nil
 }
 func (m *MockStorageBackend) Close() error { return nil }
 
@@ -358,13 +362,13 @@ func TestValidateBucketName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateBucketName(tt.bucketName)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -424,13 +428,13 @@ func TestValidateBucketTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateBucketTags(tt.tags)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -599,7 +603,7 @@ func TestDeleteBucket(t *testing.T) {
 		store.objects["test-bucket"]["key1"] = &metadata.ObjectMeta{Key: "key1"}
 
 		err = service.DeleteBucket(ctx, "test-bucket")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.True(t, s3errors.IsS3Error(err, "BucketNotEmpty"))
 	})
 }

@@ -1125,8 +1125,7 @@ func TestErasureCodingWithPlacementGroups(t *testing.T) {
 		shardIndex  int
 	}
 
-	var placements []shardPlacement
-
+	placements := make([]shardPlacement, 0, totalShards)
 	faultDomainCounts := make(map[string]int)
 
 	// Group nodes by fault domain for fault-aware placement

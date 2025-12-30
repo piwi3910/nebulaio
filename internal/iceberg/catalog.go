@@ -874,12 +874,12 @@ func (c *Catalog) copyMetadata(m *TableMetadata) (*TableMetadata, error) {
 		return nil, fmt.Errorf("failed to marshal table metadata for copy: %w", err)
 	}
 
-	var copy TableMetadata
-	if err := json.Unmarshal(data, &copy); err != nil {
+	var tableCopy TableMetadata
+	if err := json.Unmarshal(data, &tableCopy); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal table metadata copy: %w", err)
 	}
 
-	return &copy, nil
+	return &tableCopy, nil
 }
 
 // RenameTable renames a table.
@@ -1077,14 +1077,6 @@ func getMaxPartitionFieldID(spec *PartitionSpec) int {
 	}
 
 	return maxID
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-
-	return b
 }
 
 // RESTHandler provides HTTP handlers for Iceberg REST API.

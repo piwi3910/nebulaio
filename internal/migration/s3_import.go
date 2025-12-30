@@ -216,8 +216,9 @@ type S3Object struct {
 
 // NewMigrationManager creates a new migration manager.
 func NewMigrationManager(destStorage DestinationStorage, stateDir string) (*MigrationManager, error) {
-	if err := os.MkdirAll(stateDir, stateDirPermissions); err != nil {
-		return nil, fmt.Errorf("failed to create state directory: %w", err)
+	mkdirErr := os.MkdirAll(stateDir, stateDirPermissions)
+	if mkdirErr != nil {
+		return nil, fmt.Errorf("failed to create state directory: %w", mkdirErr)
 	}
 
 	failedLogPath := filepath.Join(stateDir, "failed.log")
@@ -236,8 +237,9 @@ func NewMigrationManager(destStorage DestinationStorage, stateDir string) (*Migr
 	}
 
 	// Load existing jobs
-	if err := mm.loadJobs(); err != nil {
-		return nil, fmt.Errorf("failed to load jobs: %w", err)
+	loadErr := mm.loadJobs()
+	if loadErr != nil {
+		return nil, fmt.Errorf("failed to load jobs: %w", loadErr)
 	}
 
 	return mm, nil
@@ -258,8 +260,10 @@ func (mm *MigrationManager) loadJobs() error {
 	}
 
 	var jobs []*MigrationJob
-	if err := json.Unmarshal(data, &jobs); err != nil {
-		return err
+
+	unmarshalErr := json.Unmarshal(data, &jobs)
+	if unmarshalErr != nil {
+		return unmarshalErr
 	}
 
 	for _, j := range jobs {
@@ -560,7 +564,7 @@ func (c *S3Client) getCanonicalHeaders(req *http.Request) string {
 		}
 	}
 
-	var keys []string
+	keys := make([]string, 0, len(headers))
 	for k := range headers {
 		keys = append(keys, k)
 	}

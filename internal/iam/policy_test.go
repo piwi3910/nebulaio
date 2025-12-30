@@ -135,7 +135,7 @@ func TestCreatePolicy(t *testing.T) {
 		require.NoError(t, err)
 
 		err = pm.CreatePolicy(ctx, "duplicate", "Second", policy)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "already exists")
 	})
 
@@ -151,7 +151,7 @@ func TestCreatePolicy(t *testing.T) {
 		}
 
 		err := pm.CreatePolicy(ctx, "empty-policy", "Empty", policy)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "at least one statement")
 	})
 }
@@ -183,7 +183,7 @@ func TestGetPolicy(t *testing.T) {
 
 	t.Run("non-existing policy", func(t *testing.T) {
 		_, err := pm.GetPolicy(ctx, "non-existing")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 }
@@ -240,7 +240,7 @@ func TestDeletePolicy(t *testing.T) {
 
 		// Try to delete - should fail
 		err = pm.DeletePolicy(ctx, "attached-policy")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "attached to user")
 	})
 }
@@ -524,7 +524,7 @@ func TestValidatePolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := pm.validatePolicy(tt.policy)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)

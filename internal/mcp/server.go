@@ -950,7 +950,9 @@ func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req JSONRPCRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+
+	err = json.Unmarshal(body, &req)
+	if err != nil {
 		s.sendError(w, nil, -32700, "Parse error")
 		atomic.AddInt64(&s.metrics.RequestsFailed, 1)
 
@@ -982,9 +984,10 @@ func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
+	encodeErr := json.NewEncoder(w).Encode(resp)
+	if encodeErr != nil {
 		// Response already started, log error but can't do much
-		_ = err
+		_ = encodeErr
 	}
 
 	atomic.AddInt64(&s.metrics.RequestsSuccess, 1)
@@ -1135,7 +1138,8 @@ func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage)
 		URI string `json:"uri"`
 	}
 
-	if err := json.Unmarshal(params, &readParams); err != nil {
+	err := json.Unmarshal(params, &readParams)
+	if err != nil {
 		return nil, err
 	}
 

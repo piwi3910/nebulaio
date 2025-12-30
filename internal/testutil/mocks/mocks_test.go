@@ -197,16 +197,16 @@ func TestMockMetadataStore_NilReceiverHandling(t *testing.T) {
 	assert.False(t, store.IsLeader())
 
 	_, err := store.LeaderAddress()
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = store.GetBucket(context.Background(), "test")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = store.ListBuckets(context.Background(), "")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = store.GetClusterInfo(context.Background())
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // TestMockMetadataStore_Reset verifies Reset clears all state.
@@ -239,7 +239,7 @@ func TestMockMetadataStore_Reset(t *testing.T) {
 	// Verify cluster state is reset
 	assert.True(t, store.IsLeader())
 	addr, err := store.LeaderAddress()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "localhost:9003", addr)
 
 	// Verify errors are cleared
@@ -625,7 +625,7 @@ func TestMockMultipartService_Reset(t *testing.T) {
 
 	// Verify data is cleared
 	uploads, err := svc.ListMultipartUploads(ctx, "bucket")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, uploads)
 }
 

@@ -446,7 +446,7 @@ func (m *MockMetadataStore) DeleteUser(ctx context.Context, id string) error {
 }
 
 func (m *MockMetadataStore) ListUsers(ctx context.Context) ([]*metadata.User, error) {
-	var result []*metadata.User
+	result := make([]*metadata.User, 0, len(m.users))
 	for _, user := range m.users {
 		result = append(result, user)
 	}
@@ -512,7 +512,7 @@ func (m *MockMetadataStore) DeletePolicy(ctx context.Context, name string) error
 }
 
 func (m *MockMetadataStore) ListPolicies(ctx context.Context) ([]*metadata.Policy, error) {
-	var result []*metadata.Policy
+	result := make([]*metadata.Policy, 0, len(m.policies))
 	for _, policy := range m.policies {
 		result = append(result, policy)
 	}

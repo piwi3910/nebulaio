@@ -112,7 +112,7 @@ func (d *Discovery) Start(ctx context.Context) error {
 	// Build node metadata
 	host := d.config.AdvertiseAddr
 	if host == "" {
-		host = getOutboundIP()
+		host = getOutboundIP(ctx)
 	}
 
 	meta := NodeMeta{
@@ -736,8 +736,13 @@ func (d *Discovery) GetRaftConfiguration() (*ShardMembershipInfo, error) {
 }
 
 // getOutboundIP gets the preferred outbound IP of this machine.
-func getOutboundIP() string {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
+func getOutboundIP(ctx context.Context) string {
+	dialCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+
+	var d net.Dialer
+
+	conn, err := d.DialContext(dialCtx, "udp", "8.8.8.8:80")
 	if err != nil {
 		return "127.0.0.1"
 	}

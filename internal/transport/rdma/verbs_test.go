@@ -51,10 +51,10 @@ func TestSimulatedVerbsBackendNotInitialized(t *testing.T) {
 	backend := NewSimulatedVerbsBackend()
 
 	_, err := backend.GetDeviceList()
-	assert.ErrorIs(t, err, ErrVerbsNotInitialized)
+	require.ErrorIs(t, err, ErrVerbsNotInitialized)
 
 	_, err = backend.OpenDevice("mlx5_0")
-	assert.ErrorIs(t, err, ErrVerbsNotInitialized)
+	require.ErrorIs(t, err, ErrVerbsNotInitialized)
 }
 
 func TestSimulatedVerbsBackendOpenDevice(t *testing.T) {

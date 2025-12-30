@@ -57,7 +57,8 @@ type Provider struct {
 
 // NewProvider creates a new OIDC provider.
 func NewProvider(cfg Config) (*Provider, error) {
-	if err := cfg.Validate(); err != nil {
+	err := cfg.Validate()
+	if err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 

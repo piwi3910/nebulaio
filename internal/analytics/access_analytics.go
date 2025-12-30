@@ -1308,7 +1308,7 @@ func (aa *AccessAnalytics) GenerateReport(ctx context.Context, startTime, endTim
 		count  int
 	}
 
-	var userCounts []userCount
+	userCounts := make([]userCount, 0, len(userDist))
 	for u, c := range userDist {
 		userCounts = append(userCounts, userCount{u, c})
 	}

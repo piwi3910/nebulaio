@@ -349,7 +349,7 @@ func (e *Engine) parseParquet(data []byte) ([]Record, error) {
 
 // executeQuery executes the parsed query on records.
 func (e *Engine) executeQuery(query *Query, records []Record) ([]Record, error) {
-	var results []Record
+	results := make([]Record, 0, len(records))
 
 	for _, record := range records {
 		// Apply WHERE filter
@@ -379,7 +379,7 @@ func (e *Engine) executeQuery(query *Query, records []Record) ([]Record, error) 
 func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, error) {
 	result := Record{Fields: make(map[string]interface{})}
 
-	var columns []string
+	columns := make([]string, 0, len(query.Columns))
 
 	for _, col := range query.Columns {
 		var value interface{}
@@ -435,34 +435,34 @@ func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, er
 				value = 0.0
 			}
 		case "MIN":
-			var min *float64
+			var minVal *float64
 
 			for _, r := range records {
 				if v, ok := r.Fields[col.Name]; ok {
 					f := toFloat64(v)
-					if min == nil || f < *min {
-						min = &f
+					if minVal == nil || f < *minVal {
+						minVal = &f
 					}
 				}
 			}
 
-			if min != nil {
-				value = *min
+			if minVal != nil {
+				value = *minVal
 			}
 		case "MAX":
-			var max *float64
+			var maxVal *float64
 
 			for _, r := range records {
 				if v, ok := r.Fields[col.Name]; ok {
 					f := toFloat64(v)
-					if max == nil || f > *max {
-						max = &f
+					if maxVal == nil || f > *maxVal {
+						maxVal = &f
 					}
 				}
 			}
 
-			if max != nil {
-				value = *max
+			if maxVal != nil {
+				value = *maxVal
 			}
 		}
 
@@ -626,8 +626,6 @@ func ParseSQL(sql string) (*Query, error) {
 
 // parseColumns parses the column list.
 func parseColumns(columnsStr string) ([]Column, error) {
-	var columns []Column
-
 	// Handle simple cases
 	columnsStr = strings.TrimSpace(columnsStr)
 	if columnsStr == "*" {
@@ -636,6 +634,7 @@ func parseColumns(columnsStr string) ([]Column, error) {
 
 	// Split by comma, handling parentheses
 	parts := splitByComma(columnsStr)
+	columns := make([]Column, 0, len(parts))
 
 	for _, part := range parts {
 		part = strings.TrimSpace(part)

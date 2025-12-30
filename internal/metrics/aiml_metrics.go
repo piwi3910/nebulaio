@@ -95,16 +95,16 @@ var (
 	// IcebergNamespacesTotal tracks total namespaces.
 	IcebergNamespacesTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_iceberg_namespaces_total",
-			Help: "Total number of Iceberg namespaces",
+			Name: "nebulaio_iceberg_namespaces",
+			Help: "Current number of Iceberg namespaces",
 		},
 	)
 
 	// IcebergTablesTotal tracks total tables.
 	IcebergTablesTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_iceberg_tables_total",
-			Help: "Total number of Iceberg tables",
+			Name: "nebulaio_iceberg_tables",
+			Help: "Current number of Iceberg tables",
 		},
 	)
 
@@ -424,8 +424,8 @@ var (
 	// RDMAMemoryTotal tracks total RDMA memory pool.
 	RDMAMemoryTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_rdma_memory_bytes_total",
-			Help: "RDMA memory pool total bytes",
+			Name: "nebulaio_rdma_memory_bytes_capacity",
+			Help: "RDMA memory pool capacity bytes",
 		},
 	)
 )

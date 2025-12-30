@@ -288,7 +288,7 @@ func (s *ObjectLambdaService) ListAccessPoints() []*AccessPointConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var configs []*AccessPointConfig
+	configs := make([]*AccessPointConfig, 0, len(s.accessPoints))
 	for _, cfg := range s.accessPoints {
 		configs = append(configs, cfg)
 	}

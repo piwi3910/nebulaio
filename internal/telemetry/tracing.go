@@ -176,7 +176,9 @@ func NewTracer(config *TracerConfig) (*Tracer, error) {
 	}
 
 	hostname := "unknown"
-	if h, err := getHostname(); err == nil {
+
+	h, err := getHostname()
+	if err == nil {
 		hostname = h
 	}
 

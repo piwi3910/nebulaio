@@ -4,6 +4,7 @@ package hardware
 
 import (
 	"bufio"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +27,8 @@ const (
 )
 
 const (
-	unknownValue = "unknown"
+	unknownValue   = "unknown"
+	commandTimeout = 10 * time.Second
 )
 
 // GPUInfo contains information about a detected GPU.
@@ -194,7 +196,10 @@ func (d *Detector) detectGPUs() []GPUInfo {
 
 	// Query GPU information
 	// All arguments are hardcoded to prevent command injection
-	cmd := exec.Command("nvidia-smi",
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "nvidia-smi",
 		"--query-gpu=index,name,uuid,memory.total,memory.free,driver_version,cuda_version,compute_cap",
 		"--format=csv,noheader,nounits")
 
@@ -294,7 +299,10 @@ func (d *Detector) checkP2PSupport(gpuIndex int) bool {
 
 	// Use nvidia-smi to check P2P support
 	// All arguments are hardcoded to prevent command injection
-	cmd := exec.Command("nvidia-smi", "topo", "-p2p", "r")
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "nvidia-smi", "topo", "-p2p", "r")
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -329,11 +337,14 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 
 	// Start MST
 	// All arguments are hardcoded to prevent command injection
-	_ = exec.Command("mst", "start").Run()
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	_ = exec.CommandContext(ctx, "mst", "start").Run()
 
 	// Query devices
 	// All arguments are hardcoded to prevent command injection
-	cmd := exec.Command("mst", "status", "-v")
+	cmd := exec.CommandContext(ctx, "mst", "status", "-v")
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -380,7 +391,10 @@ func (d *Detector) getBlueFieldFirmware(index int) string {
 
 	// Query firmware version
 	// All arguments are hardcoded to prevent command injection
-	cmd := exec.Command("mlxfwmanager", "--query")
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "mlxfwmanager", "--query")
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -432,16 +446,16 @@ func (d *Detector) detectSysfsDPUs() []DPUInfo {
 
 // detectRDMADevices detects RDMA-capable network devices.
 func (d *Detector) detectRDMADevices() []RDMAInfo {
-	var devices []RDMAInfo
-
 	// Check sysfs for RDMA devices
 	rdmaPath := "/sys/class/infiniband"
 
 	entries, err := os.ReadDir(rdmaPath)
 	if err != nil {
 		log.Debug().Msg("No RDMA devices found in sysfs")
-		return devices
+		return nil
 	}
+
+	devices := make([]RDMAInfo, 0, len(entries))
 
 	for _, entry := range entries {
 		devicePath := filepath.Join(rdmaPath, entry.Name())

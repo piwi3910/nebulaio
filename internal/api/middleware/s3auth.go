@@ -203,9 +203,9 @@ func escapeXML(s string) string {
 	return result
 }
 
-// replaceAll replaces all occurrences of old with new in s.
-func replaceAll(s, old, new string) string {
-	if old == new || old == "" {
+// replaceAll replaces all occurrences of old with replacement in s.
+func replaceAll(s, old, replacement string) string {
+	if old == replacement || old == "" {
 		return s
 	}
 
@@ -213,7 +213,7 @@ func replaceAll(s, old, new string) string {
 
 	for i := 0; i < len(s); {
 		if i+len(old) <= len(s) && s[i:i+len(old)] == old {
-			result = append(result, new...)
+			result = append(result, replacement...)
 			i += len(old)
 		} else {
 			result = append(result, s[i])

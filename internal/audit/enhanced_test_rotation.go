@@ -271,7 +271,7 @@ func TestCompressFile_NonExistentFile(t *testing.T) {
 	}
 
 	err := output.compressFile(nonExistentFile)
-	assert.Error(t, err, "Should return error for non-existent file")
+	require.Error(t, err, "Should return error for non-existent file")
 	assert.Contains(t, err.Error(), "failed to open log file for compression", "Error should indicate file open failure")
 }
 
@@ -301,7 +301,7 @@ func TestCompressFile_ReadOnlyDestination(t *testing.T) {
 	}
 
 	err = output.compressFile(testFile)
-	assert.Error(t, err, "Should return error when cannot create compressed file")
+	require.Error(t, err, "Should return error when cannot create compressed file")
 	assert.Contains(t, err.Error(), "failed to create compressed log file", "Error should indicate file creation failure")
 }
 

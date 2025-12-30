@@ -582,11 +582,12 @@ func (t *Transport) Connect(ctx context.Context, addr string) (*Connection, erro
 	}
 
 	// Transition QP to Ready-to-Send state
-	if err := t.transitionQPToRTS(conn.QueuePair); err != nil {
+	rtsErr := t.transitionQPToRTS(conn.QueuePair)
+	if rtsErr != nil {
 		t.memPool.ReleaseRegion(sendMR)
 		t.memPool.ReleaseRegion(recvMR)
 
-		return nil, err
+		return nil, rtsErr
 	}
 
 	conn.Connected = true
@@ -866,13 +867,15 @@ func (c *Connection) Execute(ctx context.Context, req *S3Request) (*S3Response, 
 	copy(c.SendMR.Buffer, reqData)
 
 	// Post send work request
-	if err := c.postSend(ctx, len(reqData)); err != nil {
-		return nil, err
+	sendErr := c.postSend(ctx, len(reqData))
+	if sendErr != nil {
+		return nil, sendErr
 	}
 
 	// Wait for send completion
-	if err := c.waitCompletion(ctx, c.QueuePair.SendCQ); err != nil {
-		return nil, err
+	completionErr := c.waitCompletion(ctx, c.QueuePair.SendCQ)
+	if completionErr != nil {
+		return nil, completionErr
 	}
 
 	// Post receive for response

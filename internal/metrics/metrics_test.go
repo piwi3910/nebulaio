@@ -32,13 +32,13 @@ func TestRecordRequest(t *testing.T) {
 
 	// Verify counter was incremented
 	count := testutil.ToFloat64(RequestsTotal.WithLabelValues("GET", "GetObject", "2xx"))
-	assert.Equal(t, float64(1), count)
+	assert.InDelta(t, float64(1), count, 0.001)
 
 	// Record another request
 	RecordRequest("PUT", "PutObject", 201, 50*time.Millisecond)
 
 	count = testutil.ToFloat64(RequestsTotal.WithLabelValues("PUT", "PutObject", "2xx"))
-	assert.Equal(t, float64(1), count)
+	assert.InDelta(t, float64(1), count, 0.001)
 }
 
 func TestRecordS3Operation(t *testing.T) {
@@ -47,14 +47,14 @@ func TestRecordS3Operation(t *testing.T) {
 	RecordS3Operation("GetObject", "test-bucket")
 
 	count := testutil.ToFloat64(S3OperationsTotal.WithLabelValues("GetObject", "test-bucket"))
-	assert.Equal(t, float64(1), count)
+	assert.InDelta(t, float64(1), count, 0.001)
 
 	// Record multiple operations
 	RecordS3Operation("GetObject", "test-bucket")
 	RecordS3Operation("GetObject", "test-bucket")
 
 	count = testutil.ToFloat64(S3OperationsTotal.WithLabelValues("GetObject", "test-bucket"))
-	assert.Equal(t, float64(3), count)
+	assert.InDelta(t, float64(3), count, 0.001)
 }
 
 func TestRecordError(t *testing.T) {
@@ -63,12 +63,12 @@ func TestRecordError(t *testing.T) {
 	RecordError("GetObject", "NotFound")
 
 	count := testutil.ToFloat64(ErrorsTotal.WithLabelValues("GetObject", "NotFound"))
-	assert.Equal(t, float64(1), count)
+	assert.InDelta(t, float64(1), count, 0.001)
 
 	RecordError("GetObject", "NotFound")
 
 	count = testutil.ToFloat64(ErrorsTotal.WithLabelValues("GetObject", "NotFound"))
-	assert.Equal(t, float64(2), count)
+	assert.InDelta(t, float64(2), count, 0.001)
 }
 
 func TestSetRaftLeader(t *testing.T) {
@@ -79,13 +79,13 @@ func TestSetRaftLeader(t *testing.T) {
 
 	// Set as leader
 	SetRaftLeader(shardID, true)
-	assert.Equal(t, float64(1), testutil.ToFloat64(RaftIsLeader.WithLabelValues(shardID)))
-	assert.Equal(t, float64(1), testutil.ToFloat64(RaftState.WithLabelValues(shardID)))
+	assert.InDelta(t, float64(1), testutil.ToFloat64(RaftIsLeader.WithLabelValues(shardID)), 0.001)
+	assert.InDelta(t, float64(1), testutil.ToFloat64(RaftState.WithLabelValues(shardID)), 0.001)
 
 	// Set as follower
 	SetRaftLeader(shardID, false)
-	assert.Equal(t, float64(0), testutil.ToFloat64(RaftIsLeader.WithLabelValues(shardID)))
-	assert.Equal(t, float64(0), testutil.ToFloat64(RaftState.WithLabelValues(shardID)))
+	assert.InDelta(t, float64(0), testutil.ToFloat64(RaftIsLeader.WithLabelValues(shardID)), 0.001)
+	assert.InDelta(t, float64(0), testutil.ToFloat64(RaftState.WithLabelValues(shardID)), 0.001)
 }
 
 func TestRecordRaftProposal(t *testing.T) {
@@ -97,28 +97,28 @@ func TestRecordRaftProposal(t *testing.T) {
 	// Record successful proposal
 	RecordRaftProposal(shardID, 10*time.Millisecond, true)
 	count := testutil.ToFloat64(RaftProposalsTotal.WithLabelValues(shardID, "success"))
-	assert.Equal(t, float64(1), count)
+	assert.InDelta(t, float64(1), count, 0.001)
 
 	// Record failed proposal
 	RecordRaftProposal(shardID, 5*time.Millisecond, false)
 	count = testutil.ToFloat64(RaftProposalsTotal.WithLabelValues(shardID, "failure"))
-	assert.Equal(t, float64(1), count)
+	assert.InDelta(t, float64(1), count, 0.001)
 }
 
 func TestActiveConnections(t *testing.T) {
 	ActiveConnections.Set(0) // Reset
 
 	IncrementActiveConnections()
-	assert.Equal(t, float64(1), testutil.ToFloat64(ActiveConnections))
+	assert.InDelta(t, float64(1), testutil.ToFloat64(ActiveConnections), 0.001)
 
 	IncrementActiveConnections()
-	assert.Equal(t, float64(2), testutil.ToFloat64(ActiveConnections))
+	assert.InDelta(t, float64(2), testutil.ToFloat64(ActiveConnections), 0.001)
 
 	DecrementActiveConnections()
-	assert.Equal(t, float64(1), testutil.ToFloat64(ActiveConnections))
+	assert.InDelta(t, float64(1), testutil.ToFloat64(ActiveConnections), 0.001)
 
 	DecrementActiveConnections()
-	assert.Equal(t, float64(0), testutil.ToFloat64(ActiveConnections))
+	assert.InDelta(t, float64(0), testutil.ToFloat64(ActiveConnections), 0.001)
 }
 
 func TestAddBytesReceived(t *testing.T) {
@@ -126,10 +126,10 @@ func TestAddBytesReceived(t *testing.T) {
 	initial := testutil.ToFloat64(BytesReceived)
 
 	AddBytesReceived(1024)
-	assert.Equal(t, initial+1024, testutil.ToFloat64(BytesReceived))
+	assert.InDelta(t, initial+1024, testutil.ToFloat64(BytesReceived), 0.001)
 
 	AddBytesReceived(2048)
-	assert.Equal(t, initial+3072, testutil.ToFloat64(BytesReceived))
+	assert.InDelta(t, initial+3072, testutil.ToFloat64(BytesReceived), 0.001)
 }
 
 func TestAddBytesSent(t *testing.T) {
@@ -137,58 +137,58 @@ func TestAddBytesSent(t *testing.T) {
 	initial := testutil.ToFloat64(BytesSent)
 
 	AddBytesSent(1024)
-	assert.Equal(t, initial+1024, testutil.ToFloat64(BytesSent))
+	assert.InDelta(t, initial+1024, testutil.ToFloat64(BytesSent), 0.001)
 
 	AddBytesSent(2048)
-	assert.Equal(t, initial+3072, testutil.ToFloat64(BytesSent))
+	assert.InDelta(t, initial+3072, testutil.ToFloat64(BytesSent), 0.001)
 }
 
 func TestSetStorageStats(t *testing.T) {
 	SetStorageStats(500000000, 1000000000)
 
-	assert.Equal(t, float64(500000000), testutil.ToFloat64(StorageBytesUsed))
-	assert.Equal(t, float64(1000000000), testutil.ToFloat64(StorageBytesTotal))
+	assert.InDelta(t, float64(500000000), testutil.ToFloat64(StorageBytesUsed), 0.001)
+	assert.InDelta(t, float64(1000000000), testutil.ToFloat64(StorageBytesTotal), 0.001)
 
 	SetStorageStats(750000000, 2000000000)
-	assert.Equal(t, float64(750000000), testutil.ToFloat64(StorageBytesUsed))
-	assert.Equal(t, float64(2000000000), testutil.ToFloat64(StorageBytesTotal))
+	assert.InDelta(t, float64(750000000), testutil.ToFloat64(StorageBytesUsed), 0.001)
+	assert.InDelta(t, float64(2000000000), testutil.ToFloat64(StorageBytesTotal), 0.001)
 }
 
 func TestSetBucketsTotal(t *testing.T) {
 	SetBucketsTotal(5)
-	assert.Equal(t, float64(5), testutil.ToFloat64(BucketsTotal))
+	assert.InDelta(t, float64(5), testutil.ToFloat64(BucketsTotal), 0.001)
 
 	SetBucketsTotal(10)
-	assert.Equal(t, float64(10), testutil.ToFloat64(BucketsTotal))
+	assert.InDelta(t, float64(10), testutil.ToFloat64(BucketsTotal), 0.001)
 }
 
 func TestSetObjectsTotal(t *testing.T) {
 	ObjectsTotal.Reset()
 
 	SetObjectsTotal("bucket1", 100)
-	assert.Equal(t, float64(100), testutil.ToFloat64(ObjectsTotal.WithLabelValues("bucket1")))
+	assert.InDelta(t, float64(100), testutil.ToFloat64(ObjectsTotal.WithLabelValues("bucket1")), 0.001)
 
 	SetObjectsTotal("bucket2", 200)
-	assert.Equal(t, float64(200), testutil.ToFloat64(ObjectsTotal.WithLabelValues("bucket2")))
+	assert.InDelta(t, float64(200), testutil.ToFloat64(ObjectsTotal.WithLabelValues("bucket2")), 0.001)
 
 	SetObjectsTotal("bucket1", 150)
-	assert.Equal(t, float64(150), testutil.ToFloat64(ObjectsTotal.WithLabelValues("bucket1")))
+	assert.InDelta(t, float64(150), testutil.ToFloat64(ObjectsTotal.WithLabelValues("bucket1")), 0.001)
 }
 
 func TestSetMultipartUploadsActive(t *testing.T) {
 	SetMultipartUploadsActive(3)
-	assert.Equal(t, float64(3), testutil.ToFloat64(MultipartUploadsActive))
+	assert.InDelta(t, float64(3), testutil.ToFloat64(MultipartUploadsActive), 0.001)
 
 	SetMultipartUploadsActive(5)
-	assert.Equal(t, float64(5), testutil.ToFloat64(MultipartUploadsActive))
+	assert.InDelta(t, float64(5), testutil.ToFloat64(MultipartUploadsActive), 0.001)
 }
 
 func TestSetClusterNodesTotal(t *testing.T) {
 	SetClusterNodesTotal(3)
-	assert.Equal(t, float64(3), testutil.ToFloat64(ClusterNodesTotal))
+	assert.InDelta(t, float64(3), testutil.ToFloat64(ClusterNodesTotal), 0.001)
 
 	SetClusterNodesTotal(5)
-	assert.Equal(t, float64(5), testutil.ToFloat64(ClusterNodesTotal))
+	assert.InDelta(t, float64(5), testutil.ToFloat64(ClusterNodesTotal), 0.001)
 }
 
 func TestStatusCodeToString(t *testing.T) {
@@ -267,8 +267,8 @@ func TestCollectDragonboatMetrics(t *testing.T) {
 		CollectDragonboatMetrics(shardID, nodeHost, replicaID)
 
 		shardLabel := "1"
-		assert.Equal(t, float64(1), testutil.ToFloat64(RaftState.WithLabelValues(shardLabel)))
-		assert.Equal(t, float64(1), testutil.ToFloat64(RaftIsLeader.WithLabelValues(shardLabel)))
+		assert.InDelta(t, float64(1), testutil.ToFloat64(RaftState.WithLabelValues(shardLabel)), 0.001)
+		assert.InDelta(t, float64(1), testutil.ToFloat64(RaftIsLeader.WithLabelValues(shardLabel)), 0.001)
 	})
 
 	t.Run("is follower", func(t *testing.T) {
@@ -280,8 +280,8 @@ func TestCollectDragonboatMetrics(t *testing.T) {
 		CollectDragonboatMetrics(shardID, nodeHost, replicaID)
 
 		shardLabel := "1"
-		assert.Equal(t, float64(0), testutil.ToFloat64(RaftState.WithLabelValues(shardLabel)))
-		assert.Equal(t, float64(0), testutil.ToFloat64(RaftIsLeader.WithLabelValues(shardLabel)))
+		assert.InDelta(t, float64(0), testutil.ToFloat64(RaftState.WithLabelValues(shardLabel)), 0.001)
+		assert.InDelta(t, float64(0), testutil.ToFloat64(RaftIsLeader.WithLabelValues(shardLabel)), 0.001)
 	})
 
 	t.Run("error getting leader", func(t *testing.T) {
@@ -292,8 +292,8 @@ func TestCollectDragonboatMetrics(t *testing.T) {
 		CollectDragonboatMetrics(shardID, nodeHost, replicaID)
 
 		shardLabel := "1"
-		assert.Equal(t, float64(0), testutil.ToFloat64(RaftState.WithLabelValues(shardLabel)))
-		assert.Equal(t, float64(0), testutil.ToFloat64(RaftIsLeader.WithLabelValues(shardLabel)))
+		assert.InDelta(t, float64(0), testutil.ToFloat64(RaftState.WithLabelValues(shardLabel)), 0.001)
+		assert.InDelta(t, float64(0), testutil.ToFloat64(RaftIsLeader.WithLabelValues(shardLabel)), 0.001)
 	})
 }
 

@@ -46,7 +46,7 @@ func NewMockObjectStore() *MockObjectStore {
 }
 
 func (m *MockObjectStore) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
-	var buckets []BucketInfo
+	buckets := make([]BucketInfo, 0, len(m.buckets))
 	for name := range m.buckets {
 		buckets = append(buckets, BucketInfo{
 			Name:         name,

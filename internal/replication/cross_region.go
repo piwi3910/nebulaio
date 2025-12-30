@@ -744,7 +744,7 @@ func (rm *ReplicationManager) getCanonicalHeaders(req *http.Request) string {
 		}
 	}
 
-	var keys []string
+	keys := make([]string, 0, len(headers))
 	for k := range headers {
 		keys = append(keys, k)
 	}

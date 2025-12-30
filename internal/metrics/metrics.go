@@ -57,8 +57,8 @@ var (
 	// ObjectsTotal tracks total number of objects per bucket.
 	ObjectsTotal = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_objects_total",
-			Help: "Total number of objects per bucket",
+			Name: "nebulaio_objects",
+			Help: "Current number of objects per bucket",
 		},
 		[]string{"bucket"},
 	)
@@ -66,8 +66,8 @@ var (
 	// BucketsTotal tracks total number of buckets.
 	BucketsTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_buckets_total",
-			Help: "Total number of buckets",
+			Name: "nebulaio_buckets",
+			Help: "Current number of buckets",
 		},
 	)
 
@@ -82,8 +82,8 @@ var (
 	// StorageBytesTotal tracks total storage bytes available.
 	StorageBytesTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_storage_bytes_total",
-			Help: "Total storage bytes available",
+			Name: "nebulaio_storage_bytes_capacity",
+			Help: "Storage capacity in bytes",
 		},
 	)
 
@@ -177,8 +177,8 @@ var (
 	// ClusterNodesTotal tracks total number of cluster nodes.
 	ClusterNodesTotal = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_cluster_nodes_total",
-			Help: "Total number of cluster nodes",
+			Name: "nebulaio_cluster_nodes",
+			Help: "Current number of cluster nodes",
 		},
 	)
 
@@ -194,7 +194,7 @@ var (
 	// PlacementGroupNodesTotal tracks number of nodes per placement group.
 	PlacementGroupNodesTotal = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_placement_group_nodes_total",
+			Name: "nebulaio_placement_group_nodes",
 			Help: "Number of nodes in each placement group",
 		},
 		[]string{"group_id", "datacenter", "region"},
@@ -303,7 +303,7 @@ var (
 	// TieringObjectsPerTier tracks number of objects in each tier.
 	TieringObjectsPerTier = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_tiering_objects_total",
+			Name: "nebulaio_tiering_objects",
 			Help: "Number of objects in each storage tier",
 		},
 		[]string{"tier"},
@@ -312,7 +312,7 @@ var (
 	// TieringBytesPerTier tracks bytes stored in each tier.
 	TieringBytesPerTier = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "nebulaio_tiering_bytes_total",
+			Name: "nebulaio_tiering_bytes",
 			Help: "Bytes stored in each storage tier",
 		},
 		[]string{"tier"},

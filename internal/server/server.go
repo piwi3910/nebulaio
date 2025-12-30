@@ -809,17 +809,20 @@ func (s *Server) collectMetrics(ctx context.Context) {
 	metrics.SetRaftLeader(shardID, isLeader)
 
 	// Get cluster info and update node count
-	if clusterInfo, err := s.metaStore.GetClusterInfo(ctx); err == nil {
+	clusterInfo, clusterErr := s.metaStore.GetClusterInfo(ctx)
+	if clusterErr == nil {
 		metrics.SetClusterNodesTotal(len(clusterInfo.Nodes))
 	}
 
 	// Update storage metrics
-	if storageInfo, err := s.storageBackend.GetStorageInfo(ctx); err == nil {
+	storageInfo, storageErr := s.storageBackend.GetStorageInfo(ctx)
+	if storageErr == nil {
 		metrics.SetStorageStats(storageInfo.UsedBytes, storageInfo.TotalBytes)
 	}
 
 	// Update bucket count
-	if buckets, err := s.metaStore.ListBuckets(ctx, ""); err == nil {
+	buckets, bucketsErr := s.metaStore.ListBuckets(ctx, "")
+	if bucketsErr == nil {
 		metrics.SetBucketsTotal(len(buckets))
 	}
 

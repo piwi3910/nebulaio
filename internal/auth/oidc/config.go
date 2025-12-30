@@ -118,8 +118,9 @@ func (c *Config) Validate() error {
 	}
 
 	// Validate issuer URL format
-	if _, err := url.Parse(c.IssuerURL); err != nil {
-		return errors.New("invalid issuer URL: " + err.Error())
+	_, issuerErr := url.Parse(c.IssuerURL)
+	if issuerErr != nil {
+		return errors.New("invalid issuer URL: " + issuerErr.Error())
 	}
 
 	if c.ClientID == "" {
@@ -136,8 +137,9 @@ func (c *Config) Validate() error {
 	}
 
 	// Validate redirect URL format
-	if _, err := url.Parse(c.RedirectURL); err != nil {
-		return errors.New("invalid redirect URL: " + err.Error())
+	_, redirectErr := url.Parse(c.RedirectURL)
+	if redirectErr != nil {
+		return errors.New("invalid redirect URL: " + redirectErr.Error())
 	}
 
 	// Ensure at least openid scope

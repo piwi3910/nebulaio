@@ -151,7 +151,7 @@ func AssertSliceNotContains[T comparable](t *testing.T, slice []T, excluded ...T
 	for _, e := range excluded {
 		for _, s := range slice {
 			if s == e {
-				assert.Fail(t, "slice should not contain %v", e)
+				assert.Fail(t, "slice should not contain element", "found: %v", e)
 				return
 			}
 		}

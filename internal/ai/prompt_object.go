@@ -1104,14 +1104,6 @@ func isTextContent(data []byte) bool {
 	return float64(printable)/float64(min(len(data), 1000)) > 0.9
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
-}
-
 // ========================================
 // S3 API Compatibility
 // ========================================

@@ -56,7 +56,7 @@ func TestEncodeStream_ContextCancellation(t *testing.T) {
 						channelsClosed = true
 					} else if err != nil {
 						// Should be context.Canceled
-						assert.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error")
+						require.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error")
 					}
 				case <-time.After(100 * time.Millisecond):
 					require.Fail(t, "errChan not closed after dataChan closed")
@@ -92,7 +92,7 @@ func TestEncodeStream_FullStream(t *testing.T) {
 				// Channel closed, check for errors
 				select {
 				case err := <-errChan:
-					assert.NoError(t, err, "Encoding should complete without error")
+					require.NoError(t, err, "Encoding should complete without error")
 				default:
 				}
 				// Success
@@ -159,7 +159,7 @@ func TestEncodeStream_ContextCancelledBeforeRead(t *testing.T) {
 	timeout := time.After(1 * time.Second)
 	select {
 	case err := <-errChan:
-		assert.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error")
+		require.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error")
 	case <-timeout:
 		require.Fail(t, "Timeout waiting for context cancellation error")
 	}
@@ -197,7 +197,7 @@ func TestEncodeStream_SlowReader(t *testing.T) {
 	case err := <-errChan:
 		// Should get context.Canceled
 		if err != nil {
-			assert.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error from slow reader")
+			require.ErrorIs(t, err, context.Canceled, "Expected context.Canceled error from slow reader")
 		}
 	case <-timeout:
 		require.Fail(t, "Goroutine did not terminate within 2 seconds")
@@ -224,7 +224,7 @@ func TestEncodeStream_ReadError(t *testing.T) {
 	case err := <-errChan:
 		require.Error(t, err, "Should receive error from failing reader")
 		assert.Contains(t, err.Error(), "failed to read chunk", "Error should indicate read failure")
-		assert.ErrorIs(t, err, expectedErr, "Should wrap original error")
+		require.ErrorIs(t, err, expectedErr, "Should wrap original error")
 	case <-dataChan:
 		require.Fail(t, "Should not receive data from failing reader")
 	case <-timeout:

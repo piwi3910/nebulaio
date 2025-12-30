@@ -770,7 +770,7 @@ func (e *DLPEngine) getApplicableRules(req *ScanRequest) []*DLPRule {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	var applicable []*DLPRule
+	applicable := make([]*DLPRule, 0, len(e.rules))
 
 	for _, rule := range e.rules {
 		if !rule.Enabled {

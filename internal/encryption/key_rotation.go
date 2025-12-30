@@ -353,7 +353,9 @@ func (krm *KeyRotationManager) generateKeyMaterial(algorithm KeyAlgorithm) ([]by
 	}
 
 	key := make([]byte, keySize)
-	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+
+	_, err := io.ReadFull(rand.Reader, key)
+	if err != nil {
 		return nil, err
 	}
 
@@ -377,8 +379,10 @@ func (krm *KeyRotationManager) wrapKey(keyMaterial []byte) ([]byte, error) {
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
+
+	_, nonceErr := io.ReadFull(rand.Reader, nonce)
+	if nonceErr != nil {
+		return nil, nonceErr
 	}
 
 	return gcm.Seal(nonce, nonce, keyMaterial, nil), nil
@@ -611,7 +615,8 @@ func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 		}
 
 		if keyAge >= policy.RotationInterval {
-			if _, rotateErr := krm.RotateKey(ctx, key.ID, "scheduled", "system"); rotateErr != nil {
+			_, rotateErr := krm.RotateKey(ctx, key.ID, "scheduled", "system")
+			if rotateErr != nil {
 				log.Error().
 					Err(rotateErr).
 					Str("key_id", key.ID).
@@ -844,8 +849,10 @@ func (krm *KeyRotationManager) DeriveKey(ctx context.Context, parentKeyID string
 	hkdfReader := hkdf.New(sha256.New, key.KeyMaterial, nil, info)
 
 	derivedKey := make([]byte, keySize)
-	if _, err := io.ReadFull(hkdfReader, derivedKey); err != nil {
-		return nil, err
+
+	_, deriveErr := io.ReadFull(hkdfReader, derivedKey)
+	if deriveErr != nil {
+		return nil, deriveErr
 	}
 
 	return derivedKey, nil
@@ -873,8 +880,10 @@ func (krm *KeyRotationManager) Encrypt(ctx context.Context, keyID string, plaint
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
+
+	_, encNonceErr := io.ReadFull(rand.Reader, nonce)
+	if encNonceErr != nil {
+		return nil, encNonceErr
 	}
 
 	// Update usage statistics
