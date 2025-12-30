@@ -95,6 +95,19 @@ type Server struct {
 // Version is the current version of NebulaIO.
 const Version = "0.1.0"
 
+// Server configuration constants.
+const (
+	defaultShardSizeMB         = 64
+	defaultShardSizeBytes      = defaultShardSizeMB * 1024 * 1024
+	defaultAuditBufferSize     = 1000
+	defaultReadTimeoutSec      = 30
+	defaultWriteTimeoutSec     = 30
+	defaultIdleTimeoutSec      = 120
+	defaultCORSMaxAgeSec       = 300
+	defaultShutdownTimeoutSec  = 30
+	defaultMetricsIntervalSec  = 30
+)
+
 // New creates a new NebulaIO server.
 func New(cfg *config.Config) (*Server, error) {
 	srv := &Server{
@@ -252,7 +265,7 @@ func New(cfg *config.Config) (*Server, error) {
 					ShardSize:    int(tierErasureConfig.ShardSize),
 				}
 				if erasureCfg.ShardSize == 0 {
-					erasureCfg.ShardSize = 64 * 1024 * 1024 // 64MB default
+					erasureCfg.ShardSize = defaultShardSizeBytes // 64MB default
 				}
 			} else if cfg.Storage.DefaultRedundancy.Enabled {
 				// Use default redundancy configuration
@@ -260,7 +273,7 @@ func New(cfg *config.Config) (*Server, error) {
 					DataDir:      dataDir,
 					DataShards:   cfg.Storage.DefaultRedundancy.DataShards,
 					ParityShards: cfg.Storage.DefaultRedundancy.ParityShards,
-					ShardSize:    64 * 1024 * 1024, // 64MB default
+					ShardSize:    defaultShardSizeBytes, // 64MB default
 				}
 			} else {
 				// Fallback to preset
@@ -386,7 +399,7 @@ func New(cfg *config.Config) (*Server, error) {
 	srv.auditLogger, err = audit.NewAuditLogger(audit.Config{
 		Store:      srv.metaStore,
 		FilePath:   auditLogPath,
-		BufferSize: 1000,
+		BufferSize: defaultAuditBufferSize,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize audit logger: %w", err)
@@ -495,9 +508,9 @@ func (s *Server) setupS3Server() {
 	s.s3Server = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.cfg.S3Port),
 		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  defaultReadTimeoutSec * time.Second,
+		WriteTimeout: defaultWriteTimeoutSec * time.Second,
+		IdleTimeout:  defaultIdleTimeoutSec * time.Second,
 	}
 
 	// Apply TLS configuration if enabled
@@ -526,7 +539,7 @@ func (s *Server) setupAdminServer() {
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
-		MaxAge:           300,
+		MaxAge:           defaultCORSMaxAgeSec,
 	}))
 
 	// Audit middleware for Admin operations
@@ -572,9 +585,9 @@ func (s *Server) setupAdminServer() {
 	s.adminServer = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.cfg.AdminPort),
 		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  defaultReadTimeoutSec * time.Second,
+		WriteTimeout: defaultWriteTimeoutSec * time.Second,
+		IdleTimeout:  defaultIdleTimeoutSec * time.Second,
 	}
 
 	// Apply TLS configuration if enabled
@@ -601,9 +614,9 @@ func (s *Server) setupConsoleServer() {
 	s.consoleServer = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.cfg.ConsolePort),
 		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  defaultReadTimeoutSec * time.Second,
+		WriteTimeout: defaultWriteTimeoutSec * time.Second,
+		IdleTimeout:  defaultIdleTimeoutSec * time.Second,
 	}
 
 	// Apply TLS configuration if enabled
@@ -718,7 +731,7 @@ func (s *Server) Start(ctx context.Context) error {
 		<-ctx.Done()
 		log.Info().Msg("Shutting down servers...")
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeoutSec*time.Second)
 		defer cancel()
 
 		// Stop cluster discovery first (graceful leave)
@@ -770,7 +783,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 // runMetricsCollector periodically collects and updates metrics.
 func (s *Server) runMetricsCollector(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(defaultMetricsIntervalSec * time.Second)
 	defer ticker.Stop()
 
 	// Collect initial metrics
