@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -311,110 +312,51 @@ func (h *Handler) handleBucketDelete(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleBucketGet(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
-	// Check for bucket subresources
-	if _, ok := query["versioning"]; ok {
-		h.GetBucketVersioning(w, r)
-		return
+	// Use query parameter dispatch table
+	handler := h.getBucketGetHandler(query)
+	handler(w, r)
+}
+
+func (h *Handler) getBucketGetHandler(query url.Values) func(http.ResponseWriter, *http.Request) {
+	// Define dispatch table for bucket GET subresources
+	handlers := map[string]func(http.ResponseWriter, *http.Request){
+		"versioning":        h.GetBucketVersioning,
+		"policy":            h.GetBucketPolicy,
+		"tagging":           h.GetBucketTagging,
+		"cors":              h.GetBucketCORS,
+		"lifecycle":         h.GetBucketLifecycle,
+		"uploads":           h.ListMultipartUploads,
+		"versions":          h.ListObjectVersions,
+		"location":          h.GetBucketLocation,
+		"acl":               h.GetBucketAcl,
+		"encryption":        h.GetBucketEncryption,
+		"website":           h.GetBucketWebsite,
+		"logging":           h.GetBucketLogging,
+		"notification":      h.GetBucketNotificationConfiguration,
+		"replication":       h.GetBucketReplication,
+		"object-lock":       h.GetObjectLockConfiguration,
+		"publicAccessBlock": h.GetPublicAccessBlock,
+		"ownershipControls": h.GetBucketOwnershipControls,
+		"accelerate":        h.GetBucketAccelerateConfiguration,
 	}
 
-	if _, ok := query["policy"]; ok {
-		h.GetBucketPolicy(w, r)
-		return
-	}
-
-	if _, ok := query["tagging"]; ok {
-		h.GetBucketTagging(w, r)
-		return
-	}
-
-	if _, ok := query["cors"]; ok {
-		h.GetBucketCORS(w, r)
-		return
-	}
-
-	if _, ok := query["lifecycle"]; ok {
-		h.GetBucketLifecycle(w, r)
-		return
-	}
-
-	if _, ok := query["uploads"]; ok {
-		h.ListMultipartUploads(w, r)
-		return
-	}
-
-	if _, ok := query["versions"]; ok {
-		h.ListObjectVersions(w, r)
-		return
-	}
-
-	if _, ok := query["location"]; ok {
-		h.GetBucketLocation(w, r)
-		return
-	}
-
-	if _, ok := query["acl"]; ok {
-		h.GetBucketAcl(w, r)
-		return
-	}
-
-	if _, ok := query["encryption"]; ok {
-		h.GetBucketEncryption(w, r)
-		return
-	}
-
-	if _, ok := query["website"]; ok {
-		h.GetBucketWebsite(w, r)
-		return
-	}
-
-	if _, ok := query["logging"]; ok {
-		h.GetBucketLogging(w, r)
-		return
-	}
-
-	if _, ok := query["notification"]; ok {
-		h.GetBucketNotificationConfiguration(w, r)
-		return
-	}
-
-	if _, ok := query["replication"]; ok {
-		h.GetBucketReplication(w, r)
-		return
-	}
-
-	if _, ok := query["object-lock"]; ok {
-		h.GetObjectLockConfiguration(w, r)
-		return
-	}
-
-	if _, ok := query["publicAccessBlock"]; ok {
-		h.GetPublicAccessBlock(w, r)
-		return
-	}
-
-	if _, ok := query["ownershipControls"]; ok {
-		h.GetBucketOwnershipControls(w, r)
-		return
-	}
-
-	if _, ok := query["accelerate"]; ok {
-		h.GetBucketAccelerateConfiguration(w, r)
-		return
-	}
-
+	// Check for intelligent-tiering with special logic
 	if _, ok := query["intelligent-tiering"]; ok {
-		// Check if id parameter is present for single config
 		if id := query.Get("id"); id != "" {
-			h.GetBucketIntelligentTieringConfiguration(w, r)
-		} else {
-			h.ListBucketIntelligentTieringConfigurations(w, r)
+			return h.GetBucketIntelligentTieringConfiguration
 		}
+		return h.ListBucketIntelligentTieringConfigurations
+	}
 
-		return
+	// Check all other subresources
+	for param, handler := range handlers {
+		if _, ok := query[param]; ok {
+			return handler
+		}
 	}
 
 	// Default: list objects
-	h.ListObjectsV2(w, r)
+	return h.ListObjectsV2
 }
 
 // handleBucketPost handles POST requests on buckets (e.g., ?delete for batch delete).
