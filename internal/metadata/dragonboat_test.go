@@ -654,110 +654,134 @@ func TestUserOperations(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("CreateUser", func(t *testing.T) {
-		user := &User{
-			ID:        "user-123",
-			Username:  "testuser",
-			Email:     "test@example.com",
-			CreatedAt: time.Now(),
-			Enabled:   true,
-			Role:      RoleUser,
-		}
-
-		err := store.CreateUser(ctx, user)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to create user: %v", err)
-		}
+		testCreateUser(t, ctx, store)
 	})
 
 	t.Run("GetUser", func(t *testing.T) {
-		user, err := store.GetUser(ctx, "user-123")
-		if err != nil {
-			t.Errorf("Failed to get user: %v", err)
-		}
-
-		if user == nil {
-			t.Fatal("Expected user, got nil")
-		}
-
-		if user.Username != "testuser" {
-			t.Errorf("Expected username 'testuser', got '%s'", user.Username)
-		}
+		testGetUser(t, ctx, store)
 	})
 
 	t.Run("GetUserByUsername", func(t *testing.T) {
-		user, err := store.GetUserByUsername(ctx, "testuser")
-		if err != nil {
-			t.Errorf("Failed to get user by username: %v", err)
-		}
-
-		if user == nil {
-			t.Fatal("Expected user, got nil")
-		}
-
-		if user.ID != "user-123" {
-			t.Errorf("Expected ID 'user-123', got '%s'", user.ID)
-		}
+		testGetUserByUsername(t, ctx, store)
 	})
 
 	t.Run("ListUsers", func(t *testing.T) {
-		users, err := store.ListUsers(ctx)
-		if err != nil {
-			t.Errorf("Failed to list users: %v", err)
-		}
-
-		if len(users) == 0 {
-			t.Error("Expected at least one user")
-		}
+		testListUsers(t, ctx, store)
 	})
 
 	t.Run("UpdateUser", func(t *testing.T) {
-		user, err := store.GetUser(ctx, "user-123")
-		if err != nil {
-			t.Fatalf("Failed to get user: %v", err)
-		}
-
-		user.Email = "newemail@example.com"
-
-		err = store.UpdateUser(ctx, user)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to update user: %v", err)
-		}
-
-		// Verify update
-		updatedUser, err := store.GetUser(ctx, "user-123")
-		if err != nil {
-			t.Errorf("Failed to get updated user: %v", err)
-		}
-
-		if updatedUser.Email != "newemail@example.com" {
-			t.Errorf("Expected email 'newemail@example.com', got '%s'", updatedUser.Email)
-		}
+		testUpdateUser(t, ctx, store)
 	})
 
 	t.Run("DeleteUser", func(t *testing.T) {
-		err := store.DeleteUser(ctx, "user-123")
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to delete user: %v", err)
-		}
-
-		// Verify deletion
-		_, err = store.GetUser(ctx, "user-123")
-		if err == nil {
-			t.Error("Expected error when getting deleted user")
-		}
+		testDeleteUser(t, ctx, store)
 	})
+}
+
+func testCreateUser(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	user := &User{
+		ID:        "user-123",
+		Username:  "testuser",
+		Email:     "test@example.com",
+		CreatedAt: time.Now(),
+		Enabled:   true,
+		Role:      RoleUser,
+	}
+
+	err := store.CreateUser(ctx, user)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to create user: %v", err)
+	}
+}
+
+func testGetUser(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	user, err := store.GetUser(ctx, "user-123")
+	if err != nil {
+		t.Errorf("Failed to get user: %v", err)
+	}
+
+	if user == nil {
+		t.Fatal("Expected user, got nil")
+	}
+
+	if user.Username != "testuser" {
+		t.Errorf("Expected username 'testuser', got '%s'", user.Username)
+	}
+}
+
+func testGetUserByUsername(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	user, err := store.GetUserByUsername(ctx, "testuser")
+	if err != nil {
+		t.Errorf("Failed to get user by username: %v", err)
+	}
+
+	if user == nil {
+		t.Fatal("Expected user, got nil")
+	}
+
+	if user.ID != "user-123" {
+		t.Errorf("Expected ID 'user-123', got '%s'", user.ID)
+	}
+}
+
+func testListUsers(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	users, err := store.ListUsers(ctx)
+	if err != nil {
+		t.Errorf("Failed to list users: %v", err)
+	}
+
+	if len(users) == 0 {
+		t.Error("Expected at least one user")
+	}
+}
+
+func testUpdateUser(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	user, err := store.GetUser(ctx, "user-123")
+	if err != nil {
+		t.Fatalf("Failed to get user: %v", err)
+	}
+
+	user.Email = "newemail@example.com"
+
+	err = store.UpdateUser(ctx, user)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to update user: %v", err)
+	}
+
+	// Verify update
+	updatedUser, err := store.GetUser(ctx, "user-123")
+	if err != nil {
+		t.Errorf("Failed to get updated user: %v", err)
+	}
+
+	if updatedUser.Email != "newemail@example.com" {
+		t.Errorf("Expected email 'newemail@example.com', got '%s'", updatedUser.Email)
+	}
+}
+
+func testDeleteUser(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	err := store.DeleteUser(ctx, "user-123")
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to delete user: %v", err)
+	}
+
+	// Verify deletion
+	_, err = store.GetUser(ctx, "user-123")
+	if err == nil {
+		t.Error("Expected error when getting deleted user")
+	}
 }
 
 // TestAccessKeyOperations tests access key CRUD operations.
