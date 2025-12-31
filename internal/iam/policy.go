@@ -632,54 +632,49 @@ func (pm *PolicyManager) validateStatement(stmt Statement) error {
 
 // isValidAction checks if an action is valid.
 func (pm *PolicyManager) isValidAction(action string) bool {
-	// Check for wildcard
 	if action == "*" {
 		return true
 	}
 
-	// Check S3 actions
 	if strings.HasPrefix(action, "s3:") {
-		// Handle wildcards in action
-		if strings.Contains(action, "*") {
-			pattern := strings.ReplaceAll(action, "*", ".*")
-
-			re, err := regexp.Compile("^" + pattern + "$")
-			if err != nil {
-				return false
-			}
-
-			for a := range S3Actions {
-				if re.MatchString(a) {
-					return true
-				}
-			}
-
-			return false
-		}
-
-		return S3Actions[action]
+		return pm.isValidS3Action(action)
 	}
 
-	// Check admin actions
 	if strings.HasPrefix(action, "admin:") {
-		if strings.Contains(action, "*") {
-			pattern := strings.ReplaceAll(action, "*", ".*")
+		return pm.isValidAdminAction(action)
+	}
 
-			re, err := regexp.Compile("^" + pattern + "$")
-			if err != nil {
-				return false
-			}
+	return false
+}
 
-			for a := range AdminActions {
-				if re.MatchString(a) {
-					return true
-				}
-			}
+func (pm *PolicyManager) isValidS3Action(action string) bool {
+	if strings.Contains(action, "*") {
+		return pm.matchesWildcardAction(action, S3Actions)
+	}
 
-			return false
+	return S3Actions[action]
+}
+
+func (pm *PolicyManager) isValidAdminAction(action string) bool {
+	if strings.Contains(action, "*") {
+		return pm.matchesWildcardAction(action, AdminActions)
+	}
+
+	return AdminActions[action]
+}
+
+func (pm *PolicyManager) matchesWildcardAction(action string, actions map[string]bool) bool {
+	pattern := strings.ReplaceAll(action, "*", ".*")
+
+	re, err := regexp.Compile("^" + pattern + "$")
+	if err != nil {
+		return false
+	}
+
+	for a := range actions {
+		if re.MatchString(a) {
+			return true
 		}
-
-		return AdminActions[action]
 	}
 
 	return false
