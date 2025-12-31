@@ -821,13 +821,50 @@ func setDefaults(v *viper.Viper) {
 }
 
 func (c *Config) validate() error {
-	// Ensure data directory exists
+	if err := c.ensureDataDirectory(); err != nil {
+		return err
+	}
+
+	if err := c.ensureNodeID(); err != nil {
+		return err
+	}
+
+	if err := c.ensureJWTSecret(); err != nil {
+		return err
+	}
+
+	if err := c.validateRootPassword(); err != nil {
+		return err
+	}
+
+	if err := c.ensureReplicaID(); err != nil {
+		return err
+	}
+
+	if err := c.ensureWALDirectory(); err != nil {
+		return err
+	}
+
+	if err := c.validatePlacementGroups(); err != nil {
+		return err
+	}
+
+	if err := c.validateRedundancyVsNodes(); err != nil {
+		return fmt.Errorf("invalid redundancy configuration: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Config) ensureDataDirectory() error {
 	err := os.MkdirAll(c.DataDir, 0750)
 	if err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
+	return nil
+}
 
-	// Generate node ID if not set
+func (c *Config) ensureNodeID() error {
 	if c.NodeID == "" {
 		nodeIDPath := filepath.Join(c.DataDir, "node-id")
 		//nolint:gosec // G304: nodeIDPath is constructed from trusted config
@@ -843,8 +880,10 @@ func (c *Config) validate() error {
 			}
 		}
 	}
+	return nil
+}
 
-	// Generate JWT secret if not set
+func (c *Config) ensureJWTSecret() error {
 	if c.Auth.JWTSecret == "" {
 		jwtSecretPath := filepath.Join(c.DataDir, "jwt-secret")
 		//nolint:gosec // G304: jwtSecretPath is constructed from trusted config
@@ -859,15 +898,20 @@ func (c *Config) validate() error {
 			}
 		}
 	}
+	return nil
+}
 
+func (c *Config) validateRootPassword() error {
 	// Validate root password - fail fast if missing or weak
 	// Password must be: min 12 chars, with uppercase, lowercase, and number
-	err = auth.ValidatePasswordStrength(c.Auth.RootPassword)
+	err := auth.ValidatePasswordStrength(c.Auth.RootPassword)
 	if err != nil {
 		return fmt.Errorf("invalid root password: %w. Set via NEBULAIO_AUTH_ROOT_PASSWORD environment variable", err)
 	}
+	return nil
+}
 
-	// Generate or load replica ID if not set
+func (c *Config) ensureReplicaID() error {
 	if c.Cluster.ReplicaID == 0 {
 		replicaIDPath := filepath.Join(c.DataDir, "replica-id")
 		//nolint:gosec // G304: replicaIDPath is constructed from trusted config
@@ -889,30 +933,28 @@ func (c *Config) validate() error {
 			}
 		}
 	}
+	return nil
+}
 
+func (c *Config) ensureWALDirectory() error {
 	// Set WAL directory if not specified
 	if c.Cluster.WALDir == "" {
 		c.Cluster.WALDir = filepath.Join(c.DataDir, "wal")
 	}
 
 	// Ensure WAL directory exists
-	err = os.MkdirAll(c.Cluster.WALDir, 0750)
+	err := os.MkdirAll(c.Cluster.WALDir, 0750)
 	if err != nil {
 		return fmt.Errorf("failed to create WAL directory: %w", err)
 	}
+	return nil
+}
 
-	// Validate placement group configuration
-	err = c.Storage.PlacementGroups.validate()
+func (c *Config) validatePlacementGroups() error {
+	err := c.Storage.PlacementGroups.validate()
 	if err != nil {
 		return fmt.Errorf("invalid placement group configuration: %w", err)
 	}
-
-	// Validate redundancy settings against available nodes
-	err = c.validateRedundancyVsNodes()
-	if err != nil {
-		return fmt.Errorf("invalid redundancy configuration: %w", err)
-	}
-
 	return nil
 }
 
