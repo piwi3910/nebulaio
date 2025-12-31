@@ -727,70 +727,22 @@ func (m *MTLSManager) ExportCertificate(certID string, certPath, keyPath string)
 
 // loadCertificateFromDisk loads a certificate from disk.
 func (m *MTLSManager) loadCertificateFromDisk(certPath, keyPath string) (*CertificateBundle, error) {
-	//nolint:gosec // G304: certPath comes from trusted configuration
-	certPEM, err := os.ReadFile(certPath)
+	certPEM, keyPEM, err := m.readCertificateFiles(certPath, keyPath)
 	if err != nil {
 		return nil, err
 	}
 
-	//nolint:gosec // G304: keyPath comes from trusted configuration
-	keyPEM, err := os.ReadFile(keyPath)
+	cert, err := m.parseCertificate(certPEM)
 	if err != nil {
 		return nil, err
 	}
 
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		return nil, errors.New("failed to decode certificate PEM")
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
+	privateKey, err := m.parsePrivateKey(keyPEM)
 	if err != nil {
 		return nil, err
 	}
 
-	keyBlock, _ := pem.Decode(keyPEM)
-	if keyBlock == nil {
-		return nil, errors.New("failed to decode key PEM")
-	}
-
-	privateKey, err := x509.ParseECPrivateKey(keyBlock.Bytes)
-	if err != nil {
-		// Try parsing as PKCS8
-		key, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key: %w", err)
-		}
-
-		privateKey = key.(*ecdsa.PrivateKey)
-	}
-
-	var certType CertificateType
-	if cert.IsCA {
-		certType = CertTypeCA
-	} else if len(cert.ExtKeyUsage) > 0 {
-		hasServer := false
-		hasClient := false
-
-		for _, usage := range cert.ExtKeyUsage {
-			if usage == x509.ExtKeyUsageServerAuth {
-				hasServer = true
-			}
-
-			if usage == x509.ExtKeyUsageClientAuth {
-				hasClient = true
-			}
-		}
-
-		switch {
-		case hasServer && hasClient:
-			certType = CertTypePeer
-		case hasServer:
-			certType = CertTypeServer
-		case hasClient:
-			certType = CertTypeClient
-		}
-	}
+	certType := m.determineCertificateType(cert)
 
 	return &CertificateBundle{
 		Certificate:    cert,
@@ -812,6 +764,90 @@ func (m *MTLSManager) loadCertificateFromDisk(certPath, keyPath string) (*Certif
 			ExtKeyUsage:  cert.ExtKeyUsage,
 		},
 	}, nil
+}
+
+// readCertificateFiles reads certificate and key files from disk.
+func (m *MTLSManager) readCertificateFiles(certPath, keyPath string) ([]byte, []byte, error) {
+	//nolint:gosec // G304: certPath comes from trusted configuration
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	//nolint:gosec // G304: keyPath comes from trusted configuration
+	keyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return certPEM, keyPEM, nil
+}
+
+// parseCertificate parses a certificate from PEM data.
+func (m *MTLSManager) parseCertificate(certPEM []byte) (*x509.Certificate, error) {
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return nil, errors.New("failed to decode certificate PEM")
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return cert, nil
+}
+
+// parsePrivateKey parses a private key from PEM data.
+func (m *MTLSManager) parsePrivateKey(keyPEM []byte) (*ecdsa.PrivateKey, error) {
+	keyBlock, _ := pem.Decode(keyPEM)
+	if keyBlock == nil {
+		return nil, errors.New("failed to decode key PEM")
+	}
+
+	privateKey, err := x509.ParseECPrivateKey(keyBlock.Bytes)
+	if err != nil {
+		// Try parsing as PKCS8
+		key, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key: %w", err)
+		}
+		privateKey = key.(*ecdsa.PrivateKey)
+	}
+
+	return privateKey, nil
+}
+
+// determineCertificateType determines the type of certificate based on its properties.
+func (m *MTLSManager) determineCertificateType(cert *x509.Certificate) CertificateType {
+	if cert.IsCA {
+		return CertTypeCA
+	}
+
+	if len(cert.ExtKeyUsage) > 0 {
+		hasServer := false
+		hasClient := false
+
+		for _, usage := range cert.ExtKeyUsage {
+			if usage == x509.ExtKeyUsageServerAuth {
+				hasServer = true
+			}
+			if usage == x509.ExtKeyUsageClientAuth {
+				hasClient = true
+			}
+		}
+
+		switch {
+		case hasServer && hasClient:
+			return CertTypePeer
+		case hasServer:
+			return CertTypeServer
+		case hasClient:
+			return CertTypeClient
+		}
+	}
+
+	return CertificateType("") // Default/unknown type
 }
 
 // generatePrivateKey generates a private key based on configuration.
