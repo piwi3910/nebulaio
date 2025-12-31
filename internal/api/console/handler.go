@@ -11,7 +11,9 @@
 package console
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -786,103 +788,38 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 	role := metadata.UserRole(r.Header.Get("X-User-Role"))
 
-	var req ConsolePresignRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
+	req, err := h.parsePresignRequest(r)
 	if err != nil {
-		writeError(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Validate required fields
-	if req.Bucket == "" {
-		writeError(w, "Bucket is required", http.StatusBadRequest)
+	if err := h.validatePresignRequest(req, role); err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if req.Method == "" {
-		req.Method = "GET"
-	}
-
-	// Validate method
-	validMethods := map[string]bool{"GET": true, "PUT": true, "DELETE": true, "HEAD": true}
-	if !validMethods[strings.ToUpper(req.Method)] {
-		writeError(w, "Invalid method. Allowed: GET, PUT, DELETE, HEAD", http.StatusBadRequest)
+	if err := h.checkPresignPermissions(ctx, userID, role, req); err != nil {
+		writeError(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
-	req.Method = strings.ToUpper(req.Method)
-
-	// Check write permission for PUT
-	if req.Method == http.MethodPut && role == metadata.RoleReadOnly {
-		writeError(w, "Permission denied: read-only user cannot create upload URLs", http.StatusForbidden)
-		return
-	}
-
-	// Check delete permission for DELETE
-	if req.Method == http.MethodDelete && (role == metadata.RoleReadOnly || role == metadata.RoleUser) {
-		writeError(w, "Permission denied: cannot create delete URLs", http.StatusForbidden)
-		return
-	}
-
-	// Validate bucket exists and user has access
-	bucket, err := h.bucket.GetBucket(ctx, req.Bucket)
+	bucket, err := h.getBucketWithAccess(ctx, userID, role, req.Bucket)
 	if err != nil {
-		writeError(w, "Bucket not found", http.StatusNotFound)
+		writeError(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	_ = bucket // Used for access validation
+
+	h.normalizePresignExpiration(req)
+
+	accessKey, err := h.getEnabledAccessKey(ctx, userID)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// For non-admin users, verify they own the bucket
-	if role != metadata.RoleSuperAdmin && role != metadata.RoleAdmin {
-		if bucket.Owner != userID {
-			writeError(w, "Access denied to bucket", http.StatusForbidden)
-			return
-		}
-	}
-
-	// Set default expiration (1 hour)
-	if req.Expiration <= 0 {
-		req.Expiration = defaultPresignedExpirySec
-	}
-	// Max 7 days
-	if req.Expiration > maxPresignedExpirySec {
-		req.Expiration = maxPresignedExpirySec
-	}
-
-	// Get user's access key
-	keys, err := h.store.ListAccessKeys(ctx, userID)
-	if err != nil || len(keys) == 0 {
-		writeError(w, "No access keys found for user. Please create an access key first.", http.StatusBadRequest)
-		return
-	}
-
-	// Use the first enabled access key
-	var accessKey *metadata.AccessKey
-
-	for _, k := range keys {
-		if k.Enabled {
-			accessKey = k
-			break
-		}
-	}
-
-	if accessKey == nil {
-		writeError(w, "No enabled access keys found", http.StatusBadRequest)
-		return
-	}
-
-	// Generate the presigned URL
-	generator := auth.NewPresignedURLGenerator("us-east-1", "")
-
-	presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
-		Method:      req.Method,
-		Bucket:      req.Bucket,
-		Key:         req.Key,
-		Expiration:  time.Duration(req.Expiration) * time.Second,
-		AccessKeyID: accessKey.AccessKeyID,
-		SecretKey:   accessKey.SecretAccessKey,
-		Region:      "us-east-1",
-		Headers:     req.Headers,
-	})
+	presignedURL, err := h.generateURL(req, accessKey)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -897,6 +834,108 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *Handler) parsePresignRequest(r *http.Request) (*ConsolePresignRequest, error) {
+	var req ConsolePresignRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return nil, errors.New("Invalid request body")
+	}
+
+	if req.Bucket == "" {
+		return nil, errors.New("Bucket is required")
+	}
+
+	if req.Method == "" {
+		req.Method = "GET"
+	}
+	req.Method = strings.ToUpper(req.Method)
+
+	return &req, nil
+}
+
+func (h *Handler) validatePresignRequest(req *ConsolePresignRequest, role metadata.UserRole) error {
+	validMethods := map[string]bool{"GET": true, "PUT": true, "DELETE": true, "HEAD": true}
+	if !validMethods[req.Method] {
+		return errors.New("Invalid method. Allowed: GET, PUT, DELETE, HEAD")
+	}
+	return nil
+}
+
+func (h *Handler) checkPresignPermissions(
+	ctx context.Context,
+	userID string,
+	role metadata.UserRole,
+	req *ConsolePresignRequest,
+) error {
+	if req.Method == http.MethodPut && role == metadata.RoleReadOnly {
+		return errors.New("Permission denied: read-only user cannot create upload URLs")
+	}
+
+	if req.Method == http.MethodDelete && (role == metadata.RoleReadOnly || role == metadata.RoleUser) {
+		return errors.New("Permission denied: cannot create delete URLs")
+	}
+
+	return nil
+}
+
+func (h *Handler) getBucketWithAccess(
+	ctx context.Context,
+	userID string,
+	role metadata.UserRole,
+	bucketName string,
+) (*metadata.Bucket, error) {
+	bucket, err := h.bucket.GetBucket(ctx, bucketName)
+	if err != nil {
+		return nil, errors.New("Bucket not found")
+	}
+
+	if role != metadata.RoleSuperAdmin && role != metadata.RoleAdmin {
+		if bucket.Owner != userID {
+			return nil, errors.New("Access denied to bucket")
+		}
+	}
+
+	return bucket, nil
+}
+
+func (h *Handler) normalizePresignExpiration(req *ConsolePresignRequest) {
+	if req.Expiration <= 0 {
+		req.Expiration = defaultPresignedExpirySec
+	}
+	if req.Expiration > maxPresignedExpirySec {
+		req.Expiration = maxPresignedExpirySec
+	}
+}
+
+func (h *Handler) getEnabledAccessKey(ctx context.Context, userID string) (*metadata.AccessKey, error) {
+	keys, err := h.store.ListAccessKeys(ctx, userID)
+	if err != nil || len(keys) == 0 {
+		return nil, errors.New("No access keys found for user. Please create an access key first.")
+	}
+
+	for _, k := range keys {
+		if k.Enabled {
+			return k, nil
+		}
+	}
+
+	return nil, errors.New("No enabled access keys found")
+}
+
+func (h *Handler) generateURL(req *ConsolePresignRequest, accessKey *metadata.AccessKey) (string, error) {
+	generator := auth.NewPresignedURLGenerator("us-east-1", "")
+
+	return generator.GeneratePresignedURL(auth.PresignParams{
+		Method:      req.Method,
+		Bucket:      req.Bucket,
+		Key:         req.Key,
+		Expiration:  time.Duration(req.Expiration) * time.Second,
+		AccessKeyID: accessKey.AccessKeyID,
+		SecretKey:   accessKey.SecretAccessKey,
+		Region:      "us-east-1",
+		Headers:     req.Headers,
+	})
 }
 
 // Helper functions
