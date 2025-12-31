@@ -694,52 +694,6 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 	job.Status = MigrationStatusCompleted
 }
 
-// countObjects counts total objects to migrate.
-func (mm *MigrationManager) countObjects(activeJob *activeMigrationJob) error {
-	job := activeJob.job
-
-	for _, bucket := range job.Config.SourceBuckets {
-		marker := ""
-
-		for {
-			select {
-			case <-activeJob.ctx.Done():
-				return activeJob.ctx.Err()
-			default:
-			}
-
-			result, err := activeJob.sourceClient.ListObjects(
-				activeJob.ctx,
-				bucket,
-				job.Config.SourcePrefix,
-				marker,
-				listMaxKeys,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to list objects in %s: %w", bucket, err)
-			}
-
-			for _, obj := range result.Contents {
-				if mm.shouldMigrate(job.Config, &obj) {
-					atomic.AddInt64(&job.Progress.TotalObjects, 1)
-					atomic.AddInt64(&job.Progress.TotalBytes, obj.Size)
-				}
-			}
-
-			if !result.IsTruncated {
-				break
-			}
-
-			marker = result.NextMarker
-			if marker == "" && len(result.Contents) > 0 {
-				marker = result.Contents[len(result.Contents)-1].Key
-			}
-		}
-	}
-
-	return nil
-}
-
 // migrateObjects migrates objects from source to destination.
 func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error {
 	job := activeJob.job
@@ -1118,7 +1072,6 @@ func (mm *MigrationManager) getResumeMarker(job *MigrationJob, sourceBucket stri
 	if job.Resume != nil && job.Resume.LastBucket == sourceBucket {
 		marker = job.Resume.LastKey
 	}
-
 	return marker
 }
 
@@ -1137,7 +1090,6 @@ func (mm *MigrationManager) checkPauseOrCancel(activeJob *activeMigrationJob) er
 		return ErrMigrationCanceled
 	default:
 	}
-
 	return nil
 }
 
@@ -1150,7 +1102,6 @@ func (mm *MigrationManager) listBucketObjects(
 	if err != nil {
 		return nil, fmt.Errorf("failed to list source objects: %w", err)
 	}
-
 	return result, nil
 }
 
@@ -1170,7 +1121,6 @@ func (mm *MigrationManager) processObjectBatch(
 		}
 
 		sem <- struct{}{}
-
 		wg.Add(1)
 
 		go mm.migrateObjectWorker(activeJob, sourceBucket, destBucket, &objects[i], sem, wg, migrationErr, errMu)
@@ -1221,4 +1171,85 @@ func (mm *MigrationManager) updateMigrationProgress(activeJob *activeMigrationJo
 		Int64("objects_migrated", activeJob.job.Progress.MigratedObjects).
 		Int64("bytes_migrated", activeJob.job.Progress.MigratedBytes).
 		Msg("Migration progress updated")
+}
+
+// countBucketObjects counts total objects in a bucket for migration.
+func (mm *MigrationManager) countBucketObjects(activeJob *activeMigrationJob, bucket string) error {
+	job := activeJob.job
+	marker := ""
+
+	for {
+		select {
+		case <-activeJob.ctx.Done():
+			return fmt.Errorf("context canceled: %w", activeJob.ctx.Err())
+		default:
+		}
+
+		result, err := mm.listBucketForCounting(activeJob, bucket, marker)
+		if err != nil {
+			return err
+		}
+
+		mm.accumulateObjectCounts(job, result.Contents)
+
+		if !result.IsTruncated {
+			break
+		}
+
+		marker = mm.getNextMarker(result)
+	}
+
+	return nil
+}
+
+// listBucketForCounting lists objects in a bucket for counting purposes.
+func (mm *MigrationManager) listBucketForCounting(
+	activeJob *activeMigrationJob,
+	bucket, marker string,
+) (*ListBucketResult, error) {
+	result, err := activeJob.sourceClient.ListObjects(
+		activeJob.ctx,
+		bucket,
+		activeJob.job.Config.SourcePrefix,
+		marker,
+		listMaxKeys,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list objects in %s: %w", bucket, err)
+	}
+
+	return result, nil
+}
+
+// accumulateObjectCounts accumulates object counts and sizes.
+func (mm *MigrationManager) accumulateObjectCounts(job *MigrationJob, objects []S3Object) {
+	for i := range objects {
+		if mm.shouldMigrate(job.Config, &objects[i]) {
+			atomic.AddInt64(&job.Progress.TotalObjects, 1)
+			atomic.AddInt64(&job.Progress.TotalBytes, objects[i].Size)
+		}
+	}
+}
+
+// getNextMarker determines the next marker for pagination.
+func (mm *MigrationManager) getNextMarker(result *ListBucketResult) string {
+	marker := result.NextMarker
+	if marker == "" && len(result.Contents) > 0 {
+		marker = result.Contents[len(result.Contents)-1].Key
+	}
+
+	return marker
+}
+
+// countObjects counts total objects to migrate.
+func (mm *MigrationManager) countObjects(activeJob *activeMigrationJob) error {
+	job := activeJob.job
+
+	for _, bucket := range job.Config.SourceBuckets {
+		if err := mm.countBucketObjects(activeJob, bucket); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
