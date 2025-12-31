@@ -911,98 +911,114 @@ func TestPolicyOperations(t *testing.T) {
 	}
 	defer store.Close()
 
-	// Wait for leadership
 	time.Sleep(2 * time.Second)
-
 	ctx := context.Background()
 
 	t.Run("CreatePolicy", func(t *testing.T) {
-		policy := &Policy{
-			Name:      "test-policy",
-			Document:  `{"Version":"2012-10-17","Statement":[]}`,
-			CreatedAt: time.Now(),
-		}
-
-		err := store.CreatePolicy(ctx, policy)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to create policy: %v", err)
-		}
+		testCreatePolicy(t, ctx, store)
 	})
 
 	t.Run("GetPolicy", func(t *testing.T) {
-		policy, err := store.GetPolicy(ctx, "test-policy")
-		if err != nil {
-			t.Errorf("Failed to get policy: %v", err)
-		}
-
-		if policy == nil {
-			t.Fatal("Expected policy, got nil")
-		}
-
-		if policy.Name != "test-policy" {
-			t.Errorf("Expected name 'test-policy', got '%s'", policy.Name)
-		}
+		testGetPolicy(t, ctx, store)
 	})
 
 	t.Run("ListPolicies", func(t *testing.T) {
-		policies, err := store.ListPolicies(ctx)
-		if err != nil {
-			t.Errorf("Failed to list policies: %v", err)
-		}
-
-		if len(policies) == 0 {
-			t.Error("Expected at least one policy")
-		}
+		testListPolicies(t, ctx, store)
 	})
 
 	t.Run("UpdatePolicy", func(t *testing.T) {
-		policy, err := store.GetPolicy(ctx, "test-policy")
-		if err != nil {
-			t.Fatalf("Failed to get policy: %v", err)
-		}
-
-		policy.Document = `{"Version":"2012-10-17","Statement":[{"Effect":"Allow"}]}`
-
-		err = store.UpdatePolicy(ctx, policy)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to update policy: %v", err)
-		}
-
-		// Verify update
-		updatedPolicy, err := store.GetPolicy(ctx, "test-policy")
-		if err != nil {
-			t.Errorf("Failed to get updated policy: %v", err)
-		}
-
-		if !strings.Contains(updatedPolicy.Document, "Allow") {
-			t.Error("Expected updated policy document to contain 'Allow'")
-		}
+		testUpdatePolicy(t, ctx, store)
 	})
 
 	t.Run("DeletePolicy", func(t *testing.T) {
-		err := store.DeletePolicy(ctx, "test-policy")
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to delete policy: %v", err)
-		}
-
-		// Verify deletion
-		_, err = store.GetPolicy(ctx, "test-policy")
-		if err == nil {
-			t.Error("Expected error when getting deleted policy")
-		}
+		testDeletePolicy(t, ctx, store)
 	})
+}
+
+func testCreatePolicy(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	policy := &Policy{
+		Name:      "test-policy",
+		Document:  `{"Version":"2012-10-17","Statement":[]}`,
+		CreatedAt: time.Now(),
+	}
+
+	err := store.CreatePolicy(ctx, policy)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to create policy: %v", err)
+	}
+}
+
+func testGetPolicy(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	policy, err := store.GetPolicy(ctx, "test-policy")
+	if err != nil {
+		t.Errorf("Failed to get policy: %v", err)
+	}
+
+	if policy == nil {
+		t.Fatal("Expected policy, got nil")
+	}
+
+	if policy.Name != "test-policy" {
+		t.Errorf("Expected name 'test-policy', got '%s'", policy.Name)
+	}
+}
+
+func testListPolicies(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	policies, err := store.ListPolicies(ctx)
+	if err != nil {
+		t.Errorf("Failed to list policies: %v", err)
+	}
+
+	if len(policies) == 0 {
+		t.Error("Expected at least one policy")
+	}
+}
+
+func testUpdatePolicy(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	policy, err := store.GetPolicy(ctx, "test-policy")
+	if err != nil {
+		t.Fatalf("Failed to get policy: %v", err)
+	}
+
+	policy.Document = `{"Version":"2012-10-17","Statement":[{"Effect":"Allow"}]}`
+
+	err = store.UpdatePolicy(ctx, policy)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to update policy: %v", err)
+	}
+
+	updatedPolicy, err := store.GetPolicy(ctx, "test-policy")
+	if err != nil {
+		t.Errorf("Failed to get updated policy: %v", err)
+	}
+
+	if !strings.Contains(updatedPolicy.Document, "Allow") {
+		t.Error("Expected updated policy document to contain 'Allow'")
+	}
+}
+
+func testDeletePolicy(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	err := store.DeletePolicy(ctx, "test-policy")
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to delete policy: %v", err)
+	}
+
+	_, err = store.GetPolicy(ctx, "test-policy")
+	if err == nil {
+		t.Error("Expected error when getting deleted policy")
+	}
 }
 
 // TestLeaderElectionHelpers tests leader-related helper functions.
