@@ -247,141 +247,144 @@ func TestStateMachineOperations(t *testing.T) {
 
 // TestStateMachineSnapshot tests snapshot operations.
 func TestStateMachineSnapshot(t *testing.T) {
-	t.Run("SaveAndRecoverSnapshot", func(t *testing.T) {
-		tmpDir := t.TempDir()
+	t.Run("SaveAndRecoverSnapshot", func(t *testing.T) { testSnapshotSaveAndRecover(t) })
+	t.Run("SnapshotStopped", func(t *testing.T) { testSnapshotStopped(t) })
+}
 
-		opts := badger.DefaultOptions(tmpDir)
-		opts.Logger = nil
+func testSnapshotSaveAndRecover(t *testing.T) {
+	tmpDir := t.TempDir()
 
-		db, err := badger.Open(opts)
-		if err != nil {
-			t.Fatalf("Failed to open badger: %v", err)
+	opts := badger.DefaultOptions(tmpDir)
+	opts.Logger = nil
+
+	db, err := badger.Open(opts)
+	if err != nil {
+		t.Fatalf("Failed to open badger: %v", err)
+	}
+	defer db.Close()
+
+	sm := newStateMachine(db)
+	_, err = sm.Open(make(chan struct{}))
+	if err != nil {
+		t.Fatalf("Failed to open state machine: %v", err)
+	}
+
+	// Create some test data
+	testData := map[string]string{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": "value3",
+	}
+
+	err = db.Update(func(txn *badger.Txn) error {
+		for k, v := range testData {
+			err := txn.Set([]byte(k), []byte(v))
+			if err != nil {
+				return err
+			}
 		}
-		defer db.Close()
 
-		sm := newStateMachine(db)
-		_, err = sm.Open(make(chan struct{}))
-		if err != nil {
-			t.Fatalf("Failed to open state machine: %v", err)
-		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test data: %v", err)
+	}
 
-		// Create some test data
-		testData := map[string]string{
-			"key1": "value1",
-			"key2": "value2",
-			"key3": "value3",
-		}
+	// Save snapshot
+	var buf strings.Builder
 
-		err = db.Update(func(txn *badger.Txn) error {
-			for k, v := range testData {
-				err := txn.Set([]byte(k), []byte(v))
-				if err != nil {
-					return err
-				}
+	done := make(chan struct{})
+
+	err = sm.SaveSnapshot(&buf, nil, done)
+	if err != nil {
+		t.Fatalf("Failed to save snapshot: %v", err)
+	}
+
+	// Create a new database for recovery
+	tmpDir2 := t.TempDir()
+	opts2 := badger.DefaultOptions(tmpDir2)
+	opts2.Logger = nil
+
+	db2, err := badger.Open(opts2)
+	if err != nil {
+		t.Fatalf("Failed to open second badger: %v", err)
+	}
+	defer db2.Close()
+
+	sm2 := newStateMachine(db2)
+	_, err = sm2.Open(make(chan struct{}))
+	if err != nil {
+		t.Fatalf("Failed to open second state machine: %v", err)
+	}
+
+	// Recover snapshot
+	reader := strings.NewReader(buf.String())
+	done2 := make(chan struct{})
+
+	err = sm2.RecoverFromSnapshot(reader, nil, done2)
+	if err != nil {
+		t.Fatalf("Failed to recover snapshot: %v", err)
+	}
+
+	// Verify data was recovered
+	err = db2.View(func(txn *badger.Txn) error {
+		for k, expectedV := range testData {
+			item, err := txn.Get([]byte(k))
+			if err != nil {
+				return err
 			}
 
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("Failed to create test data: %v", err)
-		}
+			var actualV string
 
-		// Save snapshot
-		var buf strings.Builder
-
-		done := make(chan struct{})
-
-		err = sm.SaveSnapshot(&buf, nil, done)
-		if err != nil {
-			t.Fatalf("Failed to save snapshot: %v", err)
-		}
-
-		// Create a new database for recovery
-		tmpDir2 := t.TempDir()
-		opts2 := badger.DefaultOptions(tmpDir2)
-		opts2.Logger = nil
-
-		db2, err := badger.Open(opts2)
-		if err != nil {
-			t.Fatalf("Failed to open second badger: %v", err)
-		}
-		defer db2.Close()
-
-		sm2 := newStateMachine(db2)
-		_, err = sm2.Open(make(chan struct{}))
-		if err != nil {
-			t.Fatalf("Failed to open second state machine: %v", err)
-		}
-
-		// Recover snapshot
-		reader := strings.NewReader(buf.String())
-		done2 := make(chan struct{})
-
-		err = sm2.RecoverFromSnapshot(reader, nil, done2)
-		if err != nil {
-			t.Fatalf("Failed to recover snapshot: %v", err)
-		}
-
-		// Verify data was recovered
-		err = db2.View(func(txn *badger.Txn) error {
-			for k, expectedV := range testData {
-				item, err := txn.Get([]byte(k))
-				if err != nil {
-					return err
-				}
-
-				var actualV string
-
-				err = item.Value(func(val []byte) error {
-					actualV = string(val)
-					return nil
-				})
-				if err != nil {
-					return err
-				}
-
-				if actualV != expectedV {
-					t.Errorf("Expected value %s for key %s, got %s", expectedV, k, actualV)
-				}
+			err = item.Value(func(val []byte) error {
+				actualV = string(val)
+				return nil
+			})
+			if err != nil {
+				return err
 			}
 
-			return nil
-		})
-		if err != nil {
-			t.Errorf("Failed to verify recovered data: %v", err)
+			if actualV != expectedV {
+				t.Errorf("Expected value %s for key %s, got %s", expectedV, k, actualV)
+			}
 		}
+
+		return nil
 	})
+	if err != nil {
+		t.Errorf("Failed to verify recovered data: %v", err)
+	}
+}
 
-	t.Run("SnapshotStopped", func(t *testing.T) {
-		tmpDir := t.TempDir()
+func testSnapshotStopped(t *testing.T) {
+	tmpDir := t.TempDir()
 
-		opts := badger.DefaultOptions(tmpDir)
-		opts.Logger = nil
+	opts := badger.DefaultOptions(tmpDir)
+	opts.Logger = nil
 
-		db, err := badger.Open(opts)
-		if err != nil {
-			t.Fatalf("Failed to open badger: %v", err)
-		}
-		defer db.Close()
+	db, err := badger.Open(opts)
+	if err != nil {
+		t.Fatalf("Failed to open badger: %v", err)
+	}
+	defer db.Close()
 
-		sm := newStateMachine(db)
-		_, err = sm.Open(make(chan struct{}))
-		if err != nil {
-			t.Fatalf("Failed to open state machine: %v", err)
-		}
+	sm := newStateMachine(db)
+	_, err = sm.Open(make(chan struct{}))
+	if err != nil {
+		t.Fatalf("Failed to open state machine: %v", err)
+	}
 
-		// Create a closed channel to simulate stop
-		done := make(chan struct{})
-		close(done)
+	// Create a closed channel to simulate stop
+	done := make(chan struct{})
+	close(done)
 
-		var buf strings.Builder
+	var buf strings.Builder
 
-		err = sm.SaveSnapshot(&buf, nil, done)
-		// Should not error when stopped immediately
-		if err != nil && err != statemachine.ErrSnapshotStopped {
-			t.Errorf("Expected ErrSnapshotStopped or nil, got: %v", err)
-		}
-	})
+	err = sm.SaveSnapshot(&buf, nil, done)
+	// Should not error when stopped immediately
+	if err != nil && err != statemachine.ErrSnapshotStopped {
+		t.Errorf("Expected ErrSnapshotStopped or nil, got: %v", err)
+	}
 }
 
 // TestBucketOperations tests bucket CRUD operations.
