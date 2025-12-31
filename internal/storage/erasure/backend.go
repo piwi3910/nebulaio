@@ -261,96 +261,116 @@ func (b *Backend) deleteObjectMetadata(bucket, key string) error {
 
 // PutObject stores an object with erasure coding.
 func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
-	// Check for context cancellation before starting expensive operation
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+	if err := b.checkContext(ctx); err != nil {
+		return nil, err
 	}
 
-	// Encode the data
 	encoded, err := b.encoder.Encode(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode object: %w", err)
 	}
 
-	// Check for context cancellation after encoding
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+	if err := b.checkContext(ctx); err != nil {
+		return nil, err
 	}
 
-	// Get node assignments for shards
+	nodes := b.getNodeAssignments()
+	assignments, err := b.placement.PlaceShards(fmt.Sprintf("%s/%s", bucket, key), len(encoded.Shards), nodes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to place shards: %w", err)
+	}
+
+	results, err := b.storeShardsParallel(ctx, bucket, key, encoded.Shards, assignments)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := b.storeObjectMetadata(bucket, key, encoded); err != nil {
+		log.Warn().
+			Err(err).
+			Str("bucket", bucket).
+			Str("key", key).
+			Msg("Failed to write object metadata (shards stored successfully)")
+	}
+
+	_ = results // silence unused warning if cleanup logic removed
+
+	return &backend.PutResult{
+		ETag: encoded.OriginalChecksum,
+		Size: encoded.OriginalSize,
+		Path: fmt.Sprintf("erasure:%s/%s", bucket, key),
+	}, nil
+}
+
+func (b *Backend) checkContext(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
+func (b *Backend) getNodeAssignments() []NodeInfo {
 	b.mu.RLock()
 	nodes := b.nodes
 	b.mu.RUnlock()
 
-	// For single-node mode, store all shards locally
 	if len(nodes) == 0 {
-		nodes = []NodeInfo{{
+		return []NodeInfo{{
 			ID:      b.localNodeID,
 			Status:  "alive",
 			Address: "localhost",
 		}}
 	}
 
-	assignments, err := b.placement.PlaceShards(fmt.Sprintf("%s/%s", bucket, key), len(encoded.Shards), nodes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to place shards: %w", err)
-	}
+	return nodes
+}
 
-	// Store shards concurrently
-	// Use a struct to track results for proper cleanup on failure
-	type shardResult struct {
-		err   error
-		path  string
-		index int
-	}
+type shardResult struct {
+	err   error
+	path  string
+	index int
+}
 
+func (b *Backend) storeShardsParallel(ctx context.Context, bucket, key string, shards [][]byte, assignments []NodeAssignment) ([]shardResult, error) {
 	var wg sync.WaitGroup
-
-	results := make([]shardResult, len(encoded.Shards))
-
+	results := make([]shardResult, len(shards))
 	var resultsMu sync.Mutex
 
-	for i, shard := range encoded.Shards {
+	for i, shard := range shards {
 		wg.Add(1)
-
 		go func(index int, data []byte, assignment NodeAssignment) {
 			defer wg.Done()
-
-			// Check for context cancellation before writing
-			select {
-			case <-ctx.Done():
-				resultsMu.Lock()
-
-				results[index] = shardResult{index: index, err: ctx.Err()}
-
-				resultsMu.Unlock()
-
-				return
-			default:
-			}
-
-			// For now, all shards go to local node (distributed mode would send to remote nodes)
-			path, writeErr := b.shardManager.WriteShard(ctx, bucket, key, index, data)
-
-			resultsMu.Lock()
-
-			if writeErr != nil {
-				results[index] = shardResult{index: index, err: fmt.Errorf("failed to write shard %d: %w", index, writeErr)}
-			} else {
-				results[index] = shardResult{index: index, path: path}
-			}
-
-			resultsMu.Unlock()
+			b.storeShardWithResult(ctx, bucket, key, index, data, &results[index], &resultsMu)
 		}(i, shard, assignments[i])
 	}
 
 	wg.Wait()
 
-	// Count errors and collect successful paths for potential cleanup
+	return b.validateShardResults(ctx, results)
+}
+
+func (b *Backend) storeShardWithResult(ctx context.Context, bucket, key string, index int, data []byte, result *shardResult, mu *sync.Mutex) {
+	if err := b.checkContext(ctx); err != nil {
+		mu.Lock()
+		*result = shardResult{index: index, err: err}
+		mu.Unlock()
+		return
+	}
+
+	path, writeErr := b.shardManager.WriteShard(ctx, bucket, key, index, data)
+
+	mu.Lock()
+	if writeErr != nil {
+		*result = shardResult{index: index, err: fmt.Errorf("failed to write shard %d: %w", index, writeErr)}
+	} else {
+		*result = shardResult{index: index, path: path}
+	}
+	mu.Unlock()
+}
+
+func (b *Backend) validateShardResults(ctx context.Context, results []shardResult) ([]shardResult, error) {
 	var (
 		errs         []error
 		successPaths []string
@@ -364,37 +384,28 @@ func (b *Backend) PutObject(ctx context.Context, bucket, key string, reader io.R
 		}
 	}
 
-	// Allow some shard failures (up to parityShards)
 	if len(errs) > b.config.ParityShards {
-		// Clean up written shards on failure
-		for _, path := range successPaths {
-			_ = b.shardManager.DeleteShardByPath(ctx, path)
-		}
-
+		b.cleanupShards(ctx, successPaths)
 		return nil, fmt.Errorf("too many shard write failures (%d): %v", len(errs), errs[0])
 	}
 
-	// Store object metadata for later retrieval
+	return results, nil
+}
+
+func (b *Backend) cleanupShards(ctx context.Context, paths []string) {
+	for _, path := range paths {
+		_ = b.shardManager.DeleteShardByPath(ctx, path)
+	}
+}
+
+func (b *Backend) storeObjectMetadata(bucket, key string, encoded *EncodedData) error {
 	objMeta := &objectMetadata{
 		OriginalSize:     encoded.OriginalSize,
 		OriginalChecksum: encoded.OriginalChecksum,
 		DataShards:       b.config.DataShards,
 		ParityShards:     b.config.ParityShards,
 	}
-	err = b.writeObjectMetadata(bucket, key, objMeta)
-	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("bucket", bucket).
-			Str("key", key).
-			Msg("Failed to write object metadata (shards stored successfully)")
-	}
-
-	return &backend.PutResult{
-		ETag: encoded.OriginalChecksum,
-		Size: encoded.OriginalSize,
-		Path: fmt.Sprintf("erasure:%s/%s", bucket, key),
-	}, nil
+	return b.writeObjectMetadata(bucket, key, objMeta)
 }
 
 // GetObject retrieves an object using erasure coding.
