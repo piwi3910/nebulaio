@@ -132,6 +132,13 @@ type PutObjectResult struct {
 	VersionID string
 }
 
+// partResult represents the result of copying a single part.
+type partResult struct {
+	err        error
+	result     *CopyPartResult
+	partNumber int
+}
+
 // ObjectMetadata contains object metadata.
 type ObjectMetadata struct {
 	LastModified              time.Time
@@ -366,21 +373,55 @@ func (m *MultipartCopyManager) simpleCopy(ctx context.Context, opts *MultipartCo
 
 // multipartCopy performs a multipart copy for large objects.
 func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *MultipartCopyOptions, sourceMetadata *ObjectMetadata) (*CopyObjectResult, error) {
-	// Create cancellable context
 	ctx, cancel := context.WithCancel(ctx)
 	copyID := uuid.New().String()
 
+	m.registerActiveCopy(copyID, cancel)
+	defer m.unregisterActiveCopy(copyID)
+
+	partSize := m.determinePartSize(opts, sourceMetadata.Size)
+	numParts := (sourceMetadata.Size + partSize - 1) / partSize
+
+	metadata, contentType := m.determineMetadata(opts, sourceMetadata)
+
+	upload, err := m.initiateMultipartUpload(ctx, opts, metadata, contentType)
+	if err != nil {
+		return nil, err
+	}
+
+	completedParts, copyErr := m.copyPartsParallel(ctx, cancel, opts, sourceMetadata, upload.UploadID, partSize, numParts)
+	if copyErr != nil {
+		_ = m.storage.AbortMultipartUpload(context.Background(), opts.DestBucket, opts.DestKey, upload.UploadID)
+		return nil, fmt.Errorf("multipart copy failed: %w", copyErr)
+	}
+
+	sortParts(completedParts)
+
+	completeResult, err := m.storage.CompleteMultipartUpload(ctx, opts.DestBucket, opts.DestKey, upload.UploadID, completedParts)
+	if err != nil {
+		_ = m.storage.AbortMultipartUpload(context.Background(), opts.DestBucket, opts.DestKey, upload.UploadID)
+		return nil, fmt.Errorf("failed to complete multipart upload: %w", err)
+	}
+
+	return &CopyObjectResult{
+		ETag:         completeResult.ETag,
+		LastModified: time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func (m *MultipartCopyManager) registerActiveCopy(copyID string, cancel context.CancelFunc) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.activeCopies[copyID] = cancel
-	m.mu.Unlock()
+}
 
-	defer func() {
-		m.mu.Lock()
-		delete(m.activeCopies, copyID)
-		m.mu.Unlock()
-	}()
+func (m *MultipartCopyManager) unregisterActiveCopy(copyID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.activeCopies, copyID)
+}
 
-	// Determine part size
+func (m *MultipartCopyManager) determinePartSize(opts *MultipartCopyOptions, sourceSize int64) int64 {
 	partSize := opts.PartSize
 	if partSize == 0 {
 		partSize = DefaultPartSize
@@ -394,15 +435,15 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 		partSize = MaxPartSize
 	}
 
-	// Calculate number of parts
-	numParts := (sourceMetadata.Size + partSize - 1) / partSize
+	numParts := (sourceSize + partSize - 1) / partSize
 	if numParts > MaxParts {
-		// Increase part size to fit within MaxParts
-		partSize = (sourceMetadata.Size + MaxParts - 1) / MaxParts
-		numParts = (sourceMetadata.Size + partSize - 1) / partSize
+		partSize = (sourceSize + MaxParts - 1) / MaxParts
 	}
 
-	// Determine metadata
+	return partSize
+}
+
+func (m *MultipartCopyManager) determineMetadata(opts *MultipartCopyOptions, sourceMetadata *ObjectMetadata) (map[string]string, string) {
 	metadata := sourceMetadata.Metadata
 	contentType := sourceMetadata.ContentType
 
@@ -413,7 +454,10 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 		}
 	}
 
-	// Initiate multipart upload
+	return metadata, contentType
+}
+
+func (m *MultipartCopyManager) initiateMultipartUpload(ctx context.Context, opts *MultipartCopyOptions, metadata map[string]string, contentType string) (*MultipartUpload, error) {
 	mpOpts := &MultipartUploadOptions{
 		ContentType:  contentType,
 		Metadata:     metadata,
@@ -429,97 +473,86 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 		return nil, fmt.Errorf("failed to create multipart upload: %w", err)
 	}
 
-	// Channel for part results
-	type partResult struct {
-		err        error
-		result     *CopyPartResult
-		partNumber int
-	}
+	return upload, nil
+}
 
+func (m *MultipartCopyManager) copyPartsParallel(ctx context.Context, cancel context.CancelFunc, opts *MultipartCopyOptions, sourceMetadata *ObjectMetadata, uploadID string, partSize, numParts int64) ([]CompletedPart, error) {
 	results := make(chan partResult, numParts)
-
-	// Semaphore for concurrency control
 	maxConcurrency := opts.MaxConcurrency
 	if maxConcurrency <= 0 {
 		maxConcurrency = 10
 	}
 
 	sem := make(chan struct{}, maxConcurrency)
-
-	// Copy parts concurrently
 	var wg sync.WaitGroup
+
 	for i := range numParts {
 		wg.Add(1)
-
-		go func(partNum int64) {
-			defer wg.Done()
-
-			// Acquire semaphore
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				results <- partResult{partNumber: int(partNum + 1), err: ctx.Err()}
-				return
-			}
-
-			defer func() { <-sem }()
-
-			// Calculate byte range
-			start := partNum * partSize
-
-			end := start + partSize - 1
-			if end >= sourceMetadata.Size {
-				end = sourceMetadata.Size - 1
-			}
-
-			// Create copy source range
-			copyRange := fmt.Sprintf("bytes=%d-%d", start, end)
-
-			// Copy part
-			params := &UploadPartCopyParams{
-				DestBucket:                     opts.DestBucket,
-				DestKey:                        opts.DestKey,
-				UploadID:                       upload.UploadID,
-				PartNumber:                     int(partNum + 1),
-				SourceBucket:                   opts.SourceBucket,
-				SourceKey:                      opts.SourceKey,
-				SourceVersionID:                opts.SourceVersionID,
-				CopySourceRange:                copyRange,
-				SSECustomerAlgorithm:           opts.SSECustomerAlgorithm,
-				SSECustomerKey:                 opts.SSECustomerKey,
-				CopySourceSSECustomerAlgorithm: opts.CopySourceSSECustomerAlgorithm,
-				CopySourceSSECustomerKey:       opts.CopySourceSSECustomerKey,
-			}
-
-			result, err := m.storage.UploadPartCopy(ctx, params)
-			if err != nil {
-				results <- partResult{partNumber: int(partNum + 1), err: err}
-				return
-			}
-
-			results <- partResult{partNumber: int(partNum + 1), result: result}
-		}(i)
+		go m.copyPartWorker(ctx, &wg, sem, results, opts, sourceMetadata, uploadID, partSize, i)
 	}
 
-	// Wait for all parts and close results channel
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
-	// Collect results
-	completedParts := make([]CompletedPart, 0, numParts)
+	return m.collectPartResults(results, cancel)
+}
 
+func (m *MultipartCopyManager) copyPartWorker(ctx context.Context, wg *sync.WaitGroup, sem chan struct{}, results chan<- partResult, opts *MultipartCopyOptions, sourceMetadata *ObjectMetadata, uploadID string, partSize, partNum int64) {
+	defer wg.Done()
+
+	select {
+	case sem <- struct{}{}:
+	case <-ctx.Done():
+		results <- partResult{partNumber: int(partNum + 1), err: ctx.Err()}
+		return
+	}
+
+	defer func() { <-sem }()
+
+	start := partNum * partSize
+	end := start + partSize - 1
+	if end >= sourceMetadata.Size {
+		end = sourceMetadata.Size - 1
+	}
+
+	copyRange := fmt.Sprintf("bytes=%d-%d", start, end)
+
+	params := &UploadPartCopyParams{
+		DestBucket:                     opts.DestBucket,
+		DestKey:                        opts.DestKey,
+		UploadID:                       uploadID,
+		PartNumber:                     int(partNum + 1),
+		SourceBucket:                   opts.SourceBucket,
+		SourceKey:                      opts.SourceKey,
+		SourceVersionID:                opts.SourceVersionID,
+		CopySourceRange:                copyRange,
+		SSECustomerAlgorithm:           opts.SSECustomerAlgorithm,
+		SSECustomerKey:                 opts.SSECustomerKey,
+		CopySourceSSECustomerAlgorithm: opts.CopySourceSSECustomerAlgorithm,
+		CopySourceSSECustomerKey:       opts.CopySourceSSECustomerKey,
+	}
+
+	result, err := m.storage.UploadPartCopy(ctx, params)
+	if err != nil {
+		results <- partResult{partNumber: int(partNum + 1), err: err}
+		return
+	}
+
+	results <- partResult{partNumber: int(partNum + 1), result: result}
+}
+
+func (m *MultipartCopyManager) collectPartResults(results <-chan partResult, cancel context.CancelFunc) ([]CompletedPart, error) {
+	var completedParts []CompletedPart
 	var copyErr error
 
 	for result := range results {
 		if result.err != nil {
 			if copyErr == nil {
 				copyErr = result.err
-
-				cancel() // Cancel remaining parts
+				cancel()
 			}
-
 			continue
 		}
 
@@ -529,28 +562,7 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 		})
 	}
 
-	// Handle errors
-	if copyErr != nil {
-		// Abort multipart upload
-		_ = m.storage.AbortMultipartUpload(context.Background(), opts.DestBucket, opts.DestKey, upload.UploadID)
-		return nil, fmt.Errorf("multipart copy failed: %w", copyErr)
-	}
-
-	// Sort parts by part number
-	sortParts(completedParts)
-
-	// Complete multipart upload
-	completeResult, err := m.storage.CompleteMultipartUpload(ctx, opts.DestBucket, opts.DestKey, upload.UploadID, completedParts)
-	if err != nil {
-		// Abort multipart upload
-		_ = m.storage.AbortMultipartUpload(context.Background(), opts.DestBucket, opts.DestKey, upload.UploadID)
-		return nil, fmt.Errorf("failed to complete multipart upload: %w", err)
-	}
-
-	return &CopyObjectResult{
-		ETag:         completeResult.ETag,
-		LastModified: time.Now().UTC().Format(time.RFC3339),
-	}, nil
+	return completedParts, copyErr
 }
 
 // sortParts sorts completed parts by part number.
