@@ -669,30 +669,53 @@ func (s *CatalogService) matchesFilter(obj ObjectInfo, filter *InventoryFilter) 
 		return true
 	}
 
+	return s.matchesPrefixFilter(obj, filter) &&
+		s.matchesSizeFilter(obj, filter) &&
+		s.matchesTimeFilter(obj, filter) &&
+		s.matchesStorageClassFilter(obj, filter) &&
+		s.matchesTagsFilter(obj, filter)
+}
+
+// matchesPrefixFilter checks if object matches prefix filter.
+func (s *CatalogService) matchesPrefixFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if filter.Prefix != "" && !hasPrefix(obj.Key, filter.Prefix) {
 		return false
 	}
+	return true
+}
 
+// matchesSizeFilter checks if object matches size filter.
+func (s *CatalogService) matchesSizeFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if filter.MinSize != nil && obj.Size < *filter.MinSize {
 		return false
 	}
-
 	if filter.MaxSize != nil && obj.Size > *filter.MaxSize {
 		return false
 	}
+	return true
+}
 
+// matchesTimeFilter checks if object matches time filter.
+func (s *CatalogService) matchesTimeFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if filter.CreatedAfter != nil && obj.LastModified.Before(*filter.CreatedAfter) {
 		return false
 	}
-
 	if filter.CreatedBefore != nil && obj.LastModified.After(*filter.CreatedBefore) {
 		return false
 	}
+	return true
+}
 
+// matchesStorageClassFilter checks if object matches storage class filter.
+func (s *CatalogService) matchesStorageClassFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if filter.StorageClass != "" && obj.StorageClass != filter.StorageClass {
 		return false
 	}
+	return true
+}
 
+// matchesTagsFilter checks if object matches all required tags.
+func (s *CatalogService) matchesTagsFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if len(filter.Tags) > 0 {
 		for k, v := range filter.Tags {
 			if obj.Tags[k] != v {
@@ -700,7 +723,6 @@ func (s *CatalogService) matchesFilter(obj ObjectInfo, filter *InventoryFilter) 
 			}
 		}
 	}
-
 	return true
 }
 
