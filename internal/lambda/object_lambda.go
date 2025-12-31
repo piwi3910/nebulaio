@@ -1219,110 +1219,8 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 	pr, pw := io.Pipe()
 	maxSize := GetMaxDecompressSize()
 
-	switch algorithm {
-	case compressionAlgGzip:
-		go func() {
-			defer func() { _ = pw.Close() }()
-
-			reader, err := gzip.NewReader(input)
-			if err != nil {
-				pw.CloseWithError(fmt.Errorf("failed to create gzip reader: %w", err))
-				return
-			}
-
-			defer func() { _ = reader.Close() }()
-
-			buf := make([]byte, 32*1024) // 32KB buffer for streaming
-			var totalWritten int64
-
-			for {
-				select {
-				case <-ctx.Done():
-					pw.CloseWithError(ctx.Err())
-					return
-				default:
-				}
-
-				n, err := reader.Read(buf)
-				if n > 0 {
-					// Check decompression bomb protection before writing
-					if totalWritten+int64(n) > maxSize {
-						pw.CloseWithError(fmt.Errorf("%w: limit is %d bytes", ErrDecompressSizeLimitExceeded, maxSize))
-						return
-					}
-
-					_, werr := pw.Write(buf[:n])
-					if werr != nil {
-						pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", werr))
-						return
-					}
-
-					totalWritten += int64(n)
-				}
-
-				if err == io.EOF {
-					break
-				}
-
-				if err != nil {
-					pw.CloseWithError(fmt.Errorf("failed to decompress gzip data: %w", err))
-					return
-				}
-			}
-		}()
-
-	case compressionAlgZstd:
-		go func() {
-			defer func() { _ = pw.Close() }()
-
-			decoder, err := zstd.NewReader(input)
-			if err != nil {
-				pw.CloseWithError(fmt.Errorf("failed to create zstd decoder: %w", err))
-				return
-			}
-			defer decoder.Close()
-
-			buf := make([]byte, 32*1024) // 32KB buffer for streaming
-			var totalWritten int64
-
-			for {
-				select {
-				case <-ctx.Done():
-					pw.CloseWithError(ctx.Err())
-					return
-				default:
-				}
-
-				n, err := decoder.Read(buf)
-				if n > 0 {
-					// Check decompression bomb protection before writing
-					if totalWritten+int64(n) > maxSize {
-						pw.CloseWithError(fmt.Errorf("%w: limit is %d bytes", ErrDecompressSizeLimitExceeded, maxSize))
-						return
-					}
-
-					_, werr := pw.Write(buf[:n])
-					if werr != nil {
-						pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", werr))
-						return
-					}
-
-					totalWritten += int64(n)
-				}
-
-				if err == io.EOF {
-					break
-				}
-
-				if err != nil {
-					pw.CloseWithError(fmt.Errorf("failed to decompress zstd data: %w", err))
-					return
-				}
-			}
-		}()
-
-	default:
-		return nil, nil, fmt.Errorf("unsupported decompression algorithm for streaming: %s", algorithm)
+	if err := t.startDecompressionStream(ctx, input, pw, algorithm, maxSize); err != nil {
+		return nil, nil, err
 	}
 
 	log.Debug().
@@ -1331,6 +1229,101 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 		Msg("Started streaming decompression with size limit")
 
 	return pr, nil, nil
+}
+
+// startDecompressionStream starts a goroutine to decompress input stream.
+func (t *DecompressTransformer) startDecompressionStream(ctx context.Context, input io.Reader, pw *io.PipeWriter, algorithm string, maxSize int64) error {
+	switch algorithm {
+	case compressionAlgGzip:
+		t.streamGzipDecompression(ctx, input, pw, maxSize)
+		return nil
+	case compressionAlgZstd:
+		t.streamZstdDecompression(ctx, input, pw, maxSize)
+		return nil
+	default:
+		return fmt.Errorf("unsupported decompression algorithm for streaming: %s", algorithm)
+	}
+}
+
+// streamGzipDecompression decompresses gzip stream.
+func (t *DecompressTransformer) streamGzipDecompression(ctx context.Context, input io.Reader, pw *io.PipeWriter, maxSize int64) {
+	go func() {
+		defer func() { _ = pw.Close() }()
+
+		reader, err := gzip.NewReader(input)
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to create gzip reader: %w", err))
+			return
+		}
+		defer func() { _ = reader.Close() }()
+
+		t.streamDecompress(ctx, reader, pw, maxSize, "gzip")
+	}()
+}
+
+// streamZstdDecompression decompresses zstd stream.
+func (t *DecompressTransformer) streamZstdDecompression(ctx context.Context, input io.Reader, pw *io.PipeWriter, maxSize int64) {
+	go func() {
+		defer func() { _ = pw.Close() }()
+
+		decoder, err := zstd.NewReader(input)
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to create zstd decoder: %w", err))
+			return
+		}
+		defer decoder.Close()
+
+		t.streamDecompress(ctx, decoder, pw, maxSize, "zstd")
+	}()
+}
+
+// streamDecompress performs the actual streaming decompression with size limits.
+func (t *DecompressTransformer) streamDecompress(ctx context.Context, reader io.Reader, pw *io.PipeWriter, maxSize int64, algorithm string) {
+	buf := make([]byte, 32*1024) // 32KB buffer for streaming
+	var totalWritten int64
+
+	for {
+		select {
+		case <-ctx.Done():
+			pw.CloseWithError(ctx.Err())
+			return
+		default:
+		}
+
+		n, err := reader.Read(buf)
+		if n > 0 {
+			if err := t.writeDecompressedData(pw, buf[:n], &totalWritten, maxSize); err != nil {
+				return
+			}
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to decompress %s data: %w", algorithm, err))
+			return
+		}
+	}
+}
+
+// writeDecompressedData writes decompressed data with size limit checking.
+func (t *DecompressTransformer) writeDecompressedData(pw *io.PipeWriter, data []byte, totalWritten *int64, maxSize int64) error {
+	// Check decompression bomb protection before writing
+	if *totalWritten+int64(len(data)) > maxSize {
+		pw.CloseWithError(fmt.Errorf("%w: limit is %d bytes", ErrDecompressSizeLimitExceeded, maxSize))
+		return ErrDecompressSizeLimitExceeded
+	}
+
+	_, err := pw.Write(data)
+	if err != nil {
+		pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", err))
+		return err
+	}
+
+	*totalWritten += int64(len(data))
+	return nil
 }
 
 // GetAccessPointForBucketConfiguration implements S3 API.

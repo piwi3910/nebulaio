@@ -734,94 +734,132 @@ func parseColumns(columnsStr string) ([]Column, error) {
 func parseWhereClause(where string) (*Condition, error) {
 	where = strings.TrimSpace(where)
 
-	// Handle AND/OR
+	// Try parsing as compound condition (AND/OR)
+	if cond, err := parseCompoundCondition(where); err == nil {
+		return cond, nil
+	}
+
+	// Parse as simple condition
+	return parseSimpleCondition(where)
+}
+
+// parseCompoundCondition parses AND/OR compound conditions.
+func parseCompoundCondition(where string) (*Condition, error) {
 	andRegex := regexp.MustCompile(`(?i)\s+and\s+`)
 	orRegex := regexp.MustCompile(`(?i)\s+or\s+`)
 
-	if andParts := andRegex.Split(where, 2); len(andParts) == 2 {
-		left, err := parseWhereClause(andParts[0])
-		if err != nil {
-			return nil, err
-		}
+	if cond, err := parseBinaryCondition(where, andRegex, true); err == nil {
+		return cond, nil
+	}
 
-		right, err := parseWhereClause(andParts[1])
-		if err != nil {
-			return nil, err
-		}
+	if cond, err := parseBinaryCondition(where, orRegex, false); err == nil {
+		return cond, nil
+	}
 
+	return nil, fmt.Errorf("not a compound condition")
+}
+
+// parseBinaryCondition parses a binary condition (AND or OR).
+func parseBinaryCondition(where string, regex *regexp.Regexp, isAnd bool) (*Condition, error) {
+	parts := regex.Split(where, 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("not a binary condition")
+	}
+
+	left, err := parseWhereClause(parts[0])
+	if err != nil {
+		return nil, err
+	}
+
+	right, err := parseWhereClause(parts[1])
+	if err != nil {
+		return nil, err
+	}
+
+	if isAnd {
 		left.And = right
-
-		return left, nil
-	}
-
-	if orParts := orRegex.Split(where, 2); len(orParts) == 2 {
-		left, err := parseWhereClause(orParts[0])
-		if err != nil {
-			return nil, err
-		}
-
-		right, err := parseWhereClause(orParts[1])
-		if err != nil {
-			return nil, err
-		}
-
+	} else {
 		left.Or = right
-
-		return left, nil
 	}
 
-	// Parse simple condition
+	return left, nil
+}
+
+// parseSimpleCondition parses a simple comparison condition.
+func parseSimpleCondition(where string) (*Condition, error) {
 	operators := []string{">=", "<=", "!=", "<>", "=", ">", "<", " LIKE ", " like ", " IS NULL", " is null", " IS NOT NULL", " is not null"}
+
 	for _, op := range operators {
-		if strings.Contains(where, op) {
-			parts := strings.SplitN(where, op, 2)
-			if len(parts) == 2 {
-				left := strings.TrimSpace(parts[0])
-				right := strings.TrimSpace(parts[1])
-
-				// Remove alias prefix
-				if strings.Contains(left, ".") {
-					leftParts := strings.SplitN(left, ".", 2)
-					if len(leftParts) == 2 {
-						left = leftParts[1]
-					}
-				}
-
-				// Parse right value
-				var rightVal interface{}
-
-				rightLower := strings.ToLower(right)
-				switch {
-				case strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(op), "null"):
-					rightVal = nil
-				case strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'"):
-					rightVal = right[1 : len(right)-1]
-				case strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\""):
-					rightVal = right[1 : len(right)-1]
-				default:
-					f, floatErr := strconv.ParseFloat(right, 64)
-					if floatErr == nil {
-						rightVal = f
-					} else {
-						b, boolErr := strconv.ParseBool(right)
-						if boolErr == nil {
-							rightVal = b
-						} else {
-							rightVal = right
-						}
-					}
-				}
-
-				return &Condition{
-					Left:     left,
-					Operator: strings.TrimSpace(op),
-					Right:    rightVal,
-				}, nil
-			}
+		if cond, err := tryParseOperator(where, op); err == nil {
+			return cond, nil
 		}
 	}
 
 	return nil, fmt.Errorf("failed to parse WHERE clause: %s", where)
+}
+
+// tryParseOperator tries to parse condition with a specific operator.
+func tryParseOperator(where, op string) (*Condition, error) {
+	if !strings.Contains(where, op) {
+		return nil, fmt.Errorf("operator not found")
+	}
+
+	parts := strings.SplitN(where, op, 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid operator split")
+	}
+
+	left := removeAliasPrefix(strings.TrimSpace(parts[0]))
+	rightVal := parseRightValue(strings.TrimSpace(parts[1]), op)
+
+	return &Condition{
+		Left:     left,
+		Operator: strings.TrimSpace(op),
+		Right:    rightVal,
+	}, nil
+}
+
+// removeAliasPrefix removes table alias prefix from column name.
+func removeAliasPrefix(column string) string {
+	if strings.Contains(column, ".") {
+		parts := strings.SplitN(column, ".", 2)
+		if len(parts) == 2 {
+			return parts[1]
+		}
+	}
+	return column
+}
+
+// parseRightValue parses the right-hand value of a condition.
+func parseRightValue(right, op string) interface{} {
+	rightLower := strings.ToLower(right)
+
+	// Check for NULL
+	if strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(op), "null") {
+		return nil
+	}
+
+	// Check for quoted strings
+	if strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'") {
+		return right[1 : len(right)-1]
+	}
+
+	if strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\"") {
+		return right[1 : len(right)-1]
+	}
+
+	// Try parsing as number
+	if f, err := strconv.ParseFloat(right, 64); err == nil {
+		return f
+	}
+
+	// Try parsing as boolean
+	if b, err := strconv.ParseBool(right); err == nil {
+		return b
+	}
+
+	// Default to string
+	return right
 }
 
 // evaluateCondition evaluates a condition against a record.
