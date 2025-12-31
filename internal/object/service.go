@@ -1110,7 +1110,6 @@ func sortParts(parts []metadata.UploadPart) {
 
 // DeleteObjects deletes multiple objects in a batch.
 func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []DeleteObjectInput, quiet bool) (*DeleteObjectsResult, error) {
-	// Verify bucket exists
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
 	if err != nil {
 		return nil, fmt.Errorf("bucket not found: %w", err)
@@ -1121,95 +1120,110 @@ func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []De
 		Errors:  make([]DeleteError, 0),
 	}
 
-	// Note: We use bucketInfo for versioning check via versioningPkg.IsVersioningEnabled
-	// The explicit GetVersioning call is not needed here since we already have bucketInfo
-	_ = bucketInfo // Already checked versioning status via bucketInfo above
-
 	for _, obj := range objects {
-		// Validate key
-		if obj.Key == "" {
-			result.Errors = append(result.Errors, DeleteError{
-				Key:       obj.Key,
-				VersionID: obj.VersionID,
-				Code:      "InvalidArgument",
-				Message:   "Object key cannot be empty",
-			})
-
-			continue
-		}
-
-		// Handle version-specific delete
-		if obj.VersionID != "" {
-			deleted, err := s.deleteSpecificVersion(ctx, bucket, obj.Key, obj.VersionID)
-			if err != nil {
-				result.Errors = append(result.Errors, DeleteError{
-					Key:       obj.Key,
-					VersionID: obj.VersionID,
-					Code:      getErrorCode(err),
-					Message:   err.Error(),
-				})
-			} else {
-				result.Deleted = append(result.Deleted, *deleted)
-			}
-
-			continue
-		}
-
-		// Handle non-versioned or create delete marker
-		if versioningPkg.IsVersioningEnabled(bucketInfo) {
-			// Create a delete marker
-			deleteMarkerVersionID := s.versionService.GenerateVersionID()
-
-			meta := &metadata.ObjectMeta{
-				Bucket:       bucket,
-				Key:          obj.Key,
-				VersionID:    deleteMarkerVersionID,
-				IsLatest:     true,
-				DeleteMarker: true,
-				Owner:        bucketInfo.Owner,
-				ModifiedAt:   time.Now(),
-			}
-
-			err := s.store.PutObjectMetaVersioned(ctx, meta, true)
-			if err != nil {
-				result.Errors = append(result.Errors, DeleteError{
-					Key:     obj.Key,
-					Code:    "InternalError",
-					Message: err.Error(),
-				})
-			} else {
-				result.Deleted = append(result.Deleted, DeletedObject{
-					Key:                   obj.Key,
-					DeleteMarker:          true,
-					DeleteMarkerVersionID: deleteMarkerVersionID,
-				})
-			}
-		} else {
-			// Non-versioned bucket: permanently delete
-			err := s.deleteObjectPermanently(ctx, bucket, obj.Key)
-			if err != nil {
-				// S3 doesn't report errors for non-existent objects
-				if !strings.Contains(err.Error(), "not found") {
-					result.Errors = append(result.Errors, DeleteError{
-						Key:     obj.Key,
-						Code:    getErrorCode(err),
-						Message: err.Error(),
-					})
-				} else {
-					// Object didn't exist, still count as deleted
-					result.Deleted = append(result.Deleted, DeletedObject{
-						Key: obj.Key,
-					})
-				}
-			} else {
-				result.Deleted = append(result.Deleted, DeletedObject{
-					Key: obj.Key,
-				})
-			}
-		}
+		s.processObjectDeletion(ctx, bucket, bucketInfo, obj, result)
 	}
 
 	return result, nil
+}
+
+func (s *Service) processObjectDeletion(ctx context.Context, bucket string, bucketInfo *bucket.BucketInfo, obj DeleteObjectInput, result *DeleteObjectsResult) {
+	if !s.validateObjectKey(obj, result) {
+		return
+	}
+
+	if obj.VersionID != "" {
+		s.deleteVersionedObject(ctx, bucket, obj, result)
+		return
+	}
+
+	s.deleteCurrentVersion(ctx, bucket, bucketInfo, obj, result)
+}
+
+func (s *Service) validateObjectKey(obj DeleteObjectInput, result *DeleteObjectsResult) bool {
+	if obj.Key == "" {
+		result.Errors = append(result.Errors, DeleteError{
+			Key:       obj.Key,
+			VersionID: obj.VersionID,
+			Code:      "InvalidArgument",
+			Message:   "Object key cannot be empty",
+		})
+		return false
+	}
+
+	return true
+}
+
+func (s *Service) deleteVersionedObject(ctx context.Context, bucket string, obj DeleteObjectInput, result *DeleteObjectsResult) {
+	deleted, err := s.deleteSpecificVersion(ctx, bucket, obj.Key, obj.VersionID)
+	if err != nil {
+		result.Errors = append(result.Errors, DeleteError{
+			Key:       obj.Key,
+			VersionID: obj.VersionID,
+			Code:      getErrorCode(err),
+			Message:   err.Error(),
+		})
+	} else {
+		result.Deleted = append(result.Deleted, *deleted)
+	}
+}
+
+func (s *Service) deleteCurrentVersion(ctx context.Context, bucket string, bucketInfo *bucket.BucketInfo, obj DeleteObjectInput, result *DeleteObjectsResult) {
+	if versioningPkg.IsVersioningEnabled(bucketInfo) {
+		s.createDeleteMarker(ctx, bucket, bucketInfo, obj, result)
+	} else {
+		s.permanentlyDeleteObject(ctx, bucket, obj, result)
+	}
+}
+
+func (s *Service) createDeleteMarker(ctx context.Context, bucket string, bucketInfo *bucket.BucketInfo, obj DeleteObjectInput, result *DeleteObjectsResult) {
+	deleteMarkerVersionID := s.versionService.GenerateVersionID()
+
+	meta := &metadata.ObjectMeta{
+		Bucket:       bucket,
+		Key:          obj.Key,
+		VersionID:    deleteMarkerVersionID,
+		IsLatest:     true,
+		DeleteMarker: true,
+		Owner:        bucketInfo.Owner,
+		ModifiedAt:   time.Now(),
+	}
+
+	err := s.store.PutObjectMetaVersioned(ctx, meta, true)
+	if err != nil {
+		result.Errors = append(result.Errors, DeleteError{
+			Key:     obj.Key,
+			Code:    "InternalError",
+			Message: err.Error(),
+		})
+	} else {
+		result.Deleted = append(result.Deleted, DeletedObject{
+			Key:                   obj.Key,
+			DeleteMarker:          true,
+			DeleteMarkerVersionID: deleteMarkerVersionID,
+		})
+	}
+}
+
+func (s *Service) permanentlyDeleteObject(ctx context.Context, bucket string, obj DeleteObjectInput, result *DeleteObjectsResult) {
+	err := s.deleteObjectPermanently(ctx, bucket, obj.Key)
+	if err != nil {
+		if !strings.Contains(err.Error(), "not found") {
+			result.Errors = append(result.Errors, DeleteError{
+				Key:     obj.Key,
+				Code:    getErrorCode(err),
+				Message: err.Error(),
+			})
+		} else {
+			result.Deleted = append(result.Deleted, DeletedObject{
+				Key: obj.Key,
+			})
+		}
+	} else {
+		result.Deleted = append(result.Deleted, DeletedObject{
+			Key: obj.Key,
+		})
+	}
 }
 
 // deleteSpecificVersion permanently deletes a specific object version.
