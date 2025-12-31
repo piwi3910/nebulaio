@@ -1013,49 +1013,93 @@ func (c *Config) validateRedundancyVsNodes() error {
 
 // validate checks placement group configuration for consistency.
 func (c *PlacementGroupsConfig) validate() error {
-	// Build a map of known group IDs
+	groupIDs, err := c.validateGroups()
+	if err != nil {
+		return err
+	}
+
+	if err := c.validateLocalGroupID(groupIDs); err != nil {
+		return err
+	}
+
+	if err := c.validateReplicationTargets(groupIDs); err != nil {
+		return err
+	}
+
+	if err := c.validateMinNodesForErasure(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *PlacementGroupsConfig) validateGroups() (map[string]bool, error) {
 	groupIDs := make(map[string]bool)
 
 	for _, g := range c.Groups {
-		if g.ID == "" {
-			return errors.New("placement group ID cannot be empty")
+		if err := c.validateGroupID(g, groupIDs); err != nil {
+			return nil, err
 		}
 
-		if groupIDs[g.ID] {
-			return fmt.Errorf("duplicate placement group ID: %s", g.ID)
+		if err := c.validateGroupNodes(g); err != nil {
+			return nil, err
 		}
 
 		groupIDs[g.ID] = true
-
-		// Validate MinNodes and MaxNodes
-		if g.MinNodes < 0 {
-			return fmt.Errorf("placement group %s: min_nodes cannot be negative", g.ID)
-		}
-
-		if g.MaxNodes < 0 {
-			return fmt.Errorf("placement group %s: max_nodes cannot be negative", g.ID)
-		}
-
-		if g.MaxNodes > 0 && g.MinNodes > g.MaxNodes {
-			return fmt.Errorf("placement group %s: min_nodes (%d) cannot exceed max_nodes (%d)", g.ID, g.MinNodes, g.MaxNodes)
-		}
 	}
 
-	// Validate LocalGroupID references a known group (if groups are defined)
+	return groupIDs, nil
+}
+
+func (c *PlacementGroupsConfig) validateGroupID(g PlacementGroupConfig, groupIDs map[string]bool) error {
+	if g.ID == "" {
+		return errors.New("placement group ID cannot be empty")
+	}
+
+	if groupIDs[g.ID] {
+		return fmt.Errorf("duplicate placement group ID: %s", g.ID)
+	}
+
+	return nil
+}
+
+func (c *PlacementGroupsConfig) validateGroupNodes(g PlacementGroupConfig) error {
+	if g.MinNodes < 0 {
+		return fmt.Errorf("placement group %s: min_nodes cannot be negative", g.ID)
+	}
+
+	if g.MaxNodes < 0 {
+		return fmt.Errorf("placement group %s: max_nodes cannot be negative", g.ID)
+	}
+
+	if g.MaxNodes > 0 && g.MinNodes > g.MaxNodes {
+		return fmt.Errorf("placement group %s: min_nodes (%d) cannot exceed max_nodes (%d)", g.ID, g.MinNodes, g.MaxNodes)
+	}
+
+	return nil
+}
+
+func (c *PlacementGroupsConfig) validateLocalGroupID(groupIDs map[string]bool) error {
 	if c.LocalGroupID != "" && len(c.Groups) > 0 {
 		if !groupIDs[c.LocalGroupID] {
 			return fmt.Errorf("local_group_id %q references unknown placement group", c.LocalGroupID)
 		}
 	}
 
-	// Validate ReplicationTargets reference known groups
+	return nil
+}
+
+func (c *PlacementGroupsConfig) validateReplicationTargets(groupIDs map[string]bool) error {
 	for _, targetID := range c.ReplicationTargets {
 		if len(c.Groups) > 0 && !groupIDs[targetID] {
 			return fmt.Errorf("replication_target %q references unknown placement group", targetID)
 		}
 	}
 
-	// Validate MinNodesForErasure
+	return nil
+}
+
+func (c *PlacementGroupsConfig) validateMinNodesForErasure() error {
 	if c.MinNodesForErasure < 0 {
 		return errors.New("min_nodes_for_erasure cannot be negative")
 	}
