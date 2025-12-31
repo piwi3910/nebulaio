@@ -826,6 +826,13 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	}
 	defer mgr.Close()
 
+	testUnhealthyGroupHealthyState(t, mgr)
+	testUnhealthyGroupDegradeToMinNodes(t, mgr)
+	testUnhealthyGroupRemoveAllNodes(t, mgr)
+	testUnhealthyGroupRecovery(t, mgr)
+}
+
+func testUnhealthyGroupHealthyState(t *testing.T, mgr *PlacementGroupManager) {
 	// Verify initial healthy status
 	group := mgr.LocalGroup()
 	if group.Status != PlacementGroupStatusHealthy {
@@ -841,9 +848,11 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if len(nodes) != 3 {
 		t.Errorf("Expected 3 nodes, got %d", len(nodes))
 	}
+}
 
+func testUnhealthyGroupDegradeToMinNodes(t *testing.T, mgr *PlacementGroupManager) {
 	// Remove nodes to make the group degraded (below MinNodes)
-	err = mgr.RemoveNodeFromGroup("pg-main", "node4")
+	err := mgr.RemoveNodeFromGroup("pg-main", "node4")
 	if err != nil {
 		t.Fatalf("Failed to remove node: %v", err)
 	}
@@ -854,13 +863,13 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	}
 
 	// Verify group is now degraded
-	group = mgr.LocalGroup()
+	group := mgr.LocalGroup()
 	if group.Status != PlacementGroupStatusDegraded {
 		t.Errorf("Expected degraded status, got %s", group.Status)
 	}
 
 	// Shard placement should still work (with 2 nodes for 2 shards)
-	nodes, err = mgr.GetShardPlacementNodesForObject("bucket", "key", 2)
+	nodes, err := mgr.GetShardPlacementNodesForObject("bucket", "key", 2)
 	if err != nil {
 		t.Errorf("Shard placement should work when degraded: %v", err)
 	}
@@ -874,9 +883,11 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if err == nil {
 		t.Error("Shard placement should fail when requesting more shards than available nodes")
 	}
+}
 
+func testUnhealthyGroupRemoveAllNodes(t *testing.T, mgr *PlacementGroupManager) {
 	// Remove all remaining nodes
-	err = mgr.RemoveNodeFromGroup("pg-main", "node2")
+	err := mgr.RemoveNodeFromGroup("pg-main", "node2")
 	if err != nil {
 		t.Fatalf("Failed to remove node: %v", err)
 	}
@@ -887,7 +898,7 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	}
 
 	// Verify group has no nodes
-	group = mgr.LocalGroup()
+	group := mgr.LocalGroup()
 	if len(group.Nodes) != 0 {
 		t.Errorf("Expected 0 nodes, got %d", len(group.Nodes))
 	}
@@ -897,9 +908,11 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if err == nil {
 		t.Error("Shard placement should fail with no nodes")
 	}
+}
 
+func testUnhealthyGroupRecovery(t *testing.T, mgr *PlacementGroupManager) {
 	// Add nodes back and verify recovery
-	err = mgr.AddNodeToGroup("pg-main", "node5")
+	err := mgr.AddNodeToGroup("pg-main", "node5")
 	if err != nil {
 		t.Fatalf("Failed to add node: %v", err)
 	}
@@ -915,13 +928,13 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	}
 
 	// Verify recovery to healthy
-	group = mgr.LocalGroup()
+	group := mgr.LocalGroup()
 	if group.Status != PlacementGroupStatusHealthy {
 		t.Errorf("Expected healthy status after recovery, got %s", group.Status)
 	}
 
 	// Shard placement should work again
-	nodes, err = mgr.GetShardPlacementNodesForObject("bucket", "key", 3)
+	nodes, err := mgr.GetShardPlacementNodesForObject("bucket", "key", 3)
 	if err != nil {
 		t.Errorf("Shard placement should work after recovery: %v", err)
 	}
