@@ -155,76 +155,89 @@ func newBucketListCmd() *cobra.Command {
 	}
 }
 
+// runBucketInfo executes the bucket info operation.
+func runBucketInfo(bucketName string) error {
+	ctx := context.Background()
+	client, err := NewS3Client(ctx)
+	if err != nil {
+		return err
+	}
+
+	printBucketVersioning(ctx, client, bucketName)
+	printBucketLocation(ctx, client, bucketName)
+
+	return printBucketStats(ctx, client, bucketName)
+}
+
+// printBucketVersioning prints bucket versioning status.
+func printBucketVersioning(ctx context.Context, client *s3.Client, bucketName string) {
+	versioning, err := client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
+		Bucket: &bucketName,
+	})
+	if err != nil {
+		fmt.Printf("Versioning: unknown\n")
+		return
+	}
+
+	status := "Disabled"
+	if versioning.Status != "" {
+		status = string(versioning.Status)
+	}
+	fmt.Printf("Versioning: %s\n", status)
+}
+
+// printBucketLocation prints bucket region.
+func printBucketLocation(ctx context.Context, client *s3.Client, bucketName string) {
+	location, err := client.GetBucketLocation(ctx, &s3.GetBucketLocationInput{
+		Bucket: &bucketName,
+	})
+	if err == nil && location.LocationConstraint != "" {
+		fmt.Printf("Region: %s\n", location.LocationConstraint)
+	}
+}
+
+// printBucketStats prints object count and total size.
+func printBucketStats(ctx context.Context, client *s3.Client, bucketName string) error {
+	objectCount, totalSize, err := calculateBucketStats(ctx, client, bucketName)
+
+	fmt.Printf("Objects: %d\n", objectCount)
+	fmt.Printf("Total Size: %s\n", FormatSize(totalSize))
+
+	return err
+}
+
+// calculateBucketStats calculates object count and total size.
+func calculateBucketStats(ctx context.Context, client *s3.Client, bucketName string) (int64, int64, error) {
+	var objectCount, totalSize int64
+
+	paginator := s3.NewListObjectsV2Paginator(client, &s3.ListObjectsV2Input{
+		Bucket: &bucketName,
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return objectCount, totalSize, err
+		}
+
+		objectCount += int64(len(page.Contents))
+		for _, obj := range page.Contents {
+			if obj.Size != nil {
+				totalSize += *obj.Size
+			}
+		}
+	}
+
+	return objectCount, totalSize, nil
+}
+
 func newBucketInfoCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "info <bucket-name>",
 		Short: "Get bucket information",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-
-			client, err := NewS3Client(ctx)
-			if err != nil {
-				return err
-			}
-
-			bucketName := args[0]
-
-			// Get versioning
-			versioning, err := client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
-				Bucket: &bucketName,
-			})
-			if err != nil {
-				fmt.Printf("Versioning: unknown\n")
-			} else {
-				status := "Disabled"
-				if versioning.Status != "" {
-					status = string(versioning.Status)
-				}
-
-				fmt.Printf("Versioning: %s\n", status)
-			}
-
-			// Get location
-			location, err := client.GetBucketLocation(ctx, &s3.GetBucketLocationInput{
-				Bucket: &bucketName,
-			})
-			if err == nil && location.LocationConstraint != "" {
-				fmt.Printf("Region: %s\n", location.LocationConstraint)
-			}
-
-			// Get object count and total size
-			var (
-				objectCount int64
-				totalSize   int64
-			)
-
-			paginator := s3.NewListObjectsV2Paginator(client, &s3.ListObjectsV2Input{
-				Bucket: &bucketName,
-			})
-
-			var paginationErr error
-
-			for paginator.HasMorePages() {
-				page, err := paginator.NextPage(ctx)
-				if err != nil {
-					paginationErr = err
-
-					break
-				}
-
-				objectCount += int64(len(page.Contents))
-				for _, obj := range page.Contents {
-					if obj.Size != nil {
-						totalSize += *obj.Size
-					}
-				}
-			}
-
-			fmt.Printf("Objects: %d\n", objectCount)
-			fmt.Printf("Total Size: %s\n", FormatSize(totalSize))
-
-			return paginationErr
+			return runBucketInfo(args[0])
 		},
 	}
 }
