@@ -225,7 +225,18 @@ func (e *PolicyEngine) EvaluateObject(ctx context.Context, obj ObjectMetadata) (
 		return nil, err
 	}
 
-	// Get access stats for the object
+	stats := e.getObjectStats(ctx, obj)
+
+	result := &EvaluationResult{
+		Object: obj,
+	}
+
+	e.evaluatePolicies(obj, stats, policies, result)
+
+	return result, nil
+}
+
+func (e *PolicyEngine) getObjectStats(ctx context.Context, obj ObjectMetadata) *ObjectAccessStats {
 	stats, err := e.accessStats.GetStats(ctx, obj.Bucket, obj.Key)
 	if err != nil {
 		stats = &ObjectAccessStats{
@@ -234,72 +245,75 @@ func (e *PolicyEngine) EvaluateObject(ctx context.Context, obj ObjectMetadata) (
 			CurrentTier: obj.CurrentTier,
 		}
 	}
+	return stats
+}
 
-	result := &EvaluationResult{
-		Object: obj,
-	}
-
-	// Evaluate policies in priority order
+func (e *PolicyEngine) evaluatePolicies(obj ObjectMetadata, stats *ObjectAccessStats, policies []*AdvancedPolicy, result *EvaluationResult) {
 	for _, policy := range policies {
 		if !policy.Enabled {
 			continue
 		}
 
-		// Check if this node should handle this policy for this bucket
-		if policy.Distributed.Enabled && policy.Distributed.ShardByBucket {
-			if !e.shouldHandleBucket(obj.Bucket, policy.ID) {
-				continue
-			}
+		if !e.shouldEvaluatePolicy(obj, policy) {
+			continue
 		}
 
-		// Check selector
 		if !e.matchesSelector(obj, stats, policy.Selector) {
 			continue
 		}
 
-		// Check triggers
 		triggered, triggerInfo := e.checkTriggers(obj, stats, policy)
 		if !triggered {
 			continue
 		}
 
-		// Check anti-thrash
-		if policy.AntiThrash.Enabled {
-			if !e.antiThrash.CanTransition(obj.Bucket, obj.Key, policy) {
-				result.BlockedByAntiThrash = true
-				continue
-			}
+		if e.isBlockedByConstraints(obj, policy, result) {
+			continue
 		}
 
-		// Check schedule
-		if policy.Schedule.Enabled {
-			if !e.isInScheduleWindow(policy.Schedule) {
-				result.OutsideSchedule = true
-				continue
-			}
-		}
-
-		// Check rate limit
-		if policy.RateLimit.Enabled {
-			if !e.rateLimiter.Allow(policy.ID) {
-				result.RateLimited = true
-				continue
-			}
-		}
-
-		// Add matching policy
 		result.MatchingPolicies = append(result.MatchingPolicies, PolicyMatch{
 			Policy:      policy,
 			TriggerInfo: triggerInfo,
 		})
 
-		// Check if first action has stopProcessing
 		if len(policy.Actions) > 0 && policy.Actions[0].StopProcessing {
 			break
 		}
 	}
+}
 
-	return result, nil
+func (e *PolicyEngine) shouldEvaluatePolicy(obj ObjectMetadata, policy *AdvancedPolicy) bool {
+	if policy.Distributed.Enabled && policy.Distributed.ShardByBucket {
+		if !e.shouldHandleBucket(obj.Bucket, policy.ID) {
+			return false
+		}
+	}
+	return true
+}
+
+func (e *PolicyEngine) isBlockedByConstraints(obj ObjectMetadata, policy *AdvancedPolicy, result *EvaluationResult) bool {
+	if policy.AntiThrash.Enabled {
+		if !e.antiThrash.CanTransition(obj.Bucket, obj.Key, policy) {
+			result.BlockedByAntiThrash = true
+			return true
+		}
+	}
+
+	if policy.Schedule.Enabled {
+		if !e.isInScheduleWindow(policy.Schedule) {
+			result.OutsideSchedule = true
+			return true
+		}
+	}
+
+	if policy.RateLimit.Enabled {
+		if !e.rateLimiter.Allow(policy.ID) {
+			result.RateLimited = true
+			return true
+		}
+	}
+
+	return false
 }
 
 // EvaluationResult contains the result of policy evaluation.
