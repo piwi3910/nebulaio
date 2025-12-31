@@ -1137,83 +1137,90 @@ func TestClusterMembershipOperations(t *testing.T) {
 
 	ctx := context.Background()
 
-	t.Run("AddNode", func(t *testing.T) {
-		node := &NodeInfo{
-			ID:      "node-2",
-			Name:    "node-2",
-			Address: nodeAddr,
-			Role:    "gateway",
-			Status:  "active",
-		}
+	t.Run("AddNode", func(t *testing.T) { testAddNode(t, ctx, store, nodeAddr) })
+	t.Run("ListNodes", func(t *testing.T) { testListNodes(t, ctx, store) })
+	t.Run("GetClusterInfo", func(t *testing.T) { testGetClusterInfo(t, ctx, store) })
+	t.Run("RemoveNode", func(t *testing.T) { testRemoveNode(t, ctx, store) })
+	t.Run("GetConfiguration", func(t *testing.T) { testGetConfiguration(t, store) })
+	t.Run("GetServers", func(t *testing.T) { testGetServers(t, store) })
+}
 
-		err := store.AddNode(ctx, node)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+func testAddNode(t *testing.T, ctx context.Context, store *DragonboatStore, nodeAddr string) {
+	node := &NodeInfo{
+		ID:      "node-2",
+		Name:    "node-2",
+		Address: nodeAddr,
+		Role:    "gateway",
+		Status:  "active",
+	}
 
-		if err != nil {
-			t.Errorf("Failed to add node: %v", err)
-		}
-	})
+	err := store.AddNode(ctx, node)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-	t.Run("ListNodes", func(t *testing.T) {
-		nodes, err := store.ListNodes(ctx)
-		if err != nil {
-			t.Errorf("Failed to list nodes: %v", err)
-		}
-		// Should have at least the node we added
-		if len(nodes) == 0 {
-			t.Log("No nodes in list (acceptable if add failed)")
-		}
-	})
+	if err != nil {
+		t.Errorf("Failed to add node: %v", err)
+	}
+}
 
-	t.Run("GetClusterInfo", func(t *testing.T) {
-		info, err := store.GetClusterInfo(ctx)
-		if err != nil {
-			t.Errorf("Failed to get cluster info: %v", err)
-		}
+func testListNodes(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	nodes, err := store.ListNodes(ctx)
+	if err != nil {
+		t.Errorf("Failed to list nodes: %v", err)
+	}
+	// Should have at least the node we added
+	if len(nodes) == 0 {
+		t.Log("No nodes in list (acceptable if add failed)")
+	}
+}
 
-		if info == nil {
-			t.Fatal("Expected cluster info, got nil")
-		}
+func testGetClusterInfo(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	info, err := store.GetClusterInfo(ctx)
+	if err != nil {
+		t.Errorf("Failed to get cluster info: %v", err)
+	}
 
-		if info.ClusterID == "" {
-			t.Error("Expected non-empty cluster ID")
-		}
-	})
+	if info == nil {
+		t.Fatal("Expected cluster info, got nil")
+	}
 
-	t.Run("RemoveNode", func(t *testing.T) {
-		err := store.RemoveNode(ctx, "node-2")
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+	if info.ClusterID == "" {
+		t.Error("Expected non-empty cluster ID")
+	}
+}
 
-		if err != nil {
-			t.Errorf("Failed to remove node: %v", err)
-		}
-	})
+func testRemoveNode(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	err := store.RemoveNode(ctx, "node-2")
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-	t.Run("GetConfiguration", func(t *testing.T) {
-		membership, err := store.GetConfiguration()
-		if err != nil {
-			t.Errorf("Failed to get configuration: %v", err)
-		}
+	if err != nil {
+		t.Errorf("Failed to remove node: %v", err)
+	}
+}
 
-		if membership == nil {
-			t.Fatal("Expected membership, got nil")
-		}
-	})
+func testGetConfiguration(t *testing.T, store *DragonboatStore) {
+	membership, err := store.GetConfiguration()
+	if err != nil {
+		t.Errorf("Failed to get configuration: %v", err)
+	}
 
-	t.Run("GetServers", func(t *testing.T) {
-		servers, err := store.GetServers()
-		if err != nil {
-			t.Errorf("Failed to get servers: %v", err)
-		}
+	if membership == nil {
+		t.Fatal("Expected membership, got nil")
+	}
+}
 
-		if len(servers) == 0 {
-			t.Error("Expected at least one server")
-		}
-	})
+func testGetServers(t *testing.T, store *DragonboatStore) {
+	servers, err := store.GetServers()
+	if err != nil {
+		t.Errorf("Failed to get servers: %v", err)
+	}
+
+	if len(servers) == 0 {
+		t.Error("Expected at least one server")
+	}
 }
 
 // TestAuditOperations tests audit event operations.
