@@ -1127,7 +1127,7 @@ func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []De
 	return result, nil
 }
 
-func (s *Service) processObjectDeletion(ctx context.Context, bucket string, bucketInfo *bucket.BucketInfo, obj DeleteObjectInput, result *DeleteObjectsResult) {
+func (s *Service) processObjectDeletion(ctx context.Context, bucket string, bucketInfo *metadata.Bucket, obj DeleteObjectInput, result *DeleteObjectsResult) {
 	if !s.validateObjectKey(obj, result) {
 		return
 	}
@@ -1168,7 +1168,7 @@ func (s *Service) deleteVersionedObject(ctx context.Context, bucket string, obj 
 	}
 }
 
-func (s *Service) deleteCurrentVersion(ctx context.Context, bucket string, bucketInfo *bucket.BucketInfo, obj DeleteObjectInput, result *DeleteObjectsResult) {
+func (s *Service) deleteCurrentVersion(ctx context.Context, bucket string, bucketInfo *metadata.Bucket, obj DeleteObjectInput, result *DeleteObjectsResult) {
 	if versioningPkg.IsVersioningEnabled(bucketInfo) {
 		s.createDeleteMarker(ctx, bucket, bucketInfo, obj, result)
 	} else {
@@ -1176,7 +1176,7 @@ func (s *Service) deleteCurrentVersion(ctx context.Context, bucket string, bucke
 	}
 }
 
-func (s *Service) createDeleteMarker(ctx context.Context, bucket string, bucketInfo *bucket.BucketInfo, obj DeleteObjectInput, result *DeleteObjectsResult) {
+func (s *Service) createDeleteMarker(ctx context.Context, bucket string, bucketInfo *metadata.Bucket, obj DeleteObjectInput, result *DeleteObjectsResult) {
 	deleteMarkerVersionID := s.versionService.GenerateVersionID()
 
 	meta := &metadata.ObjectMeta{
