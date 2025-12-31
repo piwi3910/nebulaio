@@ -384,38 +384,71 @@ func (r *LifecycleRule) MatchesObject(key string, tags map[string]string) bool {
 
 // Matches returns true if the filter matches the given object key and tags.
 func (f *Filter) Matches(key string, tags map[string]string) bool {
-	// Check prefix
+	if !f.matchesPrefix(key) {
+		return false
+	}
+
+	if !f.matchesTag(tags) {
+		return false
+	}
+
+	if !f.matchesAndConditions(key, tags) {
+		return false
+	}
+
+	return true
+}
+
+func (f *Filter) matchesPrefix(key string) bool {
 	if f.Prefix != "" && !strings.HasPrefix(key, f.Prefix) {
 		return false
 	}
 
-	// Check single tag
-	if f.Tag != nil {
+	return true
+}
+
+func (f *Filter) matchesTag(tags map[string]string) bool {
+	if f.Tag == nil {
+		return true
+	}
+
+	if tags == nil {
+		return false
+	}
+
+	val, ok := tags[f.Tag.Key]
+	return ok && val == f.Tag.Value
+}
+
+func (f *Filter) matchesAndConditions(key string, tags map[string]string) bool {
+	if f.And == nil {
+		return true
+	}
+
+	if !f.matchesAndPrefix(key) {
+		return false
+	}
+
+	return f.matchesAndTags(tags)
+}
+
+func (f *Filter) matchesAndPrefix(key string) bool {
+	if f.And.Prefix != "" && !strings.HasPrefix(key, f.And.Prefix) {
+		return false
+	}
+
+	return true
+}
+
+func (f *Filter) matchesAndTags(tags map[string]string) bool {
+	for _, tag := range f.And.Tags {
 		if tags == nil {
 			return false
 		}
 
-		if val, ok := tags[f.Tag.Key]; !ok || val != f.Tag.Value {
+		val, ok := tags[tag.Key]
+		if !ok || val != tag.Value {
 			return false
-		}
-	}
-
-	// Check And conditions
-	if f.And != nil {
-		// Check And prefix
-		if f.And.Prefix != "" && !strings.HasPrefix(key, f.And.Prefix) {
-			return false
-		}
-
-		// Check And tags
-		for _, tag := range f.And.Tags {
-			if tags == nil {
-				return false
-			}
-
-			if val, ok := tags[tag.Key]; !ok || val != tag.Value {
-				return false
-			}
 		}
 	}
 
