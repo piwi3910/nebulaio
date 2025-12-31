@@ -601,85 +601,102 @@ func (sm *stateMachine) applyPutObjectMetaVersioned(meta *ObjectMeta, preserveOl
 
 func (sm *stateMachine) applyDeleteObjectVersion(bucket, objKey, versionID string) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		// Delete the specific version
-		versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID))
-		err := txn.Delete(versionKey)
-		if err != nil && err != badger.ErrKeyNotFound {
+		if err := sm.deleteVersionKey(txn, bucket, objKey, versionID); err != nil {
 			return err
 		}
 
-		// Check if this was the current/latest version
-		currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, objKey))
-
-		item, err := txn.Get(currentKey)
-		if err != nil {
-			if err == badger.ErrKeyNotFound {
-				return nil
-			}
-
-			return err
-		}
-
-		var currentMeta ObjectMeta
-
-		err = item.Value(func(val []byte) error {
-			return json.Unmarshal(val, &currentMeta)
-		})
+		currentMeta, currentKey, err := sm.getCurrentVersionMeta(txn, bucket, objKey)
 		if err != nil {
 			return err
 		}
 
-		// If we deleted the current version, we need to find the next latest version
+		if currentMeta == nil {
+			return nil
+		}
+
 		if currentMeta.VersionID == versionID {
-			// Find the most recent remaining version
-			prefix := []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, objKey))
-			opts := badger.DefaultIteratorOptions
-			opts.Prefix = prefix
-			opts.Reverse = true // Get newest first (ULIDs are sortable)
-
-			it := txn.NewIterator(opts)
-			defer it.Close()
-
-			it.Seek(append(prefix, 0xFF)) // Seek to end of prefix range
-
-			if it.ValidForPrefix(prefix) {
-				// Found another version, make it the current
-				item := it.Item()
-
-				val, err := item.ValueCopy(nil)
-				if err != nil {
-					return err
-				}
-
-				var newLatest ObjectMeta
-				err = json.Unmarshal(val, &newLatest)
-				if err != nil {
-					return err
-				}
-
-				newLatest.IsLatest = true
-
-				data, err := json.Marshal(&newLatest)
-				if err != nil {
-					return err
-				}
-
-				// Update version store
-				err = txn.Set(item.KeyCopy(nil), data)
-				if err != nil {
-					return err
-				}
-
-				// Update current pointer
-				return txn.Set(currentKey, data)
-			}
-
-			// No more versions, delete the current pointer
-			return txn.Delete(currentKey)
+			return sm.promoteNextVersion(txn, bucket, objKey, currentKey)
 		}
 
 		return nil
 	})
+}
+
+func (sm *stateMachine) deleteVersionKey(txn *badger.Txn, bucket, objKey, versionID string) error {
+	versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID))
+	err := txn.Delete(versionKey)
+	if err != nil && err != badger.ErrKeyNotFound {
+		return err
+	}
+	return nil
+}
+
+func (sm *stateMachine) getCurrentVersionMeta(txn *badger.Txn, bucket, objKey string) (*ObjectMeta, []byte, error) {
+	currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, objKey))
+
+	item, err := txn.Get(currentKey)
+	if err != nil {
+		if err == badger.ErrKeyNotFound {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+
+	var currentMeta ObjectMeta
+
+	err = item.Value(func(val []byte) error {
+		return json.Unmarshal(val, &currentMeta)
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &currentMeta, currentKey, nil
+}
+
+func (sm *stateMachine) promoteNextVersion(txn *badger.Txn, bucket, objKey string, currentKey []byte) error {
+	prefix := []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, objKey))
+	opts := badger.DefaultIteratorOptions
+	opts.Prefix = prefix
+	opts.Reverse = true
+
+	it := txn.NewIterator(opts)
+	defer it.Close()
+
+	it.Seek(append(prefix, 0xFF))
+
+	if it.ValidForPrefix(prefix) {
+		return sm.setNewLatestVersion(txn, it.Item(), currentKey)
+	}
+
+	return txn.Delete(currentKey)
+}
+
+func (sm *stateMachine) setNewLatestVersion(txn *badger.Txn, item *badger.Item, currentKey []byte) error {
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		return err
+	}
+
+	var newLatest ObjectMeta
+	err = json.Unmarshal(val, &newLatest)
+	if err != nil {
+		return err
+	}
+
+	newLatest.IsLatest = true
+
+	data, err := json.Marshal(&newLatest)
+	if err != nil {
+		return err
+	}
+
+	err = txn.Set(item.KeyCopy(nil), data)
+	if err != nil {
+		return err
+	}
+
+	return txn.Set(currentKey, data)
 }
 
 func (sm *stateMachine) applyCreateUser(user *User) error {
