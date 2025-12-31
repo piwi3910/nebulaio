@@ -101,56 +101,42 @@ func (sm *stateMachine) updateAppliedIndex(index uint64) error {
 
 // processCommand processes a single command by delegating to specific handlers.
 func (sm *stateMachine) processCommand(cmd *command) error {
-	switch cmd.Type {
-	case cmdCreateBucket:
-		return sm.handleCreateBucket(cmd.Data)
-	case cmdDeleteBucket:
-		return sm.handleDeleteBucket(cmd.Data)
-	case cmdUpdateBucket:
-		return sm.handleUpdateBucket(cmd.Data)
-	case cmdPutObjectMeta:
-		return sm.handlePutObjectMeta(cmd.Data)
-	case cmdDeleteObjectMeta:
-		return sm.handleDeleteObjectMeta(cmd.Data)
-	case cmdPutObjectMetaVersioned:
-		return sm.handlePutObjectMetaVersioned(cmd.Data)
-	case cmdDeleteObjectVersion:
-		return sm.handleDeleteObjectVersion(cmd.Data)
-	case cmdCreateUser:
-		return sm.handleCreateUser(cmd.Data)
-	case cmdUpdateUser:
-		return sm.handleUpdateUser(cmd.Data)
-	case cmdDeleteUser:
-		return sm.handleDeleteUser(cmd.Data)
-	case cmdCreateAccessKey:
-		return sm.handleCreateAccessKey(cmd.Data)
-	case cmdDeleteAccessKey:
-		return sm.handleDeleteAccessKey(cmd.Data)
-	case cmdCreatePolicy:
-		return sm.handleCreatePolicy(cmd.Data)
-	case cmdUpdatePolicy:
-		return sm.handleUpdatePolicy(cmd.Data)
-	case cmdDeletePolicy:
-		return sm.handleDeletePolicy(cmd.Data)
-	case cmdCreateMultipartUpload:
-		return sm.handleCreateMultipartUpload(cmd.Data)
-	case cmdAbortMultipartUpload:
-		return sm.handleAbortMultipartUpload(cmd.Data)
-	case cmdCompleteMultipartUpload:
-		return sm.handleCompleteMultipartUpload(cmd.Data)
-	case cmdAddUploadPart:
-		return sm.handleAddUploadPart(cmd.Data)
-	case cmdAddNode:
-		return sm.handleAddNode(cmd.Data)
-	case cmdRemoveNode:
-		return sm.handleRemoveNode(cmd.Data)
-	case cmdStoreAuditEvent:
-		return sm.handleStoreAuditEvent(cmd.Data)
-	case cmdDeleteAuditEvent:
-		return sm.handleDeleteAuditEvent(cmd.Data)
+	handler, exists := sm.getCommandHandler(cmd.Type)
+	if !exists {
+		return fmt.Errorf("unknown command type: %s", cmd.Type)
+	}
+	return handler(cmd.Data)
+}
+
+func (sm *stateMachine) getCommandHandler(cmdType commandType) (func([]byte) error, bool) {
+	handlers := map[commandType]func([]byte) error{
+		cmdCreateBucket:             sm.handleCreateBucket,
+		cmdDeleteBucket:             sm.handleDeleteBucket,
+		cmdUpdateBucket:             sm.handleUpdateBucket,
+		cmdPutObjectMeta:            sm.handlePutObjectMeta,
+		cmdDeleteObjectMeta:         sm.handleDeleteObjectMeta,
+		cmdPutObjectMetaVersioned:   sm.handlePutObjectMetaVersioned,
+		cmdDeleteObjectVersion:      sm.handleDeleteObjectVersion,
+		cmdCreateUser:               sm.handleCreateUser,
+		cmdUpdateUser:               sm.handleUpdateUser,
+		cmdDeleteUser:               sm.handleDeleteUser,
+		cmdCreateAccessKey:          sm.handleCreateAccessKey,
+		cmdDeleteAccessKey:          sm.handleDeleteAccessKey,
+		cmdCreatePolicy:             sm.handleCreatePolicy,
+		cmdUpdatePolicy:             sm.handleUpdatePolicy,
+		cmdDeletePolicy:             sm.handleDeletePolicy,
+		cmdCreateMultipartUpload:    sm.handleCreateMultipartUpload,
+		cmdAbortMultipartUpload:     sm.handleAbortMultipartUpload,
+		cmdCompleteMultipartUpload:  sm.handleCompleteMultipartUpload,
+		cmdAddUploadPart:            sm.handleAddUploadPart,
+		cmdAddNode:                  sm.handleAddNode,
+		cmdRemoveNode:               sm.handleRemoveNode,
+		cmdStoreAuditEvent:          sm.handleStoreAuditEvent,
+		cmdDeleteAuditEvent:         sm.handleDeleteAuditEvent,
 	}
 
-	return fmt.Errorf("unknown command type: %s", cmd.Type)
+	handler, exists := handlers[cmdType]
+	return handler, exists
 }
 
 // Command handlers - unmarshal data and delegate to apply methods
