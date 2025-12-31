@@ -72,24 +72,62 @@ func NewPresignedURLGenerator(defaultRegion, defaultEndpoint string) *PresignedU
 
 // GeneratePresignedURL creates a presigned URL for an S3 operation.
 func (g *PresignedURLGenerator) GeneratePresignedURL(params PresignParams) (string, error) {
-	// Validate required parameters
+	if err := g.validatePresignParams(params); err != nil {
+		return "", err
+	}
+
+	g.applyDefaults(&params)
+
+	expirationSeconds, err := g.validateExpiration(params.Expiration)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now().UTC()
+	amzDate := now.Format("20060102T150405Z")
+	dateStamp := now.Format("20060102")
+
+	credentialScope := fmt.Sprintf("%s/%s/%s/%s", dateStamp, params.Region, serviceS3, requestTypeAWS4)
+	canonicalURI := g.buildCanonicalURI(params.Key)
+	host := g.getHost(params.Endpoint, params.Bucket)
+	signedHeaders := g.buildSignedHeaders(params.Headers)
+
+	queryParams := g.buildPresignedQueryParams(params, credentialScope, amzDate, expirationSeconds, signedHeaders)
+	canonicalQueryString := g.buildCanonicalQueryString(queryParams)
+	canonicalHeaders := g.buildCanonicalHeaders(host, params.Headers)
+
+	canonicalRequest := g.buildCanonicalRequest(params.Method, canonicalURI, canonicalQueryString, canonicalHeaders, signedHeaders)
+	stringToSign := g.buildStringToSign(amzDate, credentialScope, canonicalRequest)
+	signature := g.calculateSignature(params.SecretKey, dateStamp, params.Region, stringToSign)
+
+	queryParams.Set("X-Amz-Signature", signature)
+
+	presignedURL := g.buildURL(params.Endpoint, params.Bucket, params.Key, queryParams)
+
+	return presignedURL, nil
+}
+
+func (g *PresignedURLGenerator) validatePresignParams(params PresignParams) error {
 	if params.Method == "" {
-		return "", errors.New("method is required")
+		return errors.New("method is required")
 	}
 
 	if params.Bucket == "" {
-		return "", errors.New("bucket is required")
+		return errors.New("bucket is required")
 	}
 
 	if params.AccessKeyID == "" {
-		return "", errors.New("access key ID is required")
+		return errors.New("access key ID is required")
 	}
 
 	if params.SecretKey == "" {
-		return "", errors.New("secret key is required")
+		return errors.New("secret key is required")
 	}
 
-	// Set defaults
+	return nil
+}
+
+func (g *PresignedURLGenerator) applyDefaults(params *PresignParams) {
 	if params.Region == "" {
 		params.Region = g.defaultRegion
 	}
@@ -97,54 +135,52 @@ func (g *PresignedURLGenerator) GeneratePresignedURL(params PresignParams) (stri
 	if params.Endpoint == "" {
 		params.Endpoint = g.defaultEndpoint
 	}
+}
 
-	// Calculate expiration in seconds
-	expirationSeconds := int64(params.Expiration.Seconds())
+func (g *PresignedURLGenerator) validateExpiration(expiration time.Duration) (int64, error) {
+	expirationSeconds := int64(expiration.Seconds())
 	if expirationSeconds <= 0 {
 		expirationSeconds = defaultPresignExpiration
 	}
 
 	if expirationSeconds > maxPresignExpiration {
-		return "", fmt.Errorf("expiration cannot exceed 7 days (%d seconds)", maxPresignExpiration)
+		return 0, fmt.Errorf("expiration cannot exceed 7 days (%d seconds)", maxPresignExpiration)
 	}
 
 	if expirationSeconds < minPresignExpiration {
 		expirationSeconds = minPresignExpiration
 	}
 
-	// Get current time in UTC
-	now := time.Now().UTC()
-	amzDate := now.Format("20060102T150405Z")
-	dateStamp := now.Format("20060102")
+	return expirationSeconds, nil
+}
 
-	// Build the credential scope
-	credentialScope := fmt.Sprintf("%s/%s/%s/%s", dateStamp, params.Region, serviceS3, requestTypeAWS4)
-
-	// Build the canonical URI (path)
-	canonicalURI := "/" + params.Key
-	if params.Key == "" {
+func (g *PresignedURLGenerator) buildCanonicalURI(key string) string {
+	canonicalURI := "/" + key
+	if key == "" {
 		canonicalURI = "/"
 	}
+	return canonicalURI
+}
 
-	// Determine host
-	host := g.getHost(params.Endpoint, params.Bucket)
-
-	// Build signed headers
+func (g *PresignedURLGenerator) buildSignedHeaders(headers map[string]string) string {
 	signedHeaders := headerHost
 
-	if len(params.Headers) > 0 {
-		headers := make([]string, 0, len(params.Headers)+1)
+	if len(headers) > 0 {
+		headerList := make([]string, 0, len(headers)+1)
 
-		headers = append(headers, headerHost)
-		for h := range params.Headers {
-			headers = append(headers, strings.ToLower(h))
+		headerList = append(headerList, headerHost)
+		for h := range headers {
+			headerList = append(headerList, strings.ToLower(h))
 		}
 
-		sort.Strings(headers)
-		signedHeaders = strings.Join(headers, ";")
+		sort.Strings(headerList)
+		signedHeaders = strings.Join(headerList, ";")
 	}
 
-	// Build query parameters for presigned URL
+	return signedHeaders
+}
+
+func (g *PresignedURLGenerator) buildPresignedQueryParams(params PresignParams, credentialScope, amzDate string, expirationSeconds int64, signedHeaders string) url.Values {
 	queryParams := url.Values{}
 	queryParams.Set("X-Amz-Algorithm", algorithmAWS4HMACSHA256)
 	queryParams.Set("X-Amz-Credential", params.AccessKeyID+"/"+credentialScope)
@@ -157,15 +193,15 @@ func (g *PresignedURLGenerator) GeneratePresignedURL(params PresignParams) (stri
 		queryParams.Set(k, v)
 	}
 
-	// Build canonical query string (sorted by key)
-	canonicalQueryString := g.buildCanonicalQueryString(queryParams)
+	return queryParams
+}
 
-	// Build canonical headers
+func (g *PresignedURLGenerator) buildCanonicalHeaders(host string, headers map[string]string) string {
 	canonicalHeaders := fmt.Sprintf("host:%s\n", host)
 
-	if len(params.Headers) > 0 {
-		headerKeys := make([]string, 0, len(params.Headers))
-		for k := range params.Headers {
+	if len(headers) > 0 {
+		headerKeys := make([]string, 0, len(headers))
+		for k := range headers {
 			headerKeys = append(headerKeys, strings.ToLower(k))
 		}
 
@@ -179,18 +215,21 @@ func (g *PresignedURLGenerator) GeneratePresignedURL(params PresignParams) (stri
 				continue
 			}
 
-			headerBuilder.WriteString(fmt.Sprintf("%s:%s\n", k, strings.TrimSpace(params.Headers[k])))
+			headerBuilder.WriteString(fmt.Sprintf("%s:%s\n", k, strings.TrimSpace(headers[k])))
 		}
 
 		canonicalHeaders = headerBuilder.String()
 	}
 
+	return canonicalHeaders
+}
+
+func (g *PresignedURLGenerator) buildCanonicalRequest(method, canonicalURI, canonicalQueryString, canonicalHeaders, signedHeaders string) string {
 	// For presigned URLs, we use UNSIGNED-PAYLOAD
 	payloadHash := unsignedPayload
 
-	// Build canonical request
 	canonicalRequest := strings.Join([]string{
-		params.Method,
+		method,
 		canonicalURI,
 		canonicalQueryString,
 		canonicalHeaders,
@@ -198,10 +237,12 @@ func (g *PresignedURLGenerator) GeneratePresignedURL(params PresignParams) (stri
 		payloadHash,
 	}, "\n")
 
-	// Hash the canonical request
+	return canonicalRequest
+}
+
+func (g *PresignedURLGenerator) buildStringToSign(amzDate, credentialScope, canonicalRequest string) string {
 	canonicalRequestHash := sha256Hex([]byte(canonicalRequest))
 
-	// Build string to sign
 	stringToSign := strings.Join([]string{
 		algorithmAWS4HMACSHA256,
 		amzDate,
@@ -209,19 +250,13 @@ func (g *PresignedURLGenerator) GeneratePresignedURL(params PresignParams) (stri
 		canonicalRequestHash,
 	}, "\n")
 
-	// Calculate the signing key
-	signingKey := g.getSignatureKey(params.SecretKey, dateStamp, params.Region, serviceS3)
+	return stringToSign
+}
 
-	// Calculate the signature
+func (g *PresignedURLGenerator) calculateSignature(secretKey, dateStamp, region, stringToSign string) string {
+	signingKey := g.getSignatureKey(secretKey, dateStamp, region, serviceS3)
 	signature := hmacSHA256Hex(signingKey, []byte(stringToSign))
-
-	// Add signature to query params
-	queryParams.Set("X-Amz-Signature", signature)
-
-	// Build the final URL
-	presignedURL := g.buildURL(params.Endpoint, params.Bucket, params.Key, queryParams)
-
-	return presignedURL, nil
+	return signature
 }
 
 // getHost returns the host for the request.
