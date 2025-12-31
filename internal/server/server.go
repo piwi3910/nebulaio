@@ -125,6 +125,40 @@ func New(cfg *config.Config) (*Server, error) {
 	}()
 
 	// Initialize metrics
+	srv.initializeMetrics(cfg)
+
+	// Initialize metadata store and cluster
+	if err := srv.initializeCluster(cfg); err != nil {
+		return nil, err
+	}
+
+	// Initialize storage tiers
+	if err := srv.initializeStorage(cfg); err != nil {
+		return nil, err
+	}
+
+	// Initialize services
+	if err := srv.initializeServices(cfg); err != nil {
+		return nil, err
+	}
+
+	// Initialize TLS
+	if err := srv.initializeTLS(cfg); err != nil {
+		return nil, err
+	}
+
+	// Setup HTTP servers
+	srv.setupS3Server()
+	srv.setupAdminServer()
+	srv.setupConsoleServer()
+
+	// Mark initialization as successful to prevent cleanup
+	initSuccess = true
+
+	return srv, nil
+}
+
+func (s *Server) initializeMetrics(cfg *config.Config) {
 	metrics.Init(cfg.NodeID)
 	log.Info().Str("node_id", cfg.NodeID).Msg("Metrics initialized")
 
@@ -144,17 +178,15 @@ func New(cfg *config.Config) (*Server, error) {
 			Int64("streaming_threshold_bytes", cfg.Lambda.ObjectLambda.StreamingThreshold).
 			Msg("Lambda streaming threshold configured")
 	}
+}
 
+func (s *Server) initializeCluster(cfg *config.Config) error {
 	// Initialize metadata store (Dragonboat-backed)
-	// Use advertise address for raft binding if specified, otherwise use localhost for single-node
 	raftBindAddr := cfg.Cluster.AdvertiseAddress
 	if raftBindAddr == "" {
 		raftBindAddr = "127.0.0.1"
 	}
 
-	var err error
-
-	// Create Dragonboat store configuration
 	storeConfig := metadata.DragonboatConfig{
 		NodeID:      cfg.Cluster.ReplicaID,
 		ShardID:     cfg.Cluster.ShardID,
@@ -169,13 +201,14 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 	}
 
-	srv.metaStore, err = metadata.NewDragonboatStore(storeConfig)
+	var err error
+	s.metaStore, err = metadata.NewDragonboatStore(storeConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize metadata store: %w", err)
+		return fmt.Errorf("failed to initialize metadata store: %w", err)
 	}
 
 	// Initialize cluster discovery
-	srv.discovery = cluster.NewDiscovery(cluster.DiscoveryConfig{
+	s.discovery = cluster.NewDiscovery(cluster.DiscoveryConfig{
 		NodeID:        cfg.NodeID,
 		AdvertiseAddr: cfg.Cluster.AdvertiseAddress,
 		JoinAddresses: cfg.Cluster.JoinAddresses,
@@ -187,10 +220,24 @@ func New(cfg *config.Config) (*Server, error) {
 		Version:       Version,
 	})
 
-	// Set NodeHost for discovery to enable Raft-based leader election awareness
-	srv.discovery.SetNodeHost(srv.metaStore.GetNodeHost(), storeConfig.ShardID)
+	s.discovery.SetNodeHost(s.metaStore.GetNodeHost(), storeConfig.ShardID)
 
-	// Initialize placement group manager for distributed storage
+	// Initialize placement group manager
+	pgConfig := s.buildPlacementGroupConfig(cfg)
+	s.placementGroupMgr, err = cluster.NewPlacementGroupManager(pgConfig)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize placement group manager, using single-node mode")
+	} else {
+		log.Info().
+			Str("local_group", string(pgConfig.LocalGroupID)).
+			Int("total_groups", len(pgConfig.Groups)).
+			Msg("Placement group manager initialized")
+	}
+
+	return nil
+}
+
+func (s *Server) buildPlacementGroupConfig(cfg *config.Config) cluster.PlacementGroupConfig {
 	pgConfig := cluster.PlacementGroupConfig{
 		LocalGroupID:       cluster.PlacementGroupID(cfg.Storage.PlacementGroups.LocalGroupID),
 		Groups:             make([]cluster.PlacementGroup, 0, len(cfg.Storage.PlacementGroups.Groups)),
@@ -212,154 +259,40 @@ func New(cfg *config.Config) (*Server, error) {
 		pgConfig.ReplicationTargets = append(pgConfig.ReplicationTargets, cluster.PlacementGroupID(target))
 	}
 
-	srv.placementGroupMgr, err = cluster.NewPlacementGroupManager(pgConfig)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize placement group manager, using single-node mode")
-	} else {
-		log.Info().
-			Str("local_group", string(pgConfig.LocalGroupID)).
-			Int("total_groups", len(pgConfig.Groups)).
-			Msg("Placement group manager initialized")
-	}
+	return pgConfig
+}
 
-	// Initialize tiered storage model
-	// All storage uses tiered backends - hot tier is the primary/default storage
-	// Objects are written to hot tier and can be transitioned to warm/cold via policies
+func (s *Server) initializeStorage(cfg *config.Config) error {
 	hotDataDir := filepath.Join(cfg.DataDir, "tiering", "hot")
 	warmDataDir := filepath.Join(cfg.DataDir, "tiering", "warm")
 	coldDataDir := filepath.Join(cfg.DataDir, "tiering", "cold")
 
-	// Helper function to create a backend based on type
-	// This now supports per-tier backend configuration
-	createBackend := func(dataDir, tierName string) (backend.Backend, error) {
-		// Check if we have tier-specific configuration
-		tierBackend := cfg.Storage.Backend
-
-		var tierErasureConfig *config.ErasureStorageConfig
-
-		if cfg.Storage.Tiering.Enabled && cfg.Storage.Tiering.Tiers != nil {
-			if tierCfg, ok := cfg.Storage.Tiering.Tiers[tierName]; ok {
-				// Use tier-specific backend if configured
-				if tierCfg.Backend != "" {
-					tierBackend = tierCfg.Backend
-				}
-
-				if tierCfg.DataDir != "" {
-					dataDir = tierCfg.DataDir
-				}
-
-				tierErasureConfig = tierCfg.ErasureConfig
-			}
-		}
-
-		switch tierBackend {
-		case "erasure":
-			// Erasure coding provides redundancy through Reed-Solomon encoding
-			// Data is split into data shards + parity shards across the tier
-			var erasureCfg erasure.Config
-
-			switch {
-			case tierErasureConfig != nil:
-				// Use tier-specific erasure configuration
-				erasureCfg = erasure.Config{
-					DataDir:      dataDir,
-					DataShards:   tierErasureConfig.DataShards,
-					ParityShards: tierErasureConfig.ParityShards,
-					ShardSize:    int(tierErasureConfig.ShardSize),
-				}
-				if erasureCfg.ShardSize == 0 {
-					erasureCfg.ShardSize = defaultShardSizeBytes // 64MB default
-				}
-			case cfg.Storage.DefaultRedundancy.Enabled:
-				// Use default redundancy configuration
-				erasureCfg = erasure.Config{
-					DataDir:      dataDir,
-					DataShards:   cfg.Storage.DefaultRedundancy.DataShards,
-					ParityShards: cfg.Storage.DefaultRedundancy.ParityShards,
-					ShardSize:    defaultShardSizeBytes, // 64MB default
-				}
-			default:
-				// Fallback to preset
-				erasureCfg = erasure.ConfigFromPreset(erasure.PresetStandard, dataDir)
-			}
-
-			// Attach placement group manager for distributed shard distribution
-			// This enables multi-node erasure coding when placement groups are configured
-			erasureCfg.PlacementGroupManager = srv.placementGroupMgr
-
-			log.Info().
-				Str("tier", tierName).
-				Int("data_shards", erasureCfg.DataShards).
-				Int("parity_shards", erasureCfg.ParityShards).
-				Bool("distributed", srv.placementGroupMgr != nil).
-				Msg("Initializing erasure coded storage")
-
-			return erasure.New(erasureCfg, cfg.NodeID)
-		case "volume":
-			log.Info().Str("tier", tierName).Msg("Initializing volume storage")
-			return volume.NewBackend(dataDir)
-		case "rawdevice":
-			log.Info().Str("tier", tierName).Msg("Initializing raw device storage")
-			// Raw device storage is handled separately via TieredDeviceManager
-			// For now, fall back to volume storage
-			return volume.NewBackend(dataDir)
-		case "fs", "":
-			log.Info().Str("tier", tierName).Msg("Initializing filesystem storage")
-			return fs.New(fs.Config{DataDir: dataDir})
-		default:
-			return nil, fmt.Errorf("unsupported storage backend: %s (supported: fs, volume, erasure, rawdevice)", tierBackend)
-		}
-	}
-
 	// Initialize hot tier - this is the PRIMARY storage backend
-	// All new objects are written here by default
-	hotBackend, err := createBackend(hotDataDir, "hot")
+	hotBackend, err := s.createBackend(cfg, hotDataDir, "hot")
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize hot tier backend: %w", err)
+		return fmt.Errorf("failed to initialize hot tier backend: %w", err)
 	}
 
-	// Use hot tier as the primary storage backend for all S3 operations
-	// This ensures all objects start in the hot tier
-	srv.storageBackend = &multipartWrapper{Backend: hotBackend}
-
+	s.storageBackend = &multipartWrapper{Backend: hotBackend}
 	log.Info().Str("path", hotDataDir).Msg("Hot tier initialized as primary storage")
 
 	// Initialize warm tier
-	warmBackend, err := createBackend(warmDataDir, "warm")
+	warmBackend, err := s.createBackend(cfg, warmDataDir, "warm")
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize warm tier, warm tier disabled")
-
 		warmBackend = nil
 	} else {
 		log.Info().Str("path", warmDataDir).Msg("Warm tier initialized")
 	}
 
 	// Initialize cold tier
-	coldManager := tiering.NewColdStorageManager()
+	coldManager, coldBackend := s.initializeColdTier(cfg, coldDataDir)
 
-	coldBackend, err := createBackend(coldDataDir, "cold")
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize cold tier backend, cold tier disabled")
-	} else {
-		coldStorage, err := tiering.NewColdStorage(tiering.ColdStorageConfig{
-			Name:    "cold-default",
-			Type:    tiering.ColdStorageFileSystem,
-			Enabled: true,
-		}, coldBackend)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize cold tier storage, cold tier disabled")
-		} else {
-			coldManager.Register(coldStorage)
-			log.Info().Str("path", coldDataDir).Msg("Cold tier initialized")
-		}
-	}
-
-	// Create advanced tiering service with all tiers
-	// The tiering service manages transitions between hot -> warm -> cold
+	// Create tiering service
 	tieringConfig := tiering.DefaultAdvancedServiceConfig()
 	tieringConfig.NodeID = cfg.NodeID
 
-	srv.tieringService, err = tiering.NewAdvancedService(
+	s.tieringService, err = tiering.NewAdvancedService(
 		tieringConfig,
 		hotBackend,
 		warmBackend,
@@ -371,76 +304,173 @@ func New(cfg *config.Config) (*Server, error) {
 		log.Info().Msg("Tiering service initialized - all storage uses tiered model")
 	}
 
+	_ = coldBackend
+	return nil
+}
+
+func (s *Server) createBackend(cfg *config.Config, dataDir, tierName string) (backend.Backend, error) {
+	tierBackend := cfg.Storage.Backend
+	var tierErasureConfig *config.ErasureStorageConfig
+
+	if cfg.Storage.Tiering.Enabled && cfg.Storage.Tiering.Tiers != nil {
+		if tierCfg, ok := cfg.Storage.Tiering.Tiers[tierName]; ok {
+			if tierCfg.Backend != "" {
+				tierBackend = tierCfg.Backend
+			}
+			if tierCfg.DataDir != "" {
+				dataDir = tierCfg.DataDir
+			}
+			tierErasureConfig = tierCfg.ErasureConfig
+		}
+	}
+
+	switch tierBackend {
+	case "erasure":
+		return s.createErasureBackend(cfg, dataDir, tierName, tierErasureConfig)
+	case "volume":
+		log.Info().Str("tier", tierName).Msg("Initializing volume storage")
+		return volume.NewBackend(dataDir)
+	case "rawdevice":
+		log.Info().Str("tier", tierName).Msg("Initializing raw device storage")
+		return volume.NewBackend(dataDir)
+	case "fs", "":
+		log.Info().Str("tier", tierName).Msg("Initializing filesystem storage")
+		return fs.New(fs.Config{DataDir: dataDir})
+	default:
+		return nil, fmt.Errorf("unsupported storage backend: %s (supported: fs, volume, erasure, rawdevice)", tierBackend)
+	}
+}
+
+func (s *Server) createErasureBackend(cfg *config.Config, dataDir, tierName string, tierErasureConfig *config.ErasureStorageConfig) (backend.Backend, error) {
+	var erasureCfg erasure.Config
+
+	switch {
+	case tierErasureConfig != nil:
+		erasureCfg = erasure.Config{
+			DataDir:      dataDir,
+			DataShards:   tierErasureConfig.DataShards,
+			ParityShards: tierErasureConfig.ParityShards,
+			ShardSize:    int(tierErasureConfig.ShardSize),
+		}
+		if erasureCfg.ShardSize == 0 {
+			erasureCfg.ShardSize = defaultShardSizeBytes
+		}
+	case cfg.Storage.DefaultRedundancy.Enabled:
+		erasureCfg = erasure.Config{
+			DataDir:      dataDir,
+			DataShards:   cfg.Storage.DefaultRedundancy.DataShards,
+			ParityShards: cfg.Storage.DefaultRedundancy.ParityShards,
+			ShardSize:    defaultShardSizeBytes,
+		}
+	default:
+		erasureCfg = erasure.ConfigFromPreset(erasure.PresetStandard, dataDir)
+	}
+
+	erasureCfg.PlacementGroupManager = s.placementGroupMgr
+
+	log.Info().
+		Str("tier", tierName).
+		Int("data_shards", erasureCfg.DataShards).
+		Int("parity_shards", erasureCfg.ParityShards).
+		Bool("distributed", s.placementGroupMgr != nil).
+		Msg("Initializing erasure coded storage")
+
+	return erasure.New(erasureCfg, cfg.NodeID)
+}
+
+func (s *Server) initializeColdTier(cfg *config.Config, coldDataDir string) (*tiering.ColdStorageManager, backend.Backend) {
+	coldManager := tiering.NewColdStorageManager()
+
+	coldBackend, err := s.createBackend(cfg, coldDataDir, "cold")
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize cold tier backend, cold tier disabled")
+		return coldManager, nil
+	}
+
+	coldStorage, err := tiering.NewColdStorage(tiering.ColdStorageConfig{
+		Name:    "cold-default",
+		Type:    tiering.ColdStorageFileSystem,
+		Enabled: true,
+	}, coldBackend)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize cold tier storage, cold tier disabled")
+		return coldManager, nil
+	}
+
+	coldManager.Register(coldStorage)
+	log.Info().Str("path", coldDataDir).Msg("Cold tier initialized")
+
+	return coldManager, coldBackend
+}
+
+func (s *Server) initializeServices(cfg *config.Config) error {
 	// Initialize auth service
-	srv.authService = auth.NewService(auth.Config{
+	s.authService = auth.NewService(auth.Config{
 		JWTSecret:          cfg.Auth.JWTSecret,
 		TokenExpiry:        time.Duration(cfg.Auth.TokenExpiry) * time.Minute,
 		RefreshTokenExpiry: time.Duration(cfg.Auth.RefreshTokenExpiry) * time.Hour,
 		RootUser:           cfg.Auth.RootUser,
 		RootPassword:       cfg.Auth.RootPassword,
-	}, srv.metaStore)
+	}, s.metaStore)
 
-	// Initialize bucket service - uses hot tier as primary storage
-	srv.bucketService = bucket.NewService(srv.metaStore, srv.storageBackend)
+	// Initialize bucket service
+	s.bucketService = bucket.NewService(s.metaStore, s.storageBackend)
 
-	// Initialize object service - uses hot tier as primary storage
-	srv.objectService = object.NewService(srv.metaStore, srv.storageBackend, srv.bucketService)
+	// Initialize object service
+	s.objectService = object.NewService(s.metaStore, s.storageBackend, s.bucketService)
 
 	// Initialize health checker
-	srv.healthChecker = health.NewChecker(srv.metaStore, srv.storageBackend)
+	s.healthChecker = health.NewChecker(s.metaStore, s.storageBackend)
 
 	// Initialize lifecycle manager
-	srv.lifecycleManager = lifecycle.NewManager(
-		srv.metaStore,
-		&lifecycleObjectService{srv.objectService},
-		srv.objectService,
+	s.lifecycleManager = lifecycle.NewManager(
+		s.metaStore,
+		&lifecycleObjectService{s.objectService},
+		s.objectService,
 	)
 
 	// Initialize audit logger
 	auditLogPath := filepath.Join(cfg.DataDir, "audit.log")
 
-	srv.auditLogger, err = audit.NewAuditLogger(audit.Config{
-		Store:      srv.metaStore,
+	var err error
+	s.auditLogger, err = audit.NewAuditLogger(audit.Config{
+		Store:      s.metaStore,
 		FilePath:   auditLogPath,
 		BufferSize: defaultAuditBufferSize,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize audit logger: %w", err)
+		return fmt.Errorf("failed to initialize audit logger: %w", err)
 	}
 
 	log.Info().Str("path", auditLogPath).Msg("Audit logger initialized")
 
-	// Initialize TLS if enabled
-	if cfg.TLS.Enabled {
-		hostname := cfg.NodeName
-		if hostname == "" {
-			hostname = "localhost"
-		}
+	return nil
+}
 
-		tlsManager, err := security.NewTLSManager(&cfg.TLS, hostname)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize TLS: %w", err)
-		}
-
-		srv.tlsManager = tlsManager
-		log.Info().
-			Str("cert_file", tlsManager.GetCertFile()).
-			Str("ca_file", tlsManager.GetCAFile()).
-			Bool("require_client_cert", cfg.TLS.RequireClientCert).
-			Msg("TLS initialized (secure by default)")
-	} else {
+func (s *Server) initializeTLS(cfg *config.Config) error {
+	if !cfg.TLS.Enabled {
 		log.Warn().Msg("TLS disabled - running in insecure mode (NOT recommended for production)")
+		return nil
 	}
 
-	// Setup HTTP servers
-	srv.setupS3Server()
-	srv.setupAdminServer()
-	srv.setupConsoleServer()
+	hostname := cfg.NodeName
+	if hostname == "" {
+		hostname = "localhost"
+	}
 
-	// Mark initialization as successful to prevent cleanup
-	initSuccess = true
+	tlsManager, err := security.NewTLSManager(&cfg.TLS, hostname)
+	if err != nil {
+		return fmt.Errorf("failed to initialize TLS: %w", err)
+	}
 
-	return srv, nil
+	s.tlsManager = tlsManager
+	log.Info().
+		Str("cert_file", tlsManager.GetCertFile()).
+		Str("ca_file", tlsManager.GetCAFile()).
+		Bool("require_client_cert", cfg.TLS.RequireClientCert).
+		Msg("TLS initialized (secure by default)")
+
+	return nil
 }
 
 // cleanupOnInitFailure cleans up resources if initialization fails.
