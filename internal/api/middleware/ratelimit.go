@@ -90,48 +90,52 @@ func (l *TokenBucketLimiter) Allow() bool {
 	now := time.Now().UnixNano()
 	l.lastUsed.Store(now)
 
-	// Refill tokens based on time elapsed
 	lastRefill := l.lastRefill.Load()
-	elapsed := now - lastRefill
-
-	// Cap elapsed time to prevent integer overflow in token calculation.
-	// This ensures elapsed * refillRate won't overflow even with high refill rates.
-	if elapsed > maxElapsedNanos {
-		elapsed = maxElapsedNanos
-	}
-
-	tokensToAdd := (elapsed * l.refillRate) / int64(time.Second)
+	elapsed := l.calculateElapsed(now, lastRefill)
+	tokensToAdd := l.calculateTokensToAdd(elapsed)
 
 	if tokensToAdd <= 0 {
-		// Try to consume a token
-		for {
-			current := l.tokens.Load()
-			if current <= 0 {
-				return false
-			}
-
-			if l.tokens.CompareAndSwap(current, current-1) {
-				return true
-			}
-		}
+		return l.tryConsumeToken()
 	}
 
 	if !l.lastRefill.CompareAndSwap(lastRefill, now) {
-		// Try to consume a token
-		for {
-			current := l.tokens.Load()
-			if current <= 0 {
-				return false
-			}
-
-			if l.tokens.CompareAndSwap(current, current-1) {
-				return true
-			}
-		}
+		return l.tryConsumeToken()
 	}
 
-	// Use CAS loop to safely add tokens without race conditions.
-	// This prevents lost updates when multiple goroutines refill simultaneously.
+	l.refillTokens(tokensToAdd)
+	return l.tryConsumeToken()
+}
+
+// calculateElapsed calculates elapsed time with overflow protection.
+func (l *TokenBucketLimiter) calculateElapsed(now, lastRefill int64) int64 {
+	elapsed := now - lastRefill
+	if elapsed > maxElapsedNanos {
+		elapsed = maxElapsedNanos
+	}
+	return elapsed
+}
+
+// calculateTokensToAdd calculates how many tokens to add based on elapsed time.
+func (l *TokenBucketLimiter) calculateTokensToAdd(elapsed int64) int64 {
+	return (elapsed * l.refillRate) / int64(time.Second)
+}
+
+// tryConsumeToken attempts to consume a token using CAS loop.
+func (l *TokenBucketLimiter) tryConsumeToken() bool {
+	for {
+		current := l.tokens.Load()
+		if current <= 0 {
+			return false
+		}
+
+		if l.tokens.CompareAndSwap(current, current-1) {
+			return true
+		}
+	}
+}
+
+// refillTokens adds tokens to the bucket using CAS loop.
+func (l *TokenBucketLimiter) refillTokens(tokensToAdd int64) {
 	for {
 		current := l.tokens.Load()
 
@@ -142,18 +146,6 @@ func (l *TokenBucketLimiter) Allow() bool {
 
 		if l.tokens.CompareAndSwap(current, newTokens) {
 			break
-		}
-	}
-
-	// Try to consume a token
-	for {
-		current := l.tokens.Load()
-		if current <= 0 {
-			return false
-		}
-
-		if l.tokens.CompareAndSwap(current, current-1) {
-			return true
 		}
 	}
 }
