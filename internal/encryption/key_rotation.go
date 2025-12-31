@@ -805,42 +805,62 @@ func (krm *KeyRotationManager) CancelKeyDeletion(ctx context.Context, keyID stri
 
 // GetKeyVersion retrieves a specific version of a key.
 func (krm *KeyRotationManager) GetKeyVersion(ctx context.Context, keyID string, version int) (*KeyVersion, error) {
+	if keyVersion := krm.getKeyVersionFromCache(keyID, version); keyVersion != nil {
+		return keyVersion, nil
+	}
+
+	return krm.getKeyVersionFromStorage(ctx, keyID, version)
+}
+
+func (krm *KeyRotationManager) getKeyVersionFromCache(keyID string, version int) *KeyVersion {
 	krm.mu.RLock()
 	versions, exists := krm.keyVersions[keyID]
 	krm.mu.RUnlock()
 
-	if exists {
-		for _, v := range versions {
-			if v.Version == version {
-				return v, nil
-			}
+	if !exists {
+		return nil
+	}
+
+	for _, v := range versions {
+		if v.Version == version {
+			return v
 		}
 	}
 
-	if krm.storage != nil {
-		versions, err := krm.storage.GetKeyVersions(ctx, keyID)
-		if err != nil {
-			return nil, err
-		}
+	return nil
+}
 
-		for _, v := range versions {
-			if v.Version == version {
-				// Unwrap key material
-				if len(v.WrappedKey) > 0 {
-					keyMaterial, err := krm.unwrapKey(v.WrappedKey)
-					if err != nil {
-						return nil, err
-					}
+func (krm *KeyRotationManager) getKeyVersionFromStorage(ctx context.Context, keyID string, version int) (*KeyVersion, error) {
+	if krm.storage == nil {
+		return nil, fmt.Errorf("key version not found: %s v%d", keyID, version)
+	}
 
-					v.KeyMaterial = keyMaterial
-				}
+	versions, err := krm.storage.GetKeyVersions(ctx, keyID)
+	if err != nil {
+		return nil, err
+	}
 
-				return v, nil
-			}
+	for _, v := range versions {
+		if v.Version == version {
+			return krm.unwrapAndReturnVersion(v)
 		}
 	}
 
 	return nil, fmt.Errorf("key version not found: %s v%d", keyID, version)
+}
+
+func (krm *KeyRotationManager) unwrapAndReturnVersion(v *KeyVersion) (*KeyVersion, error) {
+	if len(v.WrappedKey) == 0 {
+		return v, nil
+	}
+
+	keyMaterial, err := krm.unwrapKey(v.WrappedKey)
+	if err != nil {
+		return nil, err
+	}
+
+	v.KeyMaterial = keyMaterial
+	return v, nil
 }
 
 // DeriveKey derives a new key from an existing key using HKDF.
