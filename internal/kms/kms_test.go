@@ -340,103 +340,111 @@ func TestVaultProvider(t *testing.T) {
 
 	defer func() { _ = provider.Close() }()
 
-	t.Run("Name", func(t *testing.T) {
-		if provider.Name() != "vault" {
-			t.Errorf("Expected name 'vault', got '%s'", provider.Name())
-		}
+	t.Run("Name", func(t *testing.T) { testVaultProviderName(t, provider) })
+	t.Run("CreateKey", func(t *testing.T) { testVaultProviderCreateKey(t, provider) })
+	t.Run("ListKeys", func(t *testing.T) { testVaultProviderListKeys(t, provider) })
+	t.Run("EncryptDecrypt", func(t *testing.T) { testVaultProviderEncryptDecrypt(t, provider) })
+	t.Run("GenerateDecryptDataKey", func(t *testing.T) { testVaultProviderGenerateDecryptDataKey(t, provider) })
+	t.Run("RotateKey", func(t *testing.T) { testVaultProviderRotateKey(t, provider) })
+	t.Run("DeleteKey", func(t *testing.T) { testVaultProviderDeleteKey(t, provider) })
+}
+
+func testVaultProviderName(t *testing.T, provider *vault.Provider) {
+	if provider.Name() != "vault" {
+		t.Errorf("Expected name 'vault', got '%s'", provider.Name())
+	}
+}
+
+func testVaultProviderCreateKey(t *testing.T, provider *vault.Provider) {
+	ctx := context.Background()
+
+	keyInfo, err := provider.CreateKey(ctx, kms.KeySpec{
+		Name:      "test-vault-key",
+		Algorithm: kms.AlgorithmAES256GCM,
+		Usage:     kms.KeyUsageEncrypt,
 	})
+	if err != nil {
+		t.Fatalf("Failed to create key: %v", err)
+	}
 
-	t.Run("CreateKey", func(t *testing.T) {
-		ctx := context.Background()
+	if keyInfo.KeyID != "test-vault-key" {
+		t.Errorf("Expected key ID 'test-vault-key', got '%s'", keyInfo.KeyID)
+	}
+}
 
-		keyInfo, err := provider.CreateKey(ctx, kms.KeySpec{
-			Name:      "test-vault-key",
-			Algorithm: kms.AlgorithmAES256GCM,
-			Usage:     kms.KeyUsageEncrypt,
-		})
-		if err != nil {
-			t.Fatalf("Failed to create key: %v", err)
-		}
+func testVaultProviderListKeys(t *testing.T, provider *vault.Provider) {
+	ctx := context.Background()
 
-		if keyInfo.KeyID != "test-vault-key" {
-			t.Errorf("Expected key ID 'test-vault-key', got '%s'", keyInfo.KeyID)
-		}
+	keys, err := provider.ListKeys(ctx)
+	if err != nil {
+		t.Fatalf("Failed to list keys: %v", err)
+	}
+
+	if len(keys) == 0 {
+		t.Error("Expected at least one key")
+	}
+}
+
+func testVaultProviderEncryptDecrypt(t *testing.T, provider *vault.Provider) {
+	ctx := context.Background()
+
+	plaintext := []byte("Hello from Vault!")
+
+	ciphertext, err := provider.Encrypt(ctx, "test-vault-key", plaintext)
+	if err != nil {
+		t.Fatalf("Failed to encrypt: %v", err)
+	}
+
+	decrypted, err := provider.Decrypt(ctx, "test-vault-key", ciphertext)
+	if err != nil {
+		t.Fatalf("Failed to decrypt: %v", err)
+	}
+
+	if string(decrypted) != string(plaintext) {
+		t.Error("Decrypted text does not match plaintext")
+	}
+}
+
+func testVaultProviderGenerateDecryptDataKey(t *testing.T, provider *vault.Provider) {
+	ctx := context.Background()
+
+	dataKey, err := provider.GenerateDataKey(ctx, "test-vault-key", kms.KeySpec{
+		Algorithm: kms.AlgorithmAES256GCM,
 	})
+	if err != nil {
+		t.Fatalf("Failed to generate data key: %v", err)
+	}
 
-	t.Run("ListKeys", func(t *testing.T) {
-		ctx := context.Background()
+	if len(dataKey.Plaintext) == 0 {
+		t.Error("Expected non-empty plaintext")
+	}
 
-		keys, err := provider.ListKeys(ctx)
-		if err != nil {
-			t.Fatalf("Failed to list keys: %v", err)
-		}
+	decrypted, err := provider.DecryptDataKey(ctx, "test-vault-key", dataKey.Ciphertext)
+	if err != nil {
+		t.Fatalf("Failed to decrypt data key: %v", err)
+	}
 
-		if len(keys) == 0 {
-			t.Error("Expected at least one key")
-		}
-	})
+	if string(decrypted) != string(dataKey.Plaintext) {
+		t.Error("Decrypted key does not match plaintext")
+	}
+}
 
-	t.Run("EncryptDecrypt", func(t *testing.T) {
-		ctx := context.Background()
+func testVaultProviderRotateKey(t *testing.T, provider *vault.Provider) {
+	ctx := context.Background()
 
-		plaintext := []byte("Hello from Vault!")
+	_, err := provider.RotateKey(ctx, "test-vault-key")
+	if err != nil {
+		t.Fatalf("Failed to rotate key: %v", err)
+	}
+}
 
-		ciphertext, err := provider.Encrypt(ctx, "test-vault-key", plaintext)
-		if err != nil {
-			t.Fatalf("Failed to encrypt: %v", err)
-		}
+func testVaultProviderDeleteKey(t *testing.T, provider *vault.Provider) {
+	ctx := context.Background()
 
-		decrypted, err := provider.Decrypt(ctx, "test-vault-key", ciphertext)
-		if err != nil {
-			t.Fatalf("Failed to decrypt: %v", err)
-		}
-
-		if string(decrypted) != string(plaintext) {
-			t.Error("Decrypted text does not match plaintext")
-		}
-	})
-
-	t.Run("GenerateDecryptDataKey", func(t *testing.T) {
-		ctx := context.Background()
-
-		dataKey, err := provider.GenerateDataKey(ctx, "test-vault-key", kms.KeySpec{
-			Algorithm: kms.AlgorithmAES256GCM,
-		})
-		if err != nil {
-			t.Fatalf("Failed to generate data key: %v", err)
-		}
-
-		if len(dataKey.Plaintext) == 0 {
-			t.Error("Expected non-empty plaintext")
-		}
-
-		decrypted, err := provider.DecryptDataKey(ctx, "test-vault-key", dataKey.Ciphertext)
-		if err != nil {
-			t.Fatalf("Failed to decrypt data key: %v", err)
-		}
-
-		if string(decrypted) != string(dataKey.Plaintext) {
-			t.Error("Decrypted key does not match plaintext")
-		}
-	})
-
-	t.Run("RotateKey", func(t *testing.T) {
-		ctx := context.Background()
-
-		_, err := provider.RotateKey(ctx, "test-vault-key")
-		if err != nil {
-			t.Fatalf("Failed to rotate key: %v", err)
-		}
-	})
-
-	t.Run("DeleteKey", func(t *testing.T) {
-		ctx := context.Background()
-
-		err := provider.DeleteKey(ctx, "test-vault-key")
-		if err != nil {
-			t.Fatalf("Failed to delete key: %v", err)
-		}
-	})
+	err := provider.DeleteKey(ctx, "test-vault-key")
+	if err != nil {
+		t.Fatalf("Failed to delete key: %v", err)
+	}
 }
 
 func TestEncryptionService(t *testing.T) {
