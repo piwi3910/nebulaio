@@ -213,47 +213,61 @@ func (s *Service) PutObject(ctx context.Context, bucket, key string, reader io.R
 
 // PutObjectWithOptions stores an object with additional options including tags.
 func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType, owner string, userMetadata map[string]string, opts *PutObjectOptions) (*metadata.ObjectMeta, error) {
-	// Verify bucket exists
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
 	if err != nil {
 		return nil, fmt.Errorf("bucket not found: %w", err)
 	}
 
-	// Validate tags if provided
-	var tags map[string]string
-
-	if opts != nil && opts.Tags != nil {
-		err := ValidateTags(opts.Tags)
-		if err != nil {
-			return nil, fmt.Errorf("invalid tags: %w", err)
-		}
-
-		tags = opts.Tags
+	tags, err := s.validateAndGetTags(opts)
+	if err != nil {
+		return nil, err
 	}
 
-	// Store the object data
 	result, err := s.storage.PutObject(ctx, bucket, key, reader, size)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store object: %w", err)
 	}
 
-	// Determine version ID and whether to preserve old versions
-	versionID := ""
-	preserveOldVersions := false
+	versionID, preserveOldVersions := s.determineVersioning(bucketInfo)
 
-	if versioningPkg.IsVersioningEnabled(bucketInfo) {
-		// Versioning enabled: generate new version ID and preserve old versions
-		versionID = s.versionService.GenerateVersionID()
-		preserveOldVersions = true
-	} else if versioningPkg.IsVersioningSuspended(bucketInfo) {
-		// Versioning suspended: use "null" version ID, overwrite null version
-		versionID = versioningPkg.NullVersionID
-		preserveOldVersions = false
+	meta := s.createObjectMetadata(bucket, key, versionID, result, contentType, owner, userMetadata, tags, bucketInfo)
+
+	if err := s.applyObjectLockSettings(ctx, bucket, key, bucketInfo, opts, meta); err != nil {
+		_ = s.storage.DeleteObject(ctx, bucket, key)
+		return nil, err
 	}
 
-	// Create object metadata
+	if err := s.storeObjectMetadata(ctx, bucket, key, meta, versionID, preserveOldVersions); err != nil {
+		_ = s.storage.DeleteObject(ctx, bucket, key)
+		return nil, err
+	}
+
+	return meta, nil
+}
+
+func (s *Service) validateAndGetTags(opts *PutObjectOptions) (map[string]string, error) {
+	if opts != nil && opts.Tags != nil {
+		if err := ValidateTags(opts.Tags); err != nil {
+			return nil, fmt.Errorf("invalid tags: %w", err)
+		}
+		return opts.Tags, nil
+	}
+	return nil, nil
+}
+
+func (s *Service) determineVersioning(bucketInfo *metadata.Bucket) (string, bool) {
+	if versioningPkg.IsVersioningEnabled(bucketInfo) {
+		return s.versionService.GenerateVersionID(), true
+	}
+	if versioningPkg.IsVersioningSuspended(bucketInfo) {
+		return versioningPkg.NullVersionID, false
+	}
+	return "", false
+}
+
+func (s *Service) createObjectMetadata(bucket, key, versionID string, result *backend.PutResult, contentType, owner string, userMetadata, tags map[string]string, bucketInfo *metadata.Bucket) *metadata.ObjectMeta {
 	now := time.Now()
-	meta := &metadata.ObjectMeta{
+	return &metadata.ObjectMeta{
 		Bucket:       bucket,
 		Key:          key,
 		VersionID:    versionID,
@@ -271,68 +285,64 @@ func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, 
 			Path: result.Path,
 		},
 	}
+}
 
-	// Apply object lock settings if bucket has object lock enabled
-	if bucketInfo.ObjectLockEnabled {
-		// Apply default retention from bucket configuration
-		err := s.ApplyDefaultRetention(ctx, bucket, meta)
-		if err != nil {
-			// Rollback: delete the stored object
-			_ = s.storage.DeleteObject(ctx, bucket, key)
-			return nil, fmt.Errorf("failed to apply default retention: %w", err)
-		}
-
-		// Apply explicit retention from options if provided
-		if opts != nil && opts.ObjectLockMode != "" {
-			err := ValidateRetentionMode(opts.ObjectLockMode)
-			if err != nil {
-				_ = s.storage.DeleteObject(ctx, bucket, key)
-				return nil, err
-			}
-
-			meta.ObjectLockMode = opts.ObjectLockMode
-		}
-
-		if opts != nil && opts.ObjectLockRetainUntilDate != nil {
-			err := ValidateRetentionDate(*opts.ObjectLockRetainUntilDate)
-			if err != nil {
-				_ = s.storage.DeleteObject(ctx, bucket, key)
-				return nil, err
-			}
-
-			meta.ObjectLockRetainUntilDate = opts.ObjectLockRetainUntilDate
-		}
-
-		if opts != nil && opts.ObjectLockLegalHoldStatus != "" {
-			err := ValidateLegalHoldStatus(opts.ObjectLockLegalHoldStatus)
-			if err != nil {
-				_ = s.storage.DeleteObject(ctx, bucket, key)
-				return nil, err
-			}
-
-			meta.ObjectLockLegalHoldStatus = opts.ObjectLockLegalHoldStatus
-		}
+func (s *Service) applyObjectLockSettings(ctx context.Context, bucket, key string, bucketInfo *metadata.Bucket, opts *PutObjectOptions, meta *metadata.ObjectMeta) error {
+	if !bucketInfo.ObjectLockEnabled {
+		return nil
 	}
 
-	// Store metadata with versioning support
+	if err := s.ApplyDefaultRetention(ctx, bucket, meta); err != nil {
+		return fmt.Errorf("failed to apply default retention: %w", err)
+	}
+
+	if err := s.applyExplicitObjectLock(opts, meta); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) applyExplicitObjectLock(opts *PutObjectOptions, meta *metadata.ObjectMeta) error {
+	if opts == nil {
+		return nil
+	}
+
+	if opts.ObjectLockMode != "" {
+		if err := ValidateRetentionMode(opts.ObjectLockMode); err != nil {
+			return err
+		}
+		meta.ObjectLockMode = opts.ObjectLockMode
+	}
+
+	if opts.ObjectLockRetainUntilDate != nil {
+		if err := ValidateRetentionDate(*opts.ObjectLockRetainUntilDate); err != nil {
+			return err
+		}
+		meta.ObjectLockRetainUntilDate = opts.ObjectLockRetainUntilDate
+	}
+
+	if opts.ObjectLockLegalHoldStatus != "" {
+		if err := ValidateLegalHoldStatus(opts.ObjectLockLegalHoldStatus); err != nil {
+			return err
+		}
+		meta.ObjectLockLegalHoldStatus = opts.ObjectLockLegalHoldStatus
+	}
+
+	return nil
+}
+
+func (s *Service) storeObjectMetadata(ctx context.Context, bucket, key string, meta *metadata.ObjectMeta, versionID string, preserveOldVersions bool) error {
 	if versionID != "" {
-		err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions)
-		if err != nil {
-			// Rollback: delete the stored object
-			_ = s.storage.DeleteObject(ctx, bucket, key)
-			return nil, fmt.Errorf("failed to store object metadata: %w", err)
+		if err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions); err != nil {
+			return fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	} else {
-		// No versioning, just store normally
-		err := s.store.PutObjectMeta(ctx, meta)
-		if err != nil {
-			// Rollback: delete the stored object
-			_ = s.storage.DeleteObject(ctx, bucket, key)
-			return nil, fmt.Errorf("failed to store object metadata: %w", err)
+		if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+			return fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	}
-
-	return meta, nil
+	return nil
 }
 
 // GetObject retrieves an object.
