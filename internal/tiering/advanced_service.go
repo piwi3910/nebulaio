@@ -282,7 +282,24 @@ func (s *AdvancedService) GetObject(ctx context.Context, bucket, key string) (io
 
 // PutObject stores an object with policy-aware placement.
 func (s *AdvancedService) PutObject(ctx context.Context, bucket, key string, reader io.Reader, size int64) (*backend.PutResult, error) {
-	// Evaluate policies to determine placement
+	// Determine target tier based on policies
+	targetTier := s.determineTargetTier(ctx, bucket, key, size)
+
+	// Handle write-through caching
+	data, err := s.handleWriteThrough(ctx, bucket, key, reader, size)
+	if err != nil {
+		return nil, err
+	}
+
+	// Prepare reader for storage
+	putReader := s.preparePutReader(reader, data)
+
+	// Store in target tier
+	return s.putToTier(ctx, bucket, key, putReader, size, targetTier)
+}
+
+// determineTargetTier evaluates policies to determine placement tier.
+func (s *AdvancedService) determineTargetTier(ctx context.Context, bucket, key string, size int64) TierType {
 	obj := ObjectMetadata{
 		Bucket:       bucket,
 		Key:          key,
@@ -296,65 +313,92 @@ func (s *AdvancedService) PutObject(ctx context.Context, bucket, key string, rea
 	result, err := s.policyEngine.EvaluateObject(ctx, obj)
 	if err != nil {
 		log.Warn().Err(err).Msg("Policy evaluation failed, using default tier")
+
+		return TierHot
 	}
 
-	// Determine target tier from policy or use default
-	targetTier := TierHot
+	return s.extractTargetTierFromResult(result)
+}
 
-	if result != nil && len(result.MatchingPolicies) > 0 {
-		match := result.MatchingPolicies[0]
-		for _, action := range match.Policy.Actions {
-			if action.Type == ActionTransition && action.Transition != nil {
-				targetTier = action.Transition.TargetTier
-				break
-			}
+// extractTargetTierFromResult extracts target tier from policy result.
+func (s *AdvancedService) extractTargetTierFromResult(result *EvaluationResult) TierType {
+	if result == nil || len(result.MatchingPolicies) == 0 {
+		return TierHot
+	}
+
+	match := result.MatchingPolicies[0]
+	for _, action := range match.Policy.Actions {
+		if action.Type == ActionTransition && action.Transition != nil {
+			return action.Transition.TargetTier
 		}
 	}
 
-	// Write-through to cache if enabled
-	var data []byte
-	if s.cache != nil && s.config.Cache.WriteThrough && size <= s.config.Cache.MaxSize/10 {
-		data, err = io.ReadAll(reader)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read object data: %w", err)
-		}
+	return TierHot
+}
 
-		cacheKey := bucket + "/" + key
-		_ = s.cache.Put(ctx, cacheKey, data, "", "")
+// handleWriteThrough performs write-through caching if enabled.
+func (s *AdvancedService) handleWriteThrough(
+	ctx context.Context,
+	bucket, key string,
+	reader io.Reader,
+	size int64,
+) ([]byte, error) {
+	if s.cache == nil || !s.config.Cache.WriteThrough || size > s.config.Cache.MaxSize/10 {
+		return nil, nil
 	}
 
-	// Store in target tier
-	var putReader io.Reader
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read object data: %w", err)
+	}
+
+	cacheKey := bucket + "/" + key
+	_ = s.cache.Put(ctx, cacheKey, data, "", "")
+
+	return data, nil
+}
+
+// preparePutReader prepares the reader for storage operation.
+func (s *AdvancedService) preparePutReader(originalReader io.Reader, data []byte) io.Reader {
 	if data != nil {
-		putReader = &bytesReader{data: data}
-	} else {
-		putReader = reader
+		return &bytesReader{data: data, pos: 0}
 	}
 
-	switch targetTier {
+	return originalReader
+}
+
+// putToTier stores object in the specified tier with fallback.
+func (s *AdvancedService) putToTier(
+	ctx context.Context,
+	bucket, key string,
+	reader io.Reader,
+	size int64,
+	tier TierType,
+) (*backend.PutResult, error) {
+	switch tier {
 	case TierHot:
 		if s.hotStorage != nil {
-			return s.hotStorage.PutObject(ctx, bucket, key, putReader, size)
+			return s.hotStorage.PutObject(ctx, bucket, key, reader, size)
 		}
 	case TierWarm:
 		if s.warmStorage != nil {
-			return s.warmStorage.PutObject(ctx, bucket, key, putReader, size)
+			return s.warmStorage.PutObject(ctx, bucket, key, reader, size)
 		}
 	case TierCold, TierArchive:
 		if s.coldManager != nil {
-			cold := s.coldManager.GetByTier(targetTier)
+			cold := s.coldManager.GetByTier(tier)
 			if cold != nil {
-				return cold.PutObject(ctx, bucket, key, putReader, size)
+				return cold.PutObject(ctx, bucket, key, reader, size)
 			}
 		}
 	}
 
 	// Fallback to hot storage
 	if s.hotStorage != nil {
-		return s.hotStorage.PutObject(ctx, bucket, key, putReader, size)
+		return s.hotStorage.PutObject(ctx, bucket, key, reader, size)
 	}
 
-	return nil, fmt.Errorf("no storage available for tier %s", targetTier)
+	return nil, fmt.Errorf("no storage available for tier %s", tier)
 }
 
 // DeleteObject removes an object from all tiers.
