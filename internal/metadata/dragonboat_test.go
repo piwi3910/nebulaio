@@ -1330,96 +1330,102 @@ func TestMultipartUploadOperations(t *testing.T) {
 
 	uploadID := "upload-123"
 
-	t.Run("CreateMultipartUpload", func(t *testing.T) {
-		upload := &MultipartUpload{
-			Bucket:    "test-bucket",
-			Key:       "test-key",
-			UploadID:  uploadID,
-			Initiator: "test-user",
-			CreatedAt: time.Now(),
-			Parts:     []UploadPart{},
-		}
+	t.Run("CreateMultipartUpload", func(t *testing.T) { testCreateMultipartUpload(t, ctx, store, uploadID) })
+	t.Run("GetMultipartUpload", func(t *testing.T) { testGetMultipartUpload(t, ctx, store, uploadID) })
+	t.Run("AddUploadPart", func(t *testing.T) { testAddUploadPart(t, ctx, store, uploadID) })
+	t.Run("ListMultipartUploads", func(t *testing.T) { testListMultipartUploads(t, ctx, store) })
+	t.Run("AbortMultipartUpload", func(t *testing.T) { testAbortMultipartUpload(t, ctx, store, uploadID) })
+}
 
-		err := store.CreateMultipartUpload(ctx, upload)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+func testCreateMultipartUpload(t *testing.T, ctx context.Context, store *DragonboatStore, uploadID string) {
+	upload := &MultipartUpload{
+		Bucket:    "test-bucket",
+		Key:       "test-key",
+		UploadID:  uploadID,
+		Initiator: "test-user",
+		CreatedAt: time.Now(),
+		Parts:     []UploadPart{},
+	}
 
-		if err != nil {
-			t.Errorf("Failed to create multipart upload: %v", err)
-		}
-	})
+	err := store.CreateMultipartUpload(ctx, upload)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-	t.Run("GetMultipartUpload", func(t *testing.T) {
-		upload, err := store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
-		if err != nil {
-			t.Errorf("Failed to get multipart upload: %v", err)
-		}
+	if err != nil {
+		t.Errorf("Failed to create multipart upload: %v", err)
+	}
+}
 
-		if upload == nil {
-			t.Fatal("Expected upload, got nil")
-		}
+func testGetMultipartUpload(t *testing.T, ctx context.Context, store *DragonboatStore, uploadID string) {
+	upload, err := store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
+	if err != nil {
+		t.Errorf("Failed to get multipart upload: %v", err)
+	}
 
-		if upload.UploadID != uploadID {
-			t.Errorf("Expected upload ID '%s', got '%s'", uploadID, upload.UploadID)
-		}
-	})
+	if upload == nil {
+		t.Fatal("Expected upload, got nil")
+	}
 
-	t.Run("AddUploadPart", func(t *testing.T) {
-		part := &UploadPart{
-			PartNumber:   1,
-			ETag:         "etag123",
-			Size:         1024,
-			LastModified: time.Now(),
-		}
+	if upload.UploadID != uploadID {
+		t.Errorf("Expected upload ID '%s', got '%s'", uploadID, upload.UploadID)
+	}
+}
 
-		err := store.AddUploadPart(ctx, "test-bucket", "test-key", uploadID, part)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+func testAddUploadPart(t *testing.T, ctx context.Context, store *DragonboatStore, uploadID string) {
+	part := &UploadPart{
+		PartNumber:   1,
+		ETag:         "etag123",
+		Size:         1024,
+		LastModified: time.Now(),
+	}
 
-		if err != nil {
-			t.Errorf("Failed to add upload part: %v", err)
-		}
+	err := store.AddUploadPart(ctx, "test-bucket", "test-key", uploadID, part)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-		// Verify part was added
-		upload, err := store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
-		if err != nil {
-			t.Errorf("Failed to get multipart upload: %v", err)
-		}
+	if err != nil {
+		t.Errorf("Failed to add upload part: %v", err)
+	}
 
-		if len(upload.Parts) != 1 {
-			t.Errorf("Expected 1 part, got %d", len(upload.Parts))
-		}
-	})
+	// Verify part was added
+	upload, err := store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
+	if err != nil {
+		t.Errorf("Failed to get multipart upload: %v", err)
+	}
 
-	t.Run("ListMultipartUploads", func(t *testing.T) {
-		uploads, err := store.ListMultipartUploads(ctx, "test-bucket")
-		if err != nil {
-			t.Errorf("Failed to list multipart uploads: %v", err)
-		}
+	if len(upload.Parts) != 1 {
+		t.Errorf("Expected 1 part, got %d", len(upload.Parts))
+	}
+}
 
-		if len(uploads) == 0 {
-			t.Error("Expected at least one upload")
-		}
-	})
+func testListMultipartUploads(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	uploads, err := store.ListMultipartUploads(ctx, "test-bucket")
+	if err != nil {
+		t.Errorf("Failed to list multipart uploads: %v", err)
+	}
 
-	t.Run("AbortMultipartUpload", func(t *testing.T) {
-		err := store.AbortMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+	if len(uploads) == 0 {
+		t.Error("Expected at least one upload")
+	}
+}
 
-		if err != nil {
-			t.Errorf("Failed to abort multipart upload: %v", err)
-		}
+func testAbortMultipartUpload(t *testing.T, ctx context.Context, store *DragonboatStore, uploadID string) {
+	err := store.AbortMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-		// Verify deletion
-		_, err = store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
-		if err == nil {
-			t.Error("Expected error when getting aborted upload")
-		}
-	})
+	if err != nil {
+		t.Errorf("Failed to abort multipart upload: %v", err)
+	}
+
+	// Verify deletion
+	_, err = store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
+	if err == nil {
+		t.Error("Expected error when getting aborted upload")
+	}
 }
 
 // TestSnapshotOperations tests snapshot-related operations.
