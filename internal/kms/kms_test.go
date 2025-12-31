@@ -488,205 +488,212 @@ func TestEncryptionService(t *testing.T) {
 
 	defer func() { _ = service.Close() }()
 
-	t.Run("EncryptDecrypt", func(t *testing.T) {
-		plaintext := []byte("Hello, encryption service!")
+	t.Run("EncryptDecrypt", func(t *testing.T) { testEncryptionServiceEncryptDecrypt(t, ctx, service, keyInfo) })
+	t.Run("EncryptWithKey", func(t *testing.T) { testEncryptionServiceEncryptWithKey(t, ctx, service, keyInfo) })
+	t.Run("RotateKey", func(t *testing.T) { testEncryptionServiceRotateKey(t, ctx, service) })
+	t.Run("LargeData", func(t *testing.T) { testEncryptionServiceLargeData(t, ctx, service) })
+	t.Run("StreamEncryption", func(t *testing.T) { testEncryptionServiceStreamEncryption(t, ctx, service, keyInfo) })
+	t.Run("ChaCha20Encryption", func(t *testing.T) { testEncryptionServiceChaCha20(t, ctx, provider) })
+}
 
-		encrypted, err := service.Encrypt(ctx, plaintext)
+func testEncryptionServiceEncryptDecrypt(t *testing.T, ctx context.Context, service *encryption.Service, keyInfo *kms.KeyInfo) {
+	plaintext := []byte("Hello, encryption service!")
+
+	encrypted, err := service.Encrypt(ctx, plaintext)
+	if err != nil {
+		t.Fatalf("Failed to encrypt: %v", err)
+	}
+
+	if encrypted.KeyID != keyInfo.KeyID {
+		t.Errorf("Key ID mismatch: expected '%s', got '%s'", keyInfo.KeyID, encrypted.KeyID)
+	}
+
+	if len(encrypted.EncryptedDEK) == 0 {
+		t.Error("Expected non-empty encrypted DEK")
+	}
+
+	if len(encrypted.Ciphertext) == 0 {
+		t.Error("Expected non-empty ciphertext")
+	}
+
+	decrypted, err := service.Decrypt(ctx, encrypted)
+	if err != nil {
+		t.Fatalf("Failed to decrypt: %v", err)
+	}
+
+	if string(decrypted) != string(plaintext) {
+		t.Error("Decrypted text does not match plaintext")
+	}
+}
+
+func testEncryptionServiceEncryptWithKey(t *testing.T, ctx context.Context, service *encryption.Service, keyInfo *kms.KeyInfo) {
+	plaintext := []byte("Using explicit key ID")
+
+	encrypted, err := service.EncryptWithKey(ctx, keyInfo.KeyID, plaintext)
+	if err != nil {
+		t.Fatalf("Failed to encrypt: %v", err)
+	}
+
+	decrypted, err := service.Decrypt(ctx, encrypted)
+	if err != nil {
+		t.Fatalf("Failed to decrypt: %v", err)
+	}
+
+	if string(decrypted) != string(plaintext) {
+		t.Error("Decrypted text does not match plaintext")
+	}
+}
+
+func testEncryptionServiceRotateKey(t *testing.T, ctx context.Context, service *encryption.Service) {
+	plaintext := []byte("Data to rotate")
+
+	encrypted, err := service.Encrypt(ctx, plaintext)
+	if err != nil {
+		t.Fatalf("Failed to encrypt: %v", err)
+	}
+
+	rotated, err := service.RotateKey(ctx, encrypted)
+	if err != nil {
+		t.Fatalf("Failed to rotate: %v", err)
+	}
+
+	// New encrypted DEK should be different
+	if string(rotated.EncryptedDEK) == string(encrypted.EncryptedDEK) {
+		t.Error("Encrypted DEK should change after rotation")
+	}
+
+	// Should still decrypt to same plaintext
+	decrypted, err := service.Decrypt(ctx, rotated)
+	if err != nil {
+		t.Fatalf("Failed to decrypt rotated data: %v", err)
+	}
+
+	if string(decrypted) != string(plaintext) {
+		t.Error("Decrypted text does not match plaintext after rotation")
+	}
+}
+
+func testEncryptionServiceLargeData(t *testing.T, ctx context.Context, service *encryption.Service) {
+	// Test with 1MB of data
+	plaintext := make([]byte, 1024*1024)
+	for i := range plaintext {
+		plaintext[i] = byte(i % 256)
+	}
+
+	encrypted, err := service.Encrypt(ctx, plaintext)
+	if err != nil {
+		t.Fatalf("Failed to encrypt large data: %v", err)
+	}
+
+	decrypted, err := service.Decrypt(ctx, encrypted)
+	if err != nil {
+		t.Fatalf("Failed to decrypt large data: %v", err)
+	}
+
+	if len(decrypted) != len(plaintext) {
+		t.Errorf("Length mismatch: expected %d, got %d", len(plaintext), len(decrypted))
+	}
+
+	for i := range plaintext {
+		if plaintext[i] != decrypted[i] {
+			t.Errorf("Data mismatch at position %d", i)
+			break
+		}
+	}
+}
+
+func testEncryptionServiceStreamEncryption(t *testing.T, ctx context.Context, service *encryption.Service, keyInfo *kms.KeyInfo) {
+	// Create stream encryptor
+	encryptor, err := service.NewStreamEncryptor(ctx, keyInfo.KeyID)
+	if err != nil {
+		t.Fatalf("Failed to create stream encryptor: %v", err)
+	}
+
+	defer func() { _ = encryptor.Close() }()
+
+	// Encrypt chunks
+	chunks := [][]byte{
+		[]byte("First chunk of data"),
+		[]byte("Second chunk of data"),
+		[]byte("Third chunk of data"),
+	}
+
+	header := encryptor.Header()
+	encryptedChunks := make([][]byte, len(chunks))
+
+	for i, chunk := range chunks {
+		encrypted, err := encryptor.EncryptChunk(chunk)
 		if err != nil {
-			t.Fatalf("Failed to encrypt: %v", err)
+			t.Fatalf("Failed to encrypt chunk %d: %v", i, err)
 		}
 
-		if encrypted.KeyID != keyInfo.KeyID {
-			t.Errorf("Key ID mismatch: expected '%s', got '%s'", keyInfo.KeyID, encrypted.KeyID)
-		}
+		encryptedChunks[i] = encrypted
+	}
 
-		if len(encrypted.EncryptedDEK) == 0 {
-			t.Error("Expected non-empty encrypted DEK")
-		}
+	// Create stream decryptor
+	decryptor, err := service.NewStreamDecryptor(ctx, header)
+	if err != nil {
+		t.Fatalf("Failed to create stream decryptor: %v", err)
+	}
 
-		if len(encrypted.Ciphertext) == 0 {
-			t.Error("Expected non-empty ciphertext")
-		}
+	defer func() { _ = decryptor.Close() }()
 
-		decrypted, err := service.Decrypt(ctx, encrypted)
+	// Decrypt chunks
+	for i, encChunk := range encryptedChunks {
+		decrypted, err := decryptor.DecryptChunk(encChunk)
 		if err != nil {
-			t.Fatalf("Failed to decrypt: %v", err)
+			t.Fatalf("Failed to decrypt chunk %d: %v", i, err)
 		}
 
-		if string(decrypted) != string(plaintext) {
-			t.Error("Decrypted text does not match plaintext")
+		if string(decrypted) != string(chunks[i]) {
+			t.Errorf("Chunk %d mismatch: expected '%s', got '%s'", i, chunks[i], decrypted)
 		}
+	}
+}
+
+func testEncryptionServiceChaCha20(t *testing.T, ctx context.Context, provider kms.Provider) {
+	// Create a ChaCha20 key
+	chachaKey, err := provider.CreateKey(ctx, kms.KeySpec{
+		Name:      "chacha20-key",
+		Algorithm: kms.AlgorithmChaCha20,
+		Usage:     kms.KeyUsageEncrypt,
 	})
+	if err != nil {
+		t.Fatalf("Failed to create ChaCha20 key: %v", err)
+	}
 
-	t.Run("EncryptWithKey", func(t *testing.T) {
-		plaintext := []byte("Using explicit key ID")
+	// Create service with ChaCha20
+	chachaSvc, err := encryption.NewService(encryption.Config{
+		DefaultKeyID:    chachaKey.KeyID,
+		Algorithm:       kms.AlgorithmChaCha20,
+		KeyCacheTTL:     5 * time.Minute,
+		KeyCacheMaxSize: 100,
+	}, provider)
+	if err != nil {
+		t.Fatalf("Failed to create ChaCha20 service: %v", err)
+	}
 
-		encrypted, err := service.EncryptWithKey(ctx, keyInfo.KeyID, plaintext)
-		if err != nil {
-			t.Fatalf("Failed to encrypt: %v", err)
-		}
+	defer func() { _ = chachaSvc.Close() }()
 
-		decrypted, err := service.Decrypt(ctx, encrypted)
-		if err != nil {
-			t.Fatalf("Failed to decrypt: %v", err)
-		}
+	plaintext := []byte("Testing ChaCha20-Poly1305")
 
-		if string(decrypted) != string(plaintext) {
-			t.Error("Decrypted text does not match plaintext")
-		}
-	})
+	encrypted, err := chachaSvc.Encrypt(ctx, plaintext)
+	if err != nil {
+		t.Fatalf("Failed to encrypt with ChaCha20: %v", err)
+	}
 
-	t.Run("RotateKey", func(t *testing.T) {
-		plaintext := []byte("Data to rotate")
+	if encrypted.Algorithm != kms.AlgorithmChaCha20 {
+		t.Errorf("Expected ChaCha20 algorithm, got %s", encrypted.Algorithm)
+	}
 
-		encrypted, err := service.Encrypt(ctx, plaintext)
-		if err != nil {
-			t.Fatalf("Failed to encrypt: %v", err)
-		}
+	decrypted, err := chachaSvc.Decrypt(ctx, encrypted)
+	if err != nil {
+		t.Fatalf("Failed to decrypt with ChaCha20: %v", err)
+	}
 
-		rotated, err := service.RotateKey(ctx, encrypted)
-		if err != nil {
-			t.Fatalf("Failed to rotate: %v", err)
-		}
-
-		// New encrypted DEK should be different
-		if string(rotated.EncryptedDEK) == string(encrypted.EncryptedDEK) {
-			t.Error("Encrypted DEK should change after rotation")
-		}
-
-		// Should still decrypt to same plaintext
-		decrypted, err := service.Decrypt(ctx, rotated)
-		if err != nil {
-			t.Fatalf("Failed to decrypt rotated data: %v", err)
-		}
-
-		if string(decrypted) != string(plaintext) {
-			t.Error("Decrypted text does not match plaintext after rotation")
-		}
-	})
-
-	t.Run("LargeData", func(t *testing.T) {
-		// Test with 1MB of data
-		plaintext := make([]byte, 1024*1024)
-		for i := range plaintext {
-			plaintext[i] = byte(i % 256)
-		}
-
-		encrypted, err := service.Encrypt(ctx, plaintext)
-		if err != nil {
-			t.Fatalf("Failed to encrypt large data: %v", err)
-		}
-
-		decrypted, err := service.Decrypt(ctx, encrypted)
-		if err != nil {
-			t.Fatalf("Failed to decrypt large data: %v", err)
-		}
-
-		if len(decrypted) != len(plaintext) {
-			t.Errorf("Length mismatch: expected %d, got %d", len(plaintext), len(decrypted))
-		}
-
-		for i := range plaintext {
-			if plaintext[i] != decrypted[i] {
-				t.Errorf("Data mismatch at position %d", i)
-				break
-			}
-		}
-	})
-
-	t.Run("StreamEncryption", func(t *testing.T) {
-		// Create stream encryptor
-		encryptor, err := service.NewStreamEncryptor(ctx, keyInfo.KeyID)
-		if err != nil {
-			t.Fatalf("Failed to create stream encryptor: %v", err)
-		}
-
-		defer func() { _ = encryptor.Close() }()
-
-		// Encrypt chunks
-		chunks := [][]byte{
-			[]byte("First chunk of data"),
-			[]byte("Second chunk of data"),
-			[]byte("Third chunk of data"),
-		}
-
-		header := encryptor.Header()
-		encryptedChunks := make([][]byte, len(chunks))
-
-		for i, chunk := range chunks {
-			encrypted, err := encryptor.EncryptChunk(chunk)
-			if err != nil {
-				t.Fatalf("Failed to encrypt chunk %d: %v", i, err)
-			}
-
-			encryptedChunks[i] = encrypted
-		}
-
-		// Create stream decryptor
-		decryptor, err := service.NewStreamDecryptor(ctx, header)
-		if err != nil {
-			t.Fatalf("Failed to create stream decryptor: %v", err)
-		}
-
-		defer func() { _ = decryptor.Close() }()
-
-		// Decrypt chunks
-		for i, encChunk := range encryptedChunks {
-			decrypted, err := decryptor.DecryptChunk(encChunk)
-			if err != nil {
-				t.Fatalf("Failed to decrypt chunk %d: %v", i, err)
-			}
-
-			if string(decrypted) != string(chunks[i]) {
-				t.Errorf("Chunk %d mismatch: expected '%s', got '%s'", i, chunks[i], decrypted)
-			}
-		}
-	})
-
-	t.Run("ChaCha20Encryption", func(t *testing.T) {
-		// Create a ChaCha20 key
-		chachaKey, err := provider.CreateKey(ctx, kms.KeySpec{
-			Name:      "chacha20-key",
-			Algorithm: kms.AlgorithmChaCha20,
-			Usage:     kms.KeyUsageEncrypt,
-		})
-		if err != nil {
-			t.Fatalf("Failed to create ChaCha20 key: %v", err)
-		}
-
-		// Create service with ChaCha20
-		chachaSvc, err := encryption.NewService(encryption.Config{
-			DefaultKeyID:    chachaKey.KeyID,
-			Algorithm:       kms.AlgorithmChaCha20,
-			KeyCacheTTL:     5 * time.Minute,
-			KeyCacheMaxSize: 100,
-		}, provider)
-		if err != nil {
-			t.Fatalf("Failed to create ChaCha20 service: %v", err)
-		}
-
-		defer func() { _ = chachaSvc.Close() }()
-
-		plaintext := []byte("Testing ChaCha20-Poly1305")
-
-		encrypted, err := chachaSvc.Encrypt(ctx, plaintext)
-		if err != nil {
-			t.Fatalf("Failed to encrypt with ChaCha20: %v", err)
-		}
-
-		if encrypted.Algorithm != kms.AlgorithmChaCha20 {
-			t.Errorf("Expected ChaCha20 algorithm, got %s", encrypted.Algorithm)
-		}
-
-		decrypted, err := chachaSvc.Decrypt(ctx, encrypted)
-		if err != nil {
-			t.Fatalf("Failed to decrypt with ChaCha20: %v", err)
-		}
-
-		if string(decrypted) != string(plaintext) {
-			t.Error("ChaCha20 decryption failed")
-		}
-	})
+	if string(decrypted) != string(plaintext) {
+		t.Error("ChaCha20 decryption failed")
+	}
 }
 
 func TestProviderErrors(t *testing.T) {
