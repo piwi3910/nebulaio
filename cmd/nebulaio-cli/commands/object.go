@@ -379,6 +379,78 @@ func newObjectListCmd() *cobra.Command {
 	return cmd
 }
 
+// runObjectHead executes the object head operation.
+func runObjectHead(s3URI, versionID string) error {
+	bucket, key, isS3 := ParseS3URI(s3URI)
+	if !isS3 || key == "" {
+		return fmt.Errorf("invalid S3 URI: %s", s3URI)
+	}
+
+	ctx := context.Background()
+	client, err := NewS3Client(ctx)
+	if err != nil {
+		return err
+	}
+
+	input := buildHeadObjectInput(bucket, key, versionID)
+
+	result, err := client.HeadObject(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to get object metadata: %w", err)
+	}
+
+	printHeadObjectResult(key, result)
+	return nil
+}
+
+// buildHeadObjectInput constructs HeadObjectInput.
+func buildHeadObjectInput(bucket, key, versionID string) *s3.HeadObjectInput {
+	input := &s3.HeadObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+	}
+	if versionID != "" {
+		input.VersionId = &versionID
+	}
+	return input
+}
+
+// printHeadObjectResult prints object metadata.
+func printHeadObjectResult(key string, result *s3.HeadObjectOutput) {
+	fmt.Printf("Key: %s\n", key)
+
+	if result.ContentLength != nil {
+		fmt.Printf("Size: %s (%d bytes)\n", FormatSize(*result.ContentLength), *result.ContentLength)
+	}
+
+	if result.ContentType != nil {
+		fmt.Printf("Content-Type: %s\n", *result.ContentType)
+	}
+
+	if result.ETag != nil {
+		fmt.Printf("ETag: %s\n", *result.ETag)
+	}
+
+	if result.LastModified != nil {
+		fmt.Printf("Last-Modified: %s\n", result.LastModified.Format(time.RFC3339))
+	}
+
+	if result.VersionId != nil {
+		fmt.Printf("Version-Id: %s\n", *result.VersionId)
+	}
+
+	if result.StorageClass != "" {
+		fmt.Printf("Storage-Class: %s\n", result.StorageClass)
+	}
+
+	if len(result.Metadata) > 0 {
+		fmt.Println("Metadata:")
+		for k, v := range result.Metadata {
+			fmt.Printf("  %s: %s\n", k, v)
+		}
+	}
+}
+
 func newObjectHeadCmd() *cobra.Command {
 	var versionID string
 
@@ -387,66 +459,7 @@ func newObjectHeadCmd() *cobra.Command {
 		Short: "Get object metadata",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			bucket, key, isS3 := ParseS3URI(args[0])
-			if !isS3 || key == "" {
-				return fmt.Errorf("invalid S3 URI: %s", args[0])
-			}
-
-			ctx := context.Background()
-
-			client, err := NewS3Client(ctx)
-			if err != nil {
-				return err
-			}
-
-			input := &s3.HeadObjectInput{
-				Bucket: &bucket,
-				Key:    &key,
-			}
-			if versionID != "" {
-				input.VersionId = &versionID
-			}
-
-			result, err := client.HeadObject(ctx, input)
-			if err != nil {
-				return fmt.Errorf("failed to get object metadata: %w", err)
-			}
-
-			fmt.Printf("Key: %s\n", key)
-
-			if result.ContentLength != nil {
-				fmt.Printf("Size: %s (%d bytes)\n", FormatSize(*result.ContentLength), *result.ContentLength)
-			}
-
-			if result.ContentType != nil {
-				fmt.Printf("Content-Type: %s\n", *result.ContentType)
-			}
-
-			if result.ETag != nil {
-				fmt.Printf("ETag: %s\n", *result.ETag)
-			}
-
-			if result.LastModified != nil {
-				fmt.Printf("Last-Modified: %s\n", result.LastModified.Format(time.RFC3339))
-			}
-
-			if result.VersionId != nil {
-				fmt.Printf("Version-Id: %s\n", *result.VersionId)
-			}
-
-			if result.StorageClass != "" {
-				fmt.Printf("Storage-Class: %s\n", result.StorageClass)
-			}
-
-			if len(result.Metadata) > 0 {
-				fmt.Println("Metadata:")
-
-				for k, v := range result.Metadata {
-					fmt.Printf("  %s: %s\n", k, v)
-				}
-			}
-
-			return nil
+			return runObjectHead(args[0], versionID)
 		},
 	}
 
