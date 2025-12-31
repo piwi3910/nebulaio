@@ -428,78 +428,96 @@ func NewListCmd() *cobra.Command {
 
 			// No args - list buckets
 			if len(args) == 0 {
-				result, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
-				if err != nil {
-					return fmt.Errorf("failed to list buckets: %w", err)
-				}
-
-				for _, bucket := range result.Buckets {
-					created := ""
-					if bucket.CreationDate != nil {
-						created = bucket.CreationDate.Format("2006-01-02 15:04:05")
-					}
-
-					fmt.Printf("%s  s3://%s\n", created, *bucket.Name)
-				}
-
-				return nil
+				return listBuckets(ctx, client)
 			}
 
 			// List objects
-			bucket, prefix, isS3 := ParseS3URI(args[0])
-			if !isS3 {
-				bucket = args[0]
-			}
-
-			input := &s3.ListObjectsV2Input{
-				Bucket: &bucket,
-			}
-			if prefix != "" {
-				input.Prefix = &prefix
-			}
-
-			if !recursive {
-				delimiter := "/"
-				input.Delimiter = &delimiter
-			}
-
-			paginator := s3.NewListObjectsV2Paginator(client, input)
-			for paginator.HasMorePages() {
-				page, err := paginator.NextPage(ctx)
-				if err != nil {
-					return fmt.Errorf("failed to list objects: %w", err)
-				}
-
-				// Print common prefixes (directories)
-				for _, p := range page.CommonPrefixes {
-					if p.Prefix != nil {
-						fmt.Printf("                           PRE %s\n", *p.Prefix)
-					}
-				}
-
-				// Print objects
-				for _, obj := range page.Contents {
-					modified := ""
-					if obj.LastModified != nil {
-						modified = obj.LastModified.Format("2006-01-02 15:04:05")
-					}
-
-					size := int64(0)
-					if obj.Size != nil {
-						size = *obj.Size
-					}
-
-					fmt.Printf("%s %10d %s\n", modified, size, *obj.Key)
-				}
-			}
-
-			return nil
+			return listObjects(ctx, client, args[0], recursive)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "List recursively")
 
 	return cmd
+}
+
+func listBuckets(ctx context.Context, client *s3.Client) error {
+	result, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
+	if err != nil {
+		return fmt.Errorf("failed to list buckets: %w", err)
+	}
+
+	for _, bucket := range result.Buckets {
+		created := ""
+		if bucket.CreationDate != nil {
+			created = bucket.CreationDate.Format("2006-01-02 15:04:05")
+		}
+
+		fmt.Printf("%s  s3://%s\n", created, *bucket.Name)
+	}
+
+	return nil
+}
+
+func listObjects(ctx context.Context, client *s3.Client, uri string, recursive bool) error {
+	bucket, prefix, isS3 := ParseS3URI(uri)
+	if !isS3 {
+		bucket = uri
+	}
+
+	input := buildListObjectsInput(bucket, prefix, recursive)
+
+	paginator := s3.NewListObjectsV2Paginator(client, input)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list objects: %w", err)
+		}
+
+		printListObjectsPage(page)
+	}
+
+	return nil
+}
+
+func buildListObjectsInput(bucket, prefix string, recursive bool) *s3.ListObjectsV2Input {
+	input := &s3.ListObjectsV2Input{
+		Bucket: &bucket,
+	}
+	if prefix != "" {
+		input.Prefix = &prefix
+	}
+
+	if !recursive {
+		delimiter := "/"
+		input.Delimiter = &delimiter
+	}
+
+	return input
+}
+
+func printListObjectsPage(page *s3.ListObjectsV2Output) {
+	// Print common prefixes (directories)
+	for _, p := range page.CommonPrefixes {
+		if p.Prefix != nil {
+			fmt.Printf("                           PRE %s\n", *p.Prefix)
+		}
+	}
+
+	// Print objects
+	for _, obj := range page.Contents {
+		modified := ""
+		if obj.LastModified != nil {
+			modified = obj.LastModified.Format("2006-01-02 15:04:05")
+		}
+
+		size := int64(0)
+		if obj.Size != nil {
+			size = *obj.Size
+		}
+
+		fmt.Printf("%s %10d %s\n", modified, size, *obj.Key)
+	}
 }
 
 // NewCopyCmd creates the cp alias command.
