@@ -533,50 +533,79 @@ func (fw *Firewall) checkConnectionLimits(req *Request) bool {
 }
 
 func (fw *Firewall) checkRateLimits(req *Request) bool {
-	// Check global rate limit
-	if fw.globalLimiter != nil && !fw.globalLimiter.Allow() {
+	if !fw.checkGlobalRateLimit() {
 		return false
 	}
 
-	// Check per-IP rate limit
+	if !fw.checkIPRateLimit(req) {
+		return false
+	}
+
+	if !fw.checkUserRateLimit(req) {
+		return false
+	}
+
+	if !fw.checkBucketRateLimit(req) {
+		return false
+	}
+
+	if !fw.checkOperationRateLimit(req) {
+		return false
+	}
+
+	return true
+}
+
+func (fw *Firewall) checkGlobalRateLimit() bool {
+	if fw.globalLimiter != nil && !fw.globalLimiter.Allow() {
+		return false
+	}
+	return true
+}
+
+func (fw *Firewall) checkIPRateLimit(req *Request) bool {
 	if fw.config.RateLimiting.PerIP && req.SourceIP != "" {
 		limiter := fw.getOrCreateIPLimiter(req.SourceIP)
 		if !limiter.Allow() {
 			return false
 		}
 	}
+	return true
+}
 
-	// Check per-user rate limit
+func (fw *Firewall) checkUserRateLimit(req *Request) bool {
 	if fw.config.RateLimiting.PerUser && req.User != "" {
 		limiter := fw.getOrCreateUserLimiter(req.User)
 		if !limiter.Allow() {
 			return false
 		}
 	}
+	return true
+}
 
-	// Check per-bucket rate limit
+func (fw *Firewall) checkBucketRateLimit(req *Request) bool {
 	if fw.config.RateLimiting.PerBucket && req.Bucket != "" {
 		limiter := fw.getOrCreateBucketLimiter(req.Bucket)
 		if !limiter.Allow() {
 			return false
 		}
 	}
+	return true
+}
 
-	// Check operation-specific rate limits (e.g., for hash DoS mitigation on PutObject)
-	if req.Operation != "" {
-		// Check specific object creation rate limit (protects against hash DoS attacks)
-		if isObjectCreationOperation(req.Operation) && fw.config.RateLimiting.ObjectCreationLimit > 0 {
-			limiter := fw.getOrCreateOperationLimiter(req.Operation)
-			if !limiter.Allow() {
-				return false
-			}
-		} else if limit, ok := fw.config.RateLimiting.OperationLimits[req.Operation]; ok && limit > 0 {
-			// Check per-operation rate limit overrides
-			limiter := fw.getOrCreateOperationLimiter(req.Operation)
-			if !limiter.Allow() {
-				return false
-			}
-		}
+func (fw *Firewall) checkOperationRateLimit(req *Request) bool {
+	if req.Operation == "" {
+		return true
+	}
+
+	if isObjectCreationOperation(req.Operation) && fw.config.RateLimiting.ObjectCreationLimit > 0 {
+		limiter := fw.getOrCreateOperationLimiter(req.Operation)
+		return limiter.Allow()
+	}
+
+	if limit, ok := fw.config.RateLimiting.OperationLimits[req.Operation]; ok && limit > 0 {
+		limiter := fw.getOrCreateOperationLimiter(req.Operation)
+		return limiter.Allow()
 	}
 
 	return true
