@@ -440,40 +440,79 @@ func (rm *ReplicationManager) matchesFilter(rule *ReplicationRule, key string, i
 		return true
 	}
 
-	// Check prefix
-	if rule.Filter.Prefix != "" && !strings.HasPrefix(key, rule.Filter.Prefix) {
+	if !rm.matchesPrefixCondition(rule.Filter, key) {
 		return false
 	}
 
-	// Check tag
-	if rule.Filter.Tag != nil {
-		tags, err := rm.storage.GetObjectTags(context.Background(), info.Key, key)
-		if err != nil {
-			return false
-		}
-
-		if tags[rule.Filter.Tag.Key] != rule.Filter.Tag.Value {
-			return false
-		}
+	if !rm.matchesTagCondition(rule.Filter, info, key) {
+		return false
 	}
 
-	// Check And conditions
-	if rule.Filter.And != nil {
-		if rule.Filter.And.Prefix != "" && !strings.HasPrefix(key, rule.Filter.And.Prefix) {
+	if !rm.matchesAndConditions(rule.Filter, info, key) {
+		return false
+	}
+
+	return true
+}
+
+func (rm *ReplicationManager) matchesPrefixCondition(filter *ReplicationFilter, key string) bool {
+	if filter.Prefix != "" && !strings.HasPrefix(key, filter.Prefix) {
+		return false
+	}
+
+	return true
+}
+
+func (rm *ReplicationManager) matchesTagCondition(filter *ReplicationFilter, info *S3ObjectInfo, key string) bool {
+	if filter.Tag == nil {
+		return true
+	}
+
+	tags, err := rm.storage.GetObjectTags(context.Background(), info.Key, key)
+	if err != nil {
+		return false
+	}
+
+	return tags[filter.Tag.Key] == filter.Tag.Value
+}
+
+func (rm *ReplicationManager) matchesAndConditions(filter *ReplicationFilter, info *S3ObjectInfo, key string) bool {
+	if filter.And == nil {
+		return true
+	}
+
+	if !rm.matchesAndPrefix(filter.And, key) {
+		return false
+	}
+
+	if !rm.matchesAndTags(filter.And, info, key) {
+		return false
+	}
+
+	return true
+}
+
+func (rm *ReplicationManager) matchesAndPrefix(and *ReplicationFilterAnd, key string) bool {
+	if and.Prefix != "" && !strings.HasPrefix(key, and.Prefix) {
+		return false
+	}
+
+	return true
+}
+
+func (rm *ReplicationManager) matchesAndTags(and *ReplicationFilterAnd, info *S3ObjectInfo, key string) bool {
+	if len(and.Tags) == 0 {
+		return true
+	}
+
+	tags, err := rm.storage.GetObjectTags(context.Background(), info.Key, key)
+	if err != nil {
+		return false
+	}
+
+	for _, tag := range and.Tags {
+		if tags[tag.Key] != tag.Value {
 			return false
-		}
-
-		if len(rule.Filter.And.Tags) > 0 {
-			tags, err := rm.storage.GetObjectTags(context.Background(), info.Key, key)
-			if err != nil {
-				return false
-			}
-
-			for _, tag := range rule.Filter.And.Tags {
-				if tags[tag.Key] != tag.Value {
-					return false
-				}
-			}
 		}
 	}
 
