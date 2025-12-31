@@ -67,6 +67,7 @@ type PlacementGroupConfig struct {
 
 // PlacementGroupManager manages placement groups and node assignments.
 type PlacementGroupManager struct {
+	// 8-byte fields (interfaces, pointers, maps, channels, functions, uint64)
 	auditLogger          PlacementGroupAuditLogger
 	ctx                  context.Context
 	cancel               context.CancelFunc
@@ -77,14 +78,17 @@ type PlacementGroupManager struct {
 	onGroupStatusChange  func(groupID PlacementGroupID, status PlacementGroupStatus)
 	callbackPool         chan func()
 	onNodeJoinedGroup    func(groupID PlacementGroupID, nodeID string)
-	config               PlacementGroupConfig
-	cachedLocalNodes     []string
-	workerWg             sync.WaitGroup
 	cachedLocalNodesHash uint64
 	cacheGeneration      uint64
-	mu                   sync.RWMutex
-	closedMu             sync.RWMutex // Protects closed flag and callbackPool operations
-	closed               bool         // Indicates if the manager has been closed
+	// Slices
+	cachedLocalNodes []string
+	// Structs
+	config   PlacementGroupConfig
+	workerWg sync.WaitGroup
+	mu       sync.RWMutex
+	closedMu sync.RWMutex // Protects closed flag and callbackPool operations
+	// 1-byte fields (bool)
+	closed bool // Indicates if the manager has been closed
 }
 
 // NewPlacementGroupManager creates a new placement group manager.

@@ -27,7 +27,7 @@ import (
 
 // Test constants.
 const (
-	testBucket     = "test-bucket"
+	testBucket       = "test-bucket"
 	statusCompleted  = "completed"
 	statusInProgress = "in_progress"
 	statusPaused     = "paused"
@@ -866,14 +866,18 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 
 	// Simulate tiering transition with placement group awareness
 	type tierTransition struct {
-		object       tieringObject
+		// 8-byte fields (int64)
+		bytesMovied int64
+		// Structs
+		object tieringObject
+		// Strings
 		fromPG       string
 		toPG         string
 		fromDC       string
 		toDC         string
 		errorMessage string
-		bytesMovied  int64
-		successful   bool
+		// 1-byte fields (bool)
+		successful bool
 	}
 
 	var transitions []tierTransition

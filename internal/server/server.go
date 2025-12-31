@@ -97,15 +97,16 @@ const Version = "0.1.0"
 
 // Server configuration constants.
 const (
-	defaultShardSizeMB         = 64
-	defaultShardSizeBytes      = defaultShardSizeMB * 1024 * 1024
-	defaultAuditBufferSize     = 1000
-	defaultReadTimeoutSec      = 30
-	defaultWriteTimeoutSec     = 30
-	defaultIdleTimeoutSec      = 120
-	defaultCORSMaxAgeSec       = 300
-	defaultShutdownTimeoutSec  = 30
-	defaultMetricsIntervalSec  = 30
+	defaultShardSizeMB          = 64
+	defaultShardSizeBytes       = defaultShardSizeMB * 1024 * 1024
+	defaultAuditBufferSize      = 1000
+	defaultReadTimeoutSec       = 30
+	defaultWriteTimeoutSec      = 30
+	defaultIdleTimeoutSec       = 120
+	defaultReadHeaderTimeoutSec = 10 // G112: Prevent Slowloris attacks
+	defaultCORSMaxAgeSec        = 300
+	defaultShutdownTimeoutSec   = 30
+	defaultMetricsIntervalSec   = 30
 )
 
 // New creates a new NebulaIO server.
@@ -508,11 +509,12 @@ func (s *Server) setupS3Server() {
 	s3Handler.RegisterRoutes(r)
 
 	s.s3Server = &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.cfg.S3Port),
-		Handler:      r,
-		ReadTimeout:  defaultReadTimeoutSec * time.Second,
-		WriteTimeout: defaultWriteTimeoutSec * time.Second,
-		IdleTimeout:  defaultIdleTimeoutSec * time.Second,
+		Addr:              fmt.Sprintf(":%d", s.cfg.S3Port),
+		Handler:           r,
+		ReadTimeout:       defaultReadTimeoutSec * time.Second,
+		WriteTimeout:      defaultWriteTimeoutSec * time.Second,
+		IdleTimeout:       defaultIdleTimeoutSec * time.Second,
+		ReadHeaderTimeout: defaultReadHeaderTimeoutSec * time.Second,
 	}
 
 	// Apply TLS configuration if enabled
@@ -585,11 +587,12 @@ func (s *Server) setupAdminServer() {
 	})
 
 	s.adminServer = &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.cfg.AdminPort),
-		Handler:      r,
-		ReadTimeout:  defaultReadTimeoutSec * time.Second,
-		WriteTimeout: defaultWriteTimeoutSec * time.Second,
-		IdleTimeout:  defaultIdleTimeoutSec * time.Second,
+		Addr:              fmt.Sprintf(":%d", s.cfg.AdminPort),
+		Handler:           r,
+		ReadTimeout:       defaultReadTimeoutSec * time.Second,
+		WriteTimeout:      defaultWriteTimeoutSec * time.Second,
+		IdleTimeout:       defaultIdleTimeoutSec * time.Second,
+		ReadHeaderTimeout: defaultReadHeaderTimeoutSec * time.Second,
 	}
 
 	// Apply TLS configuration if enabled
@@ -614,11 +617,12 @@ func (s *Server) setupConsoleServer() {
 	})
 
 	s.consoleServer = &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.cfg.ConsolePort),
-		Handler:      r,
-		ReadTimeout:  defaultReadTimeoutSec * time.Second,
-		WriteTimeout: defaultWriteTimeoutSec * time.Second,
-		IdleTimeout:  defaultIdleTimeoutSec * time.Second,
+		Addr:              fmt.Sprintf(":%d", s.cfg.ConsolePort),
+		Handler:           r,
+		ReadTimeout:       defaultReadTimeoutSec * time.Second,
+		WriteTimeout:      defaultWriteTimeoutSec * time.Second,
+		IdleTimeout:       defaultIdleTimeoutSec * time.Second,
+		ReadHeaderTimeout: defaultReadHeaderTimeoutSec * time.Second,
 	}
 
 	// Apply TLS configuration if enabled

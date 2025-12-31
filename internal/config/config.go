@@ -37,28 +37,31 @@ import (
 
 // Config holds all configuration for NebulaIO.
 type Config struct {
-	GPUDirect   GPUDirectConfig `mapstructure:"gpudirect"`
-	NodeID      string          `mapstructure:"node_id"`
-	NodeName    string          `mapstructure:"node_name"`
-	DataDir     string          `mapstructure:"data_dir"`
-	LogLevel    string          `mapstructure:"log_level"`
-	Storage     StorageConfig   `mapstructure:"storage"`
-	TLS         TLSConfig       `mapstructure:"tls"`
-	NIM         NIMConfig       `mapstructure:"nim"`
-	Cache       CacheConfig     `mapstructure:"cache"`
-	Audit       AuditConfig     `mapstructure:"audit"`
-	Firewall    FirewallConfig  `mapstructure:"firewall"`
-	Cluster     ClusterConfig   `mapstructure:"cluster"`
-	Auth        AuthConfig      `mapstructure:"auth"`
-	Iceberg     IcebergConfig   `mapstructure:"iceberg"`
-	S3Express   S3ExpressConfig `mapstructure:"s3_express"`
-	MCP         MCPConfig       `mapstructure:"mcp"`
-	RDMA        RDMAConfig      `mapstructure:"rdma"`
-	DPU         DPUConfig       `mapstructure:"dpu"`
-	Lambda      LambdaConfig    `mapstructure:"lambda"`
-	ConsolePort int             `mapstructure:"console_port"`
-	AdminPort   int             `mapstructure:"admin_port"`
-	S3Port      int             `mapstructure:"s3_port"`
+	// Structs
+	GPUDirect GPUDirectConfig `mapstructure:"gpudirect"`
+	Storage   StorageConfig   `mapstructure:"storage"`
+	TLS       TLSConfig       `mapstructure:"tls"`
+	NIM       NIMConfig       `mapstructure:"nim"`
+	Cache     CacheConfig     `mapstructure:"cache"`
+	Audit     AuditConfig     `mapstructure:"audit"`
+	Firewall  FirewallConfig  `mapstructure:"firewall"`
+	Cluster   ClusterConfig   `mapstructure:"cluster"`
+	Auth      AuthConfig      `mapstructure:"auth"`
+	Iceberg   IcebergConfig   `mapstructure:"iceberg"`
+	S3Express S3ExpressConfig `mapstructure:"s3_express"`
+	MCP       MCPConfig       `mapstructure:"mcp"`
+	RDMA      RDMAConfig      `mapstructure:"rdma"`
+	DPU       DPUConfig       `mapstructure:"dpu"`
+	Lambda    LambdaConfig    `mapstructure:"lambda"`
+	// Strings
+	NodeID   string `mapstructure:"node_id"`
+	NodeName string `mapstructure:"node_name"`
+	DataDir  string `mapstructure:"data_dir"`
+	LogLevel string `mapstructure:"log_level"`
+	// 4-byte fields (int)
+	ConsolePort int `mapstructure:"console_port"`
+	AdminPort   int `mapstructure:"admin_port"`
+	S3Port      int `mapstructure:"s3_port"`
 }
 
 // TLSConfig holds TLS configuration for secure communications.
@@ -98,14 +101,17 @@ type ClusterConfig struct {
 
 // StorageConfig holds storage-related configuration.
 type StorageConfig struct {
-	Volume              VolumeStorageConfig   `mapstructure:"volume"`
-	Backend             string                `mapstructure:"backend"`
-	DefaultStorageClass string                `mapstructure:"default_storage_class"`
-	PlacementGroups     PlacementGroupsConfig `mapstructure:"placement_groups"`
-	DefaultRedundancy   RedundancyConfig      `mapstructure:"default_redundancy"`
-	Tiering             TieringConfig         `mapstructure:"tiering"`
-	MaxObjectSize       int64                 `mapstructure:"max_object_size"`
-	MultipartPartSize   int64                 `mapstructure:"multipart_part_size"`
+	// 8-byte fields (int64)
+	MaxObjectSize     int64 `mapstructure:"max_object_size"`
+	MultipartPartSize int64 `mapstructure:"multipart_part_size"`
+	// Structs
+	Volume            VolumeStorageConfig   `mapstructure:"volume"`
+	PlacementGroups   PlacementGroupsConfig `mapstructure:"placement_groups"`
+	DefaultRedundancy RedundancyConfig      `mapstructure:"default_redundancy"`
+	Tiering           TieringConfig         `mapstructure:"tiering"`
+	// Strings
+	Backend             string `mapstructure:"backend"`
+	DefaultStorageClass string `mapstructure:"default_storage_class"`
 }
 
 // TieringConfig holds configuration for tiered storage.
@@ -137,11 +143,14 @@ type ErasureStorageConfig struct {
 
 // TieringPolicyConfig defines a policy for automatic data movement.
 type TieringPolicyConfig struct {
-	Condition       TieringCondition `mapstructure:"condition"`
-	Name            string           `mapstructure:"name"`
-	SourceTier      string           `mapstructure:"source_tier"`
-	DestinationTier string           `mapstructure:"destination_tier"`
-	Enabled         bool             `mapstructure:"enabled"`
+	// Structs
+	Condition TieringCondition `mapstructure:"condition"`
+	// Strings
+	Name            string `mapstructure:"name"`
+	SourceTier      string `mapstructure:"source_tier"`
+	DestinationTier string `mapstructure:"destination_tier"`
+	// 1-byte fields (bool)
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // TieringCondition defines when a tiering policy should trigger.

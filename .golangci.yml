@@ -129,12 +129,6 @@ linters:
           avro: snake
           mapstructure: kebab
 
-    wrapcheck:
-      ignorePackageGlobs:
-        - github.com/piwi3910/nebulaio/*
-        - encoding/*
-        - github.com/pkg/errors
-
     exhaustive:
       check:
         - switch
@@ -142,24 +136,12 @@ linters:
 
     forbidigo:
       forbid:
-        - p: ^fmt\.Print.*$
+        - pattern: '^fmt\.Print.*$'
           msg: "Use zerolog for logging, not fmt.Print"
-        - p: ^log\.Print.*$
+        - pattern: '^log\.Print.*$'
           msg: "Use zerolog for logging, not log.Print"
-        - p: ^panic$
+        - pattern: '^panic$'
           msg: "Avoid panic, return errors instead"
-
-    wsl_v5:
-      allow-assign-and-anything: false
-      allow-assign-and-call: true
-      allow-cuddle-declarations: false
-      allow-multiline-assign: true
-      allow-separated-leading-comment: false
-      allow-trailing-comment: false
-      force-case-trailing-whitespace: 0
-      force-err-cuddling: false
-      force-short-decl-cuddling: false
-      strict-append: true
 
   enable:
     # Security & Bug Detection (High Priority)
@@ -192,9 +174,6 @@ linters:
 
     # Documentation
     - godot          # Comment periods
-
-  disable:
-    - wsl  # Deprecated - replaced by wsl_v5
 
   exclusions:
     paths:

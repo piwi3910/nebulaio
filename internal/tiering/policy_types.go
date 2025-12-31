@@ -63,35 +63,22 @@ const (
 
 // AdvancedPolicy is the comprehensive policy model.
 type AdvancedPolicy struct {
-	// ID is the unique identifier
-	ID string `json:"id" yaml:"id"`
-
-	// Name is a human-readable name
-	Name string `json:"name" yaml:"name"`
-
-	// Description explains the policy purpose
-	Description string `json:"description,omitempty" yaml:"description,omitempty"`
-
-	// Type of policy (scheduled, realtime, threshold, s3_lifecycle)
-	Type PolicyType `json:"type" yaml:"type"`
-
-	// Scope defines where the policy applies
-	Scope PolicyScope `json:"scope" yaml:"scope"`
-
-	// Enabled determines if the policy is active
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// Priority determines evaluation order (lower = higher priority)
-	Priority int `json:"priority" yaml:"priority"`
-
-	// Selector defines which objects this policy applies to
-	Selector PolicySelector `json:"selector" yaml:"selector"`
-
+	// 8-byte fields (pointers, slices)
 	// Triggers define when the policy should evaluate
 	Triggers []PolicyTrigger `json:"triggers" yaml:"triggers"`
 
 	// Actions define what happens when conditions are met
 	Actions []PolicyAction `json:"actions" yaml:"actions"`
+
+	LastRunAt *time.Time `json:"lastRunAt,omitempty" yaml:"lastRunAt,omitempty"`
+
+	// Metadata for tracking
+	CreatedAt time.Time `json:"createdAt" yaml:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt" yaml:"updatedAt"`
+
+	// Structs
+	// Selector defines which objects this policy applies to
+	Selector PolicySelector `json:"selector" yaml:"selector"`
 
 	// AntiThrash prevents oscillation between tiers
 	AntiThrash AntiThrashConfig `json:"antiThrash,omitempty" yaml:"antiThrash,omitempty"`
@@ -105,18 +92,42 @@ type AdvancedPolicy struct {
 	// Distributed execution configuration
 	Distributed DistributedConfig `json:"distributed,omitempty" yaml:"distributed,omitempty"`
 
-	// Metadata for tracking
-	CreatedAt   time.Time  `json:"createdAt"             yaml:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"             yaml:"updatedAt"`
-	LastRunAt   *time.Time `json:"lastRunAt,omitempty"   yaml:"lastRunAt,omitempty"`
-	LastRunNode string     `json:"lastRunNode,omitempty" yaml:"lastRunNode,omitempty"`
+	// Scope defines where the policy applies
+	Scope PolicyScope `json:"scope" yaml:"scope"`
+
+	// Strings
+	// ID is the unique identifier
+	ID string `json:"id" yaml:"id"`
+
+	// Name is a human-readable name
+	Name string `json:"name" yaml:"name"`
+
+	// Description explains the policy purpose
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
+	LastRunNode string `json:"lastRunNode,omitempty" yaml:"lastRunNode,omitempty"`
+
+	// Type of policy (scheduled, realtime, threshold, s3_lifecycle)
+	Type PolicyType `json:"type" yaml:"type"`
+
+	// 4-byte fields (int)
+	// Priority determines evaluation order (lower = higher priority)
+	Priority int `json:"priority" yaml:"priority"`
 
 	// Version for optimistic locking
 	Version int `json:"version" yaml:"version"`
+
+	// 1-byte fields (bool)
+	// Enabled determines if the policy is active
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // PolicySelector defines criteria for selecting objects.
 type PolicySelector struct {
+	// 8-byte fields (maps, slices, int64)
+	// Tags to match (all must match)
+	Tags map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
+
 	// Buckets to match (supports wildcards)
 	Buckets []string `json:"buckets,omitempty" yaml:"buckets,omitempty"`
 
@@ -125,13 +136,6 @@ type PolicySelector struct {
 
 	// Suffix patterns to match
 	Suffixes []string `json:"suffixes,omitempty" yaml:"suffixes,omitempty"`
-
-	// Tags to match (all must match)
-	Tags map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
-
-	// Size constraints
-	MinSize int64 `json:"minSize,omitempty" yaml:"minSize,omitempty"`
-	MaxSize int64 `json:"maxSize,omitempty" yaml:"maxSize,omitempty"`
 
 	// Content types (supports wildcards)
 	ContentTypes []string `json:"contentTypes,omitempty" yaml:"contentTypes,omitempty"`
@@ -144,13 +148,15 @@ type PolicySelector struct {
 
 	// StorageClasses filters by S3 storage class
 	StorageClasses []StorageClass `json:"storageClasses,omitempty" yaml:"storageClasses,omitempty"`
+
+	// Size constraints
+	MinSize int64 `json:"minSize,omitempty" yaml:"minSize,omitempty"`
+	MaxSize int64 `json:"maxSize,omitempty" yaml:"maxSize,omitempty"`
 }
 
 // PolicyTrigger defines when a policy evaluates.
 type PolicyTrigger struct {
-	// Type of trigger
-	Type TriggerType `json:"type" yaml:"type"`
-
+	// 8-byte fields (pointers)
 	// Age-based trigger configuration
 	Age *AgeTrigger `json:"age,omitempty" yaml:"age,omitempty"`
 
@@ -165,6 +171,9 @@ type PolicyTrigger struct {
 
 	// Cron-based trigger configuration
 	Cron *CronTrigger `json:"cron,omitempty" yaml:"cron,omitempty"`
+
+	// Type of trigger
+	Type TriggerType `json:"type" yaml:"type"`
 }
 
 // AgeTrigger triggers based on object age.
@@ -223,17 +232,20 @@ type CapacityTrigger struct {
 
 // FrequencyTrigger triggers based on access frequency patterns.
 type FrequencyTrigger struct {
+	// 8-byte fields (float64)
 	// MinAccessesPerDay for hot classification
 	MinAccessesPerDay float64 `json:"minAccessesPerDay,omitempty" yaml:"minAccessesPerDay,omitempty"`
 
 	// MaxAccessesPerDay for cold classification
 	MaxAccessesPerDay float64 `json:"maxAccessesPerDay,omitempty" yaml:"maxAccessesPerDay,omitempty"`
 
-	// SlidingWindowDays for frequency calculation
-	SlidingWindowDays int `json:"slidingWindowDays,omitempty" yaml:"slidingWindowDays,omitempty"`
-
+	// Strings
 	// Pattern detection (e.g., "declining", "increasing", "stable")
 	Pattern string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+
+	// 4-byte fields (int)
+	// SlidingWindowDays for frequency calculation
+	SlidingWindowDays int `json:"slidingWindowDays,omitempty" yaml:"slidingWindowDays,omitempty"`
 }
 
 // CronTrigger triggers on a cron schedule.
@@ -247,9 +259,7 @@ type CronTrigger struct {
 
 // PolicyAction defines what happens when conditions are met.
 type PolicyAction struct {
-	// Type of action
-	Type PolicyActionType `json:"type" yaml:"type"`
-
+	// 8-byte fields (pointers)
 	// Transition configuration
 	Transition *TransitionActionConfig `json:"transition,omitempty" yaml:"transition,omitempty"`
 
@@ -262,6 +272,10 @@ type PolicyAction struct {
 	// Notify configuration
 	Notify *NotifyActionConfig `json:"notify,omitempty" yaml:"notify,omitempty"`
 
+	// Type of action
+	Type PolicyActionType `json:"type" yaml:"type"`
+
+	// 1-byte fields (bool)
 	// StopProcessing prevents other policies from executing
 	StopProcessing bool `json:"stopProcessing,omitempty" yaml:"stopProcessing,omitempty"`
 }
@@ -282,20 +296,22 @@ const (
 
 // TransitionActionConfig configures tier transitions.
 type TransitionActionConfig struct {
+	// Strings
+	// CompressionAlgorithm specifies compression type
+	CompressionAlgorithm string `json:"compressionAlgorithm,omitempty" yaml:"compressionAlgorithm,omitempty"`
+
 	// TargetTier is the destination tier
 	TargetTier TierType `json:"targetTier" yaml:"targetTier"`
 
 	// TargetStorageClass is the S3 storage class
 	TargetStorageClass StorageClass `json:"targetStorageClass,omitempty" yaml:"targetStorageClass,omitempty"`
 
+	// 1-byte fields (bool)
 	// PreserveCopy keeps original after transition
 	PreserveCopy bool `json:"preserveCopy,omitempty" yaml:"preserveCopy,omitempty"`
 
 	// Compression enables compression during transition
 	Compression bool `json:"compression,omitempty" yaml:"compression,omitempty"`
-
-	// CompressionAlgorithm specifies compression type
-	CompressionAlgorithm string `json:"compressionAlgorithm,omitempty" yaml:"compressionAlgorithm,omitempty"`
 }
 
 // DeleteActionConfig configures object deletion.
@@ -379,26 +395,31 @@ func (c *AntiThrashConfig) GetCooldownAfterTransition() time.Duration {
 
 // ScheduleConfig defines when policies can execute.
 type ScheduleConfig struct {
-	// Enabled turns on scheduling
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
+	// 8-byte fields (slices)
 	// MaintenanceWindows define allowed execution times
 	MaintenanceWindows []MaintenanceWindow `json:"maintenanceWindows,omitempty" yaml:"maintenanceWindows,omitempty"`
 
 	// BlackoutWindows define forbidden execution times
 	BlackoutWindows []MaintenanceWindow `json:"blackoutWindows,omitempty" yaml:"blackoutWindows,omitempty"`
 
+	// Strings
 	// Timezone for window evaluation
 	Timezone string `json:"timezone,omitempty" yaml:"timezone,omitempty"`
+
+	// 1-byte fields (bool)
+	// Enabled turns on scheduling
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // MaintenanceWindow defines a time window.
 type MaintenanceWindow struct {
-	// Name of the window
-	Name string `json:"name" yaml:"name"`
-
+	// 8-byte fields (slices)
 	// DaysOfWeek (0=Sunday, 6=Saturday)
 	DaysOfWeek []int `json:"daysOfWeek,omitempty" yaml:"daysOfWeek,omitempty"`
+
+	// Strings
+	// Name of the window
+	Name string `json:"name" yaml:"name"`
 
 	// StartTime in HH:MM format
 	StartTime string `json:"startTime" yaml:"startTime"`
@@ -427,6 +448,11 @@ type RateLimitConfig struct {
 
 // DistributedConfig configures distributed execution.
 type DistributedConfig struct {
+	// Strings
+	// CoordinationKey for distributed locking
+	CoordinationKey string `json:"coordinationKey,omitempty" yaml:"coordinationKey,omitempty"`
+
+	// 1-byte fields (bool)
 	// Enabled turns on distributed execution
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
@@ -435,38 +461,41 @@ type DistributedConfig struct {
 
 	// RequireLeaderElection for certain policies
 	RequireLeaderElection bool `json:"requireLeaderElection,omitempty" yaml:"requireLeaderElection,omitempty"`
-
-	// CoordinationKey for distributed locking
-	CoordinationKey string `json:"coordinationKey,omitempty" yaml:"coordinationKey,omitempty"`
 }
 
 // PolicyStats tracks policy execution statistics.
 type PolicyStats struct {
-	PolicyID               string        `json:"policyId"`
+	// 8-byte fields (time.Time, time.Duration, int64, float64)
 	LastExecuted           time.Time     `json:"lastExecuted"`
 	LastDuration           time.Duration `json:"lastDuration"`
 	ObjectsEvaluated       int64         `json:"objectsEvaluated"`
 	ObjectsTransitioned    int64         `json:"objectsTransitioned"`
 	BytesTransitioned      int64         `json:"bytesTransitioned"`
 	Errors                 int64         `json:"errors"`
-	LastError              string        `json:"lastError,omitempty"`
-	ConsecutiveSuccesses   int           `json:"consecutiveSuccesses"`
-	ConsecutiveFailures    int           `json:"consecutiveFailures"`
-	AverageExecutionTimeMs float64       `json:"averageExecutionTimeMs"`
 	TotalExecutions        int64         `json:"totalExecutions"`
+	AverageExecutionTimeMs float64       `json:"averageExecutionTimeMs"`
+	// Strings
+	PolicyID  string `json:"policyId"`
+	LastError string `json:"lastError,omitempty"`
+	// 4-byte fields (int)
+	ConsecutiveSuccesses int `json:"consecutiveSuccesses"`
+	ConsecutiveFailures  int `json:"consecutiveFailures"`
 }
 
 // ObjectAccessStats tracks object access patterns.
 type ObjectAccessStats struct {
-	Bucket       string    `json:"bucket"`
-	Key          string    `json:"key"`
-	CurrentTier  TierType  `json:"currentTier"`
-	LastAccessed time.Time `json:"lastAccessed"`
-	LastModified time.Time `json:"lastModified"`
-	AccessCount  int64     `json:"accessCount"`
-
+	// 8-byte fields (slices, int64)
 	// Time-series access data
 	AccessHistory []AccessRecord `json:"accessHistory,omitempty"`
+	AccessCount   int64          `json:"accessCount"`
+	LastAccessed  time.Time      `json:"lastAccessed"`
+	LastModified  time.Time      `json:"lastModified"`
+
+	// Strings
+	Bucket string `json:"bucket"`
+	Key    string `json:"key"`
+
+	CurrentTier TierType `json:"currentTier"`
 
 	// Computed metrics
 	AccessesLast24h    int     `json:"accessesLast24h"`

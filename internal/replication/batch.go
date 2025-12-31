@@ -58,6 +58,29 @@ type BatchJob struct {
 	RateLimitBytesPerSec int64             `json:"rateLimitBytesPerSec,omitempty"`
 	MaxSize              int64             `json:"maxSize,omitempty"`
 	MinSize              int64             `json:"minSize,omitempty"`
+	mu                   sync.RWMutex      `json:"-"` // Protects Status and Error fields
+}
+
+// GetStatus safely returns the job status.
+func (job *BatchJob) GetStatus() BatchJobStatus {
+	job.mu.RLock()
+	defer job.mu.RUnlock()
+
+	return job.Status
+}
+
+// SetStatus safely sets the job status.
+func (job *BatchJob) SetStatus(status BatchJobStatus) {
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	job.Status = status
+}
+
+// SetError safely sets the job error.
+func (job *BatchJob) SetError(err string) {
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	job.Error = err
 }
 
 // BatchJobProgress tracks job progress.
@@ -172,7 +195,7 @@ func (bm *BatchManager) CreateJob(job *BatchJob) error {
 		job.Priority = 100
 	}
 
-	job.Status = BatchJobStatusPending
+	job.SetStatus(BatchJobStatusPending)
 	job.CreatedAt = time.Now()
 	job.pauseCh = make(chan struct{})
 	job.resumeCh = make(chan struct{})
@@ -195,9 +218,11 @@ func (bm *BatchManager) StartJob(ctx context.Context, jobID string) error {
 		return fmt.Errorf("job %s not found", jobID)
 	}
 
-	if job.Status != BatchJobStatusPending && job.Status != BatchJobStatusPaused {
+	status := job.GetStatus()
+	if status != BatchJobStatusPending && status != BatchJobStatusPaused {
 		bm.mu.Unlock()
-		return fmt.Errorf("job %s cannot be started (status: %s)", jobID, job.Status)
+		//nolint:err113 // Dynamic status information is necessary for error context
+		return fmt.Errorf("job %s cannot be started (status: %s)", jobID, status)
 	}
 
 	if int(atomic.LoadInt32(&bm.runningJobs)) >= bm.maxConcurrentJobs {
@@ -209,7 +234,7 @@ func (bm *BatchManager) StartJob(ctx context.Context, jobID string) error {
 
 	jobCtx, cancelFunc := context.WithCancel(ctx)
 	job.cancelFunc = cancelFunc
-	job.Status = BatchJobStatusRunning
+	job.SetStatus(BatchJobStatusRunning)
 	now := time.Now()
 	job.StartedAt = &now
 
@@ -231,11 +256,11 @@ func (bm *BatchManager) PauseJob(jobID string) error {
 		return fmt.Errorf("job %s not found", jobID)
 	}
 
-	if job.Status != BatchJobStatusRunning {
+	if job.GetStatus() != BatchJobStatusRunning {
 		return fmt.Errorf("job %s is not running", jobID)
 	}
 
-	job.Status = BatchJobStatusPaused
+	job.SetStatus(BatchJobStatusPaused)
 	close(job.pauseCh)
 
 	return nil
@@ -251,12 +276,12 @@ func (bm *BatchManager) ResumeJob(ctx context.Context, jobID string) error {
 		return fmt.Errorf("job %s not found", jobID)
 	}
 
-	if job.Status != BatchJobStatusPaused {
+	if job.GetStatus() != BatchJobStatusPaused {
 		bm.mu.Unlock()
 		return fmt.Errorf("job %s is not paused", jobID)
 	}
 
-	job.Status = BatchJobStatusRunning
+	job.SetStatus(BatchJobStatusRunning)
 	job.pauseCh = make(chan struct{})
 	close(job.resumeCh)
 	job.resumeCh = make(chan struct{})
@@ -276,7 +301,8 @@ func (bm *BatchManager) CancelJob(jobID string) error {
 		return fmt.Errorf("job %s not found", jobID)
 	}
 
-	if job.Status == BatchJobStatusCompleted || job.Status == BatchJobStatusFailed || job.Status == BatchJobStatusCancelled {
+	status := job.GetStatus()
+	if status == BatchJobStatusCompleted || status == BatchJobStatusFailed || status == BatchJobStatusCancelled {
 		return fmt.Errorf("job %s already finished", jobID)
 	}
 
@@ -284,7 +310,7 @@ func (bm *BatchManager) CancelJob(jobID string) error {
 		job.cancelFunc()
 	}
 
-	job.Status = BatchJobStatusCancelled
+	job.SetStatus(BatchJobStatusCancelled)
 	now := time.Now()
 	job.CompletedAt = &now
 
@@ -327,7 +353,7 @@ func (bm *BatchManager) DeleteJob(jobID string) error {
 		return fmt.Errorf("job %s not found", jobID)
 	}
 
-	if job.Status == BatchJobStatusRunning {
+	if job.GetStatus() == BatchJobStatusRunning {
 		return fmt.Errorf("cannot delete running job %s", jobID)
 	}
 
@@ -417,7 +443,7 @@ func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 		if err != nil {
 			bm.mu.Lock()
 
-			job.Status = BatchJobStatusFailed
+			job.SetStatus(BatchJobStatusFailed)
 			job.Error = err.Error()
 
 			bm.mu.Unlock()
@@ -435,14 +461,14 @@ func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 
 	switch {
 	case ctx.Err() != nil:
-		if job.Status != BatchJobStatusCancelled {
-			job.Status = BatchJobStatusCancelled
+		if job.GetStatus() != BatchJobStatusCancelled {
+			job.SetStatus(BatchJobStatusCancelled)
 		}
 	case job.Progress.FailedObjects > 0 && job.Progress.SuccessObjects == 0:
-		job.Status = BatchJobStatusFailed
+		job.SetStatus(BatchJobStatusFailed)
 		job.Error = fmt.Sprintf("all %d objects failed", job.Progress.FailedObjects)
 	default:
-		job.Status = BatchJobStatusCompleted
+		job.SetStatus(BatchJobStatusCompleted)
 	}
 
 	// Calculate final stats
@@ -622,7 +648,8 @@ func (bm *BatchManager) cleanupOldJobs() {
 	var completedJobs []*BatchJob
 
 	for _, job := range bm.jobs {
-		if job.Status == BatchJobStatusCompleted || job.Status == BatchJobStatusFailed || job.Status == BatchJobStatusCancelled {
+		status := job.GetStatus()
+		if status == BatchJobStatusCompleted || status == BatchJobStatusFailed || status == BatchJobStatusCancelled {
 			completedJobs = append(completedJobs, job)
 		}
 	}
@@ -721,7 +748,7 @@ func (job *BatchJob) Summary() BatchJobSummary {
 		Description:       job.Description,
 		SourceBucket:      job.SourceBucket,
 		DestinationBucket: job.DestinationBucket,
-		Status:            job.Status,
+		Status:            job.GetStatus(),
 		Progress:          job.Progress,
 		CreatedAt:         job.CreatedAt,
 		CompletedAt:       job.CompletedAt,

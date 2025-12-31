@@ -116,8 +116,10 @@ type Provider struct {
 
 // cachedKey holds cached key information.
 type cachedKey struct {
-	info      kms.KeyInfo
+	// 8-byte fields
 	expiresAt time.Time
+	// Structs
+	info kms.KeyInfo
 }
 
 // NewProvider creates a new Vault KMS provider.

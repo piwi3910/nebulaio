@@ -130,18 +130,22 @@ type FilterRule struct {
 // EnhancedAuditEvent extends AuditEvent with additional fields.
 type EnhancedAuditEvent struct {
 	AuditEvent
+	// 8-byte fields (pointers, int64)
+	Integrity      *IntegrityInfo  `json:"integrity,omitempty"`
+	Compliance     *ComplianceInfo `json:"compliance,omitempty"`
+	GeoLocation    *GeoLocation    `json:"geoLocation,omitempty"`
+	SequenceNumber int64           `json:"sequenceNumber"`
+	// Map fields (8 bytes on 64-bit)
 	ResponseHeaders map[string]string `json:"responseHeaders,omitempty"`
-	Integrity       *IntegrityInfo    `json:"integrity,omitempty"`
-	Compliance      *ComplianceInfo   `json:"compliance,omitempty"`
-	GeoLocation     *GeoLocation      `json:"geoLocation,omitempty"`
 	RequestHeaders  map[string]string `json:"requestHeaders,omitempty"`
-	RequestPath     string            `json:"requestPath,omitempty"`
-	RequestMethod   string            `json:"requestMethod,omitempty"`
-	SessionID       string            `json:"sessionId,omitempty"`
-	PreviousHash    string            `json:"previousHash,omitempty"`
-	EventHash       string            `json:"eventHash,omitempty"`
-	ResponseStatus  int               `json:"responseStatus,omitempty"`
-	SequenceNumber  int64             `json:"sequenceNumber"`
+	// String fields
+	RequestPath   string `json:"requestPath,omitempty"`
+	RequestMethod string `json:"requestMethod,omitempty"`
+	SessionID     string `json:"sessionId,omitempty"`
+	PreviousHash  string `json:"previousHash,omitempty"`
+	EventHash     string `json:"eventHash,omitempty"`
+	// 4-byte fields
+	ResponseStatus int `json:"responseStatus,omitempty"`
 }
 
 // GeoLocation contains geographic information.
@@ -175,18 +179,21 @@ type IntegrityInfo struct {
 
 // EnhancedAuditLogger provides enhanced audit logging capabilities.
 type EnhancedAuditLogger struct {
+	// 8-byte fields (pointers, slices, channels, int64, functions)
 	ctx       context.Context
 	geoLookup GeoLookup
 	store     AuditStore
 	buffer    chan *EnhancedAuditEvent
 	cancel    context.CancelFunc
-	lastHash  string
-	config    EnhancedConfig
 	outputs   []AuditOutput
-	stats     AuditStats
-	wg        sync.WaitGroup
 	sequence  int64
-	mu        sync.RWMutex
+	// Strings
+	lastHash string
+	// Structs
+	config EnhancedConfig
+	stats  AuditStats
+	wg     sync.WaitGroup
+	mu     sync.RWMutex
 }
 
 // AuditStats tracks audit logging statistics.

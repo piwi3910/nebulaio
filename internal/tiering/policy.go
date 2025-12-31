@@ -52,12 +52,17 @@ const (
 
 // Policy defines tiering rules for objects.
 type Policy struct {
-	Name        string           `json:"name" yaml:"name"`
-	Description string           `json:"description,omitempty" yaml:"description,omitempty"`
-	Filter      PolicyFilter     `json:"filter" yaml:"filter"`
-	Rules       []TransitionRule `json:"rules" yaml:"rules"`
-	Priority    int              `json:"priority" yaml:"priority"`
-	Enabled     bool             `json:"enabled" yaml:"enabled"`
+	// 8-byte fields (slices)
+	Rules []TransitionRule `json:"rules" yaml:"rules"`
+	// Structs
+	Filter PolicyFilter `json:"filter" yaml:"filter"`
+	// Strings
+	Name        string `json:"name"                  yaml:"name"`
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	// 4-byte fields (int)
+	Priority int `json:"priority" yaml:"priority"`
+	// 1-byte fields (bool)
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // PolicyFilter defines criteria for selecting objects.

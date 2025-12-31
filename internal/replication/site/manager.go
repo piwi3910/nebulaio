@@ -201,11 +201,12 @@ func (m *Manager) Stop() error {
 
 // createClient creates a MinIO client for a site.
 func (m *Manager) createClient(site Site) (*minio.Client, error) {
-	//nolint:gosec // G402: InsecureSkipVerify only true for non-SSL connections (no TLS used)
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: !site.UseSSL,
-		},
+	// G402: Only configure TLS when SSL is enabled, ensure TLS 1.2+ minimum
+	transport := &http.Transport{}
+	if site.UseSSL {
+		transport.TLSClientConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12, // Enforce TLS 1.2+ for security
+		}
 	}
 
 	opts := &minio.Options{

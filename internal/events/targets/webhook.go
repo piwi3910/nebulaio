@@ -81,7 +81,12 @@ func NewWebhookTarget(config WebhookConfig) (*WebhookTarget, error) {
 		log.Warn().
 			Str("url", config.URL).
 			Msg("WARNING: TLS certificate verification disabled for webhook target - this should only be used in development/testing")
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		// G402: InsecureSkipVerify is user-configurable for dev/test environments
+		// Even when skipping verification, we still enforce TLS 1.2+ for encryption
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true, //nolint:gosec // G402: User-configured for development/testing only
+			MinVersion:         tls.VersionTLS12,
+		}
 	}
 
 	return &WebhookTarget{
