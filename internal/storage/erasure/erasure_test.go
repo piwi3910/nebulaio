@@ -138,102 +138,107 @@ func TestDecoder(t *testing.T) {
 		t.Fatalf("failed to create decoder: %v", err)
 	}
 
-	t.Run("DecodeComplete", func(t *testing.T) {
-		data := []byte("Test data for decoding")
+	t.Run("DecodeComplete", func(t *testing.T) { testDecoderComplete(t, enc, dec) })
+	t.Run("DecodeWithMissingShard", func(t *testing.T) { testDecoderWithMissingShard(t, enc, dec) })
+	t.Run("DecodeWithMaxMissing", func(t *testing.T) { testDecoderWithMaxMissing(t, enc, dec, parityShards) })
+	t.Run("DecodeFailsWithTooManyMissing", func(t *testing.T) { testDecoderFailsWithTooManyMissing(t, enc, dec, parityShards) })
+}
 
-		encoded, err := enc.Encode(bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("failed to encode: %v", err)
-		}
+func testDecoderComplete(t *testing.T, enc *Encoder, dec *Decoder) {
+	data := []byte("Test data for decoding")
 
-		result, err := dec.Decode(&DecodeInput{
-			Shards:       encoded.Shards,
-			OriginalSize: encoded.OriginalSize,
-		})
-		if err != nil {
-			t.Fatalf("failed to decode: %v", err)
-		}
+	encoded, err := enc.Encode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("failed to encode: %v", err)
+	}
 
-		if !bytes.Equal(result.Data, data) {
-			t.Error("decoded data doesn't match original")
-		}
+	result, err := dec.Decode(&DecodeInput{
+		Shards:       encoded.Shards,
+		OriginalSize: encoded.OriginalSize,
 	})
+	if err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
 
-	t.Run("DecodeWithMissingShard", func(t *testing.T) {
-		data := []byte("Test data for partial decode")
+	if !bytes.Equal(result.Data, data) {
+		t.Error("decoded data doesn't match original")
+	}
+}
 
-		encoded, err := enc.Encode(bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("failed to encode: %v", err)
-		}
+func testDecoderWithMissingShard(t *testing.T, enc *Encoder, dec *Decoder) {
+	data := []byte("Test data for partial decode")
 
-		// Remove one shard
-		encoded.Shards[0] = nil
+	encoded, err := enc.Encode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("failed to encode: %v", err)
+	}
 
-		result, err := dec.Decode(&DecodeInput{
-			Shards:       encoded.Shards,
-			OriginalSize: encoded.OriginalSize,
-		})
-		if err != nil {
-			t.Fatalf("failed to decode with 1 missing shard: %v", err)
-		}
+	// Remove one shard
+	encoded.Shards[0] = nil
 
-		if !bytes.Equal(result.Data, data) {
-			t.Error("decoded data doesn't match original")
-		}
-
-		if len(result.ReconstructedShards) != 1 {
-			t.Errorf("expected 1 reconstructed shard, got %d", len(result.ReconstructedShards))
-		}
+	result, err := dec.Decode(&DecodeInput{
+		Shards:       encoded.Shards,
+		OriginalSize: encoded.OriginalSize,
 	})
+	if err != nil {
+		t.Fatalf("failed to decode with 1 missing shard: %v", err)
+	}
 
-	t.Run("DecodeWithMaxMissing", func(t *testing.T) {
-		data := []byte("Test data for max missing")
+	if !bytes.Equal(result.Data, data) {
+		t.Error("decoded data doesn't match original")
+	}
 
-		encoded, err := enc.Encode(bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("failed to encode: %v", err)
-		}
+	if len(result.ReconstructedShards) != 1 {
+		t.Errorf("expected 1 reconstructed shard, got %d", len(result.ReconstructedShards))
+	}
+}
 
-		// Remove parityShards shards (maximum allowed)
-		for i := range parityShards {
-			encoded.Shards[i] = nil
-		}
+func testDecoderWithMaxMissing(t *testing.T, enc *Encoder, dec *Decoder, parityShards int) {
+	data := []byte("Test data for max missing")
 
-		result, err := dec.Decode(&DecodeInput{
-			Shards:       encoded.Shards,
-			OriginalSize: encoded.OriginalSize,
-		})
-		if err != nil {
-			t.Fatalf("failed to decode with max missing shards: %v", err)
-		}
+	encoded, err := enc.Encode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("failed to encode: %v", err)
+	}
 
-		if !bytes.Equal(result.Data, data) {
-			t.Error("decoded data doesn't match original")
-		}
+	// Remove parityShards shards (maximum allowed)
+	for i := range parityShards {
+		encoded.Shards[i] = nil
+	}
+
+	result, err := dec.Decode(&DecodeInput{
+		Shards:       encoded.Shards,
+		OriginalSize: encoded.OriginalSize,
 	})
+	if err != nil {
+		t.Fatalf("failed to decode with max missing shards: %v", err)
+	}
 
-	t.Run("DecodeFailsWithTooManyMissing", func(t *testing.T) {
-		data := []byte("Test data for failure case")
+	if !bytes.Equal(result.Data, data) {
+		t.Error("decoded data doesn't match original")
+	}
+}
 
-		encoded, err := enc.Encode(bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("failed to encode: %v", err)
-		}
+func testDecoderFailsWithTooManyMissing(t *testing.T, enc *Encoder, dec *Decoder, parityShards int) {
+	data := []byte("Test data for failure case")
 
-		// Remove more than parityShards
-		for i := 0; i <= parityShards; i++ {
-			encoded.Shards[i] = nil
-		}
+	encoded, err := enc.Encode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("failed to encode: %v", err)
+	}
 
-		_, err = dec.Decode(&DecodeInput{
-			Shards:       encoded.Shards,
-			OriginalSize: encoded.OriginalSize,
-		})
-		if err == nil {
-			t.Error("expected decode to fail with too many missing shards")
-		}
+	// Remove more than parityShards
+	for i := 0; i <= parityShards; i++ {
+		encoded.Shards[i] = nil
+	}
+
+	_, err = dec.Decode(&DecodeInput{
+		Shards:       encoded.Shards,
+		OriginalSize: encoded.OriginalSize,
 	})
+	if err == nil {
+		t.Error("expected decode to fail with too many missing shards")
+	}
 }
 
 func TestPlacement(t *testing.T) {
