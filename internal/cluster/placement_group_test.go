@@ -39,7 +39,14 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
 
-	// Test LocalGroup
+	testLocalGroupOperations(t, mgr)
+	testGetGroupOperations(t, mgr)
+	testNodeGroupOperations(t, mgr)
+	testLocalGroupNodeChecks(t, mgr)
+	testReplicationAndAllGroupsChecks(t, mgr)
+}
+
+func testLocalGroupOperations(t *testing.T, mgr *PlacementGroupManager) {
 	localGroup := mgr.LocalGroup()
 	if localGroup == nil {
 		t.Fatal("LocalGroup returned nil")
@@ -52,8 +59,9 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if !localGroup.IsLocal {
 		t.Error("Expected local group IsLocal to be true")
 	}
+}
 
-	// Test GetGroup
+func testGetGroupOperations(t *testing.T, mgr *PlacementGroupManager) {
 	group, ok := mgr.GetGroup("pg-dc2")
 	if !ok {
 		t.Fatal("GetGroup failed for pg-dc2")
@@ -62,8 +70,9 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if group.Name != "Datacenter 2" {
 		t.Errorf("Expected name 'Datacenter 2', got '%s'", group.Name)
 	}
+}
 
-	// Test GetNodeGroup
+func testNodeGroupOperations(t *testing.T, mgr *PlacementGroupManager) {
 	nodeGroup, ok := mgr.GetNodeGroup("node1")
 	if !ok {
 		t.Fatal("GetNodeGroup failed for node1")
@@ -81,8 +90,9 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if nodeGroup.ID != "pg-dc2" {
 		t.Errorf("Expected node5 in group 'pg-dc2', got '%s'", nodeGroup.ID)
 	}
+}
 
-	// Test IsLocalGroupNode
+func testLocalGroupNodeChecks(t *testing.T, mgr *PlacementGroupManager) {
 	if !mgr.IsLocalGroupNode("node1") {
 		t.Error("Expected node1 to be in local group")
 	}
@@ -95,13 +105,13 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 		t.Error("Expected node4 to NOT be in local group")
 	}
 
-	// Test LocalGroupNodes
 	nodes := mgr.LocalGroupNodes()
 	if len(nodes) != 3 {
 		t.Errorf("Expected 3 local nodes, got %d", len(nodes))
 	}
+}
 
-	// Test ReplicationTargets
+func testReplicationAndAllGroupsChecks(t *testing.T, mgr *PlacementGroupManager) {
 	targets := mgr.ReplicationTargets()
 	if len(targets) != 1 {
 		t.Errorf("Expected 1 replication target, got %d", len(targets))
@@ -111,7 +121,6 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 		t.Errorf("Expected replication target 'pg-dc2', got '%s'", targets[0].ID)
 	}
 
-	// Test AllGroups
 	allGroups := mgr.AllGroups()
 	if len(allGroups) != 2 {
 		t.Errorf("Expected 2 groups, got %d", len(allGroups))
