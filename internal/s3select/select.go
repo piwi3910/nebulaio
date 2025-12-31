@@ -282,57 +282,75 @@ func (e *Engine) parseCSV(data []byte) ([]Record, error) {
 func (e *Engine) parseJSON(data []byte) ([]Record, error) {
 	config := e.inputFormat.JSONConfig
 
+	if config.Type == "LINES" {
+		return e.parseJSONLines(data)
+	}
+
+	return e.parseJSONDocument(data)
+}
+
+func (e *Engine) parseJSONLines(data []byte) ([]Record, error) {
 	var records []Record
 
-	if config.Type == "LINES" {
-		// JSON Lines format
-		lines := strings.Split(string(data), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-
-			var obj map[string]interface{}
-
-			err := json.Unmarshal([]byte(line), &obj)
-			if err != nil {
-				// Try as array
-				var arr []interface{}
-
-				err := json.Unmarshal([]byte(line), &arr)
-				if err != nil {
-					continue
-				}
-
-				for _, item := range arr {
-					if rec, ok := item.(map[string]interface{}); ok {
-						records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
-					}
-				}
-
-				continue
-			}
-
-			records = append(records, Record{Fields: obj, Columns: getKeys(obj)})
-		}
-	} else {
-		// DOCUMENT format - single JSON object or array
-		var obj interface{}
-
-		err := json.Unmarshal(data, &obj)
-		if err != nil {
-			return nil, err
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
 		}
 
-		switch v := obj.(type) {
-		case map[string]interface{}:
-			records = append(records, Record{Fields: v, Columns: getKeys(v)})
-		case []interface{}:
-			for _, item := range v {
-				if rec, ok := item.(map[string]interface{}); ok {
-					records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
-				}
+		lineRecords := e.parseJSONLine(line)
+		records = append(records, lineRecords...)
+	}
+
+	return records, nil
+}
+
+func (e *Engine) parseJSONLine(line string) []Record {
+	var records []Record
+
+	var obj map[string]interface{}
+
+	err := json.Unmarshal([]byte(line), &obj)
+	if err == nil {
+		records = append(records, Record{Fields: obj, Columns: getKeys(obj)})
+		return records
+	}
+
+	// Try as array
+	var arr []interface{}
+
+	err = json.Unmarshal([]byte(line), &arr)
+	if err != nil {
+		return records
+	}
+
+	for _, item := range arr {
+		if rec, ok := item.(map[string]interface{}); ok {
+			records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
+		}
+	}
+
+	return records
+}
+
+func (e *Engine) parseJSONDocument(data []byte) ([]Record, error) {
+	var records []Record
+
+	var obj interface{}
+
+	err := json.Unmarshal(data, &obj)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := obj.(type) {
+	case map[string]interface{}:
+		records = append(records, Record{Fields: v, Columns: getKeys(v)})
+	case []interface{}:
+		for _, item := range v {
+			if rec, ok := item.(map[string]interface{}); ok {
+				records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
 			}
 		}
 	}
