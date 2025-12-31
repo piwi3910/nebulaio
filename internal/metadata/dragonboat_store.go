@@ -944,115 +944,16 @@ func (s *DragonboatStore) StoreAuditEvent(ctx context.Context, event *audit.Audi
 
 // ListAuditEvents lists audit events with filtering.
 func (s *DragonboatStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) {
-	prefix := []byte(prefixAudit)
+	maxResults := s.normalizeMaxResults(filter.MaxResults)
+	seekKey := s.determineSeekKey(filter)
 
-	var (
-		events    []audit.AuditEvent
-		nextToken string
-	)
-
-	err := s.badger.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.Reverse = true // Most recent first
-
-		it := txn.NewIterator(opts)
-		defer it.Close()
-
-		maxResults := filter.MaxResults
-		if maxResults <= 0 {
-			maxResults = 100 // Default limit
-		}
-
-		if maxResults > 1000 {
-			maxResults = 1000 // Hard limit
-		}
-
-		// Determine seek position
-		var seekKey []byte
-
-		switch {
-		case filter.NextToken != "":
-			seekKey = []byte(filter.NextToken)
-		case !filter.EndTime.IsZero():
-			// Create a key that will be after any events at EndTime
-			seekKey = []byte(fmt.Sprintf("%s%s", prefixAudit, filter.EndTime.Format(time.RFC3339Nano)+"~"))
-		default:
-			// Seek to the end to iterate in reverse
-			seekKey = make([]byte, len(prefix)+1)
-			copy(seekKey, prefix)
-			seekKey[len(prefix)] = 0xFF
-		}
-
-		count := 0
-
-		for it.Seek(seekKey); it.Valid(); it.Next() {
-			item := it.Item()
-			key := item.Key()
-
-			// Check prefix
-			if !strings.HasPrefix(string(key), prefixAudit) {
-				break
-			}
-
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-
-			var event audit.AuditEvent
-			err = json.Unmarshal(val, &event)
-			if err != nil {
-				continue
-			}
-
-			// Apply filters
-			if !filter.StartTime.IsZero() && event.Timestamp.Before(filter.StartTime) {
-				break // Events are ordered by time, so we can stop here
-			}
-
-			if !filter.EndTime.IsZero() && event.Timestamp.After(filter.EndTime) {
-				continue
-			}
-
-			if filter.Bucket != "" && event.Resource.Bucket != filter.Bucket {
-				continue
-			}
-
-			if filter.User != "" && event.UserIdentity.Username != filter.User && event.UserIdentity.UserID != filter.User {
-				continue
-			}
-
-			if filter.EventType != "" && !strings.HasPrefix(string(event.EventType), filter.EventType) {
-				continue
-			}
-
-			if filter.Result != "" && string(event.Result) != filter.Result {
-				continue
-			}
-
-			events = append(events, event)
-			count++
-
-			// Check if we've collected enough
-			if count >= maxResults+1 {
-				break
-			}
-		}
-
-		return nil
-	})
+	events, err := s.scanAuditEvents(seekKey, filter, maxResults)
 	if err != nil {
 		return nil, err
 	}
 
-	// Handle pagination
-	maxResults := filter.MaxResults
-	if maxResults <= 0 {
-		maxResults = 100
-	}
-
+	nextToken := s.buildNextToken(events, maxResults, filter)
 	if len(events) > maxResults {
-		nextToken = fmt.Sprintf("%s%s", prefixAudit, events[maxResults].Timestamp.Format(time.RFC3339Nano))
 		events = events[:maxResults]
 	}
 
@@ -1060,6 +961,134 @@ func (s *DragonboatStore) ListAuditEvents(ctx context.Context, filter audit.Audi
 		Events:    events,
 		NextToken: nextToken,
 	}, nil
+}
+
+func (s *DragonboatStore) normalizeMaxResults(maxResults int) int {
+	if maxResults <= 0 {
+		return 100
+	}
+	if maxResults > 1000 {
+		return 1000
+	}
+	return maxResults
+}
+
+func (s *DragonboatStore) determineSeekKey(filter audit.AuditFilter) []byte {
+	prefix := []byte(prefixAudit)
+
+	switch {
+	case filter.NextToken != "":
+		return []byte(filter.NextToken)
+	case !filter.EndTime.IsZero():
+		return []byte(fmt.Sprintf("%s%s", prefixAudit, filter.EndTime.Format(time.RFC3339Nano)+"~"))
+	default:
+		seekKey := make([]byte, len(prefix)+1)
+		copy(seekKey, prefix)
+		seekKey[len(prefix)] = 0xFF
+		return seekKey
+	}
+}
+
+func (s *DragonboatStore) scanAuditEvents(
+	seekKey []byte,
+	filter audit.AuditFilter,
+	maxResults int,
+) ([]audit.AuditEvent, error) {
+	var events []audit.AuditEvent
+
+	err := s.badger.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Reverse = true
+
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		count := 0
+		for it.Seek(seekKey); it.Valid(); it.Next() {
+			item := it.Item()
+			key := item.Key()
+
+			if !strings.HasPrefix(string(key), prefixAudit) {
+				break
+			}
+
+			event, err := s.unmarshalAuditEvent(item)
+			if err != nil {
+				continue
+			}
+
+			if s.shouldStopScan(event, filter) {
+				break
+			}
+
+			if !s.eventMatchesFilter(event, filter) {
+				continue
+			}
+
+			events = append(events, *event)
+			count++
+
+			if count >= maxResults+1 {
+				break
+			}
+		}
+
+		return nil
+	})
+
+	return events, err
+}
+
+func (s *DragonboatStore) unmarshalAuditEvent(item *badger.Item) (*audit.AuditEvent, error) {
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var event audit.AuditEvent
+	if err := json.Unmarshal(val, &event); err != nil {
+		return nil, err
+	}
+
+	return &event, nil
+}
+
+func (s *DragonboatStore) shouldStopScan(event *audit.AuditEvent, filter audit.AuditFilter) bool {
+	if !filter.StartTime.IsZero() && event.Timestamp.Before(filter.StartTime) {
+		return true
+	}
+	return false
+}
+
+func (s *DragonboatStore) eventMatchesFilter(event *audit.AuditEvent, filter audit.AuditFilter) bool {
+	if !filter.EndTime.IsZero() && event.Timestamp.After(filter.EndTime) {
+		return false
+	}
+
+	if filter.Bucket != "" && event.Resource.Bucket != filter.Bucket {
+		return false
+	}
+
+	if filter.User != "" && event.UserIdentity.Username != filter.User && event.UserIdentity.UserID != filter.User {
+		return false
+	}
+
+	if filter.EventType != "" && !strings.HasPrefix(string(event.EventType), filter.EventType) {
+		return false
+	}
+
+	if filter.Result != "" && string(event.Result) != filter.Result {
+		return false
+	}
+
+	return true
+}
+
+func (s *DragonboatStore) buildNextToken(events []audit.AuditEvent, maxResults int, filter audit.AuditFilter) string {
+	if len(events) > maxResults {
+		return fmt.Sprintf("%s%s", prefixAudit, events[maxResults].Timestamp.Format(time.RFC3339Nano))
+	}
+	return ""
 }
 
 // DeleteOldAuditEvents deletes audit events older than the specified time.
