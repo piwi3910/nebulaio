@@ -461,59 +461,79 @@ func (m *Manager) EvaluateObject(rules []LifecycleRule, obj *metadata.ObjectMeta
 	now := time.Now()
 
 	for _, rule := range rules {
-		if !rule.IsEnabled() {
+		if !m.shouldEvaluateRule(rule, obj) {
 			continue
 		}
 
-		if !rule.MatchesObject(obj.Key, obj.Tags) {
-			continue
+		// Check expiration first
+		if result := m.evaluateExpiration(rule, obj, now); result.Action != ActionNone {
+			return result
 		}
 
-		// Check expiration
-		if rule.Expiration != nil {
-			// Check by days
-			if rule.Expiration.Days > 0 {
-				expirationTime := obj.CreatedAt.AddDate(0, 0, rule.Expiration.Days)
-				if now.After(expirationTime) {
-					return ActionResult{
-						Action: ActionDelete,
-						RuleID: rule.ID,
-					}
-				}
-			}
+		// Check transitions
+		if result := m.evaluateTransitions(rule, obj, now); result.Action != ActionNone {
+			return result
+		}
+	}
 
-			// Check by date
-			if !rule.Expiration.Date.IsZero() {
-				if now.After(rule.Expiration.Date) {
-					return ActionResult{
-						Action: ActionDelete,
-						RuleID: rule.ID,
-					}
-				}
+	return ActionResult{Action: ActionNone}
+}
+
+func (m *Manager) shouldEvaluateRule(rule LifecycleRule, obj *metadata.ObjectMeta) bool {
+	return rule.IsEnabled() && rule.MatchesObject(obj.Key, obj.Tags)
+}
+
+func (m *Manager) evaluateExpiration(rule LifecycleRule, obj *metadata.ObjectMeta, now time.Time) ActionResult {
+	if rule.Expiration == nil {
+		return ActionResult{Action: ActionNone}
+	}
+
+	// Check by days
+	if rule.Expiration.Days > 0 {
+		expirationTime := obj.CreatedAt.AddDate(0, 0, rule.Expiration.Days)
+		if now.After(expirationTime) {
+			return ActionResult{
+				Action: ActionDelete,
+				RuleID: rule.ID,
 			}
 		}
+	}
 
-		// Check transitions (find earliest applicable)
-		for _, transition := range rule.Transition {
-			var transitionTime time.Time
+	// Check by date
+	if !rule.Expiration.Date.IsZero() && now.After(rule.Expiration.Date) {
+		return ActionResult{
+			Action: ActionDelete,
+			RuleID: rule.ID,
+		}
+	}
 
-			if transition.Days > 0 {
-				transitionTime = obj.CreatedAt.AddDate(0, 0, transition.Days)
-			} else if !transition.Date.IsZero() {
-				transitionTime = transition.Date
-			}
+	return ActionResult{Action: ActionNone}
+}
 
-			if now.After(transitionTime) && obj.StorageClass != transition.StorageClass {
-				return ActionResult{
-					Action:      ActionTransition,
-					TargetClass: transition.StorageClass,
-					RuleID:      rule.ID,
-				}
+func (m *Manager) evaluateTransitions(rule LifecycleRule, obj *metadata.ObjectMeta, now time.Time) ActionResult {
+	for _, transition := range rule.Transition {
+		transitionTime := m.getTransitionTime(transition, obj)
+
+		if now.After(transitionTime) && obj.StorageClass != transition.StorageClass {
+			return ActionResult{
+				Action:      ActionTransition,
+				TargetClass: transition.StorageClass,
+				RuleID:      rule.ID,
 			}
 		}
 	}
 
 	return ActionResult{Action: ActionNone}
+}
+
+func (m *Manager) getTransitionTime(transition Transition, obj *metadata.ObjectMeta) time.Time {
+	if transition.Days > 0 {
+		return obj.CreatedAt.AddDate(0, 0, transition.Days)
+	}
+	if !transition.Date.IsZero() {
+		return transition.Date
+	}
+	return time.Time{}
 }
 
 // applyAction applies the lifecycle action to an object.
