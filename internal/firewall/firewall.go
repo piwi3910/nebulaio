@@ -595,84 +595,106 @@ func isObjectCreationOperation(operation string) bool {
 func (fw *Firewall) matchRule(rule *Rule, req *Request) bool {
 	match := &rule.Match
 
-	// Check source IPs
-	if len(match.SourceIPs) > 0 {
-		found := false
+	return fw.matchSourceIPs(match.SourceIPs, req.SourceIP) &&
+		fw.matchUsers(match.Users, req.User) &&
+		fw.matchBuckets(match.Buckets, req.Bucket) &&
+		fw.matchOperations(match.Operations, req.Operation) &&
+		fw.matchKeyPrefixes(match.KeyPrefixes, req.Key) &&
+		fw.matchContentTypes(match.ContentTypes, req.ContentType) &&
+		fw.matchSizeConstraints(match.MinSize, match.MaxSize, req.Size) &&
+		fw.matchTimeConstraints(match.TimeWindow, req.Timestamp)
+}
 
-		reqIP := net.ParseIP(req.SourceIP)
-		for _, cidr := range match.SourceIPs {
-			_, network, err := net.ParseCIDR(cidr)
-			if err != nil {
-				if net.ParseIP(cidr).Equal(reqIP) {
-					found = true
-					break
-				}
+// matchSourceIPs checks if request source IP matches any allowed CIDR/IP.
+func (fw *Firewall) matchSourceIPs(sourceIPs []string, requestIP string) bool {
+	if len(sourceIPs) == 0 {
+		return true
+	}
 
-				continue
+	reqIP := net.ParseIP(requestIP)
+	for _, cidr := range sourceIPs {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			if net.ParseIP(cidr).Equal(reqIP) {
+				return true
 			}
-
-			if network.Contains(reqIP) {
-				found = true
-				break
-			}
+			continue
 		}
 
-		if !found {
-			return false
+		if network.Contains(reqIP) {
+			return true
 		}
 	}
 
-	// Check users
-	if len(match.Users) > 0 && !contains(match.Users, req.User) {
-		return false
+	return false
+}
+
+// matchUsers checks if request user matches any allowed user.
+func (fw *Firewall) matchUsers(users []string, requestUser string) bool {
+	if len(users) == 0 {
+		return true
+	}
+	return contains(users, requestUser)
+}
+
+// matchBuckets checks if request bucket matches any wildcard pattern.
+func (fw *Firewall) matchBuckets(buckets []string, requestBucket string) bool {
+	if len(buckets) == 0 {
+		return true
+	}
+	return matchWildcard(buckets, requestBucket)
+}
+
+// matchOperations checks if request operation matches any allowed operation.
+func (fw *Firewall) matchOperations(operations []string, requestOperation string) bool {
+	if len(operations) == 0 {
+		return true
+	}
+	return contains(operations, requestOperation)
+}
+
+// matchKeyPrefixes checks if request key starts with any allowed prefix.
+func (fw *Firewall) matchKeyPrefixes(keyPrefixes []string, requestKey string) bool {
+	if len(keyPrefixes) == 0 {
+		return true
 	}
 
-	// Check buckets
-	if len(match.Buckets) > 0 && !matchWildcard(match.Buckets, req.Bucket) {
-		return false
-	}
-
-	// Check operations
-	if len(match.Operations) > 0 && !contains(match.Operations, req.Operation) {
-		return false
-	}
-
-	// Check key prefixes
-	if len(match.KeyPrefixes) > 0 {
-		found := false
-
-		for _, prefix := range match.KeyPrefixes {
-			if len(req.Key) >= len(prefix) && req.Key[:len(prefix)] == prefix {
-				found = true
-				break
-			}
+	for _, prefix := range keyPrefixes {
+		if len(requestKey) >= len(prefix) && requestKey[:len(prefix)] == prefix {
+			return true
 		}
-
-		if !found {
-			return false
-		}
 	}
 
-	// Check content types
-	if len(match.ContentTypes) > 0 && !contains(match.ContentTypes, req.ContentType) {
+	return false
+}
+
+// matchContentTypes checks if request content type matches any allowed type.
+func (fw *Firewall) matchContentTypes(contentTypes []string, requestContentType string) bool {
+	if len(contentTypes) == 0 {
+		return true
+	}
+	return contains(contentTypes, requestContentType)
+}
+
+// matchSizeConstraints checks if request size is within allowed range.
+func (fw *Firewall) matchSizeConstraints(minSize, maxSize, requestSize int64) bool {
+	if minSize > 0 && requestSize < minSize {
 		return false
 	}
 
-	// Check size constraints
-	if match.MinSize > 0 && req.Size < match.MinSize {
-		return false
-	}
-
-	if match.MaxSize > 0 && req.Size > match.MaxSize {
-		return false
-	}
-
-	// Check time window
-	if match.TimeWindow != nil && !fw.matchTimeWindow(match.TimeWindow, req.Timestamp) {
+	if maxSize > 0 && requestSize > maxSize {
 		return false
 	}
 
 	return true
+}
+
+// matchTimeConstraints checks if request time is within allowed time window.
+func (fw *Firewall) matchTimeConstraints(timeWindow *TimeWindow, requestTime time.Time) bool {
+	if timeWindow == nil {
+		return true
+	}
+	return fw.matchTimeWindow(timeWindow, requestTime)
 }
 
 func (fw *Firewall) matchTimeWindow(window *TimeWindow, t time.Time) bool {
