@@ -820,94 +820,126 @@ func (e *PolicyEngine) executeScheduledPolicy(policy *AdvancedPolicy) {
 		LastExecuted: startTime,
 	}
 
-	// Iterate through buckets that match the policy selector
-	buckets := e.getBucketsForPolicy(ctx, policy)
-
-	for _, bucket := range buckets {
-		// Check if this node should handle this bucket
-		if policy.Distributed.Enabled && policy.Distributed.ShardByBucket {
-			if !e.shouldHandleBucket(bucket, policy.ID) {
-				continue
-			}
-		}
-
-		// List objects in bucket
-		var marker string
-
-		for {
-			objects, err := e.tierManager.ListObjects(ctx, bucket, "", 1000)
-			if err != nil {
-				stats.Errors++
-				stats.LastError = err.Error()
-
-				break
-			}
-
-			if len(objects) == 0 {
-				break
-			}
-
-			for _, obj := range objects {
-				stats.ObjectsEvaluated++
-
-				// Get access stats
-				accessStats, _ := e.accessStats.GetStats(ctx, bucket, obj.Key)
-				if accessStats == nil {
-					accessStats = &ObjectAccessStats{Bucket: bucket, Key: obj.Key}
-				}
-
-				// Check selector
-				if !e.matchesSelector(obj, accessStats, policy.Selector) {
-					continue
-				}
-
-				// Check triggers
-				triggered, _ := e.checkTriggers(obj, accessStats, policy)
-				if !triggered {
-					continue
-				}
-
-				// Check anti-thrash
-				if policy.AntiThrash.Enabled {
-					if !e.antiThrash.CanTransition(bucket, obj.Key, policy) {
-						continue
-					}
-				}
-
-				// Execute actions
-				for _, action := range policy.Actions {
-					err := e.executor.Execute(ctx, bucket, obj.Key, &action)
-					if err != nil {
-						stats.Errors++
-						stats.LastError = err.Error()
-					} else {
-						stats.ObjectsTransitioned++
-						stats.BytesTransitioned += obj.Size
-
-						// Record transition in anti-thrash
-						if policy.AntiThrash.Enabled {
-							e.antiThrash.RecordTransition(bucket, obj.Key)
-						}
-					}
-				}
-
-				// Rate limiting
-				if policy.RateLimit.Enabled {
-					e.rateLimiter.Wait(policy.ID)
-				}
-			}
-
-			marker = objects[len(objects)-1].Key
-			if marker == "" {
-				break
-			}
-		}
-	}
+	e.processBucketsForPolicy(ctx, policy, stats)
 
 	stats.LastDuration = time.Since(startTime)
 	stats.TotalExecutions++
 
-	// Update stats
+	e.finalizeScheduledPolicyExecution(ctx, policy, stats)
+}
+
+// processBucketsForPolicy processes all buckets matching the policy.
+func (e *PolicyEngine) processBucketsForPolicy(ctx context.Context, policy *AdvancedPolicy, stats *PolicyStats) {
+	buckets := e.getBucketsForPolicy(ctx, policy)
+
+	for _, bucket := range buckets {
+		if !e.shouldProcessBucket(bucket, policy) {
+			continue
+		}
+
+		e.processObjectsInBucket(ctx, bucket, policy, stats)
+	}
+}
+
+// shouldProcessBucket checks if this node should handle the bucket.
+func (e *PolicyEngine) shouldProcessBucket(bucket string, policy *AdvancedPolicy) bool {
+	if policy.Distributed.Enabled && policy.Distributed.ShardByBucket {
+		return e.shouldHandleBucket(bucket, policy.ID)
+	}
+	return true
+}
+
+// processObjectsInBucket processes all objects in a bucket for the policy.
+func (e *PolicyEngine) processObjectsInBucket(ctx context.Context, bucket string, policy *AdvancedPolicy, stats *PolicyStats) {
+	var marker string
+
+	for {
+		objects, err := e.tierManager.ListObjects(ctx, bucket, "", 1000)
+		if err != nil {
+			stats.Errors++
+			stats.LastError = err.Error()
+			break
+		}
+
+		if len(objects) == 0 {
+			break
+		}
+
+		for _, obj := range objects {
+			e.processObject(ctx, bucket, obj, policy, stats)
+		}
+
+		marker = objects[len(objects)-1].Key
+		if marker == "" {
+			break
+		}
+	}
+}
+
+// processObject evaluates and executes policy for a single object.
+func (e *PolicyEngine) processObject(ctx context.Context, bucket string, obj ObjectMetadata, policy *AdvancedPolicy, stats *PolicyStats) {
+	stats.ObjectsEvaluated++
+
+	accessStats := e.getAccessStatsForObject(ctx, bucket, obj.Key)
+
+	if !e.shouldTransitionObject(obj, accessStats, policy) {
+		return
+	}
+
+	e.executeActionsForObject(ctx, bucket, obj, policy, stats)
+}
+
+// getAccessStatsForObject retrieves access stats for an object.
+func (e *PolicyEngine) getAccessStatsForObject(ctx context.Context, bucket, key string) *ObjectAccessStats {
+	accessStats, _ := e.accessStats.GetStats(ctx, bucket, key)
+	if accessStats == nil {
+		accessStats = &ObjectAccessStats{Bucket: bucket, Key: key}
+	}
+	return accessStats
+}
+
+// shouldTransitionObject checks if object meets policy criteria.
+func (e *PolicyEngine) shouldTransitionObject(obj ObjectMetadata, accessStats *ObjectAccessStats, policy *AdvancedPolicy) bool {
+	if !e.matchesSelector(obj, accessStats, policy.Selector) {
+		return false
+	}
+
+	triggered, _ := e.checkTriggers(obj, accessStats, policy)
+	if !triggered {
+		return false
+	}
+
+	if policy.AntiThrash.Enabled {
+		return e.antiThrash.CanTransition(obj.Bucket, obj.Key, policy)
+	}
+
+	return true
+}
+
+// executeActionsForObject executes policy actions on an object.
+func (e *PolicyEngine) executeActionsForObject(ctx context.Context, bucket string, obj ObjectMetadata, policy *AdvancedPolicy, stats *PolicyStats) {
+	for _, action := range policy.Actions {
+		err := e.executor.Execute(ctx, bucket, obj.Key, &action)
+		if err != nil {
+			stats.Errors++
+			stats.LastError = err.Error()
+		} else {
+			stats.ObjectsTransitioned++
+			stats.BytesTransitioned += obj.Size
+
+			if policy.AntiThrash.Enabled {
+				e.antiThrash.RecordTransition(bucket, obj.Key)
+			}
+		}
+	}
+
+	if policy.RateLimit.Enabled {
+		e.rateLimiter.Wait(policy.ID)
+	}
+}
+
+// finalizeScheduledPolicyExecution updates stats and logs completion.
+func (e *PolicyEngine) finalizeScheduledPolicyExecution(ctx context.Context, policy *AdvancedPolicy, stats *PolicyStats) {
 	err := e.store.UpdateStats(ctx, stats)
 	if err != nil {
 		log.Error().Err(err).Str("policy_id", policy.ID).Msg("Failed to update policy stats")
