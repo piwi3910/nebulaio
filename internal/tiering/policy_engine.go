@@ -1107,22 +1107,12 @@ func (e *PolicyEngine) handleThresholdEvent(event ThresholdEvent) {
 
 // executeCapacityPolicy moves objects to free up tier capacity.
 func (e *PolicyEngine) executeCapacityPolicy(ctx context.Context, policy *AdvancedPolicy, trigger *CapacityTrigger, event ThresholdEvent) {
-	// Get target tier from actions
-	var targetTier TierType
-
-	for _, action := range policy.Actions {
-		if action.Type == ActionTransition && action.Transition != nil {
-			targetTier = action.Transition.TargetTier
-			break
-		}
-	}
-
+	targetTier := e.findTargetTierFromPolicy(policy)
 	if targetTier == "" {
 		return
 	}
 
-	// Calculate how much to free
-	targetBytes := int64(float64(event.BytesTotal) * (event.Usage - trigger.LowWatermark) / 100)
+	targetBytes := e.calculateBytesToFree(event, trigger)
 	if targetBytes <= 0 {
 		return
 	}
@@ -1133,7 +1123,31 @@ func (e *PolicyEngine) executeCapacityPolicy(ctx context.Context, policy *Advanc
 		Int64("target_bytes", targetBytes).
 		Msg("Freeing tier capacity")
 
-	// Move oldest objects first
+	bytesFreed := e.freeCapacityByTransitioning(ctx, policy, event.Tier, targetTier, targetBytes)
+
+	log.Info().
+		Int64("bytes_freed", bytesFreed).
+		Int64("target_bytes", targetBytes).
+		Msg("Capacity policy completed")
+}
+
+// findTargetTierFromPolicy extracts target tier from policy actions.
+func (e *PolicyEngine) findTargetTierFromPolicy(policy *AdvancedPolicy) TierType {
+	for _, action := range policy.Actions {
+		if action.Type == ActionTransition && action.Transition != nil {
+			return action.Transition.TargetTier
+		}
+	}
+	return ""
+}
+
+// calculateBytesToFree calculates how many bytes need to be freed.
+func (e *PolicyEngine) calculateBytesToFree(event ThresholdEvent, trigger *CapacityTrigger) int64 {
+	return int64(float64(event.BytesTotal) * (event.Usage - trigger.LowWatermark) / 100)
+}
+
+// freeCapacityByTransitioning transitions objects to free capacity.
+func (e *PolicyEngine) freeCapacityByTransitioning(ctx context.Context, policy *AdvancedPolicy, sourceTier, targetTier TierType, targetBytes int64) int64 {
 	bytesFreed := int64(0)
 
 	for _, bucket := range policy.Selector.Buckets {
@@ -1147,33 +1161,37 @@ func (e *PolicyEngine) executeCapacityPolicy(ctx context.Context, policy *Advanc
 			return objects[i].ModifiedAt.Before(objects[j].ModifiedAt)
 		})
 
-		for _, obj := range objects {
-			if obj.CurrentTier != event.Tier {
-				continue
-			}
+		bytesFreed += e.transitionOldestObjects(ctx, policy, bucket, objects, sourceTier, targetTier, targetBytes, bytesFreed)
 
-			// Check anti-thrash
-			if policy.AntiThrash.Enabled {
-				if !e.antiThrash.CanTransition(bucket, obj.Key, policy) {
-					continue
-				}
-			}
+		if bytesFreed >= targetBytes {
+			break
+		}
+	}
 
-			// Transition object
-			err := e.tierManager.TransitionObject(ctx, bucket, obj.Key, targetTier)
-			if err != nil {
-				continue
-			}
+	return bytesFreed
+}
 
-			bytesFreed += obj.Size
+// transitionOldestObjects transitions objects until target is reached.
+func (e *PolicyEngine) transitionOldestObjects(ctx context.Context, policy *AdvancedPolicy, bucket string, objects []ObjectMetadata, sourceTier, targetTier TierType, targetBytes, currentFreed int64) int64 {
+	bytesFreed := currentFreed
 
-			if policy.AntiThrash.Enabled {
-				e.antiThrash.RecordTransition(bucket, obj.Key)
-			}
+	for _, obj := range objects {
+		if obj.CurrentTier != sourceTier {
+			continue
+		}
 
-			if bytesFreed >= targetBytes {
-				break
-			}
+		if !e.checkAntiThrashForObject(policy, bucket, obj.Key) {
+			continue
+		}
+
+		if err := e.tierManager.TransitionObject(ctx, bucket, obj.Key, targetTier); err != nil {
+			continue
+		}
+
+		bytesFreed += obj.Size
+
+		if policy.AntiThrash.Enabled {
+			e.antiThrash.RecordTransition(bucket, obj.Key)
 		}
 
 		if bytesFreed >= targetBytes {
@@ -1181,8 +1199,13 @@ func (e *PolicyEngine) executeCapacityPolicy(ctx context.Context, policy *Advanc
 		}
 	}
 
-	log.Info().
-		Int64("bytes_freed", bytesFreed).
-		Int64("target_bytes", targetBytes).
-		Msg("Capacity policy completed")
+	return bytesFreed
+}
+
+// checkAntiThrashForObject checks if object can be transitioned.
+func (e *PolicyEngine) checkAntiThrashForObject(policy *AdvancedPolicy, bucket, key string) bool {
+	if policy.AntiThrash.Enabled {
+		return e.antiThrash.CanTransition(bucket, key, policy)
+	}
+	return true
 }
