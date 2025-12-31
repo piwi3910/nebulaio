@@ -538,87 +538,87 @@ func (l *EnhancedAuditLogger) shouldLog(event *EnhancedAuditEvent) bool {
 }
 
 func (l *EnhancedAuditLogger) matchesFilterRule(rule *FilterRule, event *EnhancedAuditEvent) bool {
-	// Check event types
-	if len(rule.EventTypes) > 0 {
-		found := false
-
-		for _, et := range rule.EventTypes {
-			if et == event.EventType {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !l.matchesEventTypes(rule.EventTypes, event.EventType) {
+		return false
 	}
 
-	// Check users
-	if len(rule.Users) > 0 {
-		found := false
-
-		for _, u := range rule.Users {
-			if u == event.UserIdentity.Username {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !l.matchesUsers(rule.Users, event.UserIdentity.Username) {
+		return false
 	}
 
-	// Check buckets
-	if len(rule.Buckets) > 0 {
-		found := false
-
-		for _, b := range rule.Buckets {
-			if b == event.Resource.Bucket {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !l.matchesBuckets(rule.Buckets, event.Resource.Bucket) {
+		return false
 	}
 
-	// Check IPs
-	if len(rule.IPs) > 0 {
-		found := false
-
-		for _, ip := range rule.IPs {
-			if ip == event.SourceIP {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !l.matchesIPs(rule.IPs, event.SourceIP) {
+		return false
 	}
 
-	// Check results
-	if len(rule.Results) > 0 {
-		found := false
-
-		for _, r := range rule.Results {
-			if r == event.Result {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !l.matchesResults(rule.Results, event.Result) {
+		return false
 	}
 
 	return true
+}
+
+func (l *EnhancedAuditLogger) matchesEventTypes(allowed []EventType, actual EventType) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, et := range allowed {
+		if et == actual {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *EnhancedAuditLogger) matchesUsers(allowed []string, actual string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, u := range allowed {
+		if u == actual {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *EnhancedAuditLogger) matchesBuckets(allowed []string, actual string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, b := range allowed {
+		if b == actual {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *EnhancedAuditLogger) matchesIPs(allowed []string, actual string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, ip := range allowed {
+		if ip == actual {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *EnhancedAuditLogger) matchesResults(allowed []Result, actual Result) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, r := range allowed {
+		if r == actual {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *EnhancedAuditLogger) addIntegrity(event *EnhancedAuditEvent) {
