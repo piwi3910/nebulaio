@@ -540,63 +540,72 @@ func (sm *stateMachine) applyDeleteObjectMeta(bucket, objKey string) error {
 
 func (sm *stateMachine) applyPutObjectMetaVersioned(meta *ObjectMeta, preserveOldVersions bool) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		// Current object key (for latest version pointer)
 		currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, meta.Bucket, meta.Key))
 
 		if preserveOldVersions {
-			// Get current version and mark it as not latest
-			item, err := txn.Get(currentKey)
-			if err == nil {
-				var oldMeta ObjectMeta
-
-				err = item.Value(func(val []byte) error {
-					return json.Unmarshal(val, &oldMeta)
-				})
-				if err == nil && oldMeta.VersionID != "" {
-					// Mark old version as not latest
-					oldMeta.IsLatest = false
-
-					oldData, err := json.Marshal(&oldMeta)
-					if err != nil {
-						return err
-					}
-
-					// Store old version with compound key: objver:{bucket}/{key}#{versionID}
-					oldVersionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID))
-					err = txn.Set(oldVersionKey, oldData)
-					if err != nil {
-						return err
-					}
-				}
+			if err := sm.preserveOldVersion(txn, currentKey); err != nil {
+				return err
 			}
 		}
 
-		// Mark new version as latest
 		meta.IsLatest = true
 
-		// Store new version in version history if it has a version ID
-		if meta.VersionID != "" {
-			versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, meta.Bucket, meta.Key, meta.VersionID))
-
-			versionData, err := json.Marshal(meta)
-			if err != nil {
-				return err
-			}
-
-			err = txn.Set(versionKey, versionData)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Store/update current version pointer
-		data, err := json.Marshal(meta)
-		if err != nil {
+		if err := sm.storeVersionHistory(txn, meta); err != nil {
 			return err
 		}
 
-		return txn.Set(currentKey, data)
+		return sm.storeCurrentVersion(txn, currentKey, meta)
 	})
+}
+
+func (sm *stateMachine) preserveOldVersion(txn *badger.Txn, currentKey []byte) error {
+	item, err := txn.Get(currentKey)
+	if err != nil {
+		return nil
+	}
+
+	var oldMeta ObjectMeta
+
+	err = item.Value(func(val []byte) error {
+		return json.Unmarshal(val, &oldMeta)
+	})
+	if err != nil || oldMeta.VersionID == "" {
+		return nil
+	}
+
+	oldMeta.IsLatest = false
+
+	oldData, err := json.Marshal(&oldMeta)
+	if err != nil {
+		return err
+	}
+
+	oldVersionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID))
+	return txn.Set(oldVersionKey, oldData)
+}
+
+func (sm *stateMachine) storeVersionHistory(txn *badger.Txn, meta *ObjectMeta) error {
+	if meta.VersionID == "" {
+		return nil
+	}
+
+	versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, meta.Bucket, meta.Key, meta.VersionID))
+
+	versionData, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	return txn.Set(versionKey, versionData)
+}
+
+func (sm *stateMachine) storeCurrentVersion(txn *badger.Txn, currentKey []byte, meta *ObjectMeta) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	return txn.Set(currentKey, data)
 }
 
 func (sm *stateMachine) applyDeleteObjectVersion(bucket, objKey, versionID string) error {
