@@ -794,82 +794,147 @@ func (c *Catalog) validateRequirement(table *Table, req *TableRequirement) error
 func (c *Catalog) applyUpdate(metadata *TableMetadata, update *TableUpdate) error {
 	switch update.Action {
 	case "upgrade-format-version":
-		metadata.FormatVersion = 2
+		c.applyUpgradeFormatVersion(metadata)
 	case "add-schema":
-		if update.Schema != nil {
-			update.Schema.SchemaID = len(metadata.Schemas)
-			metadata.Schemas = append(metadata.Schemas, update.Schema)
-			metadata.LastColumnID = max(metadata.LastColumnID, getMaxFieldID(update.Schema))
-		}
+		c.applyAddSchema(metadata, update)
 	case "set-current-schema":
-		if update.SchemaID != nil {
-			metadata.CurrentSchemaID = *update.SchemaID
-			for _, s := range metadata.Schemas {
-				if s.SchemaID == *update.SchemaID {
-					metadata.Schema = s
-					break
-				}
-			}
-		}
+		c.applySetCurrentSchema(metadata, update)
 	case "add-spec":
-		if update.Spec != nil {
-			update.Spec.SpecID = len(metadata.PartitionSpecs)
-			metadata.PartitionSpecs = append(metadata.PartitionSpecs, update.Spec)
-			metadata.LastPartitionID = max(metadata.LastPartitionID, getMaxPartitionFieldID(update.Spec))
-		}
+		c.applyAddSpec(metadata, update)
 	case "set-default-spec":
-		if update.SpecID != nil {
-			metadata.DefaultSpecID = *update.SpecID
-		}
+		c.applySetDefaultSpec(metadata, update)
 	case "add-sort-order":
-		if update.SortOrder != nil {
-			update.SortOrder.OrderID = len(metadata.SortOrders)
-			metadata.SortOrders = append(metadata.SortOrders, update.SortOrder)
-		}
+		c.applyAddSortOrder(metadata, update)
 	case "set-default-sort-order":
-		if update.OrderID != nil {
-			metadata.DefaultSortOrderID = *update.OrderID
-		}
+		c.applySetDefaultSortOrder(metadata, update)
 	case "add-snapshot":
-		if update.Snapshot != nil {
-			metadata.Snapshots = append(metadata.Snapshots, update.Snapshot)
-			metadata.SnapshotLog = append(metadata.SnapshotLog, &SnapshotLogEntry{
-				TimestampMs: update.Snapshot.TimestampMs,
-				SnapshotID:  update.Snapshot.SnapshotID,
-			})
-
-			atomic.AddInt64(&c.metrics.SnapshotsCreated, 1)
-		}
+		c.applyAddSnapshot(metadata, update)
 	case "set-snapshot-ref":
-		if metadata.Refs == nil {
-			metadata.Refs = make(map[string]*SnapshotRef)
-		}
-
-		if update.Ref != nil {
-			metadata.Refs[update.RefName] = update.Ref
-			if update.RefName == "main" {
-				metadata.CurrentSnapshotID = &update.Ref.SnapshotID
-			}
-		}
+		c.applySetSnapshotRef(metadata, update)
 	case "remove-snapshot-ref":
-		delete(metadata.Refs, update.RefName)
+		c.applyRemoveSnapshotRef(metadata, update)
 	case "set-location":
-		metadata.Location = update.Location
+		c.applySetLocation(metadata, update)
 	case "set-properties":
-		if metadata.Properties == nil {
-			metadata.Properties = make(map[string]string)
-		}
-
-		for k, v := range update.Properties {
-			metadata.Properties[k] = v
-		}
+		c.applySetProperties(metadata, update)
 	case "remove-properties":
-		for _, k := range update.Removals {
-			delete(metadata.Properties, k)
-		}
+		c.applyRemoveProperties(metadata, update)
 	}
 
 	return nil
+}
+
+// applyUpgradeFormatVersion upgrades the table format version.
+func (c *Catalog) applyUpgradeFormatVersion(metadata *TableMetadata) {
+	metadata.FormatVersion = 2
+}
+
+// applyAddSchema adds a new schema to the table.
+func (c *Catalog) applyAddSchema(metadata *TableMetadata, update *TableUpdate) {
+	if update.Schema != nil {
+		update.Schema.SchemaID = len(metadata.Schemas)
+		metadata.Schemas = append(metadata.Schemas, update.Schema)
+		metadata.LastColumnID = max(metadata.LastColumnID, getMaxFieldID(update.Schema))
+	}
+}
+
+// applySetCurrentSchema sets the current schema for the table.
+func (c *Catalog) applySetCurrentSchema(metadata *TableMetadata, update *TableUpdate) {
+	if update.SchemaID != nil {
+		metadata.CurrentSchemaID = *update.SchemaID
+		for _, s := range metadata.Schemas {
+			if s.SchemaID == *update.SchemaID {
+				metadata.Schema = s
+				break
+			}
+		}
+	}
+}
+
+// applyAddSpec adds a partition spec to the table.
+func (c *Catalog) applyAddSpec(metadata *TableMetadata, update *TableUpdate) {
+	if update.Spec != nil {
+		update.Spec.SpecID = len(metadata.PartitionSpecs)
+		metadata.PartitionSpecs = append(metadata.PartitionSpecs, update.Spec)
+		metadata.LastPartitionID = max(metadata.LastPartitionID, getMaxPartitionFieldID(update.Spec))
+	}
+}
+
+// applySetDefaultSpec sets the default partition spec.
+func (c *Catalog) applySetDefaultSpec(metadata *TableMetadata, update *TableUpdate) {
+	if update.SpecID != nil {
+		metadata.DefaultSpecID = *update.SpecID
+	}
+}
+
+// applyAddSortOrder adds a sort order to the table.
+func (c *Catalog) applyAddSortOrder(metadata *TableMetadata, update *TableUpdate) {
+	if update.SortOrder != nil {
+		update.SortOrder.OrderID = len(metadata.SortOrders)
+		metadata.SortOrders = append(metadata.SortOrders, update.SortOrder)
+	}
+}
+
+// applySetDefaultSortOrder sets the default sort order.
+func (c *Catalog) applySetDefaultSortOrder(metadata *TableMetadata, update *TableUpdate) {
+	if update.OrderID != nil {
+		metadata.DefaultSortOrderID = *update.OrderID
+	}
+}
+
+// applyAddSnapshot adds a new snapshot to the table.
+func (c *Catalog) applyAddSnapshot(metadata *TableMetadata, update *TableUpdate) {
+	if update.Snapshot != nil {
+		metadata.Snapshots = append(metadata.Snapshots, update.Snapshot)
+		metadata.SnapshotLog = append(metadata.SnapshotLog, &SnapshotLogEntry{
+			TimestampMs: update.Snapshot.TimestampMs,
+			SnapshotID:  update.Snapshot.SnapshotID,
+		})
+
+		atomic.AddInt64(&c.metrics.SnapshotsCreated, 1)
+	}
+}
+
+// applySetSnapshotRef sets a snapshot reference.
+func (c *Catalog) applySetSnapshotRef(metadata *TableMetadata, update *TableUpdate) {
+	if metadata.Refs == nil {
+		metadata.Refs = make(map[string]*SnapshotRef)
+	}
+
+	if update.Ref != nil {
+		metadata.Refs[update.RefName] = update.Ref
+		if update.RefName == "main" {
+			metadata.CurrentSnapshotID = &update.Ref.SnapshotID
+		}
+	}
+}
+
+// applyRemoveSnapshotRef removes a snapshot reference.
+func (c *Catalog) applyRemoveSnapshotRef(metadata *TableMetadata, update *TableUpdate) {
+	delete(metadata.Refs, update.RefName)
+}
+
+// applySetLocation sets the table location.
+func (c *Catalog) applySetLocation(metadata *TableMetadata, update *TableUpdate) {
+	metadata.Location = update.Location
+}
+
+// applySetProperties sets table properties.
+func (c *Catalog) applySetProperties(metadata *TableMetadata, update *TableUpdate) {
+	if metadata.Properties == nil {
+		metadata.Properties = make(map[string]string)
+	}
+
+	for k, v := range update.Properties {
+		metadata.Properties[k] = v
+	}
+}
+
+// applyRemoveProperties removes table properties.
+func (c *Catalog) applyRemoveProperties(metadata *TableMetadata, update *TableUpdate) {
+	for _, k := range update.Removals {
+		delete(metadata.Properties, k)
+	}
 }
 
 func (c *Catalog) copyMetadata(m *TableMetadata) (*TableMetadata, error) {
