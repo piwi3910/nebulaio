@@ -39,28 +39,7 @@ func (m *mockAuditStore) ListAuditEvents(ctx context.Context, filter AuditFilter
 	}
 
 	for _, e := range m.events {
-		// Apply filters
-		if !filter.StartTime.IsZero() && e.Timestamp.Before(filter.StartTime) {
-			continue
-		}
-
-		if !filter.EndTime.IsZero() && e.Timestamp.After(filter.EndTime) {
-			continue
-		}
-
-		if filter.Bucket != "" && e.Resource.Bucket != filter.Bucket {
-			continue
-		}
-
-		if filter.User != "" && e.UserIdentity.Username != filter.User {
-			continue
-		}
-
-		if filter.EventType != "" && string(e.EventType) != filter.EventType {
-			continue
-		}
-
-		if filter.Result != "" && string(e.Result) != filter.Result {
+		if !matchesAuditFilter(e, filter) {
 			continue
 		}
 
@@ -72,6 +51,58 @@ func (m *mockAuditStore) ListAuditEvents(ctx context.Context, filter AuditFilter
 	}
 
 	return result, nil
+}
+
+func matchesAuditFilter(e *AuditEvent, filter AuditFilter) bool {
+	if !matchesTimeFilter(e, filter) {
+		return false
+	}
+
+	if !matchesResourceFilter(e, filter) {
+		return false
+	}
+
+	if !matchesEventTypeAndResultFilter(e, filter) {
+		return false
+	}
+
+	return true
+}
+
+func matchesTimeFilter(e *AuditEvent, filter AuditFilter) bool {
+	if !filter.StartTime.IsZero() && e.Timestamp.Before(filter.StartTime) {
+		return false
+	}
+
+	if !filter.EndTime.IsZero() && e.Timestamp.After(filter.EndTime) {
+		return false
+	}
+
+	return true
+}
+
+func matchesResourceFilter(e *AuditEvent, filter AuditFilter) bool {
+	if filter.Bucket != "" && e.Resource.Bucket != filter.Bucket {
+		return false
+	}
+
+	if filter.User != "" && e.UserIdentity.Username != filter.User {
+		return false
+	}
+
+	return true
+}
+
+func matchesEventTypeAndResultFilter(e *AuditEvent, filter AuditFilter) bool {
+	if filter.EventType != "" && string(e.EventType) != filter.EventType {
+		return false
+	}
+
+	if filter.Result != "" && string(e.Result) != filter.Result {
+		return false
+	}
+
+	return true
 }
 
 // mockGeoLookup implements GeoLookup for testing.
