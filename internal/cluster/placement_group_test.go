@@ -735,6 +735,15 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 		t.Fatalf("Should handle empty config: %v", err)
 	}
 
+	testNilPointerLocalGroup(t, mgr)
+	testNilPointerGetGroup(t, mgr)
+	testNilPointerShardPlacement(t, mgr)
+	testNilPointerReplicationAndGroups(t, mgr)
+	testNilPointerGroupOperations(t, mgr)
+	testNilPointerClose(t, mgr)
+}
+
+func testNilPointerLocalGroup(t *testing.T, mgr *PlacementGroupManager) {
 	// LocalGroup should return nil gracefully
 	if mgr.LocalGroup() != nil {
 		t.Error("LocalGroup should return nil for empty config")
@@ -744,13 +753,17 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if mgr.LocalGroupNodes() != nil {
 		t.Error("LocalGroupNodes should return nil for empty config")
 	}
+}
 
+func testNilPointerGetGroup(t *testing.T, mgr *PlacementGroupManager) {
 	// GetGroup for non-existent group
 	group, ok := mgr.GetGroup("nonexistent")
 	if ok || group != nil {
 		t.Error("GetGroup should return nil for non-existent group")
 	}
+}
 
+func testNilPointerShardPlacement(t *testing.T, mgr *PlacementGroupManager) {
 	// GetShardPlacementNodes with no local group should return empty, no panic
 	nodes, err := mgr.GetShardPlacementNodes(3)
 	if err != nil {
@@ -770,7 +783,9 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if len(nodes) != 0 {
 		t.Error("GetShardPlacementNodesForObject should return empty slice on error")
 	}
+}
 
+func testNilPointerReplicationAndGroups(t *testing.T, mgr *PlacementGroupManager) {
 	// ReplicationTargets should return empty, not panic
 	targets := mgr.ReplicationTargets()
 	if len(targets) != 0 {
@@ -786,9 +801,11 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if len(allGroups) != 0 {
 		t.Error("AllGroups should be empty for empty config")
 	}
+}
 
+func testNilPointerGroupOperations(t *testing.T, mgr *PlacementGroupManager) {
 	// AddNodeToGroup on non-existent group should error gracefully
-	err = mgr.AddNodeToGroup("nonexistent", "node1")
+	err := mgr.AddNodeToGroup("nonexistent", "node1")
 	if err == nil {
 		t.Error("AddNodeToGroup should error for non-existent group")
 	}
@@ -804,9 +821,11 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if err == nil {
 		t.Error("UpdateGroupStatus should error for non-existent group")
 	}
+}
 
+func testNilPointerClose(t *testing.T, mgr *PlacementGroupManager) {
 	// Close should not panic on empty manager
-	err = mgr.Close()
+	err := mgr.Close()
 	if err != nil {
 		t.Errorf("Close should not error: %v", err)
 	}
