@@ -767,32 +767,15 @@ func evaluateCondition(cond *Condition, row map[string]interface{}) (bool, error
 	case ConditionTypeComparison:
 		return evaluateComparison(cond, row)
 	case ConditionTypeAnd:
-		left, err := evaluateCondition(cond.Left, row)
-		if err != nil || !left {
-			return false, err
-		}
-
-		return evaluateCondition(cond.Right, row)
+		return evaluateAnd(cond, row)
 	case ConditionTypeOr:
-		left, err := evaluateCondition(cond.Left, row)
-		if err != nil {
-			return false, err
-		}
-
-		if left {
-			return true, nil
-		}
-
-		return evaluateCondition(cond.Right, row)
+		return evaluateOr(cond, row)
 	case ConditionTypeNot:
-		result, err := evaluateCondition(cond.Left, row)
-		return !result, err
+		return evaluateNot(cond, row)
 	case ConditionTypeIsNull:
-		val := row[cond.Column]
-		return val == nil, nil
+		return evaluateIsNull(cond, row)
 	case ConditionTypeIsNotNull:
-		val := row[cond.Column]
-		return val != nil, nil
+		return evaluateIsNotNull(cond, row)
 	case ConditionTypeLike:
 		return evaluateLike(cond, row)
 	case ConditionTypeBetween:
@@ -802,6 +785,45 @@ func evaluateCondition(cond *Condition, row map[string]interface{}) (bool, error
 	default:
 		return false, fmt.Errorf("unsupported condition type: %d", cond.Type)
 	}
+}
+
+// evaluateAnd evaluates an AND condition.
+func evaluateAnd(cond *Condition, row map[string]interface{}) (bool, error) {
+	left, err := evaluateCondition(cond.Left, row)
+	if err != nil || !left {
+		return false, err
+	}
+	return evaluateCondition(cond.Right, row)
+}
+
+// evaluateOr evaluates an OR condition.
+func evaluateOr(cond *Condition, row map[string]interface{}) (bool, error) {
+	left, err := evaluateCondition(cond.Left, row)
+	if err != nil {
+		return false, err
+	}
+	if left {
+		return true, nil
+	}
+	return evaluateCondition(cond.Right, row)
+}
+
+// evaluateNot evaluates a NOT condition.
+func evaluateNot(cond *Condition, row map[string]interface{}) (bool, error) {
+	result, err := evaluateCondition(cond.Left, row)
+	return !result, err
+}
+
+// evaluateIsNull evaluates an IS NULL condition.
+func evaluateIsNull(cond *Condition, row map[string]interface{}) (bool, error) {
+	val := row[cond.Column]
+	return val == nil, nil
+}
+
+// evaluateIsNotNull evaluates an IS NOT NULL condition.
+func evaluateIsNotNull(cond *Condition, row map[string]interface{}) (bool, error) {
+	val := row[cond.Column]
+	return val != nil, nil
 }
 
 // evaluateComparison evaluates a comparison condition.
