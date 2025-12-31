@@ -689,35 +689,57 @@ func (bm *BatchManager) updateETA(job *BatchJob) {
 
 // cleanupOldJobs removes old completed jobs if over the limit.
 func (bm *BatchManager) cleanupOldJobs() {
-	// Count completed jobs
+	completedJobs := bm.collectCompletedJobs()
+
+	if len(completedJobs) <= bm.historyLimit {
+		return
+	}
+
+	bm.removeOldestJobs(completedJobs)
+}
+
+func (bm *BatchManager) collectCompletedJobs() []*BatchJob {
 	var completedJobs []*BatchJob
 
 	for _, job := range bm.jobs {
-		status := job.GetStatus()
-		if status == BatchJobStatusCompleted || status == BatchJobStatusFailed || status == BatchJobStatusCancelled {
+		if bm.isJobCompleted(job) {
 			completedJobs = append(completedJobs, job)
 		}
 	}
 
-	// Remove oldest if over limit
-	if len(completedJobs) > bm.historyLimit {
-		// Sort by completion time
-		for i := range len(completedJobs) - 1 {
-			for j := i + 1; j < len(completedJobs); j++ {
-				if completedJobs[i].CompletedAt != nil && completedJobs[j].CompletedAt != nil {
-					if completedJobs[i].CompletedAt.After(*completedJobs[j].CompletedAt) {
-						completedJobs[i], completedJobs[j] = completedJobs[j], completedJobs[i]
-					}
-				}
+	return completedJobs
+}
+
+func (bm *BatchManager) isJobCompleted(job *BatchJob) bool {
+	status := job.GetStatus()
+	return status == BatchJobStatusCompleted || status == BatchJobStatusFailed || status == BatchJobStatusCancelled
+}
+
+func (bm *BatchManager) removeOldestJobs(completedJobs []*BatchJob) {
+	bm.sortJobsByCompletionTime(completedJobs)
+
+	toRemove := len(completedJobs) - bm.historyLimit
+	for i := range toRemove {
+		delete(bm.jobs, completedJobs[i].JobID)
+	}
+}
+
+func (bm *BatchManager) sortJobsByCompletionTime(jobs []*BatchJob) {
+	for i := range len(jobs) - 1 {
+		for j := i + 1; j < len(jobs); j++ {
+			if bm.shouldSwapJobs(jobs[i], jobs[j]) {
+				jobs[i], jobs[j] = jobs[j], jobs[i]
 			}
 		}
-
-		// Remove oldest
-		toRemove := len(completedJobs) - bm.historyLimit
-		for i := range toRemove {
-			delete(bm.jobs, completedJobs[i].JobID)
-		}
 	}
+}
+
+func (bm *BatchManager) shouldSwapJobs(job1, job2 *BatchJob) bool {
+	if job1.CompletedAt == nil || job2.CompletedAt == nil {
+		return false
+	}
+
+	return job1.CompletedAt.After(*job2.CompletedAt)
 }
 
 // MarshalJSON implements json.Marshaler.
