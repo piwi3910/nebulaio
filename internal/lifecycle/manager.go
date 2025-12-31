@@ -421,7 +421,7 @@ func (m *Manager) processMultipartUploads(ctx context.Context, bucket string, ru
 	return nil
 }
 
-func (m *Manager) processUploadWithRules(ctx context.Context, bucket string, upload metadata.MultipartUpload, rules []LifecycleRule, now time.Time) {
+func (m *Manager) processUploadWithRules(ctx context.Context, bucket string, upload *metadata.MultipartUpload, rules []LifecycleRule, now time.Time) {
 	for _, rule := range rules {
 		if m.shouldAbortUpload(upload, rule, now) {
 			m.abortUpload(ctx, bucket, upload, rule.ID)
@@ -430,7 +430,7 @@ func (m *Manager) processUploadWithRules(ctx context.Context, bucket string, upl
 	}
 }
 
-func (m *Manager) shouldAbortUpload(upload metadata.MultipartUpload, rule LifecycleRule, now time.Time) bool {
+func (m *Manager) shouldAbortUpload(upload *metadata.MultipartUpload, rule LifecycleRule, now time.Time) bool {
 	if !rule.IsEnabled() {
 		return false
 	}
@@ -449,7 +449,7 @@ func (m *Manager) shouldAbortUpload(upload metadata.MultipartUpload, rule Lifecy
 	return now.After(expirationTime)
 }
 
-func (m *Manager) abortUpload(ctx context.Context, bucket string, upload metadata.MultipartUpload, ruleID string) {
+func (m *Manager) abortUpload(ctx context.Context, bucket string, upload *metadata.MultipartUpload, ruleID string) {
 	err := m.multipartService.AbortMultipartUpload(ctx, bucket, upload.Key, upload.UploadID)
 	if err != nil {
 		log.Error().Err(err).
