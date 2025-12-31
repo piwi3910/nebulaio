@@ -622,62 +622,73 @@ func MapActionToS3Action(method, path string, isBucket bool) string {
 	method = strings.ToUpper(method)
 
 	if isBucket {
-		switch method {
-		case "GET":
-			if strings.Contains(path, "?policy") {
-				return ActionGetBucketPolicy
-			}
-
-			if strings.Contains(path, "?cors") {
-				return ActionGetBucketCORS
-			}
-
-			if strings.Contains(path, "?versioning") {
-				return ActionGetBucketVersioning
-			}
-
-			return ActionListBucket
-		case "PUT":
-			if strings.Contains(path, "?policy") {
-				return ActionPutBucketPolicy
-			}
-
-			if strings.Contains(path, "?cors") {
-				return ActionPutBucketCORS
-			}
-
-			if strings.Contains(path, "?versioning") {
-				return ActionPutBucketVersioning
-			}
-
-			return "s3:CreateBucket"
-		case "DELETE":
-			if strings.Contains(path, "?policy") {
-				return ActionDeleteBucketPolicy
-			}
-
-			if strings.Contains(path, "?cors") {
-				return ActionDeleteBucketCORS
-			}
-
-			return "s3:DeleteBucket"
-		case "HEAD":
-			return "s3:HeadBucket"
-		}
-	} else {
-		switch method {
-		case "GET":
-			return ActionGetObject
-		case "PUT":
-			return ActionPutObject
-		case "DELETE":
-			return ActionDeleteObject
-		case "HEAD":
-			return "s3:HeadObject"
-		case "POST":
-			return ActionPutObject
-		}
+		return mapBucketAction(method, path)
 	}
+	return mapObjectAction(method)
+}
 
+func mapBucketAction(method, path string) string {
+	switch method {
+	case "GET":
+		return getBucketGetAction(path)
+	case "PUT":
+		return getBucketPutAction(path)
+	case "DELETE":
+		return getBucketDeleteAction(path)
+	case "HEAD":
+		return "s3:HeadBucket"
+	}
+	return ""
+}
+
+func getBucketGetAction(path string) string {
+	if strings.Contains(path, "?policy") {
+		return ActionGetBucketPolicy
+	}
+	if strings.Contains(path, "?cors") {
+		return ActionGetBucketCORS
+	}
+	if strings.Contains(path, "?versioning") {
+		return ActionGetBucketVersioning
+	}
+	return ActionListBucket
+}
+
+func getBucketPutAction(path string) string {
+	if strings.Contains(path, "?policy") {
+		return ActionPutBucketPolicy
+	}
+	if strings.Contains(path, "?cors") {
+		return ActionPutBucketCORS
+	}
+	if strings.Contains(path, "?versioning") {
+		return ActionPutBucketVersioning
+	}
+	return "s3:CreateBucket"
+}
+
+func getBucketDeleteAction(path string) string {
+	if strings.Contains(path, "?policy") {
+		return ActionDeleteBucketPolicy
+	}
+	if strings.Contains(path, "?cors") {
+		return ActionDeleteBucketCORS
+	}
+	return "s3:DeleteBucket"
+}
+
+func mapObjectAction(method string) string {
+	switch method {
+	case "GET":
+		return ActionGetObject
+	case "PUT":
+		return ActionPutObject
+	case "DELETE":
+		return ActionDeleteObject
+	case "HEAD":
+		return "s3:HeadObject"
+	case "POST":
+		return ActionPutObject
+	}
 	return ""
 }
