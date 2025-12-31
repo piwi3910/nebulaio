@@ -394,10 +394,26 @@ func containsCommandInjection(input string) bool {
 }
 
 func isValidBucketName(name string) bool {
-	if len(name) < 3 || len(name) > 63 {
+	if !isValidBucketNameLength(name) {
 		return false
 	}
 
+	if !isValidBucketNameFormat(name) {
+		return false
+	}
+
+	if !isValidBucketNameCharacters(name) {
+		return false
+	}
+
+	return true
+}
+
+func isValidBucketNameLength(name string) bool {
+	return len(name) >= 3 && len(name) <= 63
+}
+
+func isValidBucketNameFormat(name string) bool {
 	if strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") {
 		return false
 	}
@@ -409,11 +425,16 @@ func isValidBucketName(name string) bool {
 	if strings.Contains(name, "_") || strings.Contains(name, " ") {
 		return false
 	}
+
 	// Check for IP address format
 	if isIPAddress(name) {
 		return false
 	}
 
+	return true
+}
+
+func isValidBucketNameCharacters(name string) bool {
 	for _, c := range name {
 		isLowerAlpha := c >= 'a' && c <= 'z'
 		isDigit := c >= '0' && c <= '9'
