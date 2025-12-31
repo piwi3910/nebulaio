@@ -62,49 +62,60 @@ func DefaultSecurityHeadersConfig() SecurityHeadersConfig {
 func SecurityHeaders(cfg SecurityHeadersConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Prevent clickjacking
-			if cfg.XFrameOptions != "" {
-				w.Header().Set("X-Frame-Options", cfg.XFrameOptions)
-			}
-
-			// Prevent MIME type sniffing
-			if cfg.XContentTypeOptions != "" {
-				w.Header().Set("X-Content-Type-Options", cfg.XContentTypeOptions)
-			}
-
-			// XSS Protection (legacy, but still useful for older browsers)
-			if cfg.XSSProtection != "" {
-				w.Header().Set("X-XSS-Protection", cfg.XSSProtection)
-			}
-
-			// Content Security Policy
-			if cfg.ContentSecurityPolicy != "" {
-				w.Header().Set("Content-Security-Policy", cfg.ContentSecurityPolicy)
-			}
-
-			// HTTP Strict Transport Security (only if TLS is enabled)
-			if cfg.EnableHSTS && cfg.StrictTransportSecurity != "" {
-				w.Header().Set("Strict-Transport-Security", cfg.StrictTransportSecurity)
-			}
-
-			// Referrer Policy
-			if cfg.ReferrerPolicy != "" {
-				w.Header().Set("Referrer-Policy", cfg.ReferrerPolicy)
-			}
-
-			// Permissions Policy (formerly Feature-Policy)
-			if cfg.PermissionsPolicy != "" {
-				w.Header().Set("Permissions-Policy", cfg.PermissionsPolicy)
-			}
-
-			// Cache control for API responses (not static assets)
-			if cfg.CacheControl != "" && !isStaticAsset(r.URL.Path) {
-				w.Header().Set("Cache-Control", cfg.CacheControl)
-				w.Header().Set("Pragma", "no-cache")
-			}
-
+			applySecurityHeaders(w, cfg)
+			applyCacheControlHeaders(w, r, cfg)
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+func applySecurityHeaders(w http.ResponseWriter, cfg SecurityHeadersConfig) {
+	applyFrameProtection(w, cfg)
+	applyContentProtection(w, cfg)
+	applyTransportSecurity(w, cfg)
+	applyPolicyHeaders(w, cfg)
+}
+
+func applyFrameProtection(w http.ResponseWriter, cfg SecurityHeadersConfig) {
+	if cfg.XFrameOptions != "" {
+		w.Header().Set("X-Frame-Options", cfg.XFrameOptions)
+	}
+}
+
+func applyContentProtection(w http.ResponseWriter, cfg SecurityHeadersConfig) {
+	if cfg.XContentTypeOptions != "" {
+		w.Header().Set("X-Content-Type-Options", cfg.XContentTypeOptions)
+	}
+
+	if cfg.XSSProtection != "" {
+		w.Header().Set("X-XSS-Protection", cfg.XSSProtection)
+	}
+
+	if cfg.ContentSecurityPolicy != "" {
+		w.Header().Set("Content-Security-Policy", cfg.ContentSecurityPolicy)
+	}
+}
+
+func applyTransportSecurity(w http.ResponseWriter, cfg SecurityHeadersConfig) {
+	if cfg.EnableHSTS && cfg.StrictTransportSecurity != "" {
+		w.Header().Set("Strict-Transport-Security", cfg.StrictTransportSecurity)
+	}
+}
+
+func applyPolicyHeaders(w http.ResponseWriter, cfg SecurityHeadersConfig) {
+	if cfg.ReferrerPolicy != "" {
+		w.Header().Set("Referrer-Policy", cfg.ReferrerPolicy)
+	}
+
+	if cfg.PermissionsPolicy != "" {
+		w.Header().Set("Permissions-Policy", cfg.PermissionsPolicy)
+	}
+}
+
+func applyCacheControlHeaders(w http.ResponseWriter, r *http.Request, cfg SecurityHeadersConfig) {
+	if cfg.CacheControl != "" && !isStaticAsset(r.URL.Path) {
+		w.Header().Set("Cache-Control", cfg.CacheControl)
+		w.Header().Set("Pragma", "no-cache")
 	}
 }
 
