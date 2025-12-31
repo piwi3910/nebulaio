@@ -400,7 +400,6 @@ func (s *Service) DeleteObjectVersion(ctx context.Context, bucket, key, versionI
 
 // DeleteObjectVersionWithOptions deletes a specific version with options for bypassing governance.
 func (s *Service) DeleteObjectVersionWithOptions(ctx context.Context, bucket, key, versionID string, opts *ObjectLockCheckOptions) (*DeleteObjectResult, error) {
-	// Get bucket info for versioning status
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
 	if err != nil {
 		return nil, err
@@ -410,83 +409,97 @@ func (s *Service) DeleteObjectVersionWithOptions(ctx context.Context, bucket, ke
 
 	// If a specific version ID is provided, permanently delete that version
 	if versionID != "" && versionID != "null" {
-		// Check if this version exists
-		meta, err := s.store.GetObjectVersion(ctx, bucket, key, versionID)
-		if err != nil {
-			return nil, fmt.Errorf("version not found: %w", err)
-		}
-
-		// Check object lock status before deletion
-		err = s.CheckObjectLock(ctx, meta, opts)
-		if err != nil {
-			return nil, err
-		}
-
-		// Delete the version from metadata
-		err = s.store.DeleteObjectVersion(ctx, bucket, key, versionID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to delete object version: %w", err)
-		}
-
-		// If this was a delete marker, note it in the result
-		result.VersionID = versionID
-		result.DeleteMarker = meta.DeleteMarker
-
-		return result, nil
+		return s.deleteVersionWithLock(ctx, bucket, key, versionID, opts, result)
 	}
 
 	// No version ID provided - behavior depends on versioning status
 	if versioningPkg.IsVersioningEnabled(bucketInfo) {
-		// Create a delete marker instead of actually deleting
-		deleteMarkerVersionID := s.versionService.GenerateVersionID()
-		meta := &metadata.ObjectMeta{
-			Bucket:       bucket,
-			Key:          key,
-			VersionID:    deleteMarkerVersionID,
-			IsLatest:     true,
-			DeleteMarker: true,
-			ModifiedAt:   time.Now(),
-		}
-
-		err := s.store.PutObjectMetaVersioned(ctx, meta, true)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create delete marker: %w", err)
-		}
-
-		result.DeleteMarker = true
-		result.DeleteMarkerVersionID = deleteMarkerVersionID
-
-		return result, nil
+		return s.createDeleteMarkerVersion(ctx, bucket, key, result)
 	}
 
 	// Versioning disabled or suspended - permanently delete the object
-	// First check if object has lock (even without versioning, lock should be enforced)
-	meta, metaErr := s.store.GetObjectMeta(ctx, bucket, key)
-	if metaErr == nil && meta != nil {
-		// Check object lock status before deletion
-		err := s.CheckObjectLock(ctx, meta, opts)
-		if err != nil {
+	return s.deleteObjectPermanentlyWithLock(ctx, bucket, key, opts, result)
+}
+
+// deleteVersionWithLock permanently deletes a specific version with lock check.
+func (s *Service) deleteVersionWithLock(ctx context.Context, bucket, key, versionID string, opts *ObjectLockCheckOptions, result *DeleteObjectResult) (*DeleteObjectResult, error) {
+	meta, err := s.store.GetObjectVersion(ctx, bucket, key, versionID)
+	if err != nil {
+		return nil, fmt.Errorf("version not found: %w", err)
+	}
+
+	if err := s.CheckObjectLock(ctx, meta, opts); err != nil {
+		return nil, err
+	}
+
+	if err := s.store.DeleteObjectVersion(ctx, bucket, key, versionID); err != nil {
+		return nil, fmt.Errorf("failed to delete object version: %w", err)
+	}
+
+	result.VersionID = versionID
+	result.DeleteMarker = meta.DeleteMarker
+
+	return result, nil
+}
+
+// createDeleteMarkerVersion creates a delete marker for versioned bucket.
+func (s *Service) createDeleteMarkerVersion(ctx context.Context, bucket, key string, result *DeleteObjectResult) (*DeleteObjectResult, error) {
+	deleteMarkerVersionID := s.versionService.GenerateVersionID()
+	meta := &metadata.ObjectMeta{
+		Bucket:       bucket,
+		Key:          key,
+		VersionID:    deleteMarkerVersionID,
+		IsLatest:     true,
+		DeleteMarker: true,
+		ModifiedAt:   time.Now(),
+	}
+
+	if err := s.store.PutObjectMetaVersioned(ctx, meta, true); err != nil {
+		return nil, fmt.Errorf("failed to create delete marker: %w", err)
+	}
+
+	result.DeleteMarker = true
+	result.DeleteMarkerVersionID = deleteMarkerVersionID
+
+	return result, nil
+}
+
+// deleteObjectPermanentlyWithLock deletes object when versioning is disabled.
+func (s *Service) deleteObjectPermanentlyWithLock(ctx context.Context, bucket, key string, opts *ObjectLockCheckOptions, result *DeleteObjectResult) (*DeleteObjectResult, error) {
+	// Check object lock before deletion
+	if meta, metaErr := s.store.GetObjectMeta(ctx, bucket, key); metaErr == nil && meta != nil {
+		if err := s.CheckObjectLock(ctx, meta, opts); err != nil {
 			return nil, err
 		}
 	}
 
-	err = s.storage.DeleteObject(ctx, bucket, key)
-	if err != nil {
-		// Ignore "not found" errors for storage layer
-		if !strings.Contains(err.Error(), "not found") {
-			return nil, fmt.Errorf("failed to delete object data: %w", err)
-		}
+	if err := s.deleteObjectData(ctx, bucket, key); err != nil {
+		return nil, err
 	}
 
-	err = s.store.DeleteObjectMeta(ctx, bucket, key)
-	if err != nil {
-		// Ignore "not found" errors
-		if !strings.Contains(err.Error(), "not found") {
-			return nil, fmt.Errorf("failed to delete object metadata: %w", err)
-		}
+	if err := s.deleteObjectMetadata(ctx, bucket, key); err != nil {
+		return nil, err
 	}
 
 	return result, nil
+}
+
+// deleteObjectData deletes object data from storage.
+func (s *Service) deleteObjectData(ctx context.Context, bucket, key string) error {
+	err := s.storage.DeleteObject(ctx, bucket, key)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		return fmt.Errorf("failed to delete object data: %w", err)
+	}
+	return nil
+}
+
+// deleteObjectMetadata deletes object metadata.
+func (s *Service) deleteObjectMetadata(ctx context.Context, bucket, key string) error {
+	err := s.store.DeleteObjectMeta(ctx, bucket, key)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		return fmt.Errorf("failed to delete object metadata: %w", err)
+	}
+	return nil
 }
 
 // ListObjects lists objects in a bucket.
