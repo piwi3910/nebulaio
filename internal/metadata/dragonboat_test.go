@@ -111,138 +111,142 @@ func TestDragonboatStoreCreation(t *testing.T) {
 
 // TestStateMachineOperations tests the state machine's core operations.
 func TestStateMachineOperations(t *testing.T) {
-	t.Run("OpenAndClose", func(t *testing.T) {
-		tmpDir := t.TempDir()
+	t.Run("OpenAndClose", func(t *testing.T) { testStateMachineOpenAndClose(t) })
+	t.Run("UpdateCommand", func(t *testing.T) { testStateMachineUpdateCommand(t) })
+	t.Run("Lookup", func(t *testing.T) { testStateMachineLookup(t) })
+}
 
-		opts := badger.DefaultOptions(tmpDir)
-		opts.Logger = nil
+func testStateMachineOpenAndClose(t *testing.T) {
+	tmpDir := t.TempDir()
 
-		db, err := badger.Open(opts)
+	opts := badger.DefaultOptions(tmpDir)
+	opts.Logger = nil
+
+	db, err := badger.Open(opts)
+	if err != nil {
+		t.Fatalf("Failed to open badger: %v", err)
+	}
+	defer db.Close()
+
+	sm := newStateMachine(db)
+
+	// Open should return the last applied index
+	index, err := sm.Open(make(chan struct{}))
+	if err != nil {
+		t.Errorf("Open failed: %v", err)
+	}
+
+	if index != 0 {
+		t.Errorf("Expected initial index 0, got %d", index)
+	}
+
+	// Close should succeed
+	err = sm.Close()
+	if err != nil {
+		t.Errorf("Close failed: %v", err)
+	}
+}
+
+func testStateMachineUpdateCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	opts := badger.DefaultOptions(tmpDir)
+	opts.Logger = nil
+
+	db, err := badger.Open(opts)
+	if err != nil {
+		t.Fatalf("Failed to open badger: %v", err)
+	}
+	defer db.Close()
+
+	sm := newStateMachine(db)
+	_, err = sm.Open(make(chan struct{}))
+	if err != nil {
+		t.Fatalf("Failed to open state machine: %v", err)
+	}
+
+	// Create a bucket command
+	bucket := &Bucket{
+		Name:      "test-bucket",
+		Owner:     "test-user",
+		CreatedAt: time.Now(),
+		Region:    "us-east-1",
+	}
+
+	bucketData, err := json.Marshal(bucket)
+	if err != nil {
+		t.Fatalf("Failed to marshal bucket: %v", err)
+	}
+
+	cmd := &command{
+		Type: cmdCreateBucket,
+		Data: bucketData,
+	}
+
+	cmdData, err := json.Marshal(cmd)
+	if err != nil {
+		t.Fatalf("Failed to marshal command: %v", err)
+	}
+
+	entry := statemachine.Entry{
+		Index: 1,
+		Cmd:   cmdData,
+	}
+
+	result, err := sm.Update(entry)
+	if err != nil {
+		t.Errorf("Update failed: %v", err)
+	}
+
+	if result.Value != 0 {
+		t.Errorf("Expected success result (0), got %d", result.Value)
+	}
+
+	// Verify bucket was created
+	var storedBucket Bucket
+
+	err = db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte(prefixBucket + bucket.Name))
 		if err != nil {
-			t.Fatalf("Failed to open badger: %v", err)
-		}
-		defer db.Close()
-
-		sm := newStateMachine(db)
-
-		// Open should return the last applied index
-		index, err := sm.Open(make(chan struct{}))
-		if err != nil {
-			t.Errorf("Open failed: %v", err)
+			return err
 		}
 
-		if index != 0 {
-			t.Errorf("Expected initial index 0, got %d", index)
-		}
-
-		// Close should succeed
-		err = sm.Close()
-		if err != nil {
-			t.Errorf("Close failed: %v", err)
-		}
-	})
-
-	t.Run("UpdateCommand", func(t *testing.T) {
-		tmpDir := t.TempDir()
-
-		opts := badger.DefaultOptions(tmpDir)
-		opts.Logger = nil
-
-		db, err := badger.Open(opts)
-		if err != nil {
-			t.Fatalf("Failed to open badger: %v", err)
-		}
-		defer db.Close()
-
-		sm := newStateMachine(db)
-		_, err = sm.Open(make(chan struct{}))
-		if err != nil {
-			t.Fatalf("Failed to open state machine: %v", err)
-		}
-
-		// Create a bucket command
-		bucket := &Bucket{
-			Name:      "test-bucket",
-			Owner:     "test-user",
-			CreatedAt: time.Now(),
-			Region:    "us-east-1",
-		}
-
-		bucketData, err := json.Marshal(bucket)
-		if err != nil {
-			t.Fatalf("Failed to marshal bucket: %v", err)
-		}
-
-		cmd := &command{
-			Type: cmdCreateBucket,
-			Data: bucketData,
-		}
-
-		cmdData, err := json.Marshal(cmd)
-		if err != nil {
-			t.Fatalf("Failed to marshal command: %v", err)
-		}
-
-		entry := statemachine.Entry{
-			Index: 1,
-			Cmd:   cmdData,
-		}
-
-		result, err := sm.Update(entry)
-		if err != nil {
-			t.Errorf("Update failed: %v", err)
-		}
-
-		if result.Value != 0 {
-			t.Errorf("Expected success result (0), got %d", result.Value)
-		}
-
-		// Verify bucket was created
-		var storedBucket Bucket
-
-		err = db.View(func(txn *badger.Txn) error {
-			item, err := txn.Get([]byte(prefixBucket + bucket.Name))
-			if err != nil {
-				return err
-			}
-
-			return item.Value(func(val []byte) error {
-				return json.Unmarshal(val, &storedBucket)
-			})
+		return item.Value(func(val []byte) error {
+			return json.Unmarshal(val, &storedBucket)
 		})
-		if err != nil {
-			t.Errorf("Failed to retrieve bucket: %v", err)
-		}
-
-		if storedBucket.Name != bucket.Name {
-			t.Errorf("Expected bucket name %s, got %s", bucket.Name, storedBucket.Name)
-		}
 	})
+	if err != nil {
+		t.Errorf("Failed to retrieve bucket: %v", err)
+	}
 
-	t.Run("Lookup", func(t *testing.T) {
-		tmpDir := t.TempDir()
+	if storedBucket.Name != bucket.Name {
+		t.Errorf("Expected bucket name %s, got %s", bucket.Name, storedBucket.Name)
+	}
+}
 
-		opts := badger.DefaultOptions(tmpDir)
-		opts.Logger = nil
+func testStateMachineLookup(t *testing.T) {
+	tmpDir := t.TempDir()
 
-		db, err := badger.Open(opts)
-		if err != nil {
-			t.Fatalf("Failed to open badger: %v", err)
-		}
-		defer db.Close()
+	opts := badger.DefaultOptions(tmpDir)
+	opts.Logger = nil
 
-		sm := newStateMachine(db)
+	db, err := badger.Open(opts)
+	if err != nil {
+		t.Fatalf("Failed to open badger: %v", err)
+	}
+	defer db.Close()
 
-		// Lookup is not used in our implementation, should return ErrLookupNotSupported
-		result, err := sm.Lookup(nil)
-		if err != ErrLookupNotSupported {
-			t.Errorf("Expected ErrLookupNotSupported, got %v", err)
-		}
+	sm := newStateMachine(db)
 
-		if result != nil {
-			t.Errorf("Expected nil result from Lookup, got %v", result)
-		}
-	})
+	// Lookup is not used in our implementation, should return ErrLookupNotSupported
+	result, err := sm.Lookup(nil)
+	if err != ErrLookupNotSupported {
+		t.Errorf("Expected ErrLookupNotSupported, got %v", err)
+	}
+
+	if result != nil {
+		t.Errorf("Expected nil result from Lookup, got %v", result)
+	}
 }
 
 // TestStateMachineSnapshot tests snapshot operations.
