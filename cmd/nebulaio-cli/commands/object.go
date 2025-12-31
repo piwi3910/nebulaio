@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/spf13/cobra"
 )
 
@@ -255,6 +256,88 @@ func newObjectDeleteCmd() *cobra.Command {
 	return cmd
 }
 
+// runObjectList executes the object list operation.
+func runObjectList(uri string, recursive bool, maxKeys int) error {
+	bucket, prefix, isS3 := ParseS3URI(uri)
+	if !isS3 {
+		return fmt.Errorf("invalid S3 URI: %s", uri)
+	}
+
+	ctx := context.Background()
+	client, err := NewS3Client(ctx)
+	if err != nil {
+		return err
+	}
+
+	input := buildListObjectsInput(bucket, prefix, recursive, maxKeys)
+	return printObjectList(ctx, client, input)
+}
+
+// buildListObjectsInput constructs ListObjectsV2Input.
+func buildListObjectsInput(bucket, prefix string, recursive bool, maxKeys int) *s3.ListObjectsV2Input {
+	//nolint:gosec // G115: maxKeys is validated to be within int32 range (max 1000)
+	input := &s3.ListObjectsV2Input{
+		Bucket:  &bucket,
+		MaxKeys: aws.Int32(int32(maxKeys)),
+	}
+
+	if prefix != "" {
+		input.Prefix = &prefix
+	}
+
+	if !recursive {
+		delimiter := "/"
+		input.Delimiter = &delimiter
+	}
+
+	return input
+}
+
+// printObjectList prints paginated object listing.
+func printObjectList(ctx context.Context, client *s3.Client, input *s3.ListObjectsV2Input) error {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(w, "KEY\tSIZE\tMODIFIED")
+
+	paginator := s3.NewListObjectsV2Paginator(client, input)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list objects: %w", err)
+		}
+
+		printCommonPrefixes(w, page.CommonPrefixes)
+		printObjects(w, page.Contents)
+	}
+
+	return w.Flush()
+}
+
+// printCommonPrefixes prints directory-like common prefixes.
+func printCommonPrefixes(w *tabwriter.Writer, prefixes []types.CommonPrefix) {
+	for _, prefix := range prefixes {
+		if prefix.Prefix != nil {
+			_, _ = fmt.Fprintf(w, "%s\t-\t-\n", *prefix.Prefix)
+		}
+	}
+}
+
+// printObjects prints object details.
+func printObjects(w *tabwriter.Writer, objects []types.Object) {
+	for _, obj := range objects {
+		modified := ""
+		if obj.LastModified != nil {
+			modified = obj.LastModified.Format(time.RFC3339)
+		}
+
+		size := int64(0)
+		if obj.Size != nil {
+			size = *obj.Size
+		}
+
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", *obj.Key, FormatSize(size), modified)
+	}
+}
+
 func newObjectListCmd() *cobra.Command {
 	var (
 		recursive bool
@@ -266,66 +349,7 @@ func newObjectListCmd() *cobra.Command {
 		Short: "List objects in a bucket",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			bucket, prefix, isS3 := ParseS3URI(args[0])
-			if !isS3 {
-				return fmt.Errorf("invalid S3 URI: %s", args[0])
-			}
-
-			ctx := context.Background()
-
-			client, err := NewS3Client(ctx)
-			if err != nil {
-				return err
-			}
-
-			//nolint:gosec // G115: maxKeys is validated to be within int32 range (max 1000)
-			input := &s3.ListObjectsV2Input{
-				Bucket:  &bucket,
-				MaxKeys: aws.Int32(int32(maxKeys)),
-			}
-			if prefix != "" {
-				input.Prefix = &prefix
-			}
-
-			if !recursive {
-				delimiter := "/"
-				input.Delimiter = &delimiter
-			}
-
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			_, _ = fmt.Fprintln(w, "KEY\tSIZE\tMODIFIED")
-
-			paginator := s3.NewListObjectsV2Paginator(client, input)
-			for paginator.HasMorePages() {
-				page, err := paginator.NextPage(ctx)
-				if err != nil {
-					return fmt.Errorf("failed to list objects: %w", err)
-				}
-
-				// Print common prefixes (directories)
-				for _, prefix := range page.CommonPrefixes {
-					if prefix.Prefix != nil {
-						_, _ = fmt.Fprintf(w, "%s\t-\t-\n", *prefix.Prefix)
-					}
-				}
-
-				// Print objects
-				for _, obj := range page.Contents {
-					modified := ""
-					if obj.LastModified != nil {
-						modified = obj.LastModified.Format(time.RFC3339)
-					}
-
-					size := int64(0)
-					if obj.Size != nil {
-						size = *obj.Size
-					}
-
-					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", *obj.Key, FormatSize(size), modified)
-				}
-			}
-
-			return w.Flush()
+			return runObjectList(args[0], recursive, maxKeys)
 		},
 	}
 
@@ -465,7 +489,7 @@ func listObjects(ctx context.Context, client *s3.Client, uri string, recursive b
 		bucket = uri
 	}
 
-	input := buildListObjectsInput(bucket, prefix, recursive)
+	input := buildListObjectsInput(bucket, prefix, recursive, defaultMaxKeys)
 
 	paginator := s3.NewListObjectsV2Paginator(client, input)
 	for paginator.HasMorePages() {
@@ -474,51 +498,33 @@ func listObjects(ctx context.Context, client *s3.Client, uri string, recursive b
 			return fmt.Errorf("failed to list objects: %w", err)
 		}
 
-		printListObjectsPage(page)
+		// Print common prefixes (directories)
+		for _, p := range page.CommonPrefixes {
+			if p.Prefix != nil {
+				fmt.Printf("                           PRE %s\n", *p.Prefix)
+			}
+		}
+
+		// Print objects
+		for _, obj := range page.Contents {
+			modified := ""
+			if obj.LastModified != nil {
+				modified = obj.LastModified.Format("2006-01-02 15:04:05")
+			}
+
+			size := int64(0)
+			if obj.Size != nil {
+				size = *obj.Size
+			}
+
+			fmt.Printf("%s %10d %s\n", modified, size, *obj.Key)
+		}
 	}
 
 	return nil
 }
 
-func buildListObjectsInput(bucket, prefix string, recursive bool) *s3.ListObjectsV2Input {
-	input := &s3.ListObjectsV2Input{
-		Bucket: &bucket,
-	}
-	if prefix != "" {
-		input.Prefix = &prefix
-	}
 
-	if !recursive {
-		delimiter := "/"
-		input.Delimiter = &delimiter
-	}
-
-	return input
-}
-
-func printListObjectsPage(page *s3.ListObjectsV2Output) {
-	// Print common prefixes (directories)
-	for _, p := range page.CommonPrefixes {
-		if p.Prefix != nil {
-			fmt.Printf("                           PRE %s\n", *p.Prefix)
-		}
-	}
-
-	// Print objects
-	for _, obj := range page.Contents {
-		modified := ""
-		if obj.LastModified != nil {
-			modified = obj.LastModified.Format("2006-01-02 15:04:05")
-		}
-
-		size := int64(0)
-		if obj.Size != nil {
-			size = *obj.Size
-		}
-
-		fmt.Printf("%s %10d %s\n", modified, size, *obj.Key)
-	}
-}
 
 // NewCopyCmd creates the cp alias command.
 func NewCopyCmd() *cobra.Command {
