@@ -34,277 +34,289 @@ func TestLocalProvider(t *testing.T) {
 
 	defer func() { _ = provider.Close() }()
 
-	t.Run("Name", func(t *testing.T) {
-		if provider.Name() != "local" {
-			t.Errorf("Expected name 'local', got '%s'", provider.Name())
-		}
+	t.Run("Name", func(t *testing.T) { testLocalProviderName(t, provider) })
+	t.Run("CreateKey", func(t *testing.T) { testLocalProviderCreateKey(t, provider) })
+	t.Run("ListKeys", func(t *testing.T) { testLocalProviderListKeys(t, provider) })
+	t.Run("GetKeyInfo", func(t *testing.T) { testLocalProviderGetKeyInfo(t, provider) })
+	t.Run("GenerateDataKey", func(t *testing.T) { testLocalProviderGenerateDataKey(t, provider) })
+	t.Run("DecryptDataKey", func(t *testing.T) { testLocalProviderDecryptDataKey(t, provider) })
+	t.Run("EncryptDecrypt", func(t *testing.T) { testLocalProviderEncryptDecrypt(t, provider) })
+	t.Run("RotateKey", func(t *testing.T) { testLocalProviderRotateKey(t, provider) })
+	t.Run("DeleteKey", func(t *testing.T) { testLocalProviderDeleteKey(t, provider) })
+	t.Run("KeyNotFound", func(t *testing.T) { testLocalProviderKeyNotFound(t, provider) })
+	t.Run("KeyPersistence", func(t *testing.T) { testLocalProviderKeyPersistence(t, provider, config) })
+}
+
+func testLocalProviderName(t *testing.T, provider kms.Provider) {
+	if provider.Name() != "local" {
+		t.Errorf("Expected name 'local', got '%s'", provider.Name())
+	}
+}
+
+func testLocalProviderCreateKey(t *testing.T, provider kms.Provider) {
+	ctx := context.Background()
+
+	keyInfo, err := provider.CreateKey(ctx, kms.KeySpec{
+		Name:        "test-key-1",
+		Description: "Test encryption key",
+		Algorithm:   kms.AlgorithmAES256GCM,
+		Usage:       kms.KeyUsageEncrypt,
 	})
+	if err != nil {
+		t.Fatalf("Failed to create key: %v", err)
+	}
 
-	t.Run("CreateKey", func(t *testing.T) {
-		ctx := context.Background()
+	if keyInfo.KeyID == "" {
+		t.Error("Expected non-empty key ID")
+	}
 
-		keyInfo, err := provider.CreateKey(ctx, kms.KeySpec{
-			Name:        "test-key-1",
-			Description: "Test encryption key",
-			Algorithm:   kms.AlgorithmAES256GCM,
-			Usage:       kms.KeyUsageEncrypt,
-		})
-		if err != nil {
-			t.Fatalf("Failed to create key: %v", err)
-		}
+	if keyInfo.Name != "test-key-1" {
+		t.Errorf("Expected name 'test-key-1', got '%s'", keyInfo.Name)
+	}
 
-		if keyInfo.KeyID == "" {
-			t.Error("Expected non-empty key ID")
-		}
+	if keyInfo.Algorithm != kms.AlgorithmAES256GCM {
+		t.Errorf("Expected algorithm AES_256_GCM, got '%s'", keyInfo.Algorithm)
+	}
 
-		if keyInfo.Name != "test-key-1" {
-			t.Errorf("Expected name 'test-key-1', got '%s'", keyInfo.Name)
-		}
+	if keyInfo.State != kms.KeyStateEnabled {
+		t.Errorf("Expected state ENABLED, got '%s'", keyInfo.State)
+	}
+}
 
-		if keyInfo.Algorithm != kms.AlgorithmAES256GCM {
-			t.Errorf("Expected algorithm AES_256_GCM, got '%s'", keyInfo.Algorithm)
-		}
+func testLocalProviderListKeys(t *testing.T, provider kms.Provider) {
+	ctx := context.Background()
 
-		if keyInfo.State != kms.KeyStateEnabled {
-			t.Errorf("Expected state ENABLED, got '%s'", keyInfo.State)
-		}
+	keys, err := provider.ListKeys(ctx)
+	if err != nil {
+		t.Fatalf("Failed to list keys: %v", err)
+	}
+
+	if len(keys) == 0 {
+		t.Error("Expected at least one key")
+	}
+}
+
+func testLocalProviderGetKeyInfo(t *testing.T, provider kms.Provider) {
+	ctx := context.Background()
+
+	keys, err := provider.ListKeys(ctx)
+	if err != nil {
+		t.Fatalf("Failed to list keys: %v", err)
+	}
+
+	if len(keys) == 0 {
+		t.Skip("No keys to test")
+	}
+
+	keyInfo, err := provider.GetKeyInfo(ctx, keys[0].KeyID)
+	if err != nil {
+		t.Fatalf("Failed to get key info: %v", err)
+	}
+
+	if keyInfo.KeyID != keys[0].KeyID {
+		t.Errorf("Key ID mismatch: expected '%s', got '%s'", keys[0].KeyID, keyInfo.KeyID)
+	}
+}
+
+func testLocalProviderGenerateDataKey(t *testing.T, provider kms.Provider) {
+	ctx := context.Background()
+
+	keys, err := provider.ListKeys(ctx)
+	if err != nil || len(keys) == 0 {
+		t.Skip("No keys available")
+	}
+
+	dataKey, err := provider.GenerateDataKey(ctx, keys[0].KeyID, kms.KeySpec{
+		Algorithm: kms.AlgorithmAES256GCM,
 	})
+	if err != nil {
+		t.Fatalf("Failed to generate data key: %v", err)
+	}
 
-	t.Run("ListKeys", func(t *testing.T) {
-		ctx := context.Background()
+	if len(dataKey.Plaintext) != 32 {
+		t.Errorf("Expected 32-byte plaintext, got %d bytes", len(dataKey.Plaintext))
+	}
 
-		keys, err := provider.ListKeys(ctx)
-		if err != nil {
-			t.Fatalf("Failed to list keys: %v", err)
-		}
+	if len(dataKey.Ciphertext) == 0 {
+		t.Error("Expected non-empty ciphertext")
+	}
 
-		if len(keys) == 0 {
-			t.Error("Expected at least one key")
-		}
+	if dataKey.KeyID != keys[0].KeyID {
+		t.Errorf("Key ID mismatch: expected '%s', got '%s'", keys[0].KeyID, dataKey.KeyID)
+	}
+}
+
+func testLocalProviderDecryptDataKey(t *testing.T, provider kms.Provider) {
+	ctx := context.Background()
+
+	keys, err := provider.ListKeys(ctx)
+	if err != nil || len(keys) == 0 {
+		t.Skip("No keys available")
+	}
+
+	dataKey, err := provider.GenerateDataKey(ctx, keys[0].KeyID, kms.KeySpec{
+		Algorithm: kms.AlgorithmAES256GCM,
 	})
+	if err != nil {
+		t.Fatalf("Failed to generate data key: %v", err)
+	}
 
-	t.Run("GetKeyInfo", func(t *testing.T) {
-		ctx := context.Background()
+	decrypted, err := provider.DecryptDataKey(ctx, keys[0].KeyID, dataKey.Ciphertext)
+	if err != nil {
+		t.Fatalf("Failed to decrypt data key: %v", err)
+	}
 
-		keys, err := provider.ListKeys(ctx)
-		if err != nil {
-			t.Fatalf("Failed to list keys: %v", err)
-		}
+	if string(decrypted) != string(dataKey.Plaintext) {
+		t.Error("Decrypted key does not match original plaintext")
+	}
+}
 
-		if len(keys) == 0 {
-			t.Skip("No keys to test")
-		}
+func testLocalProviderEncryptDecrypt(t *testing.T, provider kms.Provider) {
+	ctx := context.Background()
 
-		keyInfo, err := provider.GetKeyInfo(ctx, keys[0].KeyID)
-		if err != nil {
-			t.Fatalf("Failed to get key info: %v", err)
-		}
+	keys, err := provider.ListKeys(ctx)
+	if err != nil || len(keys) == 0 {
+		t.Skip("No keys available")
+	}
 
-		if keyInfo.KeyID != keys[0].KeyID {
-			t.Errorf("Key ID mismatch: expected '%s', got '%s'", keys[0].KeyID, keyInfo.KeyID)
-		}
+	plaintext := []byte("Hello, World! This is a test message.")
+
+	ciphertext, err := provider.Encrypt(ctx, keys[0].KeyID, plaintext)
+	if err != nil {
+		t.Fatalf("Failed to encrypt: %v", err)
+	}
+
+	if string(ciphertext) == string(plaintext) {
+		t.Error("Ciphertext should not equal plaintext")
+	}
+
+	decrypted, err := provider.Decrypt(ctx, keys[0].KeyID, ciphertext)
+	if err != nil {
+		t.Fatalf("Failed to decrypt: %v", err)
+	}
+
+	if string(decrypted) != string(plaintext) {
+		t.Error("Decrypted text does not match original plaintext")
+	}
+}
+
+func testLocalProviderRotateKey(t *testing.T, provider kms.Provider) {
+	ctx := context.Background()
+
+	keys, err := provider.ListKeys(ctx)
+	if err != nil || len(keys) == 0 {
+		t.Skip("No keys available")
+	}
+
+	originalInfo, err := provider.GetKeyInfo(ctx, keys[0].KeyID)
+	if err != nil {
+		t.Fatalf("Failed to get key info: %v", err)
+	}
+
+	rotatedInfo, err := provider.RotateKey(ctx, keys[0].KeyID)
+	if err != nil {
+		t.Fatalf("Failed to rotate key: %v", err)
+	}
+
+	if rotatedInfo.RotatedAt == nil {
+		t.Error("Expected RotatedAt to be set after rotation")
+	}
+
+	if originalInfo.RotatedAt != nil && rotatedInfo.RotatedAt.Before(*originalInfo.RotatedAt) {
+		t.Error("RotatedAt should be after previous rotation time")
+	}
+}
+
+func testLocalProviderDeleteKey(t *testing.T, provider kms.Provider) {
+	ctx := context.Background()
+
+	// Create a key to delete
+	keyInfo, err := provider.CreateKey(ctx, kms.KeySpec{
+		Name:      "key-to-delete",
+		Algorithm: kms.AlgorithmAES256GCM,
+		Usage:     kms.KeyUsageEncrypt,
 	})
+	if err != nil {
+		t.Fatalf("Failed to create key: %v", err)
+	}
 
-	t.Run("GenerateDataKey", func(t *testing.T) {
-		ctx := context.Background()
+	err = provider.DeleteKey(ctx, keyInfo.KeyID)
+	if err != nil {
+		t.Fatalf("Failed to delete key: %v", err)
+	}
 
-		keys, err := provider.ListKeys(ctx)
-		if err != nil || len(keys) == 0 {
-			t.Skip("No keys available")
-		}
+	// Key should be marked as pending deletion
+	info, err := provider.GetKeyInfo(ctx, keyInfo.KeyID)
+	if err != nil {
+		t.Fatalf("Failed to get key info: %v", err)
+	}
 
-		dataKey, err := provider.GenerateDataKey(ctx, keys[0].KeyID, kms.KeySpec{
-			Algorithm: kms.AlgorithmAES256GCM,
-		})
-		if err != nil {
-			t.Fatalf("Failed to generate data key: %v", err)
-		}
+	if info.State != kms.KeyStatePendingDeletion {
+		t.Errorf("Expected state PENDING_DELETION, got '%s'", info.State)
+	}
+}
 
-		if len(dataKey.Plaintext) != 32 {
-			t.Errorf("Expected 32-byte plaintext, got %d bytes", len(dataKey.Plaintext))
-		}
+func testLocalProviderKeyNotFound(t *testing.T, provider kms.Provider) {
+	ctx := context.Background()
 
-		if len(dataKey.Ciphertext) == 0 {
-			t.Error("Expected non-empty ciphertext")
-		}
+	_, err := provider.GetKeyInfo(ctx, "non-existent-key")
+	if err != kms.ErrKeyNotFound {
+		t.Errorf("Expected ErrKeyNotFound, got %v", err)
+	}
+}
 
-		if dataKey.KeyID != keys[0].KeyID {
-			t.Errorf("Key ID mismatch: expected '%s', got '%s'", keys[0].KeyID, dataKey.KeyID)
-		}
+func testLocalProviderKeyPersistence(t *testing.T, provider kms.Provider, config local.Config) {
+	ctx := context.Background()
+
+	// Create a key
+	keyInfo, err := provider.CreateKey(ctx, kms.KeySpec{
+		Name:        "persistent-key",
+		Description: "Test persistence",
+		Algorithm:   kms.AlgorithmAES256GCM,
+		Usage:       kms.KeyUsageEncrypt,
 	})
+	if err != nil {
+		t.Fatalf("Failed to create key: %v", err)
+	}
 
-	t.Run("DecryptDataKey", func(t *testing.T) {
-		ctx := context.Background()
+	// Encrypt some data
+	plaintext := []byte("Test data for persistence")
 
-		keys, err := provider.ListKeys(ctx)
-		if err != nil || len(keys) == 0 {
-			t.Skip("No keys available")
-		}
+	ciphertext, err := provider.Encrypt(ctx, keyInfo.KeyID, plaintext)
+	if err != nil {
+		t.Fatalf("Failed to encrypt: %v", err)
+	}
 
-		dataKey, err := provider.GenerateDataKey(ctx, keys[0].KeyID, kms.KeySpec{
-			Algorithm: kms.AlgorithmAES256GCM,
-		})
-		if err != nil {
-			t.Fatalf("Failed to generate data key: %v", err)
-		}
+	// Close the provider
+	_ = provider.Close()
 
-		decrypted, err := provider.DecryptDataKey(ctx, keys[0].KeyID, dataKey.Ciphertext)
-		if err != nil {
-			t.Fatalf("Failed to decrypt data key: %v", err)
-		}
+	// Create a new provider with the same config
+	newProvider, err := local.NewProvider(config)
+	if err != nil {
+		t.Fatalf("Failed to create new provider: %v", err)
+	}
 
-		if string(decrypted) != string(dataKey.Plaintext) {
-			t.Error("Decrypted key does not match original plaintext")
-		}
-	})
+	defer func() { _ = newProvider.Close() }()
 
-	t.Run("EncryptDecrypt", func(t *testing.T) {
-		ctx := context.Background()
+	// Verify the key still exists
+	loadedInfo, err := newProvider.GetKeyInfo(ctx, keyInfo.KeyID)
+	if err != nil {
+		t.Fatalf("Failed to get key info from new provider: %v", err)
+	}
 
-		keys, err := provider.ListKeys(ctx)
-		if err != nil || len(keys) == 0 {
-			t.Skip("No keys available")
-		}
+	if loadedInfo.KeyID != keyInfo.KeyID {
+		t.Error("Key ID changed after reload")
+	}
 
-		plaintext := []byte("Hello, World! This is a test message.")
+	// Verify we can still decrypt
+	decrypted, err := newProvider.Decrypt(ctx, keyInfo.KeyID, ciphertext)
+	if err != nil {
+		t.Fatalf("Failed to decrypt with new provider: %v", err)
+	}
 
-		ciphertext, err := provider.Encrypt(ctx, keys[0].KeyID, plaintext)
-		if err != nil {
-			t.Fatalf("Failed to encrypt: %v", err)
-		}
-
-		if string(ciphertext) == string(plaintext) {
-			t.Error("Ciphertext should not equal plaintext")
-		}
-
-		decrypted, err := provider.Decrypt(ctx, keys[0].KeyID, ciphertext)
-		if err != nil {
-			t.Fatalf("Failed to decrypt: %v", err)
-		}
-
-		if string(decrypted) != string(plaintext) {
-			t.Error("Decrypted text does not match original plaintext")
-		}
-	})
-
-	t.Run("RotateKey", func(t *testing.T) {
-		ctx := context.Background()
-
-		keys, err := provider.ListKeys(ctx)
-		if err != nil || len(keys) == 0 {
-			t.Skip("No keys available")
-		}
-
-		originalInfo, err := provider.GetKeyInfo(ctx, keys[0].KeyID)
-		if err != nil {
-			t.Fatalf("Failed to get key info: %v", err)
-		}
-
-		rotatedInfo, err := provider.RotateKey(ctx, keys[0].KeyID)
-		if err != nil {
-			t.Fatalf("Failed to rotate key: %v", err)
-		}
-
-		if rotatedInfo.RotatedAt == nil {
-			t.Error("Expected RotatedAt to be set after rotation")
-		}
-
-		if originalInfo.RotatedAt != nil && rotatedInfo.RotatedAt.Before(*originalInfo.RotatedAt) {
-			t.Error("RotatedAt should be after previous rotation time")
-		}
-	})
-
-	t.Run("DeleteKey", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Create a key to delete
-		keyInfo, err := provider.CreateKey(ctx, kms.KeySpec{
-			Name:      "key-to-delete",
-			Algorithm: kms.AlgorithmAES256GCM,
-			Usage:     kms.KeyUsageEncrypt,
-		})
-		if err != nil {
-			t.Fatalf("Failed to create key: %v", err)
-		}
-
-		err = provider.DeleteKey(ctx, keyInfo.KeyID)
-		if err != nil {
-			t.Fatalf("Failed to delete key: %v", err)
-		}
-
-		// Key should be marked as pending deletion
-		info, err := provider.GetKeyInfo(ctx, keyInfo.KeyID)
-		if err != nil {
-			t.Fatalf("Failed to get key info: %v", err)
-		}
-
-		if info.State != kms.KeyStatePendingDeletion {
-			t.Errorf("Expected state PENDING_DELETION, got '%s'", info.State)
-		}
-	})
-
-	t.Run("KeyNotFound", func(t *testing.T) {
-		ctx := context.Background()
-
-		_, err := provider.GetKeyInfo(ctx, "non-existent-key")
-		if err != kms.ErrKeyNotFound {
-			t.Errorf("Expected ErrKeyNotFound, got %v", err)
-		}
-	})
-
-	t.Run("KeyPersistence", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Create a key
-		keyInfo, err := provider.CreateKey(ctx, kms.KeySpec{
-			Name:        "persistent-key",
-			Description: "Test persistence",
-			Algorithm:   kms.AlgorithmAES256GCM,
-			Usage:       kms.KeyUsageEncrypt,
-		})
-		if err != nil {
-			t.Fatalf("Failed to create key: %v", err)
-		}
-
-		// Encrypt some data
-		plaintext := []byte("Test data for persistence")
-
-		ciphertext, err := provider.Encrypt(ctx, keyInfo.KeyID, plaintext)
-		if err != nil {
-			t.Fatalf("Failed to encrypt: %v", err)
-		}
-
-		// Close the provider
-		_ = provider.Close()
-
-		// Create a new provider with the same config
-		newProvider, err := local.NewProvider(config)
-		if err != nil {
-			t.Fatalf("Failed to create new provider: %v", err)
-		}
-
-		defer func() { _ = newProvider.Close() }()
-
-		// Verify the key still exists
-		loadedInfo, err := newProvider.GetKeyInfo(ctx, keyInfo.KeyID)
-		if err != nil {
-			t.Fatalf("Failed to get key info from new provider: %v", err)
-		}
-
-		if loadedInfo.KeyID != keyInfo.KeyID {
-			t.Error("Key ID changed after reload")
-		}
-
-		// Verify we can still decrypt
-		decrypted, err := newProvider.Decrypt(ctx, keyInfo.KeyID, ciphertext)
-		if err != nil {
-			t.Fatalf("Failed to decrypt with new provider: %v", err)
-		}
-
-		if string(decrypted) != string(plaintext) {
-			t.Error("Decrypted data does not match original")
-		}
-	})
+	if string(decrypted) != string(plaintext) {
+		t.Error("Decrypted data does not match original")
+	}
 }
 
 func TestVaultProvider(t *testing.T) {
