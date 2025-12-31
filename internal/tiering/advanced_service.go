@@ -751,47 +751,64 @@ func (m *DefaultTierManager) GetObject(ctx context.Context, bucket, key string) 
 
 // TransitionObject moves an object between tiers.
 func (m *DefaultTierManager) TransitionObject(ctx context.Context, bucket, key string, targetTier TierType) error {
-	// Get object data
 	data, err := m.GetObject(ctx, bucket, key)
 	if err != nil {
 		return err
 	}
 
-	// Store in target tier
+	if err := m.putToTargetTier(ctx, bucket, key, data, targetTier); err != nil {
+		return err
+	}
+
+	return m.deleteFromOtherTiers(ctx, bucket, key, targetTier)
+}
+
+func (m *DefaultTierManager) putToTargetTier(ctx context.Context, bucket, key string, data []byte, targetTier TierType) error {
 	reader := &bytesReader{data: data}
 	size := int64(len(data))
 
 	switch targetTier {
 	case TierHot:
-		if m.hot != nil {
-			_, err = m.hot.PutObject(ctx, bucket, key, reader, size)
-			if err != nil {
-				return err
-			}
-		}
+		return m.putToHotTier(ctx, bucket, key, reader, size)
 	case TierWarm:
-		if m.warm != nil {
-			_, err = m.warm.PutObject(ctx, bucket, key, reader, size)
-			if err != nil {
-				return err
-			}
-		}
+		return m.putToWarmTier(ctx, bucket, key, reader, size)
 	case TierCold, TierArchive:
-		if m.cold != nil {
-			cold := m.cold.GetByTier(targetTier)
-			if cold != nil {
-				_, err = cold.PutObject(ctx, bucket, key, reader, size)
-				if err != nil {
-					return err
-				}
-			} else {
-				return fmt.Errorf("no cold storage available for tier %s", targetTier)
-			}
-		}
+		return m.putToColdTier(ctx, bucket, key, reader, size, targetTier)
+	default:
+		return nil
+	}
+}
+
+func (m *DefaultTierManager) putToHotTier(ctx context.Context, bucket, key string, reader *bytesReader, size int64) error {
+	if m.hot == nil {
+		return nil
 	}
 
-	// Delete from other tiers
-	return m.deleteFromOtherTiers(ctx, bucket, key, targetTier)
+	_, err := m.hot.PutObject(ctx, bucket, key, reader, size)
+	return err
+}
+
+func (m *DefaultTierManager) putToWarmTier(ctx context.Context, bucket, key string, reader *bytesReader, size int64) error {
+	if m.warm == nil {
+		return nil
+	}
+
+	_, err := m.warm.PutObject(ctx, bucket, key, reader, size)
+	return err
+}
+
+func (m *DefaultTierManager) putToColdTier(ctx context.Context, bucket, key string, reader *bytesReader, size int64, targetTier TierType) error {
+	if m.cold == nil {
+		return nil
+	}
+
+	cold := m.cold.GetByTier(targetTier)
+	if cold == nil {
+		return fmt.Errorf("no cold storage available for tier %s", targetTier)
+	}
+
+	_, err := cold.PutObject(ctx, bucket, key, reader, size)
+	return err
 }
 
 // deleteFromOtherTiers removes object from all tiers except target.
