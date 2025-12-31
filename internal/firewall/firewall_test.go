@@ -936,83 +936,101 @@ func TestFirewallInvalidCIDR(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			config := DefaultConfig()
-			config.Enabled = true
-			config.IPAllowlist = tc.allowlist
-			config.IPBlocklist = tc.blocklist
-
-			fw, err := New(config)
-
-			if tc.expectError {
-				if err == nil {
-					t.Error("Expected error but got none")
-				}
-
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-
-			if fw == nil {
-				t.Fatal("Firewall is nil")
-			}
-
-			// Verify that valid entries were processed
-			// Test with an IP that should work if valid entries were added
-			if len(tc.blocklist) > 0 {
-				// Find a valid entry to test
-				for _, entry := range tc.blocklist {
-					if entry == "10.0.0.0/8" {
-						req := &Request{
-							SourceIP:  "10.0.0.50",
-							Operation: "GetObject",
-						}
-
-						decision := fw.Evaluate(context.Background(), req)
-						if decision.Allowed {
-							t.Error("Expected IP in blocklist to be denied")
-						}
-
-						break
-					}
-				}
-			}
-
-			// Verify allowlist entries work correctly
-			if len(tc.allowlist) > 0 {
-				for _, entry := range tc.allowlist {
-					if entry == "192.168.1.0/24" {
-						req := &Request{
-							SourceIP:  "192.168.1.100",
-							Operation: "GetObject",
-						}
-
-						decision := fw.Evaluate(context.Background(), req)
-						if !decision.Allowed {
-							t.Error("Expected IP in allowlist to be allowed")
-						}
-
-						break
-					}
-
-					if entry == "192.168.1.100" {
-						req := &Request{
-							SourceIP:  "192.168.1.100",
-							Operation: "GetObject",
-						}
-
-						decision := fw.Evaluate(context.Background(), req)
-						if !decision.Allowed {
-							t.Error("Expected exact IP in allowlist to be allowed")
-						}
-
-						break
-					}
-				}
-			}
+			fw := createFirewallForInvalidCIDRTest(t, tc)
+			testBlocklistEntries(t, fw, tc.blocklist)
+			testAllowlistEntries(t, fw, tc.allowlist)
 		})
+	}
+}
+
+func createFirewallForInvalidCIDRTest(t *testing.T, tc struct {
+	name        string
+	allowlist   []string
+	blocklist   []string
+	expectError bool
+}) *Firewall {
+	config := DefaultConfig()
+	config.Enabled = true
+	config.IPAllowlist = tc.allowlist
+	config.IPBlocklist = tc.blocklist
+
+	fw, err := New(config)
+
+	if tc.expectError {
+		if err == nil {
+			t.Error("Expected error but got none")
+		}
+
+		return nil
+	}
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if fw == nil {
+		t.Fatal("Firewall is nil")
+	}
+
+	return fw
+}
+
+func testBlocklistEntries(t *testing.T, fw *Firewall, blocklist []string) {
+	if fw == nil || len(blocklist) == 0 {
+		return
+	}
+
+	// Find a valid entry to test
+	for _, entry := range blocklist {
+		if entry == "10.0.0.0/8" {
+			req := &Request{
+				SourceIP:  "10.0.0.50",
+				Operation: "GetObject",
+			}
+
+			decision := fw.Evaluate(context.Background(), req)
+			if decision.Allowed {
+				t.Error("Expected IP in blocklist to be denied")
+			}
+
+			break
+		}
+	}
+}
+
+func testAllowlistEntries(t *testing.T, fw *Firewall, allowlist []string) {
+	if fw == nil || len(allowlist) == 0 {
+		return
+	}
+
+	for _, entry := range allowlist {
+		if entry == "192.168.1.0/24" {
+			req := &Request{
+				SourceIP:  "192.168.1.100",
+				Operation: "GetObject",
+			}
+
+			decision := fw.Evaluate(context.Background(), req)
+			if !decision.Allowed {
+				t.Error("Expected IP in allowlist to be allowed")
+			}
+
+			break
+		}
+
+		if entry == "192.168.1.100" {
+			req := &Request{
+				SourceIP:  "192.168.1.100",
+				Operation: "GetObject",
+			}
+
+			decision := fw.Evaluate(context.Background(), req)
+			if !decision.Allowed {
+				t.Error("Expected exact IP in allowlist to be allowed")
+			}
+
+			break
+		}
 	}
 }
 
