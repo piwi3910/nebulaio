@@ -163,90 +163,37 @@ func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request) {
 // handleBucketPut handles PUT requests on buckets (create bucket or bucket subresources).
 func (h *Handler) handleBucketPut(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
+	handler := h.getBucketPutHandler(query)
+	handler(w, r)
+}
 
-	// Check for bucket subresources
-	if _, ok := query["versioning"]; ok {
-		h.PutBucketVersioning(w, r)
-		return
+func (h *Handler) getBucketPutHandler(query url.Values) func(http.ResponseWriter, *http.Request) {
+	handlers := map[string]func(http.ResponseWriter, *http.Request){
+		"versioning":            h.PutBucketVersioning,
+		"policy":                h.PutBucketPolicy,
+		"tagging":               h.PutBucketTagging,
+		"cors":                  h.PutBucketCORS,
+		"lifecycle":             h.PutBucketLifecycle,
+		"acl":                   h.PutBucketAcl,
+		"encryption":            h.PutBucketEncryption,
+		"website":               h.PutBucketWebsite,
+		"logging":               h.PutBucketLogging,
+		"notification":          h.PutBucketNotificationConfiguration,
+		"replication":           h.PutBucketReplication,
+		"object-lock":           h.PutObjectLockConfiguration,
+		"publicAccessBlock":     h.PutPublicAccessBlock,
+		"ownershipControls":     h.PutBucketOwnershipControls,
+		"accelerate":            h.PutBucketAccelerateConfiguration,
+		"intelligent-tiering":   h.PutBucketIntelligentTieringConfiguration,
 	}
 
-	if _, ok := query["policy"]; ok {
-		h.PutBucketPolicy(w, r)
-		return
+	for param, handler := range handlers {
+		if _, ok := query[param]; ok {
+			return handler
+		}
 	}
 
-	if _, ok := query["tagging"]; ok {
-		h.PutBucketTagging(w, r)
-		return
-	}
-
-	if _, ok := query["cors"]; ok {
-		h.PutBucketCORS(w, r)
-		return
-	}
-
-	if _, ok := query["lifecycle"]; ok {
-		h.PutBucketLifecycle(w, r)
-		return
-	}
-
-	if _, ok := query["acl"]; ok {
-		h.PutBucketAcl(w, r)
-		return
-	}
-
-	if _, ok := query["encryption"]; ok {
-		h.PutBucketEncryption(w, r)
-		return
-	}
-
-	if _, ok := query["website"]; ok {
-		h.PutBucketWebsite(w, r)
-		return
-	}
-
-	if _, ok := query["logging"]; ok {
-		h.PutBucketLogging(w, r)
-		return
-	}
-
-	if _, ok := query["notification"]; ok {
-		h.PutBucketNotificationConfiguration(w, r)
-		return
-	}
-
-	if _, ok := query["replication"]; ok {
-		h.PutBucketReplication(w, r)
-		return
-	}
-
-	if _, ok := query["object-lock"]; ok {
-		h.PutObjectLockConfiguration(w, r)
-		return
-	}
-
-	if _, ok := query["publicAccessBlock"]; ok {
-		h.PutPublicAccessBlock(w, r)
-		return
-	}
-
-	if _, ok := query["ownershipControls"]; ok {
-		h.PutBucketOwnershipControls(w, r)
-		return
-	}
-
-	if _, ok := query["accelerate"]; ok {
-		h.PutBucketAccelerateConfiguration(w, r)
-		return
-	}
-
-	if _, ok := query["intelligent-tiering"]; ok {
-		h.PutBucketIntelligentTieringConfiguration(w, r)
-		return
-	}
-
-	// Default: create bucket
-	h.CreateBucket(w, r)
+	return h.CreateBucket
 }
 
 // handleBucketDelete handles DELETE requests on buckets (delete bucket or bucket subresources).
