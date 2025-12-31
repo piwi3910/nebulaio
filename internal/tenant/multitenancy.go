@@ -582,12 +582,34 @@ func (tm *TenantManager) UpdateUsage(ctx context.Context, tenantID string, delta
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
+	usage := tm.getOrCreateUsage(tenantID)
+
+	tm.applyUsageDelta(usage, delta)
+	usage.LastUpdated = time.Now()
+
+	if err := tm.checkAndNotifyQuota(tenantID, usage); err != nil {
+		return err
+	}
+
+	if err := tm.saveUsageToStorage(ctx, usage); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// getOrCreateUsage gets existing usage or creates new one.
+func (tm *TenantManager) getOrCreateUsage(tenantID string) *TenantUsage {
 	usage, exists := tm.usage[tenantID]
 	if !exists {
 		usage = &TenantUsage{TenantID: tenantID}
 		tm.usage[tenantID] = usage
 	}
+	return usage
+}
 
+// applyUsageDelta applies usage delta to current usage.
+func (tm *TenantManager) applyUsageDelta(usage *TenantUsage, delta *UsageDelta) {
 	if delta.StorageBytes != 0 {
 		usage.StorageBytes += delta.StorageBytes
 		if usage.StorageBytes < 0 {
@@ -623,22 +645,24 @@ func (tm *TenantManager) UpdateUsage(ctx context.Context, tenantID string, delta
 	if delta.Bandwidth != 0 {
 		usage.BandwidthToday += delta.Bandwidth
 	}
+}
 
-	usage.LastUpdated = time.Now()
-
-	// Check quota warnings
+// checkAndNotifyQuota checks quota and sends warnings if needed.
+func (tm *TenantManager) checkAndNotifyQuota(tenantID string, usage *TenantUsage) error {
 	tenant := tm.tenants[tenantID]
 	if tenant != nil && tenant.Settings.NotifyOnQuotaWarning {
 		tm.checkQuotaWarnings(tenant, usage)
 	}
+	return nil
+}
 
+// saveUsageToStorage persists usage to storage backend.
+func (tm *TenantManager) saveUsageToStorage(ctx context.Context, usage *TenantUsage) error {
 	if tm.storage != nil {
-		err := tm.storage.SaveUsage(ctx, usage)
-		if err != nil {
+		if err := tm.storage.SaveUsage(ctx, usage); err != nil {
 			return fmt.Errorf("failed to save usage: %w", err)
 		}
 	}
-
 	return nil
 }
 
