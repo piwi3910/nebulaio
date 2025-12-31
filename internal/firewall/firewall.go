@@ -4,6 +4,7 @@ package firewall
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -222,94 +223,101 @@ func New(config Config) (*Firewall, error) {
 		userConnections:   make(map[string]int64),
 	}
 
-	// Parse IP allowlist - collect invalid entries for summary logging
-	var invalidAllowlistEntries []string
+	fw.parseIPAllowlist(config.IPAllowlist)
+	fw.parseIPBlocklist(config.IPBlocklist)
+	fw.initializeRateLimiter(config)
+	fw.initializeBandwidthTracker(config)
 
-	for _, cidr := range config.IPAllowlist {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			ip := net.ParseIP(cidr)
-			if ip == nil {
-				invalidAllowlistEntries = append(invalidAllowlistEntries, cidr)
-				continue
-			}
+	return fw, nil
+}
 
-			var parseErr error
-			if ip.To4() != nil {
-				_, network, parseErr = net.ParseCIDR(cidr + "/32")
-			} else {
-				_, network, parseErr = net.ParseCIDR(cidr + "/128")
-			}
+func (fw *Firewall) parseIPAllowlist(allowlist []string) {
+	networks, invalid := fw.parseCIDRList(allowlist)
+	fw.allowedNets = networks
 
-			if parseErr != nil {
-				invalidAllowlistEntries = append(invalidAllowlistEntries, cidr)
-				continue
-			}
-		}
-
-		if network != nil {
-			fw.allowedNets = append(fw.allowedNets, network)
-		}
-	}
-
-	if len(invalidAllowlistEntries) > 0 {
+	if len(invalid) > 0 {
 		log.Warn().
-			Int("count", len(invalidAllowlistEntries)).
-			Strs("entries", invalidAllowlistEntries).
+			Int("count", len(invalid)).
+			Strs("entries", invalid).
 			Msg("skipped invalid IP allowlist entries - check firewall configuration")
 	}
+}
 
-	// Parse IP blocklist - collect invalid entries for summary logging
-	var invalidBlocklistEntries []string
+func (fw *Firewall) parseIPBlocklist(blocklist []string) {
+	networks, invalid := fw.parseCIDRList(blocklist)
+	fw.blockedNets = networks
 
-	for _, cidr := range config.IPBlocklist {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			ip := net.ParseIP(cidr)
-			if ip == nil {
-				invalidBlocklistEntries = append(invalidBlocklistEntries, cidr)
-				continue
-			}
-
-			var parseErr error
-			if ip.To4() != nil {
-				_, network, parseErr = net.ParseCIDR(cidr + "/32")
-			} else {
-				_, network, parseErr = net.ParseCIDR(cidr + "/128")
-			}
-
-			if parseErr != nil {
-				invalidBlocklistEntries = append(invalidBlocklistEntries, cidr)
-				continue
-			}
-		}
-
-		if network != nil {
-			fw.blockedNets = append(fw.blockedNets, network)
-		}
-	}
-
-	if len(invalidBlocklistEntries) > 0 {
+	if len(invalid) > 0 {
 		log.Warn().
-			Int("count", len(invalidBlocklistEntries)).
-			Strs("entries", invalidBlocklistEntries).
+			Int("count", len(invalid)).
+			Strs("entries", invalid).
 			Msg("skipped invalid IP blocklist entries - check firewall configuration")
 	}
+}
 
-	// Initialize global rate limiter
+func (fw *Firewall) parseCIDRList(cidrs []string) ([]*net.IPNet, []string) {
+	var networks []*net.IPNet
+	var invalid []string
+
+	for _, cidr := range cidrs {
+		network, err := fw.parseCIDREntry(cidr)
+		if err != nil {
+			invalid = append(invalid, cidr)
+			continue
+		}
+		if network != nil {
+			networks = append(networks, network)
+		}
+	}
+
+	return networks, invalid
+}
+
+func (fw *Firewall) parseCIDREntry(cidr string) (*net.IPNet, error) {
+	_, network, err := net.ParseCIDR(cidr)
+	if err == nil {
+		return network, nil
+	}
+
+	// Try parsing as plain IP
+	ip := net.ParseIP(cidr)
+	if ip == nil {
+		return nil, errors.New("invalid IP or CIDR")
+	}
+
+	// Convert IP to CIDR
+	return fw.ipToCIDR(ip, cidr)
+}
+
+func (fw *Firewall) ipToCIDR(ip net.IP, original string) (*net.IPNet, error) {
+	var cidr string
+	if ip.To4() != nil {
+		cidr = original + "/32"
+	} else {
+		cidr = original + "/128"
+	}
+
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, err
+	}
+
+	return network, nil
+}
+
+func (fw *Firewall) initializeRateLimiter(config Config) {
 	if config.RateLimiting.Enabled {
 		fw.globalLimiter = NewTokenBucket(
 			config.RateLimiting.RequestsPerSecond,
 			config.RateLimiting.BurstSize,
 		)
 	}
+}
 
-	// Initialize global bandwidth tracker
+func (fw *Firewall) initializeBandwidthTracker(config Config) {
 	if config.Bandwidth.Enabled {
 		fw.globalBandwidth = NewBandwidthTracker(config.Bandwidth.MaxBytesPerSecond)
 	}
-
-	return fw, nil
 }
 
 // Evaluate evaluates a request against the firewall.
