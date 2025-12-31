@@ -836,72 +836,112 @@ type CompletePart struct {
 
 // CompleteMultipartUpload completes a multipart upload.
 func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string, requestParts []CompletePart) (*metadata.ObjectMeta, error) {
-	// Get upload metadata
-	upload, err := s.store.GetMultipartUpload(ctx, bucket, key, uploadID)
+	upload, bucketInfo, err := s.getUploadAndBucketInfo(ctx, bucket, key, uploadID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get bucket info
-	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
-	if err != nil {
+	partMap := s.buildPartMap(upload)
+
+	if err := s.validateRequestParts(requestParts, partMap); err != nil {
 		return nil, err
 	}
 
-	// Build map of uploaded parts
-	partMap := make(map[int]*metadata.UploadPart)
-	for i := range upload.Parts {
-		partMap[upload.Parts[i].PartNumber] = &upload.Parts[i]
-	}
+	partNumbers := s.extractPartNumbers(requestParts)
 
-	// Validate request parts
-	if len(requestParts) == 0 {
-		return nil, errors.New("at least one part must be specified")
-	}
-
-	// Verify parts are in ascending order
-	prevPartNumber := 0
-	for _, reqPart := range requestParts {
-		if reqPart.PartNumber <= prevPartNumber {
-			return nil, errors.New("parts must be in ascending order")
-		}
-
-		prevPartNumber = reqPart.PartNumber
-	}
-
-	// Verify all parts exist and ETags match
-	partNumbers := make([]int, 0, len(requestParts))
-
-	for i, reqPart := range requestParts {
-		uploadedPart, exists := partMap[reqPart.PartNumber]
-		if !exists {
-			return nil, fmt.Errorf("part %d not found", reqPart.PartNumber)
-		}
-
-		// Normalize ETags for comparison (remove quotes if present)
-		requestETag := strings.Trim(reqPart.ETag, `"`)
-
-		uploadedETag := strings.Trim(uploadedPart.ETag, `"`)
-		if requestETag != uploadedETag {
-			return nil, fmt.Errorf("ETag mismatch for part %d: expected %s, got %s", reqPart.PartNumber, uploadedETag, requestETag)
-		}
-
-		// Validate part size (all parts except the last must be at least 5MB)
-		if i < len(requestParts)-1 && uploadedPart.Size < MinPartSize {
-			return nil, fmt.Errorf("part %d is too small (%d bytes); minimum size is %d bytes except for the last part",
-				reqPart.PartNumber, uploadedPart.Size, MinPartSize)
-		}
-
-		partNumbers = append(partNumbers, reqPart.PartNumber)
-	}
-
-	// Complete the upload in storage
 	result, err := s.storage.CompleteParts(ctx, bucket, key, uploadID, partNumbers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to complete multipart upload: %w", err)
 	}
 
-	// Calculate total size and combined ETag
+	totalSize, finalETag := s.calculateFinalETag(partNumbers, partMap)
+
+	meta := s.createCompletedObjectMetadata(upload, bucket, key, bucketInfo, totalSize, finalETag, result.Path)
+
+	if err := s.storeCompletedObjectMetadata(ctx, meta, bucketInfo); err != nil {
+		return nil, err
+	}
+
+	_ = s.store.CompleteMultipartUpload(ctx, bucket, key, uploadID)
+
+	return meta, nil
+}
+
+func (s *Service) getUploadAndBucketInfo(ctx context.Context, bucket, key, uploadID string) (*metadata.MultipartUpload, *metadata.Bucket, error) {
+	upload, err := s.store.GetMultipartUpload(ctx, bucket, key, uploadID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return upload, bucketInfo, nil
+}
+
+func (s *Service) buildPartMap(upload *metadata.MultipartUpload) map[int]*metadata.UploadPart {
+	partMap := make(map[int]*metadata.UploadPart)
+	for i := range upload.Parts {
+		partMap[upload.Parts[i].PartNumber] = &upload.Parts[i]
+	}
+	return partMap
+}
+
+func (s *Service) validateRequestParts(requestParts []CompletePart, partMap map[int]*metadata.UploadPart) error {
+	if len(requestParts) == 0 {
+		return errors.New("at least one part must be specified")
+	}
+
+	if err := s.verifyPartsAscending(requestParts); err != nil {
+		return err
+	}
+
+	return s.verifyPartsExistAndMatch(requestParts, partMap)
+}
+
+func (s *Service) verifyPartsAscending(requestParts []CompletePart) error {
+	prevPartNumber := 0
+	for _, reqPart := range requestParts {
+		if reqPart.PartNumber <= prevPartNumber {
+			return errors.New("parts must be in ascending order")
+		}
+		prevPartNumber = reqPart.PartNumber
+	}
+	return nil
+}
+
+func (s *Service) verifyPartsExistAndMatch(requestParts []CompletePart, partMap map[int]*metadata.UploadPart) error {
+	for i, reqPart := range requestParts {
+		uploadedPart, exists := partMap[reqPart.PartNumber]
+		if !exists {
+			return fmt.Errorf("part %d not found", reqPart.PartNumber)
+		}
+
+		requestETag := strings.Trim(reqPart.ETag, `"`)
+		uploadedETag := strings.Trim(uploadedPart.ETag, `"`)
+		if requestETag != uploadedETag {
+			return fmt.Errorf("ETag mismatch for part %d: expected %s, got %s", reqPart.PartNumber, uploadedETag, requestETag)
+		}
+
+		if i < len(requestParts)-1 && uploadedPart.Size < MinPartSize {
+			return fmt.Errorf("part %d is too small (%d bytes); minimum size is %d bytes except for the last part",
+				reqPart.PartNumber, uploadedPart.Size, MinPartSize)
+		}
+	}
+	return nil
+}
+
+func (s *Service) extractPartNumbers(requestParts []CompletePart) []int {
+	partNumbers := make([]int, 0, len(requestParts))
+	for _, reqPart := range requestParts {
+		partNumbers = append(partNumbers, reqPart.PartNumber)
+	}
+	return partNumbers
+}
+
+func (s *Service) calculateFinalETag(partNumbers []int, partMap map[int]*metadata.UploadPart) (int64, string) {
 	var (
 		totalSize int64
 		etagBytes []byte
@@ -910,30 +950,27 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 	for _, partNum := range partNumbers {
 		part := partMap[partNum]
 		totalSize += part.Size
-		// Decode hex ETag to bytes
 		etag := strings.Trim(part.ETag, `"`)
 		hashBytes, _ := hex.DecodeString(etag)
 		etagBytes = append(etagBytes, hashBytes...)
 	}
 
-	// Combined ETag for multipart uploads: MD5(concat(part_etags)) + "-" + num_parts
 	combinedHash := md5.Sum(etagBytes) //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	finalETag := fmt.Sprintf(`"%s-%d"`, hex.EncodeToString(combinedHash[:]), len(partNumbers))
 
-	// Determine version ID and whether to preserve old versions
-	versionID := ""
-	preserveOldVersions := false
+	return totalSize, finalETag
+}
 
+func (s *Service) createCompletedObjectMetadata(upload *metadata.MultipartUpload, bucket, key string, bucketInfo *metadata.Bucket, totalSize int64, finalETag, path string) *metadata.ObjectMeta {
+	versionID := ""
 	if versioningPkg.IsVersioningEnabled(bucketInfo) {
 		versionID = s.versionService.GenerateVersionID()
-		preserveOldVersions = true
 	} else if versioningPkg.IsVersioningSuspended(bucketInfo) {
 		versionID = versioningPkg.NullVersionID
 	}
 
-	// Create object metadata using content-type and metadata from initial upload request
 	now := time.Now()
-	meta := &metadata.ObjectMeta{
+	return &metadata.ObjectMeta{
 		Bucket:       bucket,
 		Key:          key,
 		VersionID:    versionID,
@@ -947,30 +984,25 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 		ModifiedAt:   now,
 		Metadata:     upload.Metadata,
 		StorageInfo: &metadata.ObjectStorageInfo{
-			Path: result.Path,
+			Path: path,
 		},
 	}
+}
 
-	// Store object metadata with versioning support
-	if versionID != "" {
+func (s *Service) storeCompletedObjectMetadata(ctx context.Context, meta *metadata.ObjectMeta, bucketInfo *metadata.Bucket) error {
+	if meta.VersionID != "" {
+		preserveOldVersions := versioningPkg.IsVersioningEnabled(bucketInfo)
 		err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions)
 		if err != nil {
-			return nil, fmt.Errorf("failed to store object metadata: %w", err)
+			return fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	} else {
 		err := s.store.PutObjectMeta(ctx, meta)
 		if err != nil {
-			return nil, fmt.Errorf("failed to store object metadata: %w", err)
+			return fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	}
-
-	// Clean up upload metadata
-	err = s.store.CompleteMultipartUpload(ctx, bucket, key, uploadID)
-	if err != nil {
-		// Log error but don't fail - object is already stored
-	}
-
-	return meta, nil
+	return nil
 }
 
 // AbortMultipartUpload aborts a multipart upload.
