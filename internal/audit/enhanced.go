@@ -103,6 +103,12 @@ type RotationConfig struct {
 	Compress   bool `json:"compress" yaml:"compress"`
 }
 
+// rotatedFile represents a rotated log file.
+type rotatedFile struct {
+	modTime time.Time
+	path    string
+}
+
 // FilterRule defines a filter for audit events.
 type FilterRule struct {
 	// Name is the rule name
