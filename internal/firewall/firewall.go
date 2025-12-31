@@ -328,7 +328,30 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 
 	atomic.AddInt64(&fw.stats.RulesEvaluated, 1)
 
-	// Check IP blocklist first
+	if decision := fw.checkIPBlocklist(req); decision != nil {
+		return decision
+	}
+
+	if decision := fw.checkIPAllowlist(req); decision != nil {
+		return decision
+	}
+
+	if decision := fw.checkConnectionLimitsDecision(req); decision != nil {
+		return decision
+	}
+
+	if decision := fw.evaluateRules(req); decision != nil {
+		return decision
+	}
+
+	if decision := fw.checkRateLimitsDecision(req); decision != nil {
+		return decision
+	}
+
+	return fw.applyDefaultPolicy()
+}
+
+func (fw *Firewall) checkIPBlocklist(req *Request) *Decision {
 	if fw.isIPBlocked(req.SourceIP) {
 		atomic.AddInt64(&fw.stats.RequestsDenied, 1)
 
@@ -337,8 +360,10 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			Reason:  "IP address is blocked",
 		}
 	}
+	return nil
+}
 
-	// Check IP allowlist
+func (fw *Firewall) checkIPAllowlist(req *Request) *Decision {
 	if len(fw.allowedNets) > 0 && !fw.isIPAllowed(req.SourceIP) {
 		atomic.AddInt64(&fw.stats.RequestsDenied, 1)
 
@@ -347,8 +372,10 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			Reason:  "IP address is not in allowlist",
 		}
 	}
+	return nil
+}
 
-	// Check connection limits
+func (fw *Firewall) checkConnectionLimitsDecision(req *Request) *Decision {
 	if fw.config.Connections.Enabled {
 		if !fw.checkConnectionLimits(req) {
 			atomic.AddInt64(&fw.stats.ConnectionLimitHits, 1)
@@ -360,8 +387,10 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			}
 		}
 	}
+	return nil
+}
 
-	// Evaluate rules
+func (fw *Firewall) evaluateRules(req *Request) *Decision {
 	for _, rule := range fw.config.Rules {
 		if !rule.Enabled {
 			continue
@@ -403,8 +432,10 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			}
 		}
 	}
+	return nil
+}
 
-	// Check rate limits
+func (fw *Firewall) checkRateLimitsDecision(req *Request) *Decision {
 	if fw.config.RateLimiting.Enabled {
 		if !fw.checkRateLimits(req) {
 			atomic.AddInt64(&fw.stats.RateLimitHits, 1)
@@ -416,8 +447,10 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			}
 		}
 	}
+	return nil
+}
 
-	// Apply default policy
+func (fw *Firewall) applyDefaultPolicy() *Decision {
 	if fw.config.DefaultPolicy == "deny" {
 		atomic.AddInt64(&fw.stats.RequestsDenied, 1)
 
