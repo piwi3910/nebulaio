@@ -398,7 +398,6 @@ func (e *Engine) getColumnAlias(col Column) string {
 	if col.Alias != "" {
 		return col.Alias
 	}
-
 	return fmt.Sprintf("%s(%s)", col.Function, col.Name)
 }
 
@@ -427,7 +426,6 @@ func (e *Engine) calculateCount(col Column, records []Record) int {
 	}
 
 	count := 0
-
 	for _, r := range records {
 		if _, ok := r.Fields[col.Name]; ok {
 			count++
@@ -453,7 +451,6 @@ func (e *Engine) calculateSum(col Column, records []Record) float64 {
 // calculateAvg calculates the average of numeric values in the specified column.
 func (e *Engine) calculateAvg(col Column, records []Record) float64 {
 	var sum float64
-
 	var count int
 
 	for _, r := range records {
@@ -515,93 +512,117 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 	var output strings.Builder
 
 	for _, record := range records {
-		// Select columns
-		var (
-			values []interface{}
-			keys   []string
-		)
-
-		if query.SelectAll {
-			for _, col := range record.Columns {
-				keys = append(keys, col)
-				values = append(values, record.Fields[col])
-			}
-		} else {
-			for _, col := range query.Columns {
-				var name string
-
-				switch {
-				case col.Function != "":
-					// For aggregate functions, use the function expression as key
-					if col.Alias != "" {
-						name = col.Alias
-					} else {
-						name = fmt.Sprintf("%s(%s)", col.Function, col.Name)
-					}
-				case col.Alias != "":
-					name = col.Alias
-				default:
-					name = col.Name
-				}
-
-				keys = append(keys, name)
-
-				switch {
-				case col.Function != "":
-					// Aggregate result - value stored under the formatted key
-					key := name
-					values = append(values, record.Fields[key])
-				case col.IsIndex:
-					key := fmt.Sprintf("_%d", col.Index)
-					values = append(values, record.Fields[key])
-				default:
-					values = append(values, record.Fields[col.Name])
-				}
-			}
-		}
-
-		switch e.outputFormat.Type {
-		case formatJSON:
-			obj := make(map[string]interface{})
-
-			for i, key := range keys {
-				if i < len(values) {
-					obj[key] = values[i]
-				}
-			}
-
-			jsonBytes, err := json.Marshal(obj)
-			if err != nil {
-				return nil, err
-			}
-
-			output.Write(jsonBytes)
-			output.WriteString(e.outputFormat.JSONConfig.RecordDelimiter)
-
-		case formatCSV:
-			for i, val := range values {
-				if i > 0 {
-					output.WriteString(e.outputFormat.CSVConfig.FieldDelimiter)
-				}
-
-				output.WriteString(formatCSVValue(val, e.outputFormat.CSVConfig))
-			}
-
-			output.WriteString(e.outputFormat.CSVConfig.RecordDelimiter)
-
-		default:
-			// Default to JSON
-			jsonBytes, err := json.Marshal(values)
-			if err != nil {
-				return nil, err
-			}
-
-			output.Write(jsonBytes)
-			output.WriteString("\n")
+		keys, values := e.extractColumnValues(record, query)
+		if err := e.writeFormattedRecord(&output, keys, values); err != nil {
+			return nil, err
 		}
 	}
 
 	return []byte(output.String()), nil
+}
+
+func (e *Engine) extractColumnValues(record Record, query *Query) ([]string, []interface{}) {
+	var (
+		values []interface{}
+		keys   []string
+	)
+
+	if query.SelectAll {
+		for _, col := range record.Columns {
+			keys = append(keys, col)
+			values = append(values, record.Fields[col])
+		}
+		return keys, values
+	}
+
+	for _, col := range query.Columns {
+		name := e.getColumnName(col)
+		keys = append(keys, name)
+		values = append(values, e.getColumnValue(record, col, name))
+	}
+
+	return keys, values
+}
+
+func (e *Engine) getColumnName(col Column) string {
+	switch {
+	case col.Function != "":
+		if col.Alias != "" {
+			return col.Alias
+		}
+		return fmt.Sprintf("%s(%s)", col.Function, col.Name)
+	case col.Alias != "":
+		return col.Alias
+	default:
+		return col.Name
+	}
+}
+
+func (e *Engine) getColumnValue(record Record, col Column, name string) interface{} {
+	switch {
+	case col.Function != "":
+		return record.Fields[name]
+	case col.IsIndex:
+		key := fmt.Sprintf("_%d", col.Index)
+		return record.Fields[key]
+	default:
+		return record.Fields[col.Name]
+	}
+}
+
+func (e *Engine) writeFormattedRecord(output *strings.Builder, keys []string, values []interface{}) error {
+	switch e.outputFormat.Type {
+	case formatJSON:
+		return e.writeJSONRecord(output, keys, values)
+	case formatCSV:
+		e.writeCSVRecord(output, values)
+		return nil
+	default:
+		return e.writeDefaultRecord(output, values)
+	}
+}
+
+func (e *Engine) writeJSONRecord(output *strings.Builder, keys []string, values []interface{}) error {
+	obj := make(map[string]interface{})
+
+	for i, key := range keys {
+		if i < len(values) {
+			obj[key] = values[i]
+		}
+	}
+
+	jsonBytes, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+
+	output.Write(jsonBytes)
+	output.WriteString(e.outputFormat.JSONConfig.RecordDelimiter)
+
+	return nil
+}
+
+func (e *Engine) writeCSVRecord(output *strings.Builder, values []interface{}) {
+	for i, val := range values {
+		if i > 0 {
+			output.WriteString(e.outputFormat.CSVConfig.FieldDelimiter)
+		}
+		output.WriteString(formatCSVValue(val, e.outputFormat.CSVConfig))
+	}
+
+	output.WriteString(e.outputFormat.CSVConfig.RecordDelimiter)
+}
+
+func (e *Engine) writeDefaultRecord(output *strings.Builder, values []interface{}) error {
+	jsonBytes, err := json.Marshal(values)
+	if err != nil {
+		return err
+	}
+
+	output.Write(jsonBytes)
+	output.WriteString("\n")
+
+	return nil
 }
 
 // ParseSQL parses an S3 Select SQL query.
@@ -734,132 +755,94 @@ func parseColumns(columnsStr string) ([]Column, error) {
 func parseWhereClause(where string) (*Condition, error) {
 	where = strings.TrimSpace(where)
 
-	// Try parsing as compound condition (AND/OR)
-	if cond, err := parseCompoundCondition(where); err == nil {
-		return cond, nil
-	}
-
-	// Parse as simple condition
-	return parseSimpleCondition(where)
-}
-
-// parseCompoundCondition parses AND/OR compound conditions.
-func parseCompoundCondition(where string) (*Condition, error) {
+	// Handle AND/OR
 	andRegex := regexp.MustCompile(`(?i)\s+and\s+`)
 	orRegex := regexp.MustCompile(`(?i)\s+or\s+`)
 
-	if cond, err := parseBinaryCondition(where, andRegex, true); err == nil {
-		return cond, nil
-	}
+	if andParts := andRegex.Split(where, 2); len(andParts) == 2 {
+		left, err := parseWhereClause(andParts[0])
+		if err != nil {
+			return nil, err
+		}
 
-	if cond, err := parseBinaryCondition(where, orRegex, false); err == nil {
-		return cond, nil
-	}
+		right, err := parseWhereClause(andParts[1])
+		if err != nil {
+			return nil, err
+		}
 
-	return nil, fmt.Errorf("not a compound condition")
-}
-
-// parseBinaryCondition parses a binary condition (AND or OR).
-func parseBinaryCondition(where string, regex *regexp.Regexp, isAnd bool) (*Condition, error) {
-	parts := regex.Split(where, 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("not a binary condition")
-	}
-
-	left, err := parseWhereClause(parts[0])
-	if err != nil {
-		return nil, err
-	}
-
-	right, err := parseWhereClause(parts[1])
-	if err != nil {
-		return nil, err
-	}
-
-	if isAnd {
 		left.And = right
-	} else {
-		left.Or = right
+
+		return left, nil
 	}
 
-	return left, nil
-}
+	if orParts := orRegex.Split(where, 2); len(orParts) == 2 {
+		left, err := parseWhereClause(orParts[0])
+		if err != nil {
+			return nil, err
+		}
 
-// parseSimpleCondition parses a simple comparison condition.
-func parseSimpleCondition(where string) (*Condition, error) {
+		right, err := parseWhereClause(orParts[1])
+		if err != nil {
+			return nil, err
+		}
+
+		left.Or = right
+
+		return left, nil
+	}
+
+	// Parse simple condition
 	operators := []string{">=", "<=", "!=", "<>", "=", ">", "<", " LIKE ", " like ", " IS NULL", " is null", " IS NOT NULL", " is not null"}
-
 	for _, op := range operators {
-		if cond, err := tryParseOperator(where, op); err == nil {
-			return cond, nil
+		if strings.Contains(where, op) {
+			parts := strings.SplitN(where, op, 2)
+			if len(parts) == 2 {
+				left := strings.TrimSpace(parts[0])
+				right := strings.TrimSpace(parts[1])
+
+				// Remove alias prefix
+				if strings.Contains(left, ".") {
+					leftParts := strings.SplitN(left, ".", 2)
+					if len(leftParts) == 2 {
+						left = leftParts[1]
+					}
+				}
+
+				// Parse right value
+				var rightVal interface{}
+
+				rightLower := strings.ToLower(right)
+				switch {
+				case strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(op), "null"):
+					rightVal = nil
+				case strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'"):
+					rightVal = right[1 : len(right)-1]
+				case strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\""):
+					rightVal = right[1 : len(right)-1]
+				default:
+					f, floatErr := strconv.ParseFloat(right, 64)
+					if floatErr == nil {
+						rightVal = f
+					} else {
+						b, boolErr := strconv.ParseBool(right)
+						if boolErr == nil {
+							rightVal = b
+						} else {
+							rightVal = right
+						}
+					}
+				}
+
+				return &Condition{
+					Left:     left,
+					Operator: strings.TrimSpace(op),
+					Right:    rightVal,
+				}, nil
+			}
 		}
 	}
 
 	return nil, fmt.Errorf("failed to parse WHERE clause: %s", where)
-}
-
-// tryParseOperator tries to parse condition with a specific operator.
-func tryParseOperator(where, op string) (*Condition, error) {
-	if !strings.Contains(where, op) {
-		return nil, fmt.Errorf("operator not found")
-	}
-
-	parts := strings.SplitN(where, op, 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid operator split")
-	}
-
-	left := removeAliasPrefix(strings.TrimSpace(parts[0]))
-	rightVal := parseRightValue(strings.TrimSpace(parts[1]), op)
-
-	return &Condition{
-		Left:     left,
-		Operator: strings.TrimSpace(op),
-		Right:    rightVal,
-	}, nil
-}
-
-// removeAliasPrefix removes table alias prefix from column name.
-func removeAliasPrefix(column string) string {
-	if strings.Contains(column, ".") {
-		parts := strings.SplitN(column, ".", 2)
-		if len(parts) == 2 {
-			return parts[1]
-		}
-	}
-	return column
-}
-
-// parseRightValue parses the right-hand value of a condition.
-func parseRightValue(right, op string) interface{} {
-	rightLower := strings.ToLower(right)
-
-	// Check for NULL
-	if strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(op), "null") {
-		return nil
-	}
-
-	// Check for quoted strings
-	if strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'") {
-		return right[1 : len(right)-1]
-	}
-
-	if strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\"") {
-		return right[1 : len(right)-1]
-	}
-
-	// Try parsing as number
-	if f, err := strconv.ParseFloat(right, 64); err == nil {
-		return f
-	}
-
-	// Try parsing as boolean
-	if b, err := strconv.ParseBool(right); err == nil {
-		return b
-	}
-
-	// Default to string
-	return right
 }
 
 // evaluateCondition evaluates a condition against a record.
