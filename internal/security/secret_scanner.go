@@ -589,7 +589,7 @@ func (s *SecretScanner) scanLine(bucket, key, lineStr string, lineNum int, lines
 	return findings
 }
 
-func (s *SecretScanner) processMatch(bucket, key, lineStr string, lineNum int, match []int, pattern SecretPattern, lines [][]byte) *SecretFinding {
+func (s *SecretScanner) processMatch(bucket, key, lineStr string, lineNum int, match []int, pattern *SecretPattern, lines [][]byte) *SecretFinding {
 	matchStr := lineStr[match[0]:match[1]]
 
 	if !s.validateMatch(matchStr, pattern) {
@@ -603,7 +603,7 @@ func (s *SecretScanner) processMatch(bucket, key, lineStr string, lineNum int, m
 	return s.createFinding(bucket, key, lineNum, match, matchStr, pattern, lines)
 }
 
-func (s *SecretScanner) validateMatch(matchStr string, pattern SecretPattern) bool {
+func (s *SecretScanner) validateMatch(matchStr string, pattern *SecretPattern) bool {
 	if pattern.Validator == nil {
 		return true
 	}
@@ -611,7 +611,7 @@ func (s *SecretScanner) validateMatch(matchStr string, pattern SecretPattern) bo
 	return pattern.Validator(matchStr)
 }
 
-func (s *SecretScanner) createFinding(bucket, key string, lineNum int, match []int, matchStr string, pattern SecretPattern, lines [][]byte) *SecretFinding {
+func (s *SecretScanner) createFinding(bucket, key string, lineNum int, match []int, matchStr string, pattern *SecretPattern, lines [][]byte) *SecretFinding {
 	finding := &SecretFinding{
 		ID:          uuid.New().String(),
 		Type:        pattern.Type,
