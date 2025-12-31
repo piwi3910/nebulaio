@@ -755,41 +755,57 @@ func (e *PolicyEngine) handleRealtimeEvent(event RealtimeEvent) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Record access in stats
-	if e.accessStats != nil {
-		e.accessStats.RecordAccess(ctx, event.Bucket, event.Key, event.Operation, event.Size)
-	}
+	e.recordAccessStats(ctx, event)
 
-	// Get real-time policies
 	policies, err := e.store.ListByType(ctx, PolicyTypeRealtime)
 	if err != nil {
 		return
 	}
 
 	for _, policy := range policies {
-		if !policy.Enabled {
-			continue
+		if policy.Enabled {
+			e.processRealtimePolicy(ctx, event, policy)
 		}
+	}
+}
 
-		// Check for read promotion trigger
-		for _, trigger := range policy.Triggers {
-			if trigger.Type == TriggerTypeAccess && trigger.Access != nil {
-				if trigger.Access.PromoteOnAnyRead && event.Operation == "GET" {
-					// Execute promotion
-					for _, action := range policy.Actions {
-						if action.Type == ActionTransition && action.Transition != nil {
-							err := e.executor.ExecuteTransition(ctx, event.Bucket, event.Key, action.Transition)
-							if err != nil {
-								log.Error().Err(err).
-									Str("bucket", event.Bucket).
-									Str("key", event.Key).
-									Msg("Failed to execute read promotion")
-							}
-						}
-					}
-				}
-			}
+func (e *PolicyEngine) recordAccessStats(ctx context.Context, event RealtimeEvent) {
+	if e.accessStats != nil {
+		e.accessStats.RecordAccess(ctx, event.Bucket, event.Key, event.Operation, event.Size)
+	}
+}
+
+func (e *PolicyEngine) processRealtimePolicy(ctx context.Context, event RealtimeEvent, policy *AdvancedPolicy) {
+	for _, trigger := range policy.Triggers {
+		if e.shouldProcessRealtimeTrigger(trigger, event) {
+			e.executeRealtimeActions(ctx, event, policy)
+			break
 		}
+	}
+}
+
+func (e *PolicyEngine) shouldProcessRealtimeTrigger(trigger PolicyTrigger, event RealtimeEvent) bool {
+	if trigger.Type != TriggerTypeAccess || trigger.Access == nil {
+		return false
+	}
+	return trigger.Access.PromoteOnAnyRead && event.Operation == "GET"
+}
+
+func (e *PolicyEngine) executeRealtimeActions(ctx context.Context, event RealtimeEvent, policy *AdvancedPolicy) {
+	for _, action := range policy.Actions {
+		if action.Type == ActionTransition && action.Transition != nil {
+			e.executeRealtimeTransition(ctx, event, action)
+		}
+	}
+}
+
+func (e *PolicyEngine) executeRealtimeTransition(ctx context.Context, event RealtimeEvent, action PolicyAction) {
+	err := e.executor.ExecuteTransition(ctx, event.Bucket, event.Key, action.Transition)
+	if err != nil {
+		log.Error().Err(err).
+			Str("bucket", event.Bucket).
+			Str("key", event.Key).
+			Msg("Failed to execute read promotion")
 	}
 }
 
