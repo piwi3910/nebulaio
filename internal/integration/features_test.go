@@ -34,6 +34,16 @@ const (
 	statusPending    = "pending"
 )
 
+// transferState represents the state of a tiering transfer operation.
+type transferState struct {
+	objectKey      string
+	targetPG       string
+	transferStatus string
+	shardsTotal    int
+	shardsWritten  int
+	pgHealthy      bool
+}
+
 // TestDRAMCacheWithFirewall tests that DRAM cache respects firewall rules.
 func TestDRAMCacheWithFirewall(t *testing.T) {
 	// Create firewall with rate limiting
@@ -953,14 +963,6 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 // becomes unhealthy during an active tiering operation.
 func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 	// Simulate a tiering operation where the target placement group degrades mid-transfer
-	type transferState struct {
-		objectKey      string
-		targetPG       string
-		transferStatus string
-		shardsTotal    int
-		shardsWritten  int
-		pgHealthy      bool
-	}
 
 	// Initial state: 3 objects being tiered
 	transfers := []transferState{
@@ -969,13 +971,26 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 		{objectKey: "obj3", shardsTotal: 14, shardsWritten: 0, targetPG: "pg-cold", pgHealthy: true, transferStatus: statusPending},
 	}
 
+	simulatePGDegradation(transfers)
+	applyFailoverLogic(transfers)
+	verifyFailoverBehavior(t, transfers)
+	simulatePGRecovery(transfers)
+	resumeTransfersAfterRecovery(transfers)
+	verifyAllTransfersCompleted(t, transfers)
+
+	t.Log("Placement group failover test: all transfers recovered and completed")
+}
+
+func simulatePGDegradation(transfers []transferState) {
 	// Simulate placement group degradation
 	for i := range transfers {
 		if transfers[i].transferStatus != statusCompleted {
 			transfers[i].pgHealthy = false
 		}
 	}
+}
 
+func applyFailoverLogic(transfers []transferState) {
 	// Apply failover logic
 	for i := range transfers {
 		if !transfers[i].pgHealthy {
@@ -989,7 +1004,9 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 			}
 		}
 	}
+}
 
+func verifyFailoverBehavior(t *testing.T, transfers []transferState) {
 	// Verify failover behavior
 	completedCount := 0
 	pausedCount := 0
@@ -1017,12 +1034,16 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 	if pendingCount != 1 {
 		t.Errorf("Expected 1 pending transfer, got %d", pendingCount)
 	}
+}
 
+func simulatePGRecovery(transfers []transferState) {
 	// Simulate PG recovery
 	for i := range transfers {
 		transfers[i].pgHealthy = true
 	}
+}
 
+func resumeTransfersAfterRecovery(transfers []transferState) {
 	// Resume paused transfers
 	for i := range transfers {
 		if transfers[i].transferStatus == statusPaused {
@@ -1041,15 +1062,15 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 			transfers[i].transferStatus = statusCompleted
 		}
 	}
+}
 
+func verifyAllTransfersCompleted(t *testing.T, transfers []transferState) {
 	// Verify all transfers completed after recovery
 	for _, tr := range transfers {
 		if tr.transferStatus != statusCompleted {
 			t.Errorf("Transfer %s should be completed, got %s", tr.objectKey, tr.transferStatus)
 		}
 	}
-
-	t.Log("Placement group failover test: all transfers recovered and completed")
 }
 
 // TestErasureCodingWithPlacementGroups verifies that erasure coding respects
