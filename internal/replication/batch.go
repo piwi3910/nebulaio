@@ -516,38 +516,58 @@ func (bm *BatchManager) replicationWorker(ctx context.Context, job *BatchJob, wo
 				return
 			}
 
-			// Replicate with retries
-			var err error
-			for attempt := 0; attempt <= job.MaxRetries; attempt++ {
-				err = bm.replicateObject(ctx, job, obj)
-				if err == nil {
-					break
-				}
-
-				// Wait before retry
-				if attempt < job.MaxRetries {
-					select {
-					case <-time.After(time.Duration(attempt+1) * time.Second):
-					case <-ctx.Done():
-						return
-					}
-				}
-			}
-
-			if err != nil {
-				atomic.AddInt64(&job.Progress.FailedObjects, 1)
-			} else {
-				atomic.AddInt64(&job.Progress.SuccessObjects, 1)
-				atomic.AddInt64(bytesProcessed, obj.Size)
-			}
-
-			atomic.AddInt64(&job.Progress.ProcessedObjects, 1)
-			atomic.AddInt64(&job.Progress.ProcessedBytes, obj.Size)
-
-			// Update ETA
-			bm.updateETA(job)
+			bm.processObject(ctx, job, obj, bytesProcessed)
 		}
 	}
+}
+
+func (bm *BatchManager) processObject(ctx context.Context, job *BatchJob, obj ObjectListEntry, bytesProcessed *int64) {
+	err := bm.replicateWithRetries(ctx, job, obj)
+
+	bm.updateJobProgress(job, obj, err, bytesProcessed)
+	bm.updateETA(job)
+}
+
+func (bm *BatchManager) replicateWithRetries(ctx context.Context, job *BatchJob, obj ObjectListEntry) error {
+	var err error
+
+	for attempt := 0; attempt <= job.MaxRetries; attempt++ {
+		err = bm.replicateObject(ctx, job, obj)
+		if err == nil {
+			return nil
+		}
+
+		if !bm.shouldRetry(ctx, attempt, job.MaxRetries) {
+			break
+		}
+	}
+
+	return err
+}
+
+func (bm *BatchManager) shouldRetry(ctx context.Context, attempt, maxRetries int) bool {
+	if attempt >= maxRetries {
+		return false
+	}
+
+	select {
+	case <-time.After(time.Duration(attempt+1) * time.Second):
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func (bm *BatchManager) updateJobProgress(job *BatchJob, obj ObjectListEntry, err error, bytesProcessed *int64) {
+	if err != nil {
+		atomic.AddInt64(&job.Progress.FailedObjects, 1)
+	} else {
+		atomic.AddInt64(&job.Progress.SuccessObjects, 1)
+		atomic.AddInt64(bytesProcessed, obj.Size)
+	}
+
+	atomic.AddInt64(&job.Progress.ProcessedObjects, 1)
+	atomic.AddInt64(&job.Progress.ProcessedBytes, obj.Size)
 }
 
 // replicateObject replicates a single object.
