@@ -415,45 +415,56 @@ func (m *Manager) processMultipartUploads(ctx context.Context, bucket string, ru
 	now := time.Now()
 
 	for _, upload := range uploads {
-		for _, rule := range rules {
-			if !rule.IsEnabled() {
-				continue
-			}
-
-			if !rule.MatchesObject(upload.Key, nil) {
-				continue
-			}
-
-			if rule.AbortIncompleteMultipartUpload == nil {
-				continue
-			}
-
-			daysAfter := rule.AbortIncompleteMultipartUpload.DaysAfterInitiation
-			expirationTime := upload.CreatedAt.AddDate(0, 0, daysAfter)
-
-			if now.After(expirationTime) {
-				err := m.multipartService.AbortMultipartUpload(ctx, bucket, upload.Key, upload.UploadID)
-				if err != nil {
-					log.Error().Err(err).
-						Str("bucket", bucket).
-						Str("key", upload.Key).
-						Str("uploadId", upload.UploadID).
-						Msg("Failed to abort incomplete multipart upload")
-				} else {
-					log.Info().
-						Str("bucket", bucket).
-						Str("key", upload.Key).
-						Str("uploadId", upload.UploadID).
-						Str("rule", rule.ID).
-						Msg("Aborted incomplete multipart upload")
-				}
-
-				break // Only apply first matching rule
-			}
-		}
+		m.processUploadWithRules(ctx, bucket, upload, rules, now)
 	}
 
 	return nil
+}
+
+func (m *Manager) processUploadWithRules(ctx context.Context, bucket string, upload metadata.MultipartUpload, rules []LifecycleRule, now time.Time) {
+	for _, rule := range rules {
+		if m.shouldAbortUpload(upload, rule, now) {
+			m.abortUpload(ctx, bucket, upload, rule.ID)
+			break
+		}
+	}
+}
+
+func (m *Manager) shouldAbortUpload(upload metadata.MultipartUpload, rule LifecycleRule, now time.Time) bool {
+	if !rule.IsEnabled() {
+		return false
+	}
+
+	if !rule.MatchesObject(upload.Key, nil) {
+		return false
+	}
+
+	if rule.AbortIncompleteMultipartUpload == nil {
+		return false
+	}
+
+	daysAfter := rule.AbortIncompleteMultipartUpload.DaysAfterInitiation
+	expirationTime := upload.CreatedAt.AddDate(0, 0, daysAfter)
+
+	return now.After(expirationTime)
+}
+
+func (m *Manager) abortUpload(ctx context.Context, bucket string, upload metadata.MultipartUpload, ruleID string) {
+	err := m.multipartService.AbortMultipartUpload(ctx, bucket, upload.Key, upload.UploadID)
+	if err != nil {
+		log.Error().Err(err).
+			Str("bucket", bucket).
+			Str("key", upload.Key).
+			Str("uploadId", upload.UploadID).
+			Msg("Failed to abort incomplete multipart upload")
+	} else {
+		log.Info().
+			Str("bucket", bucket).
+			Str("key", upload.Key).
+			Str("uploadId", upload.UploadID).
+			Str("rule", ruleID).
+			Msg("Aborted incomplete multipart upload")
+	}
 }
 
 // EvaluateObject evaluates lifecycle rules against an object and returns the action.
