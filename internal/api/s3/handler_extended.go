@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -29,93 +30,136 @@ func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
 	versionID := r.URL.Query().Get("versionId")
 
-	// Parse x-amz-object-attributes header (comma-separated list)
 	requestedAttrs := parseObjectAttributesHeader(r.Header.Get("X-Amz-Object-Attributes"))
 	if len(requestedAttrs) == 0 {
 		writeS3Error(w, "InvalidArgument", "x-amz-object-attributes header is required", http.StatusBadRequest)
 		return
 	}
 
-	// Get object metadata
-	var (
-		meta *metadata.ObjectMeta
-		err  error
-	)
-
-	if versionID != "" {
-		meta, err = h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
-	} else {
-		meta, err = h.object.HeadObject(ctx, bucketName, key)
-	}
-
+	meta, err := h.getObjectMetadataForAttributes(ctx, bucketName, key, versionID)
 	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, key)
 		return
 	}
 
-	// Build response based on requested attributes
+	response := h.buildObjectAttributesResponse(requestedAttrs, meta)
+	h.setObjectAttributesHeaders(w, meta, versionID)
+
+	writeXML(w, http.StatusOK, response)
+}
+
+func (h *Handler) getObjectMetadataForAttributes(
+	ctx context.Context,
+	bucketName, key, versionID string,
+) (*metadata.ObjectMeta, error) {
+	if versionID != "" {
+		return h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
+	}
+	return h.object.HeadObject(ctx, bucketName, key)
+}
+
+func (h *Handler) buildObjectAttributesResponse(
+	requestedAttrs []string,
+	meta *metadata.ObjectMeta,
+) s3types.GetObjectAttributesOutput {
 	response := s3types.GetObjectAttributesOutput{}
 
 	for _, attr := range requestedAttrs {
-		switch attr {
-		case "ETag":
-			response.ETag = meta.ETag
-		case "Checksum":
-			// Checksums are stored in metadata if available
-			if meta.Metadata != nil {
-				checksum := &s3types.Checksum{}
-				hasChecksum := false
-
-				if v, ok := meta.Metadata["x-amz-checksum-crc32"]; ok {
-					checksum.ChecksumCRC32 = v
-					hasChecksum = true
-				}
-
-				if v, ok := meta.Metadata["x-amz-checksum-crc32c"]; ok {
-					checksum.ChecksumCRC32C = v
-					hasChecksum = true
-				}
-
-				if v, ok := meta.Metadata["x-amz-checksum-sha1"]; ok {
-					checksum.ChecksumSHA1 = v
-					hasChecksum = true
-				}
-
-				if v, ok := meta.Metadata["x-amz-checksum-sha256"]; ok {
-					checksum.ChecksumSHA256 = v
-					hasChecksum = true
-				}
-
-				if hasChecksum {
-					response.Checksum = checksum
-				}
-			}
-		case "ObjectParts":
-			// Part count info from metadata
-			if meta.Metadata != nil {
-				if partsStr, ok := meta.Metadata["x-amz-mp-parts-count"]; ok {
-					partsCount, err := strconv.Atoi(partsStr)
-					if err == nil && partsCount > 0 {
-						response.ObjectParts = &s3types.ObjectParts{
-							PartsCount:      partsCount,
-							TotalPartsCount: partsCount,
-							IsTruncated:     false,
-							MaxParts:        1000,
-						}
-					}
-				}
-			}
-		case "StorageClass":
-			response.StorageClass = meta.StorageClass
-			if response.StorageClass == "" {
-				response.StorageClass = "STANDARD"
-			}
-		case "ObjectSize":
-			response.ObjectSize = meta.Size
-		}
+		h.setAttributeInResponse(&response, attr, meta)
 	}
 
-	// Set response headers
+	return response
+}
+
+func (h *Handler) setAttributeInResponse(
+	response *s3types.GetObjectAttributesOutput,
+	attr string,
+	meta *metadata.ObjectMeta,
+) {
+	switch attr {
+	case "ETag":
+		response.ETag = meta.ETag
+	case "Checksum":
+		response.Checksum = h.extractChecksumFromMetadata(meta)
+	case "ObjectParts":
+		response.ObjectParts = h.extractObjectPartsFromMetadata(meta)
+	case "StorageClass":
+		response.StorageClass = h.getStorageClassOrDefault(meta)
+	case "ObjectSize":
+		response.ObjectSize = meta.Size
+	}
+}
+
+func (h *Handler) extractChecksumFromMetadata(meta *metadata.ObjectMeta) *s3types.Checksum {
+	if meta.Metadata == nil {
+		return nil
+	}
+
+	checksum := &s3types.Checksum{}
+	hasChecksum := false
+
+	if v, ok := meta.Metadata["x-amz-checksum-crc32"]; ok {
+		checksum.ChecksumCRC32 = v
+		hasChecksum = true
+	}
+
+	if v, ok := meta.Metadata["x-amz-checksum-crc32c"]; ok {
+		checksum.ChecksumCRC32C = v
+		hasChecksum = true
+	}
+
+	if v, ok := meta.Metadata["x-amz-checksum-sha1"]; ok {
+		checksum.ChecksumSHA1 = v
+		hasChecksum = true
+	}
+
+	if v, ok := meta.Metadata["x-amz-checksum-sha256"]; ok {
+		checksum.ChecksumSHA256 = v
+		hasChecksum = true
+	}
+
+	if !hasChecksum {
+		return nil
+	}
+
+	return checksum
+}
+
+func (h *Handler) extractObjectPartsFromMetadata(meta *metadata.ObjectMeta) *s3types.ObjectParts {
+	if meta.Metadata == nil {
+		return nil
+	}
+
+	partsStr, ok := meta.Metadata["x-amz-mp-parts-count"]
+	if !ok {
+		return nil
+	}
+
+	partsCount, err := strconv.Atoi(partsStr)
+	if err != nil || partsCount <= 0 {
+		return nil
+	}
+
+	return &s3types.ObjectParts{
+		PartsCount:      partsCount,
+		TotalPartsCount: partsCount,
+		IsTruncated:     false,
+		MaxParts:        1000,
+	}
+}
+
+func (h *Handler) getStorageClassOrDefault(meta *metadata.ObjectMeta) string {
+	if meta.StorageClass == "" {
+		return "STANDARD"
+	}
+	return meta.StorageClass
+}
+
+func (h *Handler) setObjectAttributesHeaders(
+	w http.ResponseWriter,
+	meta *metadata.ObjectMeta,
+	versionID string,
+) {
 	w.Header().Set("Last-Modified", meta.ModifiedAt.Format(http.TimeFormat))
 
 	if versionID != "" {
@@ -125,8 +169,6 @@ func (h *Handler) GetObjectAttributes(w http.ResponseWriter, r *http.Request) {
 	if meta.DeleteMarker {
 		w.Header().Set("X-Amz-Delete-Marker", "true")
 	}
-
-	writeXML(w, http.StatusOK, response)
 }
 
 // parseObjectAttributesHeader parses the x-amz-object-attributes header.
