@@ -756,38 +756,70 @@ func (c *Catalog) CommitTable(ctx context.Context, request *UpdateTableRequest) 
 }
 
 func (c *Catalog) validateRequirement(table *Table, req *TableRequirement) error {
-	switch req.Type {
-	case "assert-table-uuid":
-		if req.UUID != table.Metadata.TableUUID {
-			return ErrRequirementFailed
-		}
-	case "assert-ref-snapshot-id":
-		ref, ok := table.Metadata.Refs[req.Ref]
-		if !ok {
-			if req.SnapshotID != nil {
-				return ErrRequirementFailed
-			}
-		} else if req.SnapshotID != nil && ref.SnapshotID != *req.SnapshotID {
-			return ErrRequirementFailed
-		}
-	case "assert-last-assigned-field-id":
-		if req.LastAssignedFieldID != nil && *req.LastAssignedFieldID != table.Metadata.LastColumnID {
-			return ErrRequirementFailed
-		}
-	case "assert-current-schema-id":
-		if req.CurrentSchemaID != nil && *req.CurrentSchemaID != table.Metadata.CurrentSchemaID {
-			return ErrRequirementFailed
-		}
-	case "assert-default-spec-id":
-		if req.DefaultSpecID != nil && *req.DefaultSpecID != table.Metadata.DefaultSpecID {
-			return ErrRequirementFailed
-		}
-	case "assert-default-sort-order-id":
-		if req.DefaultSortOrderID != nil && *req.DefaultSortOrderID != table.Metadata.DefaultSortOrderID {
-			return ErrRequirementFailed
-		}
+	validators := map[string]func(*Table, *TableRequirement) error{
+		"assert-table-uuid":               c.validateTableUUID,
+		"assert-ref-snapshot-id":          c.validateRefSnapshotID,
+		"assert-last-assigned-field-id":   c.validateLastAssignedFieldID,
+		"assert-current-schema-id":        c.validateCurrentSchemaID,
+		"assert-default-spec-id":          c.validateDefaultSpecID,
+		"assert-default-sort-order-id":    c.validateDefaultSortOrderID,
 	}
 
+	if validator, exists := validators[req.Type]; exists {
+		return validator(table, req)
+	}
+
+	return nil
+}
+
+func (c *Catalog) validateTableUUID(table *Table, req *TableRequirement) error {
+	if req.UUID != table.Metadata.TableUUID {
+		return ErrRequirementFailed
+	}
+	return nil
+}
+
+func (c *Catalog) validateRefSnapshotID(table *Table, req *TableRequirement) error {
+	ref, ok := table.Metadata.Refs[req.Ref]
+	if !ok {
+		if req.SnapshotID != nil {
+			return ErrRequirementFailed
+		}
+		return nil
+	}
+
+	if req.SnapshotID != nil && ref.SnapshotID != *req.SnapshotID {
+		return ErrRequirementFailed
+	}
+
+	return nil
+}
+
+func (c *Catalog) validateLastAssignedFieldID(table *Table, req *TableRequirement) error {
+	if req.LastAssignedFieldID != nil && *req.LastAssignedFieldID != table.Metadata.LastColumnID {
+		return ErrRequirementFailed
+	}
+	return nil
+}
+
+func (c *Catalog) validateCurrentSchemaID(table *Table, req *TableRequirement) error {
+	if req.CurrentSchemaID != nil && *req.CurrentSchemaID != table.Metadata.CurrentSchemaID {
+		return ErrRequirementFailed
+	}
+	return nil
+}
+
+func (c *Catalog) validateDefaultSpecID(table *Table, req *TableRequirement) error {
+	if req.DefaultSpecID != nil && *req.DefaultSpecID != table.Metadata.DefaultSpecID {
+		return ErrRequirementFailed
+	}
+	return nil
+}
+
+func (c *Catalog) validateDefaultSortOrderID(table *Table, req *TableRequirement) error {
+	if req.DefaultSortOrderID != nil && *req.DefaultSortOrderID != table.Metadata.DefaultSortOrderID {
+		return ErrRequirementFailed
+	}
 	return nil
 }
 
