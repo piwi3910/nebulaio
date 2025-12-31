@@ -402,41 +402,66 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 		return err
 	}
 
-	// Check if any rule has existing object replication enabled
-	var applicableRules []Rule
+	applicableRules := s.getApplicableRulesForResync(config)
+	if len(applicableRules) == 0 {
+		return errors.New("no rules have existing object replication enabled")
+	}
 
+	lister, err := s.getListerForResync()
+	if err != nil {
+		return err
+	}
+
+	objectsCh, errCh := lister.ListObjects(ctx, bucket, "", true)
+
+	enqueuedCount, errorCount, listErr := s.processResyncObjectsChan(
+		ctx,
+		bucket,
+		applicableRules,
+		objectsCh,
+		errCh,
+	)
+
+	if listErr != nil {
+		return fmt.Errorf("error listing objects: %w", listErr)
+	}
+
+	return s.logResyncResult(bucket, enqueuedCount, errorCount)
+}
+
+func (s *Service) getApplicableRulesForResync(config *Config) []Rule {
+	var applicableRules []Rule
 	for _, rule := range config.Rules {
 		if rule.ShouldReplicateExistingObjects() {
 			applicableRules = append(applicableRules, rule)
 		}
 	}
+	return applicableRules
+}
 
-	if len(applicableRules) == 0 {
-		return errors.New("no rules have existing object replication enabled")
-	}
-
-	// Copy lister reference under lock to avoid race conditions
-	// if SetLister is called during the resync operation
+func (s *Service) getListerForResync() (ObjectLister, error) {
 	s.mu.RLock()
 	lister := s.lister
 	s.mu.RUnlock()
 
 	if lister == nil {
-		return errors.New("object lister not configured")
+		return nil, errors.New("object lister not configured")
 	}
 
-	// List all objects in the bucket and enqueue them for replication
-	objectsCh, errCh := lister.ListObjects(ctx, bucket, "", true)
+	return lister, nil
+}
 
-	// Track statistics
-	var (
-		enqueuedCount int64
-		errorCount    int64
-		listErr       error
-	)
-
-	// Process objects - drain both channels to avoid goroutine leaks
+func (s *Service) processResyncObjectsChan(
+	ctx context.Context,
+	bucket string,
+	applicableRules []Rule,
+	objectsCh <-chan ObjectListEntry,
+	errCh <-chan error,
+) (int64, int64, error) {
+	var enqueuedCount, errorCount int64
+	var listErr error
 	objectsDone := false
+
 	for !objectsDone {
 		select {
 		case obj, ok := <-objectsCh:
@@ -445,30 +470,14 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 				continue
 			}
 
-			// Check which rules apply to this object
-			for _, rule := range applicableRules {
-				// Check if the rule's filter matches the object
-				if rule.Filter != nil && !rule.Filter.Matches(obj.Key, obj.Tags) {
-					continue
-				}
-
-				// Enqueue the object for replication
-				_, err := s.queue.Enqueue(ctx, bucket, obj.Key, obj.VersionID, "PUT", rule.ID)
-				if err != nil {
-					log.Warn().
-						Err(err).
-						Str("bucket", bucket).
-						Str("key", obj.Key).
-						Str("rule_id", rule.ID).
-						Msg("Failed to enqueue object for replication")
-
-					errorCount++
-
-					continue
-				}
-
-				enqueuedCount++
-			}
+			enqueued, errCount := s.enqueueObjectForApplicableRules(
+				ctx,
+				bucket,
+				obj,
+				applicableRules,
+			)
+			enqueuedCount += enqueued
+			errorCount += errCount
 
 		case err, ok := <-errCh:
 			if ok && err != nil {
@@ -478,25 +487,73 @@ func (s *Service) ResyncBucket(ctx context.Context, bucket string) error {
 
 		case <-ctx.Done():
 			log.Warn().Str("bucket", bucket).Msg("Bucket resync cancelled")
-			return ctx.Err()
+			return enqueuedCount, errorCount, ctx.Err()
 		}
 	}
 
-	// Drain any remaining errors from errCh
+	listErr = s.drainErrorChanForResync(errCh, listErr)
+
+	return enqueuedCount, errorCount, listErr
+}
+
+func (s *Service) enqueueObjectForApplicableRules(
+	ctx context.Context,
+	bucket string,
+	obj ObjectListEntry,
+	applicableRules []Rule,
+) (int64, int64) {
+	var enqueued, errors int64
+
+	for _, rule := range applicableRules {
+		if !s.ruleMatchesObject(rule, obj) {
+			continue
+		}
+
+		if err := s.enqueueObjectForRule(ctx, bucket, obj, rule); err != nil {
+			log.Warn().
+				Err(err).
+				Str("bucket", bucket).
+				Str("key", obj.Key).
+				Str("rule_id", rule.ID).
+				Msg("Failed to enqueue object for replication")
+			errors++
+		} else {
+			enqueued++
+		}
+	}
+
+	return enqueued, errors
+}
+
+func (s *Service) ruleMatchesObject(rule Rule, obj ObjectListEntry) bool {
+	if rule.Filter != nil && !rule.Filter.Matches(obj.Key, obj.Tags) {
+		return false
+	}
+	return true
+}
+
+func (s *Service) enqueueObjectForRule(
+	ctx context.Context,
+	bucket string,
+	obj ObjectListEntry,
+	rule Rule,
+) error {
+	_, err := s.queue.Enqueue(ctx, bucket, obj.Key, obj.VersionID, "PUT", rule.ID)
+	return err
+}
+
+func (s *Service) drainErrorChanForResync(errCh <-chan error, listErr error) error {
 	select {
 	case err, ok := <-errCh:
 		if ok && err != nil && listErr == nil {
-			listErr = err
+			return err
 		}
 	default:
 	}
+	return listErr
+}
 
-	// Return listing error if any
-	if listErr != nil {
-		return fmt.Errorf("error listing objects: %w", listErr)
-	}
-
-	// Log completion
+func (s *Service) logResyncResult(bucket string, enqueuedCount, errorCount int64) error {
 	if errorCount > 0 {
 		log.Warn().
 			Str("bucket", bucket).
