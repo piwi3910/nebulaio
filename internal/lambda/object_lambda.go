@@ -591,55 +591,8 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 		return redactor.Transform(ctx, bytes.NewReader(data), params)
 	}
 
-	// Fields to mask
-	piiFields := []string{"email", "phone", "ssn", "credit_card", "password", "secret", "token"}
-	if customFields, ok := params["fields"].([]interface{}); ok {
-		piiFields = make([]string, len(customFields))
-		for i, f := range customFields {
-			piiFields[i] = f.(string)
-		}
-	}
-
-	maskValue := func(v interface{}) interface{} {
-		if s, ok := v.(string); ok {
-			if len(s) > 4 {
-				return s[:2] + strings.Repeat("*", len(s)-4) + s[len(s)-2:]
-			}
-
-			return "****"
-		}
-
-		return "****"
-	}
-
-	var maskPII func(obj map[string]interface{})
-
-	maskPII = func(obj map[string]interface{}) {
-		for key, value := range obj {
-			keyLower := strings.ToLower(key)
-			for _, piiField := range piiFields {
-				if strings.Contains(keyLower, piiField) {
-					obj[key] = maskValue(value)
-					break
-				}
-			}
-
-			// Recurse into nested objects
-			if nested, ok := value.(map[string]interface{}); ok {
-				maskPII(nested)
-			}
-
-			if arr, ok := value.([]interface{}); ok {
-				for _, item := range arr {
-					if nested, ok := item.(map[string]interface{}); ok {
-						maskPII(nested)
-					}
-				}
-			}
-		}
-	}
-
-	maskPII(obj)
+	piiFields := t.getPIIFields(params)
+	t.maskPIIRecursive(obj, piiFields)
 
 	result, err := json.Marshal(obj)
 	if err != nil {
@@ -647,6 +600,68 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 	}
 
 	return bytes.NewReader(result), map[string]string{"Content-Type": "application/json"}, nil
+}
+
+func (t *PIIMaskTransformer) getPIIFields(params map[string]interface{}) []string {
+	piiFields := []string{"email", "phone", "ssn", "credit_card", "password", "secret", "token"}
+	if customFields, ok := params["fields"].([]interface{}); ok {
+		piiFields = make([]string, len(customFields))
+		for i, f := range customFields {
+			piiFields[i] = f.(string)
+		}
+	}
+	return piiFields
+}
+
+func (t *PIIMaskTransformer) maskValue(v interface{}) interface{} {
+	if s, ok := v.(string); ok {
+		if len(s) > 4 {
+			return s[:2] + strings.Repeat("*", len(s)-4) + s[len(s)-2:]
+		}
+		return "****"
+	}
+	return "****"
+}
+
+func (t *PIIMaskTransformer) maskPIIRecursive(obj map[string]interface{}, piiFields []string) {
+	for key, value := range obj {
+		if t.shouldMaskField(key, piiFields) {
+			obj[key] = t.maskValue(value)
+			continue
+		}
+
+		t.maskNestedStructures(value, piiFields)
+	}
+}
+
+func (t *PIIMaskTransformer) shouldMaskField(key string, piiFields []string) bool {
+	keyLower := strings.ToLower(key)
+	for _, piiField := range piiFields {
+		if strings.Contains(keyLower, piiField) {
+			return true
+		}
+	}
+	return false
+}
+
+func (t *PIIMaskTransformer) maskNestedStructures(value interface{}, piiFields []string) {
+	// Recurse into nested objects
+	if nested, ok := value.(map[string]interface{}); ok {
+		t.maskPIIRecursive(nested, piiFields)
+	}
+
+	// Recurse into arrays
+	if arr, ok := value.([]interface{}); ok {
+		t.maskArrayItems(arr, piiFields)
+	}
+}
+
+func (t *PIIMaskTransformer) maskArrayItems(arr []interface{}, piiFields []string) {
+	for _, item := range arr {
+		if nested, ok := item.(map[string]interface{}); ok {
+			t.maskPIIRecursive(nested, piiFields)
+		}
+	}
 }
 
 // FilterFieldsTransformer filters JSON fields.
