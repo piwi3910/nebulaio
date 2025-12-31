@@ -517,63 +517,83 @@ func newLifecycleDeleteCmd() *cobra.Command {
 	}
 }
 
+// runLifecycleList executes the lifecycle list operation.
+func runLifecycleList(bucket string) error {
+	ctx := context.Background()
+	client, err := NewS3Client(ctx)
+	if err != nil {
+		return err
+	}
+
+	result, err := client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
+		Bucket: &bucket,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get lifecycle config: %w", err)
+	}
+
+	if len(result.Rules) == 0 {
+		fmt.Println("No lifecycle rules configured")
+		return nil
+	}
+
+	printLifecycleRules(result.Rules)
+	return nil
+}
+
+// printLifecycleRules prints lifecycle rules in table format.
+func printLifecycleRules(rules []types.LifecycleRule) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(w, "ID\tSTATUS\tPREFIX\tEXPIRATION")
+
+	for _, rule := range rules {
+		id := extractRuleID(rule)
+		status := string(rule.Status)
+		prefix := extractRulePrefix(rule)
+		expiration := extractRuleExpiration(rule)
+
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", id, status, prefix, expiration)
+	}
+
+	_ = w.Flush()
+}
+
+// extractRuleID extracts rule ID.
+func extractRuleID(rule types.LifecycleRule) string {
+	if rule.ID != nil {
+		return *rule.ID
+	}
+	return ""
+}
+
+// extractRulePrefix extracts rule filter prefix.
+func extractRulePrefix(rule types.LifecycleRule) string {
+	if rule.Filter != nil && rule.Filter.Prefix != nil {
+		return *rule.Filter.Prefix
+	}
+	return ""
+}
+
+// extractRuleExpiration extracts rule expiration details.
+func extractRuleExpiration(rule types.LifecycleRule) string {
+	if rule.Expiration != nil {
+		if rule.Expiration.Days != nil {
+			return fmt.Sprintf("%d days", *rule.Expiration.Days)
+		}
+		if rule.Expiration.Date != nil {
+			return rule.Expiration.Date.Format("2006-01-02")
+		}
+	}
+	return ""
+}
+
 func newLifecycleListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <bucket-name>",
 		Short: "List lifecycle rules",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-
-			client, err := NewS3Client(ctx)
-			if err != nil {
-				return err
-			}
-
-			bucket := args[0]
-
-			result, err := client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
-				Bucket: &bucket,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to get lifecycle config: %w", err)
-			}
-
-			if len(result.Rules) == 0 {
-				fmt.Println("No lifecycle rules configured")
-				return nil
-			}
-
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			_, _ = fmt.Fprintln(w, "ID\tSTATUS\tPREFIX\tEXPIRATION")
-
-			for _, rule := range result.Rules {
-				id := ""
-				if rule.ID != nil {
-					id = *rule.ID
-				}
-
-				status := string(rule.Status)
-
-				prefix := ""
-				if rule.Filter != nil && rule.Filter.Prefix != nil {
-					prefix = *rule.Filter.Prefix
-				}
-
-				expiration := ""
-
-				if rule.Expiration != nil {
-					if rule.Expiration.Days != nil {
-						expiration = fmt.Sprintf("%d days", *rule.Expiration.Days)
-					} else if rule.Expiration.Date != nil {
-						expiration = rule.Expiration.Date.Format("2006-01-02")
-					}
-				}
-
-				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", id, status, prefix, expiration)
-			}
-
-			return w.Flush()
+			return runLifecycleList(args[0])
 		},
 	}
 }
