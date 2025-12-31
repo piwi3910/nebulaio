@@ -1050,78 +1050,82 @@ func (o *FileOutput) compressFile(filePath string) error {
 
 // cleanupOldFiles removes old log files based on MaxBackups and MaxAgeDays.
 func (o *FileOutput) cleanupOldFiles() {
-	// Get the directory and base name of the log file
 	dir := filepath.Dir(o.path)
 	baseName := filepath.Base(o.path)
 
-	// Find all rotated files (matching pattern: baseName.timestamp or baseName.timestamp.gz)
+	rotatedFiles := o.findRotatedFiles(dir, baseName)
+	o.removeOldFiles(rotatedFiles)
+}
+
+func (o *FileOutput) findRotatedFiles(dir, baseName string) []rotatedFile {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		log.Warn().Err(err).Str("dir", dir).Msg("Failed to read log directory for cleanup")
-		return
-	}
-
-	type rotatedFile struct {
-		modTime time.Time
-		path    string
+		return nil
 	}
 
 	var rotatedFiles []rotatedFile
 
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		name := entry.Name()
-		// Skip the current log file
-		if name == baseName {
-			continue
-		}
-		// Match rotated files (baseName.timestamp or baseName.timestamp.gz)
-		if strings.HasPrefix(name, baseName+".") {
-			info, err := entry.Info()
-			if err != nil {
-				continue
-			}
-
-			rotatedFiles = append(rotatedFiles, rotatedFile{
-				path:    filepath.Join(dir, name),
-				modTime: info.ModTime(),
-			})
+		if rf := o.processLogEntry(entry, dir, baseName); rf != nil {
+			rotatedFiles = append(rotatedFiles, *rf)
 		}
 	}
 
-	// Sort by modification time (newest first)
 	sort.Slice(rotatedFiles, func(i, j int) bool {
 		return rotatedFiles[i].modTime.After(rotatedFiles[j].modTime)
 	})
 
+	return rotatedFiles
+}
+
+func (o *FileOutput) processLogEntry(entry os.DirEntry, dir, baseName string) *rotatedFile {
+	if entry.IsDir() {
+		return nil
+	}
+
+	name := entry.Name()
+	if name == baseName || !strings.HasPrefix(name, baseName+".") {
+		return nil
+	}
+
+	info, err := entry.Info()
+	if err != nil {
+		return nil
+	}
+
+	return &rotatedFile{
+		path:    filepath.Join(dir, name),
+		modTime: info.ModTime(),
+	}
+}
+
+func (o *FileOutput) removeOldFiles(rotatedFiles []rotatedFile) {
 	now := time.Now()
 
 	for i, rf := range rotatedFiles {
-		shouldDelete := false
-
-		// Check MaxBackups limit
-		if o.rotation.MaxBackups > 0 && i >= o.rotation.MaxBackups {
-			shouldDelete = true
-		}
-
-		// Check MaxAgeDays limit
-		if o.rotation.MaxAgeDays > 0 {
-			age := now.Sub(rf.modTime)
-			if age > time.Duration(o.rotation.MaxAgeDays)*24*time.Hour {
-				shouldDelete = true
-			}
-		}
-
-		if shouldDelete {
+		if o.shouldDeleteFile(i, rf.modTime, now) {
 			err := os.Remove(rf.path)
 			if err != nil {
 				log.Warn().Err(err).Str("file", rf.path).Msg("Failed to remove old log file during cleanup")
 			}
 		}
 	}
+}
+
+func (o *FileOutput) shouldDeleteFile(index int, modTime, now time.Time) bool {
+	if o.rotation.MaxBackups > 0 && index >= o.rotation.MaxBackups {
+		return true
+	}
+
+	if o.rotation.MaxAgeDays > 0 {
+		age := now.Sub(modTime)
+		if age > time.Duration(o.rotation.MaxAgeDays)*24*time.Hour {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (o *FileOutput) Flush(ctx context.Context) error {
