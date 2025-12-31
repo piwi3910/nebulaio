@@ -213,74 +213,22 @@ func OpenVolume(path string) (*Volume, error) {
 		if os.IsNotExist(err) {
 			return nil, ErrVolumeNotFound
 		}
-
 		return nil, fmt.Errorf("failed to open volume: %w", err)
 	}
 
-	// Read superblock
-	superBytes := make([]byte, 128)
-	_, err = file.ReadAt(superBytes, 0)
-	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("failed to read superblock: %w", err)
-	}
-
-	super, err := UnmarshalSuperblock(superBytes)
+	super, err := readAndValidateSuperblock(file)
 	if err != nil {
 		_ = file.Close()
 		return nil, err
 	}
 
-	// Validate version
-	if super.Version != SuperblockVersion {
-		_ = file.Close()
-		return nil, ErrVersionMismatch
-	}
-
-	// Read allocation map
-	allocMap, err := ReadAllocationMap(file, BitmapOffset, super.TotalBlocks)
+	allocMap, blockTypes, index, err := readVolumeMetadata(file, super)
 	if err != nil {
 		_ = file.Close()
-		return nil, fmt.Errorf("failed to read allocation map: %w", err)
+		return nil, err
 	}
 
-	// Read block type map
-	blockTypes := make([]byte, super.TotalBlocks)
-	_, err = file.ReadAt(blockTypes, BlockTypeMapOffset)
-	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("failed to read block type map: %w", err)
-	}
-
-	// Read index
-	//nolint:gosec // G115: IndexOffset and IndexSize are within volume bounds
-	index, err := ReadIndex(file, int64(super.IndexOffset), int64(super.IndexSize))
-	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("failed to read index: %w", err)
-	}
-
-	// Find active packed blocks
-	activeTiny := uint32(0xFFFFFFFF)
-	activeSmall := uint32(0xFFFFFFFF)
-	activeMedium := uint32(0xFFFFFFFF)
-
-	for i := range super.TotalBlocks {
-		switch blockTypes[i] {
-		case BlockTypePackedTiny:
-			if activeTiny == 0xFFFFFFFF {
-				activeTiny = i
-			}
-		case BlockTypePackedSmall:
-			if activeSmall == 0xFFFFFFFF {
-				activeSmall = i
-			}
-		case BlockTypePackedMed:
-			if activeMedium == 0xFFFFFFFF {
-				activeMedium = i
-			}
-		}
-	}
+	activeTiny, activeSmall, activeMedium := findActivePackedBlocks(blockTypes, super.TotalBlocks)
 
 	volumeID, _ := uuid.FromBytes(super.VolumeID[:])
 	log.Info().
@@ -312,74 +260,22 @@ func OpenVolumeWithConfig(path string, dioConfig DirectIOConfig) (*Volume, error
 		if os.IsNotExist(err) {
 			return nil, ErrVolumeNotFound
 		}
-
 		return nil, fmt.Errorf("failed to open volume: %w", err)
 	}
 
-	// Read superblock
-	superBytes := make([]byte, 128)
-	_, err = file.ReadAt(superBytes, 0)
-	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("failed to read superblock: %w", err)
-	}
-
-	super, err := UnmarshalSuperblock(superBytes)
+	super, err := readAndValidateSuperblock(file)
 	if err != nil {
 		_ = file.Close()
 		return nil, err
 	}
 
-	// Validate version
-	if super.Version != SuperblockVersion {
-		_ = file.Close()
-		return nil, ErrVersionMismatch
-	}
-
-	// Read allocation map
-	allocMap, err := ReadAllocationMap(file, BitmapOffset, super.TotalBlocks)
+	allocMap, blockTypes, index, err := readVolumeMetadata(file, super)
 	if err != nil {
 		_ = file.Close()
-		return nil, fmt.Errorf("failed to read allocation map: %w", err)
+		return nil, err
 	}
 
-	// Read block type map
-	blockTypes := make([]byte, super.TotalBlocks)
-	_, err = file.ReadAt(blockTypes, BlockTypeMapOffset)
-	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("failed to read block type map: %w", err)
-	}
-
-	// Read index
-	//nolint:gosec // G115: IndexOffset and IndexSize are within volume bounds
-	index, err := ReadIndex(file, int64(super.IndexOffset), int64(super.IndexSize))
-	if err != nil {
-		_ = file.Close()
-		return nil, fmt.Errorf("failed to read index: %w", err)
-	}
-
-	// Find active packed blocks
-	activeTiny := uint32(0xFFFFFFFF)
-	activeSmall := uint32(0xFFFFFFFF)
-	activeMedium := uint32(0xFFFFFFFF)
-
-	for i := range super.TotalBlocks {
-		switch blockTypes[i] {
-		case BlockTypePackedTiny:
-			if activeTiny == 0xFFFFFFFF {
-				activeTiny = i
-			}
-		case BlockTypePackedSmall:
-			if activeSmall == 0xFFFFFFFF {
-				activeSmall = i
-			}
-		case BlockTypePackedMed:
-			if activeMedium == 0xFFFFFFFF {
-				activeMedium = i
-			}
-		}
-	}
+	activeTiny, activeSmall, activeMedium := findActivePackedBlocks(blockTypes, super.TotalBlocks)
 
 	volumeID, _ := uuid.FromBytes(super.VolumeID[:])
 	log.Info().
@@ -404,12 +300,76 @@ func OpenVolumeWithConfig(path string, dioConfig DirectIOConfig) (*Volume, error
 		dioConfig:    dioConfig,
 	}
 
-	// Initialize direct I/O wrapper if enabled
 	if dioConfig.Enabled {
 		v.dio = NewDirectIOFile(file, dioConfig)
 	}
 
 	return v, nil
+}
+
+func readAndValidateSuperblock(file *os.File) (*Superblock, error) {
+	superBytes := make([]byte, 128)
+	_, err := file.ReadAt(superBytes, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read superblock: %w", err)
+	}
+
+	super, err := UnmarshalSuperblock(superBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	if super.Version != SuperblockVersion {
+		return nil, ErrVersionMismatch
+	}
+
+	return super, nil
+}
+
+func readVolumeMetadata(file *os.File, super *Superblock) (*AllocationMap, []byte, *Index, error) {
+	allocMap, err := ReadAllocationMap(file, BitmapOffset, super.TotalBlocks)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read allocation map: %w", err)
+	}
+
+	blockTypes := make([]byte, super.TotalBlocks)
+	_, err = file.ReadAt(blockTypes, BlockTypeMapOffset)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read block type map: %w", err)
+	}
+
+	//nolint:gosec // G115: IndexOffset and IndexSize are within volume bounds
+	index, err := ReadIndex(file, int64(super.IndexOffset), int64(super.IndexSize))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read index: %w", err)
+	}
+
+	return allocMap, blockTypes, index, nil
+}
+
+func findActivePackedBlocks(blockTypes []byte, totalBlocks uint32) (uint32, uint32, uint32) {
+	activeTiny := uint32(0xFFFFFFFF)
+	activeSmall := uint32(0xFFFFFFFF)
+	activeMedium := uint32(0xFFFFFFFF)
+
+	for i := range totalBlocks {
+		switch blockTypes[i] {
+		case BlockTypePackedTiny:
+			if activeTiny == 0xFFFFFFFF {
+				activeTiny = i
+			}
+		case BlockTypePackedSmall:
+			if activeSmall == 0xFFFFFFFF {
+				activeSmall = i
+			}
+		case BlockTypePackedMed:
+			if activeMedium == 0xFFFFFFFF {
+				activeMedium = i
+			}
+		}
+	}
+
+	return activeTiny, activeSmall, activeMedium
 }
 
 // Close closes the volume file.
