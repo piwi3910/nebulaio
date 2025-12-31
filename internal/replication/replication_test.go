@@ -232,92 +232,99 @@ func TestQueue(t *testing.T) {
 	q := NewQueue(cfg)
 	ctx := context.Background()
 
-	t.Run("EnqueueDequeue", func(t *testing.T) {
-		item, err := q.Enqueue(ctx, "bucket", "key", "v1", "PUT", "rule1")
-		if err != nil {
-			t.Fatalf("enqueue failed: %v", err)
+	t.Run("EnqueueDequeue", func(t *testing.T) { testQueueEnqueueDequeue(t, ctx, q) })
+	t.Run("Complete", func(t *testing.T) { testQueueComplete(t, ctx, q) })
+	t.Run("Fail", func(t *testing.T) { testQueueFail(t, ctx, q) })
+	t.Run("MaxRetry", func(t *testing.T) { testQueueMaxRetry(t, ctx, q) })
+	t.Run("Stats", func(t *testing.T) { testQueueStats(t, q) })
+	t.Run("ListByStatus", func(t *testing.T) { testQueueListByStatus(t, q) })
+}
+
+func testQueueEnqueueDequeue(t *testing.T, ctx context.Context, q *Queue) {
+	item, err := q.Enqueue(ctx, "bucket", "key", "v1", "PUT", "rule1")
+	if err != nil {
+		t.Fatalf("enqueue failed: %v", err)
+	}
+
+	if item.Bucket != "bucket" || item.Key != "key" {
+		t.Error("item data mismatch")
+	}
+
+	dequeued, err := q.Dequeue(ctx)
+	if err != nil {
+		t.Fatalf("dequeue failed: %v", err)
+	}
+
+	if dequeued.ID != item.ID {
+		t.Error("dequeued wrong item")
+	}
+}
+
+func testQueueComplete(t *testing.T, ctx context.Context, q *Queue) {
+	item, _ := q.Enqueue(ctx, "bucket", "key2", "", "PUT", "rule1")
+	_, _ = q.Dequeue(ctx)
+
+	err := q.Complete(item.ID)
+	if err != nil {
+		t.Errorf("complete failed: %v", err)
+	}
+
+	_, err = q.Get(item.ID)
+	if err == nil {
+		t.Error("item should be removed after completion")
+	}
+}
+
+func testQueueFail(t *testing.T, ctx context.Context, q *Queue) {
+	item, _ := q.Enqueue(ctx, "bucket", "key3", "", "PUT", "rule1")
+	_, _ = q.Dequeue(ctx)
+
+	err := q.Fail(item.ID, io.EOF)
+	if err != nil {
+		t.Errorf("fail failed: %v", err)
+	}
+
+	retrieved, err := q.Get(item.ID)
+	if err != nil {
+		t.Errorf("should be able to get failed item: %v", err)
+	}
+
+	if retrieved.RetryCount != 1 {
+		t.Errorf("retry count should be 1, got %d", retrieved.RetryCount)
+	}
+}
+
+func testQueueMaxRetry(t *testing.T, ctx context.Context, q *Queue) {
+	item, _ := q.Enqueue(ctx, "bucket", "key4", "", "PUT", "rule1")
+	_, _ = q.Dequeue(ctx)
+
+	// Fail until max retry
+	for range 3 {
+		_ = q.Fail(item.ID, io.EOF)
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	retrieved, _ := q.Get(item.ID)
+	if retrieved.Status != QueueStatusFailed {
+		t.Errorf("should be failed after max retries, got %s", retrieved.Status)
+	}
+}
+
+func testQueueStats(t *testing.T, q *Queue) {
+	stats := q.Stats()
+	if stats.Total < 0 {
+		t.Error("invalid stats")
+	}
+}
+
+func testQueueListByStatus(t *testing.T, q *Queue) {
+	items := q.ListByStatus(QueueStatusFailed)
+	for _, item := range items {
+		if item.Status != QueueStatusFailed {
+			t.Error("listed item has wrong status")
 		}
-
-		if item.Bucket != "bucket" || item.Key != "key" {
-			t.Error("item data mismatch")
-		}
-
-		dequeued, err := q.Dequeue(ctx)
-		if err != nil {
-			t.Fatalf("dequeue failed: %v", err)
-		}
-
-		if dequeued.ID != item.ID {
-			t.Error("dequeued wrong item")
-		}
-	})
-
-	t.Run("Complete", func(t *testing.T) {
-		item, _ := q.Enqueue(ctx, "bucket", "key2", "", "PUT", "rule1")
-		_, _ = q.Dequeue(ctx)
-
-		err := q.Complete(item.ID)
-		if err != nil {
-			t.Errorf("complete failed: %v", err)
-		}
-
-		_, err = q.Get(item.ID)
-		if err == nil {
-			t.Error("item should be removed after completion")
-		}
-	})
-
-	t.Run("Fail", func(t *testing.T) {
-		item, _ := q.Enqueue(ctx, "bucket", "key3", "", "PUT", "rule1")
-		_, _ = q.Dequeue(ctx)
-
-		err := q.Fail(item.ID, io.EOF)
-		if err != nil {
-			t.Errorf("fail failed: %v", err)
-		}
-
-		retrieved, err := q.Get(item.ID)
-		if err != nil {
-			t.Errorf("should be able to get failed item: %v", err)
-		}
-
-		if retrieved.RetryCount != 1 {
-			t.Errorf("retry count should be 1, got %d", retrieved.RetryCount)
-		}
-	})
-
-	t.Run("MaxRetry", func(t *testing.T) {
-		item, _ := q.Enqueue(ctx, "bucket", "key4", "", "PUT", "rule1")
-		_, _ = q.Dequeue(ctx)
-
-		// Fail until max retry
-		for range 3 {
-			_ = q.Fail(item.ID, io.EOF)
-
-			time.Sleep(10 * time.Millisecond)
-		}
-
-		retrieved, _ := q.Get(item.ID)
-		if retrieved.Status != QueueStatusFailed {
-			t.Errorf("should be failed after max retries, got %s", retrieved.Status)
-		}
-	})
-
-	t.Run("Stats", func(t *testing.T) {
-		stats := q.Stats()
-		if stats.Total < 0 {
-			t.Error("invalid stats")
-		}
-	})
-
-	t.Run("ListByStatus", func(t *testing.T) {
-		items := q.ListByStatus(QueueStatusFailed)
-		for _, item := range items {
-			if item.Status != QueueStatusFailed {
-				t.Error("listed item has wrong status")
-			}
-		}
-	})
+	}
 }
 
 // mockBackend implements ObjectBackend for testing
