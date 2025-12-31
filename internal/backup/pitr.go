@@ -1172,7 +1172,12 @@ func (bm *BackupManager) applyRetentionPolicy() {
 	defer bm.mu.Unlock()
 
 	cutoff := time.Now().AddDate(0, 0, -bm.config.RetentionDays)
+	toDelete := bm.findExpiredBackups(cutoff)
+	toDelete = bm.applyMaxBackupsLimit(toDelete)
+	bm.deleteBackups(toDelete)
+}
 
+func (bm *BackupManager) findExpiredBackups(cutoff time.Time) []string {
 	var toDelete []string
 
 	for id, backup := range bm.backups {
@@ -1180,77 +1185,94 @@ func (bm *BackupManager) applyRetentionPolicy() {
 			continue
 		}
 
-		if backup.StartTime.Before(cutoff) {
-			// Check if this is a parent of another backup
-			isParent := false
-
-			for _, b := range bm.backups {
-				if b.ParentBackupID == id {
-					isParent = true
-					break
-				}
-			}
-
-			if !isParent {
-				toDelete = append(toDelete, id)
-			}
+		if backup.StartTime.Before(cutoff) && !bm.isParentBackup(id) {
+			toDelete = append(toDelete, id)
 		}
 	}
 
-	// Also apply max backups limit
-	if bm.config.MaxBackups > 0 && len(bm.backups)-len(toDelete) > bm.config.MaxBackups {
-		// Sort by age and mark oldest for deletion
-		var backups []*BackupMetadata
-		for _, b := range bm.backups {
-			backups = append(backups, b)
-		}
+	return toDelete
+}
 
-		sort.Slice(backups, func(i, j int) bool {
-			return backups[i].StartTime.Before(backups[j].StartTime)
-		})
-
-		for _, b := range backups {
-			if len(bm.backups)-len(toDelete) <= bm.config.MaxBackups {
-				break
-			}
-
-			if b.Status != BackupStatusCompleted {
-				continue
-			}
-			// Check if already marked or is parent
-			found := false
-
-			for _, id := range toDelete {
-				if id == b.ID {
-					found = true
-					break
-				}
-			}
-
-			if found {
-				continue
-			}
-
-			isParent := false
-
-			for _, other := range bm.backups {
-				if other.ParentBackupID == b.ID {
-					isParent = true
-					break
-				}
-			}
-
-			if !isParent {
-				toDelete = append(toDelete, b.ID)
-			}
+func (bm *BackupManager) isParentBackup(backupID string) bool {
+	for _, b := range bm.backups {
+		if b.ParentBackupID == backupID {
+			return true
 		}
 	}
+	return false
+}
 
-	// Delete marked backups
+func (bm *BackupManager) applyMaxBackupsLimit(toDelete []string) []string {
+	if bm.config.MaxBackups <= 0 {
+		return toDelete
+	}
+
+	if len(bm.backups)-len(toDelete) <= bm.config.MaxBackups {
+		return toDelete
+	}
+
+	backups := bm.getSortedBackups()
+	return bm.markOldestForDeletion(backups, toDelete)
+}
+
+func (bm *BackupManager) getSortedBackups() []*BackupMetadata {
+	var backups []*BackupMetadata
+	for _, b := range bm.backups {
+		backups = append(backups, b)
+	}
+
+	sort.Slice(backups, func(i, j int) bool {
+		return backups[i].StartTime.Before(backups[j].StartTime)
+	})
+
+	return backups
+}
+
+func (bm *BackupManager) markOldestForDeletion(backups []*BackupMetadata, toDelete []string) []string {
+	for _, b := range backups {
+		if len(bm.backups)-len(toDelete) <= bm.config.MaxBackups {
+			break
+		}
+
+		if !bm.canDeleteBackup(b, toDelete) {
+			continue
+		}
+
+		toDelete = append(toDelete, b.ID)
+	}
+
+	return toDelete
+}
+
+func (bm *BackupManager) canDeleteBackup(backup *BackupMetadata, toDelete []string) bool {
+	if backup.Status != BackupStatusCompleted {
+		return false
+	}
+
+	if bm.isAlreadyMarked(backup.ID, toDelete) {
+		return false
+	}
+
+	if bm.isParentBackup(backup.ID) {
+		return false
+	}
+
+	return true
+}
+
+func (bm *BackupManager) isAlreadyMarked(backupID string, toDelete []string) bool {
+	for _, id := range toDelete {
+		if id == backupID {
+			return true
+		}
+	}
+	return false
+}
+
+func (bm *BackupManager) deleteBackups(toDelete []string) {
 	for _, id := range toDelete {
 		backup := bm.backups[id]
 		_ = os.RemoveAll(backup.Location)
-
 		delete(bm.backups, id)
 	}
 }
