@@ -3,6 +3,7 @@ package s3
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -375,85 +376,112 @@ func (h *Handler) RestoreObject(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
 	versionID := r.URL.Query().Get("versionId")
 
-	// Parse restore request
-	var restoreReq s3types.RestoreRequest
-	err := xml.NewDecoder(r.Body).Decode(&restoreReq)
-	if err != nil && err != io.EOF {
-		writeS3Error(w, "InvalidRequest", "Failed to parse restore request: "+err.Error(), http.StatusBadRequest)
+	restoreReq, err := h.parseRestoreRequest(r)
+	if err != nil {
+		writeS3Error(w, "InvalidRequest", err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Default restore days
-	if restoreReq.Days == 0 {
-		restoreReq.Days = 1
-	}
-
-	// Validate days
-	if restoreReq.Days < 1 || restoreReq.Days > 365 {
-		writeS3Error(w, "InvalidArgument", "Days must be between 1 and 365", http.StatusBadRequest)
-		return
-	}
-
-	// Check if object exists and is in GLACIER or DEEP_ARCHIVE
-	var meta *metadata.ObjectMeta
-
-	if versionID != "" {
-		meta, err = h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
-	} else {
-		meta, err = h.object.HeadObject(ctx, bucketName, key)
-	}
-
+	meta, err := h.getObjectMetaForRestore(ctx, bucketName, key, versionID)
 	if err != nil {
 		writeS3ErrorTypedWithResource(w, r, err, key)
 		return
 	}
 
-	// Check storage class
-	if meta.StorageClass != "GLACIER" && meta.StorageClass != "DEEP_ARCHIVE" {
-		writeS3Error(w, "InvalidObjectState", "Object storage class is not GLACIER or DEEP_ARCHIVE", http.StatusForbidden)
+	if err := h.validateStorageClassForRestore(meta); err != nil {
+		writeS3Error(w, "InvalidObjectState", err.Error(), http.StatusForbidden)
 		return
 	}
 
-	// Check if restore is already in progress or completed (stored in metadata)
-	if meta.Metadata != nil {
-		if restoreStatus, ok := meta.Metadata["x-amz-restore-status"]; ok {
-			if restoreStatus == "ongoing" {
-				// Restore already in progress
-				w.Header().Set("X-Amz-Restore", `ongoing-request="true"`)
-				w.WriteHeader(http.StatusConflict)
-
-				return
-			}
-
-			if restoreStatus == "completed" {
-				if expiryStr, ok := meta.Metadata["x-amz-restore-expiry"]; ok {
-					expiryTime, err := time.Parse(time.RFC3339, expiryStr)
-					if err == nil && expiryTime.After(time.Now()) {
-						// Object already restored
-						w.Header().Set("X-Amz-Restore", fmt.Sprintf(`ongoing-request="false", expiry-date="%s"`,
-							expiryTime.Format(time.RFC1123)))
-						w.WriteHeader(http.StatusOK)
-
-						return
-					}
-				}
-			}
-		}
+	if handled := h.handleExistingRestore(w, meta); handled {
+		return
 	}
 
-	// Initiate restore (in a real implementation, this would queue a background job)
-	// For now, we'll mark the object as having a restore in progress
+	h.initiateRestore(w, restoreReq)
+}
+
+func (h *Handler) parseRestoreRequest(r *http.Request) (*s3types.RestoreRequest, error) {
+	var restoreReq s3types.RestoreRequest
+	err := xml.NewDecoder(r.Body).Decode(&restoreReq)
+	if err != nil && err != io.EOF {
+		return nil, fmt.Errorf("Failed to parse restore request: %w", err)
+	}
+
+	if restoreReq.Days == 0 {
+		restoreReq.Days = 1
+	}
+
+	if restoreReq.Days < 1 || restoreReq.Days > 365 {
+		return nil, errors.New("Days must be between 1 and 365")
+	}
+
+	return &restoreReq, nil
+}
+
+func (h *Handler) getObjectMetaForRestore(
+	ctx context.Context,
+	bucketName, key, versionID string,
+) (*metadata.ObjectMeta, error) {
+	if versionID != "" {
+		return h.object.HeadObjectVersion(ctx, bucketName, key, versionID)
+	}
+	return h.object.HeadObject(ctx, bucketName, key)
+}
+
+func (h *Handler) validateStorageClassForRestore(meta *metadata.ObjectMeta) error {
+	if meta.StorageClass != "GLACIER" && meta.StorageClass != "DEEP_ARCHIVE" {
+		return errors.New("Object storage class is not GLACIER or DEEP_ARCHIVE")
+	}
+	return nil
+}
+
+func (h *Handler) handleExistingRestore(w http.ResponseWriter, meta *metadata.ObjectMeta) bool {
+	if meta.Metadata == nil {
+		return false
+	}
+
+	restoreStatus, ok := meta.Metadata["x-amz-restore-status"]
+	if !ok {
+		return false
+	}
+
+	if restoreStatus == "ongoing" {
+		w.Header().Set("X-Amz-Restore", `ongoing-request="true"`)
+		w.WriteHeader(http.StatusConflict)
+		return true
+	}
+
+	if restoreStatus == "completed" {
+		return h.handleCompletedRestore(w, meta)
+	}
+
+	return false
+}
+
+func (h *Handler) handleCompletedRestore(w http.ResponseWriter, meta *metadata.ObjectMeta) bool {
+	expiryStr, ok := meta.Metadata["x-amz-restore-expiry"]
+	if !ok {
+		return false
+	}
+
+	expiryTime, err := time.Parse(time.RFC3339, expiryStr)
+	if err != nil || !expiryTime.After(time.Now()) {
+		return false
+	}
+
+	w.Header().Set("X-Amz-Restore", fmt.Sprintf(`ongoing-request="false", expiry-date="%s"`,
+		expiryTime.Format(time.RFC1123)))
+	w.WriteHeader(http.StatusOK)
+	return true
+}
+
+func (h *Handler) initiateRestore(w http.ResponseWriter, restoreReq *s3types.RestoreRequest) {
 	tier := restoreReq.GlacierJobParameters.Tier
 	if tier == "" {
 		tier = "Standard"
 	}
 
 	expiryDate := time.Now().Add(time.Duration(restoreReq.Days) * 24 * time.Hour)
-
-	// In a real implementation, we would:
-	// 1. Queue a background job to copy from archive to accessible storage
-	// 2. Update the object metadata with restore status
-	// 3. The job would update the status when complete
 
 	w.Header().Set("X-Amz-Restore", `ongoing-request="true"`)
 	w.Header().Set("X-Amz-Restore-Expiry-Date", expiryDate.Format(time.RFC1123))
