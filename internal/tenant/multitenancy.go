@@ -232,31 +232,60 @@ func (tm *TenantManager) CreateTenant(ctx context.Context, name string, opts *Cr
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
-	// Generate slug from name
-	slug := tm.generateSlug(name)
-	if _, exists := tm.slugs[slug]; exists {
-		return nil, errors.New("tenant with similar name already exists")
+	slug, namespace, err := tm.prepareSlugAndNamespace(name, opts)
+	if err != nil {
+		return nil, err
 	}
 
-	// Generate namespace
+	tenant := tm.buildTenant(name, slug, namespace, opts)
+
+	if err := tm.saveTenantToStorage(ctx, tenant); err != nil {
+		return nil, err
+	}
+
+	tm.registerTenant(tenant)
+
+	return tenant, nil
+}
+
+// prepareSlugAndNamespace generates and validates slug and namespace.
+func (tm *TenantManager) prepareSlugAndNamespace(name string, opts *CreateTenantOptions) (string, string, error) {
+	slug := tm.generateSlug(name)
+	if _, exists := tm.slugs[slug]; exists {
+		return "", "", errors.New("tenant with similar name already exists")
+	}
+
 	namespace := slug
 	if opts != nil && opts.Namespace != "" {
 		namespace = opts.Namespace
 	}
 
-	// Validate namespace
-	if !tm.namespaceRE.MatchString(namespace) {
-		return nil, errors.New("invalid namespace format: must be lowercase alphanumeric with hyphens")
-	}
-
-	if len(namespace) < 3 || len(namespace) > 63 {
-		return nil, errors.New("namespace must be between 3 and 63 characters")
+	if err := tm.validateNamespace(namespace); err != nil {
+		return "", "", err
 	}
 
 	if _, exists := tm.namespaces[namespace]; exists {
-		return nil, errors.New("namespace already in use")
+		return "", "", errors.New("namespace already in use")
 	}
 
+	return slug, namespace, nil
+}
+
+// validateNamespace validates namespace format and length.
+func (tm *TenantManager) validateNamespace(namespace string) error {
+	if !tm.namespaceRE.MatchString(namespace) {
+		return errors.New("invalid namespace format: must be lowercase alphanumeric with hyphens")
+	}
+
+	if len(namespace) < 3 || len(namespace) > 63 {
+		return errors.New("namespace must be between 3 and 63 characters")
+	}
+
+	return nil
+}
+
+// buildTenant constructs a new tenant with options applied.
+func (tm *TenantManager) buildTenant(name, slug, namespace string, opts *CreateTenantOptions) *Tenant {
 	tenant := &Tenant{
 		ID:        uuid.New().String(),
 		Name:      name,
@@ -270,46 +299,45 @@ func (tm *TenantManager) CreateTenant(ctx context.Context, name string, opts *Cr
 		UpdatedAt: time.Now(),
 	}
 
-	// Apply options
 	if opts != nil {
 		if opts.Quota != nil {
 			tenant.Quota = opts.Quota
 		}
-
 		if opts.Settings != nil {
 			tenant.Settings = opts.Settings
 		}
-
 		if opts.Metadata != nil {
 			tenant.Metadata = opts.Metadata
 		}
 	}
 
-	// Set bucket name prefix
 	if tenant.Settings.EnforceBucketPrefix && tenant.Settings.BucketNamePrefix == "" {
 		tenant.Settings.BucketNamePrefix = namespace + "-"
 	}
 
-	// Save to storage
+	return tenant
+}
+
+// saveTenantToStorage persists tenant to storage backend.
+func (tm *TenantManager) saveTenantToStorage(ctx context.Context, tenant *Tenant) error {
 	if tm.storage != nil {
-		err := tm.storage.SaveTenant(ctx, tenant)
-		if err != nil {
-			return nil, fmt.Errorf("failed to save tenant: %w", err)
+		if err := tm.storage.SaveTenant(ctx, tenant); err != nil {
+			return fmt.Errorf("failed to save tenant: %w", err)
 		}
 	}
+	return nil
+}
 
-	// Initialize usage
+// registerTenant registers tenant in manager indexes.
+func (tm *TenantManager) registerTenant(tenant *Tenant) {
 	tm.usage[tenant.ID] = &TenantUsage{
 		TenantID:    tenant.ID,
 		LastUpdated: time.Now(),
 	}
 
-	// Add to indexes
 	tm.tenants[tenant.ID] = tenant
 	tm.namespaces[tenant.Namespace] = tenant.ID
 	tm.slugs[tenant.Slug] = tenant.ID
-
-	return tenant, nil
 }
 
 // CreateTenantOptions contains options for creating a tenant.
