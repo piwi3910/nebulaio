@@ -406,116 +406,131 @@ func TestBucketOperations(t *testing.T) {
 	}
 	defer store.Close()
 
-	// Wait for leadership
 	time.Sleep(2 * time.Second)
-
 	ctx := context.Background()
 
 	t.Run("CreateBucket", func(t *testing.T) {
-		bucket := &Bucket{
-			Name:      "test-bucket",
-			Owner:     "test-user",
-			CreatedAt: time.Now(),
-			Region:    "us-east-1",
-		}
-
-		err := store.CreateBucket(ctx, bucket)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to create bucket: %v", err)
-		}
+		testCreateBucket(t, ctx, store)
 	})
 
 	t.Run("GetBucket", func(t *testing.T) {
-		bucket, err := store.GetBucket(ctx, "test-bucket")
-		if err != nil {
-			t.Errorf("Failed to get bucket: %v", err)
-		}
-
-		if bucket == nil {
-			t.Fatal("Expected bucket, got nil")
-		}
-
-		if bucket.Name != "test-bucket" {
-			t.Errorf("Expected bucket name 'test-bucket', got '%s'", bucket.Name)
-		}
-
-		if bucket.Owner != "test-user" {
-			t.Errorf("Expected owner 'test-user', got '%s'", bucket.Owner)
-		}
+		testGetBucket(t, ctx, store)
 	})
 
 	t.Run("ListBuckets", func(t *testing.T) {
-		buckets, err := store.ListBuckets(ctx, "")
-		if err != nil {
-			t.Errorf("Failed to list buckets: %v", err)
-		}
-
-		if len(buckets) == 0 {
-			t.Error("Expected at least one bucket")
-		}
-
-		found := false
-
-		for _, b := range buckets {
-			if b.Name == "test-bucket" {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			t.Error("Expected to find 'test-bucket' in list")
-		}
+		testListBuckets(t, ctx, store)
 	})
 
 	t.Run("UpdateBucket", func(t *testing.T) {
-		bucket, err := store.GetBucket(ctx, "test-bucket")
-		if err != nil {
-			t.Fatalf("Failed to get bucket: %v", err)
-		}
-
-		bucket.Region = "us-west-2"
-
-		err = store.UpdateBucket(ctx, bucket)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to update bucket: %v", err)
-		}
-
-		// Verify update
-		updatedBucket, err := store.GetBucket(ctx, "test-bucket")
-		if err != nil {
-			t.Errorf("Failed to get updated bucket: %v", err)
-		}
-
-		if updatedBucket.Region != "us-west-2" {
-			t.Errorf("Expected region 'us-west-2', got '%s'", updatedBucket.Region)
-		}
+		testUpdateBucket(t, ctx, store)
 	})
 
 	t.Run("DeleteBucket", func(t *testing.T) {
-		err := store.DeleteBucket(ctx, "test-bucket")
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to delete bucket: %v", err)
-		}
-
-		// Verify deletion
-		_, err = store.GetBucket(ctx, "test-bucket")
-		if err == nil {
-			t.Error("Expected error when getting deleted bucket")
-		}
+		testDeleteBucket(t, ctx, store)
 	})
+}
+
+func testCreateBucket(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	bucket := &Bucket{
+		Name:      "test-bucket",
+		Owner:     "test-user",
+		CreatedAt: time.Now(),
+		Region:    "us-east-1",
+	}
+
+	err := store.CreateBucket(ctx, bucket)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to create bucket: %v", err)
+	}
+}
+
+func testGetBucket(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	bucket, err := store.GetBucket(ctx, "test-bucket")
+	if err != nil {
+		t.Errorf("Failed to get bucket: %v", err)
+	}
+
+	if bucket == nil {
+		t.Fatal("Expected bucket, got nil")
+	}
+
+	if bucket.Name != "test-bucket" {
+		t.Errorf("Expected bucket name 'test-bucket', got '%s'", bucket.Name)
+	}
+
+	if bucket.Owner != "test-user" {
+		t.Errorf("Expected owner 'test-user', got '%s'", bucket.Owner)
+	}
+}
+
+func testListBuckets(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	buckets, err := store.ListBuckets(ctx, "")
+	if err != nil {
+		t.Errorf("Failed to list buckets: %v", err)
+	}
+
+	if len(buckets) == 0 {
+		t.Error("Expected at least one bucket")
+	}
+
+	found := false
+	for _, b := range buckets {
+		if b.Name == "test-bucket" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Error("Expected to find 'test-bucket' in list")
+	}
+}
+
+func testUpdateBucket(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	bucket, err := store.GetBucket(ctx, "test-bucket")
+	if err != nil {
+		t.Fatalf("Failed to get bucket: %v", err)
+	}
+
+	bucket.Region = "us-west-2"
+
+	err = store.UpdateBucket(ctx, bucket)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to update bucket: %v", err)
+	}
+
+	updatedBucket, err := store.GetBucket(ctx, "test-bucket")
+	if err != nil {
+		t.Errorf("Failed to get updated bucket: %v", err)
+	}
+
+	if updatedBucket.Region != "us-west-2" {
+		t.Errorf("Expected region 'us-west-2', got '%s'", updatedBucket.Region)
+	}
+}
+
+func testDeleteBucket(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	err := store.DeleteBucket(ctx, "test-bucket")
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to delete bucket: %v", err)
+	}
+
+	_, err = store.GetBucket(ctx, "test-bucket")
+	if err == nil {
+		t.Error("Expected error when getting deleted bucket")
+	}
 }
 
 // TestObjectMetadataOperations tests object metadata CRUD operations.
