@@ -935,116 +935,125 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 func (t *CompressTransformer) transformStreaming(ctx context.Context, input io.Reader, algorithm string, level int) (io.Reader, map[string]string, error) {
 	pr, pw := io.Pipe()
 
-	var contentEncoding string
-
-	switch strings.ToLower(algorithm) {
-	case compressionAlgGzip:
-		contentEncoding = compressionAlgGzip
-
-		go func() {
-			defer pw.Close()
-
-			gzLevel := gzip.DefaultCompression
-			if level >= 0 && level <= 9 {
-				gzLevel = level
-			}
-
-			writer, err := gzip.NewWriterLevel(pw, gzLevel)
-			if err != nil {
-				pw.CloseWithError(fmt.Errorf("failed to create gzip writer: %w", err))
-				return
-			}
-			defer writer.Close()
-
-			buf := make([]byte, 32*1024) // 32KB buffer for streaming
-
-			for {
-				select {
-				case <-ctx.Done():
-					pw.CloseWithError(ctx.Err())
-					return
-				default:
-				}
-
-				n, err := input.Read(buf)
-				if n > 0 {
-					_, werr := writer.Write(buf[:n])
-					if werr != nil {
-						pw.CloseWithError(fmt.Errorf("failed to write gzip data: %w", werr))
-						return
-					}
-				}
-
-				if err == io.EOF {
-					break
-				}
-
-				if err != nil {
-					pw.CloseWithError(fmt.Errorf("failed to read input: %w", err))
-					return
-				}
-			}
-		}()
-
-	case compressionAlgZstd:
-		contentEncoding = compressionAlgZstd
-
-		go func() {
-			defer pw.Close()
-
-			var (
-				writer *zstd.Encoder
-				err    error
-			)
-
-			if level >= 1 && level <= 22 {
-				writer, err = zstd.NewWriter(pw, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
-			} else {
-				writer, err = zstd.NewWriter(pw, zstd.WithEncoderLevel(zstd.SpeedDefault))
-			}
-
-			if err != nil {
-				pw.CloseWithError(fmt.Errorf("failed to create zstd writer: %w", err))
-				return
-			}
-
-			defer writer.Close()
-
-			buf := make([]byte, 32*1024) // 32KB buffer for streaming
-
-			for {
-				select {
-				case <-ctx.Done():
-					pw.CloseWithError(ctx.Err())
-					return
-				default:
-				}
-
-				n, err := input.Read(buf)
-				if n > 0 {
-					_, werr := writer.Write(buf[:n])
-					if werr != nil {
-						pw.CloseWithError(fmt.Errorf("failed to write zstd data: %w", werr))
-						return
-					}
-				}
-
-				if err == io.EOF {
-					break
-				}
-
-				if err != nil {
-					pw.CloseWithError(fmt.Errorf("failed to read input: %w", err))
-					return
-				}
-			}
-		}()
-
-	default:
-		return nil, nil, fmt.Errorf("unsupported compression algorithm: %s", algorithm)
+	contentEncoding, err := t.startCompressionStream(ctx, input, pw, algorithm, level)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return pr, map[string]string{"Content-Encoding": contentEncoding}, nil
+}
+
+// startCompressionStream starts a goroutine to compress input stream.
+func (t *CompressTransformer) startCompressionStream(ctx context.Context, input io.Reader, pw *io.PipeWriter, algorithm string, level int) (string, error) {
+	switch strings.ToLower(algorithm) {
+	case compressionAlgGzip:
+		t.streamGzipCompression(ctx, input, pw, level)
+
+		return compressionAlgGzip, nil
+	case compressionAlgZstd:
+		t.streamZstdCompression(ctx, input, pw, level)
+
+		return compressionAlgZstd, nil
+	default:
+		return "", fmt.Errorf("unsupported compression algorithm: %s", algorithm)
+	}
+}
+
+// streamGzipCompression compresses input stream using gzip.
+func (t *CompressTransformer) streamGzipCompression(ctx context.Context, input io.Reader, pw *io.PipeWriter, level int) {
+	go func() {
+		defer func() { _ = pw.Close() }()
+
+		writer, err := t.createGzipWriter(pw, level)
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to create gzip writer: %w", err))
+
+			return
+		}
+		defer func() { _ = writer.Close() }()
+
+		t.streamCompress(ctx, input, writer, pw, "gzip")
+	}()
+}
+
+// streamZstdCompression compresses input stream using zstd.
+func (t *CompressTransformer) streamZstdCompression(ctx context.Context, input io.Reader, pw *io.PipeWriter, level int) {
+	go func() {
+		defer func() { _ = pw.Close() }()
+
+		writer, err := t.createZstdWriter(pw, level)
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to create zstd writer: %w", err))
+
+			return
+		}
+		defer func() { _ = writer.Close() }()
+
+		t.streamCompress(ctx, input, writer, pw, "zstd")
+	}()
+}
+
+// createGzipWriter creates a gzip writer with the specified compression level.
+func (t *CompressTransformer) createGzipWriter(w io.Writer, level int) (*gzip.Writer, error) {
+	gzLevel := gzip.DefaultCompression
+	if level >= 0 && level <= 9 {
+		gzLevel = level
+	}
+
+	return gzip.NewWriterLevel(w, gzLevel)
+}
+
+// createZstdWriter creates a zstd writer with the specified compression level.
+func (t *CompressTransformer) createZstdWriter(w io.Writer, level int) (*zstd.Encoder, error) {
+	if level >= 1 && level <= 22 {
+		return zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
+	}
+
+	return zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedDefault))
+}
+
+// streamCompress performs the actual streaming compression loop.
+func (t *CompressTransformer) streamCompress(ctx context.Context, input io.Reader, writer io.Writer, pw *io.PipeWriter, algorithm string) {
+	buf := make([]byte, 32*1024) // 32KB buffer for streaming
+
+	for {
+		select {
+		case <-ctx.Done():
+			pw.CloseWithError(ctx.Err())
+
+			return
+		default:
+		}
+
+		n, err := input.Read(buf)
+		if n > 0 {
+			if werr := t.writeCompressedData(writer, buf[:n], algorithm, pw); werr != nil {
+				return
+			}
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to read input: %w", err))
+
+			return
+		}
+	}
+}
+
+// writeCompressedData writes compressed data and handles errors.
+func (t *CompressTransformer) writeCompressedData(writer io.Writer, data []byte, algorithm string, pw *io.PipeWriter) error {
+	_, err := writer.Write(data)
+	if err != nil {
+		pw.CloseWithError(fmt.Errorf("failed to write %s data: %w", algorithm, err))
+
+		return err
+	}
+
+	return nil
 }
 
 // compressGzip compresses data using gzip and writes to the buffer.
@@ -1213,7 +1222,7 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 	switch algorithm {
 	case compressionAlgGzip:
 		go func() {
-			defer pw.Close()
+			defer func() { _ = pw.Close() }()
 
 			reader, err := gzip.NewReader(input)
 			if err != nil {
@@ -1264,7 +1273,7 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 
 	case compressionAlgZstd:
 		go func() {
-			defer pw.Close()
+			defer func() { _ = pw.Close() }()
 
 			decoder, err := zstd.NewReader(input)
 			if err != nil {

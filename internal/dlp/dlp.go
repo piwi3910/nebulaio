@@ -766,6 +766,7 @@ type finding struct {
 }
 
 // getApplicableRules returns rules that apply to the request.
+// getApplicableRules returns rules that apply to the request.
 func (e *DLPEngine) getApplicableRules(req *ScanRequest) []*DLPRule {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -777,101 +778,12 @@ func (e *DLPEngine) getApplicableRules(req *ScanRequest) []*DLPRule {
 			continue
 		}
 
-		// Check conditions
-		if rule.Conditions != nil {
-			// Check bucket
-			if len(rule.Conditions.Buckets) > 0 {
-				found := false
-
-				for _, b := range rule.Conditions.Buckets {
-					if b == req.Bucket {
-						found = true
-						break
-					}
-				}
-
-				if !found {
-					continue
-				}
-			}
-
-			// Check prefix
-			if len(rule.Conditions.Prefixes) > 0 {
-				found := false
-
-				for _, p := range rule.Conditions.Prefixes {
-					if strings.HasPrefix(req.Key, p) {
-						found = true
-						break
-					}
-				}
-
-				if !found {
-					continue
-				}
-			}
-
-			// Check content type
-			if len(rule.Conditions.ContentTypes) > 0 {
-				found := false
-
-				for _, ct := range rule.Conditions.ContentTypes {
-					if strings.HasPrefix(req.ContentType, ct) {
-						found = true
-						break
-					}
-				}
-
-				if !found {
-					continue
-				}
-			}
-
-			// Check size
-			if rule.Conditions.MinSize > 0 && req.Size < rule.Conditions.MinSize {
-				continue
-			}
-
-			if rule.Conditions.MaxSize > 0 && req.Size > rule.Conditions.MaxSize {
-				continue
-			}
+		if !e.ruleMatchesConditions(rule, req) {
+			continue
 		}
 
-		// Check exceptions
-		if rule.Exceptions != nil {
-			skip := false
-
-			// Check bucket exceptions
-			for _, b := range rule.Exceptions.Buckets {
-				if b == req.Bucket {
-					skip = true
-					break
-				}
-			}
-
-			// Check prefix exceptions
-			if !skip {
-				for _, p := range rule.Exceptions.Prefixes {
-					if strings.HasPrefix(req.Key, p) {
-						skip = true
-						break
-					}
-				}
-			}
-
-			// Check user exceptions
-			if !skip {
-				for _, u := range rule.Exceptions.Users {
-					if u == req.UserID {
-						skip = true
-						break
-					}
-				}
-			}
-
-			if skip {
-				continue
-			}
+		if e.ruleMatchesExceptions(rule, req) {
+			continue
 		}
 
 		applicable = append(applicable, rule)
@@ -880,18 +792,125 @@ func (e *DLPEngine) getApplicableRules(req *ScanRequest) []*DLPRule {
 	return applicable
 }
 
+// ruleMatchesConditions checks if a rule's conditions match the request.
+func (e *DLPEngine) ruleMatchesConditions(rule *DLPRule, req *ScanRequest) bool {
+	if rule.Conditions == nil {
+		return true
+	}
+
+	if !e.matchesBucketCondition(rule.Conditions.Buckets, req.Bucket) {
+		return false
+	}
+
+	if !e.matchesPrefixCondition(rule.Conditions.Prefixes, req.Key) {
+		return false
+	}
+
+	if !e.matchesContentTypeCondition(rule.Conditions.ContentTypes, req.ContentType) {
+		return false
+	}
+
+	if !e.matchesSizeConditions(rule.Conditions, req.Size) {
+		return false
+	}
+
+	return true
+}
+
+// matchesBucketCondition checks if bucket matches conditions.
+func (e *DLPEngine) matchesBucketCondition(buckets []string, bucket string) bool {
+	if len(buckets) == 0 {
+		return true
+	}
+
+	for _, b := range buckets {
+		if b == bucket {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchesPrefixCondition checks if key matches prefix conditions.
+func (e *DLPEngine) matchesPrefixCondition(prefixes []string, key string) bool {
+	if len(prefixes) == 0 {
+		return true
+	}
+
+	for _, p := range prefixes {
+		if strings.HasPrefix(key, p) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchesContentTypeCondition checks if content type matches conditions.
+func (e *DLPEngine) matchesContentTypeCondition(contentTypes []string, contentType string) bool {
+	if len(contentTypes) == 0 {
+		return true
+	}
+
+	for _, ct := range contentTypes {
+		if strings.HasPrefix(contentType, ct) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchesSizeConditions checks if size matches conditions.
+func (e *DLPEngine) matchesSizeConditions(conditions *RuleConditions, size int64) bool {
+	if conditions.MinSize > 0 && size < conditions.MinSize {
+		return false
+	}
+
+	if conditions.MaxSize > 0 && size > conditions.MaxSize {
+		return false
+	}
+
+	return true
+}
+
+// ruleMatchesExceptions checks if request matches any exception.
+func (e *DLPEngine) ruleMatchesExceptions(rule *DLPRule, req *ScanRequest) bool {
+	if rule.Exceptions == nil {
+		return false
+	}
+
+	// Check bucket exceptions
+	for _, b := range rule.Exceptions.Buckets {
+		if b == req.Bucket {
+			return true
+		}
+	}
+
+	// Check prefix exceptions
+	for _, p := range rule.Exceptions.Prefixes {
+		if strings.HasPrefix(req.Key, p) {
+			return true
+		}
+	}
+
+	// Check user exceptions
+	for _, u := range rule.Exceptions.Users {
+		if u == req.UserID {
+			return true
+		}
+	}
+
+	return false
+}
+
 // scanContent scans content for sensitive data.
 func (e *DLPEngine) scanContent(ctx context.Context, req *ScanRequest, rules []*DLPRule) []*finding {
 	var findings []*finding
 
 	// Build pattern set from rules
-	dataTypes := make(map[DataType]bool)
-
-	for _, rule := range rules {
-		for _, dt := range rule.DataTypes {
-			dataTypes[dt] = true
-		}
-	}
+	dataTypes := e.collectDataTypes(rules)
 
 	// Read content
 	content, err := io.ReadAll(req.Reader)
@@ -900,8 +919,10 @@ func (e *DLPEngine) scanContent(ctx context.Context, req *ScanRequest, rules []*
 	}
 
 	lines := bytes.Split(content, []byte("\n"))
-	occurrences := make(map[DataType]int)
-	samples := make(map[DataType]string)
+	tracker := &scanTracker{
+		occurrences: make(map[DataType]int),
+		samples:     make(map[DataType]string),
+	}
 
 	for lineNum, line := range lines {
 		lineStr := string(line)
@@ -911,58 +932,116 @@ func (e *DLPEngine) scanContent(ctx context.Context, req *ScanRequest, rules []*
 			continue
 		}
 
-		for _, pattern := range e.patterns {
-			if !dataTypes[pattern.Type] {
-				continue
-			}
-
-			matches := pattern.Pattern.FindAllString(lineStr, -1)
-			for _, match := range matches {
-				// Validate if validator exists
-				if pattern.Validator != nil && !pattern.Validator(match) {
-					continue
-				}
-
-				occurrences[pattern.Type]++
-				if samples[pattern.Type] == "" {
-					samples[pattern.Type] = match
-				}
-
-				// Find matching rule
-				for _, rule := range rules {
-					for _, dt := range rule.DataTypes {
-						if dt == pattern.Type {
-							// Check minimum occurrences
-							if rule.Conditions != nil && rule.Conditions.MinOccurrences > 0 {
-								if occurrences[pattern.Type] < rule.Conditions.MinOccurrences {
-									continue
-								}
-							}
-
-							f := &finding{
-								dataType:    pattern.Type,
-								sensitivity: pattern.Sensitivity,
-								rule:        rule,
-								lineNumber:  lineNum + 1,
-								occurrences: occurrences[pattern.Type],
-								sample:      samples[pattern.Type],
-							}
-
-							if e.config.IncludeContext {
-								f.context = e.getContext(lines, lineNum, e.config.ContextLines)
-							}
-
-							findings = append(findings, f)
-
-							break
-						}
-					}
-				}
-			}
-		}
+		e.scanLine(lineStr, lineNum, lines, dataTypes, rules, tracker, &findings)
 	}
 
 	return findings
+}
+
+// scanTracker tracks scanning state.
+type scanTracker struct {
+	occurrences map[DataType]int
+	samples     map[DataType]string
+}
+
+// collectDataTypes extracts all data types from rules.
+func (e *DLPEngine) collectDataTypes(rules []*DLPRule) map[DataType]bool {
+	dataTypes := make(map[DataType]bool)
+
+	for _, rule := range rules {
+		for _, dt := range rule.DataTypes {
+			dataTypes[dt] = true
+		}
+	}
+
+	return dataTypes
+}
+
+// scanLine scans a single line for patterns.
+func (e *DLPEngine) scanLine(lineStr string, lineNum int, lines [][]byte, dataTypes map[DataType]bool,
+	rules []*DLPRule, tracker *scanTracker, findings *[]*finding) {
+	for _, pattern := range e.patterns {
+		if !dataTypes[pattern.Type] {
+			continue
+		}
+
+		matches := pattern.Pattern.FindAllString(lineStr, -1)
+		e.processMatches(matches, pattern, lineNum, lines, rules, tracker, findings)
+	}
+}
+
+// processMatches processes pattern matches.
+func (e *DLPEngine) processMatches(matches []string, pattern *DataPattern, lineNum int, lines [][]byte,
+	rules []*DLPRule, tracker *scanTracker, findings *[]*finding) {
+	for _, match := range matches {
+		// Validate if validator exists
+		if pattern.Validator != nil && !pattern.Validator(match) {
+			continue
+		}
+
+		tracker.occurrences[pattern.Type]++
+		if tracker.samples[pattern.Type] == "" {
+			tracker.samples[pattern.Type] = match
+		}
+
+		e.checkRulesForMatch(pattern, lineNum, lines, rules, tracker, findings)
+	}
+}
+
+// checkRulesForMatch checks if match meets rule criteria and creates findings.
+func (e *DLPEngine) checkRulesForMatch(pattern *DataPattern, lineNum int, lines [][]byte,
+	rules []*DLPRule, tracker *scanTracker, findings *[]*finding) {
+	for _, rule := range rules {
+		for _, dt := range rule.DataTypes {
+			if dt != pattern.Type {
+				continue
+			}
+
+			// Check minimum occurrences
+			if !e.meetsMinOccurrences(rule, pattern.Type, tracker.occurrences) {
+				continue
+			}
+
+			f := e.createFinding(pattern, rule, lineNum, lines, tracker)
+			*findings = append(*findings, f)
+
+			break
+		}
+	}
+}
+
+// meetsMinOccurrences checks if occurrences meet minimum threshold.
+func (e *DLPEngine) meetsMinOccurrences(rule *DLPRule, dataType DataType, occurrences map[DataType]int) bool {
+	if rule.Conditions == nil {
+		return true
+	}
+
+	if rule.Conditions.MinOccurrences > 0 {
+		if occurrences[dataType] < rule.Conditions.MinOccurrences {
+			return false
+		}
+	}
+
+	return true
+}
+
+// createFinding creates a finding from matched pattern.
+func (e *DLPEngine) createFinding(pattern *DataPattern, rule *DLPRule, lineNum int, lines [][]byte,
+	tracker *scanTracker) *finding {
+	f := &finding{
+		dataType:    pattern.Type,
+		sensitivity: pattern.Sensitivity,
+		rule:        rule,
+		lineNumber:  lineNum + 1,
+		occurrences: tracker.occurrences[pattern.Type],
+		sample:      tracker.samples[pattern.Type],
+	}
+
+	if e.config.IncludeContext {
+		f.context = e.getContext(lines, lineNum, e.config.ContextLines)
+	}
+
+	return f
 }
 
 // getContext returns surrounding lines for context.

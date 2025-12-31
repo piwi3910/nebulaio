@@ -99,264 +99,296 @@ func (sm *stateMachine) updateAppliedIndex(index uint64) error {
 	})
 }
 
-// processCommand processes a single command.
+// processCommand processes a single command by delegating to specific handlers.
 func (sm *stateMachine) processCommand(cmd *command) error {
 	switch cmd.Type {
 	case cmdCreateBucket:
-		var bucket Bucket
-
-		err := json.Unmarshal(cmd.Data, &bucket)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCreateBucket(&bucket)
-
+		return sm.handleCreateBucket(cmd.Data)
 	case cmdDeleteBucket:
-		var name string
-
-		err := json.Unmarshal(cmd.Data, &name)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteBucket(name)
-
+		return sm.handleDeleteBucket(cmd.Data)
 	case cmdUpdateBucket:
-		var bucket Bucket
-
-		err := json.Unmarshal(cmd.Data, &bucket)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyUpdateBucket(&bucket)
-
+		return sm.handleUpdateBucket(cmd.Data)
 	case cmdPutObjectMeta:
-		var meta ObjectMeta
-
-		err := json.Unmarshal(cmd.Data, &meta)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyPutObjectMeta(&meta)
-
+		return sm.handlePutObjectMeta(cmd.Data)
 	case cmdDeleteObjectMeta:
-		var data struct {
-			Bucket string `json:"bucket"`
-			Key    string `json:"key"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteObjectMeta(data.Bucket, data.Key)
-
+		return sm.handleDeleteObjectMeta(cmd.Data)
 	case cmdPutObjectMetaVersioned:
-		var data struct {
-			Meta                *ObjectMeta `json:"meta"`
-			PreserveOldVersions bool        `json:"preserve_old_versions"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyPutObjectMetaVersioned(data.Meta, data.PreserveOldVersions)
-
+		return sm.handlePutObjectMetaVersioned(cmd.Data)
 	case cmdDeleteObjectVersion:
-		var data struct {
-			Bucket    string `json:"bucket"`
-			Key       string `json:"key"`
-			VersionID string `json:"version_id"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteObjectVersion(data.Bucket, data.Key, data.VersionID)
-
+		return sm.handleDeleteObjectVersion(cmd.Data)
 	case cmdCreateUser:
-		var user User
-
-		err := json.Unmarshal(cmd.Data, &user)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCreateUser(&user)
-
+		return sm.handleCreateUser(cmd.Data)
 	case cmdUpdateUser:
-		var user User
-
-		err := json.Unmarshal(cmd.Data, &user)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyUpdateUser(&user)
-
+		return sm.handleUpdateUser(cmd.Data)
 	case cmdDeleteUser:
-		var id string
-
-		err := json.Unmarshal(cmd.Data, &id)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteUser(id)
-
+		return sm.handleDeleteUser(cmd.Data)
 	case cmdCreateAccessKey:
-		var key AccessKey
-
-		err := json.Unmarshal(cmd.Data, &key)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCreateAccessKey(&key)
-
+		return sm.handleCreateAccessKey(cmd.Data)
 	case cmdDeleteAccessKey:
-		var id string
-
-		err := json.Unmarshal(cmd.Data, &id)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteAccessKey(id)
-
+		return sm.handleDeleteAccessKey(cmd.Data)
 	case cmdCreatePolicy:
-		var policy Policy
-
-		err := json.Unmarshal(cmd.Data, &policy)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCreatePolicy(&policy)
-
+		return sm.handleCreatePolicy(cmd.Data)
 	case cmdUpdatePolicy:
-		var policy Policy
-
-		err := json.Unmarshal(cmd.Data, &policy)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyUpdatePolicy(&policy)
-
+		return sm.handleUpdatePolicy(cmd.Data)
 	case cmdDeletePolicy:
-		var name string
-
-		err := json.Unmarshal(cmd.Data, &name)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeletePolicy(name)
-
+		return sm.handleDeletePolicy(cmd.Data)
 	case cmdCreateMultipartUpload:
-		var upload MultipartUpload
-
-		err := json.Unmarshal(cmd.Data, &upload)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCreateMultipartUpload(&upload)
-
+		return sm.handleCreateMultipartUpload(cmd.Data)
 	case cmdAbortMultipartUpload:
-		var data struct {
-			Bucket   string `json:"bucket"`
-			Key      string `json:"key"`
-			UploadID string `json:"upload_id"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyAbortMultipartUpload(data.Bucket, data.Key, data.UploadID)
-
+		return sm.handleAbortMultipartUpload(cmd.Data)
 	case cmdCompleteMultipartUpload:
-		var data struct {
-			Bucket   string `json:"bucket"`
-			Key      string `json:"key"`
-			UploadID string `json:"upload_id"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCompleteMultipartUpload(data.Bucket, data.Key, data.UploadID)
-
+		return sm.handleCompleteMultipartUpload(cmd.Data)
 	case cmdAddUploadPart:
-		var data struct {
-			Bucket   string     `json:"bucket"`
-			Key      string     `json:"key"`
-			UploadID string     `json:"upload_id"`
-			Part     UploadPart `json:"part"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyAddUploadPart(data.Bucket, data.Key, data.UploadID, &data.Part)
-
+		return sm.handleAddUploadPart(cmd.Data)
 	case cmdAddNode:
-		var node NodeInfo
-
-		err := json.Unmarshal(cmd.Data, &node)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyAddNode(&node)
-
+		return sm.handleAddNode(cmd.Data)
 	case cmdRemoveNode:
-		var nodeID string
-
-		err := json.Unmarshal(cmd.Data, &nodeID)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyRemoveNode(nodeID)
-
+		return sm.handleRemoveNode(cmd.Data)
 	case cmdStoreAuditEvent:
-		var event audit.AuditEvent
-
-		err := json.Unmarshal(cmd.Data, &event)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyStoreAuditEvent(&event)
-
+		return sm.handleStoreAuditEvent(cmd.Data)
 	case cmdDeleteAuditEvent:
-		var eventID string
-
-		err := json.Unmarshal(cmd.Data, &eventID)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteAuditEvent(eventID)
+		return sm.handleDeleteAuditEvent(cmd.Data)
 	}
 
 	return fmt.Errorf("unknown command type: %s", cmd.Type)
+}
+
+// Command handlers - unmarshal data and delegate to apply methods
+
+func (sm *stateMachine) handleCreateBucket(data []byte) error {
+	var bucket Bucket
+	if err := json.Unmarshal(data, &bucket); err != nil {
+		return err
+	}
+
+	return sm.applyCreateBucket(&bucket)
+}
+
+func (sm *stateMachine) handleDeleteBucket(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteBucket(name)
+}
+
+func (sm *stateMachine) handleUpdateBucket(data []byte) error {
+	var bucket Bucket
+	if err := json.Unmarshal(data, &bucket); err != nil {
+		return err
+	}
+
+	return sm.applyUpdateBucket(&bucket)
+}
+
+func (sm *stateMachine) handlePutObjectMeta(data []byte) error {
+	var meta ObjectMeta
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return err
+	}
+
+	return sm.applyPutObjectMeta(&meta)
+}
+
+func (sm *stateMachine) handleDeleteObjectMeta(data []byte) error {
+	var params struct {
+		Bucket string `json:"bucket"`
+		Key    string `json:"key"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteObjectMeta(params.Bucket, params.Key)
+}
+
+func (sm *stateMachine) handlePutObjectMetaVersioned(data []byte) error {
+	var params struct {
+		Meta                *ObjectMeta `json:"meta"`
+		PreserveOldVersions bool        `json:"preserve_old_versions"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyPutObjectMetaVersioned(params.Meta, params.PreserveOldVersions)
+}
+
+func (sm *stateMachine) handleDeleteObjectVersion(data []byte) error {
+	var params struct {
+		Bucket    string `json:"bucket"`
+		Key       string `json:"key"`
+		VersionID string `json:"version_id"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteObjectVersion(params.Bucket, params.Key, params.VersionID)
+}
+
+func (sm *stateMachine) handleCreateUser(data []byte) error {
+	var user User
+	if err := json.Unmarshal(data, &user); err != nil {
+		return err
+	}
+
+	return sm.applyCreateUser(&user)
+}
+
+func (sm *stateMachine) handleUpdateUser(data []byte) error {
+	var user User
+	if err := json.Unmarshal(data, &user); err != nil {
+		return err
+	}
+
+	return sm.applyUpdateUser(&user)
+}
+
+func (sm *stateMachine) handleDeleteUser(data []byte) error {
+	var id string
+	if err := json.Unmarshal(data, &id); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteUser(id)
+}
+
+func (sm *stateMachine) handleCreateAccessKey(data []byte) error {
+	var key AccessKey
+	if err := json.Unmarshal(data, &key); err != nil {
+		return err
+	}
+
+	return sm.applyCreateAccessKey(&key)
+}
+
+func (sm *stateMachine) handleDeleteAccessKey(data []byte) error {
+	var id string
+	if err := json.Unmarshal(data, &id); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteAccessKey(id)
+}
+
+func (sm *stateMachine) handleCreatePolicy(data []byte) error {
+	var policy Policy
+	if err := json.Unmarshal(data, &policy); err != nil {
+		return err
+	}
+
+	return sm.applyCreatePolicy(&policy)
+}
+
+func (sm *stateMachine) handleUpdatePolicy(data []byte) error {
+	var policy Policy
+	if err := json.Unmarshal(data, &policy); err != nil {
+		return err
+	}
+
+	return sm.applyUpdatePolicy(&policy)
+}
+
+func (sm *stateMachine) handleDeletePolicy(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err != nil {
+		return err
+	}
+
+	return sm.applyDeletePolicy(name)
+}
+
+func (sm *stateMachine) handleCreateMultipartUpload(data []byte) error {
+	var upload MultipartUpload
+	if err := json.Unmarshal(data, &upload); err != nil {
+		return err
+	}
+
+	return sm.applyCreateMultipartUpload(&upload)
+}
+
+func (sm *stateMachine) handleAbortMultipartUpload(data []byte) error {
+	var params struct {
+		Bucket   string `json:"bucket"`
+		Key      string `json:"key"`
+		UploadID string `json:"upload_id"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyAbortMultipartUpload(params.Bucket, params.Key, params.UploadID)
+}
+
+func (sm *stateMachine) handleCompleteMultipartUpload(data []byte) error {
+	var params struct {
+		Bucket   string `json:"bucket"`
+		Key      string `json:"key"`
+		UploadID string `json:"upload_id"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyCompleteMultipartUpload(params.Bucket, params.Key, params.UploadID)
+}
+
+func (sm *stateMachine) handleAddUploadPart(data []byte) error {
+	var params struct {
+		Bucket   string     `json:"bucket"`
+		Key      string     `json:"key"`
+		UploadID string     `json:"upload_id"`
+		Part     UploadPart `json:"part"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyAddUploadPart(params.Bucket, params.Key, params.UploadID, &params.Part)
+}
+
+func (sm *stateMachine) handleAddNode(data []byte) error {
+	var node NodeInfo
+	if err := json.Unmarshal(data, &node); err != nil {
+		return err
+	}
+
+	return sm.applyAddNode(&node)
+}
+
+func (sm *stateMachine) handleRemoveNode(data []byte) error {
+	var nodeID string
+	if err := json.Unmarshal(data, &nodeID); err != nil {
+		return err
+	}
+
+	return sm.applyRemoveNode(nodeID)
+}
+
+func (sm *stateMachine) handleStoreAuditEvent(data []byte) error {
+	var event audit.AuditEvent
+	if err := json.Unmarshal(data, &event); err != nil {
+		return err
+	}
+
+	return sm.applyStoreAuditEvent(&event)
+}
+
+func (sm *stateMachine) handleDeleteAuditEvent(data []byte) error {
+	var eventID string
+	if err := json.Unmarshal(data, &eventID); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteAuditEvent(eventID)
 }
 
 // Lookup performs a read-only query on the state machine.

@@ -319,126 +319,136 @@ type PolicyMatch struct {
 
 // matchesSelector checks if an object matches a policy selector.
 func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessStats, sel PolicySelector) bool {
-	// Check buckets
-	if len(sel.Buckets) > 0 {
-		matched := false
+	return e.matchesBucketsSelector(obj, sel.Buckets) &&
+		e.matchesPrefixesSelector(obj, sel.Prefixes) &&
+		e.matchesSuffixesSelector(obj, sel.Suffixes) &&
+		e.matchesSizeSelector(obj, sel.MinSize, sel.MaxSize) &&
+		e.matchesContentTypesSelector(obj, sel.ContentTypes) &&
+		e.matchesCurrentTiersSelector(obj, sel.CurrentTiers) &&
+		e.matchesExcludeTiersSelector(obj, sel.ExcludeTiers) &&
+		e.matchesStorageClassesSelector(obj, sel.StorageClasses) &&
+		e.matchesTagsSelector(obj, sel.Tags)
+}
 
-		for _, pattern := range sel.Buckets {
-			if matchWildcard(pattern, obj.Bucket) {
-				matched = true
-				break
-			}
-		}
+// matchesBucketsSelector checks if object bucket matches any bucket pattern.
+func (e *PolicyEngine) matchesBucketsSelector(obj ObjectMetadata, buckets []string) bool {
+	if len(buckets) == 0 {
+		return true
+	}
 
-		if !matched {
-			return false
+	for _, pattern := range buckets {
+		if matchWildcard(pattern, obj.Bucket) {
+			return true
 		}
 	}
 
-	// Check prefixes
-	if len(sel.Prefixes) > 0 {
-		matched := false
+	return false
+}
 
-		for _, prefix := range sel.Prefixes {
-			if strings.HasPrefix(obj.Key, prefix) {
-				matched = true
-				break
-			}
-		}
+// matchesPrefixesSelector checks if object key has any specified prefix.
+func (e *PolicyEngine) matchesPrefixesSelector(obj ObjectMetadata, prefixes []string) bool {
+	if len(prefixes) == 0 {
+		return true
+	}
 
-		if !matched {
-			return false
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(obj.Key, prefix) {
+			return true
 		}
 	}
 
-	// Check suffixes
-	if len(sel.Suffixes) > 0 {
-		matched := false
+	return false
+}
 
-		for _, suffix := range sel.Suffixes {
-			if strings.HasSuffix(obj.Key, suffix) {
-				matched = true
-				break
-			}
-		}
+// matchesSuffixesSelector checks if object key has any specified suffix.
+func (e *PolicyEngine) matchesSuffixesSelector(obj ObjectMetadata, suffixes []string) bool {
+	if len(suffixes) == 0 {
+		return true
+	}
 
-		if !matched {
-			return false
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(obj.Key, suffix) {
+			return true
 		}
 	}
 
-	// Check size
-	if sel.MinSize > 0 && obj.Size < sel.MinSize {
+	return false
+}
+
+// matchesSizeSelector checks if object size is within the specified range.
+func (e *PolicyEngine) matchesSizeSelector(obj ObjectMetadata, minSize, maxSize int64) bool {
+	if minSize > 0 && obj.Size < minSize {
 		return false
 	}
 
-	if sel.MaxSize > 0 && obj.Size > sel.MaxSize {
+	if maxSize > 0 && obj.Size > maxSize {
 		return false
 	}
 
-	// Check content types
-	if len(sel.ContentTypes) > 0 {
-		matched := false
+	return true
+}
 
-		for _, pattern := range sel.ContentTypes {
-			if matchContentType(pattern, obj.ContentType) {
-				matched = true
-				break
-			}
+// matchesContentTypesSelector checks if object content type matches any pattern.
+func (e *PolicyEngine) matchesContentTypesSelector(obj ObjectMetadata, contentTypes []string) bool {
+	if len(contentTypes) == 0 {
+		return true
+	}
+
+	for _, pattern := range contentTypes {
+		if matchContentType(pattern, obj.ContentType) {
+			return true
 		}
+	}
 
-		if !matched {
+	return false
+}
+
+// matchesCurrentTiersSelector checks if object is in any of the specified tiers.
+func (e *PolicyEngine) matchesCurrentTiersSelector(obj ObjectMetadata, currentTiers []TierType) bool {
+	if len(currentTiers) == 0 {
+		return true
+	}
+
+	for _, tier := range currentTiers {
+		if tier == obj.CurrentTier {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchesExcludeTiersSelector checks if object is not in any excluded tier.
+func (e *PolicyEngine) matchesExcludeTiersSelector(obj ObjectMetadata, excludeTiers []TierType) bool {
+	for _, tier := range excludeTiers {
+		if tier == obj.CurrentTier {
 			return false
 		}
 	}
 
-	// Check current tiers
-	if len(sel.CurrentTiers) > 0 {
-		matched := false
+	return true
+}
 
-		for _, tier := range sel.CurrentTiers {
-			if tier == obj.CurrentTier {
-				matched = true
-				break
-			}
+// matchesStorageClassesSelector checks if object storage class matches any specified class.
+func (e *PolicyEngine) matchesStorageClassesSelector(obj ObjectMetadata, storageClasses []StorageClass) bool {
+	if len(storageClasses) == 0 {
+		return true
+	}
+
+	for _, sc := range storageClasses {
+		if sc == obj.StorageClass {
+			return true
 		}
+	}
 
-		if !matched {
+	return false
+}
+
+// matchesTagsSelector checks if object has all required tags with matching values.
+func (e *PolicyEngine) matchesTagsSelector(obj ObjectMetadata, tags map[string]string) bool {
+	for key, value := range tags {
+		if objValue, ok := obj.Tags[key]; !ok || objValue != value {
 			return false
-		}
-	}
-
-	// Check excluded tiers
-	if len(sel.ExcludeTiers) > 0 {
-		for _, tier := range sel.ExcludeTiers {
-			if tier == obj.CurrentTier {
-				return false
-			}
-		}
-	}
-
-	// Check storage classes
-	if len(sel.StorageClasses) > 0 {
-		matched := false
-
-		for _, sc := range sel.StorageClasses {
-			if sc == obj.StorageClass {
-				matched = true
-				break
-			}
-		}
-
-		if !matched {
-			return false
-		}
-	}
-
-	// Check tags
-	if len(sel.Tags) > 0 {
-		for key, value := range sel.Tags {
-			if objValue, ok := obj.Tags[key]; !ok || objValue != value {
-				return false
-			}
 		}
 	}
 
@@ -450,84 +460,157 @@ func (e *PolicyEngine) checkTriggers(obj ObjectMetadata, stats *ObjectAccessStat
 	now := time.Now()
 
 	for _, trigger := range policy.Triggers {
-		switch trigger.Type {
-		case TriggerTypeAge:
-			if trigger.Age != nil {
-				if trigger.Age.DaysSinceCreation > 0 {
-					days := int(now.Sub(obj.CreatedAt).Hours() / 24)
-					if days >= trigger.Age.DaysSinceCreation {
-						return true, fmt.Sprintf("age: %d days since creation", days)
-					}
-				}
-
-				if trigger.Age.DaysSinceModification > 0 {
-					days := int(now.Sub(obj.ModifiedAt).Hours() / 24)
-					if days >= trigger.Age.DaysSinceModification {
-						return true, fmt.Sprintf("age: %d days since modification", days)
-					}
-				}
-
-				if trigger.Age.DaysSinceAccess > 0 && !stats.LastAccessed.IsZero() {
-					days := int(now.Sub(stats.LastAccessed).Hours() / 24)
-					if days >= trigger.Age.DaysSinceAccess {
-						return true, fmt.Sprintf("age: %d days since access", days)
-					}
-				}
-
-				if trigger.Age.HoursSinceAccess > 0 && !stats.LastAccessed.IsZero() {
-					hours := int(now.Sub(stats.LastAccessed).Hours())
-					if hours >= trigger.Age.HoursSinceAccess {
-						return true, fmt.Sprintf("age: %d hours since access", hours)
-					}
-				}
-			}
-
-		case TriggerTypeAccess:
-			if trigger.Access != nil {
-				if trigger.Access.PromoteOnAnyRead {
-					// This is handled in real-time worker
-					return true, "access: read promotion"
-				}
-
-				if trigger.Access.CountThreshold > 0 && trigger.Access.PeriodMinutes > 0 {
-					// Count accesses in period
-					count := e.countAccessesInPeriod(stats, trigger.Access.PeriodMinutes)
-					if trigger.Access.Direction == TierDirectionDown && count < int64(trigger.Access.CountThreshold) {
-						return true, fmt.Sprintf("access: %d accesses in %d minutes (threshold: %d)",
-							count, trigger.Access.PeriodMinutes, trigger.Access.CountThreshold)
-					}
-
-					if trigger.Access.Direction == TierDirectionUp && count >= int64(trigger.Access.CountThreshold) {
-						return true, fmt.Sprintf("access: %d accesses in %d minutes (threshold: %d)",
-							count, trigger.Access.PeriodMinutes, trigger.Access.CountThreshold)
-					}
-				}
-			}
-
-		case TriggerTypeFrequency:
-			if trigger.Frequency != nil {
-				avgPerDay := stats.AverageAccessesDay
-				if trigger.Frequency.MinAccessesPerDay > 0 && avgPerDay >= trigger.Frequency.MinAccessesPerDay {
-					return true, fmt.Sprintf("frequency: %.2f accesses/day (min: %.2f)", avgPerDay, trigger.Frequency.MinAccessesPerDay)
-				}
-
-				if trigger.Frequency.MaxAccessesPerDay > 0 && avgPerDay <= trigger.Frequency.MaxAccessesPerDay {
-					return true, fmt.Sprintf("frequency: %.2f accesses/day (max: %.2f)", avgPerDay, trigger.Frequency.MaxAccessesPerDay)
-				}
-
-				if trigger.Frequency.Pattern != "" && stats.AccessTrend == trigger.Frequency.Pattern {
-					return true, fmt.Sprintf("frequency: pattern match '%s'", trigger.Frequency.Pattern)
-				}
-			}
-
-		case TriggerTypeCapacity:
-			// Capacity triggers are handled by threshold monitor
-			continue
-
-		case TriggerTypeCron:
-			// Cron triggers are handled by scheduler
-			continue
+		if satisfied, reason := e.evaluateTrigger(trigger, obj, stats, now); satisfied {
+			return true, reason
 		}
+	}
+
+	return false, ""
+}
+
+// evaluateTrigger evaluates a single trigger.
+func (e *PolicyEngine) evaluateTrigger(trigger PolicyTrigger, obj ObjectMetadata, stats *ObjectAccessStats, now time.Time) (bool, string) {
+	switch trigger.Type {
+	case TriggerTypeAge:
+		return e.checkAgeTrigger(trigger, obj, stats, now)
+	case TriggerTypeAccess:
+		return e.checkAccessTrigger(trigger, stats)
+	case TriggerTypeFrequency:
+		return e.checkFrequencyTrigger(trigger, stats)
+	case TriggerTypeCapacity, TriggerTypeCron:
+		// Handled by threshold monitor and scheduler respectively
+		return false, ""
+	default:
+		return false, ""
+	}
+}
+
+// checkAgeTrigger checks age-based triggers.
+func (e *PolicyEngine) checkAgeTrigger(trigger PolicyTrigger, obj ObjectMetadata, stats *ObjectAccessStats, now time.Time) (bool, string) {
+	if trigger.Age == nil {
+		return false, ""
+	}
+
+	if satisfied, reason := e.checkDaysSinceCreation(trigger.Age, obj.CreatedAt, now); satisfied {
+		return true, reason
+	}
+
+	if satisfied, reason := e.checkDaysSinceModification(trigger.Age, obj.ModifiedAt, now); satisfied {
+		return true, reason
+	}
+
+	if satisfied, reason := e.checkDaysSinceAccess(trigger.Age, stats, now); satisfied {
+		return true, reason
+	}
+
+	if satisfied, reason := e.checkHoursSinceAccess(trigger.Age, stats, now); satisfied {
+		return true, reason
+	}
+
+	return false, ""
+}
+
+// checkDaysSinceCreation checks if days since creation threshold is met.
+func (e *PolicyEngine) checkDaysSinceCreation(age *AgeTrigger, createdAt time.Time, now time.Time) (bool, string) {
+	if age.DaysSinceCreation <= 0 {
+		return false, ""
+	}
+
+	days := int(now.Sub(createdAt).Hours() / 24)
+	if days >= age.DaysSinceCreation {
+		return true, fmt.Sprintf("age: %d days since creation", days)
+	}
+
+	return false, ""
+}
+
+// checkDaysSinceModification checks if days since modification threshold is met.
+func (e *PolicyEngine) checkDaysSinceModification(age *AgeTrigger, modifiedAt time.Time, now time.Time) (bool, string) {
+	if age.DaysSinceModification <= 0 {
+		return false, ""
+	}
+
+	days := int(now.Sub(modifiedAt).Hours() / 24)
+	if days >= age.DaysSinceModification {
+		return true, fmt.Sprintf("age: %d days since modification", days)
+	}
+
+	return false, ""
+}
+
+// checkDaysSinceAccess checks if days since access threshold is met.
+func (e *PolicyEngine) checkDaysSinceAccess(age *AgeTrigger, stats *ObjectAccessStats, now time.Time) (bool, string) {
+	if age.DaysSinceAccess <= 0 || stats == nil || stats.LastAccessed.IsZero() {
+		return false, ""
+	}
+
+	days := int(now.Sub(stats.LastAccessed).Hours() / 24)
+	if days >= age.DaysSinceAccess {
+		return true, fmt.Sprintf("age: %d days since access", days)
+	}
+
+	return false, ""
+}
+
+// checkHoursSinceAccess checks if hours since access threshold is met.
+func (e *PolicyEngine) checkHoursSinceAccess(age *AgeTrigger, stats *ObjectAccessStats, now time.Time) (bool, string) {
+	if age.HoursSinceAccess <= 0 || stats == nil || stats.LastAccessed.IsZero() {
+		return false, ""
+	}
+
+	hours := int(now.Sub(stats.LastAccessed).Hours())
+	if hours >= age.HoursSinceAccess {
+		return true, fmt.Sprintf("age: %d hours since access", hours)
+	}
+
+	return false, ""
+}
+
+// checkAccessTrigger checks access-based triggers.
+func (e *PolicyEngine) checkAccessTrigger(trigger PolicyTrigger, stats *ObjectAccessStats) (bool, string) {
+	if trigger.Access == nil {
+		return false, ""
+	}
+
+	if trigger.Access.PromoteOnAnyRead {
+		return true, "access: read promotion"
+	}
+
+	if trigger.Access.CountThreshold > 0 && trigger.Access.PeriodMinutes > 0 {
+		count := e.countAccessesInPeriod(stats, trigger.Access.PeriodMinutes)
+
+		if trigger.Access.Direction == TierDirectionDown && count < int64(trigger.Access.CountThreshold) {
+			return true, fmt.Sprintf("access: %d accesses in %d minutes (threshold: %d)",
+				count, trigger.Access.PeriodMinutes, trigger.Access.CountThreshold)
+		}
+
+		if trigger.Access.Direction == TierDirectionUp && count >= int64(trigger.Access.CountThreshold) {
+			return true, fmt.Sprintf("access: %d accesses in %d minutes (threshold: %d)",
+				count, trigger.Access.PeriodMinutes, trigger.Access.CountThreshold)
+		}
+	}
+
+	return false, ""
+}
+
+// checkFrequencyTrigger checks frequency-based triggers.
+func (e *PolicyEngine) checkFrequencyTrigger(trigger PolicyTrigger, stats *ObjectAccessStats) (bool, string) {
+	if trigger.Frequency == nil || stats == nil {
+		return false, ""
+	}
+
+	avgPerDay := stats.AverageAccessesDay
+
+	if trigger.Frequency.MinAccessesPerDay > 0 && avgPerDay >= trigger.Frequency.MinAccessesPerDay {
+		return true, fmt.Sprintf("frequency: %.2f accesses/day (min: %.2f)", avgPerDay, trigger.Frequency.MinAccessesPerDay)
+	}
+
+	if trigger.Frequency.MaxAccessesPerDay > 0 && avgPerDay <= trigger.Frequency.MaxAccessesPerDay {
+		return true, fmt.Sprintf("frequency: %.2f accesses/day (max: %.2f)", avgPerDay, trigger.Frequency.MaxAccessesPerDay)
+	}
+
+	if trigger.Frequency.Pattern != "" && stats.AccessTrend == trigger.Frequency.Pattern {
+		return true, fmt.Sprintf("frequency: pattern match '%s'", trigger.Frequency.Pattern)
 	}
 
 	return false, ""

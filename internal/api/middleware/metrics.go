@@ -70,7 +70,6 @@ func MetricsMiddleware(next http.Handler) http.Handler {
 func extractS3Operation(r *http.Request) string {
 	method := r.Method
 	path := r.URL.Path
-	query := r.URL.Query()
 
 	// Service-level operations
 	if path == "/" && method == methodGET {
@@ -90,104 +89,148 @@ func extractS3Operation(r *http.Request) string {
 
 	// Bucket-level operations
 	if hasBucket && !hasKey {
-		switch method {
-		case "PUT":
-			return "CreateBucket"
-		case "DELETE":
-			return "DeleteBucket"
-		case "HEAD":
-			return "HeadBucket"
-		case methodGET:
-			// Check for subresources
-			if _, ok := query["versioning"]; ok {
-				return "GetBucketVersioning"
-			}
-
-			if _, ok := query["policy"]; ok {
-				return "GetBucketPolicy"
-			}
-
-			if _, ok := query["tagging"]; ok {
-				return "GetBucketTagging"
-			}
-
-			if _, ok := query["cors"]; ok {
-				return "GetBucketCORS"
-			}
-
-			if _, ok := query["lifecycle"]; ok {
-				return "GetBucketLifecycle"
-			}
-
-			if _, ok := query["uploads"]; ok {
-				return "ListMultipartUploads"
-			}
-
-			if _, ok := query["location"]; ok {
-				return "GetBucketLocation"
-			}
-
-			if _, ok := query["acl"]; ok {
-				return "GetBucketAcl"
-			}
-
-			return "ListObjectsV2"
-		}
+		return extractBucketOperation(r)
 	}
 
 	// Object-level operations
 	if hasBucket && hasKey {
-		switch method {
-		case "PUT":
-			if _, ok := query["partNumber"]; ok {
-				return "UploadPart"
-			}
-
-			if r.Header.Get("X-Amz-Copy-Source") != "" {
-				return "CopyObject"
-			}
-
-			return "PutObject"
-		case methodGET:
-			if _, ok := query["uploadId"]; ok {
-				return "ListParts"
-			}
-
-			if _, ok := query["acl"]; ok {
-				return "GetObjectAcl"
-			}
-
-			if _, ok := query["tagging"]; ok {
-				return "GetObjectTagging"
-			}
-
-			return "GetObject"
-		case "DELETE":
-			if _, ok := query["uploadId"]; ok {
-				return "AbortMultipartUpload"
-			}
-
-			return "DeleteObject"
-		case "HEAD":
-			return "HeadObject"
-		case "POST":
-			if _, ok := query["uploads"]; ok {
-				return "CreateMultipartUpload"
-			}
-
-			if _, ok := query["uploadId"]; ok {
-				return "CompleteMultipartUpload"
-			}
-
-			if _, ok := query["delete"]; ok {
-				return "DeleteObjects"
-			}
-
-			return "PostObject"
-		}
+		return extractObjectOperation(r)
 	}
 
 	return "Unknown"
+}
+
+// extractBucketOperation extracts bucket-level operation name.
+func extractBucketOperation(r *http.Request) string {
+	method := r.Method
+	query := r.URL.Query()
+
+	switch method {
+	case "PUT":
+		return "CreateBucket"
+	case "DELETE":
+		return "DeleteBucket"
+	case "HEAD":
+		return "HeadBucket"
+	case methodGET:
+		return extractBucketGetOperation(query)
+	default:
+		return "Unknown"
+	}
+}
+
+// extractBucketGetOperation extracts bucket GET operation based on query params.
+func extractBucketGetOperation(query map[string][]string) string {
+	if _, ok := query["versioning"]; ok {
+		return "GetBucketVersioning"
+	}
+
+	if _, ok := query["policy"]; ok {
+		return "GetBucketPolicy"
+	}
+
+	if _, ok := query["tagging"]; ok {
+		return "GetBucketTagging"
+	}
+
+	if _, ok := query["cors"]; ok {
+		return "GetBucketCORS"
+	}
+
+	if _, ok := query["lifecycle"]; ok {
+		return "GetBucketLifecycle"
+	}
+
+	if _, ok := query["uploads"]; ok {
+		return "ListMultipartUploads"
+	}
+
+	if _, ok := query["location"]; ok {
+		return "GetBucketLocation"
+	}
+
+	if _, ok := query["acl"]; ok {
+		return "GetBucketAcl"
+	}
+
+	return "ListObjectsV2"
+}
+
+// extractObjectOperation extracts object-level operation name.
+func extractObjectOperation(r *http.Request) string {
+	method := r.Method
+	query := r.URL.Query()
+
+	switch method {
+	case "PUT":
+		return extractObjectPutOperation(r, query)
+	case methodGET:
+		return extractObjectGetOperation(query)
+	case "DELETE":
+		return extractObjectDeleteOperation(query)
+	case "HEAD":
+		return "HeadObject"
+	case "POST":
+		return extractObjectPostOperation(query)
+	default:
+		return "Unknown"
+	}
+}
+
+// extractObjectPutOperation extracts object PUT operation.
+func extractObjectPutOperation(r *http.Request, query map[string][]string) string {
+	if _, ok := query["partNumber"]; ok {
+		return "UploadPart"
+	}
+
+	if r.Header.Get("X-Amz-Copy-Source") != "" {
+		return "CopyObject"
+	}
+
+	return "PutObject"
+}
+
+// extractObjectGetOperation extracts object GET operation.
+func extractObjectGetOperation(query map[string][]string) string {
+	if _, ok := query["uploadId"]; ok {
+		return "ListParts"
+	}
+
+	if _, ok := query["acl"]; ok {
+		return "GetObjectAcl"
+	}
+
+	if _, ok := query["tagging"]; ok {
+		return "GetObjectTagging"
+	}
+
+	return "GetObject"
+}
+
+// extractObjectDeleteOperation extracts object DELETE operation.
+func extractObjectDeleteOperation(query map[string][]string) string {
+	if _, ok := query["uploadId"]; ok {
+		return "AbortMultipartUpload"
+	}
+
+	return "DeleteObject"
+}
+
+// extractObjectPostOperation extracts object POST operation.
+func extractObjectPostOperation(query map[string][]string) string {
+	if _, ok := query["uploads"]; ok {
+		return "CreateMultipartUpload"
+	}
+
+	if _, ok := query["uploadId"]; ok {
+		return "CompleteMultipartUpload"
+	}
+
+	if _, ok := query["delete"]; ok {
+		return "DeleteObjects"
+	}
+
+	return "PostObject"
 }
 
 // getErrorType returns an error type string based on HTTP status code.

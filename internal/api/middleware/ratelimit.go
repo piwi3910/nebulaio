@@ -102,22 +102,46 @@ func (l *TokenBucketLimiter) Allow() bool {
 
 	tokensToAdd := (elapsed * l.refillRate) / int64(time.Second)
 
-	if tokensToAdd > 0 {
-		if l.lastRefill.CompareAndSwap(lastRefill, now) {
-			// Use CAS loop to safely add tokens without race conditions.
-			// This prevents lost updates when multiple goroutines refill simultaneously.
-			for {
-				current := l.tokens.Load()
-
-				newTokens := current + tokensToAdd
-				if newTokens > l.maxTokens {
-					newTokens = l.maxTokens
-				}
-
-				if l.tokens.CompareAndSwap(current, newTokens) {
-					break
-				}
+	if tokensToAdd <= 0 {
+		// Try to consume a token
+		for {
+			current := l.tokens.Load()
+			if current <= 0 {
+				return false
 			}
+
+			if l.tokens.CompareAndSwap(current, current-1) {
+				return true
+			}
+		}
+	}
+
+	if !l.lastRefill.CompareAndSwap(lastRefill, now) {
+		// Try to consume a token
+		for {
+			current := l.tokens.Load()
+			if current <= 0 {
+				return false
+			}
+
+			if l.tokens.CompareAndSwap(current, current-1) {
+				return true
+			}
+		}
+	}
+
+	// Use CAS loop to safely add tokens without race conditions.
+	// This prevents lost updates when multiple goroutines refill simultaneously.
+	for {
+		current := l.tokens.Load()
+
+		newTokens := current + tokensToAdd
+		if newTokens > l.maxTokens {
+			newTokens = l.maxTokens
+		}
+
+		if l.tokens.CompareAndSwap(current, newTokens) {
+			break
 		}
 	}
 
@@ -140,7 +164,7 @@ func (l *TokenBucketLimiter) Allow() bool {
 type RateLimiter struct {
 	stopCh           chan struct{}
 	config           RateLimitConfig
-	limiters         sync.Map   // map[string]*TokenBucketLimiter
+	limiters         sync.Map     // map[string]*TokenBucketLimiter
 	trustedProxyNets []*net.IPNet // Parsed trusted proxy CIDR ranges
 }
 
@@ -155,23 +179,29 @@ func NewRateLimiter(config RateLimitConfig) *RateLimiter {
 	for _, proxy := range config.TrustedProxies {
 		// Try parsing as CIDR first
 		_, ipNet, err := net.ParseCIDR(proxy)
-		if err != nil {
-			// Not a CIDR, try as single IP
-			ip := net.ParseIP(proxy)
-			if ip != nil {
-				// Convert single IP to /32 (IPv4) or /128 (IPv6) CIDR
-				if ip.To4() != nil {
-					_, ipNet, _ = net.ParseCIDR(proxy + "/32")
-				} else {
-					_, ipNet, _ = net.ParseCIDR(proxy + "/128")
-				}
-			}
+		if err == nil {
+			rl.trustedProxyNets = append(rl.trustedProxyNets, ipNet)
+
+			continue
+		}
+
+		// Not a CIDR, try as single IP
+		ip := net.ParseIP(proxy)
+		if ip == nil {
+			log.Warn().Str("proxy", proxy).Msg("Invalid trusted proxy IP/CIDR, skipping")
+
+			continue
+		}
+
+		// Convert single IP to /32 (IPv4) or /128 (IPv6) CIDR
+		if ip.To4() != nil {
+			_, ipNet, _ = net.ParseCIDR(proxy + "/32")
+		} else {
+			_, ipNet, _ = net.ParseCIDR(proxy + "/128")
 		}
 
 		if ipNet != nil {
 			rl.trustedProxyNets = append(rl.trustedProxyNets, ipNet)
-		} else {
-			log.Warn().Str("proxy", proxy).Msg("Invalid trusted proxy IP/CIDR, skipping")
 		}
 	}
 
@@ -318,30 +348,33 @@ func (rl *RateLimiter) extractClientIP(r *http.Request) string {
 	directIP := extractDirectIP(r.RemoteAddr)
 
 	// Only trust proxy headers if the direct connection is from a trusted proxy
-	if rl.isTrustedProxy(directIP) {
-		// Check X-Forwarded-For header (for requests behind proxy)
-		xff := r.Header.Get("X-Forwarded-For")
-		if xff != "" {
-			// Take the first IP in the chain (the original client)
-			xff = strings.TrimSpace(xff)
-			if idx := strings.Index(xff, ","); idx > 0 {
-				clientIP := strings.TrimSpace(xff[:idx])
-				if clientIP != "" {
-					return clientIP
-				}
-			} else if xff != "" {
-				return xff
-			}
-		}
+	if !rl.isTrustedProxy(directIP) {
+		// Use direct connection IP (not a trusted proxy)
+		return directIP
+	}
 
-		// Check X-Real-IP header
-		xri := r.Header.Get("X-Real-IP")
-		if xri != "" {
-			return strings.TrimSpace(xri)
+	// Check X-Forwarded-For header (for requests behind proxy)
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		// Take the first IP in the chain (the original client)
+		xff = strings.TrimSpace(xff)
+		if idx := strings.Index(xff, ","); idx > 0 {
+			clientIP := strings.TrimSpace(xff[:idx])
+			if clientIP != "" {
+				return clientIP
+			}
+		} else if xff != "" {
+			return xff
 		}
 	}
 
-	// Use direct connection IP (no trusted proxy or no proxy headers)
+	// Check X-Real-IP header
+	xri := r.Header.Get("X-Real-IP")
+	if xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Use direct connection IP (trusted proxy but no proxy headers)
 	return directIP
 }
 

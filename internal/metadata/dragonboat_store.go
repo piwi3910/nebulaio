@@ -265,97 +265,69 @@ func (s *DragonboatStore) GetObjectVersion(ctx context.Context, bucket, key, ver
 }
 
 func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (*VersionListing, error) {
-	// Prefix for all versions in this bucket
-	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObjectVersion, bucket))
-
 	var (
 		versions       []*ObjectMeta
 		deleteMarkers  []*ObjectMeta
 		commonPrefixes []string
+		prefixSet      = make(map[string]bool)
 	)
 
-	prefixSet := make(map[string]bool)
+	// Collect versioned objects
+	err := s.collectVersionedObjects(bucket, prefix, delimiter, keyMarker, versionIDMarker, maxKeys, &versions, &deleteMarkers, &commonPrefixes, prefixSet)
+	if err != nil {
+		return nil, err
+	}
 
-	err := s.badger.View(func(txn *badger.Txn) error {
+	// Collect current/non-versioned objects
+	err = s.collectCurrentObjects(bucket, prefix, delimiter, &versions, &deleteMarkers, &commonPrefixes, prefixSet)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort and paginate results
+	return s.buildVersionListing(versions, deleteMarkers, commonPrefixes, maxKeys), nil
+}
+
+// collectVersionedObjects retrieves all versioned objects from the version store.
+func (s *DragonboatStore) collectVersionedObjects(bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
+	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObjectVersion, bucket))
+
+	return s.badger.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.Prefix = dbPrefix
 
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		// Determine start key
-		startKey := dbPrefix
-
-		if keyMarker != "" {
-			if versionIDMarker != "" {
-				startKey = []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, keyMarker, versionIDMarker))
-			} else {
-				startKey = []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, keyMarker))
-			}
-		}
-
+		startKey := s.calculateStartKey(dbPrefix, bucket, keyMarker, versionIDMarker)
 		count := 0
 
 		for it.Seek(startKey); it.Valid(); it.Next() {
 			item := it.Item()
-			key := string(item.Key())
 
-			// Extract object key and version from DB key
-			// Format: objver:{bucket}/{key}#{versionID}
-			trimmed := strings.TrimPrefix(key, string(dbPrefix))
-
-			hashIdx := strings.LastIndex(trimmed, "#")
-			if hashIdx < 0 {
+			objKey, versionID, shouldContinue := s.parseVersionKey(item.Key(), dbPrefix)
+			if shouldContinue {
 				continue
 			}
 
-			objKey := trimmed[:hashIdx]
-
-			// Apply prefix filter
-			if prefix != "" && !strings.HasPrefix(objKey, prefix) {
+			if !s.matchesPrefixFilter(objKey, prefix) {
 				continue
 			}
 
-			// Handle delimiter (for "folder" simulation)
-			if delimiter != "" {
-				afterPrefix := strings.TrimPrefix(objKey, prefix)
-				if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
-					// This is a "common prefix" (folder)
-					commonPrefix := prefix + afterPrefix[:idx+1]
-					if !prefixSet[commonPrefix] {
-						prefixSet[commonPrefix] = true
-						commonPrefixes = append(commonPrefixes, commonPrefix)
-					}
-
-					continue
-				}
+			if s.handleDelimiter(objKey, prefix, delimiter, commonPrefixes, prefixSet) {
+				continue
 			}
 
-			// Skip the marker entry itself
-			if keyMarker != "" && objKey == keyMarker {
-				// Get the version ID from this entry
-				thisVersionID := trimmed[hashIdx+1:]
-				if versionIDMarker != "" && thisVersionID <= versionIDMarker {
-					continue
-				}
+			if s.shouldSkipMarker(objKey, versionID, keyMarker, versionIDMarker) {
+				continue
 			}
 
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-
-			var meta ObjectMeta
-			err = json.Unmarshal(val, &meta)
+			meta, err := s.unmarshalObjectMeta(item)
 			if err != nil {
 				continue
 			}
 
-			if meta.DeleteMarker {
-				deleteMarkers = append(deleteMarkers, &meta)
-			} else {
-				versions = append(versions, &meta)
-			}
+			s.categorizeObject(meta, versions, deleteMarkers)
 
 			count++
 			if maxKeys > 0 && count >= maxKeys+1 {
@@ -365,13 +337,13 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
+}
 
-	// Also include current versions from the main object store
-	err = s.badger.View(func(txn *badger.Txn) error {
-		objPrefix := []byte(fmt.Sprintf("%s%s/", prefixObject, bucket))
+// collectCurrentObjects retrieves current/non-versioned objects from the main object store.
+func (s *DragonboatStore) collectCurrentObjects(bucket, prefix, delimiter string, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
+	objPrefix := []byte(fmt.Sprintf("%s%s/", prefixObject, bucket))
+
+	return s.badger.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.Prefix = objPrefix
 
@@ -380,98 +352,126 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
-			key := string(item.Key())
-			objKey := strings.TrimPrefix(key, string(objPrefix))
+			objKey := s.extractObjectKey(item.Key(), objPrefix)
 
-			// Apply prefix filter
-			if prefix != "" && !strings.HasPrefix(objKey, prefix) {
+			if !s.matchesPrefixFilter(objKey, prefix) {
 				continue
 			}
 
-			// Handle delimiter (for "folder" simulation)
-			if delimiter != "" {
-				afterPrefix := strings.TrimPrefix(objKey, prefix)
-				if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
-					// This is a "common prefix" (folder)
-					commonPrefix := prefix + afterPrefix[:idx+1]
-					if !prefixSet[commonPrefix] {
-						prefixSet[commonPrefix] = true
-						commonPrefixes = append(commonPrefixes, commonPrefix)
-					}
-
-					continue
-				}
+			if s.handleDelimiter(objKey, prefix, delimiter, commonPrefixes, prefixSet) {
+				continue
 			}
 
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-
-			var meta ObjectMeta
-			err = json.Unmarshal(val, &meta)
+			meta, err := s.unmarshalObjectMeta(item)
 			if err != nil {
 				continue
 			}
 
-			// Only add if it has no version ID (non-versioned object) or is a unique entry
-			if meta.VersionID == "" || meta.VersionID == "null" {
-				if meta.DeleteMarker {
-					deleteMarkers = append(deleteMarkers, &meta)
-				} else {
-					versions = append(versions, &meta)
-				}
+			if s.isNonVersionedObject(meta) {
+				s.categorizeObject(meta, versions, deleteMarkers)
 			}
 		}
 
 		return nil
 	})
+}
+
+// Helper functions for ListObjectVersions
+
+func (s *DragonboatStore) calculateStartKey(dbPrefix []byte, bucket, keyMarker, versionIDMarker string) []byte {
+	if keyMarker == "" {
+		return dbPrefix
+	}
+
+	if versionIDMarker != "" {
+		return []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, keyMarker, versionIDMarker))
+	}
+
+	return []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, keyMarker))
+}
+
+func (s *DragonboatStore) parseVersionKey(key, dbPrefix []byte) (objKey, versionID string, shouldContinue bool) {
+	trimmed := strings.TrimPrefix(string(key), string(dbPrefix))
+
+	hashIdx := strings.LastIndex(trimmed, "#")
+	if hashIdx < 0 {
+		return "", "", true
+	}
+
+	return trimmed[:hashIdx], trimmed[hashIdx+1:], false
+}
+
+func (s *DragonboatStore) extractObjectKey(key, prefix []byte) string {
+	return strings.TrimPrefix(string(key), string(prefix))
+}
+
+func (s *DragonboatStore) matchesPrefixFilter(objKey, prefix string) bool {
+	return prefix == "" || strings.HasPrefix(objKey, prefix)
+}
+
+func (s *DragonboatStore) handleDelimiter(objKey, prefix, delimiter string, commonPrefixes *[]string, prefixSet map[string]bool) bool {
+	if delimiter == "" {
+		return false
+	}
+
+	afterPrefix := strings.TrimPrefix(objKey, prefix)
+	if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
+		commonPrefix := prefix + afterPrefix[:idx+1]
+		if !prefixSet[commonPrefix] {
+			prefixSet[commonPrefix] = true
+
+			*commonPrefixes = append(*commonPrefixes, commonPrefix)
+		}
+
+		return true
+	}
+
+	return false
+}
+
+func (s *DragonboatStore) shouldSkipMarker(objKey, versionID, keyMarker, versionIDMarker string) bool {
+	if keyMarker == "" || objKey != keyMarker {
+		return false
+	}
+
+	return versionIDMarker != "" && versionID <= versionIDMarker
+}
+
+func (s *DragonboatStore) unmarshalObjectMeta(item *badger.Item) (*ObjectMeta, error) {
+	val, err := item.ValueCopy(nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// Sort common prefixes
+	var meta ObjectMeta
+
+	err = json.Unmarshal(val, &meta)
+	if err != nil {
+		return nil, err
+	}
+
+	return &meta, nil
+}
+
+func (s *DragonboatStore) categorizeObject(meta *ObjectMeta, versions, deleteMarkers *[]*ObjectMeta) {
+	if meta.DeleteMarker {
+		*deleteMarkers = append(*deleteMarkers, meta)
+	} else {
+		*versions = append(*versions, meta)
+	}
+}
+
+func (s *DragonboatStore) isNonVersionedObject(meta *ObjectMeta) bool {
+	return meta.VersionID == "" || meta.VersionID == "null"
+}
+
+func (s *DragonboatStore) buildVersionListing(versions, deleteMarkers []*ObjectMeta, commonPrefixes []string, maxKeys int) *VersionListing {
 	sort.Strings(commonPrefixes)
 
-	// Sort versions by key then by version ID (descending for versions)
-	sort.Slice(versions, func(i, j int) bool {
-		if versions[i].Key != versions[j].Key {
-			return versions[i].Key < versions[j].Key
-		}
-		// Newer versions first (higher ULID = newer)
-		return versions[i].VersionID > versions[j].VersionID
-	})
+	s.sortVersions(versions)
+	s.sortVersions(deleteMarkers)
 
-	sort.Slice(deleteMarkers, func(i, j int) bool {
-		if deleteMarkers[i].Key != deleteMarkers[j].Key {
-			return deleteMarkers[i].Key < deleteMarkers[j].Key
-		}
-
-		return deleteMarkers[i].VersionID > deleteMarkers[j].VersionID
-	})
-
-	// Determine if truncated
-	isTruncated := false
-	nextKeyMarker := ""
-	nextVersionIDMarker := ""
-
-	totalItems := len(versions) + len(deleteMarkers)
-	if maxKeys > 0 && totalItems > maxKeys {
-		isTruncated = true
-		// Truncate to maxKeys
-		if len(versions) > maxKeys {
-			nextKeyMarker = versions[maxKeys].Key
-			nextVersionIDMarker = versions[maxKeys].VersionID
-			versions = versions[:maxKeys]
-		} else if len(deleteMarkers) > 0 {
-			remaining := maxKeys - len(versions)
-			if remaining < len(deleteMarkers) {
-				nextKeyMarker = deleteMarkers[remaining].Key
-				nextVersionIDMarker = deleteMarkers[remaining].VersionID
-				deleteMarkers = deleteMarkers[:remaining]
-			}
-		}
-	}
+	isTruncated, nextKeyMarker, nextVersionIDMarker := s.calculatePagination(versions, deleteMarkers, maxKeys)
 
 	return &VersionListing{
 		Versions:            versions,
@@ -480,7 +480,45 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 		IsTruncated:         isTruncated,
 		NextKeyMarker:       nextKeyMarker,
 		NextVersionIDMarker: nextVersionIDMarker,
-	}, nil
+	}
+}
+
+func (s *DragonboatStore) sortVersions(metas []*ObjectMeta) {
+	sort.Slice(metas, func(i, j int) bool {
+		if metas[i].Key != metas[j].Key {
+			return metas[i].Key < metas[j].Key
+		}
+
+		return metas[i].VersionID > metas[j].VersionID
+	})
+}
+
+func (s *DragonboatStore) calculatePagination(versions, deleteMarkers []*ObjectMeta, maxKeys int) (isTruncated bool, nextKeyMarker, nextVersionIDMarker string) {
+	if maxKeys <= 0 {
+		return false, "", ""
+	}
+
+	totalItems := len(versions) + len(deleteMarkers)
+	if totalItems <= maxKeys {
+		return false, "", ""
+	}
+
+	isTruncated = true
+
+	if len(versions) > maxKeys {
+		nextKeyMarker = versions[maxKeys].Key
+		nextVersionIDMarker = versions[maxKeys].VersionID
+		versions = versions[:maxKeys]
+	} else if len(deleteMarkers) > 0 {
+		remaining := maxKeys - len(versions)
+		if remaining < len(deleteMarkers) {
+			nextKeyMarker = deleteMarkers[remaining].Key
+			nextVersionIDMarker = deleteMarkers[remaining].VersionID
+			deleteMarkers = deleteMarkers[:remaining]
+		}
+	}
+
+	return isTruncated, nextKeyMarker, nextVersionIDMarker
 }
 
 func (s *DragonboatStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {

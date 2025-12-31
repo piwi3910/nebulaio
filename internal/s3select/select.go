@@ -378,100 +378,136 @@ func (e *Engine) executeQuery(query *Query, records []Record) ([]Record, error) 
 // executeAggregates handles aggregate functions.
 func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, error) {
 	result := Record{Fields: make(map[string]interface{})}
-
 	columns := make([]string, 0, len(query.Columns))
 
 	for _, col := range query.Columns {
-		var value interface{}
-
-		alias := col.Alias
-		if alias == "" {
-			alias = fmt.Sprintf("%s(%s)", col.Function, col.Name)
-		}
-
+		alias := e.getColumnAlias(col)
 		columns = append(columns, alias)
 
-		switch strings.ToUpper(col.Function) {
-		case "COUNT":
-			if col.Name == "*" {
-				value = len(records)
-			} else {
-				count := 0
-
-				for _, r := range records {
-					if _, ok := r.Fields[col.Name]; ok {
-						count++
-					}
-				}
-
-				value = count
-			}
-		case "SUM":
-			var sum float64
-
-			for _, r := range records {
-				if v, ok := r.Fields[col.Name]; ok {
-					sum += toFloat64(v)
-				}
-			}
-
-			value = sum
-		case "AVG":
-			var (
-				sum   float64
-				count int
-			)
-
-			for _, r := range records {
-				if v, ok := r.Fields[col.Name]; ok {
-					sum += toFloat64(v)
-					count++
-				}
-			}
-
-			if count > 0 {
-				value = sum / float64(count)
-			} else {
-				value = 0.0
-			}
-		case "MIN":
-			var minVal *float64
-
-			for _, r := range records {
-				if v, ok := r.Fields[col.Name]; ok {
-					f := toFloat64(v)
-					if minVal == nil || f < *minVal {
-						minVal = &f
-					}
-				}
-			}
-
-			if minVal != nil {
-				value = *minVal
-			}
-		case "MAX":
-			var maxVal *float64
-
-			for _, r := range records {
-				if v, ok := r.Fields[col.Name]; ok {
-					f := toFloat64(v)
-					if maxVal == nil || f > *maxVal {
-						maxVal = &f
-					}
-				}
-			}
-
-			if maxVal != nil {
-				value = *maxVal
-			}
-		}
-
+		value := e.calculateAggregate(col, records)
 		result.Fields[alias] = value
 	}
 
 	result.Columns = columns
 
 	return []Record{result}, nil
+}
+
+// getColumnAlias returns the column alias or generates one from function and name.
+func (e *Engine) getColumnAlias(col Column) string {
+	if col.Alias != "" {
+		return col.Alias
+	}
+
+	return fmt.Sprintf("%s(%s)", col.Function, col.Name)
+}
+
+// calculateAggregate dispatches to the appropriate aggregate calculation.
+func (e *Engine) calculateAggregate(col Column, records []Record) interface{} {
+	switch strings.ToUpper(col.Function) {
+	case "COUNT":
+		return e.calculateCount(col, records)
+	case "SUM":
+		return e.calculateSum(col, records)
+	case "AVG":
+		return e.calculateAvg(col, records)
+	case "MIN":
+		return e.calculateMin(col, records)
+	case "MAX":
+		return e.calculateMax(col, records)
+	default:
+		return nil
+	}
+}
+
+// calculateCount counts records with the specified column.
+func (e *Engine) calculateCount(col Column, records []Record) int {
+	if col.Name == "*" {
+		return len(records)
+	}
+
+	count := 0
+
+	for _, r := range records {
+		if _, ok := r.Fields[col.Name]; ok {
+			count++
+		}
+	}
+
+	return count
+}
+
+// calculateSum sums numeric values in the specified column.
+func (e *Engine) calculateSum(col Column, records []Record) float64 {
+	var sum float64
+
+	for _, r := range records {
+		if v, ok := r.Fields[col.Name]; ok {
+			sum += toFloat64(v)
+		}
+	}
+
+	return sum
+}
+
+// calculateAvg calculates the average of numeric values in the specified column.
+func (e *Engine) calculateAvg(col Column, records []Record) float64 {
+	var sum float64
+
+	var count int
+
+	for _, r := range records {
+		if v, ok := r.Fields[col.Name]; ok {
+			sum += toFloat64(v)
+			count++
+		}
+	}
+
+	if count > 0 {
+		return sum / float64(count)
+	}
+
+	return 0.0
+}
+
+// calculateMin finds the minimum numeric value in the specified column.
+func (e *Engine) calculateMin(col Column, records []Record) interface{} {
+	var minVal *float64
+
+	for _, r := range records {
+		if v, ok := r.Fields[col.Name]; ok {
+			f := toFloat64(v)
+			if minVal == nil || f < *minVal {
+				minVal = &f
+			}
+		}
+	}
+
+	if minVal != nil {
+		return *minVal
+	}
+
+	return nil
+}
+
+// calculateMax finds the maximum numeric value in the specified column.
+func (e *Engine) calculateMax(col Column, records []Record) interface{} {
+	var maxVal *float64
+
+	for _, r := range records {
+		if v, ok := r.Fields[col.Name]; ok {
+			f := toFloat64(v)
+			if maxVal == nil || f > *maxVal {
+				maxVal = &f
+			}
+		}
+	}
+
+	if maxVal != nil {
+		return *maxVal
+	}
+
+	return nil
 }
 
 // formatOutput formats records to output format.

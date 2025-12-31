@@ -455,59 +455,115 @@ func matchConditions(stmtConditions map[string]map[string]interface{}, condition
 		for key, expectedValue := range conditionMap {
 			actualValue, exists := conditions[key]
 
-			switch operator {
-			case "StringEquals":
-				if !exists || !matchConditionValue(expectedValue, actualValue, func(a, b string) bool { return a == b }) {
-					return false
-				}
-			case "StringNotEquals":
-				if exists && matchConditionValue(expectedValue, actualValue, func(a, b string) bool { return a == b }) {
-					return false
-				}
-			case "StringLike":
-				if !exists || !matchConditionValue(expectedValue, actualValue, matchWildcard) {
-					return false
-				}
-			case "StringNotLike":
-				if exists && matchConditionValue(expectedValue, actualValue, matchWildcard) {
-					return false
-				}
-			case "IpAddress":
-				if !exists || !matchConditionValue(expectedValue, actualValue, matchIPAddress) {
-					return false
-				}
-			case "NotIpAddress":
-				if exists && matchConditionValue(expectedValue, actualValue, matchIPAddress) {
-					return false
-				}
-			case "Bool":
-				if !exists {
-					return false
-				}
-
-				expectedBool := fmt.Sprintf("%v", expectedValue) == boolTrue
-
-				actualBool := actualValue == boolTrue
-				if expectedBool != actualBool {
-					return false
-				}
-			case "Null":
-				expectedNull := fmt.Sprintf("%v", expectedValue) == boolTrue
-				if expectedNull && exists {
-					return false
-				}
-
-				if !expectedNull && !exists {
-					return false
-				}
-			default:
-				// Unknown operator, skip
-				continue
+			if !evaluateConditionOperator(operator, expectedValue, actualValue, exists) {
+				return false
 			}
 		}
 	}
 
 	return true
+}
+
+// evaluateConditionOperator evaluates a single condition operator.
+func evaluateConditionOperator(operator string, expectedValue interface{}, actualValue string, exists bool) bool {
+	switch operator {
+	case "StringEquals":
+		return matchStringEquals(expectedValue, actualValue, exists)
+	case "StringNotEquals":
+		return matchStringNotEquals(expectedValue, actualValue, exists)
+	case "StringLike":
+		return matchStringLike(expectedValue, actualValue, exists)
+	case "StringNotLike":
+		return matchStringNotLike(expectedValue, actualValue, exists)
+	case "IpAddress":
+		return matchIPCondition(expectedValue, actualValue, exists)
+	case "NotIpAddress":
+		return matchNotIPCondition(expectedValue, actualValue, exists)
+	case "Bool":
+		return matchBoolCondition(expectedValue, actualValue, exists)
+	case "Null":
+		return matchNullCondition(expectedValue, exists)
+	default:
+		// Unknown operator - don't fail, just skip
+		return true
+	}
+}
+
+// matchStringEquals checks if actual equals expected string value.
+func matchStringEquals(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return false
+	}
+
+	return matchConditionValue(expected, actual, func(a, b string) bool { return a == b })
+}
+
+// matchStringNotEquals checks if actual does not equal expected string value.
+func matchStringNotEquals(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return true
+	}
+
+	return !matchConditionValue(expected, actual, func(a, b string) bool { return a == b })
+}
+
+// matchStringLike checks if actual matches expected wildcard pattern.
+func matchStringLike(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return false
+	}
+
+	return matchConditionValue(expected, actual, matchWildcard)
+}
+
+// matchStringNotLike checks if actual does not match expected wildcard pattern.
+func matchStringNotLike(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return true
+	}
+
+	return !matchConditionValue(expected, actual, matchWildcard)
+}
+
+// matchIPCondition checks if actual IP matches expected CIDR/IP pattern.
+func matchIPCondition(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return false
+	}
+
+	return matchConditionValue(expected, actual, matchIPAddress)
+}
+
+// matchNotIPCondition checks if actual IP does not match expected CIDR/IP pattern.
+func matchNotIPCondition(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return true
+	}
+
+	return !matchConditionValue(expected, actual, matchIPAddress)
+}
+
+// matchBoolCondition checks if actual boolean matches expected.
+func matchBoolCondition(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return false
+	}
+
+	expectedBool := fmt.Sprintf("%v", expected) == boolTrue
+	actualBool := actual == boolTrue
+
+	return expectedBool == actualBool
+}
+
+// matchNullCondition checks if key existence matches expected null condition.
+func matchNullCondition(expected interface{}, exists bool) bool {
+	expectedNull := fmt.Sprintf("%v", expected) == boolTrue
+
+	if expectedNull {
+		return !exists
+	}
+
+	return exists
 }
 
 // matchConditionValue matches a condition value which can be a string or array.

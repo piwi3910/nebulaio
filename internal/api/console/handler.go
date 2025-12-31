@@ -446,34 +446,43 @@ func (h *Handler) GetObjectInfo(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 
 	keys, err := h.store.ListAccessKeys(ctx, userID)
-	if err == nil && len(keys) > 0 {
-		// Find first enabled key
-		var accessKey *metadata.AccessKey
+	if err != nil || len(keys) == 0 {
+		writeJSON(w, http.StatusOK, response)
 
-		for _, k := range keys {
-			if k.Enabled {
-				accessKey = k
-				break
-			}
+		return
+	}
+
+	// Find first enabled key
+	var accessKey *metadata.AccessKey
+
+	for _, k := range keys {
+		if k.Enabled {
+			accessKey = k
+
+			break
 		}
+	}
 
-		// Generate presigned URL if we have an enabled key
-		if accessKey != nil {
-			generator := auth.NewPresignedURLGenerator("us-east-1", "")
+	// Generate presigned URL if we have an enabled key
+	if accessKey == nil {
+		writeJSON(w, http.StatusOK, response)
 
-			presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
-				Method:      "GET",
-				Bucket:      bucketName,
-				Key:         key,
-				Expiration:  defaultPresignedExpirySec * time.Second,
-				AccessKeyID: accessKey.AccessKeyID,
-				SecretKey:   accessKey.SecretAccessKey,
-				Region:      "us-east-1",
-			})
-			if err == nil {
-				response.DownloadURL = presignedURL
-			}
-		}
+		return
+	}
+
+	generator := auth.NewPresignedURLGenerator("us-east-1", "")
+
+	presignedURL, err := generator.GeneratePresignedURL(auth.PresignParams{
+		Method:      "GET",
+		Bucket:      bucketName,
+		Key:         key,
+		Expiration:  defaultPresignedExpirySec * time.Second,
+		AccessKeyID: accessKey.AccessKeyID,
+		SecretKey:   accessKey.SecretAccessKey,
+		Region:      "us-east-1",
+	})
+	if err == nil {
+		response.DownloadURL = presignedURL
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -519,7 +528,9 @@ func (h *Handler) GetObjectContent(w http.ResponseWriter, r *http.Request) {
 }
 
 // copyBuffer copies from src to dst using a buffer.
-func copyBuffer(dst http.ResponseWriter, src interface{ Read(p []byte) (n int, err error) }) (int64, error) {
+func copyBuffer(dst http.ResponseWriter, src interface {
+	Read(p []byte) (n int, err error)
+}) (int64, error) {
 	buf := make([]byte, copyBufferSize)
 
 	var written int64

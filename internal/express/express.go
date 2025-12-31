@@ -18,7 +18,7 @@ import (
 
 // Configuration constants.
 const (
-	defaultMaxAppendSize          = 5 << 30   // 5GB
+	defaultMaxAppendSize          = 5 << 30 // 5GB
 	defaultStreamingListBatchSize = 1000
 	resultChannelBuffer           = 10
 	sessionCleanupInterval        = 5 * time.Minute
@@ -416,137 +416,158 @@ func (s *ExpressService) ExpressListObjects(ctx context.Context, bucket, prefix 
 		defer close(resultChan)
 		defer close(errChan)
 
-		start := time.Now()
-
-		defer func() {
-			atomic.AddInt64(&s.metrics.ListOperations, 1)
-			s.metrics.mu.Lock()
-			s.metrics.ListLatencySum += time.Since(start)
-			s.metrics.mu.Unlock()
-		}()
-
-		if opts.MaxKeys == 0 {
-			opts.MaxKeys = s.config.StreamingListBatchSize
-		}
-
-		objectsChan, errorsChan := s.store.ListObjects(ctx, bucket, prefix, opts)
-
-		batch := make([]ObjectInfo, 0, s.config.StreamingListBatchSize)
-		prefixMap := make(map[string]bool)
-		keyCount := 0
-
-		var lastKey string
-
-		for {
-			select {
-			case <-ctx.Done():
-				errChan <- ctx.Err()
-				return
-
-			case err, ok := <-errorsChan:
-				if ok && err != nil {
-					errChan <- err
-					return
-				}
-
-			case obj, ok := <-objectsChan:
-				if !ok {
-					// Send final batch
-					if len(batch) > 0 {
-						prefixes := make([]string, 0, len(prefixMap))
-						for p := range prefixMap {
-							prefixes = append(prefixes, p)
-						}
-
-						select {
-						case resultChan <- StreamingListResult{
-							Objects:           batch,
-							CommonPrefixes:    prefixes,
-							IsTruncated:       false,
-							ContinuationToken: "",
-							KeyCount:          keyCount,
-						}:
-						case <-ctx.Done():
-							errChan <- ctx.Err()
-							return
-						}
-
-						atomic.AddInt64(&s.metrics.ListObjectsReturned, int64(len(batch)))
-					}
-
-					return
-				}
-
-				// Handle delimiter-based prefixes
-				if opts.Delimiter != "" {
-					if idx := findDelimiter(obj.Key, prefix, opts.Delimiter); idx >= 0 {
-						commonPrefix := obj.Key[:idx+len(opts.Delimiter)]
-						if !prefixMap[commonPrefix] {
-							prefixMap[commonPrefix] = true
-						}
-
-						continue
-					}
-				}
-
-				batch = append(batch, obj)
-				lastKey = obj.Key
-				keyCount++
-
-				// Stream batch when full
-				if len(batch) >= s.config.StreamingListBatchSize {
-					prefixes := make([]string, 0, len(prefixMap))
-					for p := range prefixMap {
-						prefixes = append(prefixes, p)
-					}
-
-					select {
-					case resultChan <- StreamingListResult{
-						Objects:           batch,
-						CommonPrefixes:    prefixes,
-						IsTruncated:       true,
-						ContinuationToken: lastKey,
-						KeyCount:          keyCount,
-					}:
-					case <-ctx.Done():
-						errChan <- ctx.Err()
-						return
-					}
-
-					atomic.AddInt64(&s.metrics.ListObjectsReturned, int64(len(batch)))
-					batch = make([]ObjectInfo, 0, s.config.StreamingListBatchSize)
-					prefixMap = make(map[string]bool)
-				}
-
-				// Check max keys limit
-				if opts.MaxKeys > 0 && keyCount >= opts.MaxKeys {
-					prefixes := make([]string, 0, len(prefixMap))
-					for p := range prefixMap {
-						prefixes = append(prefixes, p)
-					}
-
-					select {
-					case resultChan <- StreamingListResult{
-						Objects:           batch,
-						CommonPrefixes:    prefixes,
-						IsTruncated:       true,
-						ContinuationToken: lastKey,
-						KeyCount:          keyCount,
-					}:
-					case <-ctx.Done():
-						errChan <- ctx.Err()
-						return
-					}
-
-					atomic.AddInt64(&s.metrics.ListObjectsReturned, int64(len(batch)))
-
-					return
-				}
-			}
-		}
+		s.processListObjects(ctx, bucket, prefix, opts, resultChan, errChan)
 	}()
 
 	return resultChan, errChan
+}
+
+// processListObjects handles the main list processing logic.
+func (s *ExpressService) processListObjects(ctx context.Context, bucket, prefix string, opts ListOptions, resultChan chan<- StreamingListResult, errChan chan<- error) {
+	start := time.Now()
+	defer s.recordListMetrics(start)
+
+	if opts.MaxKeys == 0 {
+		opts.MaxKeys = s.config.StreamingListBatchSize
+	}
+
+	objectsChan, errorsChan := s.store.ListObjects(ctx, bucket, prefix, opts)
+
+	state := &listState{
+		batch:     make([]ObjectInfo, 0, s.config.StreamingListBatchSize),
+		prefixMap: make(map[string]bool),
+		keyCount:  0,
+		batchSize: s.config.StreamingListBatchSize,
+		maxKeys:   opts.MaxKeys,
+		delimiter: opts.Delimiter,
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			errChan <- ctx.Err()
+
+			return
+
+		case err, ok := <-errorsChan:
+			if ok && err != nil {
+				errChan <- err
+				return
+			}
+
+		case obj, ok := <-objectsChan:
+			if !ok {
+				s.sendFinalBatch(ctx, state, resultChan, errChan)
+
+				return
+			}
+
+			if s.processObject(ctx, obj, prefix, state, resultChan, errChan) {
+				return
+			}
+		}
+	}
+}
+
+// listState tracks streaming list operation state.
+type listState struct {
+	prefixMap map[string]bool
+	lastKey   string
+	delimiter string
+	batch     []ObjectInfo
+	keyCount  int
+	batchSize int
+	maxKeys   int
+}
+
+// processObject processes a single object in the list operation.
+func (s *ExpressService) processObject(ctx context.Context, obj ObjectInfo, prefix string, state *listState, resultChan chan<- StreamingListResult, errChan chan<- error) bool {
+	// Handle delimiter-based prefixes
+	if state.delimiter != "" {
+		if idx := findDelimiter(obj.Key, prefix, state.delimiter); idx >= 0 {
+			commonPrefix := obj.Key[:idx+len(state.delimiter)]
+			if !state.prefixMap[commonPrefix] {
+				state.prefixMap[commonPrefix] = true
+			}
+
+			return false
+		}
+	}
+
+	state.batch = append(state.batch, obj)
+	state.lastKey = obj.Key
+	state.keyCount++
+
+	// Stream batch when full
+	if len(state.batch) >= state.batchSize {
+		if s.sendBatch(ctx, state, true, resultChan, errChan) {
+			return true
+		}
+
+		state.batch = make([]ObjectInfo, 0, state.batchSize)
+		state.prefixMap = make(map[string]bool)
+	}
+
+	// Check max keys limit
+	if state.maxKeys > 0 && state.keyCount >= state.maxKeys {
+		s.sendBatch(ctx, state, true, resultChan, errChan)
+
+		return true
+	}
+
+	return false
+}
+
+// sendFinalBatch sends the final batch of results.
+func (s *ExpressService) sendFinalBatch(ctx context.Context, state *listState, resultChan chan<- StreamingListResult, errChan chan<- error) {
+	if len(state.batch) > 0 {
+		s.sendBatch(ctx, state, false, resultChan, errChan)
+	}
+}
+
+// sendBatch sends a batch of results to the result channel.
+func (s *ExpressService) sendBatch(ctx context.Context, state *listState, isTruncated bool, resultChan chan<- StreamingListResult, errChan chan<- error) bool {
+	prefixes := s.extractPrefixes(state.prefixMap)
+
+	result := StreamingListResult{
+		Objects:        state.batch,
+		CommonPrefixes: prefixes,
+		IsTruncated:    isTruncated,
+		KeyCount:       state.keyCount,
+	}
+
+	if isTruncated {
+		result.ContinuationToken = state.lastKey
+	}
+
+	select {
+	case resultChan <- result:
+		atomic.AddInt64(&s.metrics.ListObjectsReturned, int64(len(state.batch)))
+
+		return false
+	case <-ctx.Done():
+		errChan <- ctx.Err()
+
+		return true
+	}
+}
+
+// extractPrefixes converts prefix map to sorted slice.
+func (s *ExpressService) extractPrefixes(prefixMap map[string]bool) []string {
+	prefixes := make([]string, 0, len(prefixMap))
+	for p := range prefixMap {
+		prefixes = append(prefixes, p)
+	}
+
+	return prefixes
+}
+
+// recordListMetrics records metrics for list operations.
+func (s *ExpressService) recordListMetrics(start time.Time) {
+	atomic.AddInt64(&s.metrics.ListOperations, 1)
+	s.metrics.mu.Lock()
+	s.metrics.ListLatencySum += time.Since(start)
+	s.metrics.mu.Unlock()
 }
 
 // ExpressDeleteObject performs an accelerated DELETE operation.
