@@ -1058,6 +1058,19 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	aa.mu.Lock()
 	defer aa.mu.Unlock()
 
+	baseline := aa.getOrCreateBaseline(userID)
+	metrics := baseline.Metrics
+
+	aa.updateActiveHours(metrics, events)
+	aa.updateCommonBuckets(metrics, events)
+	aa.updateCommonOperations(metrics, events)
+	aa.updateCommonIPs(metrics, events)
+	aa.updateCommonUserAgents(metrics, events)
+
+	aa.finalizeBaselineUpdate(ctx, baseline, len(events))
+}
+
+func (aa *AccessAnalytics) getOrCreateBaseline(userID string) *UserBaseline {
 	baseline, exists := aa.baselines[userID]
 	if !exists {
 		baseline = &UserBaseline{
@@ -1069,11 +1082,10 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 		}
 		aa.baselines[userID] = baseline
 	}
+	return baseline
+}
 
-	// Update metrics
-	metrics := baseline.Metrics
-
-	// Track active hours
+func (aa *AccessAnalytics) updateActiveHours(metrics *BaselineMetrics, events []*AccessEvent) {
 	hourCounts := make(map[int]int)
 	for _, h := range metrics.ActiveHours {
 		hourCounts[h]++
@@ -1087,8 +1099,9 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for h := range hourCounts {
 		metrics.ActiveHours = append(metrics.ActiveHours, h)
 	}
+}
 
-	// Track common buckets
+func (aa *AccessAnalytics) updateCommonBuckets(metrics *BaselineMetrics, events []*AccessEvent) {
 	bucketSet := make(map[string]bool)
 	for _, b := range metrics.CommonBuckets {
 		bucketSet[b] = true
@@ -1102,13 +1115,15 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for b := range bucketSet {
 		metrics.CommonBuckets = append(metrics.CommonBuckets, b)
 	}
+}
 
-	// Track operations
+func (aa *AccessAnalytics) updateCommonOperations(metrics *BaselineMetrics, events []*AccessEvent) {
 	for _, event := range events {
 		metrics.CommonOperations[event.AccessType]++
 	}
+}
 
-	// Track IPs
+func (aa *AccessAnalytics) updateCommonIPs(metrics *BaselineMetrics, events []*AccessEvent) {
 	ipSet := make(map[string]bool)
 	for _, ip := range metrics.CommonIPs {
 		ipSet[ip] = true
@@ -1122,8 +1137,9 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for ip := range ipSet {
 		metrics.CommonIPs = append(metrics.CommonIPs, ip)
 	}
+}
 
-	// Track user agents
+func (aa *AccessAnalytics) updateCommonUserAgents(metrics *BaselineMetrics, events []*AccessEvent) {
 	uaSet := make(map[string]bool)
 	for _, ua := range metrics.CommonUserAgents {
 		uaSet[ua] = true
@@ -1137,10 +1153,12 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for ua := range uaSet {
 		metrics.CommonUserAgents = append(metrics.CommonUserAgents, ua)
 	}
+}
 
-	baseline.EventCount += int64(len(events))
+func (aa *AccessAnalytics) finalizeBaselineUpdate(ctx context.Context, baseline *UserBaseline, eventCount int) {
+	baseline.EventCount += int64(eventCount)
 	baseline.UpdatedAt = time.Now()
-	metrics.LastUpdated = time.Now()
+	baseline.Metrics.LastUpdated = time.Now()
 
 	// Mark as stable if enough events
 	if baseline.EventCount >= int64(aa.config.MinEventsForBaseline) {
