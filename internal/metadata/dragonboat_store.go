@@ -145,79 +145,109 @@ func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delim
 
 	prefixSet := make(map[string]bool)
 
-	err := s.badger.View(func(txn *badger.Txn) error {
+	err := s.iterateObjectsForListing(bucket, dbPrefix, prefix, delimiter, continuationToken, maxKeys, &objects, &commonPrefixes, prefixSet)
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Strings(commonPrefixes)
+
+	return s.buildObjectListing(objects, commonPrefixes, maxKeys), nil
+}
+
+func (s *DragonboatStore) iterateObjectsForListing(bucket string, dbPrefix []byte, prefix, delimiter, continuationToken string, maxKeys int, objects *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
+	return s.badger.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.Prefix = dbPrefix
 
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		startKey := dbPrefix
-		if continuationToken != "" {
-			startKey = []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, continuationToken))
-		}
+		startKey := s.getStartKey(bucket, dbPrefix, continuationToken)
 
 		for it.Seek(startKey); it.Valid(); it.Next() {
-			item := it.Item()
-			key := string(item.Key())
-
-			// Extract object key from DB key
-			objKey := strings.TrimPrefix(key, string(dbPrefix))
-
-			// Apply prefix filter
-			if prefix != "" && !strings.HasPrefix(objKey, prefix) {
-				continue
-			}
-
-			// Handle delimiter (for "folder" simulation)
-			if delimiter != "" {
-				afterPrefix := strings.TrimPrefix(objKey, prefix)
-				if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
-					// This is a "common prefix" (folder)
-					commonPrefix := prefix + afterPrefix[:idx+1]
-					if !prefixSet[commonPrefix] {
-						prefixSet[commonPrefix] = true
-						commonPrefixes = append(commonPrefixes, commonPrefix)
-					}
-
-					continue
-				}
-			}
-
-			// Get object metadata
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-
-			var meta ObjectMeta
-			err = json.Unmarshal(val, &meta)
-			if err != nil {
-				continue
-			}
-
-			// Skip delete markers unless specifically querying versions
-			if meta.DeleteMarker {
-				continue
-			}
-
-			objects = append(objects, &meta)
-
-			if maxKeys > 0 && len(objects) >= maxKeys+1 {
+			if s.processListObjectItem(it.Item(), string(dbPrefix), prefix, delimiter, maxKeys, objects, commonPrefixes, prefixSet) {
 				break
 			}
 		}
 
 		return nil
 	})
-	if err != nil {
-		return nil, err
+}
+
+func (s *DragonboatStore) getStartKey(bucket string, dbPrefix []byte, continuationToken string) []byte {
+	if continuationToken != "" {
+		return []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, continuationToken))
+	}
+	return dbPrefix
+}
+
+func (s *DragonboatStore) processListObjectItem(item *badger.Item, dbPrefix, prefix, delimiter string, maxKeys int, objects *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) bool {
+	key := string(item.Key())
+	objKey := strings.TrimPrefix(key, dbPrefix)
+
+	// Apply prefix filter
+	if prefix != "" && !strings.HasPrefix(objKey, prefix) {
+		return false
 	}
 
-	// Sort common prefixes
-	sort.Strings(commonPrefixes)
+	// Handle delimiter (for "folder" simulation)
+	if s.handleCommonPrefix(objKey, prefix, delimiter, commonPrefixes, prefixSet) {
+		return false
+	}
 
-	// Determine if truncated
+	// Get and add object metadata
+	if s.addObjectToListing(item, objects) {
+		// Check if we've hit max keys
+		return maxKeys > 0 && len(*objects) >= maxKeys+1
+	}
+
+	return false
+}
+
+func (s *DragonboatStore) handleCommonPrefix(objKey, prefix, delimiter string, commonPrefixes *[]string, prefixSet map[string]bool) bool {
+	if delimiter == "" {
+		return false
+	}
+
+	afterPrefix := strings.TrimPrefix(objKey, prefix)
+	idx := strings.Index(afterPrefix, delimiter)
+	if idx < 0 {
+		return false
+	}
+
+	// This is a "common prefix" (folder)
+	commonPrefix := prefix + afterPrefix[:idx+1]
+	if !prefixSet[commonPrefix] {
+		prefixSet[commonPrefix] = true
+		*commonPrefixes = append(*commonPrefixes, commonPrefix)
+	}
+
+	return true
+}
+
+func (s *DragonboatStore) addObjectToListing(item *badger.Item, objects *[]*ObjectMeta) bool {
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		return false
+	}
+
+	var meta ObjectMeta
+	err = json.Unmarshal(val, &meta)
+	if err != nil {
+		return false
+	}
+
+	// Skip delete markers unless specifically querying versions
+	if meta.DeleteMarker {
+		return false
+	}
+
+	*objects = append(*objects, &meta)
+	return true
+}
+
+func (s *DragonboatStore) buildObjectListing(objects []*ObjectMeta, commonPrefixes []string, maxKeys int) *ObjectListing {
 	isTruncated := false
 	nextToken := ""
 
@@ -232,7 +262,7 @@ func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delim
 		CommonPrefixes:        commonPrefixes,
 		IsTruncated:           isTruncated,
 		NextContinuationToken: nextToken,
-	}, nil
+	}
 }
 
 // Version operations
