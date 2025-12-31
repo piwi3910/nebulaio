@@ -492,7 +492,7 @@ func (rm *ReplicationManager) matchesAndConditions(filter *ReplicationFilter, in
 	return true
 }
 
-func (rm *ReplicationManager) matchesAndPrefix(and *ReplicationFilterAnd, key string) bool {
+func (rm *ReplicationManager) matchesAndPrefix(and *ReplicationAnd, key string) bool {
 	if and.Prefix != "" && !strings.HasPrefix(key, and.Prefix) {
 		return false
 	}
@@ -500,7 +500,7 @@ func (rm *ReplicationManager) matchesAndPrefix(and *ReplicationFilterAnd, key st
 	return true
 }
 
-func (rm *ReplicationManager) matchesAndTags(and *ReplicationFilterAnd, info *S3ObjectInfo, key string) bool {
+func (rm *ReplicationManager) matchesAndTags(and *ReplicationAnd, info *S3ObjectInfo, key string) bool {
 	if len(and.Tags) == 0 {
 		return true
 	}
