@@ -675,47 +675,72 @@ func (e *ParquetSelectExecutor) Execute(query *SelectQuery) (*SelectResult, erro
 			break
 		}
 
-		// Apply query to each row
-		for _, row := range rows {
-			// Apply WHERE clause
-			if query.Where != nil {
-				match, err := evaluateCondition(query.Where, row)
-				if err != nil {
-					return nil, fmt.Errorf("failed to evaluate condition: %w", err)
-				}
+		limitReached, err := e.processBatch(rows, query, result)
+		if err != nil {
+			return nil, err
+		}
 
-				if !match {
-					continue
-				}
-			}
-
-			// Project columns
-			var resultRow []interface{}
-
-			if len(query.Columns) == 1 && query.Columns[0] == "*" {
-				// Select all columns
-				for _, col := range e.reader.schema.Columns {
-					colName := strings.Join(col.Path, ".")
-					resultRow = append(resultRow, row[colName])
-				}
-			} else {
-				for _, col := range query.Columns {
-					resultRow = append(resultRow, row[col])
-				}
-			}
-
-			result.Rows = append(result.Rows, resultRow)
-
-			// Check limit
-			if query.Limit > 0 && int64(len(result.Rows)) >= query.Limit {
-				return result, nil
-			}
+		if limitReached {
+			return result, nil
 		}
 
 		offset += int64(len(rows))
 	}
 
 	return result, nil
+}
+
+func (e *ParquetSelectExecutor) processBatch(rows []map[string]interface{}, query *SelectQuery, result *SelectResult) (bool, error) {
+	for _, row := range rows {
+		matchesWhere, err := e.evaluateWhereClause(query, row)
+		if err != nil {
+			return false, err
+		}
+
+		if !matchesWhere {
+			continue
+		}
+
+		resultRow := e.projectColumns(query, row)
+		result.Rows = append(result.Rows, resultRow)
+
+		if query.Limit > 0 && int64(len(result.Rows)) >= query.Limit {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (e *ParquetSelectExecutor) evaluateWhereClause(query *SelectQuery, row map[string]interface{}) (bool, error) {
+	if query.Where == nil {
+		return true, nil
+	}
+
+	match, err := evaluateCondition(query.Where, row)
+	if err != nil {
+		return false, fmt.Errorf("failed to evaluate condition: %w", err)
+	}
+
+	return match, nil
+}
+
+func (e *ParquetSelectExecutor) projectColumns(query *SelectQuery, row map[string]interface{}) []interface{} {
+	var resultRow []interface{}
+
+	if len(query.Columns) == 1 && query.Columns[0] == "*" {
+		// Select all columns
+		for _, col := range e.reader.schema.Columns {
+			colName := strings.Join(col.Path, ".")
+			resultRow = append(resultRow, row[colName])
+		}
+	} else {
+		for _, col := range query.Columns {
+			resultRow = append(resultRow, row[col])
+		}
+	}
+
+	return resultRow
 }
 
 // SelectQuery represents a parsed SELECT query.
