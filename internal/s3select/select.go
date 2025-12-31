@@ -755,94 +755,112 @@ func parseColumns(columnsStr string) ([]Column, error) {
 func parseWhereClause(where string) (*Condition, error) {
 	where = strings.TrimSpace(where)
 
-	// Handle AND/OR
 	andRegex := regexp.MustCompile(`(?i)\s+and\s+`)
 	orRegex := regexp.MustCompile(`(?i)\s+or\s+`)
 
 	if andParts := andRegex.Split(where, 2); len(andParts) == 2 {
-		left, err := parseWhereClause(andParts[0])
-		if err != nil {
-			return nil, err
-		}
-
-		right, err := parseWhereClause(andParts[1])
-		if err != nil {
-			return nil, err
-		}
-
-		left.And = right
-
-		return left, nil
+		return parseAndCondition(andParts)
 	}
 
 	if orParts := orRegex.Split(where, 2); len(orParts) == 2 {
-		left, err := parseWhereClause(orParts[0])
-		if err != nil {
-			return nil, err
-		}
-
-		right, err := parseWhereClause(orParts[1])
-		if err != nil {
-			return nil, err
-		}
-
-		left.Or = right
-
-		return left, nil
+		return parseOrCondition(orParts)
 	}
 
-	// Parse simple condition
+	return parseSimpleCondition(where)
+}
+
+func parseAndCondition(parts []string) (*Condition, error) {
+	left, err := parseWhereClause(parts[0])
+	if err != nil {
+		return nil, err
+	}
+
+	right, err := parseWhereClause(parts[1])
+	if err != nil {
+		return nil, err
+	}
+
+	left.And = right
+	return left, nil
+}
+
+func parseOrCondition(parts []string) (*Condition, error) {
+	left, err := parseWhereClause(parts[0])
+	if err != nil {
+		return nil, err
+	}
+
+	right, err := parseWhereClause(parts[1])
+	if err != nil {
+		return nil, err
+	}
+
+	left.Or = right
+	return left, nil
+}
+
+func parseSimpleCondition(where string) (*Condition, error) {
 	operators := []string{">=", "<=", "!=", "<>", "=", ">", "<", " LIKE ", " like ", " IS NULL", " is null", " IS NOT NULL", " is not null"}
 	for _, op := range operators {
 		if strings.Contains(where, op) {
 			parts := strings.SplitN(where, op, 2)
 			if len(parts) == 2 {
-				left := strings.TrimSpace(parts[0])
-				right := strings.TrimSpace(parts[1])
-
-				// Remove alias prefix
-				if strings.Contains(left, ".") {
-					leftParts := strings.SplitN(left, ".", 2)
-					if len(leftParts) == 2 {
-						left = leftParts[1]
-					}
-				}
-
-				// Parse right value
-				var rightVal interface{}
-
-				rightLower := strings.ToLower(right)
-				switch {
-				case strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(op), "null"):
-					rightVal = nil
-				case strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'"):
-					rightVal = right[1 : len(right)-1]
-				case strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\""):
-					rightVal = right[1 : len(right)-1]
-				default:
-					f, floatErr := strconv.ParseFloat(right, 64)
-					if floatErr == nil {
-						rightVal = f
-					} else {
-						b, boolErr := strconv.ParseBool(right)
-						if boolErr == nil {
-							rightVal = b
-						} else {
-							rightVal = right
-						}
-					}
-				}
+				left := parseLeftOperand(parts[0])
+				right := parseRightOperand(parts[1], op)
 
 				return &Condition{
 					Left:     left,
 					Operator: strings.TrimSpace(op),
-					Right:    rightVal,
+					Right:    right,
 				}, nil
 			}
 		}
 	}
 
 	return nil, fmt.Errorf("failed to parse WHERE clause: %s", where)
+}
+
+func parseLeftOperand(leftPart string) string {
+	left := strings.TrimSpace(leftPart)
+
+	if strings.Contains(left, ".") {
+		leftParts := strings.SplitN(left, ".", 2)
+		if len(leftParts) == 2 {
+			left = leftParts[1]
+		}
+	}
+
+	return left
+}
+
+func parseRightOperand(rightPart, operator string) interface{} {
+	right := strings.TrimSpace(rightPart)
+	rightLower := strings.ToLower(right)
+
+	switch {
+	case strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(operator), "null"):
+		return nil
+	case strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'"):
+		return right[1 : len(right)-1]
+	case strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\""):
+		return right[1 : len(right)-1]
+	default:
+		return parseNumericOrBoolOrString(right)
+	}
+}
+
+func parseNumericOrBoolOrString(value string) interface{} {
+	f, floatErr := strconv.ParseFloat(value, 64)
+	if floatErr == nil {
+		return f
+	}
+
+	b, boolErr := strconv.ParseBool(value)
+	if boolErr == nil {
+		return b
+	}
+
+	return value
 }
 
 // evaluateCondition evaluates a condition against a record.
