@@ -562,51 +562,75 @@ func (s *SecretScanner) scanContent(bucket, key string, content []byte) []*Secre
 	for lineNum, line := range lines {
 		lineStr := string(line)
 
-		// Skip very long lines
 		if len(lineStr) > s.config.MaxLineLength {
 			continue
 		}
 
-		for _, pattern := range s.patterns {
-			matches := pattern.Pattern.FindAllStringIndex(lineStr, -1)
-			for _, match := range matches {
-				matchStr := lineStr[match[0]:match[1]]
+		lineFindings := s.scanLine(bucket, key, lineStr, lineNum, lines)
+		findings = append(findings, lineFindings...)
+	}
 
-				// Validate if validator exists
-				if pattern.Validator != nil && !pattern.Validator(matchStr) {
-					continue
-				}
+	return findings
+}
 
-				// Check if allowed
-				if s.isAllowed(pattern.Type) {
-					continue
-				}
+func (s *SecretScanner) scanLine(bucket, key, lineStr string, lineNum int, lines [][]byte) []*SecretFinding {
+	findings := make([]*SecretFinding, 0)
 
-				finding := &SecretFinding{
-					ID:          uuid.New().String(),
-					Type:        pattern.Type,
-					Severity:    pattern.Severity,
-					Description: pattern.Description,
-					Bucket:      bucket,
-					Key:         key,
-					LineNumber:  lineNum + 1,
-					ColumnStart: match[0] + 1,
-					ColumnEnd:   match[1] + 1,
-					Match:       s.redactMatch(matchStr),
-					DetectedAt:  time.Now(),
-				}
-
-				// Add context if enabled
-				if s.config.IncludeContext {
-					finding.Context = s.getContext(lines, lineNum, s.config.ContextLines)
-				}
-
+	for _, pattern := range s.patterns {
+		matches := pattern.Pattern.FindAllStringIndex(lineStr, -1)
+		for _, match := range matches {
+			finding := s.processMatch(bucket, key, lineStr, lineNum, match, pattern, lines)
+			if finding != nil {
 				findings = append(findings, finding)
 			}
 		}
 	}
 
 	return findings
+}
+
+func (s *SecretScanner) processMatch(bucket, key, lineStr string, lineNum int, match []int, pattern SecretPattern, lines [][]byte) *SecretFinding {
+	matchStr := lineStr[match[0]:match[1]]
+
+	if !s.validateMatch(matchStr, pattern) {
+		return nil
+	}
+
+	if s.isAllowed(pattern.Type) {
+		return nil
+	}
+
+	return s.createFinding(bucket, key, lineNum, match, matchStr, pattern, lines)
+}
+
+func (s *SecretScanner) validateMatch(matchStr string, pattern SecretPattern) bool {
+	if pattern.Validator == nil {
+		return true
+	}
+
+	return pattern.Validator(matchStr)
+}
+
+func (s *SecretScanner) createFinding(bucket, key string, lineNum int, match []int, matchStr string, pattern SecretPattern, lines [][]byte) *SecretFinding {
+	finding := &SecretFinding{
+		ID:          uuid.New().String(),
+		Type:        pattern.Type,
+		Severity:    pattern.Severity,
+		Description: pattern.Description,
+		Bucket:      bucket,
+		Key:         key,
+		LineNumber:  lineNum + 1,
+		ColumnStart: match[0] + 1,
+		ColumnEnd:   match[1] + 1,
+		Match:       s.redactMatch(matchStr),
+		DetectedAt:  time.Now(),
+	}
+
+	if s.config.IncludeContext {
+		finding.Context = s.getContext(lines, lineNum, s.config.ContextLines)
+	}
+
+	return finding
 }
 
 // scanStream scans a stream for secrets line by line.
