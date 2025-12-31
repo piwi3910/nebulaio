@@ -579,73 +579,78 @@ func TestObjectMetadataOperations(t *testing.T) {
 		t.Fatalf("Failed to create test bucket: %v", err)
 	}
 
-	t.Run("PutObjectMeta", func(t *testing.T) {
-		meta := &ObjectMeta{
-			Bucket:      "test-objects",
-			Key:         "test-key",
-			Size:        1024,
-			ContentType: "text/plain",
-			ETag:        "abc123",
-			CreatedAt:   time.Now(),
-			ModifiedAt:  time.Now(),
-		}
+	t.Run("PutObjectMeta", func(t *testing.T) { testPutObjectMeta(t, ctx, store) })
+	t.Run("GetObjectMeta", func(t *testing.T) { testGetObjectMeta(t, ctx, store) })
+	t.Run("ListObjects", func(t *testing.T) { testListObjects(t, ctx, store) })
+	t.Run("DeleteObjectMeta", func(t *testing.T) { testDeleteObjectMeta(t, ctx, store) })
+}
 
-		err := store.PutObjectMeta(ctx, meta)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+func testPutObjectMeta(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	meta := &ObjectMeta{
+		Bucket:      "test-objects",
+		Key:         "test-key",
+		Size:        1024,
+		ContentType: "text/plain",
+		ETag:        "abc123",
+		CreatedAt:   time.Now(),
+		ModifiedAt:  time.Now(),
+	}
 
-		if err != nil {
-			t.Errorf("Failed to put object metadata: %v", err)
-		}
-	})
+	err := store.PutObjectMeta(ctx, meta)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-	t.Run("GetObjectMeta", func(t *testing.T) {
-		meta, err := store.GetObjectMeta(ctx, "test-objects", "test-key")
-		if err != nil {
-			t.Errorf("Failed to get object metadata: %v", err)
-		}
+	if err != nil {
+		t.Errorf("Failed to put object metadata: %v", err)
+	}
+}
 
-		if meta == nil {
-			t.Fatal("Expected metadata, got nil")
-		}
+func testGetObjectMeta(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	meta, err := store.GetObjectMeta(ctx, "test-objects", "test-key")
+	if err != nil {
+		t.Errorf("Failed to get object metadata: %v", err)
+	}
 
-		if meta.Key != "test-key" {
-			t.Errorf("Expected key 'test-key', got '%s'", meta.Key)
-		}
+	if meta == nil {
+		t.Fatal("Expected metadata, got nil")
+	}
 
-		if meta.Size != 1024 {
-			t.Errorf("Expected size 1024, got %d", meta.Size)
-		}
-	})
+	if meta.Key != "test-key" {
+		t.Errorf("Expected key 'test-key', got '%s'", meta.Key)
+	}
 
-	t.Run("ListObjects", func(t *testing.T) {
-		listing, err := store.ListObjects(ctx, "test-objects", "", "", 100, "")
-		if err != nil {
-			t.Errorf("Failed to list objects: %v", err)
-		}
+	if meta.Size != 1024 {
+		t.Errorf("Expected size 1024, got %d", meta.Size)
+	}
+}
 
-		if len(listing.Objects) == 0 {
-			t.Error("Expected at least one object")
-		}
-	})
+func testListObjects(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	listing, err := store.ListObjects(ctx, "test-objects", "", "", 100, "")
+	if err != nil {
+		t.Errorf("Failed to list objects: %v", err)
+	}
 
-	t.Run("DeleteObjectMeta", func(t *testing.T) {
-		err := store.DeleteObjectMeta(ctx, "test-objects", "test-key")
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+	if len(listing.Objects) == 0 {
+		t.Error("Expected at least one object")
+	}
+}
 
-		if err != nil {
-			t.Errorf("Failed to delete object metadata: %v", err)
-		}
+func testDeleteObjectMeta(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	err := store.DeleteObjectMeta(ctx, "test-objects", "test-key")
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-		// Verify deletion
-		_, err = store.GetObjectMeta(ctx, "test-objects", "test-key")
-		if err == nil {
-			t.Error("Expected error when getting deleted object")
-		}
-	})
+	if err != nil {
+		t.Errorf("Failed to delete object metadata: %v", err)
+	}
+
+	// Verify deletion
+	_, err = store.GetObjectMeta(ctx, "test-objects", "test-key")
+	if err == nil {
+		t.Error("Expected error when getting deleted object")
+	}
 }
 
 // TestUserOperations tests user CRUD operations.
