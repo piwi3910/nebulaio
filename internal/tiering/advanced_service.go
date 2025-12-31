@@ -227,57 +227,98 @@ func (s *AdvancedService) Stop() error {
 
 // GetObject retrieves an object with policy-aware tiering.
 func (s *AdvancedService) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
-	// Record access for policies
 	s.policyEngine.RecordAccess(bucket, key, "GET", 0)
 
-	// Try cache first
-	if s.cache != nil {
-		cacheKey := bucket + "/" + key
-		if entry, ok := s.cache.Get(ctx, cacheKey); ok {
-			return io.NopCloser(&bytesReader{data: entry.Data}), nil
-		}
+	if reader := s.tryGetFromCache(ctx, bucket, key); reader != nil {
+		return reader, nil
 	}
 
-	// Try hot storage
-	if s.hotStorage != nil {
-		reader, err := s.hotStorage.GetObject(ctx, bucket, key)
-		if err == nil {
-			// Cache for future requests
-			if s.cache != nil {
-				data, readErr := io.ReadAll(reader)
-				_ = reader.Close()
-
-				if readErr == nil {
-					cacheKey := bucket + "/" + key
-					_ = s.cache.Put(ctx, cacheKey, data, "", "")
-
-					return io.NopCloser(&bytesReader{data: data}), nil
-				}
-			}
-
-			return reader, nil
-		}
+	if reader := s.tryGetFromHotStorage(ctx, bucket, key); reader != nil {
+		return reader, nil
 	}
 
-	// Try warm storage
-	if s.warmStorage != nil {
-		reader, err := s.warmStorage.GetObject(ctx, bucket, key)
-		if err == nil {
-			return reader, nil
-		}
+	if reader := s.tryGetFromWarmStorage(ctx, bucket, key); reader != nil {
+		return reader, nil
 	}
 
-	// Try cold storage
-	if s.coldManager != nil {
-		for _, cold := range s.coldManager.List() {
-			reader, err := cold.GetObject(ctx, bucket, key)
-			if err == nil {
-				return reader, nil
-			}
-		}
+	if reader := s.tryGetFromColdStorage(ctx, bucket, key); reader != nil {
+		return reader, nil
 	}
 
 	return nil, backend.ErrObjectNotFound
+}
+
+func (s *AdvancedService) tryGetFromCache(ctx context.Context, bucket, key string) io.ReadCloser {
+	if s.cache == nil {
+		return nil
+	}
+
+	cacheKey := bucket + "/" + key
+	entry, ok := s.cache.Get(ctx, cacheKey)
+	if !ok {
+		return nil
+	}
+
+	return io.NopCloser(&bytesReader{data: entry.Data})
+}
+
+func (s *AdvancedService) tryGetFromHotStorage(ctx context.Context, bucket, key string) io.ReadCloser {
+	if s.hotStorage == nil {
+		return nil
+	}
+
+	reader, err := s.hotStorage.GetObject(ctx, bucket, key)
+	if err != nil {
+		return nil
+	}
+
+	return s.cacheAndReturnReader(ctx, bucket, key, reader)
+}
+
+func (s *AdvancedService) cacheAndReturnReader(ctx context.Context, bucket, key string, reader io.ReadCloser) io.ReadCloser {
+	if s.cache == nil {
+		return reader
+	}
+
+	data, readErr := io.ReadAll(reader)
+	_ = reader.Close()
+
+	if readErr != nil {
+		return nil
+	}
+
+	cacheKey := bucket + "/" + key
+	_ = s.cache.Put(ctx, cacheKey, data, "", "")
+
+	return io.NopCloser(&bytesReader{data: data})
+}
+
+func (s *AdvancedService) tryGetFromWarmStorage(ctx context.Context, bucket, key string) io.ReadCloser {
+	if s.warmStorage == nil {
+		return nil
+	}
+
+	reader, err := s.warmStorage.GetObject(ctx, bucket, key)
+	if err != nil {
+		return nil
+	}
+
+	return reader
+}
+
+func (s *AdvancedService) tryGetFromColdStorage(ctx context.Context, bucket, key string) io.ReadCloser {
+	if s.coldManager == nil {
+		return nil
+	}
+
+	for _, cold := range s.coldManager.List() {
+		reader, err := cold.GetObject(ctx, bucket, key)
+		if err == nil {
+			return reader
+		}
+	}
+
+	return nil
 }
 
 // PutObject stores an object with policy-aware placement.
