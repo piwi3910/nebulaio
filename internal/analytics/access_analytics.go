@@ -611,49 +611,73 @@ func (aa *AccessAnalytics) matchesConditions(event *AccessEvent, conditions []Ru
 
 // matchesCondition checks if an event matches a single condition.
 func (aa *AccessAnalytics) matchesCondition(event *AccessEvent, cond RuleCondition) bool {
-	var fieldValue interface{}
+	fieldValue := aa.getFieldValue(event, cond.Field)
+	if fieldValue == nil {
+		return false
+	}
 
-	switch cond.Field {
+	return aa.evaluateOperator(fieldValue, cond.Operator, cond.Value)
+}
+
+func (aa *AccessAnalytics) getFieldValue(event *AccessEvent, field string) interface{} {
+	switch field {
 	case "access_type":
-		fieldValue = string(event.AccessType)
+		return string(event.AccessType)
 	case "bucket":
-		fieldValue = event.Bucket
+		return event.Bucket
 	case "user_id":
-		fieldValue = event.UserID
+		return event.UserID
 	case "source_ip":
-		fieldValue = event.SourceIP
+		return event.SourceIP
 	case "status_code":
-		fieldValue = event.StatusCode
+		return event.StatusCode
+	default:
+		return nil
+	}
+}
+
+func (aa *AccessAnalytics) evaluateOperator(fieldValue interface{}, operator string, condValue interface{}) bool {
+	switch operator {
+	case "eq":
+		return fieldValue == condValue
+	case "ne":
+		return fieldValue != condValue
+	case "in":
+		return aa.evaluateInOperator(fieldValue, condValue)
+	case "contains":
+		return aa.evaluateContainsOperator(fieldValue, condValue)
 	default:
 		return false
 	}
+}
 
-	switch cond.Operator {
-	case "eq":
-		return fieldValue == cond.Value
-	case "ne":
-		return fieldValue != cond.Value
-	case "in":
-		if values, ok := cond.Value.([]string); ok {
-			for _, v := range values {
-				if fieldValue == v {
-					return true
-				}
-			}
-		}
-
-		return false
-	case "contains":
-		if s, ok := fieldValue.(string); ok {
-			if v, ok := cond.Value.(string); ok {
-				return len(s) > 0 && len(v) > 0 && (s == v || len(s) > len(v))
-			}
-		}
-
+func (aa *AccessAnalytics) evaluateInOperator(fieldValue, condValue interface{}) bool {
+	values, ok := condValue.([]string)
+	if !ok {
 		return false
 	}
 
+	for _, v := range values {
+		if fieldValue == v {
+			return true
+		}
+	}
+
 	return false
+}
+
+func (aa *AccessAnalytics) evaluateContainsOperator(fieldValue, condValue interface{}) bool {
+	s, ok := fieldValue.(string)
+	if !ok {
+		return false
+	}
+
+	v, ok := condValue.(string)
+	if !ok {
+		return false
+	}
+
+	return len(s) > 0 && len(v) > 0 && (s == v || len(s) > len(v))
 }
 
 // checkUnusualTime detects access during unusual hours.
