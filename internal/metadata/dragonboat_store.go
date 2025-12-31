@@ -323,50 +323,61 @@ func (s *DragonboatStore) collectVersionedObjects(bucket, prefix, delimiter, key
 	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObjectVersion, bucket))
 
 	return s.badger.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.Prefix = dbPrefix
+		return s.iterateVersionedObjects(txn, dbPrefix, bucket, prefix, delimiter, keyMarker, versionIDMarker, maxKeys, versions, deleteMarkers, commonPrefixes, prefixSet)
+	})
+}
 
-		it := txn.NewIterator(opts)
-		defer it.Close()
+func (s *DragonboatStore) iterateVersionedObjects(txn *badger.Txn, dbPrefix []byte, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
+	opts := badger.DefaultIteratorOptions
+	opts.Prefix = dbPrefix
 
-		startKey := s.calculateStartKey(dbPrefix, bucket, keyMarker, versionIDMarker)
-		count := 0
+	it := txn.NewIterator(opts)
+	defer it.Close()
 
-		for it.Seek(startKey); it.Valid(); it.Next() {
-			item := it.Item()
+	startKey := s.calculateStartKey(dbPrefix, bucket, keyMarker, versionIDMarker)
+	count := 0
 
-			objKey, versionID, shouldContinue := s.parseVersionKey(item.Key(), dbPrefix)
-			if shouldContinue {
-				continue
-			}
+	for it.Seek(startKey); it.Valid(); it.Next() {
+		item := it.Item()
 
-			if !s.matchesPrefixFilter(objKey, prefix) {
-				continue
-			}
-
-			if s.handleDelimiter(objKey, prefix, delimiter, commonPrefixes, prefixSet) {
-				continue
-			}
-
-			if s.shouldSkipMarker(objKey, versionID, keyMarker, versionIDMarker) {
-				continue
-			}
-
-			meta, err := s.unmarshalObjectMeta(item)
-			if err != nil {
-				continue
-			}
-
-			s.categorizeObject(meta, versions, deleteMarkers)
-
+		if s.processVersionedItem(item, dbPrefix, prefix, delimiter, keyMarker, versionIDMarker, versions, deleteMarkers, commonPrefixes, prefixSet) {
 			count++
-			if maxKeys > 0 && count >= maxKeys+1 {
-				break
-			}
 		}
 
-		return nil
-	})
+		if maxKeys > 0 && count >= maxKeys+1 {
+			break
+		}
+	}
+
+	return nil
+}
+
+func (s *DragonboatStore) processVersionedItem(item *badger.Item, dbPrefix []byte, prefix, delimiter, keyMarker, versionIDMarker string, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) bool {
+	objKey, versionID, shouldContinue := s.parseVersionKey(item.Key(), dbPrefix)
+	if shouldContinue {
+		return false
+	}
+
+	if !s.matchesPrefixFilter(objKey, prefix) {
+		return false
+	}
+
+	if s.handleDelimiter(objKey, prefix, delimiter, commonPrefixes, prefixSet) {
+		return false
+	}
+
+	if s.shouldSkipMarker(objKey, versionID, keyMarker, versionIDMarker) {
+		return false
+	}
+
+	meta, err := s.unmarshalObjectMeta(item)
+	if err != nil {
+		return false
+	}
+
+	s.categorizeObject(meta, versions, deleteMarkers)
+
+	return true
 }
 
 // collectCurrentObjects retrieves current/non-versioned objects from the main object store.
