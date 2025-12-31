@@ -1227,51 +1227,59 @@ func (fw *Firewall) UpdateConfig(config Config) error {
 
 	fw.config = config
 
-	// Re-parse IP lists
+	fw.updateIPLists(config)
+	fw.updateGlobalLimiters(config)
+
+	return nil
+}
+
+func (fw *Firewall) updateIPLists(config Config) {
 	fw.allowedNets = nil
 	fw.blockedNets = nil
 
-	for _, cidr := range config.IPAllowlist {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			ip := net.ParseIP(cidr)
-			if ip == nil {
-				continue
-			}
+	fw.allowedNets = fw.parseNetworkList(config.IPAllowlist)
+	fw.blockedNets = fw.parseNetworkList(config.IPBlocklist)
+}
 
-			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32")
-			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128")
-			}
-		}
+func (fw *Firewall) parseNetworkList(cidrList []string) []*net.IPNet {
+	var networks []*net.IPNet
 
+	for _, cidr := range cidrList {
+		network := fw.parseCIDROrIP(cidr)
 		if network != nil {
-			fw.allowedNets = append(fw.allowedNets, network)
+			networks = append(networks, network)
 		}
 	}
 
-	for _, cidr := range config.IPBlocklist {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			ip := net.ParseIP(cidr)
-			if ip == nil {
-				continue
-			}
+	return networks
+}
 
-			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32")
-			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128")
-			}
-		}
-
-		if network != nil {
-			fw.blockedNets = append(fw.blockedNets, network)
-		}
+func (fw *Firewall) parseCIDROrIP(cidr string) *net.IPNet {
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return fw.parseIPAsNetwork(cidr)
 	}
 
-	// Update global limiters
+	return network
+}
+
+func (fw *Firewall) parseIPAsNetwork(ipStr string) *net.IPNet {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return nil
+	}
+
+	var network *net.IPNet
+	if ip.To4() != nil {
+		_, network, _ = net.ParseCIDR(ipStr + "/32")
+	} else {
+		_, network, _ = net.ParseCIDR(ipStr + "/128")
+	}
+
+	return network
+}
+
+func (fw *Firewall) updateGlobalLimiters(config Config) {
 	if config.RateLimiting.Enabled {
 		fw.globalLimiter = NewTokenBucket(
 			config.RateLimiting.RequestsPerSecond,
@@ -1282,8 +1290,6 @@ func (fw *Firewall) UpdateConfig(config Config) error {
 	if config.Bandwidth.Enabled {
 		fw.globalBandwidth = NewBandwidthTracker(config.Bandwidth.MaxBytesPerSecond)
 	}
-
-	return nil
 }
 
 // GetConfig returns the current firewall configuration.
