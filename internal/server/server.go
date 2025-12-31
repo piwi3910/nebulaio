@@ -633,22 +633,35 @@ func (s *Server) setupConsoleServer() {
 
 // Start starts all servers.
 func (s *Server) Start(ctx context.Context) error {
-	// Ensure root admin user exists
-	err := s.ensureRootUser(ctx)
-	if err != nil {
+	if err := s.ensureRootUser(ctx); err != nil {
 		return fmt.Errorf("failed to ensure root user: %w", err)
 	}
 
-	// Start audit logger
+	s.startAuditLogger()
+
+	if err := s.startClusterDiscovery(ctx); err != nil {
+		return err
+	}
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	s.startBackgroundWorkers(g, ctx)
+	s.startHTTPServers(g)
+	s.startShutdownHandler(g, ctx)
+
+	return g.Wait()
+}
+
+func (s *Server) startAuditLogger() {
 	if s.auditLogger != nil {
 		s.auditLogger.Start()
 		log.Info().Msg("Audit logger started")
 	}
+}
 
-	// Start cluster discovery
+func (s *Server) startClusterDiscovery(ctx context.Context) error {
 	if s.discovery != nil {
-		err := s.discovery.Start(ctx)
-		if err != nil {
+		if err := s.discovery.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start cluster discovery: %w", err)
 		}
 
@@ -658,81 +671,55 @@ func (s *Server) Start(ctx context.Context) error {
 			Strs("join_addresses", s.cfg.Cluster.JoinAddresses).
 			Msg("Cluster discovery started")
 	}
+	return nil
+}
 
-	g, ctx := errgroup.WithContext(ctx)
-
-	// Start metrics collector background goroutine
+func (s *Server) startBackgroundWorkers(g *errgroup.Group, ctx context.Context) {
 	g.Go(func() error {
 		s.runMetricsCollector(ctx)
 		return nil
 	})
 
-	// Start lifecycle manager background goroutine
 	g.Go(func() error {
 		s.lifecycleManager.Start(ctx)
 		return nil
 	})
+}
 
-	// Start S3 server
+func (s *Server) startHTTPServers(g *errgroup.Group) {
 	g.Go(func() error {
-		var err error
-
-		if s.tlsManager != nil {
-			log.Info().Int("port", s.cfg.S3Port).Msg("Starting S3 API server (TLS enabled)")
-			err = s.s3Server.ListenAndServeTLS(s.tlsManager.GetCertFile(), s.tlsManager.GetKeyFile())
-		} else {
-			log.Info().Int("port", s.cfg.S3Port).Msg("Starting S3 API server")
-			err = s.s3Server.ListenAndServe()
-		}
-
-		if err != nil && err != http.ErrServerClosed {
-			return fmt.Errorf("S3 server error: %w", err)
-		}
-
-		return nil
+		return s.startHTTPServer(s.s3Server, s.cfg.S3Port, "S3 API")
 	})
 
-	// Start Admin server
 	g.Go(func() error {
-		var err error
-
-		if s.tlsManager != nil {
-			log.Info().Int("port", s.cfg.AdminPort).Msg("Starting Admin API server (TLS enabled)")
-			log.Info().Int("port", s.cfg.AdminPort).Msg("Prometheus metrics available at /metrics")
-			err = s.adminServer.ListenAndServeTLS(s.tlsManager.GetCertFile(), s.tlsManager.GetKeyFile())
-		} else {
-			log.Info().Int("port", s.cfg.AdminPort).Msg("Starting Admin API server")
-			log.Info().Int("port", s.cfg.AdminPort).Msg("Prometheus metrics available at /metrics")
-			err = s.adminServer.ListenAndServe()
-		}
-
-		if err != nil && err != http.ErrServerClosed {
-			return fmt.Errorf("Admin server error: %w", err)
-		}
-
-		return nil
+		log.Info().Int("port", s.cfg.AdminPort).Msg("Prometheus metrics available at /metrics")
+		return s.startHTTPServer(s.adminServer, s.cfg.AdminPort, "Admin API")
 	})
 
-	// Start Console server
 	g.Go(func() error {
-		var err error
-
-		if s.tlsManager != nil {
-			log.Info().Int("port", s.cfg.ConsolePort).Msg("Starting Web Console server (TLS enabled)")
-			err = s.consoleServer.ListenAndServeTLS(s.tlsManager.GetCertFile(), s.tlsManager.GetKeyFile())
-		} else {
-			log.Info().Int("port", s.cfg.ConsolePort).Msg("Starting Web Console server")
-			err = s.consoleServer.ListenAndServe()
-		}
-
-		if err != nil && err != http.ErrServerClosed {
-			return fmt.Errorf("Console server error: %w", err)
-		}
-
-		return nil
+		return s.startHTTPServer(s.consoleServer, s.cfg.ConsolePort, "Web Console")
 	})
+}
 
-	// Wait for shutdown signal
+func (s *Server) startHTTPServer(server *http.Server, port int, name string) error {
+	var err error
+
+	if s.tlsManager != nil {
+		log.Info().Int("port", port).Msgf("Starting %s server (TLS enabled)", name)
+		err = server.ListenAndServeTLS(s.tlsManager.GetCertFile(), s.tlsManager.GetKeyFile())
+	} else {
+		log.Info().Int("port", port).Msgf("Starting %s server", name)
+		err = server.ListenAndServe()
+	}
+
+	if err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("%s server error: %w", name, err)
+	}
+
+	return nil
+}
+
+func (s *Server) startShutdownHandler(g *errgroup.Group, ctx context.Context) {
 	g.Go(func() error {
 		<-ctx.Done()
 		log.Info().Msg("Shutting down servers...")
@@ -740,51 +727,55 @@ func (s *Server) Start(ctx context.Context) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeoutSec*time.Second)
 		defer cancel()
 
-		// Stop cluster discovery first (graceful leave)
-		if s.discovery != nil {
-			err := s.discovery.Stop()
-			if err != nil {
-				log.Error().Err(err).Msg("Error stopping cluster discovery")
-			}
-		}
-
-		// Stop lifecycle manager
-		if s.lifecycleManager != nil {
-			s.lifecycleManager.Stop()
-		}
-
-		// Shutdown all servers
-		err := s.s3Server.Shutdown(shutdownCtx)
-		if err != nil {
-			log.Error().Err(err).Msg("Error shutting down S3 server")
-		}
-
-		err = s.adminServer.Shutdown(shutdownCtx)
-		if err != nil {
-			log.Error().Err(err).Msg("Error shutting down Admin server")
-		}
-
-		err = s.consoleServer.Shutdown(shutdownCtx)
-		if err != nil {
-			log.Error().Err(err).Msg("Error shutting down Console server")
-		}
-
-		// Stop audit logger
-		if s.auditLogger != nil {
-			s.auditLogger.Stop()
-			log.Info().Msg("Audit logger stopped")
-		}
-
-		// Close metadata store
-		err = s.metaStore.Close()
-		if err != nil {
-			log.Error().Err(err).Msg("Error closing metadata store")
-		}
+		s.stopClusterDiscovery()
+		s.stopLifecycleManager()
+		s.shutdownHTTPServers(shutdownCtx)
+		s.stopAuditLogger()
+		s.closeMetadataStore()
 
 		return nil
 	})
+}
 
-	return g.Wait()
+func (s *Server) stopClusterDiscovery() {
+	if s.discovery != nil {
+		if err := s.discovery.Stop(); err != nil {
+			log.Error().Err(err).Msg("Error stopping cluster discovery")
+		}
+	}
+}
+
+func (s *Server) stopLifecycleManager() {
+	if s.lifecycleManager != nil {
+		s.lifecycleManager.Stop()
+	}
+}
+
+func (s *Server) shutdownHTTPServers(ctx context.Context) {
+	if err := s.s3Server.Shutdown(ctx); err != nil {
+		log.Error().Err(err).Msg("Error shutting down S3 server")
+	}
+
+	if err := s.adminServer.Shutdown(ctx); err != nil {
+		log.Error().Err(err).Msg("Error shutting down Admin server")
+	}
+
+	if err := s.consoleServer.Shutdown(ctx); err != nil {
+		log.Error().Err(err).Msg("Error shutting down Console server")
+	}
+}
+
+func (s *Server) stopAuditLogger() {
+	if s.auditLogger != nil {
+		s.auditLogger.Stop()
+		log.Info().Msg("Audit logger stopped")
+	}
+}
+
+func (s *Server) closeMetadataStore() {
+	if err := s.metaStore.Close(); err != nil {
+		log.Error().Err(err).Msg("Error closing metadata store")
+	}
 }
 
 // runMetricsCollector periodically collects and updates metrics.
