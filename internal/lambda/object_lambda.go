@@ -1130,34 +1130,43 @@ func compressZstd(buf *bytes.Buffer, data []byte, level int) (err error) {
 type DecompressTransformer struct{}
 
 func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
-	// Get compression algorithm from params (auto-detect if not specified)
-	algorithm := ""
-	if alg, ok := params["algorithm"].(string); ok {
-		algorithm = strings.ToLower(alg)
-	}
-
-	// Check if streaming mode should be used
-	useStreaming := false
-
-	if contentLength, ok := params["content_length"].(int64); ok {
-		streamingThreshold := GetStreamingThreshold()
-		if contentLength > streamingThreshold {
-			useStreaming = true
-
-			log.Debug().
-				Int64("content_length", contentLength).
-				Int64("streaming_threshold", streamingThreshold).
-				Str("algorithm", algorithm).
-				Msg("Using streaming decompression for large file")
-		}
-	}
+	algorithm := t.getAlgorithm(params)
+	useStreaming := t.shouldUseStreaming(params, algorithm)
 
 	if useStreaming && algorithm != "" {
-		// For streaming mode, algorithm must be specified (no auto-detection)
 		return t.transformStreaming(ctx, input, algorithm)
 	}
 
-	// Buffered mode for small files or when auto-detection is needed
+	return t.transformBuffered(ctx, input, algorithm)
+}
+
+func (t *DecompressTransformer) getAlgorithm(params map[string]interface{}) string {
+	if alg, ok := params["algorithm"].(string); ok {
+		return strings.ToLower(alg)
+	}
+	return ""
+}
+
+func (t *DecompressTransformer) shouldUseStreaming(params map[string]interface{}, algorithm string) bool {
+	contentLength, ok := params["content_length"].(int64)
+	if !ok {
+		return false
+	}
+
+	streamingThreshold := GetStreamingThreshold()
+	if contentLength > streamingThreshold {
+		log.Debug().
+			Int64("content_length", contentLength).
+			Int64("streaming_threshold", streamingThreshold).
+			Str("algorithm", algorithm).
+			Msg("Using streaming decompression for large file")
+		return true
+	}
+
+	return false
+}
+
+func (t *DecompressTransformer) transformBuffered(ctx context.Context, input io.Reader, algorithm string) (io.Reader, map[string]string, error) {
 	maxSize := GetMaxTransformSize()
 	limitedReader := io.LimitReader(input, maxSize+1)
 
@@ -1170,60 +1179,70 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", maxSize)
 	}
 
-	// Auto-detect compression based on magic bytes if algorithm not specified
 	if algorithm == "" {
 		algorithm = detectCompressionAlgorithm(data)
 		if algorithm == "" {
-			// Data doesn't appear to be compressed, return as-is
 			return bytes.NewReader(data), nil, nil
 		}
 	}
 
-	var result []byte
-
-	switch algorithm {
-	case compressionAlgGzip:
-		reader, err := gzip.NewReader(bytes.NewReader(data))
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create gzip reader: %w", err)
-		}
-
-		defer func() { _ = reader.Close() }()
-		// Limit decompressed size to prevent decompression bombs
-		decompressLimit := io.LimitReader(reader, maxSize+1)
-
-		result, err = io.ReadAll(decompressLimit)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to decompress gzip data: %w", err)
-		}
-
-		if int64(len(result)) > maxSize {
-			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
-		}
-
-	case compressionAlgZstd:
-		decoder, err := zstd.NewReader(bytes.NewReader(data))
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create zstd decoder: %w", err)
-		}
-		defer decoder.Close()
-		// Limit decompressed size to prevent decompression bombs
-		decompressLimit := io.LimitReader(decoder, maxSize+1)
-
-		result, err = io.ReadAll(decompressLimit)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to decompress zstd data: %w", err)
-		}
-
-		if int64(len(result)) > maxSize {
-			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
-		}
-
-	default:
-		return nil, nil, fmt.Errorf("unsupported decompression algorithm: %s", algorithm)
+	result, err := t.decompressData(data, algorithm, maxSize)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return bytes.NewReader(result), nil, nil
+}
+
+func (t *DecompressTransformer) decompressData(data []byte, algorithm string, maxSize int64) ([]byte, error) {
+	switch algorithm {
+	case compressionAlgGzip:
+		return t.decompressGzip(data, maxSize)
+	case compressionAlgZstd:
+		return t.decompressZstd(data, maxSize)
+	default:
+		return nil, fmt.Errorf("unsupported decompression algorithm: %s", algorithm)
+	}
+}
+
+func (t *DecompressTransformer) decompressGzip(data []byte, maxSize int64) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	decompressLimit := io.LimitReader(reader, maxSize+1)
+	result, err := io.ReadAll(decompressLimit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress gzip data: %w", err)
+	}
+
+	if int64(len(result)) > maxSize {
+		return nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
+	}
+
+	return result, nil
+}
+
+func (t *DecompressTransformer) decompressZstd(data []byte, maxSize int64) ([]byte, error) {
+	decoder, err := zstd.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create zstd decoder: %w", err)
+	}
+	defer decoder.Close()
+
+	decompressLimit := io.LimitReader(decoder, maxSize+1)
+	result, err := io.ReadAll(decompressLimit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress zstd data: %w", err)
+	}
+
+	if int64(len(result)) > maxSize {
+		return nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
+	}
+
+	return result, nil
 }
 
 // transformStreaming performs streaming decompression for large files.
