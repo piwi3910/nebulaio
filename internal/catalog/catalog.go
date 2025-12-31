@@ -858,47 +858,38 @@ func (s *CatalogService) writeParquet(w io.Writer, records []InventoryRecord) (i
 
 // recordToRow converts a record to a CSV row.
 func (s *CatalogService) recordToRow(rec InventoryRecord, fields []string) []string {
+	type fieldConverter func(InventoryRecord) string
+
+	converters := map[InventoryField]fieldConverter{
+		FieldBucket:                      func(r InventoryRecord) string { return r.Bucket },
+		FieldKey:                         func(r InventoryRecord) string { return r.Key },
+		FieldVersionID:                   func(r InventoryRecord) string { return r.VersionID },
+		FieldIsLatest:                    func(r InventoryRecord) string { return strconv.FormatBool(r.IsLatest) },
+		FieldIsDeleteMarker:              func(r InventoryRecord) string { return strconv.FormatBool(r.IsDeleteMarker) },
+		FieldSize:                        func(r InventoryRecord) string { return strconv.FormatInt(r.Size, 10) },
+		FieldLastModified:                func(r InventoryRecord) string { return r.LastModified.UTC().Format(time.RFC3339) },
+		FieldETag:                        func(r InventoryRecord) string { return r.ETag },
+		FieldStorageClass:                func(r InventoryRecord) string { return r.StorageClass },
+		FieldIsMultipartUploaded:         func(r InventoryRecord) string { return strconv.FormatBool(r.IsMultipartUploaded) },
+		FieldReplicationStatus:           func(r InventoryRecord) string { return r.ReplicationStatus },
+		FieldEncryptionStatus:            func(r InventoryRecord) string { return r.EncryptionStatus },
+		FieldObjectLockRetainUntilDate: func(r InventoryRecord) string {
+			if r.ObjectLockRetainUntilDate != nil {
+				return r.ObjectLockRetainUntilDate.UTC().Format(time.RFC3339)
+			}
+			return ""
+		},
+		FieldObjectLockMode:              func(r InventoryRecord) string { return r.ObjectLockMode },
+		FieldObjectLockLegalHoldStatus:   func(r InventoryRecord) string { return r.ObjectLockLegalHoldStatus },
+		FieldIntelligentTieringAccess:    func(r InventoryRecord) string { return r.IntelligentTieringAccess },
+		FieldBucketKeyStatus:             func(r InventoryRecord) string { return r.BucketKeyStatus },
+		FieldChecksumAlgorithm:           func(r InventoryRecord) string { return r.ChecksumAlgorithm },
+	}
+
 	row := make([]string, len(fields))
 	for i, field := range fields {
-		switch InventoryField(field) {
-		case FieldBucket:
-			row[i] = rec.Bucket
-		case FieldKey:
-			row[i] = rec.Key
-		case FieldVersionID:
-			row[i] = rec.VersionID
-		case FieldIsLatest:
-			row[i] = strconv.FormatBool(rec.IsLatest)
-		case FieldIsDeleteMarker:
-			row[i] = strconv.FormatBool(rec.IsDeleteMarker)
-		case FieldSize:
-			row[i] = strconv.FormatInt(rec.Size, 10)
-		case FieldLastModified:
-			row[i] = rec.LastModified.UTC().Format(time.RFC3339)
-		case FieldETag:
-			row[i] = rec.ETag
-		case FieldStorageClass:
-			row[i] = rec.StorageClass
-		case FieldIsMultipartUploaded:
-			row[i] = strconv.FormatBool(rec.IsMultipartUploaded)
-		case FieldReplicationStatus:
-			row[i] = rec.ReplicationStatus
-		case FieldEncryptionStatus:
-			row[i] = rec.EncryptionStatus
-		case FieldObjectLockRetainUntilDate:
-			if rec.ObjectLockRetainUntilDate != nil {
-				row[i] = rec.ObjectLockRetainUntilDate.UTC().Format(time.RFC3339)
-			}
-		case FieldObjectLockMode:
-			row[i] = rec.ObjectLockMode
-		case FieldObjectLockLegalHoldStatus:
-			row[i] = rec.ObjectLockLegalHoldStatus
-		case FieldIntelligentTieringAccess:
-			row[i] = rec.IntelligentTieringAccess
-		case FieldBucketKeyStatus:
-			row[i] = rec.BucketKeyStatus
-		case FieldChecksumAlgorithm:
-			row[i] = rec.ChecksumAlgorithm
+		if converter, ok := converters[InventoryField(field)]; ok {
+			row[i] = converter(rec)
 		}
 	}
 
