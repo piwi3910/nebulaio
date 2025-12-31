@@ -370,17 +370,33 @@ func (t *Transport) selectDevice(devices []*Device) *Device {
 	}
 
 	// If specific device requested, find it
+	if device := t.findSpecificDevice(devices); device != nil {
+		return device
+	}
+
+	// Select based on transport preference
+	if device := t.findDeviceByTransport(devices); device != nil {
+		return device
+	}
+
+	// Auto-select: prefer InfiniBand > RoCE > iWARP
+	return t.selectBestDeviceByPriority(devices)
+}
+
+// findSpecificDevice finds device by name if specified.
+func (t *Transport) findSpecificDevice(devices []*Device) *Device {
 	if t.config.DeviceName != "" && t.config.DeviceName != deviceSimulated {
 		for _, d := range devices {
 			if d.Name == t.config.DeviceName {
 				return d
 			}
 		}
-
-		return nil
 	}
+	return nil
+}
 
-	// Select based on transport preference
+// findDeviceByTransport finds device matching transport preference.
+func (t *Transport) findDeviceByTransport(devices []*Device) *Device {
 	switch t.config.Transport {
 	case TransportInfiniBand:
 		for _, d := range devices {
@@ -401,8 +417,11 @@ func (t *Transport) selectDevice(devices []*Device) *Device {
 			}
 		}
 	}
+	return nil
+}
 
-	// Auto-select: prefer InfiniBand > RoCE > iWARP
+// selectBestDeviceByPriority selects device with highest priority.
+func (t *Transport) selectBestDeviceByPriority(devices []*Device) *Device {
 	priority := map[string]int{
 		TransportInfiniBand: 3,
 		TransportRoCEv2:     2,
@@ -410,8 +429,8 @@ func (t *Transport) selectDevice(devices []*Device) *Device {
 	}
 
 	var best *Device
-
 	bestPriority := 0
+
 	for _, d := range devices {
 		if p := priority[d.Transport]; p > bestPriority {
 			best = d
