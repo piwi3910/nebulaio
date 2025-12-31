@@ -289,41 +289,57 @@ func (p *Policy) Evaluate(ctx EvalContext) (EvalResult, error) {
 		return EvalDefault, nil
 	}
 
-	// Build resource ARN if not provided
-	resource := ctx.Resource
-	if resource == "" {
-		if ctx.ObjectKey != "" {
-			resource = fmt.Sprintf("arn:aws:s3:::%s/%s", ctx.BucketName, ctx.ObjectKey)
-		} else {
-			resource = "arn:aws:s3:::" + ctx.BucketName
-		}
+	resource := p.buildResourceARN(ctx)
+
+	if denyResult := p.checkDenyStatements(ctx, resource); denyResult != EvalDefault {
+		return denyResult, nil
 	}
 
-	// First check for explicit denies (deny takes precedence)
-	for _, stmt := range p.Statement {
-		if stmt.Effect == EffectDeny {
-			matches, err := matchStatement(&stmt, ctx.Principal, ctx.Action, resource, ctx.Conditions)
-			if err != nil {
-				return EvalDefault, fmt.Errorf("error evaluating statement: %w", err)
-			}
+	return p.checkAllowStatements(ctx, resource)
+}
 
-			if matches {
-				return EvalDeny, nil
-			}
-		}
+func (p *Policy) buildResourceARN(ctx EvalContext) string {
+	if ctx.Resource != "" {
+		return ctx.Resource
 	}
 
-	// Then check for explicit allows
-	for _, stmt := range p.Statement {
-		if stmt.Effect == EffectAllow {
-			matches, err := matchStatement(&stmt, ctx.Principal, ctx.Action, resource, ctx.Conditions)
-			if err != nil {
-				return EvalDefault, fmt.Errorf("error evaluating statement: %w", err)
-			}
+	if ctx.ObjectKey != "" {
+		return fmt.Sprintf("arn:aws:s3:::%s/%s", ctx.BucketName, ctx.ObjectKey)
+	}
 
-			if matches {
-				return EvalAllow, nil
-			}
+	return "arn:aws:s3:::" + ctx.BucketName
+}
+
+func (p *Policy) checkDenyStatements(ctx EvalContext, resource string) EvalResult {
+	for _, stmt := range p.Statement {
+		if stmt.Effect != EffectDeny {
+			continue
+		}
+
+		matches, err := matchStatement(&stmt, ctx.Principal, ctx.Action, resource, ctx.Conditions)
+		if err != nil || !matches {
+			continue
+		}
+
+		return EvalDeny
+	}
+
+	return EvalDefault
+}
+
+func (p *Policy) checkAllowStatements(ctx EvalContext, resource string) (EvalResult, error) {
+	for _, stmt := range p.Statement {
+		if stmt.Effect != EffectAllow {
+			continue
+		}
+
+		matches, err := matchStatement(&stmt, ctx.Principal, ctx.Action, resource, ctx.Conditions)
+		if err != nil {
+			return EvalDefault, fmt.Errorf("error evaluating statement: %w", err)
+		}
+
+		if matches {
+			return EvalAllow, nil
 		}
 	}
 
