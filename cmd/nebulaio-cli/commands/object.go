@@ -44,6 +44,96 @@ func NewObjectCmd() *cobra.Command {
 	return cmd
 }
 
+// runObjectPut executes the object put operation.
+func runObjectPut(localFile, s3URI, contentType string, metadata []string) error {
+	bucket, key, isS3 := ParseS3URI(s3URI)
+	if !isS3 {
+		return fmt.Errorf("invalid S3 URI: %s", s3URI)
+	}
+
+	if key == "" {
+		key = filepath.Base(localFile)
+	}
+
+	ctx := context.Background()
+	client, err := NewS3Client(ctx)
+	if err != nil {
+		return err
+	}
+
+	file, stat, err := openAndStatFile(localFile)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+
+	input := buildPutObjectInput(bucket, key, file, stat.Size(), contentType, metadata)
+
+	result, err := client.PutObject(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to upload object: %w", err)
+	}
+
+	printPutObjectResult(localFile, bucket, key, result)
+	return nil
+}
+
+// openAndStatFile opens a file and returns file and stat.
+func openAndStatFile(localFile string) (*os.File, os.FileInfo, error) {
+	//nolint:gosec // G304: localFile is user-provided CLI argument
+	file, err := os.Open(localFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open file: %w", err)
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	return file, stat, nil
+}
+
+// buildPutObjectInput constructs PutObjectInput.
+func buildPutObjectInput(bucket, key string, body io.Reader, size int64, contentType string, metadata []string) *s3.PutObjectInput {
+	input := &s3.PutObjectInput{
+		Bucket:        &bucket,
+		Key:           &key,
+		Body:          body,
+		ContentLength: aws.Int64(size),
+	}
+
+	if contentType != "" {
+		input.ContentType = &contentType
+	}
+
+	if len(metadata) > 0 {
+		input.Metadata = make(map[string]string)
+		for _, m := range metadata {
+			parts := strings.SplitN(m, "=", metadataKeyValueParts)
+			if len(parts) == metadataKeyValueParts {
+				input.Metadata[parts[0]] = parts[1]
+			}
+		}
+	}
+
+	return input
+}
+
+// printPutObjectResult prints upload result.
+func printPutObjectResult(localFile, bucket, key string, result *s3.PutObjectOutput) {
+	fmt.Printf("Uploaded %s to s3://%s/%s\n", localFile, bucket, key)
+
+	if result.ETag != nil {
+		fmt.Printf("ETag: %s\n", *result.ETag)
+	}
+
+	if result.VersionId != nil {
+		fmt.Printf("VersionId: %s\n", *result.VersionId)
+	}
+}
+
 func newObjectPutCmd() *cobra.Command {
 	var (
 		contentType string
@@ -55,77 +145,7 @@ func newObjectPutCmd() *cobra.Command {
 		Short: "Upload an object",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			localFile := args[0]
-
-			bucket, key, isS3 := ParseS3URI(args[1])
-			if !isS3 {
-				return fmt.Errorf("invalid S3 URI: %s", args[1])
-			}
-
-			// If key is empty, use filename
-			if key == "" {
-				key = filepath.Base(localFile)
-			}
-
-			ctx := context.Background()
-
-			client, err := NewS3Client(ctx)
-			if err != nil {
-				return err
-			}
-
-			//nolint:gosec // G304: localFile is user-provided CLI argument
-			file, err := os.Open(localFile)
-			if err != nil {
-				return fmt.Errorf("failed to open file: %w", err)
-			}
-
-			defer func() { _ = file.Close() }()
-
-			stat, err := file.Stat()
-			if err != nil {
-				return fmt.Errorf("failed to stat file: %w", err)
-			}
-
-			input := &s3.PutObjectInput{
-				Bucket:        &bucket,
-				Key:           &key,
-				Body:          file,
-				ContentLength: aws.Int64(stat.Size()),
-			}
-
-			if contentType != "" {
-				input.ContentType = &contentType
-			}
-
-			// Parse metadata
-			if len(metadata) > 0 {
-				input.Metadata = make(map[string]string)
-
-				for _, m := range metadata {
-					parts := strings.SplitN(m, "=", metadataKeyValueParts)
-					if len(parts) == metadataKeyValueParts {
-						input.Metadata[parts[0]] = parts[1]
-					}
-				}
-			}
-
-			result, err := client.PutObject(ctx, input)
-			if err != nil {
-				return fmt.Errorf("failed to upload object: %w", err)
-			}
-
-			fmt.Printf("Uploaded %s to s3://%s/%s\n", localFile, bucket, key)
-
-			if result.ETag != nil {
-				fmt.Printf("ETag: %s\n", *result.ETag)
-			}
-
-			if result.VersionId != nil {
-				fmt.Printf("VersionId: %s\n", *result.VersionId)
-			}
-
-			return nil
+			return runObjectPut(args[0], args[1], contentType, metadata)
 		},
 	}
 
