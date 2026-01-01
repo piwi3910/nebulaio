@@ -341,6 +341,7 @@ coordinator.RegisterHook(shutdown.PhaseStorage, func(ctx context.Context) error 
 ```
 
 Available hook phases:
+
 - `PhaseDraining`
 - `PhaseWorkers`
 - `PhaseHTTPServers`
