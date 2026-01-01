@@ -129,18 +129,16 @@ type Coordinator struct {
 	errors   []error
 	hooks    map[Phase][]ShutdownHook
 	doneCh   chan struct{}
-	forceCh  chan struct{}
 	shutdown atomic.Bool
 }
 
 // NewCoordinator creates a new shutdown coordinator with the given configuration.
 func NewCoordinator(cfg Config) *Coordinator {
 	return &Coordinator{
-		config:  cfg,
-		phase:   PhaseNone,
-		hooks:   make(map[Phase][]ShutdownHook),
-		doneCh:  make(chan struct{}),
-		forceCh: make(chan struct{}),
+		config: cfg,
+		phase:  PhaseNone,
+		hooks:  make(map[Phase][]ShutdownHook),
+		doneCh: make(chan struct{}),
 	}
 }
 
@@ -265,18 +263,20 @@ func (c *Coordinator) Shutdown(ctx context.Context, components ShutdownComponent
 // watchForceTimeout monitors for force timeout and triggers forced shutdown.
 func (c *Coordinator) watchForceTimeout(ctx context.Context) {
 	forceDeadline := c.config.TotalTimeout + c.config.ForceTimeout
+	timer := time.NewTimer(forceDeadline)
+
+	defer timer.Stop()
 
 	select {
-	case <-time.After(forceDeadline):
+	case <-timer.C:
 		c.setPhase(PhaseForcedShutdown)
 		log.Warn().
 			Dur("timeout", forceDeadline).
 			Msg("Force timeout reached, forcing shutdown")
-		close(c.forceCh)
 	case <-c.doneCh:
-		// Shutdown completed normally
+		// Shutdown completed normally, goroutine exits cleanly
 	case <-ctx.Done():
-		// Context cancelled
+		// Context cancelled, goroutine exits cleanly
 	}
 }
 
