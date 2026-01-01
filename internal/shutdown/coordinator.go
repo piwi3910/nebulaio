@@ -4,12 +4,14 @@
 // ensuring data integrity and proper resource cleanup. It implements a phased
 // shutdown sequence:
 //
-//  1. Stop accepting new requests (drain phase)
-//  2. Wait for in-flight requests to complete
-//  3. Stop background workers
-//  4. Flush and close metadata store
-//  5. Close storage backends
-//  6. Release remaining resources
+//  1. Draining - Wait for in-flight requests to complete
+//  2. Workers - Stop background workers (lifecycle manager)
+//  3. HTTP Servers - Shutdown HTTP servers concurrently
+//  4. Cluster - Stop cluster discovery and gossip
+//  5. Tiering - Stop tiering service
+//  6. Audit - Flush and stop audit logger
+//  7. Metadata - Flush and close metadata store (Raft + BadgerDB)
+//  8. Storage - Close storage backends
 //
 // The coordinator tracks shutdown progress with metrics and respects configurable
 // timeouts to prevent hanging during shutdown.
@@ -534,9 +536,21 @@ func (c *Coordinator) stopComponent(ctx context.Context, name string, component 
 	}
 }
 
-func (c *Coordinator) stopComponentNoError(_ context.Context, name string, component StoppableNoError) {
-	component.Stop()
-	log.Debug().Str("component", name).Msg("Component stopped")
+func (c *Coordinator) stopComponentNoError(ctx context.Context, name string, component StoppableNoError) {
+	done := make(chan struct{}, 1)
+
+	go func() {
+		component.Stop()
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+		log.Debug().Str("component", name).Msg("Component stopped")
+	case <-ctx.Done():
+		log.Warn().Str("component", name).Msg("Timeout stopping component (no error)")
+		c.addError(ctx.Err())
+	}
 }
 
 func (c *Coordinator) closeComponent(ctx context.Context, name string, component Closeable) {

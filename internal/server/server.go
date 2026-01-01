@@ -825,6 +825,10 @@ func (s *Server) buildShutdownComponents() shutdown.ShutdownComponents {
 	if s.storageBackend != nil {
 		if closer, ok := s.storageBackend.(io.Closer); ok {
 			components.StorageBackend = closer
+		} else {
+			log.Warn().
+				Str("backend_type", fmt.Sprintf("%T", s.storageBackend)).
+				Msg("Storage backend does not implement io.Closer, will not be closed during shutdown")
 		}
 	}
 
