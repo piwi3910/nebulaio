@@ -20,7 +20,7 @@ const (
 // ClusterStore defines the interface for cluster operations.
 type ClusterStore interface {
 	IsLeader() bool
-	LeaderAddress() (string, error)
+	LeaderAddress(ctx context.Context) (string, error)
 	AddVoter(nodeID string, raftAddr string) error
 	AddNonvoter(nodeID string, raftAddr string) error
 	RemoveServer(nodeID string) error
@@ -163,7 +163,7 @@ func (h *ClusterHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !h.store.IsLeader() {
-		leaderAddr, _ := h.store.LeaderAddress()
+		leaderAddr, _ := h.store.LeaderAddress(r.Context())
 		writeJSON(w, http.StatusTemporaryRedirect, map[string]string{
 			"error":   "not leader",
 			"leader":  leaderAddr,
@@ -211,7 +211,7 @@ func (h *ClusterHandler) RemoveNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !h.store.IsLeader() {
-		leaderAddr, _ := h.store.LeaderAddress()
+		leaderAddr, _ := h.store.LeaderAddress(r.Context())
 		writeJSON(w, http.StatusTemporaryRedirect, map[string]string{
 			"error":   "not leader",
 			"leader":  leaderAddr,
@@ -253,7 +253,7 @@ func (h *ClusterHandler) GetLeader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	leaderAddr, _ := h.store.LeaderAddress()
+	leaderAddr, _ := h.store.LeaderAddress(r.Context())
 	leaderID := ""
 	isLocal := h.store.IsLeader()
 

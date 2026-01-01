@@ -21,7 +21,7 @@ func (s *DragonboatStore) CreateBucket(ctx context.Context, bucket *Bucket) erro
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCreateBucket, Data: data})
+	return s.apply(ctx, &command{Type: cmdCreateBucket, Data: data})
 }
 
 func (s *DragonboatStore) GetBucket(ctx context.Context, name string) (*Bucket, error) {
@@ -51,7 +51,7 @@ func (s *DragonboatStore) DeleteBucket(ctx context.Context, name string) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeleteBucket, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeleteBucket, Data: data})
 }
 
 func (s *DragonboatStore) ListBuckets(ctx context.Context, owner string) ([]*Bucket, error) {
@@ -88,7 +88,7 @@ func (s *DragonboatStore) UpdateBucket(ctx context.Context, bucket *Bucket) erro
 		return err
 	}
 
-	return s.apply(&command{Type: cmdUpdateBucket, Data: data})
+	return s.apply(ctx, &command{Type: cmdUpdateBucket, Data: data})
 }
 
 // Object metadata operations
@@ -99,7 +99,7 @@ func (s *DragonboatStore) PutObjectMeta(ctx context.Context, meta *ObjectMeta) e
 		return err
 	}
 
-	return s.apply(&command{Type: cmdPutObjectMeta, Data: data})
+	return s.apply(ctx, &command{Type: cmdPutObjectMeta, Data: data})
 }
 
 func (s *DragonboatStore) GetObjectMeta(ctx context.Context, bucket, key string) (*ObjectMeta, error) {
@@ -132,7 +132,7 @@ func (s *DragonboatStore) DeleteObjectMeta(ctx context.Context, bucket, key stri
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeleteObjectMeta, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeleteObjectMeta, Data: data})
 }
 
 func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*ObjectListing, error) {
@@ -572,7 +572,7 @@ func (s *DragonboatStore) DeleteObjectVersion(ctx context.Context, bucket, key, 
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeleteObjectVersion, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeleteObjectVersion, Data: data})
 }
 
 func (s *DragonboatStore) PutObjectMetaVersioned(ctx context.Context, meta *ObjectMeta, preserveOldVersions bool) error {
@@ -584,7 +584,7 @@ func (s *DragonboatStore) PutObjectMetaVersioned(ctx context.Context, meta *Obje
 		return err
 	}
 
-	return s.apply(&command{Type: cmdPutObjectMetaVersioned, Data: data})
+	return s.apply(ctx, &command{Type: cmdPutObjectMetaVersioned, Data: data})
 }
 
 // Multipart upload operations
@@ -595,7 +595,7 @@ func (s *DragonboatStore) CreateMultipartUpload(ctx context.Context, upload *Mul
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCreateMultipartUpload, Data: data})
+	return s.apply(ctx, &command{Type: cmdCreateMultipartUpload, Data: data})
 }
 
 func (s *DragonboatStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*MultipartUpload, error) {
@@ -629,7 +629,7 @@ func (s *DragonboatStore) AbortMultipartUpload(ctx context.Context, bucket, key,
 		return err
 	}
 
-	return s.apply(&command{Type: cmdAbortMultipartUpload, Data: data})
+	return s.apply(ctx, &command{Type: cmdAbortMultipartUpload, Data: data})
 }
 
 func (s *DragonboatStore) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
@@ -642,7 +642,7 @@ func (s *DragonboatStore) CompleteMultipartUpload(ctx context.Context, bucket, k
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCompleteMultipartUpload, Data: data})
+	return s.apply(ctx, &command{Type: cmdCompleteMultipartUpload, Data: data})
 }
 
 func (s *DragonboatStore) AddUploadPart(ctx context.Context, bucket, key, uploadID string, part *UploadPart) error {
@@ -656,7 +656,7 @@ func (s *DragonboatStore) AddUploadPart(ctx context.Context, bucket, key, upload
 		return err
 	}
 
-	return s.apply(&command{Type: cmdAddUploadPart, Data: data})
+	return s.apply(ctx, &command{Type: cmdAddUploadPart, Data: data})
 }
 
 func (s *DragonboatStore) ListMultipartUploads(ctx context.Context, bucket string) ([]*MultipartUpload, error) {
@@ -690,7 +690,7 @@ func (s *DragonboatStore) CreateUser(ctx context.Context, user *User) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCreateUser, Data: data})
+	return s.apply(ctx, &command{Type: cmdCreateUser, Data: data})
 }
 
 func (s *DragonboatStore) GetUser(ctx context.Context, id string) (*User, error) {
@@ -736,7 +736,7 @@ func (s *DragonboatStore) UpdateUser(ctx context.Context, user *User) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdUpdateUser, Data: data})
+	return s.apply(ctx, &command{Type: cmdUpdateUser, Data: data})
 }
 
 func (s *DragonboatStore) DeleteUser(ctx context.Context, id string) error {
@@ -745,7 +745,7 @@ func (s *DragonboatStore) DeleteUser(ctx context.Context, id string) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeleteUser, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeleteUser, Data: data})
 }
 
 func (s *DragonboatStore) ListUsers(ctx context.Context) ([]*User, error) {
@@ -781,7 +781,7 @@ func (s *DragonboatStore) CreateAccessKey(ctx context.Context, key *AccessKey) e
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCreateAccessKey, Data: data})
+	return s.apply(ctx, &command{Type: cmdCreateAccessKey, Data: data})
 }
 
 func (s *DragonboatStore) GetAccessKey(ctx context.Context, accessKeyID string) (*AccessKey, error) {
@@ -811,7 +811,7 @@ func (s *DragonboatStore) DeleteAccessKey(ctx context.Context, accessKeyID strin
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeleteAccessKey, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeleteAccessKey, Data: data})
 }
 
 func (s *DragonboatStore) ListAccessKeys(ctx context.Context, userID string) ([]*AccessKey, error) {
@@ -845,7 +845,7 @@ func (s *DragonboatStore) CreatePolicy(ctx context.Context, policy *Policy) erro
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCreatePolicy, Data: data})
+	return s.apply(ctx, &command{Type: cmdCreatePolicy, Data: data})
 }
 
 func (s *DragonboatStore) GetPolicy(ctx context.Context, name string) (*Policy, error) {
@@ -875,7 +875,7 @@ func (s *DragonboatStore) UpdatePolicy(ctx context.Context, policy *Policy) erro
 		return err
 	}
 
-	return s.apply(&command{Type: cmdUpdatePolicy, Data: data})
+	return s.apply(ctx, &command{Type: cmdUpdatePolicy, Data: data})
 }
 
 func (s *DragonboatStore) DeletePolicy(ctx context.Context, name string) error {
@@ -884,7 +884,7 @@ func (s *DragonboatStore) DeletePolicy(ctx context.Context, name string) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeletePolicy, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeletePolicy, Data: data})
 }
 
 func (s *DragonboatStore) ListPolicies(ctx context.Context) ([]*Policy, error) {
@@ -921,7 +921,7 @@ func (s *DragonboatStore) GetClusterInfo(ctx context.Context) (*ClusterInfo, err
 	}
 
 	leaderID, _, _, _ := s.nodeHost.GetLeaderID(s.shardID)
-	leaderAddr, _ := s.LeaderAddress()
+	leaderAddr, _ := s.LeaderAddress(ctx)
 
 	return &ClusterInfo{
 		ClusterID:     strconv.FormatUint(s.shardID, 10),
@@ -938,7 +938,7 @@ func (s *DragonboatStore) AddNode(ctx context.Context, node *NodeInfo) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdAddNode, Data: data})
+	return s.apply(ctx, &command{Type: cmdAddNode, Data: data})
 }
 
 func (s *DragonboatStore) RemoveNode(ctx context.Context, nodeID string) error {
@@ -947,7 +947,7 @@ func (s *DragonboatStore) RemoveNode(ctx context.Context, nodeID string) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdRemoveNode, Data: data})
+	return s.apply(ctx, &command{Type: cmdRemoveNode, Data: data})
 }
 
 func (s *DragonboatStore) ListNodes(ctx context.Context) ([]*NodeInfo, error) {
@@ -980,7 +980,7 @@ func (s *DragonboatStore) StoreAuditEvent(ctx context.Context, event *audit.Audi
 		return err
 	}
 
-	return s.apply(&command{Type: cmdStoreAuditEvent, Data: data})
+	return s.apply(ctx, &command{Type: cmdStoreAuditEvent, Data: data})
 }
 
 // ListAuditEvents lists audit events with filtering.
@@ -1178,7 +1178,7 @@ func (s *DragonboatStore) DeleteOldAuditEvents(ctx context.Context, before time.
 			continue
 		}
 
-		err = s.apply(&command{Type: cmdDeleteAuditEvent, Data: data})
+		err = s.apply(ctx, &command{Type: cmdDeleteAuditEvent, Data: data})
 		if err != nil {
 			continue
 		}

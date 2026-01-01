@@ -217,7 +217,7 @@ func (s *DragonboatStore) IsLeader() bool {
 }
 
 // LeaderAddress returns the address of the current leader.
-func (s *DragonboatStore) LeaderAddress() (string, error) {
+func (s *DragonboatStore) LeaderAddress(ctx context.Context) (string, error) {
 	leaderID, _, valid, err := s.nodeHost.GetLeaderID(s.shardID)
 	if err != nil {
 		return "", err
@@ -228,7 +228,7 @@ func (s *DragonboatStore) LeaderAddress() (string, error) {
 	}
 
 	// Get membership info to map leader ID to address
-	membership, err := s.nodeHost.SyncGetShardMembership(context.Background(), s.shardID)
+	membership, err := s.nodeHost.SyncGetShardMembership(ctx, s.shardID)
 	if err != nil {
 		return "", err
 	}
@@ -288,7 +288,7 @@ func (s *DragonboatStore) JoinCluster(leaderNodeID uint64, nodeID uint64, raftAd
 // This must be called on the leader.
 func (s *DragonboatStore) AddVoter(nodeID string, raftAddr string) error {
 	if !s.IsLeader() {
-		leaderAddr, _ := s.LeaderAddress()
+		leaderAddr, _ := s.LeaderAddress(context.Background())
 		return fmt.Errorf("not the leader, current leader address: %s", leaderAddr)
 	}
 
@@ -318,7 +318,7 @@ func (s *DragonboatStore) AddVoter(nodeID string, raftAddr string) error {
 // Non-voters receive log replication but don't vote in elections.
 func (s *DragonboatStore) AddNonvoter(nodeID string, raftAddr string) error {
 	if !s.IsLeader() {
-		leaderAddr, _ := s.LeaderAddress()
+		leaderAddr, _ := s.LeaderAddress(context.Background())
 		return fmt.Errorf("not the leader, current leader address: %s", leaderAddr)
 	}
 
@@ -343,7 +343,7 @@ func (s *DragonboatStore) AddNonvoter(nodeID string, raftAddr string) error {
 // RemoveServer removes a server from the cluster.
 func (s *DragonboatStore) RemoveServer(nodeID string) error {
 	if !s.IsLeader() {
-		leaderAddr, _ := s.LeaderAddress()
+		leaderAddr, _ := s.LeaderAddress(context.Background())
 		return fmt.Errorf("not the leader, current leader address: %s", leaderAddr)
 	}
 
@@ -442,7 +442,7 @@ func (s *DragonboatStore) GetClusterConfiguration(ctx context.Context) (*Cluster
 // This method initiates a transfer by requesting the target node to be the leader.
 func (s *DragonboatStore) TransferLeadership(targetID string, targetAddr string) error {
 	if !s.IsLeader() {
-		leaderAddr, _ := s.LeaderAddress()
+		leaderAddr, _ := s.LeaderAddress(context.Background())
 		return fmt.Errorf("not the leader, current leader address: %s", leaderAddr)
 	}
 
@@ -529,7 +529,7 @@ func (s *DragonboatStore) AppliedIndex() (uint64, error) {
 }
 
 // apply sends a command through Dragonboat.
-func (s *DragonboatStore) apply(cmd *command) error {
+func (s *DragonboatStore) apply(ctx context.Context, cmd *command) error {
 	if !s.IsLeader() {
 		return errors.New("not leader")
 	}
@@ -539,10 +539,10 @@ func (s *DragonboatStore) apply(cmd *command) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), syncReadTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, syncReadTimeout)
 	defer cancel()
 
-	result, err := s.nodeHost.SyncPropose(ctx, s.nodeHost.GetNoOPSession(s.shardID), data)
+	result, err := s.nodeHost.SyncPropose(timeoutCtx, s.nodeHost.GetNoOPSession(s.shardID), data)
 	if err != nil {
 		return err
 	}
