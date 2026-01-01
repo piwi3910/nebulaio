@@ -59,6 +59,7 @@ const (
 const (
 	compressionAlgGzip = "gzip"
 	compressionAlgZstd = "zstd"
+	compressionAlgAuto = "auto" // Used for auto-detection metrics label
 )
 
 // AccessPointConfig defines an Object Lambda access point configuration.
@@ -1177,10 +1178,10 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 	startTime := time.Now()
 	algorithm := t.getAlgorithm(params)
 
-	// Track in-flight operations (use "auto" if algorithm not yet detected)
+	// Track in-flight operations (use auto if algorithm not yet detected)
 	metricsAlgorithm := algorithm
 	if metricsAlgorithm == "" {
-		metricsAlgorithm = "auto"
+		metricsAlgorithm = compressionAlgAuto
 	}
 	metrics.IncrementLambdaOperationsInFlight(metricsAlgorithm)
 	defer metrics.DecrementLambdaOperationsInFlight(metricsAlgorithm)
@@ -1242,7 +1243,7 @@ func (t *DecompressTransformer) transformBufferedWithMetrics(
 		duration := time.Since(startTime)
 		metricsAlg := algorithm
 		if metricsAlg == "" {
-			metricsAlg = "auto"
+			metricsAlg = compressionAlgAuto
 		}
 		metrics.RecordLambdaCompression(metricsAlg, "decompress", false, duration, 0, 0)
 
@@ -1255,7 +1256,7 @@ func (t *DecompressTransformer) transformBufferedWithMetrics(
 		duration := time.Since(startTime)
 		metricsAlg := algorithm
 		if metricsAlg == "" {
-			metricsAlg = "auto"
+			metricsAlg = compressionAlgAuto
 		}
 		metrics.RecordLambdaCompression(metricsAlg, "decompress", false, duration, compressedSize, 0)
 
