@@ -1,5 +1,9 @@
 package catalog
 
+// TODO: The xitongsys/parquet-go library is archived and no longer maintained.
+// Consider migrating to github.com/parquet-go/parquet-go (actively maintained fork)
+// in a future PR. Current implementation is stable for S3 inventory use case.
+
 import (
 	"bytes"
 	"fmt"
@@ -57,8 +61,8 @@ func (s *CatalogService) writeParquet(w io.Writer, records []InventoryRecord) (i
 
 	// Convert records to Parquet-compatible format
 	parquetRecords := make([]ParquetInventoryRecord, 0, len(records))
-	for idx := range records {
-		parquetRecords = append(parquetRecords, inventoryToParquetRecord(&records[idx]))
+	for recIdx := range records {
+		parquetRecords = append(parquetRecords, inventoryToParquetRecord(&records[recIdx]))
 	}
 
 	// Write to buffer first to get accurate size
@@ -93,8 +97,8 @@ func writeParquetRecords(buffer *bytes.Buffer, records []ParquetInventoryRecord)
 	pw.CompressionType = parquet.CompressionCodec_SNAPPY
 
 	// Write all records
-	for idx := range records {
-		if err := pw.Write(records[idx]); err != nil {
+	for recIdx := range records {
+		if err := pw.Write(records[recIdx]); err != nil {
 			return 0, fmt.Errorf("failed to write parquet record: %w", err)
 		}
 	}
