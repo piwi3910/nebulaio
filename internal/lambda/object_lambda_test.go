@@ -1203,7 +1203,8 @@ func TestCompressionRatioMetrics(t *testing.T) {
 
 	// Verify compression ratio histogram has observations
 	// Note: We verify the ratio is recorded by checking the histogram count
-	ratioCount := testutil.CollectAndCount(metrics.LambdaCompressionRatio.WithLabelValues("gzip"))
+	// Pass the parent histogram vec (Collector), not the labeled observer
+	ratioCount := testutil.CollectAndCount(metrics.LambdaCompressionRatio)
 	if ratioCount == 0 {
 		t.Error("Expected compression ratio to be recorded")
 	}
@@ -1232,7 +1233,8 @@ func TestCompressionDurationMetrics(t *testing.T) {
 	_, _ = io.ReadAll(output)
 
 	// Verify duration histogram has observations
-	durationCount := testutil.CollectAndCount(metrics.LambdaCompressionDuration.WithLabelValues("gzip", "compress"))
+	// Pass the parent histogram vec (Collector), not the labeled observer
+	durationCount := testutil.CollectAndCount(metrics.LambdaCompressionDuration)
 	if durationCount == 0 {
 		t.Error("Expected compression duration to be recorded")
 	}
