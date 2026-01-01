@@ -1,5 +1,6 @@
-// Package nim provides a simulated NIM backend for testing.
 package nim
+
+// a simulated NIM backend for testing.
 
 import (
 	"context"

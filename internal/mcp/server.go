@@ -28,7 +28,7 @@ const (
 	pathMinParts              = 2
 )
 
-// MCP Protocol Version.
+// MCPVersion is the Model Context Protocol version supported by this server.
 const MCPVersion = "2024-11-05"
 
 // MCP Errors.

@@ -168,7 +168,7 @@ func (s *Service) ApplyDefaultRetention(ctx context.Context, bucket string, meta
 	return nil
 }
 
-// GetRetentionInfo returns the retention information for an object.
+// RetentionInfo contains the retention information for an object.
 type RetentionInfo struct {
 	RetainUntilDate *time.Time
 	Mode            RetentionMode

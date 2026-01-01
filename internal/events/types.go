@@ -94,40 +94,40 @@ type EventType string
 
 // S3 event types.
 const (
-	// Object created events.
+	// EventObjectCreated represents any object creation event.
 	EventObjectCreated                        EventType = "s3:ObjectCreated:*"
 	EventObjectCreatedPut                     EventType = "s3:ObjectCreated:Put"
 	EventObjectCreatedPost                    EventType = "s3:ObjectCreated:Post"
 	EventObjectCreatedCopy                    EventType = "s3:ObjectCreated:Copy"
 	EventObjectCreatedCompleteMultipartUpload EventType = "s3:ObjectCreated:CompleteMultipartUpload"
 
-	// Object removed events.
+	// EventObjectRemoved represents any object removal event.
 	EventObjectRemoved                    EventType = "s3:ObjectRemoved:*"
 	EventObjectRemovedDelete              EventType = "s3:ObjectRemoved:Delete"
 	EventObjectRemovedDeleteMarkerCreated EventType = "s3:ObjectRemoved:DeleteMarkerCreated"
 
-	// Object restore events.
+	// EventObjectRestorePost is fired when an object restore is initiated.
 	EventObjectRestorePost      EventType = "s3:ObjectRestore:Post"
 	EventObjectRestoreCompleted EventType = "s3:ObjectRestore:Completed"
 
-	// Replication events.
+	// EventReplicationOperationFailed is fired when replication fails.
 	EventReplicationOperationFailed    EventType = "s3:Replication:OperationFailedReplication"
 	EventReplicationOperationCompleted EventType = "s3:Replication:OperationReplicatedAfterThreshold"
 
-	// Lifecycle events.
+	// EventLifecycleExpiration represents any lifecycle expiration event.
 	EventLifecycleExpiration                    EventType = "s3:LifecycleExpiration:*"
 	EventLifecycleExpirationDelete              EventType = "s3:LifecycleExpiration:Delete"
 	EventLifecycleExpirationDeleteMarkerCreated EventType = "s3:LifecycleExpiration:DeleteMarkerCreated"
 
-	// Object tagging events.
+	// EventObjectTagging represents any object tagging event.
 	EventObjectTagging       EventType = "s3:ObjectTagging:*"
 	EventObjectTaggingPut    EventType = "s3:ObjectTagging:Put"
 	EventObjectTaggingDelete EventType = "s3:ObjectTagging:Delete"
 
-	// Object ACL events.
+	// EventObjectAclPut is fired when an object ACL is updated.
 	EventObjectAclPut EventType = "s3:ObjectAcl:Put"
 
-	// Test event.
+	// EventTestEvent is a test event for verifying notification configuration.
 	EventTestEvent EventType = "s3:TestEvent"
 )
 

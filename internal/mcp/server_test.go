@@ -1,5 +1,6 @@
-// Package mcp provides Model Context Protocol (MCP) server implementation for AI agent integration.
 package mcp
+
+// Model Context Protocol (MCP) server implementation for AI agent integration.
 
 import (
 	"bytes"

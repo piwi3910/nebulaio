@@ -1,4 +1,6 @@
-// Package dpu implements NVIDIA BlueField DPU (Data Processing Unit) support for NebulaIO.
+package dpu
+
+// implements NVIDIA BlueField DPU (Data Processing Unit) support for NebulaIO.
 //
 // BlueField DPUs are SmartNICs that combine network interface capabilities with
 // ARM-based processing cores. This enables offloading of storage and network
@@ -14,7 +16,6 @@
 // - Offload service management
 // - DOCA SDK integration abstraction
 // - Performance monitoring and metrics
-package dpu
 
 import (
 	"context"

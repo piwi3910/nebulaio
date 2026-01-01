@@ -1,5 +1,6 @@
-// Package security provides mTLS (mutual TLS) for internal communication in NebulaIO
 package security
+
+// mTLS (mutual TLS) for internal communication in NebulaIO
 
 import (
 	"context"

@@ -1011,7 +1011,7 @@ func (s *CatalogService) QueryInventory(ctx context.Context, manifestKey string,
 	return records, errs
 }
 
-// AnalyzeInventory provides analytics on inventory data.
+// InventoryAnalytics provides analytics on inventory data.
 type InventoryAnalytics struct {
 	// 8-byte fields (maps, int64)
 	ByStorageClass   map[string]int64 `json:"by_storage_class"`

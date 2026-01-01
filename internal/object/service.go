@@ -788,7 +788,7 @@ const MinPartSize = 5 * 1024 * 1024
 // MaxPartNumber is the maximum allowed part number.
 const MaxPartNumber = 10000
 
-// MaxParts is the maximum number of parts allowed per upload.
+// MaxPartsPerUpload is the maximum number of parts allowed per upload (AWS limit: 10,000).
 const MaxPartsPerUpload = 10000
 
 // UploadPart uploads a part of a multipart upload.
