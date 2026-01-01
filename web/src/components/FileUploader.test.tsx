@@ -3,6 +3,36 @@ import { render, screen, cleanup, waitFor, fireEvent, act } from '../test/utils'
 import { FileUploader } from './FileUploader';
 import { consoleApi } from '../api/client';
 
+// =============================================================================
+// Test Constants
+// =============================================================================
+// File size constants for consistent test values
+const TEST_FILE_SIZES = {
+  TINY: 100,           // 100 bytes - for rejection tests
+  SMALL: 512,          // 512 bytes
+  STANDARD: 1024,      // 1 KB - default test file size
+  MEDIUM: 1536,        // 1.5 KB - for size display tests
+  LARGE: 2048,         // 2 KB
+  VERY_LARGE: 10240,   // 10 KB - for progress tracking tests
+} as const;
+
+// File size limits for validation tests
+const TEST_SIZE_LIMITS = {
+  TINY: 100,                      // 100 bytes - very restrictive
+  ONE_KB: 1024,                   // 1 KB
+  ONE_MB: 1024 * 1024,            // 1 MB
+  ONE_HUNDRED_MB: 1024 * 1024 * 100, // 100 MB
+  ONE_GB: 1024 * 1024 * 1024,     // 1 GB
+  FIVE_GB: 1024 * 1024 * 1024 * 5, // 5 GB - default max
+} as const;
+
+// Test file configuration
+const TEST_MAX_FILES = {
+  DEFAULT: 10,
+  SMALL: 2,
+  MEDIUM: 5,
+} as const;
+
 // Mock the console API
 vi.mock('../api/client', () => ({
   consoleApi: {
@@ -56,11 +86,21 @@ vi.mock('@mantine/dropzone', () => {
     <div data-testid="dropzone-idle">{children}</div>
   );
 
+  /*
+   * ESLint disable explanation (react-hooks/immutability):
+   * This mock component intentionally stores props in a global registry to enable
+   * test code to simulate file drops without complex event simulation.
+   * This pattern is necessary because:
+   * 1. The real Dropzone uses native file input which can't be programmatically triggered
+   * 2. Tests need to call onDrop/onReject callbacks directly to simulate user actions
+   * 3. The registry approach is cleaner than alternative patterns like ref forwarding
+   * This side effect is isolated to test code and doesn't affect production behavior.
+   */
   /* eslint-disable react-hooks/immutability */
   const MockDropzone = (props: DropzoneProps) => {
     const { children, disabled, onDrop, onReject, maxSize, accept } = props;
 
-    // Store callbacks in registry for test access (intentional side effect for mocking)
+    // Capture component props in registry for test simulation
     dropzoneRegistry.onDrop = onDrop;
     dropzoneRegistry.onReject = onReject;
     dropzoneRegistry.maxSize = maxSize;
@@ -174,7 +214,7 @@ describe('FileUploader', () => {
     });
 
     it('displays upload constraints message with custom maxFiles', () => {
-      render(<FileUploader bucket="test-bucket" maxFiles={5} />);
+      render(<FileUploader bucket="test-bucket" maxFiles={TEST_MAX_FILES.MEDIUM} />);
       expect(screen.getByText(/upload up to 5 files/i)).toBeInTheDocument();
     });
 
@@ -184,27 +224,27 @@ describe('FileUploader', () => {
     });
 
     it('displays file size limit for 100MB', () => {
-      render(<FileUploader bucket="test-bucket" maxSize={1024 * 1024 * 100} />);
+      render(<FileUploader bucket="test-bucket" maxSize={TEST_SIZE_LIMITS.ONE_HUNDRED_MB} />);
       expect(screen.getByText(/100\.0 MB/i)).toBeInTheDocument();
     });
 
     it('displays file size limit for 1KB', () => {
-      render(<FileUploader bucket="test-bucket" maxSize={1024} />);
+      render(<FileUploader bucket="test-bucket" maxSize={TEST_SIZE_LIMITS.ONE_KB} />);
       expect(screen.getByText(/1\.0 KB/)).toBeInTheDocument();
     });
 
     it('displays file size limit for 1MB', () => {
-      render(<FileUploader bucket="test-bucket" maxSize={1024 * 1024} />);
+      render(<FileUploader bucket="test-bucket" maxSize={TEST_SIZE_LIMITS.ONE_MB} />);
       expect(screen.getByText(/1\.0 MB/)).toBeInTheDocument();
     });
 
     it('displays file size limit for 1GB', () => {
-      render(<FileUploader bucket="test-bucket" maxSize={1024 * 1024 * 1024} />);
+      render(<FileUploader bucket="test-bucket" maxSize={TEST_SIZE_LIMITS.ONE_GB} />);
       expect(screen.getByText(/1\.00 GB/)).toBeInTheDocument();
     });
 
     it('displays file size limit for bytes', () => {
-      render(<FileUploader bucket="test-bucket" maxSize={512} />);
+      render(<FileUploader bucket="test-bucket" maxSize={TEST_FILE_SIZES.SMALL} />);
       expect(screen.getByText(/512 B/)).toBeInTheDocument();
     });
 
@@ -257,7 +297,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -273,7 +313,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -291,7 +331,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -328,7 +368,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" prefix="uploads/" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -362,7 +402,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" onUploadComplete={onUploadComplete} />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -388,7 +428,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -438,7 +478,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -491,7 +531,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 10240);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.VERY_LARGE);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -549,7 +589,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -588,7 +628,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -617,7 +657,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -654,7 +694,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -697,7 +737,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -723,7 +763,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -749,7 +789,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -777,8 +817,8 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file1 = createMockFile('file1.txt', 1024);
-      const file2 = createMockFile('file2.txt', 1024);
+      const file1 = createMockFile('file1.txt', TEST_FILE_SIZES.STANDARD);
+      const file2 = createMockFile('file2.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file1, file2]);
@@ -807,14 +847,14 @@ describe('FileUploader', () => {
     });
 
     it('shows notification when file is rejected', async () => {
-      render(<FileUploader bucket="test-bucket" maxSize={100} />);
+      render(<FileUploader bucket="test-bucket" maxSize={TEST_SIZE_LIMITS.TINY} />);
 
       const dropzone = screen.getByTestId('dropzone');
-      // Create a file larger than maxSize
-      const file = createMockFile('large-file.txt', 1000);
+      // Create a file larger than maxSize (STANDARD > TINY)
+      const oversizedFile = createMockFile('large-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
-        simulateFileSelect(dropzone, [file]);
+        simulateFileSelect(dropzone, [oversizedFile]);
       });
 
       await waitFor(() => {
@@ -836,7 +876,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -865,9 +905,9 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file1 = createMockFile('file1.txt', 1024);
-      const file2 = createMockFile('file2.txt', 2048);
-      const file3 = createMockFile('file3.txt', 512);
+      const file1 = createMockFile('file1.txt', TEST_FILE_SIZES.STANDARD);
+      const file2 = createMockFile('file2.txt', TEST_FILE_SIZES.LARGE);
+      const file3 = createMockFile('file3.txt', TEST_FILE_SIZES.SMALL);
 
       act(() => {
         simulateFileSelect(dropzone, [file1, file2, file3]);
@@ -895,8 +935,8 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file1 = createMockFile('file1.txt', 1024);
-      const file2 = createMockFile('file2.txt', 1024);
+      const file1 = createMockFile('file1.txt', TEST_FILE_SIZES.STANDARD);
+      const file2 = createMockFile('file2.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file1, file2]);
@@ -919,13 +959,13 @@ describe('FileUploader', () => {
     });
 
     it('respects maxFiles limit', async () => {
-      render(<FileUploader bucket="test-bucket" maxFiles={2} />);
+      render(<FileUploader bucket="test-bucket" maxFiles={TEST_MAX_FILES.SMALL} />);
 
       const dropzone = screen.getByTestId('dropzone');
       const files = [
-        createMockFile('file1.txt', 1024),
-        createMockFile('file2.txt', 1024),
-        createMockFile('file3.txt', 1024),
+        createMockFile('file1.txt', TEST_FILE_SIZES.STANDARD),
+        createMockFile('file2.txt', TEST_FILE_SIZES.STANDARD),
+        createMockFile('file3.txt', TEST_FILE_SIZES.STANDARD),
       ];
 
       act(() => {
@@ -943,9 +983,9 @@ describe('FileUploader', () => {
 
       const dropzone = screen.getByTestId('dropzone');
       const files = [
-        createMockFile('file1.txt', 1024),
-        createMockFile('file2.txt', 1024),
-        createMockFile('file3.txt', 1024),
+        createMockFile('file1.txt', TEST_FILE_SIZES.STANDARD),
+        createMockFile('file2.txt', TEST_FILE_SIZES.STANDARD),
+        createMockFile('file3.txt', TEST_FILE_SIZES.STANDARD),
       ];
 
       act(() => {
@@ -965,8 +1005,8 @@ describe('FileUploader', () => {
 
       const dropzone = screen.getByTestId('dropzone');
       const files = [
-        createMockFile('file1.txt', 1024),
-        createMockFile('file2.txt', 1024),
+        createMockFile('file1.txt', TEST_FILE_SIZES.STANDARD),
+        createMockFile('file2.txt', TEST_FILE_SIZES.STANDARD),
       ];
 
       act(() => {
@@ -992,10 +1032,10 @@ describe('FileUploader', () => {
   // =========================================
   describe('File Validation', () => {
     it('rejects files larger than maxSize', async () => {
-      render(<FileUploader bucket="test-bucket" maxSize={1024} />);
+      render(<FileUploader bucket="test-bucket" maxSize={TEST_SIZE_LIMITS.ONE_KB} />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const largeFile = createMockFile('large-file.txt', 2048);
+      const largeFile = createMockFile('large-file.txt', TEST_FILE_SIZES.LARGE);
 
       act(() => {
         simulateFileSelect(dropzone, [largeFile]);
@@ -1023,7 +1063,7 @@ describe('FileUploader', () => {
       );
 
       const dropzone = screen.getByTestId('dropzone');
-      const textFile = createMockFile('document.txt', 1024);
+      const textFile = createMockFile('document.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [textFile]);
@@ -1040,13 +1080,13 @@ describe('FileUploader', () => {
     });
 
     it('accepts files within size limit', async () => {
-      render(<FileUploader bucket="test-bucket" maxSize={2048} />);
+      render(<FileUploader bucket="test-bucket" maxSize={TEST_FILE_SIZES.LARGE} />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('small-file.txt', 1024);
+      const validFile = createMockFile('small-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
-        simulateFileSelect(dropzone, [file]);
+        simulateFileSelect(dropzone, [validFile]);
       });
 
       await waitFor(() => {
@@ -1064,7 +1104,7 @@ describe('FileUploader', () => {
 
       const dropzone = screen.getByTestId('dropzone');
       const pngFile = new File(['test'], 'image.png', { type: 'image/png' });
-      Object.defineProperty(pngFile, 'size', { value: 1024 });
+      Object.defineProperty(pngFile, 'size', { value: TEST_FILE_SIZES.STANDARD });
 
       act(() => {
         simulateFileSelect(dropzone, [pngFile]);
@@ -1079,7 +1119,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1536); // 1.5 KB
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.MEDIUM); // 1.5 KB
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -1108,7 +1148,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -1151,7 +1191,7 @@ describe('FileUploader', () => {
       render(<FileUploader bucket="test-bucket" />);
 
       const dropzone = screen.getByTestId('dropzone');
-      const file = createMockFile('test-file.txt', 1024);
+      const file = createMockFile('test-file.txt', TEST_FILE_SIZES.STANDARD);
 
       act(() => {
         simulateFileSelect(dropzone, [file]);
@@ -1249,14 +1289,88 @@ describe('FileUploader', () => {
 
       // Add files rapidly
       await act(async () => {
-        simulateFileSelect(dropzone, [createMockFile('file1.txt', 1024)]);
-        simulateFileSelect(dropzone, [createMockFile('file2.txt', 1024)]);
-        simulateFileSelect(dropzone, [createMockFile('file3.txt', 1024)]);
+        simulateFileSelect(dropzone, [createMockFile('file1.txt', TEST_FILE_SIZES.STANDARD)]);
+        simulateFileSelect(dropzone, [createMockFile('file2.txt', TEST_FILE_SIZES.STANDARD)]);
+        simulateFileSelect(dropzone, [createMockFile('file3.txt', TEST_FILE_SIZES.STANDARD)]);
       });
 
       await waitFor(() => {
         expect(screen.getByText(/3 file\(s\) selected/)).toBeInTheDocument();
       });
+    });
+  });
+
+  // =========================================
+  // Drag and Drop Behavior Tests
+  // =========================================
+  describe('Drag and Drop Behavior', () => {
+    it('simulates drag and drop file addition', async () => {
+      render(<FileUploader bucket="test-bucket" />);
+
+      const dropzone = screen.getByTestId('dropzone');
+      const droppedFile = createMockFile('dropped-file.txt', TEST_FILE_SIZES.STANDARD);
+
+      // Simulate drag-over state (visual feedback)
+      fireEvent.dragOver(dropzone);
+
+      // Simulate file drop using our registry-based simulation
+      act(() => {
+        simulateFileSelect(dropzone, [droppedFile]);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('dropped-file.txt')).toBeInTheDocument();
+      });
+    });
+
+    it('handles multiple files dropped at once', async () => {
+      render(<FileUploader bucket="test-bucket" />);
+
+      const dropzone = screen.getByTestId('dropzone');
+      const droppedFiles = [
+        createMockFile('photo1.jpg', TEST_FILE_SIZES.STANDARD),
+        createMockFile('photo2.jpg', TEST_FILE_SIZES.STANDARD),
+        createMockFile('photo3.jpg', TEST_FILE_SIZES.STANDARD),
+      ];
+
+      act(() => {
+        simulateFileSelect(dropzone, droppedFiles);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('photo1.jpg')).toBeInTheDocument();
+        expect(screen.getByText('photo2.jpg')).toBeInTheDocument();
+        expect(screen.getByText('photo3.jpg')).toBeInTheDocument();
+        expect(screen.getByText(/3 file\(s\) selected/)).toBeInTheDocument();
+      });
+    });
+
+    it('rejects invalid files during drop', async () => {
+      render(
+        <FileUploader
+          bucket="test-bucket"
+          accept={['image/png', 'image/jpeg']}
+        />
+      );
+
+      const dropzone = screen.getByTestId('dropzone');
+      const invalidFile = createMockFile('document.pdf', TEST_FILE_SIZES.STANDARD);
+
+      act(() => {
+        simulateFileSelect(dropzone, [invalidFile]);
+      });
+
+      await waitFor(() => {
+        expect(mockShowNotification).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: 'File rejected',
+            color: 'red',
+          })
+        );
+      });
+
+      // File should not appear in the list
+      expect(screen.queryByText('document.pdf')).not.toBeInTheDocument();
     });
   });
 });
