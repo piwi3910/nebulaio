@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sort"
 	"strings"
 	"testing"
@@ -3032,10 +3033,842 @@ func TestPutObjectLegalHold(t *testing.T) {
 }
 
 // =============================================================================
-// PRESIGNED URL TESTS (placeholder for future implementation)
+// PRESIGNED URL TESTS
 // =============================================================================
 
-func TestPresignedURLPlaceholder(t *testing.T) {
-	t.Log("Presigned URL tests would require AWS Signature V4 authentication implementation")
-	// TODO: Add presigned URL tests when authentication is properly set up
+// presignedTestContext extends testContext with presigned URL testing capabilities.
+type presignedTestContext struct {
+	*testContext
+	presignGen  *auth.PresignedURLGenerator
+	accessKeyID string
+	secretKey   string
+	userID      string
+	endpoint    string
+}
+
+// setupPresignedTestContext creates a test context configured for presigned URL tests.
+func setupPresignedTestContext(t *testing.T) *presignedTestContext {
+	t.Helper()
+
+	store := NewMockMetadataStore()
+	storage := NewMockStorageBackend()
+
+	// Create test user and access key
+	testUserID := "test-user-123"
+	testAccessKeyID := "AKIAIOSFODNN7EXAMPLE"
+	testSecretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+	testUser := &metadata.User{
+		ID:       testUserID,
+		Username: "Test User",
+		Enabled:  true,
+	}
+	store.CreateUser(context.Background(), testUser)
+
+	testAccessKey := &metadata.AccessKey{
+		AccessKeyID:     testAccessKeyID,
+		SecretAccessKey: testSecretKey,
+		UserID:          testUserID,
+		Enabled:         true,
+	}
+	store.CreateAccessKey(context.Background(), testAccessKey)
+
+	bucketService := bucket.NewService(store, storage)
+	objectService := object.NewService(store, storage, bucketService)
+
+	// Create auth service with the mock store
+	authConfig := auth.Config{
+		JWTSecret:    "test-secret",
+		RootUser:     "admin",
+		RootPassword: "password123",
+	}
+	authService := auth.NewService(authConfig, store)
+
+	handler := NewHandler(authService, bucketService, objectService)
+
+	router := chi.NewRouter()
+	endpoint := "http://localhost:9000"
+
+	// Add S3Auth middleware that validates presigned URLs
+	router.Use(middleware.S3Auth(middleware.S3AuthConfig{
+		AuthService:    authService,
+		Region:         "us-east-1",
+		AllowAnonymous: false,
+	}))
+
+	handler.RegisterRoutes(router)
+
+	presignGen := auth.NewPresignedURLGenerator("us-east-1", endpoint)
+
+	return &presignedTestContext{
+		testContext: &testContext{
+			store:   store,
+			storage: storage,
+			auth:    authService,
+			bucket:  bucketService,
+			object:  objectService,
+			handler: handler,
+			router:  router,
+		},
+		presignGen:  presignGen,
+		accessKeyID: testAccessKeyID,
+		secretKey:   testSecretKey,
+		userID:      testUserID,
+		endpoint:    endpoint,
+	}
+}
+
+// =============================================================================
+// PRESIGNED URL - GET OBJECT TESTS
+// =============================================================================
+
+func TestPresignedGetObject(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	// Create bucket and object
+	ctx := context.Background()
+	_, err := tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+	if err != nil {
+		t.Fatalf("Failed to create bucket: %v", err)
+	}
+
+	content := "Hello, Presigned URL!"
+	_, err = tc.object.PutObject(
+		ctx, "test-bucket", "test-key",
+		strings.NewReader(content), int64(len(content)),
+		"text/plain", tc.userID, nil,
+	)
+	if err != nil {
+		t.Fatalf("Failed to put object: %v", err)
+	}
+
+	// Generate presigned URL for GET
+	presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "test-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Region:      "us-east-1",
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("Failed to generate presigned URL: %v", err)
+	}
+
+	// Parse the URL to create request
+	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if w.Body.String() != content {
+		t.Errorf("Expected body '%s', got '%s'", content, w.Body.String())
+	}
+}
+
+func TestPresignedGetObjectWithExpiration(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	// Create bucket and object
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+	tc.object.PutObject(
+		ctx, "test-bucket", "test-key",
+		strings.NewReader("content"), 7,
+		"text/plain", tc.userID, nil,
+	)
+
+	// Test with different expiration times
+	expirations := []time.Duration{
+		1 * time.Second,
+		5 * time.Minute,
+		1 * time.Hour,
+		24 * time.Hour,
+	}
+
+	for _, exp := range expirations {
+		presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+			Method:      http.MethodGet,
+			Bucket:      "test-bucket",
+			Key:         "test-key",
+			AccessKeyID: tc.accessKeyID,
+			SecretKey:   tc.secretKey,
+			Endpoint:    tc.endpoint,
+			Expiration:  exp,
+		})
+		if err != nil {
+			t.Errorf("Failed to generate presigned URL with expiration %v: %v", exp, err)
+			continue
+		}
+
+		req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+		w := httptest.NewRecorder()
+
+		tc.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf(
+				"Expected status 200 for expiration %v, got %d: %s",
+				exp, w.Code, w.Body.String(),
+			)
+		}
+	}
+}
+
+func TestPresignedGetObjectNotFound(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	// Create bucket but no object
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+
+	presignedURL, _ := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "nonexistent-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+
+	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// =============================================================================
+// PRESIGNED URL - PUT OBJECT TESTS
+// =============================================================================
+
+func TestPresignedPutObject(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	// Create bucket
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+
+	// Generate presigned URL for PUT
+	presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodPut,
+		Bucket:      "test-bucket",
+		Key:         "uploaded-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("Failed to generate presigned URL: %v", err)
+	}
+
+	// Upload content using presigned URL
+	content := "Uploaded via presigned URL"
+	req := createPresignedRequest(
+		t, http.MethodPut, presignedURL,
+		strings.NewReader(content),
+	)
+	req.Header.Set("Content-Type", "text/plain")
+	req.ContentLength = int64(len(content))
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify the object was created
+	obj, err := tc.object.GetObject(ctx, "test-bucket", "uploaded-key", "")
+	if err != nil {
+		t.Errorf("Object was not created: %v", err)
+	} else {
+		body, _ := io.ReadAll(obj.Body)
+		if string(body) != content {
+			t.Errorf("Expected content '%s', got '%s'", content, string(body))
+		}
+	}
+}
+
+func TestPresignedPutObjectWithContentType(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+
+	presignedURL, _ := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodPut,
+		Bucket:      "test-bucket",
+		Key:         "json-file.json",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+
+	content := `{"key": "value"}`
+	req := createPresignedRequest(t, http.MethodPut, presignedURL, strings.NewReader(content))
+	req.Header.Set("Content-Type", "application/json")
+	req.ContentLength = int64(len(content))
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPresignedPutObjectToBucketNotFound(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	presignedURL, _ := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodPut,
+		Bucket:      "nonexistent-bucket",
+		Key:         "test-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+
+	content := "test content"
+	req := createPresignedRequest(t, http.MethodPut, presignedURL, strings.NewReader(content))
+	req.ContentLength = int64(len(content))
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	// Should return 404 for nonexistent bucket
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// =============================================================================
+// PRESIGNED URL - DELETE OBJECT TESTS
+// =============================================================================
+
+func TestPresignedDeleteObject(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	// Create bucket and object
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+	tc.object.PutObject(
+		ctx, "test-bucket", "delete-me",
+		strings.NewReader("content"), 7,
+		"text/plain", tc.userID, nil,
+	)
+
+	// Generate presigned URL for DELETE
+	presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodDelete,
+		Bucket:      "test-bucket",
+		Key:         "delete-me",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("Failed to generate presigned URL: %v", err)
+	}
+
+	req := createPresignedRequest(t, http.MethodDelete, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent && w.Code != http.StatusOK {
+		t.Errorf("Expected status 204 or 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify the object was deleted
+	_, err = tc.object.GetObject(ctx, "test-bucket", "delete-me", "")
+	if err == nil {
+		t.Error("Object should have been deleted")
+	}
+}
+
+func TestPresignedDeleteObjectNonExistent(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+
+	presignedURL, _ := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodDelete,
+		Bucket:      "test-bucket",
+		Key:         "nonexistent-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+
+	req := createPresignedRequest(t, http.MethodDelete, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	// S3 returns 204 even for nonexistent objects on DELETE
+	if w.Code != http.StatusNoContent && w.Code != http.StatusOK {
+		t.Errorf("Expected status 204 or 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// =============================================================================
+// PRESIGNED URL - SECURITY VALIDATION TESTS
+// =============================================================================
+
+func TestPresignedURLInvalidAccessKey(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+	tc.object.PutObject(
+		ctx, "test-bucket", "test-key",
+		strings.NewReader("content"), 7,
+		"text/plain", tc.userID, nil,
+	)
+
+	// Generate URL with invalid access key
+	presignedURL, _ := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "test-key",
+		AccessKeyID: "INVALID_ACCESS_KEY",
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+
+	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPresignedURLInvalidSignature(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+	tc.object.PutObject(
+		ctx, "test-bucket", "test-key",
+		strings.NewReader("content"), 7,
+		"text/plain", tc.userID, nil,
+	)
+
+	// Generate URL with wrong secret key (results in invalid signature)
+	presignedURL, _ := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "test-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   "WRONG_SECRET_KEY_12345678901234567890",
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+
+	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPresignedURLTamperedSignature(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+	tc.object.PutObject(
+		ctx, "test-bucket", "test-key",
+		strings.NewReader("content"), 7,
+		"text/plain", tc.userID, nil,
+	)
+
+	presignedURL, _ := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "test-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+
+	// Tamper with the signature
+	tamperedURL := strings.Replace(presignedURL, "X-Amz-Signature=", "X-Amz-Signature=tampered", 1)
+
+	req := createPresignedRequest(t, http.MethodGet, tamperedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPresignedURLWrongHTTPMethod(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+	tc.object.PutObject(
+		ctx, "test-bucket", "test-key",
+		strings.NewReader("content"), 7,
+		"text/plain", tc.userID, nil,
+	)
+
+	// Generate URL for GET
+	presignedURL, _ := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "test-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+
+	// Try to use it with PUT method (should fail signature validation)
+	content := "trying to put with get url"
+	req := createPresignedRequest(t, http.MethodPut, presignedURL, strings.NewReader(content))
+	req.ContentLength = int64(len(content))
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	// Should fail because HTTP method is part of signature
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status 403 for wrong HTTP method, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPresignedURLDisabledAccessKey(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+	tc.object.PutObject(
+		ctx, "test-bucket", "test-key",
+		strings.NewReader("content"), 7,
+		"text/plain", tc.userID, nil,
+	)
+
+	// Create a disabled access key
+	disabledKeyID := "AKIADISABLEDKEY12345"
+	disabledSecretKey := "DisabledSecretKey1234567890123456789"
+	tc.store.CreateAccessKey(ctx, &metadata.AccessKey{
+		AccessKeyID:     disabledKeyID,
+		SecretAccessKey: disabledSecretKey,
+		UserID:          tc.userID,
+		Enabled:         false, // Disabled
+	})
+
+	presignedURL, _ := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "test-key",
+		AccessKeyID: disabledKeyID,
+		SecretKey:   disabledSecretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+
+	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status 403 for disabled access key, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// =============================================================================
+// PRESIGNED URL - EDGE CASE TESTS
+// =============================================================================
+
+func TestPresignedURLWithSpecialCharactersInKey(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+
+	// Test with special characters in key
+	specialKeys := []string{
+		"folder/file.txt",
+		"path/to/deep/file.txt",
+		"file with spaces.txt",
+		"file-with-dashes.txt",
+		"file_with_underscores.txt",
+	}
+
+	for _, key := range specialKeys {
+		tc.object.PutObject(
+			ctx, "test-bucket", key,
+			strings.NewReader("content"), 7,
+			"text/plain", tc.userID, nil,
+		)
+
+		presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+			Method:      http.MethodGet,
+			Bucket:      "test-bucket",
+			Key:         key,
+			AccessKeyID: tc.accessKeyID,
+			SecretKey:   tc.secretKey,
+			Endpoint:    tc.endpoint,
+			Expiration:  15 * time.Minute,
+		})
+		if err != nil {
+			t.Errorf("Failed to generate presigned URL for key '%s': %v", key, err)
+			continue
+		}
+
+		req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+		w := httptest.NewRecorder()
+
+		tc.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200 for key '%s', got %d: %s", key, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestPresignedURLWithQueryParameters(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+	tc.object.PutObject(
+		ctx, "test-bucket", "test-key",
+		strings.NewReader("content"), 7,
+		"text/plain", tc.userID, nil,
+	)
+
+	// Generate presigned URL with custom query parameters
+	presignedURL, _ := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "test-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+		QueryParams: map[string]string{
+			"response-content-disposition": "attachment; filename=\"download.txt\"",
+		},
+	})
+
+	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPresignedURLMultipleURLsSameObject(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+	tc.object.PutObject(
+		ctx, "test-bucket", "test-key",
+		strings.NewReader("content"), 7,
+		"text/plain", tc.userID, nil,
+	)
+
+	// Generate multiple presigned URLs for the same object
+	urls := make([]string, 3)
+	for i := range urls {
+		url, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+			Method:      http.MethodGet,
+			Bucket:      "test-bucket",
+			Key:         "test-key",
+			AccessKeyID: tc.accessKeyID,
+			SecretKey:   tc.secretKey,
+			Endpoint:    tc.endpoint,
+			Expiration:  15 * time.Minute,
+		})
+		if err != nil {
+			t.Fatalf("Failed to generate presigned URL: %v", err)
+		}
+
+		urls[i] = url
+	}
+
+	// All URLs should work
+	for i, url := range urls {
+		req := createPresignedRequest(t, http.MethodGet, url, nil)
+		w := httptest.NewRecorder()
+
+		tc.router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("URL %d: Expected status 200, got %d: %s", i, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestPresignedURLMaxExpiration(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	// Test that expiration beyond 7 days is rejected
+	_, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "test-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  8 * 24 * time.Hour, // 8 days - exceeds max
+	})
+
+	if err == nil {
+		t.Error("Expected error for expiration exceeding 7 days")
+	}
+}
+
+func TestPresignedURLValidationErrors(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	tests := []struct {
+		name   string
+		params auth.PresignParams
+	}{
+		{
+			name: "missing method",
+			params: auth.PresignParams{
+				Bucket:      "test-bucket",
+				Key:         "test-key",
+				AccessKeyID: tc.accessKeyID,
+				SecretKey:   tc.secretKey,
+			},
+		},
+		{
+			name: "missing bucket",
+			params: auth.PresignParams{
+				Method:      http.MethodGet,
+				Key:         "test-key",
+				AccessKeyID: tc.accessKeyID,
+				SecretKey:   tc.secretKey,
+			},
+		},
+		{
+			name: "missing access key",
+			params: auth.PresignParams{
+				Method:    http.MethodGet,
+				Bucket:    "test-bucket",
+				Key:       "test-key",
+				SecretKey: tc.secretKey,
+			},
+		},
+		{
+			name: "missing secret key",
+			params: auth.PresignParams{
+				Method:      http.MethodGet,
+				Bucket:      "test-bucket",
+				Key:         "test-key",
+				AccessKeyID: tc.accessKeyID,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := tc.presignGen.GeneratePresignedURL(tt.params)
+			if err == nil {
+				t.Errorf("Expected error for %s", tt.name)
+			}
+		})
+	}
+}
+
+func TestPresignedHeadObject(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+
+	ctx := context.Background()
+	tc.bucket.CreateBucket(ctx, "test-bucket", tc.userID, "us-east-1", "")
+
+	content := "Hello, Head Object!"
+	tc.object.PutObject(
+		ctx, "test-bucket", "test-key",
+		strings.NewReader(content), int64(len(content)),
+		"text/plain", tc.userID, nil,
+	)
+
+	// Generate presigned URL for HEAD
+	presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodHead,
+		Bucket:      "test-bucket",
+		Key:         "test-key",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  15 * time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("Failed to generate presigned URL: %v", err)
+	}
+
+	req := createPresignedRequest(t, http.MethodHead, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Body should be empty for HEAD request
+	if w.Body.Len() != 0 {
+		t.Errorf("Expected empty body for HEAD request, got %d bytes", w.Body.Len())
+	}
+
+	// Content-Length header should be present
+	if w.Header().Get("Content-Length") == "" {
+		t.Error("Expected Content-Length header")
+	}
+}
+
+// createPresignedRequest creates an HTTP request from a presigned URL.
+func createPresignedRequest(t *testing.T, method, presignedURL string, body io.Reader) *http.Request {
+	t.Helper()
+
+	parsedURL, err := url.Parse(presignedURL)
+	if err != nil {
+		t.Fatalf("Failed to parse presigned URL: %v", err)
+	}
+
+	req := httptest.NewRequest(method, parsedURL.RequestURI(), body)
+	req.Host = parsedURL.Host
+
+	return req
 }
