@@ -321,6 +321,8 @@ func (c *Cache) evictLRU() {
 }
 
 // writeBackWorker persists cached data to the backend.
+//
+//nolint:contextcheck // Creates per-operation contexts with timeout
 func (c *Cache) writeBackWorker() {
 	defer c.writeBackWg.Done()
 

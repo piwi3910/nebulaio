@@ -521,7 +521,9 @@ func (c *Cache) Clear() {
 
 // Close shuts down the cache.
 func (c *Cache) Close() error {
-	c.cancel()
+	if c.cancel != nil {
+		c.cancel()
+	}
 	c.wg.Wait()
 	c.Clear()
 
