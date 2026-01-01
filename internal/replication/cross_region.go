@@ -448,7 +448,7 @@ func (rm *ReplicationManager) matchesFilter(ctx context.Context, rule *Replicati
 		return false
 	}
 
-	if !rm.matchesAndConditions(rule.Filter, info, key) {
+	if !rm.matchesAndConditions(ctx, rule.Filter, info, key) {
 		return false
 	}
 
@@ -476,7 +476,7 @@ func (rm *ReplicationManager) matchesTagCondition(ctx context.Context, filter *R
 	return tags[filter.Tag.Key] == filter.Tag.Value
 }
 
-func (rm *ReplicationManager) matchesAndConditions(filter *ReplicationFilter, info *S3ObjectInfo, key string) bool {
+func (rm *ReplicationManager) matchesAndConditions(ctx context.Context, filter *ReplicationFilter, info *S3ObjectInfo, key string) bool {
 	if filter.And == nil {
 		return true
 	}
@@ -485,7 +485,7 @@ func (rm *ReplicationManager) matchesAndConditions(filter *ReplicationFilter, in
 		return false
 	}
 
-	if !rm.matchesAndTags(filter.And, info, key) {
+	if !rm.matchesAndTags(ctx, filter.And, info, key) {
 		return false
 	}
 
@@ -500,12 +500,12 @@ func (rm *ReplicationManager) matchesAndPrefix(and *ReplicationAnd, key string) 
 	return true
 }
 
-func (rm *ReplicationManager) matchesAndTags(and *ReplicationAnd, info *S3ObjectInfo, key string) bool {
+func (rm *ReplicationManager) matchesAndTags(ctx context.Context, and *ReplicationAnd, info *S3ObjectInfo, key string) bool {
 	if len(and.Tags) == 0 {
 		return true
 	}
 
-	tags, err := rm.storage.GetObjectTags(context.Background(), info.Key, key)
+	tags, err := rm.storage.GetObjectTags(ctx, info.Key, key)
 	if err != nil {
 		return false
 	}
