@@ -28,7 +28,6 @@ type QueuedEvent struct {
 
 // EventQueue manages queued events for async delivery.
 type EventQueue struct {
-	ctx        context.Context
 	events     chan *QueuedEvent
 	targets    map[string]Target
 	cancel     context.CancelFunc
@@ -84,8 +83,6 @@ func NewEventQueue(config EventQueueConfig) *EventQueue {
 		config.Workers = defaultWorkers
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	q := &EventQueue{
 		events:     make(chan *QueuedEvent, config.QueueSize),
 		retryQueue: make([]*QueuedEvent, 0),
@@ -93,26 +90,27 @@ func NewEventQueue(config EventQueueConfig) *EventQueue {
 		maxRetries: config.MaxRetries,
 		retryDelay: config.RetryDelay,
 		workers:    config.Workers,
-		ctx:        ctx,
-		cancel:     cancel,
 	}
 
 	return q
 }
 
 // Start starts the queue workers.
-func (q *EventQueue) Start() {
+func (q *EventQueue) Start(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	q.cancel = cancel
+
 	// Start worker goroutines
 	for i := range q.workers {
 		q.wg.Add(1)
 
-		go q.worker(i)
+		go q.worker(ctx, i)
 	}
 
 	// Start retry processor
 	q.wg.Add(1)
 
-	go q.retryProcessor()
+	go q.retryProcessor(ctx)
 
 	log.Info().Int("workers", q.workers).Msg("Event queue started")
 }
@@ -211,27 +209,27 @@ func (q *EventQueue) EnqueueAll(event *S3Event) error {
 }
 
 // worker processes events from the queue.
-func (q *EventQueue) worker(id int) {
+func (q *EventQueue) worker(ctx context.Context, id int) {
 	defer q.wg.Done()
 
 	log.Debug().Int("worker", id).Msg("Event queue worker started")
 
 	for {
 		select {
-		case <-q.ctx.Done():
+		case <-ctx.Done():
 			return
 		case qe, ok := <-q.events:
 			if !ok {
 				return
 			}
 
-			q.processEvent(qe)
+			q.processEvent(ctx, qe)
 		}
 	}
 }
 
 // processEvent processes a single queued event.
-func (q *EventQueue) processEvent(qe *QueuedEvent) {
+func (q *EventQueue) processEvent(ctx context.Context, qe *QueuedEvent) {
 	q.mu.RLock()
 	target, ok := q.targets[qe.TargetName]
 	q.mu.RUnlock()
@@ -243,10 +241,10 @@ func (q *EventQueue) processEvent(qe *QueuedEvent) {
 
 	qe.Attempts++
 
-	ctx, cancel := context.WithTimeout(q.ctx, eventPublishTimeout)
+	pubCtx, cancel := context.WithTimeout(ctx, eventPublishTimeout)
 	defer cancel()
 
-	err := target.Publish(ctx, qe.Event)
+	err := target.Publish(pubCtx, qe.Event)
 	if err != nil {
 		log.Warn().
 			Str("target", qe.TargetName).
@@ -284,7 +282,7 @@ func (q *EventQueue) scheduleRetry(qe *QueuedEvent) {
 }
 
 // retryProcessor processes the retry queue.
-func (q *EventQueue) retryProcessor() {
+func (q *EventQueue) retryProcessor(ctx context.Context) {
 	defer q.wg.Done()
 
 	ticker := time.NewTicker(retryProcessorInterval)
@@ -292,7 +290,7 @@ func (q *EventQueue) retryProcessor() {
 
 	for {
 		select {
-		case <-q.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			q.processRetries()
