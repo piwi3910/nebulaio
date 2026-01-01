@@ -25,7 +25,7 @@ type ClusterStore interface {
 	AddNonvoter(nodeID string, raftAddr string) error
 	RemoveServer(nodeID string) error
 	TransferLeadership(targetID, targetAddr string) error
-	GetServers() (map[uint64]string, error)
+	GetServers(ctx context.Context) (map[uint64]string, error)
 	GetClusterConfiguration(ctx context.Context) (*metadata.ClusterConfiguration, error)
 	Stats() map[string]string
 	Snapshot() error
