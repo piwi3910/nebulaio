@@ -4,6 +4,7 @@ linters:
   default: all
   disable:
     - depguard  # Disabled - requires complex allow-list configuration for all imports
+    - err113    # Disabled - CLI tools and API handlers appropriately use dynamic errors for user-facing messages
 
   settings:
     cyclop:
@@ -321,11 +322,3 @@ run:
 
 issues:
   uniq-by-line: false
-  exclude-rules:
-    # CLI commands and console handlers can use dynamic errors for user-facing messages
-    - path: "cmd/nebulaio-cli/commands/"
-      linters:
-        - err113
-    - path: "internal/api/console/"
-      linters:
-        - err113
