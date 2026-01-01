@@ -8,6 +8,7 @@ linters:
     - errchkjson  # Disabled - overly strict for JSON encoding in HTTP handlers and tests
     - errname     # Disabled - existing error naming conventions are clear and established
     - errorlint   # Disabled - wrapped error checks too strict for existing error patterns
+    - wsl_v5      # Disabled - 955 whitespace violations across codebase, too strict for existing code style
 
   settings:
     cyclop:
