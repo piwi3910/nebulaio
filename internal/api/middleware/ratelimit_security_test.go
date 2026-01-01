@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -224,7 +225,7 @@ func TestRateLimitIPSpoofingPrevention(t *testing.T) {
 		for i := range testBypassAttempts {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.RemoteAddr = testClientIPAddr // Same actual IP
-			req.Header.Set("X-Forwarded-For", "10.0.0."+string(rune('1'+i)))
+			req.Header.Set("X-Forwarded-For", "10.0.0."+strconv.Itoa(i+1))
 
 			allowed := rl.Allow(rl.extractClientIP(req))
 
@@ -250,7 +251,7 @@ func TestRateLimitDDoSProtection(t *testing.T) {
 
 		// Simulate requests from many different IPs
 		for i := range testManyIPs {
-			clientIP := "192.168.1." + string(rune('0'+i%256))
+			clientIP := "192.168.1." + strconv.Itoa(i%256)
 			allowed := rl.Allow(clientIP)
 			// First request from each IP should be allowed
 			assert.True(t, allowed, "First request from IP should be allowed")
@@ -271,7 +272,7 @@ func TestRateLimitDDoSProtection(t *testing.T) {
 
 		// Create some limiters
 		for i := range testBurstSizeLarge {
-			clientIP := "192.168.1." + string(rune('0'+i))
+			clientIP := "192.168.1." + strconv.Itoa(i)
 			rl.Allow(clientIP)
 		}
 

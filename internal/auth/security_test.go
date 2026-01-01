@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
@@ -452,9 +454,16 @@ func validateSessionIDFormat(_ string) bool {
 func generateTestSecureSessionID() string {
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, testSessionIDLength)
+	charsLen := big.NewInt(int64(len(chars)))
 
 	for i := range result {
-		result[i] = chars[i%len(chars)]
+		n, err := rand.Int(rand.Reader, charsLen)
+		if err != nil {
+			// Fallback to less random but functional for tests
+			result[i] = chars[i%len(chars)]
+		} else {
+			result[i] = chars[n.Int64()]
+		}
 	}
 
 	return string(result)
