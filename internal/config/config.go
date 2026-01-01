@@ -53,6 +53,7 @@ type Config struct {
 	RDMA      RDMAConfig      `mapstructure:"rdma"`
 	DPU       DPUConfig       `mapstructure:"dpu"`
 	Lambda    LambdaConfig    `mapstructure:"lambda"`
+	Shutdown  ShutdownConfig  `mapstructure:"shutdown"`
 	// Strings
 	NodeID   string `mapstructure:"node_id"`
 	NodeName string `mapstructure:"node_name"`
@@ -520,6 +521,37 @@ type ObjectLambdaConfig struct {
 	StreamingThreshold int64 `mapstructure:"streaming_threshold"`
 }
 
+// ShutdownConfig holds graceful shutdown configuration.
+type ShutdownConfig struct {
+	// TotalTimeoutSeconds is the maximum time allowed for the entire shutdown sequence.
+	// Default: 30 seconds
+	TotalTimeoutSeconds int `mapstructure:"total_timeout_seconds"`
+
+	// DrainTimeoutSeconds is the time to wait for in-flight requests to complete.
+	// Default: 15 seconds
+	DrainTimeoutSeconds int `mapstructure:"drain_timeout_seconds"`
+
+	// WorkerTimeoutSeconds is the time to wait for background workers to stop.
+	// Default: 10 seconds
+	WorkerTimeoutSeconds int `mapstructure:"worker_timeout_seconds"`
+
+	// HTTPTimeoutSeconds is the time to wait for HTTP servers to shutdown.
+	// Default: 10 seconds
+	HTTPTimeoutSeconds int `mapstructure:"http_timeout_seconds"`
+
+	// MetadataTimeoutSeconds is the time to wait for metadata store to close.
+	// Default: 10 seconds
+	MetadataTimeoutSeconds int `mapstructure:"metadata_timeout_seconds"`
+
+	// StorageTimeoutSeconds is the time to wait for storage backends to close.
+	// Default: 5 seconds
+	StorageTimeoutSeconds int `mapstructure:"storage_timeout_seconds"`
+
+	// ForceTimeoutSeconds is the time after TotalTimeout at which shutdown is forced.
+	// Default: 5 seconds
+	ForceTimeoutSeconds int `mapstructure:"force_timeout_seconds"`
+}
+
 // Options are command line overrides.
 type Options struct {
 	DataDir     string
@@ -815,6 +847,15 @@ func setDefaults(v *viper.Viper) {
 	// Lambda defaults (S3 Object Lambda)
 	v.SetDefault("lambda.object_lambda.max_transform_size", 100*1024*1024) // 100MB
 	v.SetDefault("lambda.object_lambda.streaming_threshold", 10*1024*1024) // 10MB
+
+	// Shutdown defaults (Graceful shutdown timeouts)
+	v.SetDefault("shutdown.total_timeout_seconds", 30)
+	v.SetDefault("shutdown.drain_timeout_seconds", 15)
+	v.SetDefault("shutdown.worker_timeout_seconds", 10)
+	v.SetDefault("shutdown.http_timeout_seconds", 10)
+	v.SetDefault("shutdown.metadata_timeout_seconds", 10)
+	v.SetDefault("shutdown.storage_timeout_seconds", 5)
+	v.SetDefault("shutdown.force_timeout_seconds", 5)
 
 	// Logging
 	v.SetDefault("log_level", "info")

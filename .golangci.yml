@@ -32,7 +32,6 @@ linters:
     - gocognit        # Disabled - 3 violations, cognitive complexity matches cyclomatic complexity checks (both have min 20)
     - interfacebloat  # Disabled - 9 violations, large interfaces are intentional for compatibility
     - ireturn         # Disabled - 8 violations, returning interfaces is intentional
-    - modernize       # Disabled - 31 violations, style preference for Go 1.23+ features
     - nestif          # Disabled - 32 violations, complex business logic requires nesting
     - nilerr          # Disabled - 2 violations, nil errors are intentional in context
     - nilnil          # Disabled - 1 violation, returning (nil, nil) is intentional

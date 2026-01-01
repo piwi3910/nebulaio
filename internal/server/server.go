@@ -44,6 +44,7 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metrics"
 	"github.com/piwi3910/nebulaio/internal/object"
 	"github.com/piwi3910/nebulaio/internal/security"
+	"github.com/piwi3910/nebulaio/internal/shutdown"
 	"github.com/piwi3910/nebulaio/internal/storage/backend"
 	"github.com/piwi3910/nebulaio/internal/storage/erasure"
 	"github.com/piwi3910/nebulaio/internal/storage/fs"
@@ -85,6 +86,9 @@ type Server struct {
 
 	// TLS manager
 	tlsManager *security.TLSManager
+
+	// Shutdown coordinator
+	shutdownCoord *shutdown.Coordinator
 
 	// HTTP servers
 	s3Server      *http.Server
@@ -152,6 +156,9 @@ func New(cfg *config.Config) (*Server, error) {
 	srv.setupAdminServer()
 	srv.setupConsoleServer()
 
+	// Initialize shutdown coordinator with config
+	srv.initializeShutdownCoordinator(cfg)
+
 	// Mark initialization as successful to prevent cleanup
 	initSuccess = true
 
@@ -178,6 +185,24 @@ func (s *Server) initializeMetrics(cfg *config.Config) {
 			Int64("streaming_threshold_bytes", cfg.Lambda.ObjectLambda.StreamingThreshold).
 			Msg("Lambda streaming threshold configured")
 	}
+}
+
+func (s *Server) initializeShutdownCoordinator(cfg *config.Config) {
+	shutdownCfg := shutdown.Config{
+		TotalTimeout:    time.Duration(cfg.Shutdown.TotalTimeoutSeconds) * time.Second,
+		DrainTimeout:    time.Duration(cfg.Shutdown.DrainTimeoutSeconds) * time.Second,
+		WorkerTimeout:   time.Duration(cfg.Shutdown.WorkerTimeoutSeconds) * time.Second,
+		HTTPTimeout:     time.Duration(cfg.Shutdown.HTTPTimeoutSeconds) * time.Second,
+		MetadataTimeout: time.Duration(cfg.Shutdown.MetadataTimeoutSeconds) * time.Second,
+		StorageTimeout:  time.Duration(cfg.Shutdown.StorageTimeoutSeconds) * time.Second,
+		ForceTimeout:    time.Duration(cfg.Shutdown.ForceTimeoutSeconds) * time.Second,
+	}
+
+	s.shutdownCoord = shutdown.NewCoordinator(shutdownCfg)
+	log.Info().
+		Dur("total_timeout", shutdownCfg.TotalTimeout).
+		Dur("drain_timeout", shutdownCfg.DrainTimeout).
+		Msg("Shutdown coordinator initialized")
 }
 
 func (s *Server) initializeCluster(cfg *config.Config) error {
@@ -752,63 +777,116 @@ func (s *Server) startHTTPServer(server *http.Server, port int, name string) err
 func (s *Server) startShutdownHandler(g *errgroup.Group, ctx context.Context) {
 	g.Go(func() error {
 		<-ctx.Done()
-		log.Info().Msg("Shutting down servers...")
+		log.Info().Msg("Initiating graceful shutdown...")
 
 		// Use WithoutCancel to create a fresh context for shutdown, derived from cancelled parent
 		// This ensures shutdown completes even though parent context is cancelled
 		baseCtx := context.WithoutCancel(ctx)
-		shutdownCtx, cancel := context.WithTimeout(baseCtx, defaultShutdownTimeoutSec*time.Second)
-		defer cancel()
 
-		s.stopClusterDiscovery()
-		s.stopLifecycleManager()
-		s.shutdownHTTPServers(shutdownCtx)
-		s.stopAuditLogger()
-		s.closeMetadataStore()
+		// Build shutdown components
+		components := s.buildShutdownComponents()
 
-		return nil
+		// Execute shutdown via coordinator
+		return s.shutdownCoord.Shutdown(baseCtx, components)
 	})
 }
 
-func (s *Server) stopClusterDiscovery() {
+// buildShutdownComponents creates the shutdown components for the coordinator.
+func (s *Server) buildShutdownComponents() shutdown.ShutdownComponents {
+	components := shutdown.ShutdownComponents{
+		HTTPServers: []shutdown.HTTPServerShutdown{
+			&httpServerWrapper{name: "S3 API", server: s.s3Server},
+			&httpServerWrapper{name: "Admin API", server: s.adminServer},
+			&httpServerWrapper{name: "Web Console", server: s.consoleServer},
+		},
+	}
+
+	// Add discovery if available
 	if s.discovery != nil {
-		if err := s.discovery.Stop(); err != nil {
-			log.Error().Err(err).Msg("Error stopping cluster discovery")
+		components.Discovery = &discoveryWrapper{discovery: s.discovery}
+	}
+
+	// Add lifecycle manager if available
+	if s.lifecycleManager != nil {
+		components.LifecycleManager = s.lifecycleManager
+	}
+
+	// Add audit logger if available
+	if s.auditLogger != nil {
+		components.AuditLogger = s.auditLogger
+	}
+
+	// Add metadata store if available
+	if s.metaStore != nil {
+		components.MetadataStore = &metadataStoreWrapper{store: s.metaStore}
+	}
+
+	// Add storage backend if it supports Close
+	if s.storageBackend != nil {
+		if closer, ok := s.storageBackend.(io.Closer); ok {
+			components.StorageBackend = closer
 		}
 	}
+
+	// Add tiering service if available
+	if s.tieringService != nil {
+		components.TieringService = &tieringServiceWrapper{service: s.tieringService}
+	}
+
+	return components
 }
 
-func (s *Server) stopLifecycleManager() {
-	if s.lifecycleManager != nil {
-		s.lifecycleManager.Stop()
-	}
+// httpServerWrapper wraps an http.Server for shutdown coordination.
+type httpServerWrapper struct {
+	name   string
+	server *http.Server
 }
 
-func (s *Server) shutdownHTTPServers(ctx context.Context) {
-	if err := s.s3Server.Shutdown(ctx); err != nil {
-		log.Error().Err(err).Msg("Error shutting down S3 server")
-	}
-
-	if err := s.adminServer.Shutdown(ctx); err != nil {
-		log.Error().Err(err).Msg("Error shutting down Admin server")
-	}
-
-	if err := s.consoleServer.Shutdown(ctx); err != nil {
-		log.Error().Err(err).Msg("Error shutting down Console server")
-	}
+func (w *httpServerWrapper) Name() string {
+	return w.name
 }
 
-func (s *Server) stopAuditLogger() {
-	if s.auditLogger != nil {
-		s.auditLogger.Stop()
-		log.Info().Msg("Audit logger stopped")
-	}
+func (w *httpServerWrapper) Shutdown(ctx context.Context) error {
+	return w.server.Shutdown(ctx)
 }
 
-func (s *Server) closeMetadataStore() {
-	if err := s.metaStore.Close(); err != nil {
-		log.Error().Err(err).Msg("Error closing metadata store")
-	}
+// discoveryWrapper wraps cluster.Discovery for shutdown coordination.
+type discoveryWrapper struct {
+	discovery *cluster.Discovery
+}
+
+func (w *discoveryWrapper) Name() string {
+	return "cluster_discovery"
+}
+
+func (w *discoveryWrapper) Stop() error {
+	return w.discovery.Stop()
+}
+
+// metadataStoreWrapper wraps metadata.DragonboatStore for shutdown coordination.
+type metadataStoreWrapper struct {
+	store *metadata.DragonboatStore
+}
+
+func (w *metadataStoreWrapper) Name() string {
+	return "metadata_store"
+}
+
+func (w *metadataStoreWrapper) Close() error {
+	return w.store.Close()
+}
+
+// tieringServiceWrapper wraps tiering.AdvancedService for shutdown coordination.
+type tieringServiceWrapper struct {
+	service *tiering.AdvancedService
+}
+
+func (w *tieringServiceWrapper) Name() string {
+	return "tiering_service"
+}
+
+func (w *tieringServiceWrapper) Stop() error {
+	return w.service.Stop()
 }
 
 // runMetricsCollector periodically collects and updates metrics.
