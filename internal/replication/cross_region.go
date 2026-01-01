@@ -362,7 +362,7 @@ func (rm *ReplicationManager) OnObjectCreated(ctx context.Context, bucket, key s
 			continue
 		}
 
-		if rm.matchesFilter(&rule, key, info) {
+		if rm.matchesFilter(ctx, &rule, key, info) {
 			task := &ReplicationTask{
 				ID:              uuid.New().String(),
 				SourceBucket:    bucket,
@@ -435,7 +435,7 @@ func (rm *ReplicationManager) OnObjectDeleted(ctx context.Context, bucket, key, 
 }
 
 // matchesFilter checks if an object matches the rule filter.
-func (rm *ReplicationManager) matchesFilter(rule *ReplicationRule, key string, info *S3ObjectInfo) bool {
+func (rm *ReplicationManager) matchesFilter(ctx context.Context, rule *ReplicationRule, key string, info *S3ObjectInfo) bool {
 	if rule.Filter == nil {
 		return true
 	}
@@ -444,7 +444,7 @@ func (rm *ReplicationManager) matchesFilter(rule *ReplicationRule, key string, i
 		return false
 	}
 
-	if !rm.matchesTagCondition(rule.Filter, info, key) {
+	if !rm.matchesTagCondition(ctx, rule.Filter, info, key) {
 		return false
 	}
 
@@ -463,12 +463,12 @@ func (rm *ReplicationManager) matchesPrefixCondition(filter *ReplicationFilter, 
 	return true
 }
 
-func (rm *ReplicationManager) matchesTagCondition(filter *ReplicationFilter, info *S3ObjectInfo, key string) bool {
+func (rm *ReplicationManager) matchesTagCondition(ctx context.Context, filter *ReplicationFilter, info *S3ObjectInfo, key string) bool {
 	if filter.Tag == nil {
 		return true
 	}
 
-	tags, err := rm.storage.GetObjectTags(context.Background(), info.Key, key)
+	tags, err := rm.storage.GetObjectTags(ctx, info.Key, key)
 	if err != nil {
 		return false
 	}

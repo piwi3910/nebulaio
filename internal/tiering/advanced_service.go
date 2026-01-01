@@ -427,7 +427,7 @@ func (s *AdvancedService) putToTier(
 		}
 	case TierCold, TierArchive:
 		if s.coldManager != nil {
-			cold := s.coldManager.GetByTier(tier)
+			cold := s.coldManager.GetByTier(ctx, tier)
 			if cold != nil {
 				return cold.PutObject(ctx, bucket, key, reader, size)
 			}
@@ -802,7 +802,7 @@ func (m *DefaultTierManager) putToColdTier(ctx context.Context, bucket, key stri
 		return nil
 	}
 
-	cold := m.cold.GetByTier(targetTier)
+	cold := m.cold.GetByTier(ctx, targetTier)
 	if cold == nil {
 		return fmt.Errorf("no cold storage available for tier %s", targetTier)
 	}

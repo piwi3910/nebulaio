@@ -209,7 +209,7 @@ func (s *Service) PutObject(ctx context.Context, bucket, key string, reader io.R
 		if result.ShouldTransition {
 			switch result.TargetTier {
 			case TierCold, TierArchive:
-				if cold := s.coldStorage.GetByTier(result.TargetTier); cold != nil {
+				if cold := s.coldStorage.GetByTier(ctx, result.TargetTier); cold != nil {
 					return cold.PutObject(ctx, bucket, key, reader, size)
 				}
 			}
@@ -311,7 +311,7 @@ func (s *Service) TransitionObject(ctx context.Context, bucket, key string, targ
 		return err
 	case TierCold, TierArchive:
 		// Move to cold storage
-		cold := s.coldStorage.GetByTier(targetTier)
+		cold := s.coldStorage.GetByTier(ctx, targetTier)
 		if cold == nil {
 			return fmt.Errorf("no cold storage available for tier %s", targetTier)
 		}

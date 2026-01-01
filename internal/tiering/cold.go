@@ -327,13 +327,13 @@ func (m *ColdStorageManager) List() []*ColdStorage {
 }
 
 // GetByTier returns cold storage for a specific tier.
-func (m *ColdStorageManager) GetByTier(tier TierType) *ColdStorage {
+func (m *ColdStorageManager) GetByTier(ctx context.Context, tier TierType) *ColdStorage {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	// Find a healthy storage for the tier
 	for _, storage := range m.storages {
-		if storage.IsHealthy(context.Background()) {
+		if storage.IsHealthy(ctx) {
 			return storage
 		}
 	}
