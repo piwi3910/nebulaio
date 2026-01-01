@@ -87,14 +87,12 @@ func NewClient(cfg *ClientConfig) *http.Client {
 	// Build TLS config
 	tlsConfig := cfg.TLSConfig
 	if tlsConfig == nil {
-		//nolint:gosec // G402: MinTLSVersion defaults to TLS 1.2
 		tlsConfig = &tls.Config{
 			MinVersion: tls.VersionTLS12,
 		}
 	}
 
 	if cfg.SkipTLSVerify {
-		//nolint:gosec // G402: InsecureSkipVerify is user-configurable for dev/test
 		tlsConfig.InsecureSkipVerify = true
 	}
 
