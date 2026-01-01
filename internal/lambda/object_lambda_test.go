@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1645,11 +1646,11 @@ func BenchmarkBufferedVsStreamingDecompression(b *testing.B) {
 func formatSize(size int) string {
 	switch {
 	case size >= 1024*1024:
-		return string(rune('0'+size/(1024*1024))) + "MB"
+		return strconv.Itoa(size/(1024*1024)) + "MB"
 	case size >= 1024:
-		return string(rune('0'+size/1024)) + "KB"
+		return strconv.Itoa(size/1024) + "KB"
 	default:
-		return string(rune('0'+size)) + "B"
+		return strconv.Itoa(size) + "B"
 	}
 }
 
