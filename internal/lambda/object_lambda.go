@@ -591,55 +591,8 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 		return redactor.Transform(ctx, bytes.NewReader(data), params)
 	}
 
-	// Fields to mask
-	piiFields := []string{"email", "phone", "ssn", "credit_card", "password", "secret", "token"}
-	if customFields, ok := params["fields"].([]interface{}); ok {
-		piiFields = make([]string, len(customFields))
-		for i, f := range customFields {
-			piiFields[i] = f.(string)
-		}
-	}
-
-	maskValue := func(v interface{}) interface{} {
-		if s, ok := v.(string); ok {
-			if len(s) > 4 {
-				return s[:2] + strings.Repeat("*", len(s)-4) + s[len(s)-2:]
-			}
-
-			return "****"
-		}
-
-		return "****"
-	}
-
-	var maskPII func(obj map[string]interface{})
-
-	maskPII = func(obj map[string]interface{}) {
-		for key, value := range obj {
-			keyLower := strings.ToLower(key)
-			for _, piiField := range piiFields {
-				if strings.Contains(keyLower, piiField) {
-					obj[key] = maskValue(value)
-					break
-				}
-			}
-
-			// Recurse into nested objects
-			if nested, ok := value.(map[string]interface{}); ok {
-				maskPII(nested)
-			}
-
-			if arr, ok := value.([]interface{}); ok {
-				for _, item := range arr {
-					if nested, ok := item.(map[string]interface{}); ok {
-						maskPII(nested)
-					}
-				}
-			}
-		}
-	}
-
-	maskPII(obj)
+	piiFields := t.getPIIFields(params)
+	t.maskPIIRecursive(obj, piiFields)
 
 	result, err := json.Marshal(obj)
 	if err != nil {
@@ -647,6 +600,68 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 	}
 
 	return bytes.NewReader(result), map[string]string{"Content-Type": "application/json"}, nil
+}
+
+func (t *PIIMaskTransformer) getPIIFields(params map[string]interface{}) []string {
+	piiFields := []string{"email", "phone", "ssn", "credit_card", "password", "secret", "token"}
+	if customFields, ok := params["fields"].([]interface{}); ok {
+		piiFields = make([]string, len(customFields))
+		for i, f := range customFields {
+			piiFields[i] = f.(string)
+		}
+	}
+	return piiFields
+}
+
+func (t *PIIMaskTransformer) maskValue(v interface{}) interface{} {
+	if s, ok := v.(string); ok {
+		if len(s) > 4 {
+			return s[:2] + strings.Repeat("*", len(s)-4) + s[len(s)-2:]
+		}
+		return "****"
+	}
+	return "****"
+}
+
+func (t *PIIMaskTransformer) maskPIIRecursive(obj map[string]interface{}, piiFields []string) {
+	for key, value := range obj {
+		if t.shouldMaskField(key, piiFields) {
+			obj[key] = t.maskValue(value)
+			continue
+		}
+
+		t.maskNestedStructures(value, piiFields)
+	}
+}
+
+func (t *PIIMaskTransformer) shouldMaskField(key string, piiFields []string) bool {
+	keyLower := strings.ToLower(key)
+	for _, piiField := range piiFields {
+		if strings.Contains(keyLower, piiField) {
+			return true
+		}
+	}
+	return false
+}
+
+func (t *PIIMaskTransformer) maskNestedStructures(value interface{}, piiFields []string) {
+	// Recurse into nested objects
+	if nested, ok := value.(map[string]interface{}); ok {
+		t.maskPIIRecursive(nested, piiFields)
+	}
+
+	// Recurse into arrays
+	if arr, ok := value.([]interface{}); ok {
+		t.maskArrayItems(arr, piiFields)
+	}
+}
+
+func (t *PIIMaskTransformer) maskArrayItems(arr []interface{}, piiFields []string) {
+	for _, item := range arr {
+		if nested, ok := item.(map[string]interface{}); ok {
+			t.maskPIIRecursive(nested, piiFields)
+		}
+	}
 }
 
 // FilterFieldsTransformer filters JSON fields.
@@ -935,116 +950,125 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 func (t *CompressTransformer) transformStreaming(ctx context.Context, input io.Reader, algorithm string, level int) (io.Reader, map[string]string, error) {
 	pr, pw := io.Pipe()
 
-	var contentEncoding string
-
-	switch strings.ToLower(algorithm) {
-	case compressionAlgGzip:
-		contentEncoding = compressionAlgGzip
-
-		go func() {
-			defer pw.Close()
-
-			gzLevel := gzip.DefaultCompression
-			if level >= 0 && level <= 9 {
-				gzLevel = level
-			}
-
-			writer, err := gzip.NewWriterLevel(pw, gzLevel)
-			if err != nil {
-				pw.CloseWithError(fmt.Errorf("failed to create gzip writer: %w", err))
-				return
-			}
-			defer writer.Close()
-
-			buf := make([]byte, 32*1024) // 32KB buffer for streaming
-
-			for {
-				select {
-				case <-ctx.Done():
-					pw.CloseWithError(ctx.Err())
-					return
-				default:
-				}
-
-				n, err := input.Read(buf)
-				if n > 0 {
-					_, werr := writer.Write(buf[:n])
-					if werr != nil {
-						pw.CloseWithError(fmt.Errorf("failed to write gzip data: %w", werr))
-						return
-					}
-				}
-
-				if err == io.EOF {
-					break
-				}
-
-				if err != nil {
-					pw.CloseWithError(fmt.Errorf("failed to read input: %w", err))
-					return
-				}
-			}
-		}()
-
-	case compressionAlgZstd:
-		contentEncoding = compressionAlgZstd
-
-		go func() {
-			defer pw.Close()
-
-			var (
-				writer *zstd.Encoder
-				err    error
-			)
-
-			if level >= 1 && level <= 22 {
-				writer, err = zstd.NewWriter(pw, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
-			} else {
-				writer, err = zstd.NewWriter(pw, zstd.WithEncoderLevel(zstd.SpeedDefault))
-			}
-
-			if err != nil {
-				pw.CloseWithError(fmt.Errorf("failed to create zstd writer: %w", err))
-				return
-			}
-
-			defer writer.Close()
-
-			buf := make([]byte, 32*1024) // 32KB buffer for streaming
-
-			for {
-				select {
-				case <-ctx.Done():
-					pw.CloseWithError(ctx.Err())
-					return
-				default:
-				}
-
-				n, err := input.Read(buf)
-				if n > 0 {
-					_, werr := writer.Write(buf[:n])
-					if werr != nil {
-						pw.CloseWithError(fmt.Errorf("failed to write zstd data: %w", werr))
-						return
-					}
-				}
-
-				if err == io.EOF {
-					break
-				}
-
-				if err != nil {
-					pw.CloseWithError(fmt.Errorf("failed to read input: %w", err))
-					return
-				}
-			}
-		}()
-
-	default:
-		return nil, nil, fmt.Errorf("unsupported compression algorithm: %s", algorithm)
+	contentEncoding, err := t.startCompressionStream(ctx, input, pw, algorithm, level)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return pr, map[string]string{"Content-Encoding": contentEncoding}, nil
+}
+
+// startCompressionStream starts a goroutine to compress input stream.
+func (t *CompressTransformer) startCompressionStream(ctx context.Context, input io.Reader, pw *io.PipeWriter, algorithm string, level int) (string, error) {
+	switch strings.ToLower(algorithm) {
+	case compressionAlgGzip:
+		t.streamGzipCompression(ctx, input, pw, level)
+
+		return compressionAlgGzip, nil
+	case compressionAlgZstd:
+		t.streamZstdCompression(ctx, input, pw, level)
+
+		return compressionAlgZstd, nil
+	default:
+		return "", fmt.Errorf("unsupported compression algorithm: %s", algorithm)
+	}
+}
+
+// streamGzipCompression compresses input stream using gzip.
+func (t *CompressTransformer) streamGzipCompression(ctx context.Context, input io.Reader, pw *io.PipeWriter, level int) {
+	go func() {
+		defer func() { _ = pw.Close() }()
+
+		writer, err := t.createGzipWriter(pw, level)
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to create gzip writer: %w", err))
+
+			return
+		}
+		defer func() { _ = writer.Close() }()
+
+		t.streamCompress(ctx, input, writer, pw, "gzip")
+	}()
+}
+
+// streamZstdCompression compresses input stream using zstd.
+func (t *CompressTransformer) streamZstdCompression(ctx context.Context, input io.Reader, pw *io.PipeWriter, level int) {
+	go func() {
+		defer func() { _ = pw.Close() }()
+
+		writer, err := t.createZstdWriter(pw, level)
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to create zstd writer: %w", err))
+
+			return
+		}
+		defer func() { _ = writer.Close() }()
+
+		t.streamCompress(ctx, input, writer, pw, "zstd")
+	}()
+}
+
+// createGzipWriter creates a gzip writer with the specified compression level.
+func (t *CompressTransformer) createGzipWriter(w io.Writer, level int) (*gzip.Writer, error) {
+	gzLevel := gzip.DefaultCompression
+	if level >= 0 && level <= 9 {
+		gzLevel = level
+	}
+
+	return gzip.NewWriterLevel(w, gzLevel)
+}
+
+// createZstdWriter creates a zstd writer with the specified compression level.
+func (t *CompressTransformer) createZstdWriter(w io.Writer, level int) (*zstd.Encoder, error) {
+	if level >= 1 && level <= 22 {
+		return zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
+	}
+
+	return zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedDefault))
+}
+
+// streamCompress performs the actual streaming compression loop.
+func (t *CompressTransformer) streamCompress(ctx context.Context, input io.Reader, writer io.Writer, pw *io.PipeWriter, algorithm string) {
+	buf := make([]byte, 32*1024) // 32KB buffer for streaming
+
+	for {
+		select {
+		case <-ctx.Done():
+			pw.CloseWithError(ctx.Err())
+
+			return
+		default:
+		}
+
+		n, err := input.Read(buf)
+		if n > 0 {
+			if werr := t.writeCompressedData(writer, buf[:n], algorithm, pw); werr != nil {
+				return
+			}
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to read input: %w", err))
+
+			return
+		}
+	}
+}
+
+// writeCompressedData writes compressed data and handles errors.
+func (t *CompressTransformer) writeCompressedData(writer io.Writer, data []byte, algorithm string, pw *io.PipeWriter) error {
+	_, err := writer.Write(data)
+	if err != nil {
+		pw.CloseWithError(fmt.Errorf("failed to write %s data: %w", algorithm, err))
+
+		return err
+	}
+
+	return nil
 }
 
 // compressGzip compresses data using gzip and writes to the buffer.
@@ -1106,34 +1130,43 @@ func compressZstd(buf *bytes.Buffer, data []byte, level int) (err error) {
 type DecompressTransformer struct{}
 
 func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
-	// Get compression algorithm from params (auto-detect if not specified)
-	algorithm := ""
-	if alg, ok := params["algorithm"].(string); ok {
-		algorithm = strings.ToLower(alg)
-	}
-
-	// Check if streaming mode should be used
-	useStreaming := false
-
-	if contentLength, ok := params["content_length"].(int64); ok {
-		streamingThreshold := GetStreamingThreshold()
-		if contentLength > streamingThreshold {
-			useStreaming = true
-
-			log.Debug().
-				Int64("content_length", contentLength).
-				Int64("streaming_threshold", streamingThreshold).
-				Str("algorithm", algorithm).
-				Msg("Using streaming decompression for large file")
-		}
-	}
+	algorithm := t.getAlgorithm(params)
+	useStreaming := t.shouldUseStreaming(params, algorithm)
 
 	if useStreaming && algorithm != "" {
-		// For streaming mode, algorithm must be specified (no auto-detection)
 		return t.transformStreaming(ctx, input, algorithm)
 	}
 
-	// Buffered mode for small files or when auto-detection is needed
+	return t.transformBuffered(ctx, input, algorithm)
+}
+
+func (t *DecompressTransformer) getAlgorithm(params map[string]interface{}) string {
+	if alg, ok := params["algorithm"].(string); ok {
+		return strings.ToLower(alg)
+	}
+	return ""
+}
+
+func (t *DecompressTransformer) shouldUseStreaming(params map[string]interface{}, algorithm string) bool {
+	contentLength, ok := params["content_length"].(int64)
+	if !ok {
+		return false
+	}
+
+	streamingThreshold := GetStreamingThreshold()
+	if contentLength > streamingThreshold {
+		log.Debug().
+			Int64("content_length", contentLength).
+			Int64("streaming_threshold", streamingThreshold).
+			Str("algorithm", algorithm).
+			Msg("Using streaming decompression for large file")
+		return true
+	}
+
+	return false
+}
+
+func (t *DecompressTransformer) transformBuffered(ctx context.Context, input io.Reader, algorithm string) (io.Reader, map[string]string, error) {
 	maxSize := GetMaxTransformSize()
 	limitedReader := io.LimitReader(input, maxSize+1)
 
@@ -1146,60 +1179,70 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", maxSize)
 	}
 
-	// Auto-detect compression based on magic bytes if algorithm not specified
 	if algorithm == "" {
 		algorithm = detectCompressionAlgorithm(data)
 		if algorithm == "" {
-			// Data doesn't appear to be compressed, return as-is
 			return bytes.NewReader(data), nil, nil
 		}
 	}
 
-	var result []byte
-
-	switch algorithm {
-	case compressionAlgGzip:
-		reader, err := gzip.NewReader(bytes.NewReader(data))
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create gzip reader: %w", err)
-		}
-
-		defer func() { _ = reader.Close() }()
-		// Limit decompressed size to prevent decompression bombs
-		decompressLimit := io.LimitReader(reader, maxSize+1)
-
-		result, err = io.ReadAll(decompressLimit)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to decompress gzip data: %w", err)
-		}
-
-		if int64(len(result)) > maxSize {
-			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
-		}
-
-	case compressionAlgZstd:
-		decoder, err := zstd.NewReader(bytes.NewReader(data))
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create zstd decoder: %w", err)
-		}
-		defer decoder.Close()
-		// Limit decompressed size to prevent decompression bombs
-		decompressLimit := io.LimitReader(decoder, maxSize+1)
-
-		result, err = io.ReadAll(decompressLimit)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to decompress zstd data: %w", err)
-		}
-
-		if int64(len(result)) > maxSize {
-			return nil, nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
-		}
-
-	default:
-		return nil, nil, fmt.Errorf("unsupported decompression algorithm: %s", algorithm)
+	result, err := t.decompressData(data, algorithm, maxSize)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return bytes.NewReader(result), nil, nil
+}
+
+func (t *DecompressTransformer) decompressData(data []byte, algorithm string, maxSize int64) ([]byte, error) {
+	switch algorithm {
+	case compressionAlgGzip:
+		return t.decompressGzip(data, maxSize)
+	case compressionAlgZstd:
+		return t.decompressZstd(data, maxSize)
+	default:
+		return nil, fmt.Errorf("unsupported decompression algorithm: %s", algorithm)
+	}
+}
+
+func (t *DecompressTransformer) decompressGzip(data []byte, maxSize int64) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	decompressLimit := io.LimitReader(reader, maxSize+1)
+	result, err := io.ReadAll(decompressLimit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress gzip data: %w", err)
+	}
+
+	if int64(len(result)) > maxSize {
+		return nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
+	}
+
+	return result, nil
+}
+
+func (t *DecompressTransformer) decompressZstd(data []byte, maxSize int64) ([]byte, error) {
+	decoder, err := zstd.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create zstd decoder: %w", err)
+	}
+	defer decoder.Close()
+
+	decompressLimit := io.LimitReader(decoder, maxSize+1)
+	result, err := io.ReadAll(decompressLimit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress zstd data: %w", err)
+	}
+
+	if int64(len(result)) > maxSize {
+		return nil, fmt.Errorf("decompressed size exceeds maximum transform size of %d bytes", maxSize)
+	}
+
+	return result, nil
 }
 
 // transformStreaming performs streaming decompression for large files.
@@ -1210,110 +1253,8 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 	pr, pw := io.Pipe()
 	maxSize := GetMaxDecompressSize()
 
-	switch algorithm {
-	case compressionAlgGzip:
-		go func() {
-			defer pw.Close()
-
-			reader, err := gzip.NewReader(input)
-			if err != nil {
-				pw.CloseWithError(fmt.Errorf("failed to create gzip reader: %w", err))
-				return
-			}
-
-			defer func() { _ = reader.Close() }()
-
-			buf := make([]byte, 32*1024) // 32KB buffer for streaming
-			var totalWritten int64
-
-			for {
-				select {
-				case <-ctx.Done():
-					pw.CloseWithError(ctx.Err())
-					return
-				default:
-				}
-
-				n, err := reader.Read(buf)
-				if n > 0 {
-					// Check decompression bomb protection before writing
-					if totalWritten+int64(n) > maxSize {
-						pw.CloseWithError(fmt.Errorf("%w: limit is %d bytes", ErrDecompressSizeLimitExceeded, maxSize))
-						return
-					}
-
-					_, werr := pw.Write(buf[:n])
-					if werr != nil {
-						pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", werr))
-						return
-					}
-
-					totalWritten += int64(n)
-				}
-
-				if err == io.EOF {
-					break
-				}
-
-				if err != nil {
-					pw.CloseWithError(fmt.Errorf("failed to decompress gzip data: %w", err))
-					return
-				}
-			}
-		}()
-
-	case compressionAlgZstd:
-		go func() {
-			defer pw.Close()
-
-			decoder, err := zstd.NewReader(input)
-			if err != nil {
-				pw.CloseWithError(fmt.Errorf("failed to create zstd decoder: %w", err))
-				return
-			}
-			defer decoder.Close()
-
-			buf := make([]byte, 32*1024) // 32KB buffer for streaming
-			var totalWritten int64
-
-			for {
-				select {
-				case <-ctx.Done():
-					pw.CloseWithError(ctx.Err())
-					return
-				default:
-				}
-
-				n, err := decoder.Read(buf)
-				if n > 0 {
-					// Check decompression bomb protection before writing
-					if totalWritten+int64(n) > maxSize {
-						pw.CloseWithError(fmt.Errorf("%w: limit is %d bytes", ErrDecompressSizeLimitExceeded, maxSize))
-						return
-					}
-
-					_, werr := pw.Write(buf[:n])
-					if werr != nil {
-						pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", werr))
-						return
-					}
-
-					totalWritten += int64(n)
-				}
-
-				if err == io.EOF {
-					break
-				}
-
-				if err != nil {
-					pw.CloseWithError(fmt.Errorf("failed to decompress zstd data: %w", err))
-					return
-				}
-			}
-		}()
-
-	default:
-		return nil, nil, fmt.Errorf("unsupported decompression algorithm for streaming: %s", algorithm)
+	if err := t.startDecompressionStream(ctx, input, pw, algorithm, maxSize); err != nil {
+		return nil, nil, err
 	}
 
 	log.Debug().
@@ -1322,6 +1263,101 @@ func (t *DecompressTransformer) transformStreaming(ctx context.Context, input io
 		Msg("Started streaming decompression with size limit")
 
 	return pr, nil, nil
+}
+
+// startDecompressionStream starts a goroutine to decompress input stream.
+func (t *DecompressTransformer) startDecompressionStream(ctx context.Context, input io.Reader, pw *io.PipeWriter, algorithm string, maxSize int64) error {
+	switch algorithm {
+	case compressionAlgGzip:
+		t.streamGzipDecompression(ctx, input, pw, maxSize)
+		return nil
+	case compressionAlgZstd:
+		t.streamZstdDecompression(ctx, input, pw, maxSize)
+		return nil
+	default:
+		return fmt.Errorf("unsupported decompression algorithm for streaming: %s", algorithm)
+	}
+}
+
+// streamGzipDecompression decompresses gzip stream.
+func (t *DecompressTransformer) streamGzipDecompression(ctx context.Context, input io.Reader, pw *io.PipeWriter, maxSize int64) {
+	go func() {
+		defer func() { _ = pw.Close() }()
+
+		reader, err := gzip.NewReader(input)
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to create gzip reader: %w", err))
+			return
+		}
+		defer func() { _ = reader.Close() }()
+
+		t.streamDecompress(ctx, reader, pw, maxSize, "gzip")
+	}()
+}
+
+// streamZstdDecompression decompresses zstd stream.
+func (t *DecompressTransformer) streamZstdDecompression(ctx context.Context, input io.Reader, pw *io.PipeWriter, maxSize int64) {
+	go func() {
+		defer func() { _ = pw.Close() }()
+
+		decoder, err := zstd.NewReader(input)
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to create zstd decoder: %w", err))
+			return
+		}
+		defer decoder.Close()
+
+		t.streamDecompress(ctx, decoder, pw, maxSize, "zstd")
+	}()
+}
+
+// streamDecompress performs the actual streaming decompression with size limits.
+func (t *DecompressTransformer) streamDecompress(ctx context.Context, reader io.Reader, pw *io.PipeWriter, maxSize int64, algorithm string) {
+	buf := make([]byte, 32*1024) // 32KB buffer for streaming
+	var totalWritten int64
+
+	for {
+		select {
+		case <-ctx.Done():
+			pw.CloseWithError(ctx.Err())
+			return
+		default:
+		}
+
+		n, err := reader.Read(buf)
+		if n > 0 {
+			if err := t.writeDecompressedData(pw, buf[:n], &totalWritten, maxSize); err != nil {
+				return
+			}
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("failed to decompress %s data: %w", algorithm, err))
+			return
+		}
+	}
+}
+
+// writeDecompressedData writes decompressed data with size limit checking.
+func (t *DecompressTransformer) writeDecompressedData(pw *io.PipeWriter, data []byte, totalWritten *int64, maxSize int64) error {
+	// Check decompression bomb protection before writing
+	if *totalWritten+int64(len(data)) > maxSize {
+		pw.CloseWithError(fmt.Errorf("%w: limit is %d bytes", ErrDecompressSizeLimitExceeded, maxSize))
+		return ErrDecompressSizeLimitExceeded
+	}
+
+	_, err := pw.Write(data)
+	if err != nil {
+		pw.CloseWithError(fmt.Errorf("failed to write decompressed data: %w", err))
+		return err
+	}
+
+	*totalWritten += int64(len(data))
+	return nil
 }
 
 // GetAccessPointForBucketConfiguration implements S3 API.

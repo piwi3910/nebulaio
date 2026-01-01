@@ -135,6 +135,7 @@ type RequestLogger struct {
 // responseRecorder wraps http.ResponseWriter to capture the status code.
 type responseRecorder struct {
 	http.ResponseWriter
+
 	statusCode int
 }
 

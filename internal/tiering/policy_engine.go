@@ -225,7 +225,18 @@ func (e *PolicyEngine) EvaluateObject(ctx context.Context, obj ObjectMetadata) (
 		return nil, err
 	}
 
-	// Get access stats for the object
+	stats := e.getObjectStats(ctx, obj)
+
+	result := &EvaluationResult{
+		Object: obj,
+	}
+
+	e.evaluatePolicies(obj, stats, policies, result)
+
+	return result, nil
+}
+
+func (e *PolicyEngine) getObjectStats(ctx context.Context, obj ObjectMetadata) *ObjectAccessStats {
 	stats, err := e.accessStats.GetStats(ctx, obj.Bucket, obj.Key)
 	if err != nil {
 		stats = &ObjectAccessStats{
@@ -234,72 +245,75 @@ func (e *PolicyEngine) EvaluateObject(ctx context.Context, obj ObjectMetadata) (
 			CurrentTier: obj.CurrentTier,
 		}
 	}
+	return stats
+}
 
-	result := &EvaluationResult{
-		Object: obj,
-	}
-
-	// Evaluate policies in priority order
+func (e *PolicyEngine) evaluatePolicies(obj ObjectMetadata, stats *ObjectAccessStats, policies []*AdvancedPolicy, result *EvaluationResult) {
 	for _, policy := range policies {
 		if !policy.Enabled {
 			continue
 		}
 
-		// Check if this node should handle this policy for this bucket
-		if policy.Distributed.Enabled && policy.Distributed.ShardByBucket {
-			if !e.shouldHandleBucket(obj.Bucket, policy.ID) {
-				continue
-			}
+		if !e.shouldEvaluatePolicy(obj, policy) {
+			continue
 		}
 
-		// Check selector
 		if !e.matchesSelector(obj, stats, policy.Selector) {
 			continue
 		}
 
-		// Check triggers
 		triggered, triggerInfo := e.checkTriggers(obj, stats, policy)
 		if !triggered {
 			continue
 		}
 
-		// Check anti-thrash
-		if policy.AntiThrash.Enabled {
-			if !e.antiThrash.CanTransition(obj.Bucket, obj.Key, policy) {
-				result.BlockedByAntiThrash = true
-				continue
-			}
+		if e.isBlockedByConstraints(obj, policy, result) {
+			continue
 		}
 
-		// Check schedule
-		if policy.Schedule.Enabled {
-			if !e.isInScheduleWindow(policy.Schedule) {
-				result.OutsideSchedule = true
-				continue
-			}
-		}
-
-		// Check rate limit
-		if policy.RateLimit.Enabled {
-			if !e.rateLimiter.Allow(policy.ID) {
-				result.RateLimited = true
-				continue
-			}
-		}
-
-		// Add matching policy
 		result.MatchingPolicies = append(result.MatchingPolicies, PolicyMatch{
 			Policy:      policy,
 			TriggerInfo: triggerInfo,
 		})
 
-		// Check if first action has stopProcessing
 		if len(policy.Actions) > 0 && policy.Actions[0].StopProcessing {
 			break
 		}
 	}
+}
 
-	return result, nil
+func (e *PolicyEngine) shouldEvaluatePolicy(obj ObjectMetadata, policy *AdvancedPolicy) bool {
+	if policy.Distributed.Enabled && policy.Distributed.ShardByBucket {
+		if !e.shouldHandleBucket(obj.Bucket, policy.ID) {
+			return false
+		}
+	}
+	return true
+}
+
+func (e *PolicyEngine) isBlockedByConstraints(obj ObjectMetadata, policy *AdvancedPolicy, result *EvaluationResult) bool {
+	if policy.AntiThrash.Enabled {
+		if !e.antiThrash.CanTransition(obj.Bucket, obj.Key, policy) {
+			result.BlockedByAntiThrash = true
+			return true
+		}
+	}
+
+	if policy.Schedule.Enabled {
+		if !e.isInScheduleWindow(policy.Schedule) {
+			result.OutsideSchedule = true
+			return true
+		}
+	}
+
+	if policy.RateLimit.Enabled {
+		if !e.rateLimiter.Allow(policy.ID) {
+			result.RateLimited = true
+			return true
+		}
+	}
+
+	return false
 }
 
 // EvaluationResult contains the result of policy evaluation.
@@ -319,126 +333,136 @@ type PolicyMatch struct {
 
 // matchesSelector checks if an object matches a policy selector.
 func (e *PolicyEngine) matchesSelector(obj ObjectMetadata, stats *ObjectAccessStats, sel PolicySelector) bool {
-	// Check buckets
-	if len(sel.Buckets) > 0 {
-		matched := false
+	return e.matchesBucketsSelector(obj, sel.Buckets) &&
+		e.matchesPrefixesSelector(obj, sel.Prefixes) &&
+		e.matchesSuffixesSelector(obj, sel.Suffixes) &&
+		e.matchesSizeSelector(obj, sel.MinSize, sel.MaxSize) &&
+		e.matchesContentTypesSelector(obj, sel.ContentTypes) &&
+		e.matchesCurrentTiersSelector(obj, sel.CurrentTiers) &&
+		e.matchesExcludeTiersSelector(obj, sel.ExcludeTiers) &&
+		e.matchesStorageClassesSelector(obj, sel.StorageClasses) &&
+		e.matchesTagsSelector(obj, sel.Tags)
+}
 
-		for _, pattern := range sel.Buckets {
-			if matchWildcard(pattern, obj.Bucket) {
-				matched = true
-				break
-			}
-		}
+// matchesBucketsSelector checks if object bucket matches any bucket pattern.
+func (e *PolicyEngine) matchesBucketsSelector(obj ObjectMetadata, buckets []string) bool {
+	if len(buckets) == 0 {
+		return true
+	}
 
-		if !matched {
-			return false
+	for _, pattern := range buckets {
+		if matchWildcard(pattern, obj.Bucket) {
+			return true
 		}
 	}
 
-	// Check prefixes
-	if len(sel.Prefixes) > 0 {
-		matched := false
+	return false
+}
 
-		for _, prefix := range sel.Prefixes {
-			if strings.HasPrefix(obj.Key, prefix) {
-				matched = true
-				break
-			}
-		}
+// matchesPrefixesSelector checks if object key has any specified prefix.
+func (e *PolicyEngine) matchesPrefixesSelector(obj ObjectMetadata, prefixes []string) bool {
+	if len(prefixes) == 0 {
+		return true
+	}
 
-		if !matched {
-			return false
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(obj.Key, prefix) {
+			return true
 		}
 	}
 
-	// Check suffixes
-	if len(sel.Suffixes) > 0 {
-		matched := false
+	return false
+}
 
-		for _, suffix := range sel.Suffixes {
-			if strings.HasSuffix(obj.Key, suffix) {
-				matched = true
-				break
-			}
-		}
+// matchesSuffixesSelector checks if object key has any specified suffix.
+func (e *PolicyEngine) matchesSuffixesSelector(obj ObjectMetadata, suffixes []string) bool {
+	if len(suffixes) == 0 {
+		return true
+	}
 
-		if !matched {
-			return false
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(obj.Key, suffix) {
+			return true
 		}
 	}
 
-	// Check size
-	if sel.MinSize > 0 && obj.Size < sel.MinSize {
+	return false
+}
+
+// matchesSizeSelector checks if object size is within the specified range.
+func (e *PolicyEngine) matchesSizeSelector(obj ObjectMetadata, minSize, maxSize int64) bool {
+	if minSize > 0 && obj.Size < minSize {
 		return false
 	}
 
-	if sel.MaxSize > 0 && obj.Size > sel.MaxSize {
+	if maxSize > 0 && obj.Size > maxSize {
 		return false
 	}
 
-	// Check content types
-	if len(sel.ContentTypes) > 0 {
-		matched := false
+	return true
+}
 
-		for _, pattern := range sel.ContentTypes {
-			if matchContentType(pattern, obj.ContentType) {
-				matched = true
-				break
-			}
+// matchesContentTypesSelector checks if object content type matches any pattern.
+func (e *PolicyEngine) matchesContentTypesSelector(obj ObjectMetadata, contentTypes []string) bool {
+	if len(contentTypes) == 0 {
+		return true
+	}
+
+	for _, pattern := range contentTypes {
+		if matchContentType(pattern, obj.ContentType) {
+			return true
 		}
+	}
 
-		if !matched {
+	return false
+}
+
+// matchesCurrentTiersSelector checks if object is in any of the specified tiers.
+func (e *PolicyEngine) matchesCurrentTiersSelector(obj ObjectMetadata, currentTiers []TierType) bool {
+	if len(currentTiers) == 0 {
+		return true
+	}
+
+	for _, tier := range currentTiers {
+		if tier == obj.CurrentTier {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchesExcludeTiersSelector checks if object is not in any excluded tier.
+func (e *PolicyEngine) matchesExcludeTiersSelector(obj ObjectMetadata, excludeTiers []TierType) bool {
+	for _, tier := range excludeTiers {
+		if tier == obj.CurrentTier {
 			return false
 		}
 	}
 
-	// Check current tiers
-	if len(sel.CurrentTiers) > 0 {
-		matched := false
+	return true
+}
 
-		for _, tier := range sel.CurrentTiers {
-			if tier == obj.CurrentTier {
-				matched = true
-				break
-			}
+// matchesStorageClassesSelector checks if object storage class matches any specified class.
+func (e *PolicyEngine) matchesStorageClassesSelector(obj ObjectMetadata, storageClasses []StorageClass) bool {
+	if len(storageClasses) == 0 {
+		return true
+	}
+
+	for _, sc := range storageClasses {
+		if sc == obj.StorageClass {
+			return true
 		}
+	}
 
-		if !matched {
+	return false
+}
+
+// matchesTagsSelector checks if object has all required tags with matching values.
+func (e *PolicyEngine) matchesTagsSelector(obj ObjectMetadata, tags map[string]string) bool {
+	for key, value := range tags {
+		if objValue, ok := obj.Tags[key]; !ok || objValue != value {
 			return false
-		}
-	}
-
-	// Check excluded tiers
-	if len(sel.ExcludeTiers) > 0 {
-		for _, tier := range sel.ExcludeTiers {
-			if tier == obj.CurrentTier {
-				return false
-			}
-		}
-	}
-
-	// Check storage classes
-	if len(sel.StorageClasses) > 0 {
-		matched := false
-
-		for _, sc := range sel.StorageClasses {
-			if sc == obj.StorageClass {
-				matched = true
-				break
-			}
-		}
-
-		if !matched {
-			return false
-		}
-	}
-
-	// Check tags
-	if len(sel.Tags) > 0 {
-		for key, value := range sel.Tags {
-			if objValue, ok := obj.Tags[key]; !ok || objValue != value {
-				return false
-			}
 		}
 	}
 
@@ -450,84 +474,157 @@ func (e *PolicyEngine) checkTriggers(obj ObjectMetadata, stats *ObjectAccessStat
 	now := time.Now()
 
 	for _, trigger := range policy.Triggers {
-		switch trigger.Type {
-		case TriggerTypeAge:
-			if trigger.Age != nil {
-				if trigger.Age.DaysSinceCreation > 0 {
-					days := int(now.Sub(obj.CreatedAt).Hours() / 24)
-					if days >= trigger.Age.DaysSinceCreation {
-						return true, fmt.Sprintf("age: %d days since creation", days)
-					}
-				}
-
-				if trigger.Age.DaysSinceModification > 0 {
-					days := int(now.Sub(obj.ModifiedAt).Hours() / 24)
-					if days >= trigger.Age.DaysSinceModification {
-						return true, fmt.Sprintf("age: %d days since modification", days)
-					}
-				}
-
-				if trigger.Age.DaysSinceAccess > 0 && !stats.LastAccessed.IsZero() {
-					days := int(now.Sub(stats.LastAccessed).Hours() / 24)
-					if days >= trigger.Age.DaysSinceAccess {
-						return true, fmt.Sprintf("age: %d days since access", days)
-					}
-				}
-
-				if trigger.Age.HoursSinceAccess > 0 && !stats.LastAccessed.IsZero() {
-					hours := int(now.Sub(stats.LastAccessed).Hours())
-					if hours >= trigger.Age.HoursSinceAccess {
-						return true, fmt.Sprintf("age: %d hours since access", hours)
-					}
-				}
-			}
-
-		case TriggerTypeAccess:
-			if trigger.Access != nil {
-				if trigger.Access.PromoteOnAnyRead {
-					// This is handled in real-time worker
-					return true, "access: read promotion"
-				}
-
-				if trigger.Access.CountThreshold > 0 && trigger.Access.PeriodMinutes > 0 {
-					// Count accesses in period
-					count := e.countAccessesInPeriod(stats, trigger.Access.PeriodMinutes)
-					if trigger.Access.Direction == TierDirectionDown && count < int64(trigger.Access.CountThreshold) {
-						return true, fmt.Sprintf("access: %d accesses in %d minutes (threshold: %d)",
-							count, trigger.Access.PeriodMinutes, trigger.Access.CountThreshold)
-					}
-
-					if trigger.Access.Direction == TierDirectionUp && count >= int64(trigger.Access.CountThreshold) {
-						return true, fmt.Sprintf("access: %d accesses in %d minutes (threshold: %d)",
-							count, trigger.Access.PeriodMinutes, trigger.Access.CountThreshold)
-					}
-				}
-			}
-
-		case TriggerTypeFrequency:
-			if trigger.Frequency != nil {
-				avgPerDay := stats.AverageAccessesDay
-				if trigger.Frequency.MinAccessesPerDay > 0 && avgPerDay >= trigger.Frequency.MinAccessesPerDay {
-					return true, fmt.Sprintf("frequency: %.2f accesses/day (min: %.2f)", avgPerDay, trigger.Frequency.MinAccessesPerDay)
-				}
-
-				if trigger.Frequency.MaxAccessesPerDay > 0 && avgPerDay <= trigger.Frequency.MaxAccessesPerDay {
-					return true, fmt.Sprintf("frequency: %.2f accesses/day (max: %.2f)", avgPerDay, trigger.Frequency.MaxAccessesPerDay)
-				}
-
-				if trigger.Frequency.Pattern != "" && stats.AccessTrend == trigger.Frequency.Pattern {
-					return true, fmt.Sprintf("frequency: pattern match '%s'", trigger.Frequency.Pattern)
-				}
-			}
-
-		case TriggerTypeCapacity:
-			// Capacity triggers are handled by threshold monitor
-			continue
-
-		case TriggerTypeCron:
-			// Cron triggers are handled by scheduler
-			continue
+		if satisfied, reason := e.evaluateTrigger(trigger, obj, stats, now); satisfied {
+			return true, reason
 		}
+	}
+
+	return false, ""
+}
+
+// evaluateTrigger evaluates a single trigger.
+func (e *PolicyEngine) evaluateTrigger(trigger PolicyTrigger, obj ObjectMetadata, stats *ObjectAccessStats, now time.Time) (bool, string) {
+	switch trigger.Type {
+	case TriggerTypeAge:
+		return e.checkAgeTrigger(trigger, obj, stats, now)
+	case TriggerTypeAccess:
+		return e.checkAccessTrigger(trigger, stats)
+	case TriggerTypeFrequency:
+		return e.checkFrequencyTrigger(trigger, stats)
+	case TriggerTypeCapacity, TriggerTypeCron:
+		// Handled by threshold monitor and scheduler respectively
+		return false, ""
+	default:
+		return false, ""
+	}
+}
+
+// checkAgeTrigger checks age-based triggers.
+func (e *PolicyEngine) checkAgeTrigger(trigger PolicyTrigger, obj ObjectMetadata, stats *ObjectAccessStats, now time.Time) (bool, string) {
+	if trigger.Age == nil {
+		return false, ""
+	}
+
+	if satisfied, reason := e.checkDaysSinceCreation(trigger.Age, obj.CreatedAt, now); satisfied {
+		return true, reason
+	}
+
+	if satisfied, reason := e.checkDaysSinceModification(trigger.Age, obj.ModifiedAt, now); satisfied {
+		return true, reason
+	}
+
+	if satisfied, reason := e.checkDaysSinceAccess(trigger.Age, stats, now); satisfied {
+		return true, reason
+	}
+
+	if satisfied, reason := e.checkHoursSinceAccess(trigger.Age, stats, now); satisfied {
+		return true, reason
+	}
+
+	return false, ""
+}
+
+// checkDaysSinceCreation checks if days since creation threshold is met.
+func (e *PolicyEngine) checkDaysSinceCreation(age *AgeTrigger, createdAt time.Time, now time.Time) (bool, string) {
+	if age.DaysSinceCreation <= 0 {
+		return false, ""
+	}
+
+	days := int(now.Sub(createdAt).Hours() / 24)
+	if days >= age.DaysSinceCreation {
+		return true, fmt.Sprintf("age: %d days since creation", days)
+	}
+
+	return false, ""
+}
+
+// checkDaysSinceModification checks if days since modification threshold is met.
+func (e *PolicyEngine) checkDaysSinceModification(age *AgeTrigger, modifiedAt time.Time, now time.Time) (bool, string) {
+	if age.DaysSinceModification <= 0 {
+		return false, ""
+	}
+
+	days := int(now.Sub(modifiedAt).Hours() / 24)
+	if days >= age.DaysSinceModification {
+		return true, fmt.Sprintf("age: %d days since modification", days)
+	}
+
+	return false, ""
+}
+
+// checkDaysSinceAccess checks if days since access threshold is met.
+func (e *PolicyEngine) checkDaysSinceAccess(age *AgeTrigger, stats *ObjectAccessStats, now time.Time) (bool, string) {
+	if age.DaysSinceAccess <= 0 || stats == nil || stats.LastAccessed.IsZero() {
+		return false, ""
+	}
+
+	days := int(now.Sub(stats.LastAccessed).Hours() / 24)
+	if days >= age.DaysSinceAccess {
+		return true, fmt.Sprintf("age: %d days since access", days)
+	}
+
+	return false, ""
+}
+
+// checkHoursSinceAccess checks if hours since access threshold is met.
+func (e *PolicyEngine) checkHoursSinceAccess(age *AgeTrigger, stats *ObjectAccessStats, now time.Time) (bool, string) {
+	if age.HoursSinceAccess <= 0 || stats == nil || stats.LastAccessed.IsZero() {
+		return false, ""
+	}
+
+	hours := int(now.Sub(stats.LastAccessed).Hours())
+	if hours >= age.HoursSinceAccess {
+		return true, fmt.Sprintf("age: %d hours since access", hours)
+	}
+
+	return false, ""
+}
+
+// checkAccessTrigger checks access-based triggers.
+func (e *PolicyEngine) checkAccessTrigger(trigger PolicyTrigger, stats *ObjectAccessStats) (bool, string) {
+	if trigger.Access == nil {
+		return false, ""
+	}
+
+	if trigger.Access.PromoteOnAnyRead {
+		return true, "access: read promotion"
+	}
+
+	if trigger.Access.CountThreshold > 0 && trigger.Access.PeriodMinutes > 0 {
+		count := e.countAccessesInPeriod(stats, trigger.Access.PeriodMinutes)
+
+		if trigger.Access.Direction == TierDirectionDown && count < int64(trigger.Access.CountThreshold) {
+			return true, fmt.Sprintf("access: %d accesses in %d minutes (threshold: %d)",
+				count, trigger.Access.PeriodMinutes, trigger.Access.CountThreshold)
+		}
+
+		if trigger.Access.Direction == TierDirectionUp && count >= int64(trigger.Access.CountThreshold) {
+			return true, fmt.Sprintf("access: %d accesses in %d minutes (threshold: %d)",
+				count, trigger.Access.PeriodMinutes, trigger.Access.CountThreshold)
+		}
+	}
+
+	return false, ""
+}
+
+// checkFrequencyTrigger checks frequency-based triggers.
+func (e *PolicyEngine) checkFrequencyTrigger(trigger PolicyTrigger, stats *ObjectAccessStats) (bool, string) {
+	if trigger.Frequency == nil || stats == nil {
+		return false, ""
+	}
+
+	avgPerDay := stats.AverageAccessesDay
+
+	if trigger.Frequency.MinAccessesPerDay > 0 && avgPerDay >= trigger.Frequency.MinAccessesPerDay {
+		return true, fmt.Sprintf("frequency: %.2f accesses/day (min: %.2f)", avgPerDay, trigger.Frequency.MinAccessesPerDay)
+	}
+
+	if trigger.Frequency.MaxAccessesPerDay > 0 && avgPerDay <= trigger.Frequency.MaxAccessesPerDay {
+		return true, fmt.Sprintf("frequency: %.2f accesses/day (max: %.2f)", avgPerDay, trigger.Frequency.MaxAccessesPerDay)
+	}
+
+	if trigger.Frequency.Pattern != "" && stats.AccessTrend == trigger.Frequency.Pattern {
+		return true, fmt.Sprintf("frequency: pattern match '%s'", trigger.Frequency.Pattern)
 	}
 
 	return false, ""
@@ -672,41 +769,57 @@ func (e *PolicyEngine) handleRealtimeEvent(event RealtimeEvent) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Record access in stats
-	if e.accessStats != nil {
-		e.accessStats.RecordAccess(ctx, event.Bucket, event.Key, event.Operation, event.Size)
-	}
+	e.recordAccessStats(ctx, event)
 
-	// Get real-time policies
 	policies, err := e.store.ListByType(ctx, PolicyTypeRealtime)
 	if err != nil {
 		return
 	}
 
 	for _, policy := range policies {
-		if !policy.Enabled {
-			continue
+		if policy.Enabled {
+			e.processRealtimePolicy(ctx, event, policy)
 		}
+	}
+}
 
-		// Check for read promotion trigger
-		for _, trigger := range policy.Triggers {
-			if trigger.Type == TriggerTypeAccess && trigger.Access != nil {
-				if trigger.Access.PromoteOnAnyRead && event.Operation == "GET" {
-					// Execute promotion
-					for _, action := range policy.Actions {
-						if action.Type == ActionTransition && action.Transition != nil {
-							err := e.executor.ExecuteTransition(ctx, event.Bucket, event.Key, action.Transition)
-							if err != nil {
-								log.Error().Err(err).
-									Str("bucket", event.Bucket).
-									Str("key", event.Key).
-									Msg("Failed to execute read promotion")
-							}
-						}
-					}
-				}
-			}
+func (e *PolicyEngine) recordAccessStats(ctx context.Context, event RealtimeEvent) {
+	if e.accessStats != nil {
+		e.accessStats.RecordAccess(ctx, event.Bucket, event.Key, event.Operation, event.Size)
+	}
+}
+
+func (e *PolicyEngine) processRealtimePolicy(ctx context.Context, event RealtimeEvent, policy *AdvancedPolicy) {
+	for _, trigger := range policy.Triggers {
+		if e.shouldProcessRealtimeTrigger(trigger, event) {
+			e.executeRealtimeActions(ctx, event, policy)
+			break
 		}
+	}
+}
+
+func (e *PolicyEngine) shouldProcessRealtimeTrigger(trigger PolicyTrigger, event RealtimeEvent) bool {
+	if trigger.Type != TriggerTypeAccess || trigger.Access == nil {
+		return false
+	}
+	return trigger.Access.PromoteOnAnyRead && event.Operation == "GET"
+}
+
+func (e *PolicyEngine) executeRealtimeActions(ctx context.Context, event RealtimeEvent, policy *AdvancedPolicy) {
+	for _, action := range policy.Actions {
+		if action.Type == ActionTransition && action.Transition != nil {
+			e.executeRealtimeTransition(ctx, event, action)
+		}
+	}
+}
+
+func (e *PolicyEngine) executeRealtimeTransition(ctx context.Context, event RealtimeEvent, action PolicyAction) {
+	err := e.executor.ExecuteTransition(ctx, event.Bucket, event.Key, action.Transition)
+	if err != nil {
+		log.Error().Err(err).
+			Str("bucket", event.Bucket).
+			Str("key", event.Key).
+			Msg("Failed to execute read promotion")
 	}
 }
 
@@ -737,94 +850,126 @@ func (e *PolicyEngine) executeScheduledPolicy(policy *AdvancedPolicy) {
 		LastExecuted: startTime,
 	}
 
-	// Iterate through buckets that match the policy selector
-	buckets := e.getBucketsForPolicy(ctx, policy)
-
-	for _, bucket := range buckets {
-		// Check if this node should handle this bucket
-		if policy.Distributed.Enabled && policy.Distributed.ShardByBucket {
-			if !e.shouldHandleBucket(bucket, policy.ID) {
-				continue
-			}
-		}
-
-		// List objects in bucket
-		var marker string
-
-		for {
-			objects, err := e.tierManager.ListObjects(ctx, bucket, "", 1000)
-			if err != nil {
-				stats.Errors++
-				stats.LastError = err.Error()
-
-				break
-			}
-
-			if len(objects) == 0 {
-				break
-			}
-
-			for _, obj := range objects {
-				stats.ObjectsEvaluated++
-
-				// Get access stats
-				accessStats, _ := e.accessStats.GetStats(ctx, bucket, obj.Key)
-				if accessStats == nil {
-					accessStats = &ObjectAccessStats{Bucket: bucket, Key: obj.Key}
-				}
-
-				// Check selector
-				if !e.matchesSelector(obj, accessStats, policy.Selector) {
-					continue
-				}
-
-				// Check triggers
-				triggered, _ := e.checkTriggers(obj, accessStats, policy)
-				if !triggered {
-					continue
-				}
-
-				// Check anti-thrash
-				if policy.AntiThrash.Enabled {
-					if !e.antiThrash.CanTransition(bucket, obj.Key, policy) {
-						continue
-					}
-				}
-
-				// Execute actions
-				for _, action := range policy.Actions {
-					err := e.executor.Execute(ctx, bucket, obj.Key, &action)
-					if err != nil {
-						stats.Errors++
-						stats.LastError = err.Error()
-					} else {
-						stats.ObjectsTransitioned++
-						stats.BytesTransitioned += obj.Size
-
-						// Record transition in anti-thrash
-						if policy.AntiThrash.Enabled {
-							e.antiThrash.RecordTransition(bucket, obj.Key)
-						}
-					}
-				}
-
-				// Rate limiting
-				if policy.RateLimit.Enabled {
-					e.rateLimiter.Wait(policy.ID)
-				}
-			}
-
-			marker = objects[len(objects)-1].Key
-			if marker == "" {
-				break
-			}
-		}
-	}
+	e.processBucketsForPolicy(ctx, policy, stats)
 
 	stats.LastDuration = time.Since(startTime)
 	stats.TotalExecutions++
 
-	// Update stats
+	e.finalizeScheduledPolicyExecution(ctx, policy, stats)
+}
+
+// processBucketsForPolicy processes all buckets matching the policy.
+func (e *PolicyEngine) processBucketsForPolicy(ctx context.Context, policy *AdvancedPolicy, stats *PolicyStats) {
+	buckets := e.getBucketsForPolicy(ctx, policy)
+
+	for _, bucket := range buckets {
+		if !e.shouldProcessBucket(bucket, policy) {
+			continue
+		}
+
+		e.processObjectsInBucket(ctx, bucket, policy, stats)
+	}
+}
+
+// shouldProcessBucket checks if this node should handle the bucket.
+func (e *PolicyEngine) shouldProcessBucket(bucket string, policy *AdvancedPolicy) bool {
+	if policy.Distributed.Enabled && policy.Distributed.ShardByBucket {
+		return e.shouldHandleBucket(bucket, policy.ID)
+	}
+	return true
+}
+
+// processObjectsInBucket processes all objects in a bucket for the policy.
+func (e *PolicyEngine) processObjectsInBucket(ctx context.Context, bucket string, policy *AdvancedPolicy, stats *PolicyStats) {
+	var marker string
+
+	for {
+		objects, err := e.tierManager.ListObjects(ctx, bucket, "", 1000)
+		if err != nil {
+			stats.Errors++
+			stats.LastError = err.Error()
+			break
+		}
+
+		if len(objects) == 0 {
+			break
+		}
+
+		for _, obj := range objects {
+			e.processObject(ctx, bucket, obj, policy, stats)
+		}
+
+		marker = objects[len(objects)-1].Key
+		if marker == "" {
+			break
+		}
+	}
+}
+
+// processObject evaluates and executes policy for a single object.
+func (e *PolicyEngine) processObject(ctx context.Context, bucket string, obj ObjectMetadata, policy *AdvancedPolicy, stats *PolicyStats) {
+	stats.ObjectsEvaluated++
+
+	accessStats := e.getAccessStatsForObject(ctx, bucket, obj.Key)
+
+	if !e.shouldTransitionObject(obj, accessStats, policy) {
+		return
+	}
+
+	e.executeActionsForObject(ctx, bucket, obj, policy, stats)
+}
+
+// getAccessStatsForObject retrieves access stats for an object.
+func (e *PolicyEngine) getAccessStatsForObject(ctx context.Context, bucket, key string) *ObjectAccessStats {
+	accessStats, _ := e.accessStats.GetStats(ctx, bucket, key)
+	if accessStats == nil {
+		accessStats = &ObjectAccessStats{Bucket: bucket, Key: key}
+	}
+	return accessStats
+}
+
+// shouldTransitionObject checks if object meets policy criteria.
+func (e *PolicyEngine) shouldTransitionObject(obj ObjectMetadata, accessStats *ObjectAccessStats, policy *AdvancedPolicy) bool {
+	if !e.matchesSelector(obj, accessStats, policy.Selector) {
+		return false
+	}
+
+	triggered, _ := e.checkTriggers(obj, accessStats, policy)
+	if !triggered {
+		return false
+	}
+
+	if policy.AntiThrash.Enabled {
+		return e.antiThrash.CanTransition(obj.Bucket, obj.Key, policy)
+	}
+
+	return true
+}
+
+// executeActionsForObject executes policy actions on an object.
+func (e *PolicyEngine) executeActionsForObject(ctx context.Context, bucket string, obj ObjectMetadata, policy *AdvancedPolicy, stats *PolicyStats) {
+	for _, action := range policy.Actions {
+		err := e.executor.Execute(ctx, bucket, obj.Key, &action)
+		if err != nil {
+			stats.Errors++
+			stats.LastError = err.Error()
+		} else {
+			stats.ObjectsTransitioned++
+			stats.BytesTransitioned += obj.Size
+
+			if policy.AntiThrash.Enabled {
+				e.antiThrash.RecordTransition(bucket, obj.Key)
+			}
+		}
+	}
+
+	if policy.RateLimit.Enabled {
+		e.rateLimiter.Wait(policy.ID)
+	}
+}
+
+// finalizeScheduledPolicyExecution updates stats and logs completion.
+func (e *PolicyEngine) finalizeScheduledPolicyExecution(ctx context.Context, policy *AdvancedPolicy, stats *PolicyStats) {
 	err := e.store.UpdateStats(ctx, stats)
 	if err != nil {
 		log.Error().Err(err).Str("policy_id", policy.ID).Msg("Failed to update policy stats")
@@ -962,22 +1107,12 @@ func (e *PolicyEngine) handleThresholdEvent(event ThresholdEvent) {
 
 // executeCapacityPolicy moves objects to free up tier capacity.
 func (e *PolicyEngine) executeCapacityPolicy(ctx context.Context, policy *AdvancedPolicy, trigger *CapacityTrigger, event ThresholdEvent) {
-	// Get target tier from actions
-	var targetTier TierType
-
-	for _, action := range policy.Actions {
-		if action.Type == ActionTransition && action.Transition != nil {
-			targetTier = action.Transition.TargetTier
-			break
-		}
-	}
-
+	targetTier := e.findTargetTierFromPolicy(policy)
 	if targetTier == "" {
 		return
 	}
 
-	// Calculate how much to free
-	targetBytes := int64(float64(event.BytesTotal) * (event.Usage - trigger.LowWatermark) / 100)
+	targetBytes := e.calculateBytesToFree(event, trigger)
 	if targetBytes <= 0 {
 		return
 	}
@@ -988,7 +1123,31 @@ func (e *PolicyEngine) executeCapacityPolicy(ctx context.Context, policy *Advanc
 		Int64("target_bytes", targetBytes).
 		Msg("Freeing tier capacity")
 
-	// Move oldest objects first
+	bytesFreed := e.freeCapacityByTransitioning(ctx, policy, event.Tier, targetTier, targetBytes)
+
+	log.Info().
+		Int64("bytes_freed", bytesFreed).
+		Int64("target_bytes", targetBytes).
+		Msg("Capacity policy completed")
+}
+
+// findTargetTierFromPolicy extracts target tier from policy actions.
+func (e *PolicyEngine) findTargetTierFromPolicy(policy *AdvancedPolicy) TierType {
+	for _, action := range policy.Actions {
+		if action.Type == ActionTransition && action.Transition != nil {
+			return action.Transition.TargetTier
+		}
+	}
+	return ""
+}
+
+// calculateBytesToFree calculates how many bytes need to be freed.
+func (e *PolicyEngine) calculateBytesToFree(event ThresholdEvent, trigger *CapacityTrigger) int64 {
+	return int64(float64(event.BytesTotal) * (event.Usage - trigger.LowWatermark) / 100)
+}
+
+// freeCapacityByTransitioning transitions objects to free capacity.
+func (e *PolicyEngine) freeCapacityByTransitioning(ctx context.Context, policy *AdvancedPolicy, sourceTier, targetTier TierType, targetBytes int64) int64 {
 	bytesFreed := int64(0)
 
 	for _, bucket := range policy.Selector.Buckets {
@@ -1002,33 +1161,37 @@ func (e *PolicyEngine) executeCapacityPolicy(ctx context.Context, policy *Advanc
 			return objects[i].ModifiedAt.Before(objects[j].ModifiedAt)
 		})
 
-		for _, obj := range objects {
-			if obj.CurrentTier != event.Tier {
-				continue
-			}
+		bytesFreed += e.transitionOldestObjects(ctx, policy, bucket, objects, sourceTier, targetTier, targetBytes, bytesFreed)
 
-			// Check anti-thrash
-			if policy.AntiThrash.Enabled {
-				if !e.antiThrash.CanTransition(bucket, obj.Key, policy) {
-					continue
-				}
-			}
+		if bytesFreed >= targetBytes {
+			break
+		}
+	}
 
-			// Transition object
-			err := e.tierManager.TransitionObject(ctx, bucket, obj.Key, targetTier)
-			if err != nil {
-				continue
-			}
+	return bytesFreed
+}
 
-			bytesFreed += obj.Size
+// transitionOldestObjects transitions objects until target is reached.
+func (e *PolicyEngine) transitionOldestObjects(ctx context.Context, policy *AdvancedPolicy, bucket string, objects []ObjectMetadata, sourceTier, targetTier TierType, targetBytes, currentFreed int64) int64 {
+	bytesFreed := currentFreed
 
-			if policy.AntiThrash.Enabled {
-				e.antiThrash.RecordTransition(bucket, obj.Key)
-			}
+	for _, obj := range objects {
+		if obj.CurrentTier != sourceTier {
+			continue
+		}
 
-			if bytesFreed >= targetBytes {
-				break
-			}
+		if !e.checkAntiThrashForObject(policy, bucket, obj.Key) {
+			continue
+		}
+
+		if err := e.tierManager.TransitionObject(ctx, bucket, obj.Key, targetTier); err != nil {
+			continue
+		}
+
+		bytesFreed += obj.Size
+
+		if policy.AntiThrash.Enabled {
+			e.antiThrash.RecordTransition(bucket, obj.Key)
 		}
 
 		if bytesFreed >= targetBytes {
@@ -1036,8 +1199,13 @@ func (e *PolicyEngine) executeCapacityPolicy(ctx context.Context, policy *Advanc
 		}
 	}
 
-	log.Info().
-		Int64("bytes_freed", bytesFreed).
-		Int64("target_bytes", targetBytes).
-		Msg("Capacity policy completed")
+	return bytesFreed
+}
+
+// checkAntiThrashForObject checks if object can be transitioned.
+func (e *PolicyEngine) checkAntiThrashForObject(policy *AdvancedPolicy, bucket, key string) bool {
+	if policy.AntiThrash.Enabled {
+		return e.antiThrash.CanTransition(bucket, key, policy)
+	}
+	return true
 }

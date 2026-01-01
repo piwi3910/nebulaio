@@ -21,7 +21,7 @@ func (s *DragonboatStore) CreateBucket(ctx context.Context, bucket *Bucket) erro
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCreateBucket, Data: data})
+	return s.apply(ctx, &command{Type: cmdCreateBucket, Data: data})
 }
 
 func (s *DragonboatStore) GetBucket(ctx context.Context, name string) (*Bucket, error) {
@@ -51,7 +51,7 @@ func (s *DragonboatStore) DeleteBucket(ctx context.Context, name string) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeleteBucket, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeleteBucket, Data: data})
 }
 
 func (s *DragonboatStore) ListBuckets(ctx context.Context, owner string) ([]*Bucket, error) {
@@ -88,7 +88,7 @@ func (s *DragonboatStore) UpdateBucket(ctx context.Context, bucket *Bucket) erro
 		return err
 	}
 
-	return s.apply(&command{Type: cmdUpdateBucket, Data: data})
+	return s.apply(ctx, &command{Type: cmdUpdateBucket, Data: data})
 }
 
 // Object metadata operations
@@ -99,7 +99,7 @@ func (s *DragonboatStore) PutObjectMeta(ctx context.Context, meta *ObjectMeta) e
 		return err
 	}
 
-	return s.apply(&command{Type: cmdPutObjectMeta, Data: data})
+	return s.apply(ctx, &command{Type: cmdPutObjectMeta, Data: data})
 }
 
 func (s *DragonboatStore) GetObjectMeta(ctx context.Context, bucket, key string) (*ObjectMeta, error) {
@@ -132,7 +132,7 @@ func (s *DragonboatStore) DeleteObjectMeta(ctx context.Context, bucket, key stri
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeleteObjectMeta, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeleteObjectMeta, Data: data})
 }
 
 func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*ObjectListing, error) {
@@ -145,79 +145,109 @@ func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delim
 
 	prefixSet := make(map[string]bool)
 
-	err := s.badger.View(func(txn *badger.Txn) error {
+	err := s.iterateObjectsForListing(bucket, dbPrefix, prefix, delimiter, continuationToken, maxKeys, &objects, &commonPrefixes, prefixSet)
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Strings(commonPrefixes)
+
+	return s.buildObjectListing(objects, commonPrefixes, maxKeys), nil
+}
+
+func (s *DragonboatStore) iterateObjectsForListing(bucket string, dbPrefix []byte, prefix, delimiter, continuationToken string, maxKeys int, objects *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
+	return s.badger.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.Prefix = dbPrefix
 
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		startKey := dbPrefix
-		if continuationToken != "" {
-			startKey = []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, continuationToken))
-		}
+		startKey := s.getStartKey(bucket, dbPrefix, continuationToken)
 
 		for it.Seek(startKey); it.Valid(); it.Next() {
-			item := it.Item()
-			key := string(item.Key())
-
-			// Extract object key from DB key
-			objKey := strings.TrimPrefix(key, string(dbPrefix))
-
-			// Apply prefix filter
-			if prefix != "" && !strings.HasPrefix(objKey, prefix) {
-				continue
-			}
-
-			// Handle delimiter (for "folder" simulation)
-			if delimiter != "" {
-				afterPrefix := strings.TrimPrefix(objKey, prefix)
-				if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
-					// This is a "common prefix" (folder)
-					commonPrefix := prefix + afterPrefix[:idx+1]
-					if !prefixSet[commonPrefix] {
-						prefixSet[commonPrefix] = true
-						commonPrefixes = append(commonPrefixes, commonPrefix)
-					}
-
-					continue
-				}
-			}
-
-			// Get object metadata
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-
-			var meta ObjectMeta
-			err = json.Unmarshal(val, &meta)
-			if err != nil {
-				continue
-			}
-
-			// Skip delete markers unless specifically querying versions
-			if meta.DeleteMarker {
-				continue
-			}
-
-			objects = append(objects, &meta)
-
-			if maxKeys > 0 && len(objects) >= maxKeys+1 {
+			if s.processListObjectItem(it.Item(), string(dbPrefix), prefix, delimiter, maxKeys, objects, commonPrefixes, prefixSet) {
 				break
 			}
 		}
 
 		return nil
 	})
-	if err != nil {
-		return nil, err
+}
+
+func (s *DragonboatStore) getStartKey(bucket string, dbPrefix []byte, continuationToken string) []byte {
+	if continuationToken != "" {
+		return []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, continuationToken))
+	}
+	return dbPrefix
+}
+
+func (s *DragonboatStore) processListObjectItem(item *badger.Item, dbPrefix, prefix, delimiter string, maxKeys int, objects *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) bool {
+	key := string(item.Key())
+	objKey := strings.TrimPrefix(key, dbPrefix)
+
+	// Apply prefix filter
+	if prefix != "" && !strings.HasPrefix(objKey, prefix) {
+		return false
 	}
 
-	// Sort common prefixes
-	sort.Strings(commonPrefixes)
+	// Handle delimiter (for "folder" simulation)
+	if s.handleCommonPrefix(objKey, prefix, delimiter, commonPrefixes, prefixSet) {
+		return false
+	}
 
-	// Determine if truncated
+	// Get and add object metadata
+	if s.addObjectToListing(item, objects) {
+		// Check if we've hit max keys
+		return maxKeys > 0 && len(*objects) >= maxKeys+1
+	}
+
+	return false
+}
+
+func (s *DragonboatStore) handleCommonPrefix(objKey, prefix, delimiter string, commonPrefixes *[]string, prefixSet map[string]bool) bool {
+	if delimiter == "" {
+		return false
+	}
+
+	afterPrefix := strings.TrimPrefix(objKey, prefix)
+	idx := strings.Index(afterPrefix, delimiter)
+	if idx < 0 {
+		return false
+	}
+
+	// This is a "common prefix" (folder)
+	commonPrefix := prefix + afterPrefix[:idx+1]
+	if !prefixSet[commonPrefix] {
+		prefixSet[commonPrefix] = true
+		*commonPrefixes = append(*commonPrefixes, commonPrefix)
+	}
+
+	return true
+}
+
+func (s *DragonboatStore) addObjectToListing(item *badger.Item, objects *[]*ObjectMeta) bool {
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		return false
+	}
+
+	var meta ObjectMeta
+	err = json.Unmarshal(val, &meta)
+	if err != nil {
+		return false
+	}
+
+	// Skip delete markers unless specifically querying versions
+	if meta.DeleteMarker {
+		return false
+	}
+
+	*objects = append(*objects, &meta)
+	return true
+}
+
+func (s *DragonboatStore) buildObjectListing(objects []*ObjectMeta, commonPrefixes []string, maxKeys int) *ObjectListing {
 	isTruncated := false
 	nextToken := ""
 
@@ -232,7 +262,7 @@ func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delim
 		CommonPrefixes:        commonPrefixes,
 		IsTruncated:           isTruncated,
 		NextContinuationToken: nextToken,
-	}, nil
+	}
 }
 
 // Version operations
@@ -265,113 +295,96 @@ func (s *DragonboatStore) GetObjectVersion(ctx context.Context, bucket, key, ver
 }
 
 func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int) (*VersionListing, error) {
-	// Prefix for all versions in this bucket
-	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObjectVersion, bucket))
-
 	var (
 		versions       []*ObjectMeta
 		deleteMarkers  []*ObjectMeta
 		commonPrefixes []string
+		prefixSet      = make(map[string]bool)
 	)
 
-	prefixSet := make(map[string]bool)
-
-	err := s.badger.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.Prefix = dbPrefix
-
-		it := txn.NewIterator(opts)
-		defer it.Close()
-
-		// Determine start key
-		startKey := dbPrefix
-
-		if keyMarker != "" {
-			if versionIDMarker != "" {
-				startKey = []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, keyMarker, versionIDMarker))
-			} else {
-				startKey = []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, keyMarker))
-			}
-		}
-
-		count := 0
-
-		for it.Seek(startKey); it.Valid(); it.Next() {
-			item := it.Item()
-			key := string(item.Key())
-
-			// Extract object key and version from DB key
-			// Format: objver:{bucket}/{key}#{versionID}
-			trimmed := strings.TrimPrefix(key, string(dbPrefix))
-
-			hashIdx := strings.LastIndex(trimmed, "#")
-			if hashIdx < 0 {
-				continue
-			}
-
-			objKey := trimmed[:hashIdx]
-
-			// Apply prefix filter
-			if prefix != "" && !strings.HasPrefix(objKey, prefix) {
-				continue
-			}
-
-			// Handle delimiter (for "folder" simulation)
-			if delimiter != "" {
-				afterPrefix := strings.TrimPrefix(objKey, prefix)
-				if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
-					// This is a "common prefix" (folder)
-					commonPrefix := prefix + afterPrefix[:idx+1]
-					if !prefixSet[commonPrefix] {
-						prefixSet[commonPrefix] = true
-						commonPrefixes = append(commonPrefixes, commonPrefix)
-					}
-
-					continue
-				}
-			}
-
-			// Skip the marker entry itself
-			if keyMarker != "" && objKey == keyMarker {
-				// Get the version ID from this entry
-				thisVersionID := trimmed[hashIdx+1:]
-				if versionIDMarker != "" && thisVersionID <= versionIDMarker {
-					continue
-				}
-			}
-
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-
-			var meta ObjectMeta
-			err = json.Unmarshal(val, &meta)
-			if err != nil {
-				continue
-			}
-
-			if meta.DeleteMarker {
-				deleteMarkers = append(deleteMarkers, &meta)
-			} else {
-				versions = append(versions, &meta)
-			}
-
-			count++
-			if maxKeys > 0 && count >= maxKeys+1 {
-				break
-			}
-		}
-
-		return nil
-	})
+	// Collect versioned objects
+	err := s.collectVersionedObjects(bucket, prefix, delimiter, keyMarker, versionIDMarker, maxKeys, &versions, &deleteMarkers, &commonPrefixes, prefixSet)
 	if err != nil {
 		return nil, err
 	}
 
-	// Also include current versions from the main object store
-	err = s.badger.View(func(txn *badger.Txn) error {
-		objPrefix := []byte(fmt.Sprintf("%s%s/", prefixObject, bucket))
+	// Collect current/non-versioned objects
+	err = s.collectCurrentObjects(bucket, prefix, delimiter, &versions, &deleteMarkers, &commonPrefixes, prefixSet)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort and paginate results
+	return s.buildVersionListing(versions, deleteMarkers, commonPrefixes, maxKeys), nil
+}
+
+// collectVersionedObjects retrieves all versioned objects from the version store.
+func (s *DragonboatStore) collectVersionedObjects(bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
+	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObjectVersion, bucket))
+
+	return s.badger.View(func(txn *badger.Txn) error {
+		return s.iterateVersionedObjects(txn, dbPrefix, bucket, prefix, delimiter, keyMarker, versionIDMarker, maxKeys, versions, deleteMarkers, commonPrefixes, prefixSet)
+	})
+}
+
+func (s *DragonboatStore) iterateVersionedObjects(txn *badger.Txn, dbPrefix []byte, bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
+	opts := badger.DefaultIteratorOptions
+	opts.Prefix = dbPrefix
+
+	it := txn.NewIterator(opts)
+	defer it.Close()
+
+	startKey := s.calculateStartKey(dbPrefix, bucket, keyMarker, versionIDMarker)
+	count := 0
+
+	for it.Seek(startKey); it.Valid(); it.Next() {
+		item := it.Item()
+
+		if s.processVersionedItem(item, dbPrefix, prefix, delimiter, keyMarker, versionIDMarker, versions, deleteMarkers, commonPrefixes, prefixSet) {
+			count++
+		}
+
+		if maxKeys > 0 && count >= maxKeys+1 {
+			break
+		}
+	}
+
+	return nil
+}
+
+func (s *DragonboatStore) processVersionedItem(item *badger.Item, dbPrefix []byte, prefix, delimiter, keyMarker, versionIDMarker string, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) bool {
+	objKey, versionID, shouldContinue := s.parseVersionKey(item.Key(), dbPrefix)
+	if shouldContinue {
+		return false
+	}
+
+	if !s.matchesPrefixFilter(objKey, prefix) {
+		return false
+	}
+
+	if s.handleDelimiter(objKey, prefix, delimiter, commonPrefixes, prefixSet) {
+		return false
+	}
+
+	if s.shouldSkipMarker(objKey, versionID, keyMarker, versionIDMarker) {
+		return false
+	}
+
+	meta, err := s.unmarshalObjectMeta(item)
+	if err != nil {
+		return false
+	}
+
+	s.categorizeObject(meta, versions, deleteMarkers)
+
+	return true
+}
+
+// collectCurrentObjects retrieves current/non-versioned objects from the main object store.
+func (s *DragonboatStore) collectCurrentObjects(bucket, prefix, delimiter string, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
+	objPrefix := []byte(fmt.Sprintf("%s%s/", prefixObject, bucket))
+
+	return s.badger.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.Prefix = objPrefix
 
@@ -380,98 +393,126 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
-			key := string(item.Key())
-			objKey := strings.TrimPrefix(key, string(objPrefix))
+			objKey := s.extractObjectKey(item.Key(), objPrefix)
 
-			// Apply prefix filter
-			if prefix != "" && !strings.HasPrefix(objKey, prefix) {
+			if !s.matchesPrefixFilter(objKey, prefix) {
 				continue
 			}
 
-			// Handle delimiter (for "folder" simulation)
-			if delimiter != "" {
-				afterPrefix := strings.TrimPrefix(objKey, prefix)
-				if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
-					// This is a "common prefix" (folder)
-					commonPrefix := prefix + afterPrefix[:idx+1]
-					if !prefixSet[commonPrefix] {
-						prefixSet[commonPrefix] = true
-						commonPrefixes = append(commonPrefixes, commonPrefix)
-					}
-
-					continue
-				}
+			if s.handleDelimiter(objKey, prefix, delimiter, commonPrefixes, prefixSet) {
+				continue
 			}
 
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-
-			var meta ObjectMeta
-			err = json.Unmarshal(val, &meta)
+			meta, err := s.unmarshalObjectMeta(item)
 			if err != nil {
 				continue
 			}
 
-			// Only add if it has no version ID (non-versioned object) or is a unique entry
-			if meta.VersionID == "" || meta.VersionID == "null" {
-				if meta.DeleteMarker {
-					deleteMarkers = append(deleteMarkers, &meta)
-				} else {
-					versions = append(versions, &meta)
-				}
+			if s.isNonVersionedObject(meta) {
+				s.categorizeObject(meta, versions, deleteMarkers)
 			}
 		}
 
 		return nil
 	})
+}
+
+// Helper functions for ListObjectVersions
+
+func (s *DragonboatStore) calculateStartKey(dbPrefix []byte, bucket, keyMarker, versionIDMarker string) []byte {
+	if keyMarker == "" {
+		return dbPrefix
+	}
+
+	if versionIDMarker != "" {
+		return []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, keyMarker, versionIDMarker))
+	}
+
+	return []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, keyMarker))
+}
+
+func (s *DragonboatStore) parseVersionKey(key, dbPrefix []byte) (objKey, versionID string, shouldContinue bool) {
+	trimmed := strings.TrimPrefix(string(key), string(dbPrefix))
+
+	hashIdx := strings.LastIndex(trimmed, "#")
+	if hashIdx < 0 {
+		return "", "", true
+	}
+
+	return trimmed[:hashIdx], trimmed[hashIdx+1:], false
+}
+
+func (s *DragonboatStore) extractObjectKey(key, prefix []byte) string {
+	return strings.TrimPrefix(string(key), string(prefix))
+}
+
+func (s *DragonboatStore) matchesPrefixFilter(objKey, prefix string) bool {
+	return prefix == "" || strings.HasPrefix(objKey, prefix)
+}
+
+func (s *DragonboatStore) handleDelimiter(objKey, prefix, delimiter string, commonPrefixes *[]string, prefixSet map[string]bool) bool {
+	if delimiter == "" {
+		return false
+	}
+
+	afterPrefix := strings.TrimPrefix(objKey, prefix)
+	if idx := strings.Index(afterPrefix, delimiter); idx >= 0 {
+		commonPrefix := prefix + afterPrefix[:idx+1]
+		if !prefixSet[commonPrefix] {
+			prefixSet[commonPrefix] = true
+
+			*commonPrefixes = append(*commonPrefixes, commonPrefix)
+		}
+
+		return true
+	}
+
+	return false
+}
+
+func (s *DragonboatStore) shouldSkipMarker(objKey, versionID, keyMarker, versionIDMarker string) bool {
+	if keyMarker == "" || objKey != keyMarker {
+		return false
+	}
+
+	return versionIDMarker != "" && versionID <= versionIDMarker
+}
+
+func (s *DragonboatStore) unmarshalObjectMeta(item *badger.Item) (*ObjectMeta, error) {
+	val, err := item.ValueCopy(nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// Sort common prefixes
+	var meta ObjectMeta
+
+	err = json.Unmarshal(val, &meta)
+	if err != nil {
+		return nil, err
+	}
+
+	return &meta, nil
+}
+
+func (s *DragonboatStore) categorizeObject(meta *ObjectMeta, versions, deleteMarkers *[]*ObjectMeta) {
+	if meta.DeleteMarker {
+		*deleteMarkers = append(*deleteMarkers, meta)
+	} else {
+		*versions = append(*versions, meta)
+	}
+}
+
+func (s *DragonboatStore) isNonVersionedObject(meta *ObjectMeta) bool {
+	return meta.VersionID == "" || meta.VersionID == "null"
+}
+
+func (s *DragonboatStore) buildVersionListing(versions, deleteMarkers []*ObjectMeta, commonPrefixes []string, maxKeys int) *VersionListing {
 	sort.Strings(commonPrefixes)
 
-	// Sort versions by key then by version ID (descending for versions)
-	sort.Slice(versions, func(i, j int) bool {
-		if versions[i].Key != versions[j].Key {
-			return versions[i].Key < versions[j].Key
-		}
-		// Newer versions first (higher ULID = newer)
-		return versions[i].VersionID > versions[j].VersionID
-	})
+	s.sortVersions(versions)
+	s.sortVersions(deleteMarkers)
 
-	sort.Slice(deleteMarkers, func(i, j int) bool {
-		if deleteMarkers[i].Key != deleteMarkers[j].Key {
-			return deleteMarkers[i].Key < deleteMarkers[j].Key
-		}
-
-		return deleteMarkers[i].VersionID > deleteMarkers[j].VersionID
-	})
-
-	// Determine if truncated
-	isTruncated := false
-	nextKeyMarker := ""
-	nextVersionIDMarker := ""
-
-	totalItems := len(versions) + len(deleteMarkers)
-	if maxKeys > 0 && totalItems > maxKeys {
-		isTruncated = true
-		// Truncate to maxKeys
-		if len(versions) > maxKeys {
-			nextKeyMarker = versions[maxKeys].Key
-			nextVersionIDMarker = versions[maxKeys].VersionID
-			versions = versions[:maxKeys]
-		} else if len(deleteMarkers) > 0 {
-			remaining := maxKeys - len(versions)
-			if remaining < len(deleteMarkers) {
-				nextKeyMarker = deleteMarkers[remaining].Key
-				nextVersionIDMarker = deleteMarkers[remaining].VersionID
-				deleteMarkers = deleteMarkers[:remaining]
-			}
-		}
-	}
+	isTruncated, nextKeyMarker, nextVersionIDMarker := s.calculatePagination(versions, deleteMarkers, maxKeys)
 
 	return &VersionListing{
 		Versions:            versions,
@@ -480,7 +521,45 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 		IsTruncated:         isTruncated,
 		NextKeyMarker:       nextKeyMarker,
 		NextVersionIDMarker: nextVersionIDMarker,
-	}, nil
+	}
+}
+
+func (s *DragonboatStore) sortVersions(metas []*ObjectMeta) {
+	sort.Slice(metas, func(i, j int) bool {
+		if metas[i].Key != metas[j].Key {
+			return metas[i].Key < metas[j].Key
+		}
+
+		return metas[i].VersionID > metas[j].VersionID
+	})
+}
+
+func (s *DragonboatStore) calculatePagination(versions, deleteMarkers []*ObjectMeta, maxKeys int) (isTruncated bool, nextKeyMarker, nextVersionIDMarker string) {
+	if maxKeys <= 0 {
+		return false, "", ""
+	}
+
+	totalItems := len(versions) + len(deleteMarkers)
+	if totalItems <= maxKeys {
+		return false, "", ""
+	}
+
+	isTruncated = true
+
+	if len(versions) > maxKeys {
+		nextKeyMarker = versions[maxKeys].Key
+		nextVersionIDMarker = versions[maxKeys].VersionID
+		_ = versions[:maxKeys] // Truncate to maxKeys
+	} else if len(deleteMarkers) > 0 {
+		remaining := maxKeys - len(versions)
+		if remaining < len(deleteMarkers) {
+			nextKeyMarker = deleteMarkers[remaining].Key
+			nextVersionIDMarker = deleteMarkers[remaining].VersionID
+			_ = deleteMarkers[:remaining] // Truncate to remaining
+		}
+	}
+
+	return isTruncated, nextKeyMarker, nextVersionIDMarker
 }
 
 func (s *DragonboatStore) DeleteObjectVersion(ctx context.Context, bucket, key, versionID string) error {
@@ -493,7 +572,7 @@ func (s *DragonboatStore) DeleteObjectVersion(ctx context.Context, bucket, key, 
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeleteObjectVersion, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeleteObjectVersion, Data: data})
 }
 
 func (s *DragonboatStore) PutObjectMetaVersioned(ctx context.Context, meta *ObjectMeta, preserveOldVersions bool) error {
@@ -505,7 +584,7 @@ func (s *DragonboatStore) PutObjectMetaVersioned(ctx context.Context, meta *Obje
 		return err
 	}
 
-	return s.apply(&command{Type: cmdPutObjectMetaVersioned, Data: data})
+	return s.apply(ctx, &command{Type: cmdPutObjectMetaVersioned, Data: data})
 }
 
 // Multipart upload operations
@@ -516,7 +595,7 @@ func (s *DragonboatStore) CreateMultipartUpload(ctx context.Context, upload *Mul
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCreateMultipartUpload, Data: data})
+	return s.apply(ctx, &command{Type: cmdCreateMultipartUpload, Data: data})
 }
 
 func (s *DragonboatStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*MultipartUpload, error) {
@@ -550,7 +629,7 @@ func (s *DragonboatStore) AbortMultipartUpload(ctx context.Context, bucket, key,
 		return err
 	}
 
-	return s.apply(&command{Type: cmdAbortMultipartUpload, Data: data})
+	return s.apply(ctx, &command{Type: cmdAbortMultipartUpload, Data: data})
 }
 
 func (s *DragonboatStore) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string) error {
@@ -563,7 +642,7 @@ func (s *DragonboatStore) CompleteMultipartUpload(ctx context.Context, bucket, k
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCompleteMultipartUpload, Data: data})
+	return s.apply(ctx, &command{Type: cmdCompleteMultipartUpload, Data: data})
 }
 
 func (s *DragonboatStore) AddUploadPart(ctx context.Context, bucket, key, uploadID string, part *UploadPart) error {
@@ -577,7 +656,7 @@ func (s *DragonboatStore) AddUploadPart(ctx context.Context, bucket, key, upload
 		return err
 	}
 
-	return s.apply(&command{Type: cmdAddUploadPart, Data: data})
+	return s.apply(ctx, &command{Type: cmdAddUploadPart, Data: data})
 }
 
 func (s *DragonboatStore) ListMultipartUploads(ctx context.Context, bucket string) ([]*MultipartUpload, error) {
@@ -611,7 +690,7 @@ func (s *DragonboatStore) CreateUser(ctx context.Context, user *User) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCreateUser, Data: data})
+	return s.apply(ctx, &command{Type: cmdCreateUser, Data: data})
 }
 
 func (s *DragonboatStore) GetUser(ctx context.Context, id string) (*User, error) {
@@ -657,7 +736,7 @@ func (s *DragonboatStore) UpdateUser(ctx context.Context, user *User) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdUpdateUser, Data: data})
+	return s.apply(ctx, &command{Type: cmdUpdateUser, Data: data})
 }
 
 func (s *DragonboatStore) DeleteUser(ctx context.Context, id string) error {
@@ -666,7 +745,7 @@ func (s *DragonboatStore) DeleteUser(ctx context.Context, id string) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeleteUser, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeleteUser, Data: data})
 }
 
 func (s *DragonboatStore) ListUsers(ctx context.Context) ([]*User, error) {
@@ -702,7 +781,7 @@ func (s *DragonboatStore) CreateAccessKey(ctx context.Context, key *AccessKey) e
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCreateAccessKey, Data: data})
+	return s.apply(ctx, &command{Type: cmdCreateAccessKey, Data: data})
 }
 
 func (s *DragonboatStore) GetAccessKey(ctx context.Context, accessKeyID string) (*AccessKey, error) {
@@ -732,7 +811,7 @@ func (s *DragonboatStore) DeleteAccessKey(ctx context.Context, accessKeyID strin
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeleteAccessKey, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeleteAccessKey, Data: data})
 }
 
 func (s *DragonboatStore) ListAccessKeys(ctx context.Context, userID string) ([]*AccessKey, error) {
@@ -766,7 +845,7 @@ func (s *DragonboatStore) CreatePolicy(ctx context.Context, policy *Policy) erro
 		return err
 	}
 
-	return s.apply(&command{Type: cmdCreatePolicy, Data: data})
+	return s.apply(ctx, &command{Type: cmdCreatePolicy, Data: data})
 }
 
 func (s *DragonboatStore) GetPolicy(ctx context.Context, name string) (*Policy, error) {
@@ -796,7 +875,7 @@ func (s *DragonboatStore) UpdatePolicy(ctx context.Context, policy *Policy) erro
 		return err
 	}
 
-	return s.apply(&command{Type: cmdUpdatePolicy, Data: data})
+	return s.apply(ctx, &command{Type: cmdUpdatePolicy, Data: data})
 }
 
 func (s *DragonboatStore) DeletePolicy(ctx context.Context, name string) error {
@@ -805,7 +884,7 @@ func (s *DragonboatStore) DeletePolicy(ctx context.Context, name string) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdDeletePolicy, Data: data})
+	return s.apply(ctx, &command{Type: cmdDeletePolicy, Data: data})
 }
 
 func (s *DragonboatStore) ListPolicies(ctx context.Context) ([]*Policy, error) {
@@ -841,8 +920,12 @@ func (s *DragonboatStore) GetClusterInfo(ctx context.Context) (*ClusterInfo, err
 		return nil, err
 	}
 
-	leaderID, _, _, _ := s.nodeHost.GetLeaderID(s.shardID)
-	leaderAddr, _ := s.LeaderAddress()
+	leaderID, valid, term, ready := s.nodeHost.GetLeaderID(s.shardID)
+	// Intentionally ignore valid, term, ready - only leaderID is needed
+	_ = valid
+	_ = term
+	_ = ready
+	leaderAddr, _ := s.LeaderAddress(ctx)
 
 	return &ClusterInfo{
 		ClusterID:     strconv.FormatUint(s.shardID, 10),
@@ -859,7 +942,7 @@ func (s *DragonboatStore) AddNode(ctx context.Context, node *NodeInfo) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdAddNode, Data: data})
+	return s.apply(ctx, &command{Type: cmdAddNode, Data: data})
 }
 
 func (s *DragonboatStore) RemoveNode(ctx context.Context, nodeID string) error {
@@ -868,7 +951,7 @@ func (s *DragonboatStore) RemoveNode(ctx context.Context, nodeID string) error {
 		return err
 	}
 
-	return s.apply(&command{Type: cmdRemoveNode, Data: data})
+	return s.apply(ctx, &command{Type: cmdRemoveNode, Data: data})
 }
 
 func (s *DragonboatStore) ListNodes(ctx context.Context) ([]*NodeInfo, error) {
@@ -901,120 +984,21 @@ func (s *DragonboatStore) StoreAuditEvent(ctx context.Context, event *audit.Audi
 		return err
 	}
 
-	return s.apply(&command{Type: cmdStoreAuditEvent, Data: data})
+	return s.apply(ctx, &command{Type: cmdStoreAuditEvent, Data: data})
 }
 
 // ListAuditEvents lists audit events with filtering.
 func (s *DragonboatStore) ListAuditEvents(ctx context.Context, filter audit.AuditFilter) (*audit.AuditListResult, error) {
-	prefix := []byte(prefixAudit)
+	maxResults := s.normalizeMaxResults(filter.MaxResults)
+	seekKey := s.determineSeekKey(filter)
 
-	var (
-		events    []audit.AuditEvent
-		nextToken string
-	)
-
-	err := s.badger.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.Reverse = true // Most recent first
-
-		it := txn.NewIterator(opts)
-		defer it.Close()
-
-		maxResults := filter.MaxResults
-		if maxResults <= 0 {
-			maxResults = 100 // Default limit
-		}
-
-		if maxResults > 1000 {
-			maxResults = 1000 // Hard limit
-		}
-
-		// Determine seek position
-		var seekKey []byte
-
-		switch {
-		case filter.NextToken != "":
-			seekKey = []byte(filter.NextToken)
-		case !filter.EndTime.IsZero():
-			// Create a key that will be after any events at EndTime
-			seekKey = []byte(fmt.Sprintf("%s%s", prefixAudit, filter.EndTime.Format(time.RFC3339Nano)+"~"))
-		default:
-			// Seek to the end to iterate in reverse
-			seekKey = make([]byte, len(prefix)+1)
-			copy(seekKey, prefix)
-			seekKey[len(prefix)] = 0xFF
-		}
-
-		count := 0
-
-		for it.Seek(seekKey); it.Valid(); it.Next() {
-			item := it.Item()
-			key := item.Key()
-
-			// Check prefix
-			if !strings.HasPrefix(string(key), prefixAudit) {
-				break
-			}
-
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-
-			var event audit.AuditEvent
-			err = json.Unmarshal(val, &event)
-			if err != nil {
-				continue
-			}
-
-			// Apply filters
-			if !filter.StartTime.IsZero() && event.Timestamp.Before(filter.StartTime) {
-				break // Events are ordered by time, so we can stop here
-			}
-
-			if !filter.EndTime.IsZero() && event.Timestamp.After(filter.EndTime) {
-				continue
-			}
-
-			if filter.Bucket != "" && event.Resource.Bucket != filter.Bucket {
-				continue
-			}
-
-			if filter.User != "" && event.UserIdentity.Username != filter.User && event.UserIdentity.UserID != filter.User {
-				continue
-			}
-
-			if filter.EventType != "" && !strings.HasPrefix(string(event.EventType), filter.EventType) {
-				continue
-			}
-
-			if filter.Result != "" && string(event.Result) != filter.Result {
-				continue
-			}
-
-			events = append(events, event)
-			count++
-
-			// Check if we've collected enough
-			if count >= maxResults+1 {
-				break
-			}
-		}
-
-		return nil
-	})
+	events, err := s.scanAuditEvents(seekKey, filter, maxResults)
 	if err != nil {
 		return nil, err
 	}
 
-	// Handle pagination
-	maxResults := filter.MaxResults
-	if maxResults <= 0 {
-		maxResults = 100
-	}
-
+	nextToken := s.buildNextToken(events, maxResults, filter)
 	if len(events) > maxResults {
-		nextToken = fmt.Sprintf("%s%s", prefixAudit, events[maxResults].Timestamp.Format(time.RFC3339Nano))
 		events = events[:maxResults]
 	}
 
@@ -1022,6 +1006,134 @@ func (s *DragonboatStore) ListAuditEvents(ctx context.Context, filter audit.Audi
 		Events:    events,
 		NextToken: nextToken,
 	}, nil
+}
+
+func (s *DragonboatStore) normalizeMaxResults(maxResults int) int {
+	if maxResults <= 0 {
+		return 100
+	}
+	if maxResults > 1000 {
+		return 1000
+	}
+	return maxResults
+}
+
+func (s *DragonboatStore) determineSeekKey(filter audit.AuditFilter) []byte {
+	prefix := []byte(prefixAudit)
+
+	switch {
+	case filter.NextToken != "":
+		return []byte(filter.NextToken)
+	case !filter.EndTime.IsZero():
+		return []byte(fmt.Sprintf("%s%s", prefixAudit, filter.EndTime.Format(time.RFC3339Nano)+"~"))
+	default:
+		seekKey := make([]byte, len(prefix)+1)
+		copy(seekKey, prefix)
+		seekKey[len(prefix)] = 0xFF
+		return seekKey
+	}
+}
+
+func (s *DragonboatStore) scanAuditEvents(
+	seekKey []byte,
+	filter audit.AuditFilter,
+	maxResults int,
+) ([]audit.AuditEvent, error) {
+	var events []audit.AuditEvent
+
+	err := s.badger.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Reverse = true
+
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		count := 0
+		for it.Seek(seekKey); it.Valid(); it.Next() {
+			item := it.Item()
+			key := item.Key()
+
+			if !strings.HasPrefix(string(key), prefixAudit) {
+				break
+			}
+
+			event, err := s.unmarshalAuditEvent(item)
+			if err != nil {
+				continue
+			}
+
+			if s.shouldStopScan(event, filter) {
+				break
+			}
+
+			if !s.eventMatchesFilter(event, filter) {
+				continue
+			}
+
+			events = append(events, *event)
+			count++
+
+			if count >= maxResults+1 {
+				break
+			}
+		}
+
+		return nil
+	})
+
+	return events, err
+}
+
+func (s *DragonboatStore) unmarshalAuditEvent(item *badger.Item) (*audit.AuditEvent, error) {
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var event audit.AuditEvent
+	if err := json.Unmarshal(val, &event); err != nil {
+		return nil, err
+	}
+
+	return &event, nil
+}
+
+func (s *DragonboatStore) shouldStopScan(event *audit.AuditEvent, filter audit.AuditFilter) bool {
+	if !filter.StartTime.IsZero() && event.Timestamp.Before(filter.StartTime) {
+		return true
+	}
+	return false
+}
+
+func (s *DragonboatStore) eventMatchesFilter(event *audit.AuditEvent, filter audit.AuditFilter) bool {
+	if !filter.EndTime.IsZero() && event.Timestamp.After(filter.EndTime) {
+		return false
+	}
+
+	if filter.Bucket != "" && event.Resource.Bucket != filter.Bucket {
+		return false
+	}
+
+	if filter.User != "" && event.UserIdentity.Username != filter.User && event.UserIdentity.UserID != filter.User {
+		return false
+	}
+
+	if filter.EventType != "" && !strings.HasPrefix(string(event.EventType), filter.EventType) {
+		return false
+	}
+
+	if filter.Result != "" && string(event.Result) != filter.Result {
+		return false
+	}
+
+	return true
+}
+
+func (s *DragonboatStore) buildNextToken(events []audit.AuditEvent, maxResults int, filter audit.AuditFilter) string {
+	if len(events) > maxResults {
+		return fmt.Sprintf("%s%s", prefixAudit, events[maxResults].Timestamp.Format(time.RFC3339Nano))
+	}
+	return ""
 }
 
 // DeleteOldAuditEvents deletes audit events older than the specified time.
@@ -1070,7 +1182,7 @@ func (s *DragonboatStore) DeleteOldAuditEvents(ctx context.Context, before time.
 			continue
 		}
 
-		err = s.apply(&command{Type: cmdDeleteAuditEvent, Data: data})
+		err = s.apply(ctx, &command{Type: cmdDeleteAuditEvent, Data: data})
 		if err != nil {
 			continue
 		}

@@ -39,6 +39,9 @@ const (
 	listMaxKeys        = 1000
 )
 
+// ErrMigrationCanceled is returned when a migration is canceled.
+var ErrMigrationCanceled = errors.New("migration canceled")
+
 // SourceType represents the type of source system.
 type SourceType string
 
@@ -148,7 +151,6 @@ type MigrationManager struct {
 // activeMigrationJob represents an active migration.
 type activeMigrationJob struct {
 	job          *MigrationJob
-	ctx          context.Context
 	cancel       context.CancelFunc
 	sourceClient *S3Client
 	pauseChan    chan struct{}
@@ -376,7 +378,6 @@ func (mm *MigrationManager) StartMigration(ctx context.Context, jobID string) er
 	jobCtx, cancel := context.WithCancel(ctx)
 	activeJob := &activeMigrationJob{
 		job:          job,
-		ctx:          jobCtx,
 		cancel:       cancel,
 		sourceClient: client,
 		pauseChan:    make(chan struct{}),
@@ -389,7 +390,7 @@ func (mm *MigrationManager) StartMigration(ctx context.Context, jobID string) er
 	mm.mu.Unlock()
 
 	// Start migration in goroutine
-	go mm.runMigration(activeJob)
+	go mm.runMigration(jobCtx, activeJob)
 
 	return nil
 }
@@ -621,7 +622,7 @@ func (c *S3Client) getSignatureKey(dateStamp string) []byte {
 }
 
 // runMigration runs the migration job.
-func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
+func (mm *MigrationManager) runMigration(ctx context.Context, activeJob *activeMigrationJob) {
 	defer func() {
 		mm.mu.Lock()
 		mm.activeJob = nil
@@ -640,7 +641,7 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 
 	// Ensure destination buckets exist
 	for _, destBucket := range job.Config.DestBuckets {
-		exists, err := mm.destStorage.BucketExists(activeJob.ctx, destBucket)
+		exists, err := mm.destStorage.BucketExists(ctx, destBucket)
 		if err != nil {
 			job.Status = MigrationStatusFailed
 			job.Error = fmt.Sprintf("failed to check bucket %s: %v", destBucket, err)
@@ -649,7 +650,7 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 		}
 
 		if !exists {
-			err := mm.destStorage.CreateBucket(activeJob.ctx, destBucket)
+			err := mm.destStorage.CreateBucket(ctx, destBucket)
 			if err != nil {
 				job.Status = MigrationStatusFailed
 				job.Error = fmt.Sprintf("failed to create bucket %s: %v", destBucket, err)
@@ -660,9 +661,9 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 	}
 
 	// First pass: count objects
-	err := mm.countObjects(activeJob)
+	err := mm.countObjects(ctx, activeJob)
 	if err != nil {
-		if activeJob.ctx.Err() != nil {
+		if ctx.Err() != nil {
 			job.Status = MigrationStatusCancelled
 			return
 		}
@@ -674,9 +675,9 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 	}
 
 	// Second pass: migrate objects
-	err = mm.migrateObjects(activeJob)
+	err = mm.migrateObjects(ctx, activeJob)
 	if err != nil {
-		if activeJob.ctx.Err() != nil {
+		if ctx.Err() != nil {
 			job.Status = MigrationStatusCancelled
 			return
 		}
@@ -691,59 +692,11 @@ func (mm *MigrationManager) runMigration(activeJob *activeMigrationJob) {
 	job.Status = MigrationStatusCompleted
 }
 
-// countObjects counts total objects to migrate.
-func (mm *MigrationManager) countObjects(activeJob *activeMigrationJob) error {
-	job := activeJob.job
-
-	for _, bucket := range job.Config.SourceBuckets {
-		marker := ""
-
-		for {
-			select {
-			case <-activeJob.ctx.Done():
-				return activeJob.ctx.Err()
-			default:
-			}
-
-			result, err := activeJob.sourceClient.ListObjects(
-				activeJob.ctx,
-				bucket,
-				job.Config.SourcePrefix,
-				marker,
-				listMaxKeys,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to list objects in %s: %w", bucket, err)
-			}
-
-			for _, obj := range result.Contents {
-				if mm.shouldMigrate(job.Config, &obj) {
-					atomic.AddInt64(&job.Progress.TotalObjects, 1)
-					atomic.AddInt64(&job.Progress.TotalBytes, obj.Size)
-				}
-			}
-
-			if !result.IsTruncated {
-				break
-			}
-
-			marker = result.NextMarker
-			if marker == "" && len(result.Contents) > 0 {
-				marker = result.Contents[len(result.Contents)-1].Key
-			}
-		}
-	}
-
-	return nil
-}
-
 // migrateObjects migrates objects from source to destination.
-func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error {
+func (mm *MigrationManager) migrateObjects(ctx context.Context, activeJob *activeMigrationJob) error {
 	job := activeJob.job
 
-	// Semaphore for concurrency control
 	sem := make(chan struct{}, job.Config.Concurrency)
-
 	var (
 		wg           sync.WaitGroup
 		migrationErr error
@@ -752,129 +705,12 @@ func (mm *MigrationManager) migrateObjects(activeJob *activeMigrationJob) error 
 
 	for i, sourceBucket := range job.Config.SourceBuckets {
 		destBucket := job.Config.DestBuckets[i]
-		job.Progress.CurrentBucket = sourceBucket
-
-		marker := ""
-		if job.Resume != nil && job.Resume.LastBucket == sourceBucket {
-			marker = job.Resume.LastKey
-		}
-
-		for {
-			select {
-			case <-activeJob.ctx.Done():
-				return activeJob.ctx.Err()
-			default:
-			}
-
-			// Check for pause
-			activeJob.mu.Lock()
-
-			if activeJob.isPaused {
-				activeJob.mu.Unlock()
-
-				select {
-				case <-activeJob.resumeChan:
-				case <-activeJob.ctx.Done():
-					return activeJob.ctx.Err()
-				}
-			} else {
-				activeJob.mu.Unlock()
-			}
-
-			result, err := activeJob.sourceClient.ListObjects(
-				activeJob.ctx,
-				sourceBucket,
-				job.Config.SourcePrefix,
-				marker,
-				listMaxKeys,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to list objects: %w", err)
-			}
-
-			for _, obj := range result.Contents {
-				if !mm.shouldMigrate(job.Config, &obj) {
-					atomic.AddInt64(&job.Progress.SkippedObjects, 1)
-					continue
-				}
-
-				// Skip if already processed (for resume)
-				if job.Resume != nil && job.Resume.ProcessedKeys[obj.Key] {
-					continue
-				}
-
-				wg.Add(1)
-
-				go func(o S3Object) {
-					defer wg.Done()
-
-					sem <- struct{}{}
-
-					defer func() { <-sem }()
-
-					err := mm.migrateObject(activeJob, sourceBucket, destBucket, &o)
-					if err != nil {
-						errMu.Lock()
-
-						if migrationErr == nil {
-							migrationErr = err
-						}
-
-						errMu.Unlock()
-
-						atomic.AddInt64(&job.Progress.FailedObjects, 1)
-						mm.logFailedObject(job.ID, sourceBucket, o.Key, err)
-					} else {
-						atomic.AddInt64(&job.Progress.MigratedObjects, 1)
-						atomic.AddInt64(&job.Progress.MigratedBytes, o.Size)
-					}
-
-					// Update progress
-					job.Progress.CurrentKey = o.Key
-					job.Progress.LastUpdateTime = time.Now()
-
-					elapsed := time.Since(job.Progress.StartTime)
-					if elapsed > 0 {
-						job.Progress.BytesPerSecond = float64(job.Progress.MigratedBytes) / elapsed.Seconds()
-					}
-
-					if job.Progress.BytesPerSecond > 0 {
-						remaining := job.Progress.TotalBytes - job.Progress.MigratedBytes
-						job.Progress.EstimatedTimeRemaining = time.Duration(float64(remaining) / job.Progress.BytesPerSecond * float64(time.Second))
-					}
-				}(obj)
-			}
-
-			wg.Wait()
-
-			if !result.IsTruncated {
-				break
-			}
-
-			marker = result.NextMarker
-			if marker == "" && len(result.Contents) > 0 {
-				marker = result.Contents[len(result.Contents)-1].Key
-			}
-
-			// Save resume state
-			job.Resume = &ResumeState{
-				LastBucket: sourceBucket,
-				LastKey:    marker,
-			}
-
-			saveErr := mm.saveJobs()
-			if saveErr != nil {
-				log.Warn().
-					Err(saveErr).
-					Str("job_id", job.ID).
-					Str("bucket", sourceBucket).
-					Str("marker", marker).
-					Msg("failed to save migration resume state - migration may restart from beginning if interrupted")
-			}
+		if err := mm.migrateBucket(ctx, activeJob, sourceBucket, destBucket, sem, &wg, &migrationErr, &errMu); err != nil {
+			return err
 		}
 	}
 
-	return nil
+	return migrationErr
 }
 
 // shouldMigrate checks if an object should be migrated based on filters.
@@ -909,7 +745,7 @@ func (mm *MigrationManager) shouldMigrate(config *MigrationConfig, obj *S3Object
 }
 
 // migrateObject migrates a single object.
-func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceBucket, destBucket string, obj *S3Object) error {
+func (mm *MigrationManager) migrateObject(ctx context.Context, activeJob *activeMigrationJob, sourceBucket, destBucket string, obj *S3Object) error {
 	job := activeJob.job
 	config := job.Config
 
@@ -925,7 +761,7 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 
 	// Check if object exists (for skip/overwrite)
 	if config.SkipExisting {
-		destInfo, err := mm.destStorage.HeadObject(activeJob.ctx, destBucket, destKey)
+		destInfo, err := mm.destStorage.HeadObject(ctx, destBucket, destKey)
 		if err == nil {
 			// Object exists
 			if !config.Overwrite && destInfo.ETag == strings.Trim(obj.ETag, "\"") {
@@ -940,7 +776,7 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 	}
 
 	// Get object from source
-	reader, info, err := activeJob.sourceClient.GetObject(activeJob.ctx, sourceBucket, obj.Key)
+	reader, info, err := activeJob.sourceClient.GetObject(ctx, sourceBucket, obj.Key)
 	if err != nil {
 		return fmt.Errorf("failed to get source object: %w", err)
 	}
@@ -962,14 +798,14 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 		opts.Metadata = info.Metadata
 	}
 
-	putErr := mm.destStorage.PutObject(activeJob.ctx, destBucket, destKey, limitedReader, info.Size, opts)
+	putErr := mm.destStorage.PutObject(ctx, destBucket, destKey, limitedReader, info.Size, opts)
 	if putErr != nil {
 		return fmt.Errorf("failed to put object: %w", putErr)
 	}
 
 	// Verify checksum if enabled
 	if config.VerifyChecksum {
-		destInfo, err := mm.destStorage.HeadObject(activeJob.ctx, destBucket, destKey)
+		destInfo, err := mm.destStorage.HeadObject(ctx, destBucket, destKey)
 		if err != nil {
 			return fmt.Errorf("failed to verify object: %w", err)
 		}
@@ -980,39 +816,6 @@ func (mm *MigrationManager) migrateObject(activeJob *activeMigrationJob, sourceB
 	}
 
 	return nil
-}
-
-// logFailedObject logs a failed object migration.
-func (mm *MigrationManager) logFailedObject(jobID, bucket, key string, err error) {
-	entry := FailedObject{
-		Bucket:    bucket,
-		Key:       key,
-		Error:     err.Error(),
-		Timestamp: time.Now(),
-	}
-
-	data, marshalErr := json.Marshal(entry)
-	if marshalErr != nil {
-		log.Error().
-			Err(marshalErr).
-			Str("job_id", jobID).
-			Str("bucket", bucket).
-			Str("key", key).
-			Str("original_error", err.Error()).
-			Msg("failed to marshal migration failure entry - failure will not be logged to file")
-
-		return
-	}
-
-	_, writeErr := mm.failedLog.Write(append(data, '\n'))
-	if writeErr != nil {
-		log.Error().
-			Err(writeErr).
-			Str("job_id", jobID).
-			Str("bucket", bucket).
-			Str("key", key).
-			Msg("failed to write migration failure to log file")
-	}
 }
 
 // PauseMigration pauses the active migration.
@@ -1167,4 +970,256 @@ func (r *RateLimitedReader) Read(p []byte) (int, error) {
 // Close closes the migration manager.
 func (mm *MigrationManager) Close() error {
 	return mm.failedLog.Close()
+}
+
+// migrateBucket migrates all objects from a source bucket to destination.
+func (mm *MigrationManager) migrateBucket(
+	ctx context.Context,
+	activeJob *activeMigrationJob,
+	sourceBucket, destBucket string,
+	sem chan struct{},
+	wg *sync.WaitGroup,
+	migrationErr *error,
+	errMu *sync.Mutex,
+) error {
+	job := activeJob.job
+	job.Progress.CurrentBucket = sourceBucket
+
+	marker := mm.getResumeMarker(job, sourceBucket)
+
+	for {
+		if err := mm.checkPauseOrCancel(ctx, activeJob); err != nil {
+			return err
+		}
+
+		result, err := mm.listBucketObjects(ctx, activeJob, sourceBucket, job.Config.SourcePrefix, marker)
+		if err != nil {
+			return err
+		}
+
+		mm.processObjectBatch(ctx, activeJob, sourceBucket, destBucket, result.Contents, sem, wg, migrationErr, errMu)
+
+		wg.Wait()
+
+		if !result.IsTruncated {
+			break
+		}
+
+		marker = result.NextMarker
+		if marker == "" && len(result.Contents) > 0 {
+			marker = result.Contents[len(result.Contents)-1].Key
+		}
+
+		// Save resume state
+		job.Resume = &ResumeState{
+			ProcessedKeys: make(map[string]bool),
+			LastBucket:    sourceBucket,
+			LastKey:       marker,
+			LastVersionID: "",
+		}
+
+		saveErr := mm.saveJobs()
+		if saveErr != nil {
+			log.Warn().
+				Err(saveErr).
+				Str("job_id", job.ID).
+				Str("bucket", sourceBucket).
+				Str("marker", marker).
+				Msg("failed to save migration resume state - migration may restart from beginning if interrupted")
+		}
+	}
+
+	return nil
+}
+
+// getResumeMarker returns the marker to resume from for a bucket.
+func (mm *MigrationManager) getResumeMarker(job *MigrationJob, sourceBucket string) string {
+	marker := ""
+	if job.Resume != nil && job.Resume.LastBucket == sourceBucket {
+		marker = job.Resume.LastKey
+	}
+	return marker
+}
+
+// checkPauseOrCancel checks if the migration should pause or cancel.
+func (mm *MigrationManager) checkPauseOrCancel(ctx context.Context, activeJob *activeMigrationJob) error {
+	select {
+	case <-activeJob.pauseChan:
+		log.Info().
+			Str("job_id", activeJob.job.ID).
+			Msg("Migration paused")
+		<-activeJob.pauseChan
+		log.Info().
+			Str("job_id", activeJob.job.ID).
+			Msg("Migration resumed")
+	case <-ctx.Done():
+		return ErrMigrationCanceled
+	default:
+	}
+	return nil
+}
+
+// listBucketObjects lists objects in a bucket with pagination.
+func (mm *MigrationManager) listBucketObjects(
+	ctx context.Context,
+	activeJob *activeMigrationJob,
+	sourceBucket, prefix, marker string,
+) (*ListBucketResult, error) {
+	result, err := activeJob.sourceClient.ListObjects(ctx, sourceBucket, prefix, marker, listMaxKeys)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list source objects: %w", err)
+	}
+	return result, nil
+}
+
+// processObjectBatch processes a batch of objects for migration.
+func (mm *MigrationManager) processObjectBatch(
+	ctx context.Context,
+	activeJob *activeMigrationJob,
+	sourceBucket, destBucket string,
+	objects []S3Object,
+	sem chan struct{},
+	wg *sync.WaitGroup,
+	migrationErr *error,
+	errMu *sync.Mutex,
+) {
+	for i := range objects {
+		if !mm.shouldMigrate(activeJob.job.Config, &objects[i]) {
+			continue
+		}
+
+		sem <- struct{}{}
+		wg.Add(1)
+
+		go mm.migrateObjectWorker(ctx, activeJob, sourceBucket, destBucket, &objects[i], sem, wg, migrationErr, errMu)
+	}
+}
+
+// migrateObjectWorker is a worker goroutine that migrates a single object.
+func (mm *MigrationManager) migrateObjectWorker(
+	ctx context.Context,
+	activeJob *activeMigrationJob,
+	sourceBucket, destBucket string,
+	obj *S3Object,
+	sem chan struct{},
+	wg *sync.WaitGroup,
+	migrationErr *error,
+	errMu *sync.Mutex,
+) {
+	defer wg.Done()
+	defer func() { <-sem }()
+
+	err := mm.migrateObject(ctx, activeJob, sourceBucket, destBucket, obj)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("job_id", activeJob.job.ID).
+			Str("bucket", sourceBucket).
+			Str("key", obj.Key).
+			Msg("failed to migrate object")
+
+		errMu.Lock()
+		if *migrationErr == nil {
+			*migrationErr = err
+		}
+		errMu.Unlock()
+	} else {
+		mm.updateMigrationProgress(activeJob, obj.Size)
+	}
+}
+
+// updateMigrationProgress updates job progress counters.
+func (mm *MigrationManager) updateMigrationProgress(activeJob *activeMigrationJob, objectSize int64) {
+	activeJob.mu.Lock()
+	activeJob.job.Progress.MigratedObjects++
+	activeJob.job.Progress.MigratedBytes += objectSize
+	activeJob.mu.Unlock()
+
+	log.Debug().
+		Str("job_id", activeJob.job.ID).
+		Int64("objects_migrated", activeJob.job.Progress.MigratedObjects).
+		Int64("bytes_migrated", activeJob.job.Progress.MigratedBytes).
+		Msg("Migration progress updated")
+}
+
+// countBucketObjects counts total objects in a bucket for migration.
+func (mm *MigrationManager) countBucketObjects(ctx context.Context, activeJob *activeMigrationJob, bucket string) error {
+	job := activeJob.job
+	marker := ""
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context canceled: %w", ctx.Err())
+		default:
+		}
+
+		result, err := mm.listBucketForCounting(ctx, activeJob, bucket, marker)
+		if err != nil {
+			return err
+		}
+
+		mm.accumulateObjectCounts(job, result.Contents)
+
+		if !result.IsTruncated {
+			break
+		}
+
+		marker = mm.getNextMarker(result)
+	}
+
+	return nil
+}
+
+// listBucketForCounting lists objects in a bucket for counting purposes.
+func (mm *MigrationManager) listBucketForCounting(
+	ctx context.Context,
+	activeJob *activeMigrationJob,
+	bucket, marker string,
+) (*ListBucketResult, error) {
+	result, err := activeJob.sourceClient.ListObjects(
+		ctx,
+		bucket,
+		activeJob.job.Config.SourcePrefix,
+		marker,
+		listMaxKeys,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list objects in %s: %w", bucket, err)
+	}
+
+	return result, nil
+}
+
+// accumulateObjectCounts accumulates object counts and sizes.
+func (mm *MigrationManager) accumulateObjectCounts(job *MigrationJob, objects []S3Object) {
+	for i := range objects {
+		if mm.shouldMigrate(job.Config, &objects[i]) {
+			atomic.AddInt64(&job.Progress.TotalObjects, 1)
+			atomic.AddInt64(&job.Progress.TotalBytes, objects[i].Size)
+		}
+	}
+}
+
+// getNextMarker determines the next marker for pagination.
+func (mm *MigrationManager) getNextMarker(result *ListBucketResult) string {
+	marker := result.NextMarker
+	if marker == "" && len(result.Contents) > 0 {
+		marker = result.Contents[len(result.Contents)-1].Key
+	}
+
+	return marker
+}
+
+// countObjects counts total objects to migrate.
+func (mm *MigrationManager) countObjects(ctx context.Context, activeJob *activeMigrationJob) error {
+	job := activeJob.job
+
+	for _, bucket := range job.Config.SourceBuckets {
+		if err := mm.countBucketObjects(ctx, activeJob, bucket); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

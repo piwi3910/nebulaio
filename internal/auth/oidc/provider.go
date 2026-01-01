@@ -416,44 +416,64 @@ func (p *Provider) claimsToUser(claims map[string]interface{}) *auth.User {
 		Attributes: make(map[string][]string),
 	}
 
-	// Get username
+	p.extractUsername(user, claims, mapping)
+	p.extractEmail(user, claims, mapping)
+	p.extractDisplayName(user, claims, mapping)
+	p.extractGroups(user, claims, mapping)
+	p.extractProviderID(user, claims)
+	p.extractAdditionalAttributes(user, claims, mapping)
+
+	return user
+}
+
+// extractUsername extracts username from claims with fallback to sub.
+func (p *Provider) extractUsername(user *auth.User, claims map[string]interface{}, mapping ClaimsMapping) {
 	if mapping.Username != "" {
 		if val, ok := claims[mapping.Username].(string); ok {
 			user.Username = val
 		}
 	}
-	// Fallback to sub if no username
 	if user.Username == "" {
 		if sub, ok := claims["sub"].(string); ok {
 			user.Username = sub
 		}
 	}
+}
 
-	// Get email
+// extractEmail extracts email from claims.
+func (p *Provider) extractEmail(user *auth.User, claims map[string]interface{}, mapping ClaimsMapping) {
 	if mapping.Email != "" {
 		if val, ok := claims[mapping.Email].(string); ok {
 			user.Email = val
 		}
 	}
+}
 
-	// Get display name
+// extractDisplayName extracts display name from claims.
+func (p *Provider) extractDisplayName(user *auth.User, claims map[string]interface{}, mapping ClaimsMapping) {
 	if mapping.DisplayName != "" {
 		if val, ok := claims[mapping.DisplayName].(string); ok {
 			user.DisplayName = val
 		}
 	}
+}
 
-	// Get groups
+// extractGroups extracts groups from claims.
+func (p *Provider) extractGroups(user *auth.User, claims map[string]interface{}, mapping ClaimsMapping) {
 	if mapping.Groups != "" {
 		user.Groups = extractGroups(claims, mapping.Groups)
 	}
+}
 
-	// Get provider ID (sub claim)
+// extractProviderID extracts provider ID from sub claim.
+func (p *Provider) extractProviderID(user *auth.User, claims map[string]interface{}) {
 	if sub, ok := claims["sub"].(string); ok {
 		user.ProviderID = sub
 	}
+}
 
-	// Get additional attributes
+// extractAdditionalAttributes extracts additional mapped attributes.
+func (p *Provider) extractAdditionalAttributes(user *auth.User, claims map[string]interface{}, mapping ClaimsMapping) {
 	for key, claimName := range mapping.Additional {
 		if val, ok := claims[claimName]; ok {
 			switch v := val.(type) {
@@ -466,13 +486,10 @@ func (p *Provider) claimsToUser(claims map[string]interface{}) *auth.User {
 						strs = append(strs, s)
 					}
 				}
-
 				user.Attributes[key] = strs
 			}
 		}
 	}
-
-	return user
 }
 
 // extractGroups extracts groups from claims.

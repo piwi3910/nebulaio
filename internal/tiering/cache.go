@@ -87,7 +87,6 @@ func NewCache(config CacheConfig, cacheBackend backend.Backend) *Cache {
 	// Start write-back worker if enabled
 	if config.WriteBack && cacheBackend != nil {
 		c.writeBackWg.Add(1)
-
 		go c.writeBackWorker()
 	}
 

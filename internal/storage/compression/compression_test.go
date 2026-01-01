@@ -325,126 +325,146 @@ func TestCompressionBackend(t *testing.T) {
 	}
 
 	t.Run("PutAndGet-Compressible", func(t *testing.T) {
-		data := bytes.Repeat([]byte("Compressible data pattern. "), 100)
-
-		result, err := compBackend.PutObject(ctx, "test-bucket", "compressible.txt", bytes.NewReader(data), int64(len(data)))
-		if err != nil {
-			t.Fatalf("PutObject failed: %v", err)
-		}
-
-		if result.ETag == "" {
-			t.Error("expected non-empty ETag")
-		}
-
-		// Get the object back
-		reader, err := compBackend.GetObject(ctx, "test-bucket", "compressible.txt")
-		if err != nil {
-			t.Fatalf("GetObject failed: %v", err)
-		}
-
-		defer func() { _ = reader.Close() }()
-
-		retrieved, err := io.ReadAll(reader)
-		if err != nil {
-			t.Fatalf("failed to read object: %v", err)
-		}
-
-		if len(retrieved) != len(data) {
-			t.Errorf("size mismatch: expected %d, got %d", len(data), len(retrieved))
-		}
-
-		if !bytes.Equal(data, retrieved) {
-			t.Error("data mismatch")
-		}
+		testPutGetCompressible(t, ctx, compBackend)
 	})
 
 	t.Run("PutAndGet-Random", func(t *testing.T) {
-		// Random data doesn't compress well
-		data := make([]byte, 1024)
-		_, _ = rand.Read(data)
-
-		_, err := compBackend.PutObject(ctx, "test-bucket", "random.bin", bytes.NewReader(data), int64(len(data)))
-		if err != nil {
-			t.Fatalf("PutObject failed: %v", err)
-		}
-
-		reader, err := compBackend.GetObject(ctx, "test-bucket", "random.bin")
-		if err != nil {
-			t.Fatalf("GetObject failed: %v", err)
-		}
-
-		defer func() { _ = reader.Close() }()
-
-		var buf bytes.Buffer
-
-		_, err = buf.ReadFrom(reader)
-		if err != nil {
-			t.Fatalf("failed to read object: %v", err)
-		}
-
-		if !bytes.Equal(data, buf.Bytes()) {
-			t.Error("data mismatch for random data")
-		}
+		testPutGetRandom(t, ctx, compBackend)
 	})
 
 	t.Run("SmallObject-NoCompression", func(t *testing.T) {
-		data := []byte("tiny") // Below MinSize
-
-		_, err := compBackend.PutObject(ctx, "test-bucket", "tiny.txt", bytes.NewReader(data), int64(len(data)))
-		if err != nil {
-			t.Fatalf("PutObject failed: %v", err)
-		}
-
-		reader, err := compBackend.GetObject(ctx, "test-bucket", "tiny.txt")
-		if err != nil {
-			t.Fatalf("GetObject failed: %v", err)
-		}
-
-		defer func() { _ = reader.Close() }()
-
-		var buf bytes.Buffer
-
-		_, err = buf.ReadFrom(reader)
-		if err != nil {
-			t.Fatalf("failed to read object: %v", err)
-		}
-
-		if !bytes.Equal(data, buf.Bytes()) {
-			t.Error("data mismatch for small object")
-		}
+		testSmallObjectNoCompression(t, ctx, compBackend)
 	})
 
 	t.Run("ObjectExists", func(t *testing.T) {
-		exists, err := compBackend.ObjectExists(ctx, "test-bucket", "compressible.txt")
-		if err != nil {
-			t.Fatalf("ObjectExists failed: %v", err)
-		}
-
-		if !exists {
-			t.Error("object should exist")
-		}
-
-		exists, err = compBackend.ObjectExists(ctx, "test-bucket", "nonexistent")
-		if err != nil {
-			t.Fatalf("ObjectExists failed: %v", err)
-		}
-
-		if exists {
-			t.Error("object should not exist")
-		}
+		testObjectExists(t, ctx, compBackend)
 	})
 
 	t.Run("DeleteObject", func(t *testing.T) {
-		err := compBackend.DeleteObject(ctx, "test-bucket", "compressible.txt")
-		if err != nil {
-			t.Fatalf("DeleteObject failed: %v", err)
-		}
-
-		exists, _ := compBackend.ObjectExists(ctx, "test-bucket", "compressible.txt")
-		if exists {
-			t.Error("object should be deleted")
-		}
+		testDeleteObject(t, ctx, compBackend)
 	})
+}
+
+func testPutGetCompressible(t *testing.T, ctx context.Context, compBackend *Backend) {
+	data := bytes.Repeat([]byte("Compressible data pattern. "), 100)
+
+	result, err := compBackend.PutObject(ctx, "test-bucket", "compressible.txt", bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatalf("PutObject failed: %v", err)
+	}
+
+	if result.ETag == "" {
+		t.Error("expected non-empty ETag")
+	}
+
+	// Get the object back
+	reader, err := compBackend.GetObject(ctx, "test-bucket", "compressible.txt")
+	if err != nil {
+		t.Fatalf("GetObject failed: %v", err)
+	}
+
+	defer func() { _ = reader.Close() }()
+
+	retrieved, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("failed to read object: %v", err)
+	}
+
+	if len(retrieved) != len(data) {
+		t.Errorf("size mismatch: expected %d, got %d", len(data), len(retrieved))
+	}
+
+	if !bytes.Equal(data, retrieved) {
+		t.Error("data mismatch")
+	}
+}
+
+func testPutGetRandom(t *testing.T, ctx context.Context, compBackend *Backend) {
+	// Random data doesn't compress well
+	data := make([]byte, 1024)
+	_, _ = rand.Read(data)
+
+	_, err := compBackend.PutObject(ctx, "test-bucket", "random.bin", bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatalf("PutObject failed: %v", err)
+	}
+
+	reader, err := compBackend.GetObject(ctx, "test-bucket", "random.bin")
+	if err != nil {
+		t.Fatalf("GetObject failed: %v", err)
+	}
+
+	defer func() { _ = reader.Close() }()
+
+	var buf bytes.Buffer
+
+	_, err = buf.ReadFrom(reader)
+	if err != nil {
+		t.Fatalf("failed to read object: %v", err)
+	}
+
+	if !bytes.Equal(data, buf.Bytes()) {
+		t.Error("data mismatch for random data")
+	}
+}
+
+func testSmallObjectNoCompression(t *testing.T, ctx context.Context, compBackend *Backend) {
+	data := []byte("tiny") // Below MinSize
+
+	_, err := compBackend.PutObject(ctx, "test-bucket", "tiny.txt", bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatalf("PutObject failed: %v", err)
+	}
+
+	reader, err := compBackend.GetObject(ctx, "test-bucket", "tiny.txt")
+	if err != nil {
+		t.Fatalf("GetObject failed: %v", err)
+	}
+
+	defer func() { _ = reader.Close() }()
+
+	var buf bytes.Buffer
+
+	_, err = buf.ReadFrom(reader)
+	if err != nil {
+		t.Fatalf("failed to read object: %v", err)
+	}
+
+	if !bytes.Equal(data, buf.Bytes()) {
+		t.Error("data mismatch for small object")
+	}
+}
+
+func testObjectExists(t *testing.T, ctx context.Context, compBackend *Backend) {
+	exists, err := compBackend.ObjectExists(ctx, "test-bucket", "compressible.txt")
+	if err != nil {
+		t.Fatalf("ObjectExists failed: %v", err)
+	}
+
+	if !exists {
+		t.Error("object should exist")
+	}
+
+	exists, err = compBackend.ObjectExists(ctx, "test-bucket", "nonexistent")
+	if err != nil {
+		t.Fatalf("ObjectExists failed: %v", err)
+	}
+
+	if exists {
+		t.Error("object should not exist")
+	}
+}
+
+func testDeleteObject(t *testing.T, ctx context.Context, compBackend *Backend) {
+	err := compBackend.DeleteObject(ctx, "test-bucket", "compressible.txt")
+	if err != nil {
+		t.Fatalf("DeleteObject failed: %v", err)
+	}
+
+	exists, _ := compBackend.ObjectExists(ctx, "test-bucket", "compressible.txt")
+	if exists {
+		t.Error("object should be deleted")
+	}
 }
 
 func TestNoCompression(t *testing.T) {

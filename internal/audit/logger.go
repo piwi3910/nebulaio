@@ -199,7 +199,6 @@ type AuditStore interface {
 // AuditLogger handles logging of audit events.
 type AuditLogger struct {
 	store    AuditStore
-	ctx      context.Context
 	buffer   chan *AuditEvent
 	file     *os.File
 	cancel   context.CancelFunc
@@ -222,14 +221,10 @@ func NewAuditLogger(config Config) (*AuditLogger, error) {
 		config.BufferSize = 1000
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	logger := &AuditLogger{
 		store:    config.Store,
 		buffer:   make(chan *AuditEvent, config.BufferSize),
 		filePath: config.FilePath,
-		ctx:      ctx,
-		cancel:   cancel,
 	}
 
 	// Open file for logging if path is specified
@@ -237,7 +232,6 @@ func NewAuditLogger(config Config) (*AuditLogger, error) {
 		//nolint:gosec // G302: Log files may need to be readable by other processes
 		f, err := os.OpenFile(config.FilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0640)
 		if err != nil {
-			cancel()
 			return nil, err
 		}
 
@@ -248,10 +242,12 @@ func NewAuditLogger(config Config) (*AuditLogger, error) {
 }
 
 // Start begins processing audit events from the buffer.
-func (l *AuditLogger) Start() {
+func (l *AuditLogger) Start(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	l.cancel = cancel
 	l.wg.Add(1)
 
-	go l.processEvents()
+	go l.processEvents(ctx)
 }
 
 // Stop gracefully shuts down the audit logger.
@@ -306,7 +302,7 @@ func (l *AuditLogger) LogSync(ctx context.Context, event *AuditEvent) error {
 }
 
 // processEvents runs in a goroutine to process buffered events.
-func (l *AuditLogger) processEvents() {
+func (l *AuditLogger) processEvents(ctx context.Context) {
 	defer l.wg.Done()
 
 	for {
@@ -315,7 +311,7 @@ func (l *AuditLogger) processEvents() {
 			if !ok {
 				// Channel closed, drain remaining events
 				for event := range l.buffer {
-					err := l.processEvent(l.ctx, event)
+					err := l.processEvent(ctx, event)
 					if err != nil {
 						log.Error().Err(err).Str("event_id", event.ID).Msg("Failed to process audit event during shutdown")
 					}
@@ -324,11 +320,11 @@ func (l *AuditLogger) processEvents() {
 				return
 			}
 
-			err := l.processEvent(l.ctx, event)
+			err := l.processEvent(ctx, event)
 			if err != nil {
 				log.Error().Err(err).Str("event_id", event.ID).Msg("Failed to process audit event")
 			}
-		case <-l.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}

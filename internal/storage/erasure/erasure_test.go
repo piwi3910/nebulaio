@@ -138,102 +138,107 @@ func TestDecoder(t *testing.T) {
 		t.Fatalf("failed to create decoder: %v", err)
 	}
 
-	t.Run("DecodeComplete", func(t *testing.T) {
-		data := []byte("Test data for decoding")
+	t.Run("DecodeComplete", func(t *testing.T) { testDecoderComplete(t, enc, dec) })
+	t.Run("DecodeWithMissingShard", func(t *testing.T) { testDecoderWithMissingShard(t, enc, dec) })
+	t.Run("DecodeWithMaxMissing", func(t *testing.T) { testDecoderWithMaxMissing(t, enc, dec, parityShards) })
+	t.Run("DecodeFailsWithTooManyMissing", func(t *testing.T) { testDecoderFailsWithTooManyMissing(t, enc, dec, parityShards) })
+}
 
-		encoded, err := enc.Encode(bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("failed to encode: %v", err)
-		}
+func testDecoderComplete(t *testing.T, enc *Encoder, dec *Decoder) {
+	data := []byte("Test data for decoding")
 
-		result, err := dec.Decode(&DecodeInput{
-			Shards:       encoded.Shards,
-			OriginalSize: encoded.OriginalSize,
-		})
-		if err != nil {
-			t.Fatalf("failed to decode: %v", err)
-		}
+	encoded, err := enc.Encode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("failed to encode: %v", err)
+	}
 
-		if !bytes.Equal(result.Data, data) {
-			t.Error("decoded data doesn't match original")
-		}
+	result, err := dec.Decode(&DecodeInput{
+		Shards:       encoded.Shards,
+		OriginalSize: encoded.OriginalSize,
 	})
+	if err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
 
-	t.Run("DecodeWithMissingShard", func(t *testing.T) {
-		data := []byte("Test data for partial decode")
+	if !bytes.Equal(result.Data, data) {
+		t.Error("decoded data doesn't match original")
+	}
+}
 
-		encoded, err := enc.Encode(bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("failed to encode: %v", err)
-		}
+func testDecoderWithMissingShard(t *testing.T, enc *Encoder, dec *Decoder) {
+	data := []byte("Test data for partial decode")
 
-		// Remove one shard
-		encoded.Shards[0] = nil
+	encoded, err := enc.Encode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("failed to encode: %v", err)
+	}
 
-		result, err := dec.Decode(&DecodeInput{
-			Shards:       encoded.Shards,
-			OriginalSize: encoded.OriginalSize,
-		})
-		if err != nil {
-			t.Fatalf("failed to decode with 1 missing shard: %v", err)
-		}
+	// Remove one shard
+	encoded.Shards[0] = nil
 
-		if !bytes.Equal(result.Data, data) {
-			t.Error("decoded data doesn't match original")
-		}
-
-		if len(result.ReconstructedShards) != 1 {
-			t.Errorf("expected 1 reconstructed shard, got %d", len(result.ReconstructedShards))
-		}
+	result, err := dec.Decode(&DecodeInput{
+		Shards:       encoded.Shards,
+		OriginalSize: encoded.OriginalSize,
 	})
+	if err != nil {
+		t.Fatalf("failed to decode with 1 missing shard: %v", err)
+	}
 
-	t.Run("DecodeWithMaxMissing", func(t *testing.T) {
-		data := []byte("Test data for max missing")
+	if !bytes.Equal(result.Data, data) {
+		t.Error("decoded data doesn't match original")
+	}
 
-		encoded, err := enc.Encode(bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("failed to encode: %v", err)
-		}
+	if len(result.ReconstructedShards) != 1 {
+		t.Errorf("expected 1 reconstructed shard, got %d", len(result.ReconstructedShards))
+	}
+}
 
-		// Remove parityShards shards (maximum allowed)
-		for i := range parityShards {
-			encoded.Shards[i] = nil
-		}
+func testDecoderWithMaxMissing(t *testing.T, enc *Encoder, dec *Decoder, parityShards int) {
+	data := []byte("Test data for max missing")
 
-		result, err := dec.Decode(&DecodeInput{
-			Shards:       encoded.Shards,
-			OriginalSize: encoded.OriginalSize,
-		})
-		if err != nil {
-			t.Fatalf("failed to decode with max missing shards: %v", err)
-		}
+	encoded, err := enc.Encode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("failed to encode: %v", err)
+	}
 
-		if !bytes.Equal(result.Data, data) {
-			t.Error("decoded data doesn't match original")
-		}
+	// Remove parityShards shards (maximum allowed)
+	for i := range parityShards {
+		encoded.Shards[i] = nil
+	}
+
+	result, err := dec.Decode(&DecodeInput{
+		Shards:       encoded.Shards,
+		OriginalSize: encoded.OriginalSize,
 	})
+	if err != nil {
+		t.Fatalf("failed to decode with max missing shards: %v", err)
+	}
 
-	t.Run("DecodeFailsWithTooManyMissing", func(t *testing.T) {
-		data := []byte("Test data for failure case")
+	if !bytes.Equal(result.Data, data) {
+		t.Error("decoded data doesn't match original")
+	}
+}
 
-		encoded, err := enc.Encode(bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("failed to encode: %v", err)
-		}
+func testDecoderFailsWithTooManyMissing(t *testing.T, enc *Encoder, dec *Decoder, parityShards int) {
+	data := []byte("Test data for failure case")
 
-		// Remove more than parityShards
-		for i := 0; i <= parityShards; i++ {
-			encoded.Shards[i] = nil
-		}
+	encoded, err := enc.Encode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("failed to encode: %v", err)
+	}
 
-		_, err = dec.Decode(&DecodeInput{
-			Shards:       encoded.Shards,
-			OriginalSize: encoded.OriginalSize,
-		})
-		if err == nil {
-			t.Error("expected decode to fail with too many missing shards")
-		}
+	// Remove more than parityShards
+	for i := 0; i <= parityShards; i++ {
+		encoded.Shards[i] = nil
+	}
+
+	_, err = dec.Decode(&DecodeInput{
+		Shards:       encoded.Shards,
+		OriginalSize: encoded.OriginalSize,
 	})
+	if err == nil {
+		t.Error("expected decode to fail with too many missing shards")
+	}
 }
 
 func TestPlacement(t *testing.T) {
@@ -388,96 +393,101 @@ func TestBackend(t *testing.T) {
 		t.Fatalf("failed to init backend: %v", err)
 	}
 
-	t.Run("PutAndGetObject", func(t *testing.T) {
-		data := []byte("Test object data for erasure coding backend")
+	t.Run("PutAndGetObject", func(t *testing.T) { testBackendPutAndGet(t, ctx, backend) })
+	t.Run("ObjectExists", func(t *testing.T) { testBackendObjectExists(t, ctx, backend) })
+	t.Run("DeleteObject", func(t *testing.T) { testBackendDeleteObject(t, ctx, backend) })
+	t.Run("LargeObject", func(t *testing.T) { testBackendLargeObject(t, ctx, backend) })
+}
 
-		result, err := backend.PutObject(ctx, "test-bucket", "test-key", bytes.NewReader(data), int64(len(data)))
-		if err != nil {
-			t.Fatalf("failed to put object: %v", err)
-		}
+func testBackendPutAndGet(t *testing.T, ctx context.Context, backend *Backend) {
+	data := []byte("Test object data for erasure coding backend")
 
-		if result.ETag == "" {
-			t.Error("expected non-empty ETag")
-		}
+	result, err := backend.PutObject(ctx, "test-bucket", "test-key", bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatalf("failed to put object: %v", err)
+	}
 
-		reader, err := backend.GetObject(ctx, "test-bucket", "test-key")
-		if err != nil {
-			t.Fatalf("failed to get object: %v", err)
-		}
+	if result.ETag == "" {
+		t.Error("expected non-empty ETag")
+	}
 
-		defer func() { _ = reader.Close() }()
+	reader, err := backend.GetObject(ctx, "test-bucket", "test-key")
+	if err != nil {
+		t.Fatalf("failed to get object: %v", err)
+	}
 
-		readData := make([]byte, len(data))
+	defer func() { _ = reader.Close() }()
 
-		n, err := reader.Read(readData)
-		if err != nil {
-			t.Fatalf("failed to read object: %v", err)
-		}
+	readData := make([]byte, len(data))
 
-		if !bytes.Equal(data, readData[:n]) {
-			t.Error("read data doesn't match written data")
-		}
-	})
+	n, err := reader.Read(readData)
+	if err != nil {
+		t.Fatalf("failed to read object: %v", err)
+	}
 
-	t.Run("ObjectExists", func(t *testing.T) {
-		exists, err := backend.ObjectExists(ctx, "test-bucket", "test-key")
-		if err != nil {
-			t.Fatalf("failed to check existence: %v", err)
-		}
+	if !bytes.Equal(data, readData[:n]) {
+		t.Error("read data doesn't match written data")
+	}
+}
 
-		if !exists {
-			t.Error("object should exist")
-		}
+func testBackendObjectExists(t *testing.T, ctx context.Context, backend *Backend) {
+	exists, err := backend.ObjectExists(ctx, "test-bucket", "test-key")
+	if err != nil {
+		t.Fatalf("failed to check existence: %v", err)
+	}
 
-		exists, err = backend.ObjectExists(ctx, "test-bucket", "non-existent")
-		if err != nil {
-			t.Fatalf("failed to check existence: %v", err)
-		}
+	if !exists {
+		t.Error("object should exist")
+	}
 
-		if exists {
-			t.Error("non-existent object should not exist")
-		}
-	})
+	exists, err = backend.ObjectExists(ctx, "test-bucket", "non-existent")
+	if err != nil {
+		t.Fatalf("failed to check existence: %v", err)
+	}
 
-	t.Run("DeleteObject", func(t *testing.T) {
-		err := backend.DeleteObject(ctx, "test-bucket", "test-key")
-		if err != nil {
-			t.Fatalf("failed to delete object: %v", err)
-		}
+	if exists {
+		t.Error("non-existent object should not exist")
+	}
+}
 
-		exists, _ := backend.ObjectExists(ctx, "test-bucket", "test-key")
-		if exists {
-			t.Error("object should not exist after deletion")
-		}
-	})
+func testBackendDeleteObject(t *testing.T, ctx context.Context, backend *Backend) {
+	err := backend.DeleteObject(ctx, "test-bucket", "test-key")
+	if err != nil {
+		t.Fatalf("failed to delete object: %v", err)
+	}
 
-	t.Run("LargeObject", func(t *testing.T) {
-		data := make([]byte, 10*1024*1024) // 10MB
-		_, _ = rand.Read(data)
+	exists, _ := backend.ObjectExists(ctx, "test-bucket", "test-key")
+	if exists {
+		t.Error("object should not exist after deletion")
+	}
+}
 
-		_, err := backend.PutObject(ctx, "test-bucket", "large-key", bytes.NewReader(data), int64(len(data)))
-		if err != nil {
-			t.Fatalf("failed to put large object: %v", err)
-		}
+func testBackendLargeObject(t *testing.T, ctx context.Context, backend *Backend) {
+	data := make([]byte, 10*1024*1024) // 10MB
+	_, _ = rand.Read(data)
 
-		reader, err := backend.GetObject(ctx, "test-bucket", "large-key")
-		if err != nil {
-			t.Fatalf("failed to get large object: %v", err)
-		}
+	_, err := backend.PutObject(ctx, "test-bucket", "large-key", bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatalf("failed to put large object: %v", err)
+	}
 
-		defer func() { _ = reader.Close() }()
+	reader, err := backend.GetObject(ctx, "test-bucket", "large-key")
+	if err != nil {
+		t.Fatalf("failed to get large object: %v", err)
+	}
 
-		var buf bytes.Buffer
+	defer func() { _ = reader.Close() }()
 
-		_, err = buf.ReadFrom(reader)
-		if err != nil {
-			t.Fatalf("failed to read large object: %v", err)
-		}
+	var buf bytes.Buffer
 
-		if !bytes.Equal(data, buf.Bytes()) {
-			t.Error("large object data mismatch")
-		}
-	})
+	_, err = buf.ReadFrom(reader)
+	if err != nil {
+		t.Fatalf("failed to read large object: %v", err)
+	}
+
+	if !bytes.Equal(data, buf.Bytes()) {
+		t.Error("large object data mismatch")
+	}
 }
 
 func BenchmarkEncode(b *testing.B) {

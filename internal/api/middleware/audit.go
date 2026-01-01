@@ -45,6 +45,7 @@ func NewAuditMiddleware(logger *audit.AuditLogger, source audit.EventSource) *Au
 // responseWriter wraps http.ResponseWriter to capture response details.
 type responseWriter struct {
 	http.ResponseWriter
+
 	statusCode   int
 	bytesWritten int64
 }
@@ -76,6 +77,7 @@ func (rw *responseWriter) Unwrap() http.ResponseWriter {
 // countingReader wraps an io.ReadCloser to count bytes read.
 type countingReader struct {
 	io.ReadCloser
+
 	bytesRead int64
 }
 

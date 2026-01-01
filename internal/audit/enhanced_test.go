@@ -39,28 +39,7 @@ func (m *mockAuditStore) ListAuditEvents(ctx context.Context, filter AuditFilter
 	}
 
 	for _, e := range m.events {
-		// Apply filters
-		if !filter.StartTime.IsZero() && e.Timestamp.Before(filter.StartTime) {
-			continue
-		}
-
-		if !filter.EndTime.IsZero() && e.Timestamp.After(filter.EndTime) {
-			continue
-		}
-
-		if filter.Bucket != "" && e.Resource.Bucket != filter.Bucket {
-			continue
-		}
-
-		if filter.User != "" && e.UserIdentity.Username != filter.User {
-			continue
-		}
-
-		if filter.EventType != "" && string(e.EventType) != filter.EventType {
-			continue
-		}
-
-		if filter.Result != "" && string(e.Result) != filter.Result {
+		if !matchesAuditFilter(e, filter) {
 			continue
 		}
 
@@ -72,6 +51,58 @@ func (m *mockAuditStore) ListAuditEvents(ctx context.Context, filter AuditFilter
 	}
 
 	return result, nil
+}
+
+func matchesAuditFilter(e *AuditEvent, filter AuditFilter) bool {
+	if !matchesTimeFilter(e, filter) {
+		return false
+	}
+
+	if !matchesResourceFilter(e, filter) {
+		return false
+	}
+
+	if !matchesEventTypeAndResultFilter(e, filter) {
+		return false
+	}
+
+	return true
+}
+
+func matchesTimeFilter(e *AuditEvent, filter AuditFilter) bool {
+	if !filter.StartTime.IsZero() && e.Timestamp.Before(filter.StartTime) {
+		return false
+	}
+
+	if !filter.EndTime.IsZero() && e.Timestamp.After(filter.EndTime) {
+		return false
+	}
+
+	return true
+}
+
+func matchesResourceFilter(e *AuditEvent, filter AuditFilter) bool {
+	if filter.Bucket != "" && e.Resource.Bucket != filter.Bucket {
+		return false
+	}
+
+	if filter.User != "" && e.UserIdentity.Username != filter.User {
+		return false
+	}
+
+	return true
+}
+
+func matchesEventTypeAndResultFilter(e *AuditEvent, filter AuditFilter) bool {
+	if filter.EventType != "" && string(e.EventType) != filter.EventType {
+		return false
+	}
+
+	if filter.Result != "" && string(e.Result) != filter.Result {
+		return false
+	}
+
+	return true
 }
 
 // mockGeoLookup implements GeoLookup for testing.
@@ -97,7 +128,7 @@ func TestEnhancedAuditLoggerBasic(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 
-	logger.Start()
+	logger.Start(context.Background())
 	defer logger.Stop()
 
 	// Log an event
@@ -152,7 +183,7 @@ func TestEnhancedAuditLoggerWithFileOutput(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 
-	logger.Start()
+	logger.Start(context.Background())
 
 	// Log multiple events synchronously for reliable test
 	for i := range 10 {
@@ -216,7 +247,7 @@ func TestEnhancedAuditLoggerIntegrity(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 
-	logger.Start()
+	logger.Start(context.Background())
 
 	// Create events with chain
 	events := make([]*EnhancedAuditEvent, 5)
@@ -280,7 +311,7 @@ func TestEnhancedAuditLoggerFiltering(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 
-	logger.Start()
+	logger.Start(context.Background())
 
 	// Log a PUT event (should be included)
 	putEvent := &EnhancedAuditEvent{
@@ -316,7 +347,7 @@ func TestEnhancedAuditLoggerQuery(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 
-	logger.Start()
+	logger.Start(context.Background())
 
 	// Log events
 	now := time.Now()
@@ -377,7 +408,7 @@ func TestEnhancedAuditLoggerMasking(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 
-	logger.Start()
+	logger.Start(context.Background())
 
 	event := &EnhancedAuditEvent{
 		AuditEvent: AuditEvent{
@@ -440,7 +471,7 @@ func TestEnhancedAuditLoggerCompliance(t *testing.T) {
 				t.Fatalf("Failed to create logger: %v", err)
 			}
 
-			logger.Start()
+			logger.Start(context.Background())
 
 			event := &EnhancedAuditEvent{
 				AuditEvent: AuditEvent{
@@ -475,7 +506,7 @@ func TestEnhancedAuditLoggerExport(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 
-	logger.Start()
+	logger.Start(context.Background())
 
 	// Log events
 	for i := range 5 {
@@ -566,7 +597,7 @@ func TestEnhancedAuditLoggerGeoLocation(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 
-	logger.Start()
+	logger.Start(context.Background())
 
 	event := &EnhancedAuditEvent{
 		AuditEvent: AuditEvent{
@@ -596,7 +627,7 @@ func TestEnhancedAuditLoggerConcurrency(t *testing.T) {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 
-	logger.Start()
+	logger.Start(context.Background())
 
 	var wg sync.WaitGroup
 
@@ -756,7 +787,7 @@ func BenchmarkEnhancedAuditLogger(b *testing.B) {
 	store := &mockAuditStore{}
 	logger, _ := NewEnhancedAuditLogger(config, store, nil)
 
-	logger.Start()
+	logger.Start(context.Background())
 	defer logger.Stop()
 
 	event := &EnhancedAuditEvent{
@@ -788,7 +819,7 @@ func TestExportToWriter(t *testing.T) {
 	config := DefaultEnhancedConfig()
 
 	logger, _ := NewEnhancedAuditLogger(config, store, nil)
-	logger.Start()
+	logger.Start(context.Background())
 
 	for range 3 {
 		event := &EnhancedAuditEvent{

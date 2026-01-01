@@ -64,13 +64,13 @@ func NewEmitter(config EmitterConfig) *Emitter {
 }
 
 // Start starts the emitter.
-func (e *Emitter) Start() {
+func (e *Emitter) Start(ctx context.Context) {
 	if !e.enabled {
 		log.Info().Msg("Event emitter disabled")
 		return
 	}
 
-	e.queue.Start()
+	e.queue.Start(ctx)
 	log.Info().Msg("Event emitter started")
 }
 

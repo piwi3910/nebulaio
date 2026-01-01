@@ -176,14 +176,36 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 		return m.caCert, nil
 	}
 
+	// Try to load existing CA
+	if ca := m.tryLoadExistingCA(ctx); ca != nil {
+		m.caCert = ca
+		m.certPool.AddCert(ca.Certificate)
+		return ca, nil
+	}
+
+	// Generate new CA
+	bundle, err := m.generateNewCA(commonName)
+	if err != nil {
+		return nil, err
+	}
+
+	m.caCert = bundle
+	m.certPool.AddCert(bundle.Certificate)
+
+	// Persist CA to disk and storage
+	if err := m.persistCA(ctx, bundle); err != nil {
+		return nil, err
+	}
+
+	return bundle, nil
+}
+
+// tryLoadExistingCA attempts to load CA from storage or disk.
+func (m *MTLSManager) tryLoadExistingCA(ctx context.Context) *CertificateBundle {
 	// Try to load from storage
 	if m.storage != nil {
-		ca, err := m.storage.LoadCA(ctx)
-		if err == nil && ca != nil {
-			m.caCert = ca
-			m.certPool.AddCert(ca.Certificate)
-
-			return ca, nil
+		if ca, err := m.storage.LoadCA(ctx); err == nil && ca != nil {
+			return ca
 		}
 	}
 
@@ -191,25 +213,23 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 	caCertPath := filepath.Join(m.config.CertDir, "ca.crt")
 	caKeyPath := filepath.Join(m.config.CertDir, "ca.key")
 
-	_, statErr := os.Stat(caCertPath)
-	if statErr == nil {
-		ca, loadErr := m.loadCertificateFromDisk(caCertPath, caKeyPath)
-		if loadErr == nil {
-			m.caCert = ca
-			m.certPool.AddCert(ca.Certificate)
-
-			return ca, nil
+	if _, err := os.Stat(caCertPath); err == nil {
+		if ca, err := m.loadCertificateFromDisk(caCertPath, caKeyPath); err == nil {
+			return ca
 		}
 	}
 
-	// Generate new CA
+	return nil
+}
+
+// generateNewCA generates a new CA certificate and key.
+func (m *MTLSManager) generateNewCA(commonName string) (*CertificateBundle, error) {
 	privateKey, err := m.generatePrivateKey()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate CA private key: %w", err)
 	}
 
 	now := time.Now()
-
 	serialNumber, err := generateSerialNumber()
 	if err != nil {
 		return nil, err
@@ -240,13 +260,12 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-
 	keyPEM, err := encodePrivateKey(privateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	bundle := &CertificateBundle{
+	return &CertificateBundle{
 		Certificate:    cert,
 		PrivateKey:     privateKey,
 		CertificatePEM: certPEM,
@@ -262,31 +281,29 @@ func (m *MTLSManager) InitializeCA(ctx context.Context, commonName string) (*Cer
 			Fingerprint:  fingerprintCert(cert),
 			KeyUsage:     template.KeyUsage,
 		},
+	}, nil
+}
+
+// persistCA saves CA to disk and storage.
+func (m *MTLSManager) persistCA(ctx context.Context, bundle *CertificateBundle) error {
+	caCertPath := filepath.Join(m.config.CertDir, "ca.crt")
+	caKeyPath := filepath.Join(m.config.CertDir, "ca.key")
+
+	if err := os.WriteFile(caCertPath, bundle.CertificatePEM, certFilePermissions); err != nil {
+		return err
 	}
 
-	m.caCert = bundle
-	m.certPool.AddCert(cert)
-
-	// Save to disk
-	certWriteErr := os.WriteFile(caCertPath, certPEM, certFilePermissions)
-	if certWriteErr != nil {
-		return nil, certWriteErr
+	if err := os.WriteFile(caKeyPath, bundle.PrivateKeyPEM, keyFilePermissions); err != nil {
+		return err
 	}
 
-	keyWriteErr := os.WriteFile(caKeyPath, keyPEM, keyFilePermissions)
-	if keyWriteErr != nil {
-		return nil, keyWriteErr
-	}
-
-	// Save to storage
 	if m.storage != nil {
-		err := m.storage.StoreCA(ctx, bundle)
-		if err != nil {
-			return nil, err
+		if err := m.storage.StoreCA(ctx, bundle); err != nil {
+			return err
 		}
 	}
 
-	return bundle, nil
+	return nil
 }
 
 // IssueCertificate issues a new certificate signed by the CA.
@@ -710,70 +727,22 @@ func (m *MTLSManager) ExportCertificate(certID string, certPath, keyPath string)
 
 // loadCertificateFromDisk loads a certificate from disk.
 func (m *MTLSManager) loadCertificateFromDisk(certPath, keyPath string) (*CertificateBundle, error) {
-	//nolint:gosec // G304: certPath comes from trusted configuration
-	certPEM, err := os.ReadFile(certPath)
+	certPEM, keyPEM, err := m.readCertificateFiles(certPath, keyPath)
 	if err != nil {
 		return nil, err
 	}
 
-	//nolint:gosec // G304: keyPath comes from trusted configuration
-	keyPEM, err := os.ReadFile(keyPath)
+	cert, err := m.parseCertificate(certPEM)
 	if err != nil {
 		return nil, err
 	}
 
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		return nil, errors.New("failed to decode certificate PEM")
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
+	privateKey, err := m.parsePrivateKey(keyPEM)
 	if err != nil {
 		return nil, err
 	}
 
-	keyBlock, _ := pem.Decode(keyPEM)
-	if keyBlock == nil {
-		return nil, errors.New("failed to decode key PEM")
-	}
-
-	privateKey, err := x509.ParseECPrivateKey(keyBlock.Bytes)
-	if err != nil {
-		// Try parsing as PKCS8
-		key, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key: %w", err)
-		}
-
-		privateKey = key.(*ecdsa.PrivateKey)
-	}
-
-	var certType CertificateType
-	if cert.IsCA {
-		certType = CertTypeCA
-	} else if len(cert.ExtKeyUsage) > 0 {
-		hasServer := false
-		hasClient := false
-
-		for _, usage := range cert.ExtKeyUsage {
-			if usage == x509.ExtKeyUsageServerAuth {
-				hasServer = true
-			}
-
-			if usage == x509.ExtKeyUsageClientAuth {
-				hasClient = true
-			}
-		}
-
-		switch {
-		case hasServer && hasClient:
-			certType = CertTypePeer
-		case hasServer:
-			certType = CertTypeServer
-		case hasClient:
-			certType = CertTypeClient
-		}
-	}
+	certType := m.determineCertificateType(cert)
 
 	return &CertificateBundle{
 		Certificate:    cert,
@@ -795,6 +764,90 @@ func (m *MTLSManager) loadCertificateFromDisk(certPath, keyPath string) (*Certif
 			ExtKeyUsage:  cert.ExtKeyUsage,
 		},
 	}, nil
+}
+
+// readCertificateFiles reads certificate and key files from disk.
+func (m *MTLSManager) readCertificateFiles(certPath, keyPath string) ([]byte, []byte, error) {
+	//nolint:gosec // G304: certPath comes from trusted configuration
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	//nolint:gosec // G304: keyPath comes from trusted configuration
+	keyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return certPEM, keyPEM, nil
+}
+
+// parseCertificate parses a certificate from PEM data.
+func (m *MTLSManager) parseCertificate(certPEM []byte) (*x509.Certificate, error) {
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return nil, errors.New("failed to decode certificate PEM")
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return cert, nil
+}
+
+// parsePrivateKey parses a private key from PEM data.
+func (m *MTLSManager) parsePrivateKey(keyPEM []byte) (*ecdsa.PrivateKey, error) {
+	keyBlock, _ := pem.Decode(keyPEM)
+	if keyBlock == nil {
+		return nil, errors.New("failed to decode key PEM")
+	}
+
+	privateKey, err := x509.ParseECPrivateKey(keyBlock.Bytes)
+	if err != nil {
+		// Try parsing as PKCS8
+		key, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key: %w", err)
+		}
+		privateKey = key.(*ecdsa.PrivateKey)
+	}
+
+	return privateKey, nil
+}
+
+// determineCertificateType determines the type of certificate based on its properties.
+func (m *MTLSManager) determineCertificateType(cert *x509.Certificate) CertificateType {
+	if cert.IsCA {
+		return CertTypeCA
+	}
+
+	if len(cert.ExtKeyUsage) > 0 {
+		hasServer := false
+		hasClient := false
+
+		for _, usage := range cert.ExtKeyUsage {
+			if usage == x509.ExtKeyUsageServerAuth {
+				hasServer = true
+			}
+			if usage == x509.ExtKeyUsageClientAuth {
+				hasClient = true
+			}
+		}
+
+		switch {
+		case hasServer && hasClient:
+			return CertTypePeer
+		case hasServer:
+			return CertTypeServer
+		case hasClient:
+			return CertTypeClient
+		}
+	}
+
+	return CertificateType("") // Default/unknown type
 }
 
 // generatePrivateKey generates a private key based on configuration.

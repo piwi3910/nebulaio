@@ -632,54 +632,49 @@ func (pm *PolicyManager) validateStatement(stmt Statement) error {
 
 // isValidAction checks if an action is valid.
 func (pm *PolicyManager) isValidAction(action string) bool {
-	// Check for wildcard
 	if action == "*" {
 		return true
 	}
 
-	// Check S3 actions
 	if strings.HasPrefix(action, "s3:") {
-		// Handle wildcards in action
-		if strings.Contains(action, "*") {
-			pattern := strings.ReplaceAll(action, "*", ".*")
-
-			re, err := regexp.Compile("^" + pattern + "$")
-			if err != nil {
-				return false
-			}
-
-			for a := range S3Actions {
-				if re.MatchString(a) {
-					return true
-				}
-			}
-
-			return false
-		}
-
-		return S3Actions[action]
+		return pm.isValidS3Action(action)
 	}
 
-	// Check admin actions
 	if strings.HasPrefix(action, "admin:") {
-		if strings.Contains(action, "*") {
-			pattern := strings.ReplaceAll(action, "*", ".*")
+		return pm.isValidAdminAction(action)
+	}
 
-			re, err := regexp.Compile("^" + pattern + "$")
-			if err != nil {
-				return false
-			}
+	return false
+}
 
-			for a := range AdminActions {
-				if re.MatchString(a) {
-					return true
-				}
-			}
+func (pm *PolicyManager) isValidS3Action(action string) bool {
+	if strings.Contains(action, "*") {
+		return pm.matchesWildcardAction(action, S3Actions)
+	}
 
-			return false
+	return S3Actions[action]
+}
+
+func (pm *PolicyManager) isValidAdminAction(action string) bool {
+	if strings.Contains(action, "*") {
+		return pm.matchesWildcardAction(action, AdminActions)
+	}
+
+	return AdminActions[action]
+}
+
+func (pm *PolicyManager) matchesWildcardAction(action string, actions map[string]bool) bool {
+	pattern := strings.ReplaceAll(action, "*", ".*")
+
+	re, err := regexp.Compile("^" + pattern + "$")
+	if err != nil {
+		return false
+	}
+
+	for a := range actions {
+		if re.MatchString(a) {
+			return true
 		}
-
-		return AdminActions[action]
 	}
 
 	return false
@@ -767,67 +762,26 @@ type EvaluationResult struct {
 
 // Evaluate evaluates access based on policies.
 func (pe *PolicyEvaluator) Evaluate(ctx context.Context, evalCtx *EvaluationContext) *EvaluationResult {
-	// Step 1: Check for explicit deny in user policies
 	userPolicies := pe.policyManager.GetUserPolicies(ctx, evalCtx.UserID)
-	for _, policy := range userPolicies {
-		for _, stmt := range policy.Statements {
-			if stmt.Effect == EffectDeny && pe.statementMatches(stmt, evalCtx) {
-				return &EvaluationResult{
-					Decision:         DecisionDeny,
-					MatchedPolicy:    policy.Name,
-					MatchedStatement: stmt.Sid,
-					Reason:           "Explicit deny in user policy",
-				}
-			}
-		}
+
+	// Step 1: Check for explicit deny in user policies
+	if result := pe.checkUserPoliciesForEffect(userPolicies, EffectDeny, evalCtx); result != nil {
+		return result
 	}
 
 	// Step 2: Check bucket policy for explicit deny
-	if evalCtx.Bucket != "" {
-		bucketPolicy, err := pe.policyManager.GetBucketPolicy(ctx, evalCtx.Bucket)
-		if err == nil {
-			for _, stmt := range bucketPolicy.Statements {
-				if stmt.Effect == EffectDeny && pe.statementMatches(stmt, evalCtx) {
-					return &EvaluationResult{
-						Decision:         DecisionDeny,
-						MatchedPolicy:    "bucket-policy",
-						MatchedStatement: stmt.Sid,
-						Reason:           "Explicit deny in bucket policy",
-					}
-				}
-			}
-		}
+	if result := pe.checkBucketPolicyForEffect(ctx, evalCtx, EffectDeny); result != nil {
+		return result
 	}
 
 	// Step 3: Check for allow in user policies
-	for _, policy := range userPolicies {
-		for _, stmt := range policy.Statements {
-			if stmt.Effect == EffectAllow && pe.statementMatches(stmt, evalCtx) {
-				return &EvaluationResult{
-					Decision:         DecisionAllow,
-					MatchedPolicy:    policy.Name,
-					MatchedStatement: stmt.Sid,
-					Reason:           "Allowed by user policy",
-				}
-			}
-		}
+	if result := pe.checkUserPoliciesForEffect(userPolicies, EffectAllow, evalCtx); result != nil {
+		return result
 	}
 
 	// Step 4: Check bucket policy for allow
-	if evalCtx.Bucket != "" {
-		bucketPolicy, err := pe.policyManager.GetBucketPolicy(ctx, evalCtx.Bucket)
-		if err == nil {
-			for _, stmt := range bucketPolicy.Statements {
-				if stmt.Effect == EffectAllow && pe.statementMatches(stmt, evalCtx) {
-					return &EvaluationResult{
-						Decision:         DecisionAllow,
-						MatchedPolicy:    "bucket-policy",
-						MatchedStatement: stmt.Sid,
-						Reason:           "Allowed by bucket policy",
-					}
-				}
-			}
-		}
+	if result := pe.checkBucketPolicyForEffect(ctx, evalCtx, EffectAllow); result != nil {
+		return result
 	}
 
 	// Step 5: Implicit deny
@@ -835,6 +789,57 @@ func (pe *PolicyEvaluator) Evaluate(ctx context.Context, evalCtx *EvaluationCont
 		Decision: DecisionImplicitDeny,
 		Reason:   "No matching allow statements",
 	}
+}
+
+func (pe *PolicyEvaluator) checkUserPoliciesForEffect(policies []*Policy, effect Effect, evalCtx *EvaluationContext) *EvaluationResult {
+	for _, policy := range policies {
+		for _, stmt := range policy.Statements {
+			if stmt.Effect == effect && pe.statementMatches(stmt, evalCtx) {
+				decision := DecisionAllow
+				reason := "Allowed by user policy"
+				if effect == EffectDeny {
+					decision = DecisionDeny
+					reason = "Explicit deny in user policy"
+				}
+				return &EvaluationResult{
+					Decision:         decision,
+					MatchedPolicy:    policy.Name,
+					MatchedStatement: stmt.Sid,
+					Reason:           reason,
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (pe *PolicyEvaluator) checkBucketPolicyForEffect(ctx context.Context, evalCtx *EvaluationContext, effect Effect) *EvaluationResult {
+	if evalCtx.Bucket == "" {
+		return nil
+	}
+
+	bucketPolicy, err := pe.policyManager.GetBucketPolicy(ctx, evalCtx.Bucket)
+	if err != nil {
+		return nil
+	}
+
+	for _, stmt := range bucketPolicy.Statements {
+		if stmt.Effect == effect && pe.statementMatches(stmt, evalCtx) {
+			decision := DecisionAllow
+			reason := "Allowed by bucket policy"
+			if effect == EffectDeny {
+				decision = DecisionDeny
+				reason = "Explicit deny in bucket policy"
+			}
+			return &EvaluationResult{
+				Decision:         decision,
+				MatchedPolicy:    "bucket-policy",
+				MatchedStatement: stmt.Sid,
+				Reason:           reason,
+			}
+		}
+	}
+	return nil
 }
 
 // statementMatches checks if a statement matches the evaluation context.

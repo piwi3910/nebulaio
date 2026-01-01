@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -133,6 +134,7 @@ func TestPlacementGroupNodeMembershipEvents(t *testing.T) {
 
 	mgr, err := NewPlacementGroupManager(config)
 	require.NoError(t, err)
+	mgr.Start(context.Background())
 
 	// Track events
 	var (
@@ -523,6 +525,7 @@ func TestPlacementGroupContextCancellation(t *testing.T) {
 
 	mgr, err := NewPlacementGroupManager(config)
 	require.NoError(t, err)
+	mgr.Start(context.Background())
 
 	// Track callback executions
 	var (

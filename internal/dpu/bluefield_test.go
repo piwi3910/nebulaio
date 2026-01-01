@@ -32,6 +32,7 @@ func TestNewService(t *testing.T) {
 	config.HealthCheckInterval = 0 // Disable health checks for testing
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	require.NotNil(t, service)
@@ -44,6 +45,7 @@ func TestNewServiceWithNilConfig(t *testing.T) {
 	backend := NewSimulatedBackend()
 
 	service, err := NewService(nil, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	require.NotNil(t, service)
@@ -57,6 +59,7 @@ func TestNewServiceWithNilBackend(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, nil)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	require.NotNil(t, service)
@@ -83,6 +86,7 @@ func TestServiceGetDPUInfo(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()
@@ -106,6 +110,7 @@ func TestServiceSelectSpecificDPU(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()
@@ -123,6 +128,7 @@ func TestServiceGetServices(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()
@@ -154,6 +160,7 @@ func TestServiceIsOffloadAvailable(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()
@@ -171,6 +178,7 @@ func TestServiceEncryptDecrypt(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()
@@ -198,6 +206,7 @@ func TestServiceCompressDecompress(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()
@@ -228,6 +237,7 @@ func TestServiceFallbackOnCryptoDisabled(t *testing.T) {
 	config.FallbackOnFailure = true
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()
@@ -254,6 +264,7 @@ func TestServiceCompressMinSize(t *testing.T) {
 	config.CompressOffload.MinSize = 1000 // Require 1KB minimum
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()
@@ -277,6 +288,7 @@ func TestServiceMetrics(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()
@@ -303,6 +315,7 @@ func TestServiceGetStatus(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()
@@ -324,6 +337,7 @@ func TestServiceClose(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	err = service.Close()
@@ -345,6 +359,7 @@ func TestServiceHealthMonitor(t *testing.T) {
 	config.HealthCheckInterval = 10 * time.Millisecond
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	// Wait for a health check
@@ -568,6 +583,7 @@ func TestServiceWithCustomDPUs(t *testing.T) {
 	config.HealthCheckInterval = 0
 
 	service, err := NewService(config, backend)
+	service.Start(t.Context())
 	require.NoError(t, err)
 
 	defer service.Close()

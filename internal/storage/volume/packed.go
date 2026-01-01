@@ -213,9 +213,7 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 		return ErrVolumeNotOpen
 	}
 
-	// Read all data
-	data := make([]byte, size)
-	_, err := io.ReadFull(r, data)
+	data, err := v.readObjectData(r, size)
 	if err != nil {
 		return err
 	}
@@ -223,93 +221,123 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 	fullKey := FullKey(bucket, key)
 	keyHash := HashKey(bucket, key)
 
-	// Check if object already exists
-	if existing, exists := v.index.Get(bucket, key); exists {
-		// Mark old entry as deleted
-		v.index.Delete(bucket, key)
-		v.super.ObjectCount-- // Decrement since we're replacing
+	v.replaceExistingObject(bucket, key)
 
-		// Track for compaction stats - the old space becomes reclaimable
-		v.compactionStats.ReplacedObjectsCount++
-		v.compactionStats.ReclaimableBytes += existing.Size
-		v.compactionStats.DeletedObjectsCount++
+	blockNum, offsetInBlock, blockCount, err := v.allocateAndWriteBlocks(fullKey, keyHash, data, size)
+	if err != nil {
+		return err
 	}
 
-	var (
-		blockNum      uint32
-		offsetInBlock uint32
-		blockCount    uint16 = 1
-	)
+	v.addToIndex(fullKey, keyHash, blockNum, offsetInBlock, blockCount, size)
 
+	return nil
+}
+
+func (v *Volume) readObjectData(r io.Reader, size int64) ([]byte, error) {
+	data := make([]byte, size)
+	_, err := io.ReadFull(r, data)
+	return data, err
+}
+
+func (v *Volume) replaceExistingObject(bucket, key string) {
+	existing, exists := v.index.Get(bucket, key)
+	if !exists {
+		return
+	}
+
+	v.index.Delete(bucket, key)
+	v.super.ObjectCount--
+
+	v.compactionStats.ReplacedObjectsCount++
+	v.compactionStats.ReclaimableBytes += existing.Size
+	v.compactionStats.DeletedObjectsCount++
+}
+
+func (v *Volume) allocateAndWriteBlocks(fullKey string, keyHash [16]byte, data []byte, size int64) (uint32, uint32, uint16, error) {
 	sizeClass := SizeClassForObject(size)
 
 	switch sizeClass {
 	case BlockTypePackedTiny, BlockTypePackedSmall, BlockTypePackedMed:
-		// Use packed block
-		blockNum, offsetInBlock = v.putPacked(sizeClass, keyHash, fullKey, data)
-		if blockNum == 0xFFFFFFFF {
-			return ErrVolumeFull
-		}
-
+		return v.allocatePackedBlock(sizeClass, keyHash, fullKey, data)
 	case BlockTypeLarge:
-		// Single block for medium-large objects
-		var err error
-
-		blockNum, err = v.allocateBlock()
-		if err != nil {
-			return err
-		}
-
-		v.blockTypes[blockNum] = BlockTypeLarge
-		err = v.writeBlock(blockNum, data)
-		if err != nil {
-			return err
-		}
-
-		offsetInBlock = 0
-
+		return v.allocateLargeBlock(data)
 	case BlockTypeSpanning:
-		// Multiple blocks for very large objects
-		blocksNeeded := BlocksNeeded(size)
+		return v.allocateSpanningBlocks(data, size)
+	default:
+		return 0, 0, 0, ErrVolumeFull
+	}
+}
 
-		var err error
-
-		blockNum, err = v.allocateBlocks(blocksNeeded)
-		if err != nil {
-			return err
-		}
-
-		//nolint:gosec // G115: blocksNeeded bounded by max object size
-		blockCount = uint16(blocksNeeded)
-
-		// Mark blocks as spanning
-		for i := range blocksNeeded {
-			//nolint:gosec // G115: i is bounded by blocksNeeded which fits in uint32
-			v.blockTypes[blockNum+uint32(i)] = BlockTypeSpanning
-		}
-
-		// Write data across blocks
-		remaining := data
-
-		for i := range blocksNeeded {
-			writeSize := BlockSize
-			if len(remaining) < BlockSize {
-				writeSize = len(remaining)
-			}
-
-			//nolint:gosec // G115: i is bounded by blocksNeeded which fits in uint32
-			err := v.writeBlock(blockNum+uint32(i), remaining[:writeSize])
-			if err != nil {
-				return err
-			}
-
-			remaining = remaining[writeSize:]
-		}
-
-		offsetInBlock = 0
+func (v *Volume) allocatePackedBlock(sizeClass uint8, keyHash [16]byte, fullKey string, data []byte) (uint32, uint32, uint16, error) {
+	blockNum, offsetInBlock := v.putPacked(sizeClass, keyHash, fullKey, data)
+	if blockNum == 0xFFFFFFFF {
+		return 0, 0, 0, ErrVolumeFull
 	}
 
-	// Add to index
+	return blockNum, offsetInBlock, 1, nil
+}
+
+func (v *Volume) allocateLargeBlock(data []byte) (uint32, uint32, uint16, error) {
+	blockNum, err := v.allocateBlock()
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	v.blockTypes[blockNum] = BlockTypeLarge
+	err = v.writeBlock(blockNum, data)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	return blockNum, 0, 1, nil
+}
+
+func (v *Volume) allocateSpanningBlocks(data []byte, size int64) (uint32, uint32, uint16, error) {
+	blocksNeeded := BlocksNeeded(size)
+
+	blockNum, err := v.allocateBlocks(blocksNeeded)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	v.markSpanningBlocks(blockNum, blocksNeeded)
+
+	if err := v.writeSpanningData(blockNum, data, blocksNeeded); err != nil {
+		return 0, 0, 0, err
+	}
+
+	return blockNum, 0, uint16(blocksNeeded), nil //nolint:gosec // G115: blocksNeeded bounded by max object size
+}
+
+func (v *Volume) markSpanningBlocks(blockNum uint32, blocksNeeded int) {
+	for i := range blocksNeeded {
+		//nolint:gosec // G115: i is bounded by blocksNeeded which fits in uint32
+		v.blockTypes[blockNum+uint32(i)] = BlockTypeSpanning
+	}
+}
+
+func (v *Volume) writeSpanningData(blockNum uint32, data []byte, blocksNeeded int) error {
+	remaining := data
+
+	for i := range blocksNeeded {
+		writeSize := BlockSize
+		if len(remaining) < BlockSize {
+			writeSize = len(remaining)
+		}
+
+		//nolint:gosec // G115: i is bounded by blocksNeeded which fits in uint32
+		err := v.writeBlock(blockNum+uint32(i), remaining[:writeSize])
+		if err != nil {
+			return err
+		}
+
+		remaining = remaining[writeSize:]
+	}
+
+	return nil
+}
+
+func (v *Volume) addToIndex(fullKey string, keyHash [16]byte, blockNum, offsetInBlock uint32, blockCount uint16, size int64) {
 	entry := IndexEntryFull{
 		IndexEntry: IndexEntry{
 			KeyHash:       keyHash,
@@ -326,8 +354,6 @@ func (v *Volume) Put(bucket, key string, r io.Reader, size int64) error {
 	v.index.Put(entry)
 	v.super.ObjectCount++
 	v.dirty = true
-
-	return nil
 }
 
 // putPacked stores an object in a packed block.

@@ -111,281 +111,290 @@ func TestDragonboatStoreCreation(t *testing.T) {
 
 // TestStateMachineOperations tests the state machine's core operations.
 func TestStateMachineOperations(t *testing.T) {
-	t.Run("OpenAndClose", func(t *testing.T) {
-		tmpDir := t.TempDir()
+	t.Run("OpenAndClose", func(t *testing.T) { testStateMachineOpenAndClose(t) })
+	t.Run("UpdateCommand", func(t *testing.T) { testStateMachineUpdateCommand(t) })
+	t.Run("Lookup", func(t *testing.T) { testStateMachineLookup(t) })
+}
 
-		opts := badger.DefaultOptions(tmpDir)
-		opts.Logger = nil
+func testStateMachineOpenAndClose(t *testing.T) {
+	tmpDir := t.TempDir()
 
-		db, err := badger.Open(opts)
+	opts := badger.DefaultOptions(tmpDir)
+	opts.Logger = nil
+
+	db, err := badger.Open(opts)
+	if err != nil {
+		t.Fatalf("Failed to open badger: %v", err)
+	}
+	defer db.Close()
+
+	sm := newStateMachine(db)
+
+	// Open should return the last applied index
+	index, err := sm.Open(make(chan struct{}))
+	if err != nil {
+		t.Errorf("Open failed: %v", err)
+	}
+
+	if index != 0 {
+		t.Errorf("Expected initial index 0, got %d", index)
+	}
+
+	// Close should succeed
+	err = sm.Close()
+	if err != nil {
+		t.Errorf("Close failed: %v", err)
+	}
+}
+
+func testStateMachineUpdateCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	opts := badger.DefaultOptions(tmpDir)
+	opts.Logger = nil
+
+	db, err := badger.Open(opts)
+	if err != nil {
+		t.Fatalf("Failed to open badger: %v", err)
+	}
+	defer db.Close()
+
+	sm := newStateMachine(db)
+	_, err = sm.Open(make(chan struct{}))
+	if err != nil {
+		t.Fatalf("Failed to open state machine: %v", err)
+	}
+
+	// Create a bucket command
+	bucket := &Bucket{
+		Name:      "test-bucket",
+		Owner:     "test-user",
+		CreatedAt: time.Now(),
+		Region:    "us-east-1",
+	}
+
+	bucketData, err := json.Marshal(bucket)
+	if err != nil {
+		t.Fatalf("Failed to marshal bucket: %v", err)
+	}
+
+	cmd := &command{
+		Type: cmdCreateBucket,
+		Data: bucketData,
+	}
+
+	cmdData, err := json.Marshal(cmd)
+	if err != nil {
+		t.Fatalf("Failed to marshal command: %v", err)
+	}
+
+	entry := statemachine.Entry{
+		Index: 1,
+		Cmd:   cmdData,
+	}
+
+	result, err := sm.Update(entry)
+	if err != nil {
+		t.Errorf("Update failed: %v", err)
+	}
+
+	if result.Value != 0 {
+		t.Errorf("Expected success result (0), got %d", result.Value)
+	}
+
+	// Verify bucket was created
+	var storedBucket Bucket
+
+	err = db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte(prefixBucket + bucket.Name))
 		if err != nil {
-			t.Fatalf("Failed to open badger: %v", err)
-		}
-		defer db.Close()
-
-		sm := newStateMachine(db)
-
-		// Open should return the last applied index
-		index, err := sm.Open(make(chan struct{}))
-		if err != nil {
-			t.Errorf("Open failed: %v", err)
+			return err
 		}
 
-		if index != 0 {
-			t.Errorf("Expected initial index 0, got %d", index)
-		}
-
-		// Close should succeed
-		err = sm.Close()
-		if err != nil {
-			t.Errorf("Close failed: %v", err)
-		}
-	})
-
-	t.Run("UpdateCommand", func(t *testing.T) {
-		tmpDir := t.TempDir()
-
-		opts := badger.DefaultOptions(tmpDir)
-		opts.Logger = nil
-
-		db, err := badger.Open(opts)
-		if err != nil {
-			t.Fatalf("Failed to open badger: %v", err)
-		}
-		defer db.Close()
-
-		sm := newStateMachine(db)
-		_, err = sm.Open(make(chan struct{}))
-		if err != nil {
-			t.Fatalf("Failed to open state machine: %v", err)
-		}
-
-		// Create a bucket command
-		bucket := &Bucket{
-			Name:      "test-bucket",
-			Owner:     "test-user",
-			CreatedAt: time.Now(),
-			Region:    "us-east-1",
-		}
-
-		bucketData, err := json.Marshal(bucket)
-		if err != nil {
-			t.Fatalf("Failed to marshal bucket: %v", err)
-		}
-
-		cmd := &command{
-			Type: cmdCreateBucket,
-			Data: bucketData,
-		}
-
-		cmdData, err := json.Marshal(cmd)
-		if err != nil {
-			t.Fatalf("Failed to marshal command: %v", err)
-		}
-
-		entry := statemachine.Entry{
-			Index: 1,
-			Cmd:   cmdData,
-		}
-
-		result, err := sm.Update(entry)
-		if err != nil {
-			t.Errorf("Update failed: %v", err)
-		}
-
-		if result.Value != 0 {
-			t.Errorf("Expected success result (0), got %d", result.Value)
-		}
-
-		// Verify bucket was created
-		var storedBucket Bucket
-
-		err = db.View(func(txn *badger.Txn) error {
-			item, err := txn.Get([]byte(prefixBucket + bucket.Name))
-			if err != nil {
-				return err
-			}
-
-			return item.Value(func(val []byte) error {
-				return json.Unmarshal(val, &storedBucket)
-			})
+		return item.Value(func(val []byte) error {
+			return json.Unmarshal(val, &storedBucket)
 		})
-		if err != nil {
-			t.Errorf("Failed to retrieve bucket: %v", err)
-		}
-
-		if storedBucket.Name != bucket.Name {
-			t.Errorf("Expected bucket name %s, got %s", bucket.Name, storedBucket.Name)
-		}
 	})
+	if err != nil {
+		t.Errorf("Failed to retrieve bucket: %v", err)
+	}
 
-	t.Run("Lookup", func(t *testing.T) {
-		tmpDir := t.TempDir()
+	if storedBucket.Name != bucket.Name {
+		t.Errorf("Expected bucket name %s, got %s", bucket.Name, storedBucket.Name)
+	}
+}
 
-		opts := badger.DefaultOptions(tmpDir)
-		opts.Logger = nil
+func testStateMachineLookup(t *testing.T) {
+	tmpDir := t.TempDir()
 
-		db, err := badger.Open(opts)
-		if err != nil {
-			t.Fatalf("Failed to open badger: %v", err)
-		}
-		defer db.Close()
+	opts := badger.DefaultOptions(tmpDir)
+	opts.Logger = nil
 
-		sm := newStateMachine(db)
+	db, err := badger.Open(opts)
+	if err != nil {
+		t.Fatalf("Failed to open badger: %v", err)
+	}
+	defer db.Close()
 
-		// Lookup is not used in our implementation, should return ErrLookupNotSupported
-		result, err := sm.Lookup(nil)
-		if err != ErrLookupNotSupported {
-			t.Errorf("Expected ErrLookupNotSupported, got %v", err)
-		}
+	sm := newStateMachine(db)
 
-		if result != nil {
-			t.Errorf("Expected nil result from Lookup, got %v", result)
-		}
-	})
+	// Lookup is not used in our implementation, should return ErrLookupNotSupported
+	result, err := sm.Lookup(nil)
+	if err != ErrLookupNotSupported {
+		t.Errorf("Expected ErrLookupNotSupported, got %v", err)
+	}
+
+	if result != nil {
+		t.Errorf("Expected nil result from Lookup, got %v", result)
+	}
 }
 
 // TestStateMachineSnapshot tests snapshot operations.
 func TestStateMachineSnapshot(t *testing.T) {
-	t.Run("SaveAndRecoverSnapshot", func(t *testing.T) {
-		tmpDir := t.TempDir()
-
-		opts := badger.DefaultOptions(tmpDir)
-		opts.Logger = nil
-
-		db, err := badger.Open(opts)
-		if err != nil {
-			t.Fatalf("Failed to open badger: %v", err)
-		}
-		defer db.Close()
-
-		sm := newStateMachine(db)
-		_, err = sm.Open(make(chan struct{}))
-		if err != nil {
-			t.Fatalf("Failed to open state machine: %v", err)
-		}
-
-		// Create some test data
-		testData := map[string]string{
-			"key1": "value1",
-			"key2": "value2",
-			"key3": "value3",
-		}
-
-		err = db.Update(func(txn *badger.Txn) error {
-			for k, v := range testData {
-				err := txn.Set([]byte(k), []byte(v))
-				if err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("Failed to create test data: %v", err)
-		}
-
-		// Save snapshot
-		var buf strings.Builder
-
-		done := make(chan struct{})
-
-		err = sm.SaveSnapshot(&buf, nil, done)
-		if err != nil {
-			t.Fatalf("Failed to save snapshot: %v", err)
-		}
-
-		// Create a new database for recovery
-		tmpDir2 := t.TempDir()
-		opts2 := badger.DefaultOptions(tmpDir2)
-		opts2.Logger = nil
-
-		db2, err := badger.Open(opts2)
-		if err != nil {
-			t.Fatalf("Failed to open second badger: %v", err)
-		}
-		defer db2.Close()
-
-		sm2 := newStateMachine(db2)
-		_, err = sm2.Open(make(chan struct{}))
-		if err != nil {
-			t.Fatalf("Failed to open second state machine: %v", err)
-		}
-
-		// Recover snapshot
-		reader := strings.NewReader(buf.String())
-		done2 := make(chan struct{})
-
-		err = sm2.RecoverFromSnapshot(reader, nil, done2)
-		if err != nil {
-			t.Fatalf("Failed to recover snapshot: %v", err)
-		}
-
-		// Verify data was recovered
-		err = db2.View(func(txn *badger.Txn) error {
-			for k, expectedV := range testData {
-				item, err := txn.Get([]byte(k))
-				if err != nil {
-					return err
-				}
-
-				var actualV string
-
-				err = item.Value(func(val []byte) error {
-					actualV = string(val)
-					return nil
-				})
-				if err != nil {
-					return err
-				}
-
-				if actualV != expectedV {
-					t.Errorf("Expected value %s for key %s, got %s", expectedV, k, actualV)
-				}
-			}
-
-			return nil
-		})
-		if err != nil {
-			t.Errorf("Failed to verify recovered data: %v", err)
-		}
-	})
-
-	t.Run("SnapshotStopped", func(t *testing.T) {
-		tmpDir := t.TempDir()
-
-		opts := badger.DefaultOptions(tmpDir)
-		opts.Logger = nil
-
-		db, err := badger.Open(opts)
-		if err != nil {
-			t.Fatalf("Failed to open badger: %v", err)
-		}
-		defer db.Close()
-
-		sm := newStateMachine(db)
-		_, err = sm.Open(make(chan struct{}))
-		if err != nil {
-			t.Fatalf("Failed to open state machine: %v", err)
-		}
-
-		// Create a closed channel to simulate stop
-		done := make(chan struct{})
-		close(done)
-
-		var buf strings.Builder
-
-		err = sm.SaveSnapshot(&buf, nil, done)
-		// Should not error when stopped immediately
-		if err != nil && err != statemachine.ErrSnapshotStopped {
-			t.Errorf("Expected ErrSnapshotStopped or nil, got: %v", err)
-		}
-	})
+	t.Run("SaveAndRecoverSnapshot", func(t *testing.T) { testSnapshotSaveAndRecover(t) })
+	t.Run("SnapshotStopped", func(t *testing.T) { testSnapshotStopped(t) })
 }
 
-// TestBucketOperations tests bucket CRUD operations.
-func TestBucketOperations(t *testing.T) {
+func testSnapshotSaveAndRecover(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	opts := badger.DefaultOptions(tmpDir)
+	opts.Logger = nil
+
+	db, err := badger.Open(opts)
+	if err != nil {
+		t.Fatalf("Failed to open badger: %v", err)
+	}
+	defer db.Close()
+
+	sm := newStateMachine(db)
+	_, err = sm.Open(make(chan struct{}))
+	if err != nil {
+		t.Fatalf("Failed to open state machine: %v", err)
+	}
+
+	// Create some test data
+	testData := map[string]string{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": "value3",
+	}
+
+	err = db.Update(func(txn *badger.Txn) error {
+		for k, v := range testData {
+			err := txn.Set([]byte(k), []byte(v))
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test data: %v", err)
+	}
+
+	// Save snapshot
+	var buf strings.Builder
+
+	done := make(chan struct{})
+
+	err = sm.SaveSnapshot(&buf, nil, done)
+	if err != nil {
+		t.Fatalf("Failed to save snapshot: %v", err)
+	}
+
+	// Create a new database for recovery
+	tmpDir2 := t.TempDir()
+	opts2 := badger.DefaultOptions(tmpDir2)
+	opts2.Logger = nil
+
+	db2, err := badger.Open(opts2)
+	if err != nil {
+		t.Fatalf("Failed to open second badger: %v", err)
+	}
+	defer db2.Close()
+
+	sm2 := newStateMachine(db2)
+	_, err = sm2.Open(make(chan struct{}))
+	if err != nil {
+		t.Fatalf("Failed to open second state machine: %v", err)
+	}
+
+	// Recover snapshot
+	reader := strings.NewReader(buf.String())
+	done2 := make(chan struct{})
+
+	err = sm2.RecoverFromSnapshot(reader, nil, done2)
+	if err != nil {
+		t.Fatalf("Failed to recover snapshot: %v", err)
+	}
+
+	// Verify data was recovered
+	err = db2.View(func(txn *badger.Txn) error {
+		for k, expectedV := range testData {
+			item, err := txn.Get([]byte(k))
+			if err != nil {
+				return err
+			}
+
+			var actualV string
+
+			err = item.Value(func(val []byte) error {
+				actualV = string(val)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+			if actualV != expectedV {
+				t.Errorf("Expected value %s for key %s, got %s", expectedV, k, actualV)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Errorf("Failed to verify recovered data: %v", err)
+	}
+}
+
+func testSnapshotStopped(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	opts := badger.DefaultOptions(tmpDir)
+	opts.Logger = nil
+
+	db, err := badger.Open(opts)
+	if err != nil {
+		t.Fatalf("Failed to open badger: %v", err)
+	}
+	defer db.Close()
+
+	sm := newStateMachine(db)
+	_, err = sm.Open(make(chan struct{}))
+	if err != nil {
+		t.Fatalf("Failed to open state machine: %v", err)
+	}
+
+	// Create a closed channel to simulate stop
+	done := make(chan struct{})
+	close(done)
+
+	var buf strings.Builder
+
+	err = sm.SaveSnapshot(&buf, nil, done)
+	// Should not error when stopped immediately
+	if err != nil && err != statemachine.ErrSnapshotStopped {
+		t.Errorf("Expected ErrSnapshotStopped or nil, got: %v", err)
+	}
+}
+
+// setupTestStore creates a test DragonboatStore instance.
+func setupTestStore(t *testing.T) (*DragonboatStore, context.Context) {
+	t.Helper()
+
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
 
@@ -404,118 +413,139 @@ func TestBucketOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create DragonboatStore: %v", err)
 	}
-	defer store.Close()
 
-	// Wait for leadership
 	time.Sleep(2 * time.Second)
 
-	ctx := context.Background()
+	return store, t.Context()
+}
+
+// TestBucketOperations tests bucket CRUD operations.
+func TestBucketOperations(t *testing.T) {
+	store, ctx := setupTestStore(t)
+	defer store.Close()
 
 	t.Run("CreateBucket", func(t *testing.T) {
-		bucket := &Bucket{
-			Name:      "test-bucket",
-			Owner:     "test-user",
-			CreatedAt: time.Now(),
-			Region:    "us-east-1",
-		}
-
-		err := store.CreateBucket(ctx, bucket)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to create bucket: %v", err)
-		}
+		testCreateBucket(t, ctx, store)
 	})
 
 	t.Run("GetBucket", func(t *testing.T) {
-		bucket, err := store.GetBucket(ctx, "test-bucket")
-		if err != nil {
-			t.Errorf("Failed to get bucket: %v", err)
-		}
-
-		if bucket == nil {
-			t.Fatal("Expected bucket, got nil")
-		}
-
-		if bucket.Name != "test-bucket" {
-			t.Errorf("Expected bucket name 'test-bucket', got '%s'", bucket.Name)
-		}
-
-		if bucket.Owner != "test-user" {
-			t.Errorf("Expected owner 'test-user', got '%s'", bucket.Owner)
-		}
+		testGetBucket(t, ctx, store)
 	})
 
 	t.Run("ListBuckets", func(t *testing.T) {
-		buckets, err := store.ListBuckets(ctx, "")
-		if err != nil {
-			t.Errorf("Failed to list buckets: %v", err)
-		}
-
-		if len(buckets) == 0 {
-			t.Error("Expected at least one bucket")
-		}
-
-		found := false
-
-		for _, b := range buckets {
-			if b.Name == "test-bucket" {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			t.Error("Expected to find 'test-bucket' in list")
-		}
+		testListBuckets(t, ctx, store)
 	})
 
 	t.Run("UpdateBucket", func(t *testing.T) {
-		bucket, err := store.GetBucket(ctx, "test-bucket")
-		if err != nil {
-			t.Fatalf("Failed to get bucket: %v", err)
-		}
-
-		bucket.Region = "us-west-2"
-
-		err = store.UpdateBucket(ctx, bucket)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to update bucket: %v", err)
-		}
-
-		// Verify update
-		updatedBucket, err := store.GetBucket(ctx, "test-bucket")
-		if err != nil {
-			t.Errorf("Failed to get updated bucket: %v", err)
-		}
-
-		if updatedBucket.Region != "us-west-2" {
-			t.Errorf("Expected region 'us-west-2', got '%s'", updatedBucket.Region)
-		}
+		testUpdateBucket(t, ctx, store)
 	})
 
 	t.Run("DeleteBucket", func(t *testing.T) {
-		err := store.DeleteBucket(ctx, "test-bucket")
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to delete bucket: %v", err)
-		}
-
-		// Verify deletion
-		_, err = store.GetBucket(ctx, "test-bucket")
-		if err == nil {
-			t.Error("Expected error when getting deleted bucket")
-		}
+		testDeleteBucket(t, ctx, store)
 	})
+}
+
+func testCreateBucket(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	bucket := &Bucket{
+		Name:      "test-bucket",
+		Owner:     "test-user",
+		CreatedAt: time.Now(),
+		Region:    "us-east-1",
+	}
+
+	err := store.CreateBucket(ctx, bucket)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to create bucket: %v", err)
+	}
+}
+
+func testGetBucket(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	bucket, err := store.GetBucket(ctx, "test-bucket")
+	if err != nil {
+		t.Errorf("Failed to get bucket: %v", err)
+	}
+
+	if bucket == nil {
+		t.Fatal("Expected bucket, got nil")
+	}
+
+	if bucket.Name != "test-bucket" {
+		t.Errorf("Expected bucket name 'test-bucket', got '%s'", bucket.Name)
+	}
+
+	if bucket.Owner != "test-user" {
+		t.Errorf("Expected owner 'test-user', got '%s'", bucket.Owner)
+	}
+}
+
+func testListBuckets(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	buckets, err := store.ListBuckets(ctx, "")
+	if err != nil {
+		t.Errorf("Failed to list buckets: %v", err)
+	}
+
+	if len(buckets) == 0 {
+		t.Error("Expected at least one bucket")
+	}
+
+	found := false
+	for _, b := range buckets {
+		if b.Name == "test-bucket" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Error("Expected to find 'test-bucket' in list")
+	}
+}
+
+func testUpdateBucket(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	bucket, err := store.GetBucket(ctx, "test-bucket")
+	if err != nil {
+		t.Fatalf("Failed to get bucket: %v", err)
+	}
+
+	bucket.Region = "us-west-2"
+
+	err = store.UpdateBucket(ctx, bucket)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to update bucket: %v", err)
+	}
+
+	updatedBucket, err := store.GetBucket(ctx, "test-bucket")
+	if err != nil {
+		t.Errorf("Failed to get updated bucket: %v", err)
+	}
+
+	if updatedBucket.Region != "us-west-2" {
+		t.Errorf("Expected region 'us-west-2', got '%s'", updatedBucket.Region)
+	}
+}
+
+func testDeleteBucket(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	err := store.DeleteBucket(ctx, "test-bucket")
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to delete bucket: %v", err)
+	}
+
+	_, err = store.GetBucket(ctx, "test-bucket")
+	if err == nil {
+		t.Error("Expected error when getting deleted bucket")
+	}
 }
 
 // TestObjectMetadataOperations tests object metadata CRUD operations.
@@ -557,73 +587,78 @@ func TestObjectMetadataOperations(t *testing.T) {
 		t.Fatalf("Failed to create test bucket: %v", err)
 	}
 
-	t.Run("PutObjectMeta", func(t *testing.T) {
-		meta := &ObjectMeta{
-			Bucket:      "test-objects",
-			Key:         "test-key",
-			Size:        1024,
-			ContentType: "text/plain",
-			ETag:        "abc123",
-			CreatedAt:   time.Now(),
-			ModifiedAt:  time.Now(),
-		}
+	t.Run("PutObjectMeta", func(t *testing.T) { testPutObjectMeta(t, ctx, store) })
+	t.Run("GetObjectMeta", func(t *testing.T) { testGetObjectMeta(t, ctx, store) })
+	t.Run("ListObjects", func(t *testing.T) { testListObjects(t, ctx, store) })
+	t.Run("DeleteObjectMeta", func(t *testing.T) { testDeleteObjectMeta(t, ctx, store) })
+}
 
-		err := store.PutObjectMeta(ctx, meta)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+func testPutObjectMeta(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	meta := &ObjectMeta{
+		Bucket:      "test-objects",
+		Key:         "test-key",
+		Size:        1024,
+		ContentType: "text/plain",
+		ETag:        "abc123",
+		CreatedAt:   time.Now(),
+		ModifiedAt:  time.Now(),
+	}
 
-		if err != nil {
-			t.Errorf("Failed to put object metadata: %v", err)
-		}
-	})
+	err := store.PutObjectMeta(ctx, meta)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-	t.Run("GetObjectMeta", func(t *testing.T) {
-		meta, err := store.GetObjectMeta(ctx, "test-objects", "test-key")
-		if err != nil {
-			t.Errorf("Failed to get object metadata: %v", err)
-		}
+	if err != nil {
+		t.Errorf("Failed to put object metadata: %v", err)
+	}
+}
 
-		if meta == nil {
-			t.Fatal("Expected metadata, got nil")
-		}
+func testGetObjectMeta(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	meta, err := store.GetObjectMeta(ctx, "test-objects", "test-key")
+	if err != nil {
+		t.Errorf("Failed to get object metadata: %v", err)
+	}
 
-		if meta.Key != "test-key" {
-			t.Errorf("Expected key 'test-key', got '%s'", meta.Key)
-		}
+	if meta == nil {
+		t.Fatal("Expected metadata, got nil")
+	}
 
-		if meta.Size != 1024 {
-			t.Errorf("Expected size 1024, got %d", meta.Size)
-		}
-	})
+	if meta.Key != "test-key" {
+		t.Errorf("Expected key 'test-key', got '%s'", meta.Key)
+	}
 
-	t.Run("ListObjects", func(t *testing.T) {
-		listing, err := store.ListObjects(ctx, "test-objects", "", "", 100, "")
-		if err != nil {
-			t.Errorf("Failed to list objects: %v", err)
-		}
+	if meta.Size != 1024 {
+		t.Errorf("Expected size 1024, got %d", meta.Size)
+	}
+}
 
-		if len(listing.Objects) == 0 {
-			t.Error("Expected at least one object")
-		}
-	})
+func testListObjects(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	listing, err := store.ListObjects(ctx, "test-objects", "", "", 100, "")
+	if err != nil {
+		t.Errorf("Failed to list objects: %v", err)
+	}
 
-	t.Run("DeleteObjectMeta", func(t *testing.T) {
-		err := store.DeleteObjectMeta(ctx, "test-objects", "test-key")
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+	if len(listing.Objects) == 0 {
+		t.Error("Expected at least one object")
+	}
+}
 
-		if err != nil {
-			t.Errorf("Failed to delete object metadata: %v", err)
-		}
+func testDeleteObjectMeta(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	err := store.DeleteObjectMeta(ctx, "test-objects", "test-key")
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-		// Verify deletion
-		_, err = store.GetObjectMeta(ctx, "test-objects", "test-key")
-		if err == nil {
-			t.Error("Expected error when getting deleted object")
-		}
-	})
+	if err != nil {
+		t.Errorf("Failed to delete object metadata: %v", err)
+	}
+
+	// Verify deletion
+	_, err = store.GetObjectMeta(ctx, "test-objects", "test-key")
+	if err == nil {
+		t.Error("Expected error when getting deleted object")
+	}
 }
 
 // TestUserOperations tests user CRUD operations.
@@ -654,110 +689,134 @@ func TestUserOperations(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("CreateUser", func(t *testing.T) {
-		user := &User{
-			ID:        "user-123",
-			Username:  "testuser",
-			Email:     "test@example.com",
-			CreatedAt: time.Now(),
-			Enabled:   true,
-			Role:      RoleUser,
-		}
-
-		err := store.CreateUser(ctx, user)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to create user: %v", err)
-		}
+		testCreateUser(t, ctx, store)
 	})
 
 	t.Run("GetUser", func(t *testing.T) {
-		user, err := store.GetUser(ctx, "user-123")
-		if err != nil {
-			t.Errorf("Failed to get user: %v", err)
-		}
-
-		if user == nil {
-			t.Fatal("Expected user, got nil")
-		}
-
-		if user.Username != "testuser" {
-			t.Errorf("Expected username 'testuser', got '%s'", user.Username)
-		}
+		testGetUser(t, ctx, store)
 	})
 
 	t.Run("GetUserByUsername", func(t *testing.T) {
-		user, err := store.GetUserByUsername(ctx, "testuser")
-		if err != nil {
-			t.Errorf("Failed to get user by username: %v", err)
-		}
-
-		if user == nil {
-			t.Fatal("Expected user, got nil")
-		}
-
-		if user.ID != "user-123" {
-			t.Errorf("Expected ID 'user-123', got '%s'", user.ID)
-		}
+		testGetUserByUsername(t, ctx, store)
 	})
 
 	t.Run("ListUsers", func(t *testing.T) {
-		users, err := store.ListUsers(ctx)
-		if err != nil {
-			t.Errorf("Failed to list users: %v", err)
-		}
-
-		if len(users) == 0 {
-			t.Error("Expected at least one user")
-		}
+		testListUsers(t, ctx, store)
 	})
 
 	t.Run("UpdateUser", func(t *testing.T) {
-		user, err := store.GetUser(ctx, "user-123")
-		if err != nil {
-			t.Fatalf("Failed to get user: %v", err)
-		}
-
-		user.Email = "newemail@example.com"
-
-		err = store.UpdateUser(ctx, user)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to update user: %v", err)
-		}
-
-		// Verify update
-		updatedUser, err := store.GetUser(ctx, "user-123")
-		if err != nil {
-			t.Errorf("Failed to get updated user: %v", err)
-		}
-
-		if updatedUser.Email != "newemail@example.com" {
-			t.Errorf("Expected email 'newemail@example.com', got '%s'", updatedUser.Email)
-		}
+		testUpdateUser(t, ctx, store)
 	})
 
 	t.Run("DeleteUser", func(t *testing.T) {
-		err := store.DeleteUser(ctx, "user-123")
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to delete user: %v", err)
-		}
-
-		// Verify deletion
-		_, err = store.GetUser(ctx, "user-123")
-		if err == nil {
-			t.Error("Expected error when getting deleted user")
-		}
+		testDeleteUser(t, ctx, store)
 	})
+}
+
+func testCreateUser(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	user := &User{
+		ID:        "user-123",
+		Username:  "testuser",
+		Email:     "test@example.com",
+		CreatedAt: time.Now(),
+		Enabled:   true,
+		Role:      RoleUser,
+	}
+
+	err := store.CreateUser(ctx, user)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to create user: %v", err)
+	}
+}
+
+func testGetUser(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	user, err := store.GetUser(ctx, "user-123")
+	if err != nil {
+		t.Errorf("Failed to get user: %v", err)
+	}
+
+	if user == nil {
+		t.Fatal("Expected user, got nil")
+	}
+
+	if user.Username != "testuser" {
+		t.Errorf("Expected username 'testuser', got '%s'", user.Username)
+	}
+}
+
+func testGetUserByUsername(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	user, err := store.GetUserByUsername(ctx, "testuser")
+	if err != nil {
+		t.Errorf("Failed to get user by username: %v", err)
+	}
+
+	if user == nil {
+		t.Fatal("Expected user, got nil")
+	}
+
+	if user.ID != "user-123" {
+		t.Errorf("Expected ID 'user-123', got '%s'", user.ID)
+	}
+}
+
+func testListUsers(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	users, err := store.ListUsers(ctx)
+	if err != nil {
+		t.Errorf("Failed to list users: %v", err)
+	}
+
+	if len(users) == 0 {
+		t.Error("Expected at least one user")
+	}
+}
+
+func testUpdateUser(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	user, err := store.GetUser(ctx, "user-123")
+	if err != nil {
+		t.Fatalf("Failed to get user: %v", err)
+	}
+
+	user.Email = "newemail@example.com"
+
+	err = store.UpdateUser(ctx, user)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to update user: %v", err)
+	}
+
+	// Verify update
+	updatedUser, err := store.GetUser(ctx, "user-123")
+	if err != nil {
+		t.Errorf("Failed to get updated user: %v", err)
+	}
+
+	if updatedUser.Email != "newemail@example.com" {
+		t.Errorf("Expected email 'newemail@example.com', got '%s'", updatedUser.Email)
+	}
+}
+
+func testDeleteUser(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	err := store.DeleteUser(ctx, "user-123")
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to delete user: %v", err)
+	}
+
+	// Verify deletion
+	_, err = store.GetUser(ctx, "user-123")
+	if err == nil {
+		t.Error("Expected error when getting deleted user")
+	}
 }
 
 // TestAccessKeyOperations tests access key CRUD operations.
@@ -852,118 +911,114 @@ func TestAccessKeyOperations(t *testing.T) {
 
 // TestPolicyOperations tests policy CRUD operations.
 func TestPolicyOperations(t *testing.T) {
-	tmpDir := t.TempDir()
-	raftAddr := getRaftAddress(t)
-
-	cfg := DragonboatConfig{
-		NodeID:      1,
-		ShardID:     1,
-		DataDir:     tmpDir,
-		RaftAddress: raftAddr,
-		Bootstrap:   true,
-		InitialMembers: map[uint64]string{
-			1: raftAddr,
-		},
-	}
-
-	store, err := NewDragonboatStore(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create DragonboatStore: %v", err)
-	}
+	store, ctx := setupTestStore(t)
 	defer store.Close()
 
-	// Wait for leadership
-	time.Sleep(2 * time.Second)
-
-	ctx := context.Background()
-
 	t.Run("CreatePolicy", func(t *testing.T) {
-		policy := &Policy{
-			Name:      "test-policy",
-			Document:  `{"Version":"2012-10-17","Statement":[]}`,
-			CreatedAt: time.Now(),
-		}
-
-		err := store.CreatePolicy(ctx, policy)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to create policy: %v", err)
-		}
+		testCreatePolicy(t, ctx, store)
 	})
 
 	t.Run("GetPolicy", func(t *testing.T) {
-		policy, err := store.GetPolicy(ctx, "test-policy")
-		if err != nil {
-			t.Errorf("Failed to get policy: %v", err)
-		}
-
-		if policy == nil {
-			t.Fatal("Expected policy, got nil")
-		}
-
-		if policy.Name != "test-policy" {
-			t.Errorf("Expected name 'test-policy', got '%s'", policy.Name)
-		}
+		testGetPolicy(t, ctx, store)
 	})
 
 	t.Run("ListPolicies", func(t *testing.T) {
-		policies, err := store.ListPolicies(ctx)
-		if err != nil {
-			t.Errorf("Failed to list policies: %v", err)
-		}
-
-		if len(policies) == 0 {
-			t.Error("Expected at least one policy")
-		}
+		testListPolicies(t, ctx, store)
 	})
 
 	t.Run("UpdatePolicy", func(t *testing.T) {
-		policy, err := store.GetPolicy(ctx, "test-policy")
-		if err != nil {
-			t.Fatalf("Failed to get policy: %v", err)
-		}
-
-		policy.Document = `{"Version":"2012-10-17","Statement":[{"Effect":"Allow"}]}`
-
-		err = store.UpdatePolicy(ctx, policy)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to update policy: %v", err)
-		}
-
-		// Verify update
-		updatedPolicy, err := store.GetPolicy(ctx, "test-policy")
-		if err != nil {
-			t.Errorf("Failed to get updated policy: %v", err)
-		}
-
-		if !strings.Contains(updatedPolicy.Document, "Allow") {
-			t.Error("Expected updated policy document to contain 'Allow'")
-		}
+		testUpdatePolicy(t, ctx, store)
 	})
 
 	t.Run("DeletePolicy", func(t *testing.T) {
-		err := store.DeletePolicy(ctx, "test-policy")
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
-
-		if err != nil {
-			t.Errorf("Failed to delete policy: %v", err)
-		}
-
-		// Verify deletion
-		_, err = store.GetPolicy(ctx, "test-policy")
-		if err == nil {
-			t.Error("Expected error when getting deleted policy")
-		}
+		testDeletePolicy(t, ctx, store)
 	})
+}
+
+func testCreatePolicy(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	policy := &Policy{
+		Name:      "test-policy",
+		Document:  `{"Version":"2012-10-17","Statement":[]}`,
+		CreatedAt: time.Now(),
+	}
+
+	err := store.CreatePolicy(ctx, policy)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to create policy: %v", err)
+	}
+}
+
+func testGetPolicy(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	policy, err := store.GetPolicy(ctx, "test-policy")
+	if err != nil {
+		t.Errorf("Failed to get policy: %v", err)
+	}
+
+	if policy == nil {
+		t.Fatal("Expected policy, got nil")
+	}
+
+	if policy.Name != "test-policy" {
+		t.Errorf("Expected name 'test-policy', got '%s'", policy.Name)
+	}
+}
+
+func testListPolicies(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	policies, err := store.ListPolicies(ctx)
+	if err != nil {
+		t.Errorf("Failed to list policies: %v", err)
+	}
+
+	if len(policies) == 0 {
+		t.Error("Expected at least one policy")
+	}
+}
+
+func testUpdatePolicy(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	policy, err := store.GetPolicy(ctx, "test-policy")
+	if err != nil {
+		t.Fatalf("Failed to get policy: %v", err)
+	}
+
+	policy.Document = `{"Version":"2012-10-17","Statement":[{"Effect":"Allow"}]}`
+
+	err = store.UpdatePolicy(ctx, policy)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to update policy: %v", err)
+	}
+
+	updatedPolicy, err := store.GetPolicy(ctx, "test-policy")
+	if err != nil {
+		t.Errorf("Failed to get updated policy: %v", err)
+	}
+
+	if !strings.Contains(updatedPolicy.Document, "Allow") {
+		t.Error("Expected updated policy document to contain 'Allow'")
+	}
+}
+
+func testDeletePolicy(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	err := store.DeletePolicy(ctx, "test-policy")
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
+
+	if err != nil {
+		t.Errorf("Failed to delete policy: %v", err)
+	}
+
+	_, err = store.GetPolicy(ctx, "test-policy")
+	if err == nil {
+		t.Error("Expected error when getting deleted policy")
+	}
 }
 
 // TestLeaderElectionHelpers tests leader-related helper functions.
@@ -1033,7 +1088,7 @@ func TestLeaderElectionHelpers(t *testing.T) {
 	})
 
 	t.Run("LeaderAddress", func(t *testing.T) {
-		addr, err := store.LeaderAddress()
+		addr, err := store.LeaderAddress(context.Background())
 		if err != nil {
 			t.Logf("Failed to get leader address: %v (acceptable if no leader elected)", err)
 		} else if addr == "" {
@@ -1070,83 +1125,90 @@ func TestClusterMembershipOperations(t *testing.T) {
 
 	ctx := context.Background()
 
-	t.Run("AddNode", func(t *testing.T) {
-		node := &NodeInfo{
-			ID:      "node-2",
-			Name:    "node-2",
-			Address: nodeAddr,
-			Role:    "gateway",
-			Status:  "active",
-		}
+	t.Run("AddNode", func(t *testing.T) { testAddNode(t, ctx, store, nodeAddr) })
+	t.Run("ListNodes", func(t *testing.T) { testListNodes(t, ctx, store) })
+	t.Run("GetClusterInfo", func(t *testing.T) { testGetClusterInfo(t, ctx, store) })
+	t.Run("RemoveNode", func(t *testing.T) { testRemoveNode(t, ctx, store) })
+	t.Run("GetConfiguration", func(t *testing.T) { testGetConfiguration(t, store) })
+	t.Run("GetServers", func(t *testing.T) { testGetServers(t, store) })
+}
 
-		err := store.AddNode(ctx, node)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+func testAddNode(t *testing.T, ctx context.Context, store *DragonboatStore, nodeAddr string) {
+	node := &NodeInfo{
+		ID:      "node-2",
+		Name:    "node-2",
+		Address: nodeAddr,
+		Role:    "gateway",
+		Status:  "active",
+	}
 
-		if err != nil {
-			t.Errorf("Failed to add node: %v", err)
-		}
-	})
+	err := store.AddNode(ctx, node)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-	t.Run("ListNodes", func(t *testing.T) {
-		nodes, err := store.ListNodes(ctx)
-		if err != nil {
-			t.Errorf("Failed to list nodes: %v", err)
-		}
-		// Should have at least the node we added
-		if len(nodes) == 0 {
-			t.Log("No nodes in list (acceptable if add failed)")
-		}
-	})
+	if err != nil {
+		t.Errorf("Failed to add node: %v", err)
+	}
+}
 
-	t.Run("GetClusterInfo", func(t *testing.T) {
-		info, err := store.GetClusterInfo(ctx)
-		if err != nil {
-			t.Errorf("Failed to get cluster info: %v", err)
-		}
+func testListNodes(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	nodes, err := store.ListNodes(ctx)
+	if err != nil {
+		t.Errorf("Failed to list nodes: %v", err)
+	}
+	// Should have at least the node we added
+	if len(nodes) == 0 {
+		t.Log("No nodes in list (acceptable if add failed)")
+	}
+}
 
-		if info == nil {
-			t.Fatal("Expected cluster info, got nil")
-		}
+func testGetClusterInfo(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	info, err := store.GetClusterInfo(ctx)
+	if err != nil {
+		t.Errorf("Failed to get cluster info: %v", err)
+	}
 
-		if info.ClusterID == "" {
-			t.Error("Expected non-empty cluster ID")
-		}
-	})
+	if info == nil {
+		t.Fatal("Expected cluster info, got nil")
+	}
 
-	t.Run("RemoveNode", func(t *testing.T) {
-		err := store.RemoveNode(ctx, "node-2")
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+	if info.ClusterID == "" {
+		t.Error("Expected non-empty cluster ID")
+	}
+}
 
-		if err != nil {
-			t.Errorf("Failed to remove node: %v", err)
-		}
-	})
+func testRemoveNode(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	err := store.RemoveNode(ctx, "node-2")
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-	t.Run("GetConfiguration", func(t *testing.T) {
-		membership, err := store.GetConfiguration()
-		if err != nil {
-			t.Errorf("Failed to get configuration: %v", err)
-		}
+	if err != nil {
+		t.Errorf("Failed to remove node: %v", err)
+	}
+}
 
-		if membership == nil {
-			t.Fatal("Expected membership, got nil")
-		}
-	})
+func testGetConfiguration(t *testing.T, store *DragonboatStore) {
+	membership, err := store.GetConfiguration(context.Background())
+	if err != nil {
+		t.Errorf("Failed to get configuration: %v", err)
+	}
 
-	t.Run("GetServers", func(t *testing.T) {
-		servers, err := store.GetServers()
-		if err != nil {
-			t.Errorf("Failed to get servers: %v", err)
-		}
+	if membership == nil {
+		t.Fatal("Expected membership, got nil")
+	}
+}
 
-		if len(servers) == 0 {
-			t.Error("Expected at least one server")
-		}
-	})
+func testGetServers(t *testing.T, store *DragonboatStore) {
+	servers, err := store.GetServers(context.Background())
+	if err != nil {
+		t.Errorf("Failed to get servers: %v", err)
+	}
+
+	if len(servers) == 0 {
+		t.Error("Expected at least one server")
+	}
 }
 
 // TestAuditOperations tests audit event operations.
@@ -1272,96 +1334,102 @@ func TestMultipartUploadOperations(t *testing.T) {
 
 	uploadID := "upload-123"
 
-	t.Run("CreateMultipartUpload", func(t *testing.T) {
-		upload := &MultipartUpload{
-			Bucket:    "test-bucket",
-			Key:       "test-key",
-			UploadID:  uploadID,
-			Initiator: "test-user",
-			CreatedAt: time.Now(),
-			Parts:     []UploadPart{},
-		}
+	t.Run("CreateMultipartUpload", func(t *testing.T) { testCreateMultipartUpload(t, ctx, store, uploadID) })
+	t.Run("GetMultipartUpload", func(t *testing.T) { testGetMultipartUpload(t, ctx, store, uploadID) })
+	t.Run("AddUploadPart", func(t *testing.T) { testAddUploadPart(t, ctx, store, uploadID) })
+	t.Run("ListMultipartUploads", func(t *testing.T) { testListMultipartUploads(t, ctx, store) })
+	t.Run("AbortMultipartUpload", func(t *testing.T) { testAbortMultipartUpload(t, ctx, store, uploadID) })
+}
 
-		err := store.CreateMultipartUpload(ctx, upload)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+func testCreateMultipartUpload(t *testing.T, ctx context.Context, store *DragonboatStore, uploadID string) {
+	upload := &MultipartUpload{
+		Bucket:    "test-bucket",
+		Key:       "test-key",
+		UploadID:  uploadID,
+		Initiator: "test-user",
+		CreatedAt: time.Now(),
+		Parts:     []UploadPart{},
+	}
 
-		if err != nil {
-			t.Errorf("Failed to create multipart upload: %v", err)
-		}
-	})
+	err := store.CreateMultipartUpload(ctx, upload)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-	t.Run("GetMultipartUpload", func(t *testing.T) {
-		upload, err := store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
-		if err != nil {
-			t.Errorf("Failed to get multipart upload: %v", err)
-		}
+	if err != nil {
+		t.Errorf("Failed to create multipart upload: %v", err)
+	}
+}
 
-		if upload == nil {
-			t.Fatal("Expected upload, got nil")
-		}
+func testGetMultipartUpload(t *testing.T, ctx context.Context, store *DragonboatStore, uploadID string) {
+	upload, err := store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
+	if err != nil {
+		t.Errorf("Failed to get multipart upload: %v", err)
+	}
 
-		if upload.UploadID != uploadID {
-			t.Errorf("Expected upload ID '%s', got '%s'", uploadID, upload.UploadID)
-		}
-	})
+	if upload == nil {
+		t.Fatal("Expected upload, got nil")
+	}
 
-	t.Run("AddUploadPart", func(t *testing.T) {
-		part := &UploadPart{
-			PartNumber:   1,
-			ETag:         "etag123",
-			Size:         1024,
-			LastModified: time.Now(),
-		}
+	if upload.UploadID != uploadID {
+		t.Errorf("Expected upload ID '%s', got '%s'", uploadID, upload.UploadID)
+	}
+}
 
-		err := store.AddUploadPart(ctx, "test-bucket", "test-key", uploadID, part)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+func testAddUploadPart(t *testing.T, ctx context.Context, store *DragonboatStore, uploadID string) {
+	part := &UploadPart{
+		PartNumber:   1,
+		ETag:         "etag123",
+		Size:         1024,
+		LastModified: time.Now(),
+	}
 
-		if err != nil {
-			t.Errorf("Failed to add upload part: %v", err)
-		}
+	err := store.AddUploadPart(ctx, "test-bucket", "test-key", uploadID, part)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-		// Verify part was added
-		upload, err := store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
-		if err != nil {
-			t.Errorf("Failed to get multipart upload: %v", err)
-		}
+	if err != nil {
+		t.Errorf("Failed to add upload part: %v", err)
+	}
 
-		if len(upload.Parts) != 1 {
-			t.Errorf("Expected 1 part, got %d", len(upload.Parts))
-		}
-	})
+	// Verify part was added
+	upload, err := store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
+	if err != nil {
+		t.Errorf("Failed to get multipart upload: %v", err)
+	}
 
-	t.Run("ListMultipartUploads", func(t *testing.T) {
-		uploads, err := store.ListMultipartUploads(ctx, "test-bucket")
-		if err != nil {
-			t.Errorf("Failed to list multipart uploads: %v", err)
-		}
+	if len(upload.Parts) != 1 {
+		t.Errorf("Expected 1 part, got %d", len(upload.Parts))
+	}
+}
 
-		if len(uploads) == 0 {
-			t.Error("Expected at least one upload")
-		}
-	})
+func testListMultipartUploads(t *testing.T, ctx context.Context, store *DragonboatStore) {
+	uploads, err := store.ListMultipartUploads(ctx, "test-bucket")
+	if err != nil {
+		t.Errorf("Failed to list multipart uploads: %v", err)
+	}
 
-	t.Run("AbortMultipartUpload", func(t *testing.T) {
-		err := store.AbortMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
-		if err != nil && !store.IsLeader() {
-			t.Skip("Not leader, skipping test")
-		}
+	if len(uploads) == 0 {
+		t.Error("Expected at least one upload")
+	}
+}
 
-		if err != nil {
-			t.Errorf("Failed to abort multipart upload: %v", err)
-		}
+func testAbortMultipartUpload(t *testing.T, ctx context.Context, store *DragonboatStore, uploadID string) {
+	err := store.AbortMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
+	if err != nil && !store.IsLeader() {
+		t.Skip("Not leader, skipping test")
+	}
 
-		// Verify deletion
-		_, err = store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
-		if err == nil {
-			t.Error("Expected error when getting aborted upload")
-		}
-	})
+	if err != nil {
+		t.Errorf("Failed to abort multipart upload: %v", err)
+	}
+
+	// Verify deletion
+	_, err = store.GetMultipartUpload(ctx, "test-bucket", "test-key", uploadID)
+	if err == nil {
+		t.Error("Expected error when getting aborted upload")
+	}
 }
 
 // TestSnapshotOperations tests snapshot-related operations.

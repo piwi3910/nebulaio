@@ -611,49 +611,73 @@ func (aa *AccessAnalytics) matchesConditions(event *AccessEvent, conditions []Ru
 
 // matchesCondition checks if an event matches a single condition.
 func (aa *AccessAnalytics) matchesCondition(event *AccessEvent, cond RuleCondition) bool {
-	var fieldValue interface{}
+	fieldValue := aa.getFieldValue(event, cond.Field)
+	if fieldValue == nil {
+		return false
+	}
 
-	switch cond.Field {
+	return aa.evaluateOperator(fieldValue, cond.Operator, cond.Value)
+}
+
+func (aa *AccessAnalytics) getFieldValue(event *AccessEvent, field string) interface{} {
+	switch field {
 	case "access_type":
-		fieldValue = string(event.AccessType)
+		return string(event.AccessType)
 	case "bucket":
-		fieldValue = event.Bucket
+		return event.Bucket
 	case "user_id":
-		fieldValue = event.UserID
+		return event.UserID
 	case "source_ip":
-		fieldValue = event.SourceIP
+		return event.SourceIP
 	case "status_code":
-		fieldValue = event.StatusCode
+		return event.StatusCode
+	default:
+		return nil
+	}
+}
+
+func (aa *AccessAnalytics) evaluateOperator(fieldValue interface{}, operator string, condValue interface{}) bool {
+	switch operator {
+	case "eq":
+		return fieldValue == condValue
+	case "ne":
+		return fieldValue != condValue
+	case "in":
+		return aa.evaluateInOperator(fieldValue, condValue)
+	case "contains":
+		return aa.evaluateContainsOperator(fieldValue, condValue)
 	default:
 		return false
 	}
+}
 
-	switch cond.Operator {
-	case "eq":
-		return fieldValue == cond.Value
-	case "ne":
-		return fieldValue != cond.Value
-	case "in":
-		if values, ok := cond.Value.([]string); ok {
-			for _, v := range values {
-				if fieldValue == v {
-					return true
-				}
-			}
-		}
-
-		return false
-	case "contains":
-		if s, ok := fieldValue.(string); ok {
-			if v, ok := cond.Value.(string); ok {
-				return len(s) > 0 && len(v) > 0 && (s == v || len(s) > len(v))
-			}
-		}
-
+func (aa *AccessAnalytics) evaluateInOperator(fieldValue, condValue interface{}) bool {
+	values, ok := condValue.([]string)
+	if !ok {
 		return false
 	}
 
+	for _, v := range values {
+		if fieldValue == v {
+			return true
+		}
+	}
+
 	return false
+}
+
+func (aa *AccessAnalytics) evaluateContainsOperator(fieldValue, condValue interface{}) bool {
+	s, ok := fieldValue.(string)
+	if !ok {
+		return false
+	}
+
+	v, ok := condValue.(string)
+	if !ok {
+		return false
+	}
+
+	return len(s) > 0 && len(v) > 0 && (s == v || len(s) > len(v))
 }
 
 // checkUnusualTime detects access during unusual hours.
@@ -1034,6 +1058,19 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	aa.mu.Lock()
 	defer aa.mu.Unlock()
 
+	baseline := aa.getOrCreateBaseline(userID)
+	metrics := baseline.Metrics
+
+	aa.updateActiveHours(metrics, events)
+	aa.updateCommonBuckets(metrics, events)
+	aa.updateCommonOperations(metrics, events)
+	aa.updateCommonIPs(metrics, events)
+	aa.updateCommonUserAgents(metrics, events)
+
+	aa.finalizeBaselineUpdate(ctx, baseline, len(events))
+}
+
+func (aa *AccessAnalytics) getOrCreateBaseline(userID string) *UserBaseline {
 	baseline, exists := aa.baselines[userID]
 	if !exists {
 		baseline = &UserBaseline{
@@ -1045,11 +1082,10 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 		}
 		aa.baselines[userID] = baseline
 	}
+	return baseline
+}
 
-	// Update metrics
-	metrics := baseline.Metrics
-
-	// Track active hours
+func (aa *AccessAnalytics) updateActiveHours(metrics *BaselineMetrics, events []*AccessEvent) {
 	hourCounts := make(map[int]int)
 	for _, h := range metrics.ActiveHours {
 		hourCounts[h]++
@@ -1063,8 +1099,9 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for h := range hourCounts {
 		metrics.ActiveHours = append(metrics.ActiveHours, h)
 	}
+}
 
-	// Track common buckets
+func (aa *AccessAnalytics) updateCommonBuckets(metrics *BaselineMetrics, events []*AccessEvent) {
 	bucketSet := make(map[string]bool)
 	for _, b := range metrics.CommonBuckets {
 		bucketSet[b] = true
@@ -1078,13 +1115,15 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for b := range bucketSet {
 		metrics.CommonBuckets = append(metrics.CommonBuckets, b)
 	}
+}
 
-	// Track operations
+func (aa *AccessAnalytics) updateCommonOperations(metrics *BaselineMetrics, events []*AccessEvent) {
 	for _, event := range events {
 		metrics.CommonOperations[event.AccessType]++
 	}
+}
 
-	// Track IPs
+func (aa *AccessAnalytics) updateCommonIPs(metrics *BaselineMetrics, events []*AccessEvent) {
 	ipSet := make(map[string]bool)
 	for _, ip := range metrics.CommonIPs {
 		ipSet[ip] = true
@@ -1098,8 +1137,9 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for ip := range ipSet {
 		metrics.CommonIPs = append(metrics.CommonIPs, ip)
 	}
+}
 
-	// Track user agents
+func (aa *AccessAnalytics) updateCommonUserAgents(metrics *BaselineMetrics, events []*AccessEvent) {
 	uaSet := make(map[string]bool)
 	for _, ua := range metrics.CommonUserAgents {
 		uaSet[ua] = true
@@ -1113,10 +1153,12 @@ func (aa *AccessAnalytics) updateBaseline(ctx context.Context, userID string, ev
 	for ua := range uaSet {
 		metrics.CommonUserAgents = append(metrics.CommonUserAgents, ua)
 	}
+}
 
-	baseline.EventCount += int64(len(events))
+func (aa *AccessAnalytics) finalizeBaselineUpdate(ctx context.Context, baseline *UserBaseline, eventCount int) {
+	baseline.EventCount += int64(eventCount)
 	baseline.UpdatedAt = time.Now()
-	metrics.LastUpdated = time.Now()
+	baseline.Metrics.LastUpdated = time.Now()
 
 	// Mark as stable if enough events
 	if baseline.EventCount >= int64(aa.config.MinEventsForBaseline) {

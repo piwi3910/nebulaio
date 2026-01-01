@@ -24,8 +24,9 @@ type Index struct {
 
 // IndexEntryFull is the full index entry including the variable-length key.
 type IndexEntryFull struct {
-	Key string
 	IndexEntry
+
+	Key string
 }
 
 // NewIndex creates a new empty index.

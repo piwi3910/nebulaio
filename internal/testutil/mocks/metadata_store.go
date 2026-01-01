@@ -511,7 +511,7 @@ func (m *MockMetadataStore) IsLeader() bool {
 }
 
 // LeaderAddress implements metadata.Store interface.
-func (m *MockMetadataStore) LeaderAddress() (string, error) {
+func (m *MockMetadataStore) LeaderAddress(ctx context.Context) (string, error) {
 	if m == nil {
 		return "", s3errors.ErrInternalError
 	}

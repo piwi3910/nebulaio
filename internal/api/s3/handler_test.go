@@ -64,7 +64,7 @@ func (m *MockMetadataStore) IsLeader() bool {
 	return true
 }
 
-func (m *MockMetadataStore) LeaderAddress() (string, error) {
+func (m *MockMetadataStore) LeaderAddress(ctx context.Context) (string, error) {
 	return "localhost:9003", nil
 }
 

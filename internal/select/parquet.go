@@ -436,94 +436,103 @@ func (pr *ParquetReader) readPage(page *Page, desc *ColumnDescriptor) ([]interfa
 
 // readValue reads a single value based on the column type.
 func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
-	switch desc.Type {
-	case ParquetTypeBoolean:
-		var b byte
+	type readFunc func(io.Reader, *ColumnDescriptor) (interface{}, error)
 
-		err := binary.Read(reader, binary.LittleEndian, &b)
-		if err != nil {
-			return nil, err
-		}
-
-		return b != 0, nil
-
-	case ParquetTypeInt32:
-		var val int32
-
-		err := binary.Read(reader, binary.LittleEndian, &val)
-		if err != nil {
-			return nil, err
-		}
-
-		return pr.convertInt32(val, desc), nil
-
-	case ParquetTypeInt64:
-		var val int64
-
-		err := binary.Read(reader, binary.LittleEndian, &val)
-		if err != nil {
-			return nil, err
-		}
-
-		return pr.convertInt64(val, desc), nil
-
-	case ParquetTypeFloat:
-		var val float32
-
-		err := binary.Read(reader, binary.LittleEndian, &val)
-		if err != nil {
-			return nil, err
-		}
-
-		return float64(val), nil
-
-	case ParquetTypeDouble:
-		var val float64
-
-		err := binary.Read(reader, binary.LittleEndian, &val)
-		if err != nil {
-			return nil, err
-		}
-
-		return val, nil
-
-	case ParquetTypeByteArray:
-		var length int32
-
-		err := binary.Read(reader, binary.LittleEndian, &length)
-		if err != nil {
-			return nil, err
-		}
-
-		data := make([]byte, length)
-		_, err = io.ReadFull(reader, data)
-		if err != nil {
-			return nil, err
-		}
-
-		return pr.convertByteArray(data, desc), nil
-
-	case ParquetTypeFixedLenByteArray:
-		data := make([]byte, desc.Precision) // Use precision as length
-		_, err := io.ReadFull(reader, data)
-		if err != nil {
-			return nil, err
-		}
-
-		return pr.convertByteArray(data, desc), nil
-
-	case ParquetTypeInt96:
-		data := make([]byte, 12)
-		_, err := io.ReadFull(reader, data)
-		if err != nil {
-			return nil, err
-		}
-
-		return pr.convertInt96(data), nil
-
-	default:
-		return nil, fmt.Errorf("unsupported type: %d", desc.Type)
+	readers := map[ParquetType]readFunc{
+		ParquetTypeBoolean:             pr.readBoolean,
+		ParquetTypeInt32:               pr.readInt32,
+		ParquetTypeInt64:               pr.readInt64,
+		ParquetTypeFloat:               pr.readFloat,
+		ParquetTypeDouble:              pr.readDouble,
+		ParquetTypeByteArray:           pr.readByteArray,
+		ParquetTypeFixedLenByteArray:   pr.readFixedLenByteArray,
+		ParquetTypeInt96:               pr.readInt96,
 	}
+
+	if readFn, ok := readers[desc.Type]; ok {
+		return readFn(reader, desc)
+	}
+
+	return nil, fmt.Errorf("unsupported type: %d", desc.Type)
+}
+
+func (pr *ParquetReader) readBoolean(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+	var b byte
+	err := binary.Read(reader, binary.LittleEndian, &b)
+	if err != nil {
+		return nil, err
+	}
+	return b != 0, nil
+}
+
+func (pr *ParquetReader) readInt32(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+	var val int32
+	err := binary.Read(reader, binary.LittleEndian, &val)
+	if err != nil {
+		return nil, err
+	}
+	return pr.convertInt32(val, desc), nil
+}
+
+func (pr *ParquetReader) readInt64(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+	var val int64
+	err := binary.Read(reader, binary.LittleEndian, &val)
+	if err != nil {
+		return nil, err
+	}
+	return pr.convertInt64(val, desc), nil
+}
+
+func (pr *ParquetReader) readFloat(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+	var val float32
+	err := binary.Read(reader, binary.LittleEndian, &val)
+	if err != nil {
+		return nil, err
+	}
+	return float64(val), nil
+}
+
+func (pr *ParquetReader) readDouble(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+	var val float64
+	err := binary.Read(reader, binary.LittleEndian, &val)
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
+}
+
+func (pr *ParquetReader) readByteArray(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+	var length int32
+	err := binary.Read(reader, binary.LittleEndian, &length)
+	if err != nil {
+		return nil, err
+	}
+
+	data := make([]byte, length)
+	_, err = io.ReadFull(reader, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return pr.convertByteArray(data, desc), nil
+}
+
+func (pr *ParquetReader) readFixedLenByteArray(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+	data := make([]byte, desc.Precision)
+	_, err := io.ReadFull(reader, data)
+	if err != nil {
+		return nil, err
+	}
+	return pr.convertByteArray(data, desc), nil
+}
+
+func (pr *ParquetReader) readInt96(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+	data := make([]byte, 12)
+	_, err := io.ReadFull(reader, data)
+	if err != nil {
+		return nil, err
+	}
+	return pr.convertInt96(data), nil
 }
 
 // convertInt32 converts an int32 based on logical type.
@@ -666,47 +675,72 @@ func (e *ParquetSelectExecutor) Execute(query *SelectQuery) (*SelectResult, erro
 			break
 		}
 
-		// Apply query to each row
-		for _, row := range rows {
-			// Apply WHERE clause
-			if query.Where != nil {
-				match, err := evaluateCondition(query.Where, row)
-				if err != nil {
-					return nil, fmt.Errorf("failed to evaluate condition: %w", err)
-				}
+		limitReached, err := e.processBatch(rows, query, result)
+		if err != nil {
+			return nil, err
+		}
 
-				if !match {
-					continue
-				}
-			}
-
-			// Project columns
-			var resultRow []interface{}
-
-			if len(query.Columns) == 1 && query.Columns[0] == "*" {
-				// Select all columns
-				for _, col := range e.reader.schema.Columns {
-					colName := strings.Join(col.Path, ".")
-					resultRow = append(resultRow, row[colName])
-				}
-			} else {
-				for _, col := range query.Columns {
-					resultRow = append(resultRow, row[col])
-				}
-			}
-
-			result.Rows = append(result.Rows, resultRow)
-
-			// Check limit
-			if query.Limit > 0 && int64(len(result.Rows)) >= query.Limit {
-				return result, nil
-			}
+		if limitReached {
+			return result, nil
 		}
 
 		offset += int64(len(rows))
 	}
 
 	return result, nil
+}
+
+func (e *ParquetSelectExecutor) processBatch(rows []map[string]interface{}, query *SelectQuery, result *SelectResult) (bool, error) {
+	for _, row := range rows {
+		matchesWhere, err := e.evaluateWhereClause(query, row)
+		if err != nil {
+			return false, err
+		}
+
+		if !matchesWhere {
+			continue
+		}
+
+		resultRow := e.projectColumns(query, row)
+		result.Rows = append(result.Rows, resultRow)
+
+		if query.Limit > 0 && int64(len(result.Rows)) >= query.Limit {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (e *ParquetSelectExecutor) evaluateWhereClause(query *SelectQuery, row map[string]interface{}) (bool, error) {
+	if query.Where == nil {
+		return true, nil
+	}
+
+	match, err := evaluateCondition(query.Where, row)
+	if err != nil {
+		return false, fmt.Errorf("failed to evaluate condition: %w", err)
+	}
+
+	return match, nil
+}
+
+func (e *ParquetSelectExecutor) projectColumns(query *SelectQuery, row map[string]interface{}) []interface{} {
+	var resultRow []interface{}
+
+	if len(query.Columns) == 1 && query.Columns[0] == "*" {
+		// Select all columns
+		for _, col := range e.reader.schema.Columns {
+			colName := strings.Join(col.Path, ".")
+			resultRow = append(resultRow, row[colName])
+		}
+	} else {
+		for _, col := range query.Columns {
+			resultRow = append(resultRow, row[col])
+		}
+	}
+
+	return resultRow
 }
 
 // SelectQuery represents a parsed SELECT query.
@@ -758,32 +792,15 @@ func evaluateCondition(cond *Condition, row map[string]interface{}) (bool, error
 	case ConditionTypeComparison:
 		return evaluateComparison(cond, row)
 	case ConditionTypeAnd:
-		left, err := evaluateCondition(cond.Left, row)
-		if err != nil || !left {
-			return false, err
-		}
-
-		return evaluateCondition(cond.Right, row)
+		return evaluateAnd(cond, row)
 	case ConditionTypeOr:
-		left, err := evaluateCondition(cond.Left, row)
-		if err != nil {
-			return false, err
-		}
-
-		if left {
-			return true, nil
-		}
-
-		return evaluateCondition(cond.Right, row)
+		return evaluateOr(cond, row)
 	case ConditionTypeNot:
-		result, err := evaluateCondition(cond.Left, row)
-		return !result, err
+		return evaluateNot(cond, row)
 	case ConditionTypeIsNull:
-		val := row[cond.Column]
-		return val == nil, nil
+		return evaluateIsNull(cond, row)
 	case ConditionTypeIsNotNull:
-		val := row[cond.Column]
-		return val != nil, nil
+		return evaluateIsNotNull(cond, row)
 	case ConditionTypeLike:
 		return evaluateLike(cond, row)
 	case ConditionTypeBetween:
@@ -793,6 +810,45 @@ func evaluateCondition(cond *Condition, row map[string]interface{}) (bool, error
 	default:
 		return false, fmt.Errorf("unsupported condition type: %d", cond.Type)
 	}
+}
+
+// evaluateAnd evaluates an AND condition.
+func evaluateAnd(cond *Condition, row map[string]interface{}) (bool, error) {
+	left, err := evaluateCondition(cond.Left, row)
+	if err != nil || !left {
+		return false, err
+	}
+	return evaluateCondition(cond.Right, row)
+}
+
+// evaluateOr evaluates an OR condition.
+func evaluateOr(cond *Condition, row map[string]interface{}) (bool, error) {
+	left, err := evaluateCondition(cond.Left, row)
+	if err != nil {
+		return false, err
+	}
+	if left {
+		return true, nil
+	}
+	return evaluateCondition(cond.Right, row)
+}
+
+// evaluateNot evaluates a NOT condition.
+func evaluateNot(cond *Condition, row map[string]interface{}) (bool, error) {
+	result, err := evaluateCondition(cond.Left, row)
+	return !result, err
+}
+
+// evaluateIsNull evaluates an IS NULL condition.
+func evaluateIsNull(cond *Condition, row map[string]interface{}) (bool, error) {
+	val := row[cond.Column]
+	return val == nil, nil
+}
+
+// evaluateIsNotNull evaluates an IS NOT NULL condition.
+func evaluateIsNotNull(cond *Condition, row map[string]interface{}) (bool, error) {
+	val := row[cond.Column]
+	return val != nil, nil
 }
 
 // evaluateComparison evaluates a comparison condition.

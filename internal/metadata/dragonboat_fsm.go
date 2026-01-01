@@ -99,264 +99,282 @@ func (sm *stateMachine) updateAppliedIndex(index uint64) error {
 	})
 }
 
-// processCommand processes a single command.
+// processCommand processes a single command by delegating to specific handlers.
 func (sm *stateMachine) processCommand(cmd *command) error {
-	switch cmd.Type {
-	case cmdCreateBucket:
-		var bucket Bucket
-
-		err := json.Unmarshal(cmd.Data, &bucket)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCreateBucket(&bucket)
-
-	case cmdDeleteBucket:
-		var name string
-
-		err := json.Unmarshal(cmd.Data, &name)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteBucket(name)
-
-	case cmdUpdateBucket:
-		var bucket Bucket
-
-		err := json.Unmarshal(cmd.Data, &bucket)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyUpdateBucket(&bucket)
-
-	case cmdPutObjectMeta:
-		var meta ObjectMeta
-
-		err := json.Unmarshal(cmd.Data, &meta)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyPutObjectMeta(&meta)
-
-	case cmdDeleteObjectMeta:
-		var data struct {
-			Bucket string `json:"bucket"`
-			Key    string `json:"key"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteObjectMeta(data.Bucket, data.Key)
-
-	case cmdPutObjectMetaVersioned:
-		var data struct {
-			Meta                *ObjectMeta `json:"meta"`
-			PreserveOldVersions bool        `json:"preserve_old_versions"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyPutObjectMetaVersioned(data.Meta, data.PreserveOldVersions)
-
-	case cmdDeleteObjectVersion:
-		var data struct {
-			Bucket    string `json:"bucket"`
-			Key       string `json:"key"`
-			VersionID string `json:"version_id"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteObjectVersion(data.Bucket, data.Key, data.VersionID)
-
-	case cmdCreateUser:
-		var user User
-
-		err := json.Unmarshal(cmd.Data, &user)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCreateUser(&user)
-
-	case cmdUpdateUser:
-		var user User
-
-		err := json.Unmarshal(cmd.Data, &user)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyUpdateUser(&user)
-
-	case cmdDeleteUser:
-		var id string
-
-		err := json.Unmarshal(cmd.Data, &id)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteUser(id)
-
-	case cmdCreateAccessKey:
-		var key AccessKey
-
-		err := json.Unmarshal(cmd.Data, &key)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCreateAccessKey(&key)
-
-	case cmdDeleteAccessKey:
-		var id string
-
-		err := json.Unmarshal(cmd.Data, &id)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteAccessKey(id)
-
-	case cmdCreatePolicy:
-		var policy Policy
-
-		err := json.Unmarshal(cmd.Data, &policy)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCreatePolicy(&policy)
-
-	case cmdUpdatePolicy:
-		var policy Policy
-
-		err := json.Unmarshal(cmd.Data, &policy)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyUpdatePolicy(&policy)
-
-	case cmdDeletePolicy:
-		var name string
-
-		err := json.Unmarshal(cmd.Data, &name)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeletePolicy(name)
-
-	case cmdCreateMultipartUpload:
-		var upload MultipartUpload
-
-		err := json.Unmarshal(cmd.Data, &upload)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCreateMultipartUpload(&upload)
-
-	case cmdAbortMultipartUpload:
-		var data struct {
-			Bucket   string `json:"bucket"`
-			Key      string `json:"key"`
-			UploadID string `json:"upload_id"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyAbortMultipartUpload(data.Bucket, data.Key, data.UploadID)
-
-	case cmdCompleteMultipartUpload:
-		var data struct {
-			Bucket   string `json:"bucket"`
-			Key      string `json:"key"`
-			UploadID string `json:"upload_id"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyCompleteMultipartUpload(data.Bucket, data.Key, data.UploadID)
-
-	case cmdAddUploadPart:
-		var data struct {
-			Bucket   string     `json:"bucket"`
-			Key      string     `json:"key"`
-			UploadID string     `json:"upload_id"`
-			Part     UploadPart `json:"part"`
-		}
-
-		err := json.Unmarshal(cmd.Data, &data)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyAddUploadPart(data.Bucket, data.Key, data.UploadID, &data.Part)
-
-	case cmdAddNode:
-		var node NodeInfo
-
-		err := json.Unmarshal(cmd.Data, &node)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyAddNode(&node)
-
-	case cmdRemoveNode:
-		var nodeID string
-
-		err := json.Unmarshal(cmd.Data, &nodeID)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyRemoveNode(nodeID)
-
-	case cmdStoreAuditEvent:
-		var event audit.AuditEvent
-
-		err := json.Unmarshal(cmd.Data, &event)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyStoreAuditEvent(&event)
-
-	case cmdDeleteAuditEvent:
-		var eventID string
-
-		err := json.Unmarshal(cmd.Data, &eventID)
-		if err != nil {
-			return err
-		}
-
-		return sm.applyDeleteAuditEvent(eventID)
+	handler, exists := sm.getCommandHandler(cmd.Type)
+	if !exists {
+		return fmt.Errorf("unknown command type: %s", cmd.Type)
+	}
+	return handler(cmd.Data)
+}
+
+func (sm *stateMachine) getCommandHandler(cmdType commandType) (func([]byte) error, bool) {
+	handlers := map[commandType]func([]byte) error{
+		cmdCreateBucket:             sm.handleCreateBucket,
+		cmdDeleteBucket:             sm.handleDeleteBucket,
+		cmdUpdateBucket:             sm.handleUpdateBucket,
+		cmdPutObjectMeta:            sm.handlePutObjectMeta,
+		cmdDeleteObjectMeta:         sm.handleDeleteObjectMeta,
+		cmdPutObjectMetaVersioned:   sm.handlePutObjectMetaVersioned,
+		cmdDeleteObjectVersion:      sm.handleDeleteObjectVersion,
+		cmdCreateUser:               sm.handleCreateUser,
+		cmdUpdateUser:               sm.handleUpdateUser,
+		cmdDeleteUser:               sm.handleDeleteUser,
+		cmdCreateAccessKey:          sm.handleCreateAccessKey,
+		cmdDeleteAccessKey:          sm.handleDeleteAccessKey,
+		cmdCreatePolicy:             sm.handleCreatePolicy,
+		cmdUpdatePolicy:             sm.handleUpdatePolicy,
+		cmdDeletePolicy:             sm.handleDeletePolicy,
+		cmdCreateMultipartUpload:    sm.handleCreateMultipartUpload,
+		cmdAbortMultipartUpload:     sm.handleAbortMultipartUpload,
+		cmdCompleteMultipartUpload:  sm.handleCompleteMultipartUpload,
+		cmdAddUploadPart:            sm.handleAddUploadPart,
+		cmdAddNode:                  sm.handleAddNode,
+		cmdRemoveNode:               sm.handleRemoveNode,
+		cmdStoreAuditEvent:          sm.handleStoreAuditEvent,
+		cmdDeleteAuditEvent:         sm.handleDeleteAuditEvent,
 	}
 
-	return fmt.Errorf("unknown command type: %s", cmd.Type)
+	handler, exists := handlers[cmdType]
+	return handler, exists
+}
+
+// Command handlers - unmarshal data and delegate to apply methods
+
+func (sm *stateMachine) handleCreateBucket(data []byte) error {
+	var bucket Bucket
+	if err := json.Unmarshal(data, &bucket); err != nil {
+		return err
+	}
+
+	return sm.applyCreateBucket(&bucket)
+}
+
+func (sm *stateMachine) handleDeleteBucket(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteBucket(name)
+}
+
+func (sm *stateMachine) handleUpdateBucket(data []byte) error {
+	var bucket Bucket
+	if err := json.Unmarshal(data, &bucket); err != nil {
+		return err
+	}
+
+	return sm.applyUpdateBucket(&bucket)
+}
+
+func (sm *stateMachine) handlePutObjectMeta(data []byte) error {
+	var meta ObjectMeta
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return err
+	}
+
+	return sm.applyPutObjectMeta(&meta)
+}
+
+func (sm *stateMachine) handleDeleteObjectMeta(data []byte) error {
+	var params struct {
+		Bucket string `json:"bucket"`
+		Key    string `json:"key"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteObjectMeta(params.Bucket, params.Key)
+}
+
+func (sm *stateMachine) handlePutObjectMetaVersioned(data []byte) error {
+	var params struct {
+		Meta                *ObjectMeta `json:"meta"`
+		PreserveOldVersions bool        `json:"preserve_old_versions"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyPutObjectMetaVersioned(params.Meta, params.PreserveOldVersions)
+}
+
+func (sm *stateMachine) handleDeleteObjectVersion(data []byte) error {
+	var params struct {
+		Bucket    string `json:"bucket"`
+		Key       string `json:"key"`
+		VersionID string `json:"version_id"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteObjectVersion(params.Bucket, params.Key, params.VersionID)
+}
+
+func (sm *stateMachine) handleCreateUser(data []byte) error {
+	var user User
+	if err := json.Unmarshal(data, &user); err != nil {
+		return err
+	}
+
+	return sm.applyCreateUser(&user)
+}
+
+func (sm *stateMachine) handleUpdateUser(data []byte) error {
+	var user User
+	if err := json.Unmarshal(data, &user); err != nil {
+		return err
+	}
+
+	return sm.applyUpdateUser(&user)
+}
+
+func (sm *stateMachine) handleDeleteUser(data []byte) error {
+	var id string
+	if err := json.Unmarshal(data, &id); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteUser(id)
+}
+
+func (sm *stateMachine) handleCreateAccessKey(data []byte) error {
+	var key AccessKey
+	if err := json.Unmarshal(data, &key); err != nil {
+		return err
+	}
+
+	return sm.applyCreateAccessKey(&key)
+}
+
+func (sm *stateMachine) handleDeleteAccessKey(data []byte) error {
+	var id string
+	if err := json.Unmarshal(data, &id); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteAccessKey(id)
+}
+
+func (sm *stateMachine) handleCreatePolicy(data []byte) error {
+	var policy Policy
+	if err := json.Unmarshal(data, &policy); err != nil {
+		return err
+	}
+
+	return sm.applyCreatePolicy(&policy)
+}
+
+func (sm *stateMachine) handleUpdatePolicy(data []byte) error {
+	var policy Policy
+	if err := json.Unmarshal(data, &policy); err != nil {
+		return err
+	}
+
+	return sm.applyUpdatePolicy(&policy)
+}
+
+func (sm *stateMachine) handleDeletePolicy(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err != nil {
+		return err
+	}
+
+	return sm.applyDeletePolicy(name)
+}
+
+func (sm *stateMachine) handleCreateMultipartUpload(data []byte) error {
+	var upload MultipartUpload
+	if err := json.Unmarshal(data, &upload); err != nil {
+		return err
+	}
+
+	return sm.applyCreateMultipartUpload(&upload)
+}
+
+func (sm *stateMachine) handleAbortMultipartUpload(data []byte) error {
+	var params struct {
+		Bucket   string `json:"bucket"`
+		Key      string `json:"key"`
+		UploadID string `json:"upload_id"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyAbortMultipartUpload(params.Bucket, params.Key, params.UploadID)
+}
+
+func (sm *stateMachine) handleCompleteMultipartUpload(data []byte) error {
+	var params struct {
+		Bucket   string `json:"bucket"`
+		Key      string `json:"key"`
+		UploadID string `json:"upload_id"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyCompleteMultipartUpload(params.Bucket, params.Key, params.UploadID)
+}
+
+func (sm *stateMachine) handleAddUploadPart(data []byte) error {
+	var params struct {
+		Bucket   string     `json:"bucket"`
+		Key      string     `json:"key"`
+		UploadID string     `json:"upload_id"`
+		Part     UploadPart `json:"part"`
+	}
+
+	if err := json.Unmarshal(data, &params); err != nil {
+		return err
+	}
+
+	return sm.applyAddUploadPart(params.Bucket, params.Key, params.UploadID, &params.Part)
+}
+
+func (sm *stateMachine) handleAddNode(data []byte) error {
+	var node NodeInfo
+	if err := json.Unmarshal(data, &node); err != nil {
+		return err
+	}
+
+	return sm.applyAddNode(&node)
+}
+
+func (sm *stateMachine) handleRemoveNode(data []byte) error {
+	var nodeID string
+	if err := json.Unmarshal(data, &nodeID); err != nil {
+		return err
+	}
+
+	return sm.applyRemoveNode(nodeID)
+}
+
+func (sm *stateMachine) handleStoreAuditEvent(data []byte) error {
+	var event audit.AuditEvent
+	if err := json.Unmarshal(data, &event); err != nil {
+		return err
+	}
+
+	return sm.applyStoreAuditEvent(&event)
+}
+
+func (sm *stateMachine) handleDeleteAuditEvent(data []byte) error {
+	var eventID string
+	if err := json.Unmarshal(data, &eventID); err != nil {
+		return err
+	}
+
+	return sm.applyDeleteAuditEvent(eventID)
 }
 
 // Lookup performs a read-only query on the state machine.
@@ -522,146 +540,172 @@ func (sm *stateMachine) applyDeleteObjectMeta(bucket, objKey string) error {
 
 func (sm *stateMachine) applyPutObjectMetaVersioned(meta *ObjectMeta, preserveOldVersions bool) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		// Current object key (for latest version pointer)
 		currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, meta.Bucket, meta.Key))
 
 		if preserveOldVersions {
-			// Get current version and mark it as not latest
-			item, err := txn.Get(currentKey)
-			if err == nil {
-				var oldMeta ObjectMeta
-
-				err = item.Value(func(val []byte) error {
-					return json.Unmarshal(val, &oldMeta)
-				})
-				if err == nil && oldMeta.VersionID != "" {
-					// Mark old version as not latest
-					oldMeta.IsLatest = false
-
-					oldData, err := json.Marshal(&oldMeta)
-					if err != nil {
-						return err
-					}
-
-					// Store old version with compound key: objver:{bucket}/{key}#{versionID}
-					oldVersionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID))
-					err = txn.Set(oldVersionKey, oldData)
-					if err != nil {
-						return err
-					}
-				}
+			if err := sm.preserveOldVersion(txn, currentKey); err != nil {
+				return err
 			}
 		}
 
-		// Mark new version as latest
 		meta.IsLatest = true
 
-		// Store new version in version history if it has a version ID
-		if meta.VersionID != "" {
-			versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, meta.Bucket, meta.Key, meta.VersionID))
-
-			versionData, err := json.Marshal(meta)
-			if err != nil {
-				return err
-			}
-
-			err = txn.Set(versionKey, versionData)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Store/update current version pointer
-		data, err := json.Marshal(meta)
-		if err != nil {
+		if err := sm.storeVersionHistory(txn, meta); err != nil {
 			return err
 		}
 
-		return txn.Set(currentKey, data)
+		return sm.storeCurrentVersion(txn, currentKey, meta)
 	})
+}
+
+func (sm *stateMachine) preserveOldVersion(txn *badger.Txn, currentKey []byte) error {
+	item, err := txn.Get(currentKey)
+	if err != nil {
+		return nil
+	}
+
+	var oldMeta ObjectMeta
+
+	err = item.Value(func(val []byte) error {
+		return json.Unmarshal(val, &oldMeta)
+	})
+	if err != nil || oldMeta.VersionID == "" {
+		return nil
+	}
+
+	oldMeta.IsLatest = false
+
+	oldData, err := json.Marshal(&oldMeta)
+	if err != nil {
+		return err
+	}
+
+	oldVersionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID))
+	return txn.Set(oldVersionKey, oldData)
+}
+
+func (sm *stateMachine) storeVersionHistory(txn *badger.Txn, meta *ObjectMeta) error {
+	if meta.VersionID == "" {
+		return nil
+	}
+
+	versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, meta.Bucket, meta.Key, meta.VersionID))
+
+	versionData, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	return txn.Set(versionKey, versionData)
+}
+
+func (sm *stateMachine) storeCurrentVersion(txn *badger.Txn, currentKey []byte, meta *ObjectMeta) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	return txn.Set(currentKey, data)
 }
 
 func (sm *stateMachine) applyDeleteObjectVersion(bucket, objKey, versionID string) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		// Delete the specific version
-		versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID))
-		err := txn.Delete(versionKey)
-		if err != nil && err != badger.ErrKeyNotFound {
+		if err := sm.deleteVersionKey(txn, bucket, objKey, versionID); err != nil {
 			return err
 		}
 
-		// Check if this was the current/latest version
-		currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, objKey))
-
-		item, err := txn.Get(currentKey)
-		if err != nil {
-			if err == badger.ErrKeyNotFound {
-				return nil
-			}
-
-			return err
-		}
-
-		var currentMeta ObjectMeta
-
-		err = item.Value(func(val []byte) error {
-			return json.Unmarshal(val, &currentMeta)
-		})
+		currentMeta, currentKey, err := sm.getCurrentVersionMeta(txn, bucket, objKey)
 		if err != nil {
 			return err
 		}
 
-		// If we deleted the current version, we need to find the next latest version
+		if currentMeta == nil {
+			return nil
+		}
+
 		if currentMeta.VersionID == versionID {
-			// Find the most recent remaining version
-			prefix := []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, objKey))
-			opts := badger.DefaultIteratorOptions
-			opts.Prefix = prefix
-			opts.Reverse = true // Get newest first (ULIDs are sortable)
-
-			it := txn.NewIterator(opts)
-			defer it.Close()
-
-			it.Seek(append(prefix, 0xFF)) // Seek to end of prefix range
-
-			if it.ValidForPrefix(prefix) {
-				// Found another version, make it the current
-				item := it.Item()
-
-				val, err := item.ValueCopy(nil)
-				if err != nil {
-					return err
-				}
-
-				var newLatest ObjectMeta
-				err = json.Unmarshal(val, &newLatest)
-				if err != nil {
-					return err
-				}
-
-				newLatest.IsLatest = true
-
-				data, err := json.Marshal(&newLatest)
-				if err != nil {
-					return err
-				}
-
-				// Update version store
-				err = txn.Set(item.KeyCopy(nil), data)
-				if err != nil {
-					return err
-				}
-
-				// Update current pointer
-				return txn.Set(currentKey, data)
-			}
-
-			// No more versions, delete the current pointer
-			return txn.Delete(currentKey)
+			return sm.promoteNextVersion(txn, bucket, objKey, currentKey)
 		}
 
 		return nil
 	})
+}
+
+func (sm *stateMachine) deleteVersionKey(txn *badger.Txn, bucket, objKey, versionID string) error {
+	versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID))
+	err := txn.Delete(versionKey)
+	if err != nil && err != badger.ErrKeyNotFound {
+		return err
+	}
+	return nil
+}
+
+func (sm *stateMachine) getCurrentVersionMeta(txn *badger.Txn, bucket, objKey string) (*ObjectMeta, []byte, error) {
+	currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, objKey))
+
+	item, err := txn.Get(currentKey)
+	if err != nil {
+		if err == badger.ErrKeyNotFound {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+
+	var currentMeta ObjectMeta
+
+	err = item.Value(func(val []byte) error {
+		return json.Unmarshal(val, &currentMeta)
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &currentMeta, currentKey, nil
+}
+
+func (sm *stateMachine) promoteNextVersion(txn *badger.Txn, bucket, objKey string, currentKey []byte) error {
+	prefix := []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, objKey))
+	opts := badger.DefaultIteratorOptions
+	opts.Prefix = prefix
+	opts.Reverse = true
+
+	it := txn.NewIterator(opts)
+	defer it.Close()
+
+	it.Seek(append(prefix, 0xFF))
+
+	if it.ValidForPrefix(prefix) {
+		return sm.setNewLatestVersion(txn, it.Item(), currentKey)
+	}
+
+	return txn.Delete(currentKey)
+}
+
+func (sm *stateMachine) setNewLatestVersion(txn *badger.Txn, item *badger.Item, currentKey []byte) error {
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		return err
+	}
+
+	var newLatest ObjectMeta
+	err = json.Unmarshal(val, &newLatest)
+	if err != nil {
+		return err
+	}
+
+	newLatest.IsLatest = true
+
+	data, err := json.Marshal(&newLatest)
+	if err != nil {
+		return err
+	}
+
+	err = txn.Set(item.KeyCopy(nil), data)
+	if err != nil {
+		return err
+	}
+
+	return txn.Set(currentKey, data)
 }
 
 func (sm *stateMachine) applyCreateUser(user *User) error {

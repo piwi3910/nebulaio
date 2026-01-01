@@ -23,14 +23,14 @@ import (
 
 // Cross-region replication configuration constants.
 const (
-	taskChannelBufferSize   = 10000
-	arnBucketPartsCount     = 2
-	arnRegionPartsCount     = 4
-	replicationTaskTimeout  = 5 * time.Minute
-	maxReplicationRetries   = 3
-	latencyHistorySize      = 1000
-	latencyHistoryTrimStart = 500
-	replicationHTTPTimeout  = 30 * time.Minute
+	taskChannelBufferSize    = 10000
+	arnBucketPartsCount      = 2
+	arnRegionPartsCount      = 4
+	replicationTaskTimeout   = 5 * time.Minute
+	maxReplicationRetries    = 3
+	latencyHistorySize       = 1000
+	latencyHistoryTrimStart  = 500
+	replicationHTTPTimeout   = 30 * time.Minute
 	httpErrorStatusThreshold = 400
 )
 
@@ -179,7 +179,7 @@ type ReplicationManager struct {
 	endpoints     map[string]*RegionEndpoint // region -> endpoint
 	storage       ReplicationStorage
 	metrics       *ReplicationMetricsCollector
-	ctx           context.Context
+	ctx           context.Context //nolint:containedctx // Worker pool pattern - context managed by New/Close lifecycle
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
 }
@@ -362,7 +362,7 @@ func (rm *ReplicationManager) OnObjectCreated(ctx context.Context, bucket, key s
 			continue
 		}
 
-		if rm.matchesFilter(&rule, key, info) {
+		if rm.matchesFilter(ctx, &rule, key, info) {
 			task := &ReplicationTask{
 				ID:              uuid.New().String(),
 				SourceBucket:    bucket,
@@ -435,45 +435,84 @@ func (rm *ReplicationManager) OnObjectDeleted(ctx context.Context, bucket, key, 
 }
 
 // matchesFilter checks if an object matches the rule filter.
-func (rm *ReplicationManager) matchesFilter(rule *ReplicationRule, key string, info *S3ObjectInfo) bool {
+func (rm *ReplicationManager) matchesFilter(ctx context.Context, rule *ReplicationRule, key string, info *S3ObjectInfo) bool {
 	if rule.Filter == nil {
 		return true
 	}
 
-	// Check prefix
-	if rule.Filter.Prefix != "" && !strings.HasPrefix(key, rule.Filter.Prefix) {
+	if !rm.matchesPrefixCondition(rule.Filter, key) {
 		return false
 	}
 
-	// Check tag
-	if rule.Filter.Tag != nil {
-		tags, err := rm.storage.GetObjectTags(context.Background(), info.Key, key)
-		if err != nil {
-			return false
-		}
-
-		if tags[rule.Filter.Tag.Key] != rule.Filter.Tag.Value {
-			return false
-		}
+	if !rm.matchesTagCondition(ctx, rule.Filter, info, key) {
+		return false
 	}
 
-	// Check And conditions
-	if rule.Filter.And != nil {
-		if rule.Filter.And.Prefix != "" && !strings.HasPrefix(key, rule.Filter.And.Prefix) {
+	if !rm.matchesAndConditions(ctx, rule.Filter, info, key) {
+		return false
+	}
+
+	return true
+}
+
+func (rm *ReplicationManager) matchesPrefixCondition(filter *ReplicationFilter, key string) bool {
+	if filter.Prefix != "" && !strings.HasPrefix(key, filter.Prefix) {
+		return false
+	}
+
+	return true
+}
+
+func (rm *ReplicationManager) matchesTagCondition(ctx context.Context, filter *ReplicationFilter, info *S3ObjectInfo, key string) bool {
+	if filter.Tag == nil {
+		return true
+	}
+
+	tags, err := rm.storage.GetObjectTags(ctx, info.Key, key)
+	if err != nil {
+		return false
+	}
+
+	return tags[filter.Tag.Key] == filter.Tag.Value
+}
+
+func (rm *ReplicationManager) matchesAndConditions(ctx context.Context, filter *ReplicationFilter, info *S3ObjectInfo, key string) bool {
+	if filter.And == nil {
+		return true
+	}
+
+	if !rm.matchesAndPrefix(filter.And, key) {
+		return false
+	}
+
+	if !rm.matchesAndTags(ctx, filter.And, info, key) {
+		return false
+	}
+
+	return true
+}
+
+func (rm *ReplicationManager) matchesAndPrefix(and *ReplicationAnd, key string) bool {
+	if and.Prefix != "" && !strings.HasPrefix(key, and.Prefix) {
+		return false
+	}
+
+	return true
+}
+
+func (rm *ReplicationManager) matchesAndTags(ctx context.Context, and *ReplicationAnd, info *S3ObjectInfo, key string) bool {
+	if len(and.Tags) == 0 {
+		return true
+	}
+
+	tags, err := rm.storage.GetObjectTags(ctx, info.Key, key)
+	if err != nil {
+		return false
+	}
+
+	for _, tag := range and.Tags {
+		if tags[tag.Key] != tag.Value {
 			return false
-		}
-
-		if len(rule.Filter.And.Tags) > 0 {
-			tags, err := rm.storage.GetObjectTags(context.Background(), info.Key, key)
-			if err != nil {
-				return false
-			}
-
-			for _, tag := range rule.Filter.And.Tags {
-				if tags[tag.Key] != tag.Value {
-					return false
-				}
-			}
 		}
 	}
 
@@ -654,7 +693,7 @@ func (rm *ReplicationManager) putObjectRemote(ctx context.Context, endpoint *Reg
 
 	// Add metadata headers
 	for k, v := range opts.Metadata {
-		req.Header.Set("x-amz-meta-"+k, v)
+		req.Header.Set("X-Amz-Meta-"+k, v)
 	}
 
 	if opts.StorageClass != "" {

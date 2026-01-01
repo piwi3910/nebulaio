@@ -138,7 +138,7 @@ func TestEventQueue(t *testing.T) {
 		mockTarget := NewMockTarget("test-target")
 		queue.AddTarget(mockTarget)
 
-		queue.Start()
+		queue.Start(context.Background())
 		defer queue.Stop()
 
 		event := events.NewS3Event(
@@ -178,7 +178,7 @@ func TestEventQueue(t *testing.T) {
 		queue.AddTarget(target1)
 		queue.AddTarget(target2)
 
-		queue.Start()
+		queue.Start(context.Background())
 		defer queue.Stop()
 
 		event := events.NewS3Event(
@@ -229,7 +229,7 @@ func TestEventQueue(t *testing.T) {
 
 		queue.AddTarget(mockTarget)
 
-		queue.Start()
+		queue.Start(context.Background())
 		defer queue.Stop()
 
 		event := events.NewS3Event(
@@ -277,7 +277,7 @@ func TestEmitter(t *testing.T) {
 			QueueConfig: events.DefaultQueueConfig(),
 		})
 
-		emitter.Start()
+		emitter.Start(context.Background())
 		defer emitter.Stop()
 
 		mockTarget := NewMockTarget("webhook1")
@@ -328,7 +328,7 @@ func TestEmitter(t *testing.T) {
 			QueueConfig: events.DefaultQueueConfig(),
 		})
 
-		emitter.Start()
+		emitter.Start(context.Background())
 		defer emitter.Stop()
 
 		mockTarget := NewMockTarget(targetName)
@@ -389,7 +389,7 @@ func TestEmitter(t *testing.T) {
 			QueueConfig: events.DefaultQueueConfig(),
 		})
 
-		emitter.Start()
+		emitter.Start(context.Background())
 		defer emitter.Stop()
 
 		mockTarget := NewMockTarget("wildcard-webhook")
@@ -426,7 +426,7 @@ func TestEmitter(t *testing.T) {
 			QueueConfig: events.DefaultQueueConfig(),
 		})
 
-		emitter.Start()
+		emitter.Start(context.Background())
 		defer emitter.Stop()
 
 		mockTarget := NewMockTarget("no-config-webhook")

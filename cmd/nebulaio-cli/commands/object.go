@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/spf13/cobra"
 )
 
@@ -43,6 +44,96 @@ func NewObjectCmd() *cobra.Command {
 	return cmd
 }
 
+// runObjectPut executes the object put operation.
+func runObjectPut(localFile, s3URI, contentType string, metadata []string) error {
+	bucket, key, isS3 := ParseS3URI(s3URI)
+	if !isS3 {
+		return fmt.Errorf("invalid S3 URI: %s", s3URI)
+	}
+
+	if key == "" {
+		key = filepath.Base(localFile)
+	}
+
+	ctx := context.Background()
+	client, err := NewS3Client(ctx)
+	if err != nil {
+		return err
+	}
+
+	file, stat, err := openAndStatFile(localFile)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+
+	input := buildPutObjectInput(bucket, key, file, stat.Size(), contentType, metadata)
+
+	result, err := client.PutObject(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to upload object: %w", err)
+	}
+
+	printPutObjectResult(localFile, bucket, key, result)
+	return nil
+}
+
+// openAndStatFile opens a file and returns file and stat.
+func openAndStatFile(localFile string) (*os.File, os.FileInfo, error) {
+	//nolint:gosec // G304: localFile is user-provided CLI argument
+	file, err := os.Open(localFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open file: %w", err)
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	return file, stat, nil
+}
+
+// buildPutObjectInput constructs PutObjectInput.
+func buildPutObjectInput(bucket, key string, body io.Reader, size int64, contentType string, metadata []string) *s3.PutObjectInput {
+	input := &s3.PutObjectInput{
+		Bucket:        &bucket,
+		Key:           &key,
+		Body:          body,
+		ContentLength: aws.Int64(size),
+	}
+
+	if contentType != "" {
+		input.ContentType = &contentType
+	}
+
+	if len(metadata) > 0 {
+		input.Metadata = make(map[string]string)
+		for _, m := range metadata {
+			parts := strings.SplitN(m, "=", metadataKeyValueParts)
+			if len(parts) == metadataKeyValueParts {
+				input.Metadata[parts[0]] = parts[1]
+			}
+		}
+	}
+
+	return input
+}
+
+// printPutObjectResult prints upload result.
+func printPutObjectResult(localFile, bucket, key string, result *s3.PutObjectOutput) {
+	fmt.Printf("Uploaded %s to s3://%s/%s\n", localFile, bucket, key)
+
+	if result.ETag != nil {
+		fmt.Printf("ETag: %s\n", *result.ETag)
+	}
+
+	if result.VersionId != nil {
+		fmt.Printf("VersionId: %s\n", *result.VersionId)
+	}
+}
+
 func newObjectPutCmd() *cobra.Command {
 	var (
 		contentType string
@@ -54,77 +145,7 @@ func newObjectPutCmd() *cobra.Command {
 		Short: "Upload an object",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			localFile := args[0]
-
-			bucket, key, isS3 := ParseS3URI(args[1])
-			if !isS3 {
-				return fmt.Errorf("invalid S3 URI: %s", args[1])
-			}
-
-			// If key is empty, use filename
-			if key == "" {
-				key = filepath.Base(localFile)
-			}
-
-			ctx := context.Background()
-
-			client, err := NewS3Client(ctx)
-			if err != nil {
-				return err
-			}
-
-			//nolint:gosec // G304: localFile is user-provided CLI argument
-			file, err := os.Open(localFile)
-			if err != nil {
-				return fmt.Errorf("failed to open file: %w", err)
-			}
-
-			defer func() { _ = file.Close() }()
-
-			stat, err := file.Stat()
-			if err != nil {
-				return fmt.Errorf("failed to stat file: %w", err)
-			}
-
-			input := &s3.PutObjectInput{
-				Bucket:        &bucket,
-				Key:           &key,
-				Body:          file,
-				ContentLength: aws.Int64(stat.Size()),
-			}
-
-			if contentType != "" {
-				input.ContentType = &contentType
-			}
-
-			// Parse metadata
-			if len(metadata) > 0 {
-				input.Metadata = make(map[string]string)
-
-				for _, m := range metadata {
-					parts := strings.SplitN(m, "=", metadataKeyValueParts)
-					if len(parts) == metadataKeyValueParts {
-						input.Metadata[parts[0]] = parts[1]
-					}
-				}
-			}
-
-			result, err := client.PutObject(ctx, input)
-			if err != nil {
-				return fmt.Errorf("failed to upload object: %w", err)
-			}
-
-			fmt.Printf("Uploaded %s to s3://%s/%s\n", localFile, bucket, key)
-
-			if result.ETag != nil {
-				fmt.Printf("ETag: %s\n", *result.ETag)
-			}
-
-			if result.VersionId != nil {
-				fmt.Printf("VersionId: %s\n", *result.VersionId)
-			}
-
-			return nil
+			return runObjectPut(args[0], args[1], contentType, metadata)
 		},
 	}
 
@@ -255,6 +276,88 @@ func newObjectDeleteCmd() *cobra.Command {
 	return cmd
 }
 
+// runObjectList executes the object list operation.
+func runObjectList(uri string, recursive bool, maxKeys int) error {
+	bucket, prefix, isS3 := ParseS3URI(uri)
+	if !isS3 {
+		return fmt.Errorf("invalid S3 URI: %s", uri)
+	}
+
+	ctx := context.Background()
+	client, err := NewS3Client(ctx)
+	if err != nil {
+		return err
+	}
+
+	input := buildListObjectsInput(bucket, prefix, recursive, maxKeys)
+	return printObjectList(ctx, client, input)
+}
+
+// buildListObjectsInput constructs ListObjectsV2Input.
+func buildListObjectsInput(bucket, prefix string, recursive bool, maxKeys int) *s3.ListObjectsV2Input {
+	//nolint:gosec // G115: maxKeys is validated to be within int32 range (max 1000)
+	input := &s3.ListObjectsV2Input{
+		Bucket:  &bucket,
+		MaxKeys: aws.Int32(int32(maxKeys)),
+	}
+
+	if prefix != "" {
+		input.Prefix = &prefix
+	}
+
+	if !recursive {
+		delimiter := "/"
+		input.Delimiter = &delimiter
+	}
+
+	return input
+}
+
+// printObjectList prints paginated object listing.
+func printObjectList(ctx context.Context, client *s3.Client, input *s3.ListObjectsV2Input) error {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(w, "KEY\tSIZE\tMODIFIED")
+
+	paginator := s3.NewListObjectsV2Paginator(client, input)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list objects: %w", err)
+		}
+
+		printCommonPrefixes(w, page.CommonPrefixes)
+		printObjects(w, page.Contents)
+	}
+
+	return w.Flush()
+}
+
+// printCommonPrefixes prints directory-like common prefixes.
+func printCommonPrefixes(w *tabwriter.Writer, prefixes []types.CommonPrefix) {
+	for _, prefix := range prefixes {
+		if prefix.Prefix != nil {
+			_, _ = fmt.Fprintf(w, "%s\t-\t-\n", *prefix.Prefix)
+		}
+	}
+}
+
+// printObjects prints object details.
+func printObjects(w *tabwriter.Writer, objects []types.Object) {
+	for _, obj := range objects {
+		modified := ""
+		if obj.LastModified != nil {
+			modified = obj.LastModified.Format(time.RFC3339)
+		}
+
+		size := int64(0)
+		if obj.Size != nil {
+			size = *obj.Size
+		}
+
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", *obj.Key, FormatSize(size), modified)
+	}
+}
+
 func newObjectListCmd() *cobra.Command {
 	var (
 		recursive bool
@@ -266,66 +369,7 @@ func newObjectListCmd() *cobra.Command {
 		Short: "List objects in a bucket",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			bucket, prefix, isS3 := ParseS3URI(args[0])
-			if !isS3 {
-				return fmt.Errorf("invalid S3 URI: %s", args[0])
-			}
-
-			ctx := context.Background()
-
-			client, err := NewS3Client(ctx)
-			if err != nil {
-				return err
-			}
-
-			//nolint:gosec // G115: maxKeys is validated to be within int32 range (max 1000)
-			input := &s3.ListObjectsV2Input{
-				Bucket:  &bucket,
-				MaxKeys: aws.Int32(int32(maxKeys)),
-			}
-			if prefix != "" {
-				input.Prefix = &prefix
-			}
-
-			if !recursive {
-				delimiter := "/"
-				input.Delimiter = &delimiter
-			}
-
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			_, _ = fmt.Fprintln(w, "KEY\tSIZE\tMODIFIED")
-
-			paginator := s3.NewListObjectsV2Paginator(client, input)
-			for paginator.HasMorePages() {
-				page, err := paginator.NextPage(ctx)
-				if err != nil {
-					return fmt.Errorf("failed to list objects: %w", err)
-				}
-
-				// Print common prefixes (directories)
-				for _, prefix := range page.CommonPrefixes {
-					if prefix.Prefix != nil {
-						_, _ = fmt.Fprintf(w, "%s\t-\t-\n", *prefix.Prefix)
-					}
-				}
-
-				// Print objects
-				for _, obj := range page.Contents {
-					modified := ""
-					if obj.LastModified != nil {
-						modified = obj.LastModified.Format(time.RFC3339)
-					}
-
-					size := int64(0)
-					if obj.Size != nil {
-						size = *obj.Size
-					}
-
-					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", *obj.Key, FormatSize(size), modified)
-				}
-			}
-
-			return w.Flush()
+			return runObjectList(args[0], recursive, maxKeys)
 		},
 	}
 
@@ -333,6 +377,78 @@ func newObjectListCmd() *cobra.Command {
 	cmd.Flags().IntVar(&maxKeys, "max-keys", defaultMaxKeys, "Maximum number of keys to return")
 
 	return cmd
+}
+
+// runObjectHead executes the object head operation.
+func runObjectHead(s3URI, versionID string) error {
+	bucket, key, isS3 := ParseS3URI(s3URI)
+	if !isS3 || key == "" {
+		return fmt.Errorf("invalid S3 URI: %s", s3URI)
+	}
+
+	ctx := context.Background()
+	client, err := NewS3Client(ctx)
+	if err != nil {
+		return err
+	}
+
+	input := buildHeadObjectInput(bucket, key, versionID)
+
+	result, err := client.HeadObject(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to get object metadata: %w", err)
+	}
+
+	printHeadObjectResult(key, result)
+	return nil
+}
+
+// buildHeadObjectInput constructs HeadObjectInput.
+func buildHeadObjectInput(bucket, key, versionID string) *s3.HeadObjectInput {
+	input := &s3.HeadObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+	}
+	if versionID != "" {
+		input.VersionId = &versionID
+	}
+	return input
+}
+
+// printHeadObjectResult prints object metadata.
+func printHeadObjectResult(key string, result *s3.HeadObjectOutput) {
+	fmt.Printf("Key: %s\n", key)
+
+	if result.ContentLength != nil {
+		fmt.Printf("Size: %s (%d bytes)\n", FormatSize(*result.ContentLength), *result.ContentLength)
+	}
+
+	if result.ContentType != nil {
+		fmt.Printf("Content-Type: %s\n", *result.ContentType)
+	}
+
+	if result.ETag != nil {
+		fmt.Printf("ETag: %s\n", *result.ETag)
+	}
+
+	if result.LastModified != nil {
+		fmt.Printf("Last-Modified: %s\n", result.LastModified.Format(time.RFC3339))
+	}
+
+	if result.VersionId != nil {
+		fmt.Printf("Version-Id: %s\n", *result.VersionId)
+	}
+
+	if result.StorageClass != "" {
+		fmt.Printf("Storage-Class: %s\n", result.StorageClass)
+	}
+
+	if len(result.Metadata) > 0 {
+		fmt.Println("Metadata:")
+		for k, v := range result.Metadata {
+			fmt.Printf("  %s: %s\n", k, v)
+		}
+	}
 }
 
 func newObjectHeadCmd() *cobra.Command {
@@ -343,66 +459,7 @@ func newObjectHeadCmd() *cobra.Command {
 		Short: "Get object metadata",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			bucket, key, isS3 := ParseS3URI(args[0])
-			if !isS3 || key == "" {
-				return fmt.Errorf("invalid S3 URI: %s", args[0])
-			}
-
-			ctx := context.Background()
-
-			client, err := NewS3Client(ctx)
-			if err != nil {
-				return err
-			}
-
-			input := &s3.HeadObjectInput{
-				Bucket: &bucket,
-				Key:    &key,
-			}
-			if versionID != "" {
-				input.VersionId = &versionID
-			}
-
-			result, err := client.HeadObject(ctx, input)
-			if err != nil {
-				return fmt.Errorf("failed to get object metadata: %w", err)
-			}
-
-			fmt.Printf("Key: %s\n", key)
-
-			if result.ContentLength != nil {
-				fmt.Printf("Size: %s (%d bytes)\n", FormatSize(*result.ContentLength), *result.ContentLength)
-			}
-
-			if result.ContentType != nil {
-				fmt.Printf("Content-Type: %s\n", *result.ContentType)
-			}
-
-			if result.ETag != nil {
-				fmt.Printf("ETag: %s\n", *result.ETag)
-			}
-
-			if result.LastModified != nil {
-				fmt.Printf("Last-Modified: %s\n", result.LastModified.Format(time.RFC3339))
-			}
-
-			if result.VersionId != nil {
-				fmt.Printf("Version-Id: %s\n", *result.VersionId)
-			}
-
-			if result.StorageClass != "" {
-				fmt.Printf("Storage-Class: %s\n", result.StorageClass)
-			}
-
-			if len(result.Metadata) > 0 {
-				fmt.Println("Metadata:")
-
-				for k, v := range result.Metadata {
-					fmt.Printf("  %s: %s\n", k, v)
-				}
-			}
-
-			return nil
+			return runObjectHead(args[0], versionID)
 		},
 	}
 
@@ -428,72 +485,11 @@ func NewListCmd() *cobra.Command {
 
 			// No args - list buckets
 			if len(args) == 0 {
-				result, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
-				if err != nil {
-					return fmt.Errorf("failed to list buckets: %w", err)
-				}
-
-				for _, bucket := range result.Buckets {
-					created := ""
-					if bucket.CreationDate != nil {
-						created = bucket.CreationDate.Format("2006-01-02 15:04:05")
-					}
-
-					fmt.Printf("%s  s3://%s\n", created, *bucket.Name)
-				}
-
-				return nil
+				return listBuckets(ctx, client)
 			}
 
 			// List objects
-			bucket, prefix, isS3 := ParseS3URI(args[0])
-			if !isS3 {
-				bucket = args[0]
-			}
-
-			input := &s3.ListObjectsV2Input{
-				Bucket: &bucket,
-			}
-			if prefix != "" {
-				input.Prefix = &prefix
-			}
-
-			if !recursive {
-				delimiter := "/"
-				input.Delimiter = &delimiter
-			}
-
-			paginator := s3.NewListObjectsV2Paginator(client, input)
-			for paginator.HasMorePages() {
-				page, err := paginator.NextPage(ctx)
-				if err != nil {
-					return fmt.Errorf("failed to list objects: %w", err)
-				}
-
-				// Print common prefixes (directories)
-				for _, p := range page.CommonPrefixes {
-					if p.Prefix != nil {
-						fmt.Printf("                           PRE %s\n", *p.Prefix)
-					}
-				}
-
-				// Print objects
-				for _, obj := range page.Contents {
-					modified := ""
-					if obj.LastModified != nil {
-						modified = obj.LastModified.Format("2006-01-02 15:04:05")
-					}
-
-					size := int64(0)
-					if obj.Size != nil {
-						size = *obj.Size
-					}
-
-					fmt.Printf("%s %10d %s\n", modified, size, *obj.Key)
-				}
-			}
-
-			return nil
+			return listObjects(ctx, client, args[0], recursive)
 		},
 	}
 
@@ -501,6 +497,67 @@ func NewListCmd() *cobra.Command {
 
 	return cmd
 }
+
+func listBuckets(ctx context.Context, client *s3.Client) error {
+	result, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
+	if err != nil {
+		return fmt.Errorf("failed to list buckets: %w", err)
+	}
+
+	for _, bucket := range result.Buckets {
+		created := ""
+		if bucket.CreationDate != nil {
+			created = bucket.CreationDate.Format("2006-01-02 15:04:05")
+		}
+
+		fmt.Printf("%s  s3://%s\n", created, *bucket.Name)
+	}
+
+	return nil
+}
+
+func listObjects(ctx context.Context, client *s3.Client, uri string, recursive bool) error {
+	bucket, prefix, isS3 := ParseS3URI(uri)
+	if !isS3 {
+		bucket = uri
+	}
+
+	input := buildListObjectsInput(bucket, prefix, recursive, defaultMaxKeys)
+
+	paginator := s3.NewListObjectsV2Paginator(client, input)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list objects: %w", err)
+		}
+
+		// Print common prefixes (directories)
+		for _, p := range page.CommonPrefixes {
+			if p.Prefix != nil {
+				fmt.Printf("                           PRE %s\n", *p.Prefix)
+			}
+		}
+
+		// Print objects
+		for _, obj := range page.Contents {
+			modified := ""
+			if obj.LastModified != nil {
+				modified = obj.LastModified.Format("2006-01-02 15:04:05")
+			}
+
+			size := int64(0)
+			if obj.Size != nil {
+				size = *obj.Size
+			}
+
+			fmt.Printf("%s %10d %s\n", modified, size, *obj.Key)
+		}
+	}
+
+	return nil
+}
+
+
 
 // NewCopyCmd creates the cp alias command.
 func NewCopyCmd() *cobra.Command {

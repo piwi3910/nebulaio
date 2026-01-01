@@ -18,8 +18,9 @@ type SQSConfig struct {
 	SessionToken        string `json:"-" yaml:"sessionToken,omitempty"`
 	Endpoint            string `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
 	MessageGroupID      string `json:"messageGroupId,omitempty" yaml:"messageGroupId,omitempty"`
-	events.TargetConfig `yaml:",inline"`
-	DelaySeconds        int `json:"delaySeconds,omitempty" yaml:"delaySeconds,omitempty"`
+	events.TargetConfig `yaml:",inline"` //nolint:embeddedstructfieldcheck // Grouped with config fields
+
+	DelaySeconds int `json:"delay_seconds,omitempty" yaml:"delay_seconds,omitempty"`
 }
 
 // DefaultSQSConfig returns a default SQS configuration.
@@ -178,7 +179,7 @@ type SNSConfig struct {
 	SessionToken        string `json:"-" yaml:"sessionToken,omitempty"`
 	Endpoint            string `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
 	Subject             string `json:"subject,omitempty" yaml:"subject,omitempty"`
-	events.TargetConfig `yaml:",inline"`
+	events.TargetConfig `yaml:",inline"` //nolint:embeddedstructfieldcheck // Grouped with config fields
 }
 
 // DefaultSNSConfig returns a default SNS configuration.

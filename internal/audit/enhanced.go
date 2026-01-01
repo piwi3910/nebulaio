@@ -103,6 +103,12 @@ type RotationConfig struct {
 	Compress   bool `json:"compress" yaml:"compress"`
 }
 
+// rotatedFile represents a rotated log file.
+type rotatedFile struct {
+	modTime time.Time
+	path    string
+}
+
 // FilterRule defines a filter for audit events.
 type FilterRule struct {
 	// Name is the rule name
@@ -130,6 +136,7 @@ type FilterRule struct {
 // EnhancedAuditEvent extends AuditEvent with additional fields.
 type EnhancedAuditEvent struct {
 	AuditEvent
+
 	// 8-byte fields (pointers, int64)
 	Integrity      *IntegrityInfo  `json:"integrity,omitempty"`
 	Compliance     *ComplianceInfo `json:"compliance,omitempty"`
@@ -180,7 +187,6 @@ type IntegrityInfo struct {
 // EnhancedAuditLogger provides enhanced audit logging capabilities.
 type EnhancedAuditLogger struct {
 	// 8-byte fields (pointers, slices, channels, int64, functions)
-	ctx       context.Context
 	geoLookup GeoLookup
 	store     AuditStore
 	buffer    chan *EnhancedAuditEvent
@@ -246,13 +252,9 @@ func NewEnhancedAuditLogger(config EnhancedConfig, store AuditStore, geoLookup G
 		config.BufferSize = defaultBufferSize
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	logger := &EnhancedAuditLogger{
 		config:    config,
 		buffer:    make(chan *EnhancedAuditEvent, config.BufferSize),
-		ctx:       ctx,
-		cancel:    cancel,
 		geoLookup: geoLookup,
 		store:     store,
 	}
@@ -265,7 +267,6 @@ func NewEnhancedAuditLogger(config EnhancedConfig, store AuditStore, geoLookup G
 
 		output, err := CreateOutput(outputCfg)
 		if err != nil {
-			cancel()
 			return nil, fmt.Errorf("failed to create output %s: %w", outputCfg.Name, err)
 		}
 
@@ -276,10 +277,12 @@ func NewEnhancedAuditLogger(config EnhancedConfig, store AuditStore, geoLookup G
 }
 
 // Start begins processing audit events.
-func (l *EnhancedAuditLogger) Start() {
+func (l *EnhancedAuditLogger) Start(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	l.cancel = cancel
 	l.wg.Add(1)
 
-	go l.processEvents()
+	go l.processEvents(ctx)
 }
 
 // Stop gracefully shuts down the logger.
@@ -434,7 +437,7 @@ func (l *EnhancedAuditLogger) Export(ctx context.Context, filter AuditFilter, fo
 
 // Internal methods
 
-func (l *EnhancedAuditLogger) processEvents() {
+func (l *EnhancedAuditLogger) processEvents(ctx context.Context) {
 	defer l.wg.Done()
 
 	for {
@@ -443,17 +446,17 @@ func (l *EnhancedAuditLogger) processEvents() {
 			if !ok {
 				// Drain remaining
 				for event := range l.buffer {
-					_ = l.processEvent(l.ctx, event)
+					_ = l.processEvent(ctx, event)
 				}
 
 				return
 			}
 
-			err := l.processEvent(l.ctx, event)
+			err := l.processEvent(ctx, event)
 			if err != nil {
 				atomic.AddInt64(&l.stats.EventsFailed, 1)
 			}
-		case <-l.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -538,87 +541,87 @@ func (l *EnhancedAuditLogger) shouldLog(event *EnhancedAuditEvent) bool {
 }
 
 func (l *EnhancedAuditLogger) matchesFilterRule(rule *FilterRule, event *EnhancedAuditEvent) bool {
-	// Check event types
-	if len(rule.EventTypes) > 0 {
-		found := false
-
-		for _, et := range rule.EventTypes {
-			if et == event.EventType {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !l.matchesEventTypes(rule.EventTypes, event.EventType) {
+		return false
 	}
 
-	// Check users
-	if len(rule.Users) > 0 {
-		found := false
-
-		for _, u := range rule.Users {
-			if u == event.UserIdentity.Username {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !l.matchesUsers(rule.Users, event.UserIdentity.Username) {
+		return false
 	}
 
-	// Check buckets
-	if len(rule.Buckets) > 0 {
-		found := false
-
-		for _, b := range rule.Buckets {
-			if b == event.Resource.Bucket {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !l.matchesBuckets(rule.Buckets, event.Resource.Bucket) {
+		return false
 	}
 
-	// Check IPs
-	if len(rule.IPs) > 0 {
-		found := false
-
-		for _, ip := range rule.IPs {
-			if ip == event.SourceIP {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !l.matchesIPs(rule.IPs, event.SourceIP) {
+		return false
 	}
 
-	// Check results
-	if len(rule.Results) > 0 {
-		found := false
-
-		for _, r := range rule.Results {
-			if r == event.Result {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return false
-		}
+	if !l.matchesResults(rule.Results, event.Result) {
+		return false
 	}
 
 	return true
+}
+
+func (l *EnhancedAuditLogger) matchesEventTypes(allowed []EventType, actual EventType) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, et := range allowed {
+		if et == actual {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *EnhancedAuditLogger) matchesUsers(allowed []string, actual string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, u := range allowed {
+		if u == actual {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *EnhancedAuditLogger) matchesBuckets(allowed []string, actual string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, b := range allowed {
+		if b == actual {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *EnhancedAuditLogger) matchesIPs(allowed []string, actual string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, ip := range allowed {
+		if ip == actual {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *EnhancedAuditLogger) matchesResults(allowed []Result, actual Result) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, r := range allowed {
+		if r == actual {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *EnhancedAuditLogger) addIntegrity(event *EnhancedAuditEvent) {
@@ -1050,78 +1053,82 @@ func (o *FileOutput) compressFile(filePath string) error {
 
 // cleanupOldFiles removes old log files based on MaxBackups and MaxAgeDays.
 func (o *FileOutput) cleanupOldFiles() {
-	// Get the directory and base name of the log file
 	dir := filepath.Dir(o.path)
 	baseName := filepath.Base(o.path)
 
-	// Find all rotated files (matching pattern: baseName.timestamp or baseName.timestamp.gz)
+	rotatedFiles := o.findRotatedFiles(dir, baseName)
+	o.removeOldFiles(rotatedFiles)
+}
+
+func (o *FileOutput) findRotatedFiles(dir, baseName string) []rotatedFile {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		log.Warn().Err(err).Str("dir", dir).Msg("Failed to read log directory for cleanup")
-		return
-	}
-
-	type rotatedFile struct {
-		modTime time.Time
-		path    string
+		return nil
 	}
 
 	var rotatedFiles []rotatedFile
 
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		name := entry.Name()
-		// Skip the current log file
-		if name == baseName {
-			continue
-		}
-		// Match rotated files (baseName.timestamp or baseName.timestamp.gz)
-		if strings.HasPrefix(name, baseName+".") {
-			info, err := entry.Info()
-			if err != nil {
-				continue
-			}
-
-			rotatedFiles = append(rotatedFiles, rotatedFile{
-				path:    filepath.Join(dir, name),
-				modTime: info.ModTime(),
-			})
+		if rf := o.processLogEntry(entry, dir, baseName); rf != nil {
+			rotatedFiles = append(rotatedFiles, *rf)
 		}
 	}
 
-	// Sort by modification time (newest first)
 	sort.Slice(rotatedFiles, func(i, j int) bool {
 		return rotatedFiles[i].modTime.After(rotatedFiles[j].modTime)
 	})
 
+	return rotatedFiles
+}
+
+func (o *FileOutput) processLogEntry(entry os.DirEntry, dir, baseName string) *rotatedFile {
+	if entry.IsDir() {
+		return nil
+	}
+
+	name := entry.Name()
+	if name == baseName || !strings.HasPrefix(name, baseName+".") {
+		return nil
+	}
+
+	info, err := entry.Info()
+	if err != nil {
+		return nil
+	}
+
+	return &rotatedFile{
+		path:    filepath.Join(dir, name),
+		modTime: info.ModTime(),
+	}
+}
+
+func (o *FileOutput) removeOldFiles(rotatedFiles []rotatedFile) {
 	now := time.Now()
 
 	for i, rf := range rotatedFiles {
-		shouldDelete := false
-
-		// Check MaxBackups limit
-		if o.rotation.MaxBackups > 0 && i >= o.rotation.MaxBackups {
-			shouldDelete = true
-		}
-
-		// Check MaxAgeDays limit
-		if o.rotation.MaxAgeDays > 0 {
-			age := now.Sub(rf.modTime)
-			if age > time.Duration(o.rotation.MaxAgeDays)*24*time.Hour {
-				shouldDelete = true
-			}
-		}
-
-		if shouldDelete {
+		if o.shouldDeleteFile(i, rf.modTime, now) {
 			err := os.Remove(rf.path)
 			if err != nil {
 				log.Warn().Err(err).Str("file", rf.path).Msg("Failed to remove old log file during cleanup")
 			}
 		}
 	}
+}
+
+func (o *FileOutput) shouldDeleteFile(index int, modTime, now time.Time) bool {
+	if o.rotation.MaxBackups > 0 && index >= o.rotation.MaxBackups {
+		return true
+	}
+
+	if o.rotation.MaxAgeDays > 0 {
+		age := now.Sub(modTime)
+		if age > time.Duration(o.rotation.MaxAgeDays)*24*time.Hour {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (o *FileOutput) Flush(ctx context.Context) error {

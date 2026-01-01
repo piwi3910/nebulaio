@@ -75,10 +75,11 @@ func NewService(config Config, store metadata.Store) *Service {
 
 // TokenClaims represents JWT claims.
 type TokenClaims struct {
+	jwt.RegisteredClaims
+
 	UserID   string            `json:"user_id"`
 	Username string            `json:"username"`
 	Role     metadata.UserRole `json:"role"`
-	jwt.RegisteredClaims
 }
 
 // TokenPair represents access and refresh tokens.

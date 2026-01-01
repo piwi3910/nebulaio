@@ -23,7 +23,8 @@ type Config struct {
 	RequestTimeout time.Duration `json:"requestTimeout"           yaml:"requestTimeout"`
 	// Structs
 	ClaimsMapping       ClaimsMapping `json:"claimsMapping,omitempty" yaml:"claimsMapping,omitempty"`
-	auth.ProviderConfig `yaml:",inline"`
+	auth.ProviderConfig `yaml:",inline"` //nolint:embeddedstructfieldcheck // Grouped by size for memory layout
+
 	// Strings
 	ClientSecret      string `json:"clientSecret"                yaml:"clientSecret"`
 	ClientID          string `json:"clientId"                    yaml:"clientId"`

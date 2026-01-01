@@ -599,7 +599,7 @@ func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 	now := time.Now()
 
 	for _, key := range keys {
-		if key.Status != KeyStatusActive {
+		if !krm.shouldCheckKey(key) {
 			continue
 		}
 
@@ -608,40 +608,49 @@ func (krm *KeyRotationManager) checkAndRotateKeys(ctx context.Context) {
 			continue
 		}
 
-		// Check if key needs rotation based on age
-		keyAge := now.Sub(key.CreatedAt)
-		if key.RotatedAt != nil {
-			keyAge = now.Sub(*key.RotatedAt)
-		}
+		krm.checkKeyRotation(ctx, key, policy, now)
+		krm.checkKeyExpiry(ctx, key, policy, now)
+	}
+}
 
-		if keyAge >= policy.RotationInterval {
-			_, rotateErr := krm.RotateKey(ctx, key.ID, "scheduled", "system")
-			if rotateErr != nil {
-				log.Error().
-					Err(rotateErr).
+func (krm *KeyRotationManager) shouldCheckKey(key *EncryptionKey) bool {
+	return key.Status == KeyStatusActive
+}
+
+func (krm *KeyRotationManager) checkKeyRotation(ctx context.Context, key *EncryptionKey, policy *RotationPolicy, now time.Time) {
+	keyAge := now.Sub(key.CreatedAt)
+	if key.RotatedAt != nil {
+		keyAge = now.Sub(*key.RotatedAt)
+	}
+
+	if keyAge >= policy.RotationInterval {
+		_, rotateErr := krm.RotateKey(ctx, key.ID, "scheduled", "system")
+		if rotateErr != nil {
+			log.Error().
+				Err(rotateErr).
+				Str("key_id", key.ID).
+				Str("key_type", string(key.Type)).
+				Dur("key_age", keyAge).
+				Msg("failed to rotate key during scheduled rotation - key may exceed rotation policy")
+		}
+	}
+}
+
+func (krm *KeyRotationManager) checkKeyExpiry(ctx context.Context, key *EncryptionKey, policy *RotationPolicy, now time.Time) {
+	if key.ExpiresAt == nil {
+		return
+	}
+
+	timeToExpiry := key.ExpiresAt.Sub(now)
+	if timeToExpiry <= policy.NotifyBeforeExpiry && timeToExpiry > 0 {
+		if krm.notifier != nil {
+			notifyErr := krm.notifier.NotifyKeyExpiring(ctx, key, timeToExpiry)
+			if notifyErr != nil {
+				log.Warn().
+					Err(notifyErr).
 					Str("key_id", key.ID).
-					Str("key_type", string(key.Type)).
-					Dur("key_age", keyAge).
-					Msg("failed to rotate key during scheduled rotation - key may exceed rotation policy")
-			}
-
-			continue
-		}
-
-		// Check if key is expiring soon and notify
-		if key.ExpiresAt != nil {
-			timeToExpiry := key.ExpiresAt.Sub(now)
-			if timeToExpiry <= policy.NotifyBeforeExpiry && timeToExpiry > 0 {
-				if krm.notifier != nil {
-					notifyErr := krm.notifier.NotifyKeyExpiring(ctx, key, timeToExpiry)
-					if notifyErr != nil {
-						log.Warn().
-							Err(notifyErr).
-							Str("key_id", key.ID).
-							Dur("time_to_expiry", timeToExpiry).
-							Msg("failed to send key expiry notification")
-					}
-				}
+					Dur("time_to_expiry", timeToExpiry).
+					Msg("failed to send key expiry notification")
 			}
 		}
 	}
@@ -796,42 +805,62 @@ func (krm *KeyRotationManager) CancelKeyDeletion(ctx context.Context, keyID stri
 
 // GetKeyVersion retrieves a specific version of a key.
 func (krm *KeyRotationManager) GetKeyVersion(ctx context.Context, keyID string, version int) (*KeyVersion, error) {
+	if keyVersion := krm.getKeyVersionFromCache(keyID, version); keyVersion != nil {
+		return keyVersion, nil
+	}
+
+	return krm.getKeyVersionFromStorage(ctx, keyID, version)
+}
+
+func (krm *KeyRotationManager) getKeyVersionFromCache(keyID string, version int) *KeyVersion {
 	krm.mu.RLock()
 	versions, exists := krm.keyVersions[keyID]
 	krm.mu.RUnlock()
 
-	if exists {
-		for _, v := range versions {
-			if v.Version == version {
-				return v, nil
-			}
+	if !exists {
+		return nil
+	}
+
+	for _, v := range versions {
+		if v.Version == version {
+			return v
 		}
 	}
 
-	if krm.storage != nil {
-		versions, err := krm.storage.GetKeyVersions(ctx, keyID)
-		if err != nil {
-			return nil, err
-		}
+	return nil
+}
 
-		for _, v := range versions {
-			if v.Version == version {
-				// Unwrap key material
-				if len(v.WrappedKey) > 0 {
-					keyMaterial, err := krm.unwrapKey(v.WrappedKey)
-					if err != nil {
-						return nil, err
-					}
+func (krm *KeyRotationManager) getKeyVersionFromStorage(ctx context.Context, keyID string, version int) (*KeyVersion, error) {
+	if krm.storage == nil {
+		return nil, fmt.Errorf("key version not found: %s v%d", keyID, version)
+	}
 
-					v.KeyMaterial = keyMaterial
-				}
+	versions, err := krm.storage.GetKeyVersions(ctx, keyID)
+	if err != nil {
+		return nil, err
+	}
 
-				return v, nil
-			}
+	for _, v := range versions {
+		if v.Version == version {
+			return krm.unwrapAndReturnVersion(v)
 		}
 	}
 
 	return nil, fmt.Errorf("key version not found: %s v%d", keyID, version)
+}
+
+func (krm *KeyRotationManager) unwrapAndReturnVersion(v *KeyVersion) (*KeyVersion, error) {
+	if len(v.WrappedKey) == 0 {
+		return v, nil
+	}
+
+	keyMaterial, err := krm.unwrapKey(v.WrappedKey)
+	if err != nil {
+		return nil, err
+	}
+
+	v.KeyMaterial = keyMaterial
+	return v, nil
 }
 
 // DeriveKey derives a new key from an existing key using HKDF.

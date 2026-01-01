@@ -277,113 +277,132 @@ func (m *Manager) processVersions(ctx context.Context, bucket string, rules []Li
 		return err
 	}
 
-	// Combine versions and delete markers
+	keyVersions := m.groupVersionsByKey(listing)
+	now := time.Now()
+
+	for key, vers := range keyVersions {
+		m.processKeyVersions(ctx, bucket, key, vers, rules, now)
+	}
+
+	return nil
+}
+
+// groupVersionsByKey combines and groups all versions by object key.
+func (m *Manager) groupVersionsByKey(listing *metadata.VersionListing) map[string][]*metadata.ObjectMeta {
 	allVersions := make([]*metadata.ObjectMeta, 0, len(listing.Versions)+len(listing.DeleteMarkers))
 	allVersions = append(allVersions, listing.Versions...)
 	allVersions = append(allVersions, listing.DeleteMarkers...)
 
-	// Group versions by key to identify noncurrent versions
 	keyVersions := make(map[string][]*metadata.ObjectMeta)
 	for _, v := range allVersions {
 		keyVersions[v.Key] = append(keyVersions[v.Key], v)
 	}
 
-	now := time.Now()
+	return keyVersions
+}
 
-	for key, vers := range keyVersions {
-		// Sort by modification time (newest first) - assume they come sorted
-		// Process noncurrent versions (all except the first/current one)
-		for i, v := range vers {
-			isCurrent := i == 0 && !v.DeleteMarker
-
-			if isCurrent {
-				continue
-			}
-
-			// Evaluate noncurrent version rules
-			for _, rule := range rules {
-				if !rule.IsEnabled() {
-					continue
-				}
-
-				if !rule.MatchesObject(key, v.Tags) {
-					continue
-				}
-
-				// Check for expired delete markers
-				if v.DeleteMarker && rule.Expiration != nil && rule.Expiration.ExpiredObjectDeleteMarker {
-					// Delete marker is expired if it's the only version
-					if len(vers) == 1 {
-						err := m.objectService.DeleteObjectVersion(ctx, bucket, key, v.VersionID)
-						if err != nil {
-							log.Error().Err(err).
-								Str("bucket", bucket).
-								Str("key", key).
-								Str("versionId", v.VersionID).
-								Msg("Failed to delete expired delete marker")
-						} else {
-							log.Info().
-								Str("bucket", bucket).
-								Str("key", key).
-								Str("versionId", v.VersionID).
-								Str("rule", rule.ID).
-								Msg("Deleted expired delete marker")
-						}
-					}
-
-					continue
-				}
-
-				// Check noncurrent version expiration
-				if rule.NoncurrentVersionExpiration != nil {
-					nve := rule.NoncurrentVersionExpiration
-
-					// Check by days
-					if nve.NoncurrentDays > 0 {
-						expirationTime := v.ModifiedAt.AddDate(0, 0, nve.NoncurrentDays)
-						if now.After(expirationTime) {
-							err := m.objectService.DeleteObjectVersion(ctx, bucket, key, v.VersionID)
-							if err != nil {
-								log.Error().Err(err).
-									Str("bucket", bucket).
-									Str("key", key).
-									Str("versionId", v.VersionID).
-									Msg("Failed to delete noncurrent version")
-							} else {
-								log.Info().
-									Str("bucket", bucket).
-									Str("key", key).
-									Str("versionId", v.VersionID).
-									Str("rule", rule.ID).
-									Msg("Deleted noncurrent version")
-							}
-						}
-					}
-
-					// Check by count (NewerNoncurrentVersions)
-					if nve.NewerNoncurrentVersions > 0 && i >= nve.NewerNoncurrentVersions {
-						err := m.objectService.DeleteObjectVersion(ctx, bucket, key, v.VersionID)
-						if err != nil {
-							log.Error().Err(err).
-								Str("bucket", bucket).
-								Str("key", key).
-								Str("versionId", v.VersionID).
-								Msg("Failed to delete excess noncurrent version")
-						} else {
-							log.Info().
-								Str("bucket", bucket).
-								Str("key", key).
-								Str("versionId", v.VersionID).
-								Str("rule", rule.ID).
-								Msg("Deleted excess noncurrent version")
-						}
-					}
-				}
-			}
+// processKeyVersions processes all versions for a specific object key.
+func (m *Manager) processKeyVersions(ctx context.Context, bucket, key string, versions []*metadata.ObjectMeta, rules []LifecycleRule, now time.Time) {
+	for i, v := range versions {
+		isCurrent := i == 0 && !v.DeleteMarker
+		if isCurrent {
+			continue
 		}
+
+		m.evaluateNoncurrentVersion(ctx, bucket, key, v, versions, i, rules, now)
+	}
+}
+
+// evaluateNoncurrentVersion evaluates lifecycle rules for a noncurrent version.
+func (m *Manager) evaluateNoncurrentVersion(ctx context.Context, bucket, key string, version *metadata.ObjectMeta, allVersions []*metadata.ObjectMeta, versionIndex int, rules []LifecycleRule, now time.Time) {
+	for _, rule := range rules {
+		if !rule.IsEnabled() || !rule.MatchesObject(key, version.Tags) {
+			continue
+		}
+
+		if m.handleExpiredDeleteMarker(ctx, bucket, key, version, allVersions, rule) {
+			continue
+		}
+
+		m.handleNoncurrentVersionExpiration(ctx, bucket, key, version, versionIndex, rule, now)
+	}
+}
+
+// handleExpiredDeleteMarker processes expired delete markers.
+func (m *Manager) handleExpiredDeleteMarker(ctx context.Context, bucket, key string, version *metadata.ObjectMeta, allVersions []*metadata.ObjectMeta, rule LifecycleRule) bool {
+	if !version.DeleteMarker || rule.Expiration == nil || !rule.Expiration.ExpiredObjectDeleteMarker {
+		return false
 	}
 
-	return nil
+	// Delete marker is expired if it's the only version
+	if len(allVersions) != 1 {
+		return true
+	}
+
+	err := m.objectService.DeleteObjectVersion(ctx, bucket, key, version.VersionID)
+	m.logVersionDeletion(err, bucket, key, version.VersionID, rule.ID, "Deleted expired delete marker", "Failed to delete expired delete marker")
+
+	return true
+}
+
+// handleNoncurrentVersionExpiration processes noncurrent version expiration rules.
+func (m *Manager) handleNoncurrentVersionExpiration(ctx context.Context, bucket, key string, version *metadata.ObjectMeta, versionIndex int, rule LifecycleRule, now time.Time) {
+	if rule.NoncurrentVersionExpiration == nil {
+		return
+	}
+
+	nve := rule.NoncurrentVersionExpiration
+
+	if m.checkNoncurrentDaysExpiration(ctx, bucket, key, version, nve, rule.ID, now) {
+		return
+	}
+
+	m.checkNoncurrentVersionCount(ctx, bucket, key, version, versionIndex, nve, rule.ID)
+}
+
+// checkNoncurrentDaysExpiration checks and applies day-based expiration.
+func (m *Manager) checkNoncurrentDaysExpiration(ctx context.Context, bucket, key string, version *metadata.ObjectMeta, nve *NoncurrentVersionExpiration, ruleID string, now time.Time) bool {
+	if nve.NoncurrentDays <= 0 {
+		return false
+	}
+
+	expirationTime := version.ModifiedAt.AddDate(0, 0, nve.NoncurrentDays)
+	if !now.After(expirationTime) {
+		return false
+	}
+
+	err := m.objectService.DeleteObjectVersion(ctx, bucket, key, version.VersionID)
+	m.logVersionDeletion(err, bucket, key, version.VersionID, ruleID, "Deleted noncurrent version", "Failed to delete noncurrent version")
+
+	return true
+}
+
+// checkNoncurrentVersionCount checks and applies count-based expiration.
+func (m *Manager) checkNoncurrentVersionCount(ctx context.Context, bucket, key string, version *metadata.ObjectMeta, versionIndex int, nve *NoncurrentVersionExpiration, ruleID string) {
+	if nve.NewerNoncurrentVersions <= 0 || versionIndex < nve.NewerNoncurrentVersions {
+		return
+	}
+
+	err := m.objectService.DeleteObjectVersion(ctx, bucket, key, version.VersionID)
+	m.logVersionDeletion(err, bucket, key, version.VersionID, ruleID, "Deleted excess noncurrent version", "Failed to delete excess noncurrent version")
+}
+
+// logVersionDeletion logs the result of a version deletion operation.
+func (m *Manager) logVersionDeletion(err error, bucket, key, versionID, ruleID, successMsg, errorMsg string) {
+	if err != nil {
+		log.Error().Err(err).
+			Str("bucket", bucket).
+			Str("key", key).
+			Str("versionId", versionID).
+			Msg(errorMsg)
+	} else {
+		log.Info().
+			Str("bucket", bucket).
+			Str("key", key).
+			Str("versionId", versionID).
+			Str("rule", ruleID).
+			Msg(successMsg)
+	}
 }
 
 // processMultipartUploads aborts incomplete multipart uploads.
@@ -396,45 +415,56 @@ func (m *Manager) processMultipartUploads(ctx context.Context, bucket string, ru
 	now := time.Now()
 
 	for _, upload := range uploads {
-		for _, rule := range rules {
-			if !rule.IsEnabled() {
-				continue
-			}
-
-			if !rule.MatchesObject(upload.Key, nil) {
-				continue
-			}
-
-			if rule.AbortIncompleteMultipartUpload == nil {
-				continue
-			}
-
-			daysAfter := rule.AbortIncompleteMultipartUpload.DaysAfterInitiation
-			expirationTime := upload.CreatedAt.AddDate(0, 0, daysAfter)
-
-			if now.After(expirationTime) {
-				err := m.multipartService.AbortMultipartUpload(ctx, bucket, upload.Key, upload.UploadID)
-				if err != nil {
-					log.Error().Err(err).
-						Str("bucket", bucket).
-						Str("key", upload.Key).
-						Str("uploadId", upload.UploadID).
-						Msg("Failed to abort incomplete multipart upload")
-				} else {
-					log.Info().
-						Str("bucket", bucket).
-						Str("key", upload.Key).
-						Str("uploadId", upload.UploadID).
-						Str("rule", rule.ID).
-						Msg("Aborted incomplete multipart upload")
-				}
-
-				break // Only apply first matching rule
-			}
-		}
+		m.processUploadWithRules(ctx, bucket, upload, rules, now)
 	}
 
 	return nil
+}
+
+func (m *Manager) processUploadWithRules(ctx context.Context, bucket string, upload *metadata.MultipartUpload, rules []LifecycleRule, now time.Time) {
+	for _, rule := range rules {
+		if m.shouldAbortUpload(upload, rule, now) {
+			m.abortUpload(ctx, bucket, upload, rule.ID)
+			break
+		}
+	}
+}
+
+func (m *Manager) shouldAbortUpload(upload *metadata.MultipartUpload, rule LifecycleRule, now time.Time) bool {
+	if !rule.IsEnabled() {
+		return false
+	}
+
+	if !rule.MatchesObject(upload.Key, nil) {
+		return false
+	}
+
+	if rule.AbortIncompleteMultipartUpload == nil {
+		return false
+	}
+
+	daysAfter := rule.AbortIncompleteMultipartUpload.DaysAfterInitiation
+	expirationTime := upload.CreatedAt.AddDate(0, 0, daysAfter)
+
+	return now.After(expirationTime)
+}
+
+func (m *Manager) abortUpload(ctx context.Context, bucket string, upload *metadata.MultipartUpload, ruleID string) {
+	err := m.multipartService.AbortMultipartUpload(ctx, bucket, upload.Key, upload.UploadID)
+	if err != nil {
+		log.Error().Err(err).
+			Str("bucket", bucket).
+			Str("key", upload.Key).
+			Str("uploadId", upload.UploadID).
+			Msg("Failed to abort incomplete multipart upload")
+	} else {
+		log.Info().
+			Str("bucket", bucket).
+			Str("key", upload.Key).
+			Str("uploadId", upload.UploadID).
+			Str("rule", ruleID).
+			Msg("Aborted incomplete multipart upload")
+	}
 }
 
 // EvaluateObject evaluates lifecycle rules against an object and returns the action.
@@ -442,59 +472,79 @@ func (m *Manager) EvaluateObject(rules []LifecycleRule, obj *metadata.ObjectMeta
 	now := time.Now()
 
 	for _, rule := range rules {
-		if !rule.IsEnabled() {
+		if !m.shouldEvaluateRule(rule, obj) {
 			continue
 		}
 
-		if !rule.MatchesObject(obj.Key, obj.Tags) {
-			continue
+		// Check expiration first
+		if result := m.evaluateExpiration(rule, obj, now); result.Action != ActionNone {
+			return result
 		}
 
-		// Check expiration
-		if rule.Expiration != nil {
-			// Check by days
-			if rule.Expiration.Days > 0 {
-				expirationTime := obj.CreatedAt.AddDate(0, 0, rule.Expiration.Days)
-				if now.After(expirationTime) {
-					return ActionResult{
-						Action: ActionDelete,
-						RuleID: rule.ID,
-					}
-				}
-			}
+		// Check transitions
+		if result := m.evaluateTransitions(rule, obj, now); result.Action != ActionNone {
+			return result
+		}
+	}
 
-			// Check by date
-			if !rule.Expiration.Date.IsZero() {
-				if now.After(rule.Expiration.Date) {
-					return ActionResult{
-						Action: ActionDelete,
-						RuleID: rule.ID,
-					}
-				}
+	return ActionResult{Action: ActionNone}
+}
+
+func (m *Manager) shouldEvaluateRule(rule LifecycleRule, obj *metadata.ObjectMeta) bool {
+	return rule.IsEnabled() && rule.MatchesObject(obj.Key, obj.Tags)
+}
+
+func (m *Manager) evaluateExpiration(rule LifecycleRule, obj *metadata.ObjectMeta, now time.Time) ActionResult {
+	if rule.Expiration == nil {
+		return ActionResult{Action: ActionNone}
+	}
+
+	// Check by days
+	if rule.Expiration.Days > 0 {
+		expirationTime := obj.CreatedAt.AddDate(0, 0, rule.Expiration.Days)
+		if now.After(expirationTime) {
+			return ActionResult{
+				Action: ActionDelete,
+				RuleID: rule.ID,
 			}
 		}
+	}
 
-		// Check transitions (find earliest applicable)
-		for _, transition := range rule.Transition {
-			var transitionTime time.Time
+	// Check by date
+	if !rule.Expiration.Date.IsZero() && now.After(rule.Expiration.Date) {
+		return ActionResult{
+			Action: ActionDelete,
+			RuleID: rule.ID,
+		}
+	}
 
-			if transition.Days > 0 {
-				transitionTime = obj.CreatedAt.AddDate(0, 0, transition.Days)
-			} else if !transition.Date.IsZero() {
-				transitionTime = transition.Date
-			}
+	return ActionResult{Action: ActionNone}
+}
 
-			if now.After(transitionTime) && obj.StorageClass != transition.StorageClass {
-				return ActionResult{
-					Action:      ActionTransition,
-					TargetClass: transition.StorageClass,
-					RuleID:      rule.ID,
-				}
+func (m *Manager) evaluateTransitions(rule LifecycleRule, obj *metadata.ObjectMeta, now time.Time) ActionResult {
+	for _, transition := range rule.Transition {
+		transitionTime := m.getTransitionTime(transition, obj)
+
+		if now.After(transitionTime) && obj.StorageClass != transition.StorageClass {
+			return ActionResult{
+				Action:      ActionTransition,
+				TargetClass: transition.StorageClass,
+				RuleID:      rule.ID,
 			}
 		}
 	}
 
 	return ActionResult{Action: ActionNone}
+}
+
+func (m *Manager) getTransitionTime(transition Transition, obj *metadata.ObjectMeta) time.Time {
+	if transition.Days > 0 {
+		return obj.CreatedAt.AddDate(0, 0, transition.Days)
+	}
+	if !transition.Date.IsZero() {
+		return transition.Date
+	}
+	return time.Time{}
 }
 
 // applyAction applies the lifecycle action to an object.

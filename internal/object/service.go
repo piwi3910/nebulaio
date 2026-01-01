@@ -213,47 +213,61 @@ func (s *Service) PutObject(ctx context.Context, bucket, key string, reader io.R
 
 // PutObjectWithOptions stores an object with additional options including tags.
 func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType, owner string, userMetadata map[string]string, opts *PutObjectOptions) (*metadata.ObjectMeta, error) {
-	// Verify bucket exists
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
 	if err != nil {
 		return nil, fmt.Errorf("bucket not found: %w", err)
 	}
 
-	// Validate tags if provided
-	var tags map[string]string
-
-	if opts != nil && opts.Tags != nil {
-		err := ValidateTags(opts.Tags)
-		if err != nil {
-			return nil, fmt.Errorf("invalid tags: %w", err)
-		}
-
-		tags = opts.Tags
+	tags, err := s.validateAndGetTags(opts)
+	if err != nil {
+		return nil, err
 	}
 
-	// Store the object data
 	result, err := s.storage.PutObject(ctx, bucket, key, reader, size)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store object: %w", err)
 	}
 
-	// Determine version ID and whether to preserve old versions
-	versionID := ""
-	preserveOldVersions := false
+	versionID, preserveOldVersions := s.determineVersioning(bucketInfo)
 
-	if versioningPkg.IsVersioningEnabled(bucketInfo) {
-		// Versioning enabled: generate new version ID and preserve old versions
-		versionID = s.versionService.GenerateVersionID()
-		preserveOldVersions = true
-	} else if versioningPkg.IsVersioningSuspended(bucketInfo) {
-		// Versioning suspended: use "null" version ID, overwrite null version
-		versionID = versioningPkg.NullVersionID
-		preserveOldVersions = false
+	meta := s.createObjectMetadata(bucket, key, versionID, result, contentType, owner, userMetadata, tags, bucketInfo)
+
+	if err := s.applyObjectLockSettings(ctx, bucket, key, bucketInfo, opts, meta); err != nil {
+		_ = s.storage.DeleteObject(ctx, bucket, key)
+		return nil, err
 	}
 
-	// Create object metadata
+	if err := s.storeObjectMetadata(ctx, bucket, key, meta, versionID, preserveOldVersions); err != nil {
+		_ = s.storage.DeleteObject(ctx, bucket, key)
+		return nil, err
+	}
+
+	return meta, nil
+}
+
+func (s *Service) validateAndGetTags(opts *PutObjectOptions) (map[string]string, error) {
+	if opts != nil && opts.Tags != nil {
+		if err := ValidateTags(opts.Tags); err != nil {
+			return nil, fmt.Errorf("invalid tags: %w", err)
+		}
+		return opts.Tags, nil
+	}
+	return nil, nil
+}
+
+func (s *Service) determineVersioning(bucketInfo *metadata.Bucket) (string, bool) {
+	if versioningPkg.IsVersioningEnabled(bucketInfo) {
+		return s.versionService.GenerateVersionID(), true
+	}
+	if versioningPkg.IsVersioningSuspended(bucketInfo) {
+		return versioningPkg.NullVersionID, false
+	}
+	return "", false
+}
+
+func (s *Service) createObjectMetadata(bucket, key, versionID string, result *backend.PutResult, contentType, owner string, userMetadata, tags map[string]string, bucketInfo *metadata.Bucket) *metadata.ObjectMeta {
 	now := time.Now()
-	meta := &metadata.ObjectMeta{
+	return &metadata.ObjectMeta{
 		Bucket:       bucket,
 		Key:          key,
 		VersionID:    versionID,
@@ -271,68 +285,64 @@ func (s *Service) PutObjectWithOptions(ctx context.Context, bucket, key string, 
 			Path: result.Path,
 		},
 	}
+}
 
-	// Apply object lock settings if bucket has object lock enabled
-	if bucketInfo.ObjectLockEnabled {
-		// Apply default retention from bucket configuration
-		err := s.ApplyDefaultRetention(ctx, bucket, meta)
-		if err != nil {
-			// Rollback: delete the stored object
-			_ = s.storage.DeleteObject(ctx, bucket, key)
-			return nil, fmt.Errorf("failed to apply default retention: %w", err)
-		}
-
-		// Apply explicit retention from options if provided
-		if opts != nil && opts.ObjectLockMode != "" {
-			err := ValidateRetentionMode(opts.ObjectLockMode)
-			if err != nil {
-				_ = s.storage.DeleteObject(ctx, bucket, key)
-				return nil, err
-			}
-
-			meta.ObjectLockMode = opts.ObjectLockMode
-		}
-
-		if opts != nil && opts.ObjectLockRetainUntilDate != nil {
-			err := ValidateRetentionDate(*opts.ObjectLockRetainUntilDate)
-			if err != nil {
-				_ = s.storage.DeleteObject(ctx, bucket, key)
-				return nil, err
-			}
-
-			meta.ObjectLockRetainUntilDate = opts.ObjectLockRetainUntilDate
-		}
-
-		if opts != nil && opts.ObjectLockLegalHoldStatus != "" {
-			err := ValidateLegalHoldStatus(opts.ObjectLockLegalHoldStatus)
-			if err != nil {
-				_ = s.storage.DeleteObject(ctx, bucket, key)
-				return nil, err
-			}
-
-			meta.ObjectLockLegalHoldStatus = opts.ObjectLockLegalHoldStatus
-		}
+func (s *Service) applyObjectLockSettings(ctx context.Context, bucket, key string, bucketInfo *metadata.Bucket, opts *PutObjectOptions, meta *metadata.ObjectMeta) error {
+	if !bucketInfo.ObjectLockEnabled {
+		return nil
 	}
 
-	// Store metadata with versioning support
+	if err := s.ApplyDefaultRetention(ctx, bucket, meta); err != nil {
+		return fmt.Errorf("failed to apply default retention: %w", err)
+	}
+
+	if err := s.applyExplicitObjectLock(opts, meta); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) applyExplicitObjectLock(opts *PutObjectOptions, meta *metadata.ObjectMeta) error {
+	if opts == nil {
+		return nil
+	}
+
+	if opts.ObjectLockMode != "" {
+		if err := ValidateRetentionMode(opts.ObjectLockMode); err != nil {
+			return err
+		}
+		meta.ObjectLockMode = opts.ObjectLockMode
+	}
+
+	if opts.ObjectLockRetainUntilDate != nil {
+		if err := ValidateRetentionDate(*opts.ObjectLockRetainUntilDate); err != nil {
+			return err
+		}
+		meta.ObjectLockRetainUntilDate = opts.ObjectLockRetainUntilDate
+	}
+
+	if opts.ObjectLockLegalHoldStatus != "" {
+		if err := ValidateLegalHoldStatus(opts.ObjectLockLegalHoldStatus); err != nil {
+			return err
+		}
+		meta.ObjectLockLegalHoldStatus = opts.ObjectLockLegalHoldStatus
+	}
+
+	return nil
+}
+
+func (s *Service) storeObjectMetadata(ctx context.Context, bucket, key string, meta *metadata.ObjectMeta, versionID string, preserveOldVersions bool) error {
 	if versionID != "" {
-		err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions)
-		if err != nil {
-			// Rollback: delete the stored object
-			_ = s.storage.DeleteObject(ctx, bucket, key)
-			return nil, fmt.Errorf("failed to store object metadata: %w", err)
+		if err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions); err != nil {
+			return fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	} else {
-		// No versioning, just store normally
-		err := s.store.PutObjectMeta(ctx, meta)
-		if err != nil {
-			// Rollback: delete the stored object
-			_ = s.storage.DeleteObject(ctx, bucket, key)
-			return nil, fmt.Errorf("failed to store object metadata: %w", err)
+		if err := s.store.PutObjectMeta(ctx, meta); err != nil {
+			return fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	}
-
-	return meta, nil
+	return nil
 }
 
 // GetObject retrieves an object.
@@ -390,7 +400,6 @@ func (s *Service) DeleteObjectVersion(ctx context.Context, bucket, key, versionI
 
 // DeleteObjectVersionWithOptions deletes a specific version with options for bypassing governance.
 func (s *Service) DeleteObjectVersionWithOptions(ctx context.Context, bucket, key, versionID string, opts *ObjectLockCheckOptions) (*DeleteObjectResult, error) {
-	// Get bucket info for versioning status
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
 	if err != nil {
 		return nil, err
@@ -400,83 +409,97 @@ func (s *Service) DeleteObjectVersionWithOptions(ctx context.Context, bucket, ke
 
 	// If a specific version ID is provided, permanently delete that version
 	if versionID != "" && versionID != "null" {
-		// Check if this version exists
-		meta, err := s.store.GetObjectVersion(ctx, bucket, key, versionID)
-		if err != nil {
-			return nil, fmt.Errorf("version not found: %w", err)
-		}
-
-		// Check object lock status before deletion
-		err = s.CheckObjectLock(ctx, meta, opts)
-		if err != nil {
-			return nil, err
-		}
-
-		// Delete the version from metadata
-		err = s.store.DeleteObjectVersion(ctx, bucket, key, versionID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to delete object version: %w", err)
-		}
-
-		// If this was a delete marker, note it in the result
-		result.VersionID = versionID
-		result.DeleteMarker = meta.DeleteMarker
-
-		return result, nil
+		return s.deleteVersionWithLock(ctx, bucket, key, versionID, opts, result)
 	}
 
 	// No version ID provided - behavior depends on versioning status
 	if versioningPkg.IsVersioningEnabled(bucketInfo) {
-		// Create a delete marker instead of actually deleting
-		deleteMarkerVersionID := s.versionService.GenerateVersionID()
-		meta := &metadata.ObjectMeta{
-			Bucket:       bucket,
-			Key:          key,
-			VersionID:    deleteMarkerVersionID,
-			IsLatest:     true,
-			DeleteMarker: true,
-			ModifiedAt:   time.Now(),
-		}
-
-		err := s.store.PutObjectMetaVersioned(ctx, meta, true)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create delete marker: %w", err)
-		}
-
-		result.DeleteMarker = true
-		result.DeleteMarkerVersionID = deleteMarkerVersionID
-
-		return result, nil
+		return s.createDeleteMarkerVersion(ctx, bucket, key, result)
 	}
 
 	// Versioning disabled or suspended - permanently delete the object
-	// First check if object has lock (even without versioning, lock should be enforced)
-	meta, metaErr := s.store.GetObjectMeta(ctx, bucket, key)
-	if metaErr == nil && meta != nil {
-		// Check object lock status before deletion
-		err := s.CheckObjectLock(ctx, meta, opts)
-		if err != nil {
+	return s.deleteObjectPermanentlyWithLock(ctx, bucket, key, opts, result)
+}
+
+// deleteVersionWithLock permanently deletes a specific version with lock check.
+func (s *Service) deleteVersionWithLock(ctx context.Context, bucket, key, versionID string, opts *ObjectLockCheckOptions, result *DeleteObjectResult) (*DeleteObjectResult, error) {
+	meta, err := s.store.GetObjectVersion(ctx, bucket, key, versionID)
+	if err != nil {
+		return nil, fmt.Errorf("version not found: %w", err)
+	}
+
+	if err := s.CheckObjectLock(ctx, meta, opts); err != nil {
+		return nil, err
+	}
+
+	if err := s.store.DeleteObjectVersion(ctx, bucket, key, versionID); err != nil {
+		return nil, fmt.Errorf("failed to delete object version: %w", err)
+	}
+
+	result.VersionID = versionID
+	result.DeleteMarker = meta.DeleteMarker
+
+	return result, nil
+}
+
+// createDeleteMarkerVersion creates a delete marker for versioned bucket.
+func (s *Service) createDeleteMarkerVersion(ctx context.Context, bucket, key string, result *DeleteObjectResult) (*DeleteObjectResult, error) {
+	deleteMarkerVersionID := s.versionService.GenerateVersionID()
+	meta := &metadata.ObjectMeta{
+		Bucket:       bucket,
+		Key:          key,
+		VersionID:    deleteMarkerVersionID,
+		IsLatest:     true,
+		DeleteMarker: true,
+		ModifiedAt:   time.Now(),
+	}
+
+	if err := s.store.PutObjectMetaVersioned(ctx, meta, true); err != nil {
+		return nil, fmt.Errorf("failed to create delete marker: %w", err)
+	}
+
+	result.DeleteMarker = true
+	result.DeleteMarkerVersionID = deleteMarkerVersionID
+
+	return result, nil
+}
+
+// deleteObjectPermanentlyWithLock deletes object when versioning is disabled.
+func (s *Service) deleteObjectPermanentlyWithLock(ctx context.Context, bucket, key string, opts *ObjectLockCheckOptions, result *DeleteObjectResult) (*DeleteObjectResult, error) {
+	// Check object lock before deletion
+	if meta, metaErr := s.store.GetObjectMeta(ctx, bucket, key); metaErr == nil && meta != nil {
+		if err := s.CheckObjectLock(ctx, meta, opts); err != nil {
 			return nil, err
 		}
 	}
 
-	err = s.storage.DeleteObject(ctx, bucket, key)
-	if err != nil {
-		// Ignore "not found" errors for storage layer
-		if !strings.Contains(err.Error(), "not found") {
-			return nil, fmt.Errorf("failed to delete object data: %w", err)
-		}
+	if err := s.deleteObjectData(ctx, bucket, key); err != nil {
+		return nil, err
 	}
 
-	err = s.store.DeleteObjectMeta(ctx, bucket, key)
-	if err != nil {
-		// Ignore "not found" errors
-		if !strings.Contains(err.Error(), "not found") {
-			return nil, fmt.Errorf("failed to delete object metadata: %w", err)
-		}
+	if err := s.deleteObjectMetadata(ctx, bucket, key); err != nil {
+		return nil, err
 	}
 
 	return result, nil
+}
+
+// deleteObjectData deletes object data from storage.
+func (s *Service) deleteObjectData(ctx context.Context, bucket, key string) error {
+	err := s.storage.DeleteObject(ctx, bucket, key)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		return fmt.Errorf("failed to delete object data: %w", err)
+	}
+	return nil
+}
+
+// deleteObjectMetadata deletes object metadata.
+func (s *Service) deleteObjectMetadata(ctx context.Context, bucket, key string) error {
+	err := s.store.DeleteObjectMeta(ctx, bucket, key)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		return fmt.Errorf("failed to delete object metadata: %w", err)
+	}
+	return nil
 }
 
 // ListObjects lists objects in a bucket.
@@ -826,72 +849,112 @@ type CompletePart struct {
 
 // CompleteMultipartUpload completes a multipart upload.
 func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uploadID string, requestParts []CompletePart) (*metadata.ObjectMeta, error) {
-	// Get upload metadata
-	upload, err := s.store.GetMultipartUpload(ctx, bucket, key, uploadID)
+	upload, bucketInfo, err := s.getUploadAndBucketInfo(ctx, bucket, key, uploadID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get bucket info
-	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
-	if err != nil {
+	partMap := s.buildPartMap(upload)
+
+	if err := s.validateRequestParts(requestParts, partMap); err != nil {
 		return nil, err
 	}
 
-	// Build map of uploaded parts
-	partMap := make(map[int]*metadata.UploadPart)
-	for i := range upload.Parts {
-		partMap[upload.Parts[i].PartNumber] = &upload.Parts[i]
-	}
+	partNumbers := s.extractPartNumbers(requestParts)
 
-	// Validate request parts
-	if len(requestParts) == 0 {
-		return nil, errors.New("at least one part must be specified")
-	}
-
-	// Verify parts are in ascending order
-	prevPartNumber := 0
-	for _, reqPart := range requestParts {
-		if reqPart.PartNumber <= prevPartNumber {
-			return nil, errors.New("parts must be in ascending order")
-		}
-
-		prevPartNumber = reqPart.PartNumber
-	}
-
-	// Verify all parts exist and ETags match
-	partNumbers := make([]int, 0, len(requestParts))
-
-	for i, reqPart := range requestParts {
-		uploadedPart, exists := partMap[reqPart.PartNumber]
-		if !exists {
-			return nil, fmt.Errorf("part %d not found", reqPart.PartNumber)
-		}
-
-		// Normalize ETags for comparison (remove quotes if present)
-		requestETag := strings.Trim(reqPart.ETag, `"`)
-
-		uploadedETag := strings.Trim(uploadedPart.ETag, `"`)
-		if requestETag != uploadedETag {
-			return nil, fmt.Errorf("ETag mismatch for part %d: expected %s, got %s", reqPart.PartNumber, uploadedETag, requestETag)
-		}
-
-		// Validate part size (all parts except the last must be at least 5MB)
-		if i < len(requestParts)-1 && uploadedPart.Size < MinPartSize {
-			return nil, fmt.Errorf("part %d is too small (%d bytes); minimum size is %d bytes except for the last part",
-				reqPart.PartNumber, uploadedPart.Size, MinPartSize)
-		}
-
-		partNumbers = append(partNumbers, reqPart.PartNumber)
-	}
-
-	// Complete the upload in storage
 	result, err := s.storage.CompleteParts(ctx, bucket, key, uploadID, partNumbers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to complete multipart upload: %w", err)
 	}
 
-	// Calculate total size and combined ETag
+	totalSize, finalETag := s.calculateFinalETag(partNumbers, partMap)
+
+	meta := s.createCompletedObjectMetadata(upload, bucket, key, bucketInfo, totalSize, finalETag, result.Path)
+
+	if err := s.storeCompletedObjectMetadata(ctx, meta, bucketInfo); err != nil {
+		return nil, err
+	}
+
+	_ = s.store.CompleteMultipartUpload(ctx, bucket, key, uploadID)
+
+	return meta, nil
+}
+
+func (s *Service) getUploadAndBucketInfo(ctx context.Context, bucket, key, uploadID string) (*metadata.MultipartUpload, *metadata.Bucket, error) {
+	upload, err := s.store.GetMultipartUpload(ctx, bucket, key, uploadID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return upload, bucketInfo, nil
+}
+
+func (s *Service) buildPartMap(upload *metadata.MultipartUpload) map[int]*metadata.UploadPart {
+	partMap := make(map[int]*metadata.UploadPart)
+	for i := range upload.Parts {
+		partMap[upload.Parts[i].PartNumber] = &upload.Parts[i]
+	}
+	return partMap
+}
+
+func (s *Service) validateRequestParts(requestParts []CompletePart, partMap map[int]*metadata.UploadPart) error {
+	if len(requestParts) == 0 {
+		return errors.New("at least one part must be specified")
+	}
+
+	if err := s.verifyPartsAscending(requestParts); err != nil {
+		return err
+	}
+
+	return s.verifyPartsExistAndMatch(requestParts, partMap)
+}
+
+func (s *Service) verifyPartsAscending(requestParts []CompletePart) error {
+	prevPartNumber := 0
+	for _, reqPart := range requestParts {
+		if reqPart.PartNumber <= prevPartNumber {
+			return errors.New("parts must be in ascending order")
+		}
+		prevPartNumber = reqPart.PartNumber
+	}
+	return nil
+}
+
+func (s *Service) verifyPartsExistAndMatch(requestParts []CompletePart, partMap map[int]*metadata.UploadPart) error {
+	for i, reqPart := range requestParts {
+		uploadedPart, exists := partMap[reqPart.PartNumber]
+		if !exists {
+			return fmt.Errorf("part %d not found", reqPart.PartNumber)
+		}
+
+		requestETag := strings.Trim(reqPart.ETag, `"`)
+		uploadedETag := strings.Trim(uploadedPart.ETag, `"`)
+		if requestETag != uploadedETag {
+			return fmt.Errorf("ETag mismatch for part %d: expected %s, got %s", reqPart.PartNumber, uploadedETag, requestETag)
+		}
+
+		if i < len(requestParts)-1 && uploadedPart.Size < MinPartSize {
+			return fmt.Errorf("part %d is too small (%d bytes); minimum size is %d bytes except for the last part",
+				reqPart.PartNumber, uploadedPart.Size, MinPartSize)
+		}
+	}
+	return nil
+}
+
+func (s *Service) extractPartNumbers(requestParts []CompletePart) []int {
+	partNumbers := make([]int, 0, len(requestParts))
+	for _, reqPart := range requestParts {
+		partNumbers = append(partNumbers, reqPart.PartNumber)
+	}
+	return partNumbers
+}
+
+func (s *Service) calculateFinalETag(partNumbers []int, partMap map[int]*metadata.UploadPart) (int64, string) {
 	var (
 		totalSize int64
 		etagBytes []byte
@@ -900,30 +963,27 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 	for _, partNum := range partNumbers {
 		part := partMap[partNum]
 		totalSize += part.Size
-		// Decode hex ETag to bytes
 		etag := strings.Trim(part.ETag, `"`)
 		hashBytes, _ := hex.DecodeString(etag)
 		etagBytes = append(etagBytes, hashBytes...)
 	}
 
-	// Combined ETag for multipart uploads: MD5(concat(part_etags)) + "-" + num_parts
 	combinedHash := md5.Sum(etagBytes) //nolint:gosec // G401: MD5 required for S3 ETag compatibility
 	finalETag := fmt.Sprintf(`"%s-%d"`, hex.EncodeToString(combinedHash[:]), len(partNumbers))
 
-	// Determine version ID and whether to preserve old versions
-	versionID := ""
-	preserveOldVersions := false
+	return totalSize, finalETag
+}
 
+func (s *Service) createCompletedObjectMetadata(upload *metadata.MultipartUpload, bucket, key string, bucketInfo *metadata.Bucket, totalSize int64, finalETag, path string) *metadata.ObjectMeta {
+	versionID := ""
 	if versioningPkg.IsVersioningEnabled(bucketInfo) {
 		versionID = s.versionService.GenerateVersionID()
-		preserveOldVersions = true
 	} else if versioningPkg.IsVersioningSuspended(bucketInfo) {
 		versionID = versioningPkg.NullVersionID
 	}
 
-	// Create object metadata using content-type and metadata from initial upload request
 	now := time.Now()
-	meta := &metadata.ObjectMeta{
+	return &metadata.ObjectMeta{
 		Bucket:       bucket,
 		Key:          key,
 		VersionID:    versionID,
@@ -937,30 +997,25 @@ func (s *Service) CompleteMultipartUpload(ctx context.Context, bucket, key, uplo
 		ModifiedAt:   now,
 		Metadata:     upload.Metadata,
 		StorageInfo: &metadata.ObjectStorageInfo{
-			Path: result.Path,
+			Path: path,
 		},
 	}
+}
 
-	// Store object metadata with versioning support
-	if versionID != "" {
+func (s *Service) storeCompletedObjectMetadata(ctx context.Context, meta *metadata.ObjectMeta, bucketInfo *metadata.Bucket) error {
+	if meta.VersionID != "" {
+		preserveOldVersions := versioningPkg.IsVersioningEnabled(bucketInfo)
 		err := s.store.PutObjectMetaVersioned(ctx, meta, preserveOldVersions)
 		if err != nil {
-			return nil, fmt.Errorf("failed to store object metadata: %w", err)
+			return fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	} else {
 		err := s.store.PutObjectMeta(ctx, meta)
 		if err != nil {
-			return nil, fmt.Errorf("failed to store object metadata: %w", err)
+			return fmt.Errorf("failed to store object metadata: %w", err)
 		}
 	}
-
-	// Clean up upload metadata
-	err = s.store.CompleteMultipartUpload(ctx, bucket, key, uploadID)
-	if err != nil {
-		// Log error but don't fail - object is already stored
-	}
-
-	return meta, nil
+	return nil
 }
 
 // AbortMultipartUpload aborts a multipart upload.
@@ -1055,7 +1110,6 @@ func sortParts(parts []metadata.UploadPart) {
 
 // DeleteObjects deletes multiple objects in a batch.
 func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []DeleteObjectInput, quiet bool) (*DeleteObjectsResult, error) {
-	// Verify bucket exists
 	bucketInfo, err := s.bucketService.GetBucket(ctx, bucket)
 	if err != nil {
 		return nil, fmt.Errorf("bucket not found: %w", err)
@@ -1066,95 +1120,110 @@ func (s *Service) DeleteObjects(ctx context.Context, bucket string, objects []De
 		Errors:  make([]DeleteError, 0),
 	}
 
-	// Note: We use bucketInfo for versioning check via versioningPkg.IsVersioningEnabled
-	// The explicit GetVersioning call is not needed here since we already have bucketInfo
-	_ = bucketInfo // Already checked versioning status via bucketInfo above
-
 	for _, obj := range objects {
-		// Validate key
-		if obj.Key == "" {
-			result.Errors = append(result.Errors, DeleteError{
-				Key:       obj.Key,
-				VersionID: obj.VersionID,
-				Code:      "InvalidArgument",
-				Message:   "Object key cannot be empty",
-			})
-
-			continue
-		}
-
-		// Handle version-specific delete
-		if obj.VersionID != "" {
-			deleted, err := s.deleteSpecificVersion(ctx, bucket, obj.Key, obj.VersionID)
-			if err != nil {
-				result.Errors = append(result.Errors, DeleteError{
-					Key:       obj.Key,
-					VersionID: obj.VersionID,
-					Code:      getErrorCode(err),
-					Message:   err.Error(),
-				})
-			} else {
-				result.Deleted = append(result.Deleted, *deleted)
-			}
-
-			continue
-		}
-
-		// Handle non-versioned or create delete marker
-		if versioningPkg.IsVersioningEnabled(bucketInfo) {
-			// Create a delete marker
-			deleteMarkerVersionID := s.versionService.GenerateVersionID()
-
-			meta := &metadata.ObjectMeta{
-				Bucket:       bucket,
-				Key:          obj.Key,
-				VersionID:    deleteMarkerVersionID,
-				IsLatest:     true,
-				DeleteMarker: true,
-				Owner:        bucketInfo.Owner,
-				ModifiedAt:   time.Now(),
-			}
-
-			err := s.store.PutObjectMetaVersioned(ctx, meta, true)
-			if err != nil {
-				result.Errors = append(result.Errors, DeleteError{
-					Key:     obj.Key,
-					Code:    "InternalError",
-					Message: err.Error(),
-				})
-			} else {
-				result.Deleted = append(result.Deleted, DeletedObject{
-					Key:                   obj.Key,
-					DeleteMarker:          true,
-					DeleteMarkerVersionID: deleteMarkerVersionID,
-				})
-			}
-		} else {
-			// Non-versioned bucket: permanently delete
-			err := s.deleteObjectPermanently(ctx, bucket, obj.Key)
-			if err != nil {
-				// S3 doesn't report errors for non-existent objects
-				if !strings.Contains(err.Error(), "not found") {
-					result.Errors = append(result.Errors, DeleteError{
-						Key:     obj.Key,
-						Code:    getErrorCode(err),
-						Message: err.Error(),
-					})
-				} else {
-					// Object didn't exist, still count as deleted
-					result.Deleted = append(result.Deleted, DeletedObject{
-						Key: obj.Key,
-					})
-				}
-			} else {
-				result.Deleted = append(result.Deleted, DeletedObject{
-					Key: obj.Key,
-				})
-			}
-		}
+		s.processObjectDeletion(ctx, bucket, bucketInfo, obj, result)
 	}
 
 	return result, nil
+}
+
+func (s *Service) processObjectDeletion(ctx context.Context, bucket string, bucketInfo *metadata.Bucket, obj DeleteObjectInput, result *DeleteObjectsResult) {
+	if !s.validateObjectKey(obj, result) {
+		return
+	}
+
+	if obj.VersionID != "" {
+		s.deleteVersionedObject(ctx, bucket, obj, result)
+		return
+	}
+
+	s.deleteCurrentVersion(ctx, bucket, bucketInfo, obj, result)
+}
+
+func (s *Service) validateObjectKey(obj DeleteObjectInput, result *DeleteObjectsResult) bool {
+	if obj.Key == "" {
+		result.Errors = append(result.Errors, DeleteError{
+			Key:       obj.Key,
+			VersionID: obj.VersionID,
+			Code:      "InvalidArgument",
+			Message:   "Object key cannot be empty",
+		})
+		return false
+	}
+
+	return true
+}
+
+func (s *Service) deleteVersionedObject(ctx context.Context, bucket string, obj DeleteObjectInput, result *DeleteObjectsResult) {
+	deleted, err := s.deleteSpecificVersion(ctx, bucket, obj.Key, obj.VersionID)
+	if err != nil {
+		result.Errors = append(result.Errors, DeleteError{
+			Key:       obj.Key,
+			VersionID: obj.VersionID,
+			Code:      getErrorCode(err),
+			Message:   err.Error(),
+		})
+	} else {
+		result.Deleted = append(result.Deleted, *deleted)
+	}
+}
+
+func (s *Service) deleteCurrentVersion(ctx context.Context, bucket string, bucketInfo *metadata.Bucket, obj DeleteObjectInput, result *DeleteObjectsResult) {
+	if versioningPkg.IsVersioningEnabled(bucketInfo) {
+		s.createDeleteMarker(ctx, bucket, bucketInfo, obj, result)
+	} else {
+		s.permanentlyDeleteObject(ctx, bucket, obj, result)
+	}
+}
+
+func (s *Service) createDeleteMarker(ctx context.Context, bucket string, bucketInfo *metadata.Bucket, obj DeleteObjectInput, result *DeleteObjectsResult) {
+	deleteMarkerVersionID := s.versionService.GenerateVersionID()
+
+	meta := &metadata.ObjectMeta{
+		Bucket:       bucket,
+		Key:          obj.Key,
+		VersionID:    deleteMarkerVersionID,
+		IsLatest:     true,
+		DeleteMarker: true,
+		Owner:        bucketInfo.Owner,
+		ModifiedAt:   time.Now(),
+	}
+
+	err := s.store.PutObjectMetaVersioned(ctx, meta, true)
+	if err != nil {
+		result.Errors = append(result.Errors, DeleteError{
+			Key:     obj.Key,
+			Code:    "InternalError",
+			Message: err.Error(),
+		})
+	} else {
+		result.Deleted = append(result.Deleted, DeletedObject{
+			Key:                   obj.Key,
+			DeleteMarker:          true,
+			DeleteMarkerVersionID: deleteMarkerVersionID,
+		})
+	}
+}
+
+func (s *Service) permanentlyDeleteObject(ctx context.Context, bucket string, obj DeleteObjectInput, result *DeleteObjectsResult) {
+	err := s.deleteObjectPermanently(ctx, bucket, obj.Key)
+	if err != nil {
+		if !strings.Contains(err.Error(), "not found") {
+			result.Errors = append(result.Errors, DeleteError{
+				Key:     obj.Key,
+				Code:    getErrorCode(err),
+				Message: err.Error(),
+			})
+		} else {
+			result.Deleted = append(result.Deleted, DeletedObject{
+				Key: obj.Key,
+			})
+		}
+	} else {
+		result.Deleted = append(result.Deleted, DeletedObject{
+			Key: obj.Key,
+		})
+	}
 }
 
 // deleteSpecificVersion permanently deletes a specific object version.

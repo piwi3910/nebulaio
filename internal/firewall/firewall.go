@@ -4,6 +4,7 @@ package firewall
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -222,94 +223,101 @@ func New(config Config) (*Firewall, error) {
 		userConnections:   make(map[string]int64),
 	}
 
-	// Parse IP allowlist - collect invalid entries for summary logging
-	var invalidAllowlistEntries []string
+	fw.parseIPAllowlist(config.IPAllowlist)
+	fw.parseIPBlocklist(config.IPBlocklist)
+	fw.initializeRateLimiter(config)
+	fw.initializeBandwidthTracker(config)
 
-	for _, cidr := range config.IPAllowlist {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			ip := net.ParseIP(cidr)
-			if ip == nil {
-				invalidAllowlistEntries = append(invalidAllowlistEntries, cidr)
-				continue
-			}
+	return fw, nil
+}
 
-			var parseErr error
-			if ip.To4() != nil {
-				_, network, parseErr = net.ParseCIDR(cidr + "/32")
-			} else {
-				_, network, parseErr = net.ParseCIDR(cidr + "/128")
-			}
+func (fw *Firewall) parseIPAllowlist(allowlist []string) {
+	networks, invalid := fw.parseCIDRList(allowlist)
+	fw.allowedNets = networks
 
-			if parseErr != nil {
-				invalidAllowlistEntries = append(invalidAllowlistEntries, cidr)
-				continue
-			}
-		}
-
-		if network != nil {
-			fw.allowedNets = append(fw.allowedNets, network)
-		}
-	}
-
-	if len(invalidAllowlistEntries) > 0 {
+	if len(invalid) > 0 {
 		log.Warn().
-			Int("count", len(invalidAllowlistEntries)).
-			Strs("entries", invalidAllowlistEntries).
+			Int("count", len(invalid)).
+			Strs("entries", invalid).
 			Msg("skipped invalid IP allowlist entries - check firewall configuration")
 	}
+}
 
-	// Parse IP blocklist - collect invalid entries for summary logging
-	var invalidBlocklistEntries []string
+func (fw *Firewall) parseIPBlocklist(blocklist []string) {
+	networks, invalid := fw.parseCIDRList(blocklist)
+	fw.blockedNets = networks
 
-	for _, cidr := range config.IPBlocklist {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			ip := net.ParseIP(cidr)
-			if ip == nil {
-				invalidBlocklistEntries = append(invalidBlocklistEntries, cidr)
-				continue
-			}
-
-			var parseErr error
-			if ip.To4() != nil {
-				_, network, parseErr = net.ParseCIDR(cidr + "/32")
-			} else {
-				_, network, parseErr = net.ParseCIDR(cidr + "/128")
-			}
-
-			if parseErr != nil {
-				invalidBlocklistEntries = append(invalidBlocklistEntries, cidr)
-				continue
-			}
-		}
-
-		if network != nil {
-			fw.blockedNets = append(fw.blockedNets, network)
-		}
-	}
-
-	if len(invalidBlocklistEntries) > 0 {
+	if len(invalid) > 0 {
 		log.Warn().
-			Int("count", len(invalidBlocklistEntries)).
-			Strs("entries", invalidBlocklistEntries).
+			Int("count", len(invalid)).
+			Strs("entries", invalid).
 			Msg("skipped invalid IP blocklist entries - check firewall configuration")
 	}
+}
 
-	// Initialize global rate limiter
+func (fw *Firewall) parseCIDRList(cidrs []string) ([]*net.IPNet, []string) {
+	var networks []*net.IPNet
+	var invalid []string
+
+	for _, cidr := range cidrs {
+		network, err := fw.parseCIDREntry(cidr)
+		if err != nil {
+			invalid = append(invalid, cidr)
+			continue
+		}
+		if network != nil {
+			networks = append(networks, network)
+		}
+	}
+
+	return networks, invalid
+}
+
+func (fw *Firewall) parseCIDREntry(cidr string) (*net.IPNet, error) {
+	_, network, err := net.ParseCIDR(cidr)
+	if err == nil {
+		return network, nil
+	}
+
+	// Try parsing as plain IP
+	ip := net.ParseIP(cidr)
+	if ip == nil {
+		return nil, errors.New("invalid IP or CIDR")
+	}
+
+	// Convert IP to CIDR
+	return fw.ipToCIDR(ip, cidr)
+}
+
+func (fw *Firewall) ipToCIDR(ip net.IP, original string) (*net.IPNet, error) {
+	var cidr string
+	if ip.To4() != nil {
+		cidr = original + "/32"
+	} else {
+		cidr = original + "/128"
+	}
+
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, err
+	}
+
+	return network, nil
+}
+
+func (fw *Firewall) initializeRateLimiter(config Config) {
 	if config.RateLimiting.Enabled {
 		fw.globalLimiter = NewTokenBucket(
 			config.RateLimiting.RequestsPerSecond,
 			config.RateLimiting.BurstSize,
 		)
 	}
+}
 
-	// Initialize global bandwidth tracker
+func (fw *Firewall) initializeBandwidthTracker(config Config) {
 	if config.Bandwidth.Enabled {
 		fw.globalBandwidth = NewBandwidthTracker(config.Bandwidth.MaxBytesPerSecond)
 	}
-
-	return fw, nil
 }
 
 // Evaluate evaluates a request against the firewall.
@@ -320,7 +328,30 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 
 	atomic.AddInt64(&fw.stats.RulesEvaluated, 1)
 
-	// Check IP blocklist first
+	if decision := fw.checkIPBlocklist(req); decision != nil {
+		return decision
+	}
+
+	if decision := fw.checkIPAllowlist(req); decision != nil {
+		return decision
+	}
+
+	if decision := fw.checkConnectionLimitsDecision(req); decision != nil {
+		return decision
+	}
+
+	if decision := fw.evaluateRules(req); decision != nil {
+		return decision
+	}
+
+	if decision := fw.checkRateLimitsDecision(req); decision != nil {
+		return decision
+	}
+
+	return fw.applyDefaultPolicy()
+}
+
+func (fw *Firewall) checkIPBlocklist(req *Request) *Decision {
 	if fw.isIPBlocked(req.SourceIP) {
 		atomic.AddInt64(&fw.stats.RequestsDenied, 1)
 
@@ -329,8 +360,10 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			Reason:  "IP address is blocked",
 		}
 	}
+	return nil
+}
 
-	// Check IP allowlist
+func (fw *Firewall) checkIPAllowlist(req *Request) *Decision {
 	if len(fw.allowedNets) > 0 && !fw.isIPAllowed(req.SourceIP) {
 		atomic.AddInt64(&fw.stats.RequestsDenied, 1)
 
@@ -339,8 +372,10 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			Reason:  "IP address is not in allowlist",
 		}
 	}
+	return nil
+}
 
-	// Check connection limits
+func (fw *Firewall) checkConnectionLimitsDecision(req *Request) *Decision {
 	if fw.config.Connections.Enabled {
 		if !fw.checkConnectionLimits(req) {
 			atomic.AddInt64(&fw.stats.ConnectionLimitHits, 1)
@@ -352,8 +387,10 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			}
 		}
 	}
+	return nil
+}
 
-	// Evaluate rules
+func (fw *Firewall) evaluateRules(req *Request) *Decision {
 	for _, rule := range fw.config.Rules {
 		if !rule.Enabled {
 			continue
@@ -395,8 +432,10 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			}
 		}
 	}
+	return nil
+}
 
-	// Check rate limits
+func (fw *Firewall) checkRateLimitsDecision(req *Request) *Decision {
 	if fw.config.RateLimiting.Enabled {
 		if !fw.checkRateLimits(req) {
 			atomic.AddInt64(&fw.stats.RateLimitHits, 1)
@@ -408,8 +447,10 @@ func (fw *Firewall) Evaluate(ctx context.Context, req *Request) *Decision {
 			}
 		}
 	}
+	return nil
+}
 
-	// Apply default policy
+func (fw *Firewall) applyDefaultPolicy() *Decision {
 	if fw.config.DefaultPolicy == "deny" {
 		atomic.AddInt64(&fw.stats.RequestsDenied, 1)
 
@@ -533,50 +574,79 @@ func (fw *Firewall) checkConnectionLimits(req *Request) bool {
 }
 
 func (fw *Firewall) checkRateLimits(req *Request) bool {
-	// Check global rate limit
-	if fw.globalLimiter != nil && !fw.globalLimiter.Allow() {
+	if !fw.checkGlobalRateLimit() {
 		return false
 	}
 
-	// Check per-IP rate limit
+	if !fw.checkIPRateLimit(req) {
+		return false
+	}
+
+	if !fw.checkUserRateLimit(req) {
+		return false
+	}
+
+	if !fw.checkBucketRateLimit(req) {
+		return false
+	}
+
+	if !fw.checkOperationRateLimit(req) {
+		return false
+	}
+
+	return true
+}
+
+func (fw *Firewall) checkGlobalRateLimit() bool {
+	if fw.globalLimiter != nil && !fw.globalLimiter.Allow() {
+		return false
+	}
+	return true
+}
+
+func (fw *Firewall) checkIPRateLimit(req *Request) bool {
 	if fw.config.RateLimiting.PerIP && req.SourceIP != "" {
 		limiter := fw.getOrCreateIPLimiter(req.SourceIP)
 		if !limiter.Allow() {
 			return false
 		}
 	}
+	return true
+}
 
-	// Check per-user rate limit
+func (fw *Firewall) checkUserRateLimit(req *Request) bool {
 	if fw.config.RateLimiting.PerUser && req.User != "" {
 		limiter := fw.getOrCreateUserLimiter(req.User)
 		if !limiter.Allow() {
 			return false
 		}
 	}
+	return true
+}
 
-	// Check per-bucket rate limit
+func (fw *Firewall) checkBucketRateLimit(req *Request) bool {
 	if fw.config.RateLimiting.PerBucket && req.Bucket != "" {
 		limiter := fw.getOrCreateBucketLimiter(req.Bucket)
 		if !limiter.Allow() {
 			return false
 		}
 	}
+	return true
+}
 
-	// Check operation-specific rate limits (e.g., for hash DoS mitigation on PutObject)
-	if req.Operation != "" {
-		// Check specific object creation rate limit (protects against hash DoS attacks)
-		if isObjectCreationOperation(req.Operation) && fw.config.RateLimiting.ObjectCreationLimit > 0 {
-			limiter := fw.getOrCreateOperationLimiter(req.Operation)
-			if !limiter.Allow() {
-				return false
-			}
-		} else if limit, ok := fw.config.RateLimiting.OperationLimits[req.Operation]; ok && limit > 0 {
-			// Check per-operation rate limit overrides
-			limiter := fw.getOrCreateOperationLimiter(req.Operation)
-			if !limiter.Allow() {
-				return false
-			}
-		}
+func (fw *Firewall) checkOperationRateLimit(req *Request) bool {
+	if req.Operation == "" {
+		return true
+	}
+
+	if isObjectCreationOperation(req.Operation) && fw.config.RateLimiting.ObjectCreationLimit > 0 {
+		limiter := fw.getOrCreateOperationLimiter(req.Operation)
+		return limiter.Allow()
+	}
+
+	if limit, ok := fw.config.RateLimiting.OperationLimits[req.Operation]; ok && limit > 0 {
+		limiter := fw.getOrCreateOperationLimiter(req.Operation)
+		return limiter.Allow()
 	}
 
 	return true
@@ -595,84 +665,106 @@ func isObjectCreationOperation(operation string) bool {
 func (fw *Firewall) matchRule(rule *Rule, req *Request) bool {
 	match := &rule.Match
 
-	// Check source IPs
-	if len(match.SourceIPs) > 0 {
-		found := false
+	return fw.matchSourceIPs(match.SourceIPs, req.SourceIP) &&
+		fw.matchUsers(match.Users, req.User) &&
+		fw.matchBuckets(match.Buckets, req.Bucket) &&
+		fw.matchOperations(match.Operations, req.Operation) &&
+		fw.matchKeyPrefixes(match.KeyPrefixes, req.Key) &&
+		fw.matchContentTypes(match.ContentTypes, req.ContentType) &&
+		fw.matchSizeConstraints(match.MinSize, match.MaxSize, req.Size) &&
+		fw.matchTimeConstraints(match.TimeWindow, req.Timestamp)
+}
 
-		reqIP := net.ParseIP(req.SourceIP)
-		for _, cidr := range match.SourceIPs {
-			_, network, err := net.ParseCIDR(cidr)
-			if err != nil {
-				if net.ParseIP(cidr).Equal(reqIP) {
-					found = true
-					break
-				}
+// matchSourceIPs checks if request source IP matches any allowed CIDR/IP.
+func (fw *Firewall) matchSourceIPs(sourceIPs []string, requestIP string) bool {
+	if len(sourceIPs) == 0 {
+		return true
+	}
 
-				continue
+	reqIP := net.ParseIP(requestIP)
+	for _, cidr := range sourceIPs {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			if net.ParseIP(cidr).Equal(reqIP) {
+				return true
 			}
-
-			if network.Contains(reqIP) {
-				found = true
-				break
-			}
+			continue
 		}
 
-		if !found {
-			return false
+		if network.Contains(reqIP) {
+			return true
 		}
 	}
 
-	// Check users
-	if len(match.Users) > 0 && !contains(match.Users, req.User) {
-		return false
+	return false
+}
+
+// matchUsers checks if request user matches any allowed user.
+func (fw *Firewall) matchUsers(users []string, requestUser string) bool {
+	if len(users) == 0 {
+		return true
+	}
+	return contains(users, requestUser)
+}
+
+// matchBuckets checks if request bucket matches any wildcard pattern.
+func (fw *Firewall) matchBuckets(buckets []string, requestBucket string) bool {
+	if len(buckets) == 0 {
+		return true
+	}
+	return matchWildcard(buckets, requestBucket)
+}
+
+// matchOperations checks if request operation matches any allowed operation.
+func (fw *Firewall) matchOperations(operations []string, requestOperation string) bool {
+	if len(operations) == 0 {
+		return true
+	}
+	return contains(operations, requestOperation)
+}
+
+// matchKeyPrefixes checks if request key starts with any allowed prefix.
+func (fw *Firewall) matchKeyPrefixes(keyPrefixes []string, requestKey string) bool {
+	if len(keyPrefixes) == 0 {
+		return true
 	}
 
-	// Check buckets
-	if len(match.Buckets) > 0 && !matchWildcard(match.Buckets, req.Bucket) {
-		return false
-	}
-
-	// Check operations
-	if len(match.Operations) > 0 && !contains(match.Operations, req.Operation) {
-		return false
-	}
-
-	// Check key prefixes
-	if len(match.KeyPrefixes) > 0 {
-		found := false
-
-		for _, prefix := range match.KeyPrefixes {
-			if len(req.Key) >= len(prefix) && req.Key[:len(prefix)] == prefix {
-				found = true
-				break
-			}
+	for _, prefix := range keyPrefixes {
+		if len(requestKey) >= len(prefix) && requestKey[:len(prefix)] == prefix {
+			return true
 		}
-
-		if !found {
-			return false
-		}
 	}
 
-	// Check content types
-	if len(match.ContentTypes) > 0 && !contains(match.ContentTypes, req.ContentType) {
+	return false
+}
+
+// matchContentTypes checks if request content type matches any allowed type.
+func (fw *Firewall) matchContentTypes(contentTypes []string, requestContentType string) bool {
+	if len(contentTypes) == 0 {
+		return true
+	}
+	return contains(contentTypes, requestContentType)
+}
+
+// matchSizeConstraints checks if request size is within allowed range.
+func (fw *Firewall) matchSizeConstraints(minSize, maxSize, requestSize int64) bool {
+	if minSize > 0 && requestSize < minSize {
 		return false
 	}
 
-	// Check size constraints
-	if match.MinSize > 0 && req.Size < match.MinSize {
-		return false
-	}
-
-	if match.MaxSize > 0 && req.Size > match.MaxSize {
-		return false
-	}
-
-	// Check time window
-	if match.TimeWindow != nil && !fw.matchTimeWindow(match.TimeWindow, req.Timestamp) {
+	if maxSize > 0 && requestSize > maxSize {
 		return false
 	}
 
 	return true
+}
+
+// matchTimeConstraints checks if request time is within allowed time window.
+func (fw *Firewall) matchTimeConstraints(timeWindow *TimeWindow, requestTime time.Time) bool {
+	if timeWindow == nil {
+		return true
+	}
+	return fw.matchTimeWindow(timeWindow, requestTime)
 }
 
 func (fw *Firewall) matchTimeWindow(window *TimeWindow, t time.Time) bool {
@@ -1135,51 +1227,59 @@ func (fw *Firewall) UpdateConfig(config Config) error {
 
 	fw.config = config
 
-	// Re-parse IP lists
+	fw.updateIPLists(config)
+	fw.updateGlobalLimiters(config)
+
+	return nil
+}
+
+func (fw *Firewall) updateIPLists(config Config) {
 	fw.allowedNets = nil
 	fw.blockedNets = nil
 
-	for _, cidr := range config.IPAllowlist {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			ip := net.ParseIP(cidr)
-			if ip == nil {
-				continue
-			}
+	fw.allowedNets = fw.parseNetworkList(config.IPAllowlist)
+	fw.blockedNets = fw.parseNetworkList(config.IPBlocklist)
+}
 
-			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32")
-			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128")
-			}
-		}
+func (fw *Firewall) parseNetworkList(cidrList []string) []*net.IPNet {
+	var networks []*net.IPNet
 
+	for _, cidr := range cidrList {
+		network := fw.parseCIDROrIP(cidr)
 		if network != nil {
-			fw.allowedNets = append(fw.allowedNets, network)
+			networks = append(networks, network)
 		}
 	}
 
-	for _, cidr := range config.IPBlocklist {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			ip := net.ParseIP(cidr)
-			if ip == nil {
-				continue
-			}
+	return networks
+}
 
-			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32")
-			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128")
-			}
-		}
-
-		if network != nil {
-			fw.blockedNets = append(fw.blockedNets, network)
-		}
+func (fw *Firewall) parseCIDROrIP(cidr string) *net.IPNet {
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return fw.parseIPAsNetwork(cidr)
 	}
 
-	// Update global limiters
+	return network
+}
+
+func (fw *Firewall) parseIPAsNetwork(ipStr string) *net.IPNet {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return nil
+	}
+
+	var network *net.IPNet
+	if ip.To4() != nil {
+		_, network, _ = net.ParseCIDR(ipStr + "/32")
+	} else {
+		_, network, _ = net.ParseCIDR(ipStr + "/128")
+	}
+
+	return network
+}
+
+func (fw *Firewall) updateGlobalLimiters(config Config) {
 	if config.RateLimiting.Enabled {
 		fw.globalLimiter = NewTokenBucket(
 			config.RateLimiting.RequestsPerSecond,
@@ -1190,8 +1290,6 @@ func (fw *Firewall) UpdateConfig(config Config) error {
 	if config.Bandwidth.Enabled {
 		fw.globalBandwidth = NewBandwidthTracker(config.Bandwidth.MaxBytesPerSecond)
 	}
-
-	return nil
 }
 
 // GetConfig returns the current firewall configuration.

@@ -540,94 +540,102 @@ func (d *Detector) GetRecommendedConfig() map[string]interface{} {
 	caps := d.GetCapabilities()
 	config := make(map[string]interface{})
 
-	// GPU recommendations
 	if caps.GPUAvailable {
-		gpuConfig := map[string]interface{}{
-			"enabled":          true,
-			"buffer_pool_size": 1024 * 1024 * 1024, // 1GB default
-			"enable_async":     true,
-			"enable_p2p":       false,
-		}
-
-		// Enable P2P if multiple GPUs with P2P support
-		p2pCount := 0
-
-		for _, gpu := range caps.GPUs {
-			if gpu.P2PSupported {
-				p2pCount++
-			}
-		}
-
-		if p2pCount >= 2 {
-			gpuConfig["enable_p2p"] = true
-		}
-
-		// Check for GDS support
-		for _, gpu := range caps.GPUs {
-			if gpu.GDSSupported {
-				gpuConfig["enable_gds"] = true
-				break
-			}
-		}
-
-		config["gpudirect"] = gpuConfig
+		config["gpudirect"] = d.buildGPUConfig(&caps)
 	}
 
-	// DPU recommendations
 	if caps.DPUAvailable {
-		dpuConfig := map[string]interface{}{
-			"enabled":            true,
-			"enable_crypto":      false,
-			"enable_compression": false,
-			"enable_rdma":        false,
-		}
-
-		for _, dpu := range caps.DPUs {
-			if dpu.CryptoSupport {
-				dpuConfig["enable_crypto"] = true
-			}
-
-			if dpu.CompressSupport {
-				dpuConfig["enable_compression"] = true
-			}
-
-			if dpu.RDMASupport {
-				dpuConfig["enable_rdma"] = true
-			}
-		}
-
-		config["dpu"] = dpuConfig
+		config["dpu"] = d.buildDPUConfig(&caps)
 	}
 
-	// RDMA recommendations
 	if caps.RDMAAvailable {
-		rdmaConfig := map[string]interface{}{
-			"enabled":          true,
-			"port":             9100,
-			"enable_zero_copy": true,
-			"fallback_to_tcp":  true,
-		}
-
-		// Find best device
-		var (
-			bestDevice *RDMAInfo
-			maxSpeed   uint64
-		)
-
-		for i := range caps.RDMADevices {
-			dev := &caps.RDMADevices[i]
-			if dev.State == "ACTIVE" && dev.Speed > maxSpeed {
-				bestDevice = dev
-				maxSpeed = dev.Speed
-			}
-		}
-
-		if bestDevice != nil {
-			rdmaConfig["device_name"] = bestDevice.Name
-		}
-
-		config["rdma"] = rdmaConfig
+		config["rdma"] = d.buildRDMAConfig(&caps)
 	}
 
 	return config
+}
+
+// buildGPUConfig builds GPU configuration based on capabilities.
+func (d *Detector) buildGPUConfig(caps *HardwareCapabilities) map[string]interface{} {
+	gpuConfig := map[string]interface{}{
+		"enabled":          true,
+		"buffer_pool_size": 1024 * 1024 * 1024, // 1GB default
+		"enable_async":     true,
+		"enable_p2p":       false,
+	}
+
+	// Enable P2P if multiple GPUs with P2P support
+	p2pCount := 0
+	for _, gpu := range caps.GPUs {
+		if gpu.P2PSupported {
+			p2pCount++
+		}
+	}
+	if p2pCount >= 2 {
+		gpuConfig["enable_p2p"] = true
+	}
+
+	// Check for GDS support
+	for _, gpu := range caps.GPUs {
+		if gpu.GDSSupported {
+			gpuConfig["enable_gds"] = true
+			break
+		}
+	}
+
+	return gpuConfig
+}
+
+// buildDPUConfig builds DPU configuration based on capabilities.
+func (d *Detector) buildDPUConfig(caps *HardwareCapabilities) map[string]interface{} {
+	dpuConfig := map[string]interface{}{
+		"enabled":            true,
+		"enable_crypto":      false,
+		"enable_compression": false,
+		"enable_rdma":        false,
+	}
+
+	for _, dpu := range caps.DPUs {
+		if dpu.CryptoSupport {
+			dpuConfig["enable_crypto"] = true
+		}
+		if dpu.CompressSupport {
+			dpuConfig["enable_compression"] = true
+		}
+		if dpu.RDMASupport {
+			dpuConfig["enable_rdma"] = true
+		}
+	}
+
+	return dpuConfig
+}
+
+// buildRDMAConfig builds RDMA configuration based on capabilities.
+func (d *Detector) buildRDMAConfig(caps *HardwareCapabilities) map[string]interface{} {
+	rdmaConfig := map[string]interface{}{
+		"enabled":          true,
+		"port":             9100,
+		"enable_zero_copy": true,
+		"fallback_to_tcp":  true,
+	}
+
+	// Find best device
+	var (
+		bestDevice *RDMAInfo
+		maxSpeed   uint64
+	)
+
+	for i := range caps.RDMADevices {
+		dev := &caps.RDMADevices[i]
+		if dev.State == "ACTIVE" && dev.Speed > maxSpeed {
+			bestDevice = dev
+			maxSpeed = dev.Speed
+		}
+	}
+
+	if bestDevice != nil {
+		rdmaConfig["device_name"] = bestDevice.Name
+	}
+
+	return rdmaConfig
 }

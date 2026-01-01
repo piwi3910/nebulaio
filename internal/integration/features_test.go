@@ -34,6 +34,43 @@ const (
 	statusPending    = "pending"
 )
 
+// transferState represents the state of a tiering transfer operation.
+type transferState struct {
+	objectKey      string
+	targetPG       string
+	transferStatus string
+	shardsTotal    int
+	shardsWritten  int
+	pgHealthy      bool
+}
+
+// tieringObject represents an object for tiering integration tests.
+type tieringObject struct {
+	lastAccess   time.Time
+	bucket       string
+	key          string
+	tier         string
+	datacenter   string
+	placementGrp string
+	size         int64
+}
+
+// tierTransition represents a tier transition operation.
+type tierTransition struct {
+	// 8-byte fields (int64)
+	bytesMovied int64
+	// Structs
+	object tieringObject
+	// Strings
+	fromPG       string
+	toPG         string
+	fromDC       string
+	toDC         string
+	errorMessage string
+	// 1-byte fields (bool)
+	successful bool
+}
+
 // TestDRAMCacheWithFirewall tests that DRAM cache respects firewall rules.
 func TestDRAMCacheWithFirewall(t *testing.T) {
 	// Create firewall with rate limiting
@@ -59,6 +96,7 @@ func TestDRAMCacheWithFirewall(t *testing.T) {
 
 	// Simulate requests going through firewall then cache
 	ctx := context.Background()
+	c.Start(ctx)
 	bucket := testBucket
 
 	// Track cache hits
@@ -130,7 +168,7 @@ func TestS3SelectWithAudit(t *testing.T) {
 	}
 	defer auditLogger.Stop()
 
-	auditLogger.Start()
+	auditLogger.Start(context.Background())
 
 	// Create S3 Select engine
 	engine := s3select.NewEngine(
@@ -226,6 +264,7 @@ func TestFirewallBandwidthWithCache(t *testing.T) {
 
 	// Simulate object retrieval with bandwidth tracking
 	ctx := context.Background()
+	c.Start(ctx)
 	bucket := "test-bucket"
 	key := bucket + "/large-object"
 	objectSize := int64(5 * 1024 * 1024) // 5MB object
@@ -287,6 +326,9 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 	})
 	defer c.Close()
 
+	ctx := t.Context()
+	c.Start(ctx)
+
 	// Create temp directory for audit
 	tmpDir := t.TempDir()
 
@@ -302,14 +344,12 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 	}
 	defer auditLogger.Stop()
 
-	auditLogger.Start()
+	auditLogger.Start(context.Background())
 
 	// Run concurrent operations
 	var wg sync.WaitGroup
 
 	errCh := make(chan error, 100)
-
-	ctx := context.Background()
 
 	for i := range 100 {
 		wg.Add(1)
@@ -399,7 +439,7 @@ func TestAuditIntegrityChain(t *testing.T) {
 	}
 	defer auditLogger.Stop()
 
-	auditLogger.Start()
+	auditLogger.Start(context.Background())
 
 	// Log a series of events
 	ctx := context.Background()
@@ -473,7 +513,7 @@ func TestWebhookAuditOutput(t *testing.T) {
 	}
 	defer auditLogger.Stop()
 
-	auditLogger.Start()
+	auditLogger.Start(context.Background())
 
 	// Log events
 	for i := range 5 {
@@ -655,6 +695,7 @@ func TestCacheEvictionUnderPressure(t *testing.T) {
 	defer c.Close()
 
 	ctx := context.Background()
+	c.Start(ctx)
 	bucket := "test-bucket"
 	objectSize := 1024 // 1KB per object
 
@@ -705,6 +746,9 @@ func TestAdvancedFeatureIntegration(t *testing.T) {
 	})
 	defer cache.Close()
 
+	ctx := t.Context()
+	cache.Start(ctx)
+
 	tmpDir := t.TempDir()
 
 	auditLogger, err := audit.NewEnhancedAuditLogger(audit.EnhancedConfig{
@@ -721,10 +765,9 @@ func TestAdvancedFeatureIntegration(t *testing.T) {
 	}
 	defer auditLogger.Stop()
 
-	auditLogger.Start()
+	auditLogger.Start(context.Background())
 
 	// 2. Simulate a request flow
-	ctx := context.Background()
 	bucket := "production-data"
 	key := bucket + "/dataset/batch-001.csv"
 
@@ -813,15 +856,6 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 	// - DC1: Hot tier placement group (fast NVMe)
 	// - DC2: Cold tier placement group (high-capacity HDD)
 	// Tiering policy should move old objects from DC1 hot tier to DC2 cold tier
-	type tieringObject struct {
-		lastAccess   time.Time
-		bucket       string
-		key          string
-		tier         string
-		datacenter   string
-		placementGrp string
-		size         int64
-	}
 
 	// Simulate objects in different placement groups
 	objects := []tieringObject{
@@ -839,23 +873,42 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 	tieringThreshold := 30 * 24 * time.Hour
 
 	// Track objects that should be tiered
-	var (
-		objectsToTier    []tieringObject
-		objectsToKeepHot []tieringObject
-	)
+	objectsToTier, objectsToKeepHot := classifyObjectsForTiering(objects, tieringThreshold)
 
+	// Verify tiering decisions
+	verifyTieringCategorization(t, objectsToTier, objectsToKeepHot)
+
+	// Simulate tiering transition with placement group awareness
+	transitions := createTieringTransitions(objectsToTier)
+
+	// Verify all transitions succeeded
+	verifyAllTransitionsSuccessful(t, transitions)
+
+	// Verify cross-datacenter transitions
+	crossDCTransitions := countAndVerifyCrossDCTransitions(t, transitions)
+
+	// Calculate total bytes moved
+	totalBytesMoved := calculateAndVerifyBytesMoved(t, transitions)
+
+	t.Logf("Tiering integration test: %d objects tiered, %d cross-DC moves, %d bytes total",
+		len(transitions), crossDCTransitions, totalBytesMoved)
+}
+
+func classifyObjectsForTiering(objects []tieringObject, threshold time.Duration) (toTier, keepHot []tieringObject) {
 	for _, obj := range objects {
 		if obj.tier == "hot" {
 			ageThreshold := time.Since(obj.lastAccess)
-			if ageThreshold > tieringThreshold {
-				objectsToTier = append(objectsToTier, obj)
+			if ageThreshold > threshold {
+				toTier = append(toTier, obj)
 			} else {
-				objectsToKeepHot = append(objectsToKeepHot, obj)
+				keepHot = append(keepHot, obj)
 			}
 		}
 	}
+	return toTier, keepHot
+}
 
-	// Verify tiering decisions
+func verifyTieringCategorization(t *testing.T, objectsToTier, objectsToKeepHot []tieringObject) {
 	if len(objectsToTier) != 2 {
 		t.Errorf("Expected 2 objects to tier, got %d", len(objectsToTier))
 	}
@@ -863,46 +916,23 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 	if len(objectsToKeepHot) != 2 {
 		t.Errorf("Expected 2 objects to keep hot, got %d", len(objectsToKeepHot))
 	}
+}
 
-	// Simulate tiering transition with placement group awareness
-	type tierTransition struct {
-		// 8-byte fields (int64)
-		bytesMovied int64
-		// Structs
-		object tieringObject
-		// Strings
-		fromPG       string
-		toPG         string
-		fromDC       string
-		toDC         string
-		errorMessage string
-		// 1-byte fields (bool)
-		successful bool
-	}
-
+func createTieringTransitions(objectsToTier []tieringObject) []tierTransition {
 	var transitions []tierTransition
 
 	for _, obj := range objectsToTier {
-		// In real implementation, this would:
-		// 1. Look up target placement group for cold tier
-		// 2. Determine optimal nodes in target PG for shards
-		// 3. Replicate data using erasure coding
-		// 4. Update metadata with new locations
-		// 5. Delete from source placement group
 		transition := tierTransition{
 			object:      obj,
 			fromPG:      obj.placementGrp,
-			toPG:        "pg-cold-dc2", // Target cold tier PG
+			toPG:        "pg-cold-dc2",
 			fromDC:      obj.datacenter,
 			toDC:        "dc2",
 			bytesMovied: obj.size,
 			successful:  true,
 		}
 
-		// Simulate placement group health check before transition
-		// In real code: pgManager.GetGroupStatus(transition.toPG)
 		if transition.toPG == "pg-cold-dc2" {
-			// Assume cold tier PG is healthy
 			transitions = append(transitions, transition)
 		} else {
 			transition.successful = false
@@ -911,14 +941,18 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 		}
 	}
 
-	// Verify all transitions succeeded
+	return transitions
+}
+
+func verifyAllTransitionsSuccessful(t *testing.T, transitions []tierTransition) {
 	for _, tr := range transitions {
 		if !tr.successful {
 			t.Errorf("Transition failed for %s: %s", tr.object.key, tr.errorMessage)
 		}
 	}
+}
 
-	// Verify cross-datacenter transitions
+func countAndVerifyCrossDCTransitions(t *testing.T, transitions []tierTransition) int {
 	var crossDCTransitions int
 
 	for _, tr := range transitions {
@@ -931,7 +965,10 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 		t.Errorf("Expected 2 cross-DC transitions, got %d", crossDCTransitions)
 	}
 
-	// Calculate total bytes moved
+	return crossDCTransitions
+}
+
+func calculateAndVerifyBytesMoved(t *testing.T, transitions []tierTransition) int64 {
 	var totalBytesMoved int64
 
 	for _, tr := range transitions {
@@ -945,22 +982,13 @@ func TestPlacementGroupsWithTiering(t *testing.T) {
 		t.Errorf("Expected %d bytes moved, got %d", expectedBytes, totalBytesMoved)
 	}
 
-	t.Logf("Tiering integration test: %d objects tiered, %d cross-DC moves, %d bytes total",
-		len(transitions), crossDCTransitions, totalBytesMoved)
+	return totalBytesMoved
 }
 
 // TestPlacementGroupFailoverDuringTiering tests behavior when a placement group
 // becomes unhealthy during an active tiering operation.
 func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 	// Simulate a tiering operation where the target placement group degrades mid-transfer
-	type transferState struct {
-		objectKey      string
-		targetPG       string
-		transferStatus string
-		shardsTotal    int
-		shardsWritten  int
-		pgHealthy      bool
-	}
 
 	// Initial state: 3 objects being tiered
 	transfers := []transferState{
@@ -969,13 +997,26 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 		{objectKey: "obj3", shardsTotal: 14, shardsWritten: 0, targetPG: "pg-cold", pgHealthy: true, transferStatus: statusPending},
 	}
 
+	simulatePGDegradation(transfers)
+	applyFailoverLogic(transfers)
+	verifyFailoverBehavior(t, transfers)
+	simulatePGRecovery(transfers)
+	resumeTransfersAfterRecovery(transfers)
+	verifyAllTransfersCompleted(t, transfers)
+
+	t.Log("Placement group failover test: all transfers recovered and completed")
+}
+
+func simulatePGDegradation(transfers []transferState) {
 	// Simulate placement group degradation
 	for i := range transfers {
 		if transfers[i].transferStatus != statusCompleted {
 			transfers[i].pgHealthy = false
 		}
 	}
+}
 
+func applyFailoverLogic(transfers []transferState) {
 	// Apply failover logic
 	for i := range transfers {
 		if !transfers[i].pgHealthy {
@@ -989,7 +1030,9 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 			}
 		}
 	}
+}
 
+func verifyFailoverBehavior(t *testing.T, transfers []transferState) {
 	// Verify failover behavior
 	completedCount := 0
 	pausedCount := 0
@@ -1017,12 +1060,16 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 	if pendingCount != 1 {
 		t.Errorf("Expected 1 pending transfer, got %d", pendingCount)
 	}
+}
 
+func simulatePGRecovery(transfers []transferState) {
 	// Simulate PG recovery
 	for i := range transfers {
 		transfers[i].pgHealthy = true
 	}
+}
 
+func resumeTransfersAfterRecovery(transfers []transferState) {
 	// Resume paused transfers
 	for i := range transfers {
 		if transfers[i].transferStatus == statusPaused {
@@ -1041,15 +1088,15 @@ func TestPlacementGroupFailoverDuringTiering(t *testing.T) {
 			transfers[i].transferStatus = statusCompleted
 		}
 	}
+}
 
+func verifyAllTransfersCompleted(t *testing.T, transfers []transferState) {
 	// Verify all transfers completed after recovery
 	for _, tr := range transfers {
 		if tr.transferStatus != statusCompleted {
 			t.Errorf("Transfer %s should be completed, got %s", tr.objectKey, tr.transferStatus)
 		}
 	}
-
-	t.Log("Placement group failover test: all transfers recovered and completed")
 }
 
 // TestErasureCodingWithPlacementGroups verifies that erasure coding respects

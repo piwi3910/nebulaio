@@ -262,54 +262,33 @@ func (h *TieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Generate ID if not provided
+	policy := h.buildPolicyFromRequest(&req)
+	h.applyPolicyDefaults(policy)
+
+	if err := h.service.CreatePolicy(ctx, policy); err != nil {
+		h.handleCreatePolicyError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, policy)
+}
+
+// buildPolicyFromRequest constructs a policy from the request.
+func (h *TieringHandler) buildPolicyFromRequest(req *CreateTieringPolicyRequest) *tiering.AdvancedPolicy {
 	policyID := req.ID
 	if policyID == "" {
 		policyID = "policy-" + uuid.New().String()[:8]
 	}
 
-	// Convert simple triggers/actions to internal format
 	triggers := convertSimpleTriggers(req.Triggers)
 	actions := convertSimpleActions(req.Actions)
+	selector := h.buildPolicySelector(req)
+	schedule := h.buildScheduleConfig(req)
+	antiThrash := h.buildAntiThrashConfig(req)
+	rateLimit := h.buildRateLimitConfig(req)
+	distributed := h.buildDistributedConfig(req)
 
-	// Build selector from bucket/prefix patterns
-	selector := tiering.PolicySelector{}
-	if req.BucketPattern != "" {
-		selector.Buckets = []string{req.BucketPattern}
-	}
-
-	if req.PrefixPattern != "" {
-		selector.Prefixes = []string{req.PrefixPattern}
-	}
-
-	// Build schedule config
-	var schedule tiering.ScheduleConfig
-
-	schedule.Enabled = req.CronExpression != ""
-	// MaintenanceWindows and BlackoutWindows need to be MaintenanceWindow type
-	// For now, we'll leave them empty as conversion would be complex
-
-	// Build anti-thrash config from advanced options
-	var antiThrash tiering.AntiThrashConfig
-	if req.AdvancedOptions != nil && req.AdvancedOptions.AntiThrashHours > 0 {
-		antiThrash.Enabled = true
-		antiThrash.MinTimeInTier = (time.Duration(req.AdvancedOptions.AntiThrashHours) * time.Hour).String()
-	}
-
-	// Build rate limit config
-	var rateLimit tiering.RateLimitConfig
-	if req.AdvancedOptions != nil && req.AdvancedOptions.RateLimit > 0 {
-		rateLimit.Enabled = true
-		rateLimit.MaxObjectsPerSecond = req.AdvancedOptions.RateLimit
-	}
-
-	// Build distributed config
-	var distributed tiering.DistributedConfig
-	if req.AdvancedOptions != nil && req.AdvancedOptions.DistributedExecution {
-		distributed.Enabled = true
-	}
-
-	policy := &tiering.AdvancedPolicy{
+	return &tiering.AdvancedPolicy{
 		ID:          policyID,
 		Name:        req.Name,
 		Description: req.Description,
@@ -327,34 +306,77 @@ func (h *TieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.Requ
 		UpdatedAt:   time.Now(),
 		Version:     1,
 	}
+}
 
-	// Set defaults
+// buildPolicySelector builds selector from bucket/prefix patterns.
+func (h *TieringHandler) buildPolicySelector(req *CreateTieringPolicyRequest) tiering.PolicySelector {
+	selector := tiering.PolicySelector{}
+	if req.BucketPattern != "" {
+		selector.Buckets = []string{req.BucketPattern}
+	}
+	if req.PrefixPattern != "" {
+		selector.Prefixes = []string{req.PrefixPattern}
+	}
+	return selector
+}
+
+// buildScheduleConfig builds schedule configuration.
+func (h *TieringHandler) buildScheduleConfig(req *CreateTieringPolicyRequest) tiering.ScheduleConfig {
+	return tiering.ScheduleConfig{
+		Enabled: req.CronExpression != "",
+	}
+}
+
+// buildAntiThrashConfig builds anti-thrash configuration from advanced options.
+func (h *TieringHandler) buildAntiThrashConfig(req *CreateTieringPolicyRequest) tiering.AntiThrashConfig {
+	var antiThrash tiering.AntiThrashConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.AntiThrashHours > 0 {
+		antiThrash.Enabled = true
+		antiThrash.MinTimeInTier = (time.Duration(req.AdvancedOptions.AntiThrashHours) * time.Hour).String()
+	}
+	return antiThrash
+}
+
+// buildRateLimitConfig builds rate limit configuration.
+func (h *TieringHandler) buildRateLimitConfig(req *CreateTieringPolicyRequest) tiering.RateLimitConfig {
+	var rateLimit tiering.RateLimitConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.RateLimit > 0 {
+		rateLimit.Enabled = true
+		rateLimit.MaxObjectsPerSecond = req.AdvancedOptions.RateLimit
+	}
+	return rateLimit
+}
+
+// buildDistributedConfig builds distributed execution configuration.
+func (h *TieringHandler) buildDistributedConfig(req *CreateTieringPolicyRequest) tiering.DistributedConfig {
+	var distributed tiering.DistributedConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.DistributedExecution {
+		distributed.Enabled = true
+	}
+	return distributed
+}
+
+// applyPolicyDefaults sets default values for unset fields.
+func (h *TieringHandler) applyPolicyDefaults(policy *tiering.AdvancedPolicy) {
 	if policy.Type == "" {
 		policy.Type = tiering.PolicyTypeScheduled
 	}
-
 	if policy.Scope == "" {
 		policy.Scope = tiering.PolicyScopeGlobal
 	}
+}
 
-	err = h.service.CreatePolicy(ctx, policy)
-	if err != nil {
-		if strings.Contains(err.Error(), "already exists") {
-			writeError(w, err.Error(), http.StatusConflict)
-			return
-		}
-
-		if strings.Contains(err.Error(), "invalid") {
-			writeError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		writeError(w, err.Error(), http.StatusInternalServerError)
-
+// handleCreatePolicyError handles errors from CreatePolicy.
+func (h *TieringHandler) handleCreatePolicyError(w http.ResponseWriter, err error) {
+	if strings.Contains(err.Error(), "already exists") {
+		writeError(w, err.Error(), http.StatusConflict)
 		return
 	}
-
-	writeJSON(w, http.StatusCreated, policy)
+	if strings.Contains(err.Error(), "invalid") {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeError(w, err.Error(), http.StatusInternalServerError)
 }
 
 // GetTieringPolicy gets a tiering policy by ID.

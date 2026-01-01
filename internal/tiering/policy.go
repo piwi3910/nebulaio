@@ -189,63 +189,84 @@ func (e *PolicyEvaluator) Evaluate(obj ObjectInfo) *EvaluateResult {
 
 // matchesFilter checks if an object matches the policy filter.
 func (e *PolicyEvaluator) matchesFilter(obj ObjectInfo, filter PolicyFilter) bool {
-	// Check buckets
-	if len(filter.Buckets) > 0 {
-		matched := false
+	return e.matchesBucketsFilter(obj, filter.Buckets) &&
+		e.matchesPrefixFilter(obj, filter.Prefix) &&
+		e.matchesSuffixFilter(obj, filter.Suffix) &&
+		e.matchesSizeFilter(obj, filter.MinSize, filter.MaxSize) &&
+		e.matchesContentTypesFilter(obj, filter.ContentTypes) &&
+		e.matchesTagsFilter(obj, filter.Tags)
+}
 
-		for _, pattern := range filter.Buckets {
-			if matchWildcard(pattern, obj.Bucket) {
-				matched = true
-				break
-			}
+// matchesBucketsFilter checks if object bucket matches filter buckets.
+func (e *PolicyEvaluator) matchesBucketsFilter(obj ObjectInfo, buckets []string) bool {
+	if len(buckets) == 0 {
+		return true
+	}
+
+	for _, pattern := range buckets {
+		if matchWildcard(pattern, obj.Bucket) {
+			return true
 		}
+	}
 
-		if !matched {
+	return false
+}
+
+// matchesPrefixFilter checks if object key matches prefix filter.
+func (e *PolicyEvaluator) matchesPrefixFilter(obj ObjectInfo, prefix string) bool {
+	if prefix == "" {
+		return true
+	}
+
+	return strings.HasPrefix(obj.Key, prefix)
+}
+
+// matchesSuffixFilter checks if object key matches suffix filter.
+func (e *PolicyEvaluator) matchesSuffixFilter(obj ObjectInfo, suffix string) bool {
+	if suffix == "" {
+		return true
+	}
+
+	return strings.HasSuffix(obj.Key, suffix)
+}
+
+// matchesSizeFilter checks if object size matches size constraints.
+func (e *PolicyEvaluator) matchesSizeFilter(obj ObjectInfo, minSize, maxSize int64) bool {
+	if minSize > 0 && obj.Size < minSize {
+		return false
+	}
+
+	if maxSize > 0 && obj.Size > maxSize {
+		return false
+	}
+
+	return true
+}
+
+// matchesContentTypesFilter checks if object content type matches filter.
+func (e *PolicyEvaluator) matchesContentTypesFilter(obj ObjectInfo, contentTypes []string) bool {
+	if len(contentTypes) == 0 {
+		return true
+	}
+
+	for _, pattern := range contentTypes {
+		if matchContentType(pattern, obj.ContentType) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// matchesTagsFilter checks if object tags match filter tags.
+func (e *PolicyEvaluator) matchesTagsFilter(obj ObjectInfo, tags map[string]string) bool {
+	if len(tags) == 0 {
+		return true
+	}
+
+	for key, value := range tags {
+		if objValue, ok := obj.Tags[key]; !ok || objValue != value {
 			return false
-		}
-	}
-
-	// Check prefix
-	if filter.Prefix != "" && !strings.HasPrefix(obj.Key, filter.Prefix) {
-		return false
-	}
-
-	// Check suffix
-	if filter.Suffix != "" && !strings.HasSuffix(obj.Key, filter.Suffix) {
-		return false
-	}
-
-	// Check size constraints
-	if filter.MinSize > 0 && obj.Size < filter.MinSize {
-		return false
-	}
-
-	if filter.MaxSize > 0 && obj.Size > filter.MaxSize {
-		return false
-	}
-
-	// Check content types
-	if len(filter.ContentTypes) > 0 {
-		matched := false
-
-		for _, pattern := range filter.ContentTypes {
-			if matchContentType(pattern, obj.ContentType) {
-				matched = true
-				break
-			}
-		}
-
-		if !matched {
-			return false
-		}
-	}
-
-	// Check tags
-	if len(filter.Tags) > 0 {
-		for key, value := range filter.Tags {
-			if objValue, ok := obj.Tags[key]; !ok || objValue != value {
-				return false
-			}
 		}
 	}
 

@@ -167,70 +167,73 @@ func (c *LifecycleConfiguration) Validate() error {
 
 // Validate validates a single lifecycle rule.
 func (r *LifecycleRule) Validate() error {
-	// Validate ID
+	if err := r.validateBasicFields(); err != nil {
+		return err
+	}
+
+	if err := r.Filter.Validate(); err != nil {
+		return fmt.Errorf("invalid filter: %w", err)
+	}
+
+	if !r.hasAction() {
+		return errors.New("rule must have at least one action (Expiration, Transition, NoncurrentVersionExpiration, NoncurrentVersionTransition, or AbortIncompleteMultipartUpload)")
+	}
+
+	if err := r.validateActions(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *LifecycleRule) validateBasicFields() error {
 	if len(r.ID) > maxRuleIDLength {
 		return errors.New("rule ID must be 255 characters or less")
 	}
 
-	// Validate status
 	status := strings.ToLower(r.Status)
 	if status != "enabled" && status != "disabled" {
 		return fmt.Errorf("status must be 'Enabled' or 'Disabled', got '%s'", r.Status)
 	}
 
-	// Validate filter
-	err := r.Filter.Validate()
-	if err != nil {
-		return fmt.Errorf("invalid filter: %w", err)
-	}
+	return nil
+}
 
-	// Must have at least one action
-	hasAction := r.Expiration != nil ||
+func (r *LifecycleRule) hasAction() bool {
+	return r.Expiration != nil ||
 		len(r.Transition) > 0 ||
 		r.NoncurrentVersionExpiration != nil ||
 		len(r.NoncurrentVersionTransition) > 0 ||
 		r.AbortIncompleteMultipartUpload != nil
+}
 
-	if !hasAction {
-		return errors.New("rule must have at least one action (Expiration, Transition, NoncurrentVersionExpiration, NoncurrentVersionTransition, or AbortIncompleteMultipartUpload)")
-	}
-
-	// Validate expiration
+func (r *LifecycleRule) validateActions() error {
 	if r.Expiration != nil {
-		err := r.Expiration.Validate()
-		if err != nil {
+		if err := r.Expiration.Validate(); err != nil {
 			return fmt.Errorf("invalid expiration: %w", err)
 		}
 	}
 
-	// Validate transitions
 	for i, t := range r.Transition {
-		err := t.Validate()
-		if err != nil {
+		if err := t.Validate(); err != nil {
 			return fmt.Errorf("invalid transition %d: %w", i, err)
 		}
 	}
 
-	// Validate noncurrent version expiration
 	if r.NoncurrentVersionExpiration != nil {
-		err := r.NoncurrentVersionExpiration.Validate()
-		if err != nil {
+		if err := r.NoncurrentVersionExpiration.Validate(); err != nil {
 			return fmt.Errorf("invalid noncurrent version expiration: %w", err)
 		}
 	}
 
-	// Validate noncurrent version transitions
 	for i, t := range r.NoncurrentVersionTransition {
-		err := t.Validate()
-		if err != nil {
+		if err := t.Validate(); err != nil {
 			return fmt.Errorf("invalid noncurrent version transition %d: %w", i, err)
 		}
 	}
 
-	// Validate abort incomplete multipart upload
 	if r.AbortIncompleteMultipartUpload != nil {
-		err := r.AbortIncompleteMultipartUpload.Validate()
-		if err != nil {
+		if err := r.AbortIncompleteMultipartUpload.Validate(); err != nil {
 			return fmt.Errorf("invalid abort incomplete multipart upload: %w", err)
 		}
 	}
@@ -381,38 +384,71 @@ func (r *LifecycleRule) MatchesObject(key string, tags map[string]string) bool {
 
 // Matches returns true if the filter matches the given object key and tags.
 func (f *Filter) Matches(key string, tags map[string]string) bool {
-	// Check prefix
+	if !f.matchesPrefix(key) {
+		return false
+	}
+
+	if !f.matchesTag(tags) {
+		return false
+	}
+
+	if !f.matchesAndConditions(key, tags) {
+		return false
+	}
+
+	return true
+}
+
+func (f *Filter) matchesPrefix(key string) bool {
 	if f.Prefix != "" && !strings.HasPrefix(key, f.Prefix) {
 		return false
 	}
 
-	// Check single tag
-	if f.Tag != nil {
+	return true
+}
+
+func (f *Filter) matchesTag(tags map[string]string) bool {
+	if f.Tag == nil {
+		return true
+	}
+
+	if tags == nil {
+		return false
+	}
+
+	val, ok := tags[f.Tag.Key]
+	return ok && val == f.Tag.Value
+}
+
+func (f *Filter) matchesAndConditions(key string, tags map[string]string) bool {
+	if f.And == nil {
+		return true
+	}
+
+	if !f.matchesAndPrefix(key) {
+		return false
+	}
+
+	return f.matchesAndTags(tags)
+}
+
+func (f *Filter) matchesAndPrefix(key string) bool {
+	if f.And.Prefix != "" && !strings.HasPrefix(key, f.And.Prefix) {
+		return false
+	}
+
+	return true
+}
+
+func (f *Filter) matchesAndTags(tags map[string]string) bool {
+	for _, tag := range f.And.Tags {
 		if tags == nil {
 			return false
 		}
 
-		if val, ok := tags[f.Tag.Key]; !ok || val != f.Tag.Value {
+		val, ok := tags[tag.Key]
+		if !ok || val != tag.Value {
 			return false
-		}
-	}
-
-	// Check And conditions
-	if f.And != nil {
-		// Check And prefix
-		if f.And.Prefix != "" && !strings.HasPrefix(key, f.And.Prefix) {
-			return false
-		}
-
-		// Check And tags
-		for _, tag := range f.And.Tags {
-			if tags == nil {
-				return false
-			}
-
-			if val, ok := tags[tag.Key]; !ok || val != tag.Value {
-				return false
-			}
 		}
 	}
 

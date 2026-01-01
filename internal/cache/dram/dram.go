@@ -18,9 +18,9 @@ import (
 
 // Cache configuration defaults.
 const (
-	defaultMaxSize       = 8 * 1024 * 1024 * 1024  // 8GB
+	defaultMaxSize       = 8 * 1024 * 1024 * 1024 // 8GB
 	defaultShardCount    = 256
-	defaultEntryMaxSize  = 256 * 1024 * 1024       // 256MB
+	defaultEntryMaxSize  = 256 * 1024 * 1024 // 256MB
 	peerCacheLogBurstMax = 5
 	lastKeysCapacity     = 10
 	sequentialThreshold  = 3
@@ -115,7 +115,6 @@ type shard struct {
 
 // Cache is a high-performance distributed DRAM cache.
 type Cache struct {
-	ctx                    context.Context
 	accessPatterns         map[string]*accessPattern
 	cancel                 context.CancelFunc
 	peerClients            map[string]*peerClient
@@ -178,16 +177,12 @@ func New(config Config) *Cache {
 
 	shardMaxSize := config.MaxSize / int64(config.ShardCount)
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	c := &Cache{
 		config:                config,
 		shards:                make([]*shard, config.ShardCount),
 		accessPatterns:        make(map[string]*accessPattern),
 		peerClients:           make(map[string]*peerClient),
 		peerCacheLogBurstLeft: 5, // Allow first 5 logs before rate limiting
-		ctx:                   ctx,
-		cancel:                cancel,
 	}
 
 	// Initialize shards
@@ -200,20 +195,26 @@ func New(config Config) *Cache {
 		}
 	}
 
-	// Start background workers
-	if config.PrefetchEnabled {
-		c.wg.Add(1)
-
-		go c.prefetchWorker()
-	}
-
-	if config.DistributedMode {
-		c.wg.Add(1)
-
-		go c.peerDiscoveryWorker()
-	}
-
 	return c
+}
+
+// Start starts background workers for the cache.
+func (c *Cache) Start(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	c.cancel = cancel
+
+	// Start background workers
+	if c.config.PrefetchEnabled {
+		c.wg.Add(1)
+
+		go c.prefetchWorker(ctx)
+	}
+
+	if c.config.DistributedMode {
+		c.wg.Add(1)
+
+		go c.peerDiscoveryWorker(ctx)
+	}
 }
 
 // getShard returns the shard for a given key.
@@ -520,7 +521,9 @@ func (c *Cache) Clear() {
 
 // Close shuts down the cache.
 func (c *Cache) Close() error {
-	c.cancel()
+	if c.cancel != nil {
+		c.cancel()
+	}
 	c.wg.Wait()
 	c.Clear()
 
@@ -663,7 +666,7 @@ func (c *Cache) isSequentialAccess(keys []string) bool {
 	return true
 }
 
-func (c *Cache) prefetchWorker() {
+func (c *Cache) prefetchWorker(ctx context.Context) {
 	defer c.wg.Done()
 
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -671,7 +674,7 @@ func (c *Cache) prefetchWorker() {
 
 	for {
 		select {
-		case <-c.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			c.processPrefetch()
@@ -703,7 +706,7 @@ func (c *Cache) processPrefetch() {
 	}
 }
 
-func (c *Cache) peerDiscoveryWorker() {
+func (c *Cache) peerDiscoveryWorker(ctx context.Context) {
 	defer c.wg.Done()
 
 	ticker := time.NewTicker(10 * time.Second)
@@ -711,7 +714,7 @@ func (c *Cache) peerDiscoveryWorker() {
 
 	for {
 		select {
-		case <-c.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			c.discoverPeers()

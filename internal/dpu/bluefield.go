@@ -229,7 +229,6 @@ type OffloadService struct {
 // Service provides BlueField DPU functionality.
 type Service struct {
 	backend      DPUBackend
-	healthCtx    context.Context
 	config       *Config
 	dpu          *DPUInfo
 	services     map[OffloadType]*OffloadService
@@ -342,12 +341,15 @@ func NewService(config *Config, backend DPUBackend) (*Service, error) {
 		}
 	}
 
-	// Start health monitoring
-	if config.HealthCheckInterval > 0 {
-		s.startHealthMonitor()
-	}
-
 	return s, nil
+}
+
+// Start starts the DPU service with health monitoring.
+func (s *Service) Start(ctx context.Context) {
+	// Start health monitoring if configured
+	if s.config.HealthCheckInterval > 0 {
+		s.startHealthMonitor(ctx)
+	}
 }
 
 // startOffloadService starts a specific offload service.
@@ -402,8 +404,11 @@ func (s *Service) startOffloadService(offloadType OffloadType) error {
 }
 
 // startHealthMonitor starts the health monitoring goroutine.
-func (s *Service) startHealthMonitor() {
-	s.healthCtx, s.healthCancel = context.WithCancel(context.Background())
+//
+//nolint:funcorder // Helper called from Start(), grouped with startup logic
+func (s *Service) startHealthMonitor(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	s.healthCancel = cancel
 	s.healthWg.Add(1)
 
 	go func() {
@@ -414,7 +419,7 @@ func (s *Service) startHealthMonitor() {
 
 		for {
 			select {
-			case <-s.healthCtx.Done():
+			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				err := s.backend.HealthCheck()

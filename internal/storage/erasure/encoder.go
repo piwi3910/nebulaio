@@ -109,7 +109,7 @@ func (e *Encoder) Encode(reader io.Reader) (*EncodedData, error) {
 // contextReader wraps an io.Reader to make it context-aware
 // It checks for context cancellation before each Read operation.
 type contextReader struct {
-	ctx context.Context
+	ctx context.Context //nolint:containedctx // Wrapper pattern - context passed from caller for Read cancellation
 	r   io.Reader
 }
 

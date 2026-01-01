@@ -196,7 +196,7 @@ func TestMockMetadataStore_NilReceiverHandling(t *testing.T) {
 	// These should not panic
 	assert.False(t, store.IsLeader())
 
-	_, err := store.LeaderAddress()
+	_, err := store.LeaderAddress(context.Background())
 	require.Error(t, err)
 
 	_, err = store.GetBucket(context.Background(), "test")
@@ -238,7 +238,7 @@ func TestMockMetadataStore_Reset(t *testing.T) {
 
 	// Verify cluster state is reset
 	assert.True(t, store.IsLeader())
-	addr, err := store.LeaderAddress()
+	addr, err := store.LeaderAddress(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "localhost:9003", addr)
 

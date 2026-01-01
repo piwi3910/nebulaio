@@ -515,39 +515,49 @@ func (s *CatalogService) runInventoryJob(ctx context.Context, job *InventoryJob,
 
 	s.updateJobStatus(job, JobStatusRunning)
 
-	// Generate timestamp for this run
 	timestamp := time.Now().UTC().Format("2006-01-02T15-04-05Z")
-
-	// Create inventory files
-	prefix := cfg.DestinationPrefix
-	if prefix == "" {
-		prefix = cfg.SourceBucket
-	}
-
+	prefix := s.getDestinationPrefix(cfg)
 	inventoryDir := fmt.Sprintf("%s/%s/data", prefix, timestamp)
 
-	// List objects and generate inventory
+	files, totalObjects, totalBytes, err := s.processInventoryObjects(ctx, job, cfg, inventoryDir)
+	if err != nil {
+		s.updateJobError(job, err.Error())
+		return
+	}
+
+	manifestKey := fmt.Sprintf("%s/%s/manifest.json", prefix, timestamp)
+	if err := s.finalizeInventoryJob(ctx, job, cfg, manifestKey, files, totalObjects, totalBytes); err != nil {
+		s.updateJobError(job, err.Error())
+		return
+	}
+}
+
+func (s *CatalogService) getDestinationPrefix(cfg *InventoryConfig) string {
+	if cfg.DestinationPrefix != "" {
+		return cfg.DestinationPrefix
+	}
+	return cfg.SourceBucket
+}
+
+func (s *CatalogService) processInventoryObjects(ctx context.Context, job *InventoryJob, cfg *InventoryConfig, inventoryDir string) ([]ManifestFile, int64, int64, error) {
 	objects, errs := s.lister.ListObjects(ctx, cfg.SourceBucket, "", true)
 
 	var (
-		records []InventoryRecord
-		files   []ManifestFile
+		records      []InventoryRecord
+		files        []ManifestFile
+		fileIndex    int
+		totalObjects int64
+		totalBytes   int64
 	)
-
-	fileIndex := 0
-
-	var totalObjects, totalBytes int64
 
 	for {
 		select {
 		case <-ctx.Done():
-			s.updateJobError(job, "job cancelled")
-			return
+			return nil, 0, 0, errors.New("job cancelled")
 
 		case err, ok := <-errs:
 			if ok && err != nil {
-				s.updateJobError(job, err.Error())
-				return
+				return nil, 0, 0, err
 			}
 
 		case obj, ok := <-objects:
@@ -556,47 +566,56 @@ func (s *CatalogService) runInventoryJob(ctx context.Context, job *InventoryJob,
 				if len(records) > 0 {
 					file, err := s.writeInventoryFile(ctx, cfg, inventoryDir, fileIndex, records)
 					if err != nil {
-						s.updateJobError(job, err.Error())
-						return
+						return nil, 0, 0, err
 					}
-
 					files = append(files, file)
 				}
-
-				goto done
+				return files, totalObjects, totalBytes, nil
 			}
 
-			// Apply filter
-			if !s.matchesFilter(obj, cfg.Filter) {
-				continue
+			newRecords, newFiles, newFileIndex, err := s.processInventoryObject(ctx, job, cfg, inventoryDir, obj, records, files, fileIndex, &totalObjects, &totalBytes)
+			if err != nil {
+				return nil, 0, 0, err
 			}
-
-			// Convert to record
-			record := s.objectToRecord(obj, cfg.IncludedFields)
-			records = append(records, record)
-
-			atomic.AddInt64(&totalObjects, 1)
-			atomic.AddInt64(&totalBytes, obj.Size)
-
-			// Update progress
-			s.updateJobProgress(job, totalObjects, totalBytes, len(files))
-
-			// Write batch if full
-			if len(records) >= s.batchSize {
-				file, err := s.writeInventoryFile(ctx, cfg, inventoryDir, fileIndex, records)
-				if err != nil {
-					s.updateJobError(job, err.Error())
-					return
-				}
-
-				files = append(files, file)
-				records = records[:0]
-				fileIndex++
-			}
+			records = newRecords
+			files = newFiles
+			fileIndex = newFileIndex
 		}
 	}
+}
 
-done:
+func (s *CatalogService) processInventoryObject(ctx context.Context, job *InventoryJob, cfg *InventoryConfig, inventoryDir string, obj ObjectInfo, records []InventoryRecord, files []ManifestFile, fileIndex int, totalObjects, totalBytes *int64) ([]InventoryRecord, []ManifestFile, int, error) {
+	// Apply filter
+	if !s.matchesFilter(obj, cfg.Filter) {
+		return records, files, fileIndex, nil
+	}
+
+	// Convert to record
+	record := s.objectToRecord(obj, cfg.IncludedFields)
+	records = append(records, record)
+
+	atomic.AddInt64(totalObjects, 1)
+	atomic.AddInt64(totalBytes, obj.Size)
+
+	// Update progress
+	s.updateJobProgress(job, *totalObjects, *totalBytes, len(files))
+
+	// Write batch if full
+	if len(records) >= s.batchSize {
+		file, err := s.writeInventoryFile(ctx, cfg, inventoryDir, fileIndex, records)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+
+		files = append(files, file)
+		records = records[:0]
+		fileIndex++
+	}
+
+	return records, files, fileIndex, nil
+}
+
+func (s *CatalogService) finalizeInventoryJob(ctx context.Context, job *InventoryJob, cfg *InventoryConfig, manifestKey string, files []ManifestFile, totalObjects, totalBytes int64) error {
 	// Write manifest
 	manifest := InventoryManifest{
 		SourceBucket:      cfg.SourceBucket,
@@ -608,18 +627,20 @@ done:
 		Files:             files,
 	}
 
-	manifestKey := fmt.Sprintf("%s/%s/manifest.json", prefix, timestamp)
-
-	err := s.writeManifest(ctx, cfg.DestinationBucket, manifestKey, manifest)
-	if err != nil {
-		s.updateJobError(job, err.Error())
-		return
+	if err := s.writeManifest(ctx, cfg.DestinationBucket, manifestKey, manifest); err != nil {
+		return err
 	}
 
-	// Update job as completed (only if not already cancelled)
-	now := time.Now()
+	s.updateJobCompletion(job, manifestKey, totalObjects, totalBytes, len(files))
+	s.updateConfigLastRun(job, cfg)
 
+	return nil
+}
+
+func (s *CatalogService) updateJobCompletion(job *InventoryJob, manifestKey string, totalObjects, totalBytes int64, filesCount int) {
+	now := time.Now()
 	s.jobMu.Lock()
+	defer s.jobMu.Unlock()
 
 	if job.Status != JobStatusCancelled {
 		job.Status = JobStatusCompleted
@@ -629,17 +650,15 @@ done:
 		job.Progress.ProcessedObjects = totalObjects
 		job.Progress.TotalBytes = totalBytes
 		job.Progress.ProcessedBytes = totalBytes
-		job.Progress.FilesGenerated = len(files)
+		job.Progress.FilesGenerated = filesCount
 	}
+}
 
-	s.jobMu.Unlock()
-
-	// Update config last run (only if job completed successfully)
+func (s *CatalogService) updateConfigLastRun(job *InventoryJob, cfg *InventoryConfig) {
 	if job.Status == JobStatusCompleted {
+		now := time.Now()
 		s.configMu.Lock()
-
 		cfg.LastRun = &now
-
 		s.configMu.Unlock()
 	}
 }
@@ -650,30 +669,53 @@ func (s *CatalogService) matchesFilter(obj ObjectInfo, filter *InventoryFilter) 
 		return true
 	}
 
+	return s.matchesPrefixFilter(obj, filter) &&
+		s.matchesSizeFilter(obj, filter) &&
+		s.matchesTimeFilter(obj, filter) &&
+		s.matchesStorageClassFilter(obj, filter) &&
+		s.matchesTagsFilter(obj, filter)
+}
+
+// matchesPrefixFilter checks if object matches prefix filter.
+func (s *CatalogService) matchesPrefixFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if filter.Prefix != "" && !hasPrefix(obj.Key, filter.Prefix) {
 		return false
 	}
+	return true
+}
 
+// matchesSizeFilter checks if object matches size filter.
+func (s *CatalogService) matchesSizeFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if filter.MinSize != nil && obj.Size < *filter.MinSize {
 		return false
 	}
-
 	if filter.MaxSize != nil && obj.Size > *filter.MaxSize {
 		return false
 	}
+	return true
+}
 
+// matchesTimeFilter checks if object matches time filter.
+func (s *CatalogService) matchesTimeFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if filter.CreatedAfter != nil && obj.LastModified.Before(*filter.CreatedAfter) {
 		return false
 	}
-
 	if filter.CreatedBefore != nil && obj.LastModified.After(*filter.CreatedBefore) {
 		return false
 	}
+	return true
+}
 
+// matchesStorageClassFilter checks if object matches storage class filter.
+func (s *CatalogService) matchesStorageClassFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if filter.StorageClass != "" && obj.StorageClass != filter.StorageClass {
 		return false
 	}
+	return true
+}
 
+// matchesTagsFilter checks if object matches all required tags.
+func (s *CatalogService) matchesTagsFilter(obj ObjectInfo, filter *InventoryFilter) bool {
 	if len(filter.Tags) > 0 {
 		for k, v := range filter.Tags {
 			if obj.Tags[k] != v {
@@ -681,7 +723,6 @@ func (s *CatalogService) matchesFilter(obj ObjectInfo, filter *InventoryFilter) 
 			}
 		}
 	}
-
 	return true
 }
 
@@ -839,47 +880,38 @@ func (s *CatalogService) writeParquet(w io.Writer, records []InventoryRecord) (i
 
 // recordToRow converts a record to a CSV row.
 func (s *CatalogService) recordToRow(rec InventoryRecord, fields []string) []string {
+	type fieldConverter func(InventoryRecord) string
+
+	converters := map[InventoryField]fieldConverter{
+		FieldBucket:                      func(r InventoryRecord) string { return r.Bucket },
+		FieldKey:                         func(r InventoryRecord) string { return r.Key },
+		FieldVersionID:                   func(r InventoryRecord) string { return r.VersionID },
+		FieldIsLatest:                    func(r InventoryRecord) string { return strconv.FormatBool(r.IsLatest) },
+		FieldIsDeleteMarker:              func(r InventoryRecord) string { return strconv.FormatBool(r.IsDeleteMarker) },
+		FieldSize:                        func(r InventoryRecord) string { return strconv.FormatInt(r.Size, 10) },
+		FieldLastModified:                func(r InventoryRecord) string { return r.LastModified.UTC().Format(time.RFC3339) },
+		FieldETag:                        func(r InventoryRecord) string { return r.ETag },
+		FieldStorageClass:                func(r InventoryRecord) string { return r.StorageClass },
+		FieldIsMultipartUploaded:         func(r InventoryRecord) string { return strconv.FormatBool(r.IsMultipartUploaded) },
+		FieldReplicationStatus:           func(r InventoryRecord) string { return r.ReplicationStatus },
+		FieldEncryptionStatus:            func(r InventoryRecord) string { return r.EncryptionStatus },
+		FieldObjectLockRetainUntilDate: func(r InventoryRecord) string {
+			if r.ObjectLockRetainUntilDate != nil {
+				return r.ObjectLockRetainUntilDate.UTC().Format(time.RFC3339)
+			}
+			return ""
+		},
+		FieldObjectLockMode:              func(r InventoryRecord) string { return r.ObjectLockMode },
+		FieldObjectLockLegalHoldStatus:   func(r InventoryRecord) string { return r.ObjectLockLegalHoldStatus },
+		FieldIntelligentTieringAccess:    func(r InventoryRecord) string { return r.IntelligentTieringAccess },
+		FieldBucketKeyStatus:             func(r InventoryRecord) string { return r.BucketKeyStatus },
+		FieldChecksumAlgorithm:           func(r InventoryRecord) string { return r.ChecksumAlgorithm },
+	}
+
 	row := make([]string, len(fields))
 	for i, field := range fields {
-		switch InventoryField(field) {
-		case FieldBucket:
-			row[i] = rec.Bucket
-		case FieldKey:
-			row[i] = rec.Key
-		case FieldVersionID:
-			row[i] = rec.VersionID
-		case FieldIsLatest:
-			row[i] = strconv.FormatBool(rec.IsLatest)
-		case FieldIsDeleteMarker:
-			row[i] = strconv.FormatBool(rec.IsDeleteMarker)
-		case FieldSize:
-			row[i] = strconv.FormatInt(rec.Size, 10)
-		case FieldLastModified:
-			row[i] = rec.LastModified.UTC().Format(time.RFC3339)
-		case FieldETag:
-			row[i] = rec.ETag
-		case FieldStorageClass:
-			row[i] = rec.StorageClass
-		case FieldIsMultipartUploaded:
-			row[i] = strconv.FormatBool(rec.IsMultipartUploaded)
-		case FieldReplicationStatus:
-			row[i] = rec.ReplicationStatus
-		case FieldEncryptionStatus:
-			row[i] = rec.EncryptionStatus
-		case FieldObjectLockRetainUntilDate:
-			if rec.ObjectLockRetainUntilDate != nil {
-				row[i] = rec.ObjectLockRetainUntilDate.UTC().Format(time.RFC3339)
-			}
-		case FieldObjectLockMode:
-			row[i] = rec.ObjectLockMode
-		case FieldObjectLockLegalHoldStatus:
-			row[i] = rec.ObjectLockLegalHoldStatus
-		case FieldIntelligentTieringAccess:
-			row[i] = rec.IntelligentTieringAccess
-		case FieldBucketKeyStatus:
-			row[i] = rec.BucketKeyStatus
-		case FieldChecksumAlgorithm:
-			row[i] = rec.ChecksumAlgorithm
+		if converter, ok := converters[InventoryField(field)]; ok {
+			row[i] = converter(rec)
 		}
 	}
 

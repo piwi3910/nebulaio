@@ -19,7 +19,7 @@ const (
 
 // Queue manages replication tasks.
 type Queue struct {
-	ctx      context.Context
+	ctx      context.Context //nolint:containedctx // Queue lifecycle pattern - context managed by New/Close
 	items    map[string]*QueueItem
 	pending  chan *QueueItem
 	cancel   context.CancelFunc

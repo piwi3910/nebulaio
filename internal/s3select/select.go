@@ -282,57 +282,75 @@ func (e *Engine) parseCSV(data []byte) ([]Record, error) {
 func (e *Engine) parseJSON(data []byte) ([]Record, error) {
 	config := e.inputFormat.JSONConfig
 
+	if config.Type == "LINES" {
+		return e.parseJSONLines(data)
+	}
+
+	return e.parseJSONDocument(data)
+}
+
+func (e *Engine) parseJSONLines(data []byte) ([]Record, error) {
 	var records []Record
 
-	if config.Type == "LINES" {
-		// JSON Lines format
-		lines := strings.Split(string(data), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-
-			var obj map[string]interface{}
-
-			err := json.Unmarshal([]byte(line), &obj)
-			if err != nil {
-				// Try as array
-				var arr []interface{}
-
-				err := json.Unmarshal([]byte(line), &arr)
-				if err != nil {
-					continue
-				}
-
-				for _, item := range arr {
-					if rec, ok := item.(map[string]interface{}); ok {
-						records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
-					}
-				}
-
-				continue
-			}
-
-			records = append(records, Record{Fields: obj, Columns: getKeys(obj)})
-		}
-	} else {
-		// DOCUMENT format - single JSON object or array
-		var obj interface{}
-
-		err := json.Unmarshal(data, &obj)
-		if err != nil {
-			return nil, err
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
 		}
 
-		switch v := obj.(type) {
-		case map[string]interface{}:
-			records = append(records, Record{Fields: v, Columns: getKeys(v)})
-		case []interface{}:
-			for _, item := range v {
-				if rec, ok := item.(map[string]interface{}); ok {
-					records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
-				}
+		lineRecords := e.parseJSONLine(line)
+		records = append(records, lineRecords...)
+	}
+
+	return records, nil
+}
+
+func (e *Engine) parseJSONLine(line string) []Record {
+	var records []Record
+
+	var obj map[string]interface{}
+
+	err := json.Unmarshal([]byte(line), &obj)
+	if err == nil {
+		records = append(records, Record{Fields: obj, Columns: getKeys(obj)})
+		return records
+	}
+
+	// Try as array
+	var arr []interface{}
+
+	err = json.Unmarshal([]byte(line), &arr)
+	if err != nil {
+		return records
+	}
+
+	for _, item := range arr {
+		if rec, ok := item.(map[string]interface{}); ok {
+			records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
+		}
+	}
+
+	return records
+}
+
+func (e *Engine) parseJSONDocument(data []byte) ([]Record, error) {
+	var records []Record
+
+	var obj interface{}
+
+	err := json.Unmarshal(data, &obj)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := obj.(type) {
+	case map[string]interface{}:
+		records = append(records, Record{Fields: v, Columns: getKeys(v)})
+	case []interface{}:
+		for _, item := range v {
+			if rec, ok := item.(map[string]interface{}); ok {
+				records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
 			}
 		}
 	}
@@ -378,94 +396,13 @@ func (e *Engine) executeQuery(query *Query, records []Record) ([]Record, error) 
 // executeAggregates handles aggregate functions.
 func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, error) {
 	result := Record{Fields: make(map[string]interface{})}
-
 	columns := make([]string, 0, len(query.Columns))
 
 	for _, col := range query.Columns {
-		var value interface{}
-
-		alias := col.Alias
-		if alias == "" {
-			alias = fmt.Sprintf("%s(%s)", col.Function, col.Name)
-		}
-
+		alias := e.getColumnAlias(col)
 		columns = append(columns, alias)
 
-		switch strings.ToUpper(col.Function) {
-		case "COUNT":
-			if col.Name == "*" {
-				value = len(records)
-			} else {
-				count := 0
-
-				for _, r := range records {
-					if _, ok := r.Fields[col.Name]; ok {
-						count++
-					}
-				}
-
-				value = count
-			}
-		case "SUM":
-			var sum float64
-
-			for _, r := range records {
-				if v, ok := r.Fields[col.Name]; ok {
-					sum += toFloat64(v)
-				}
-			}
-
-			value = sum
-		case "AVG":
-			var (
-				sum   float64
-				count int
-			)
-
-			for _, r := range records {
-				if v, ok := r.Fields[col.Name]; ok {
-					sum += toFloat64(v)
-					count++
-				}
-			}
-
-			if count > 0 {
-				value = sum / float64(count)
-			} else {
-				value = 0.0
-			}
-		case "MIN":
-			var minVal *float64
-
-			for _, r := range records {
-				if v, ok := r.Fields[col.Name]; ok {
-					f := toFloat64(v)
-					if minVal == nil || f < *minVal {
-						minVal = &f
-					}
-				}
-			}
-
-			if minVal != nil {
-				value = *minVal
-			}
-		case "MAX":
-			var maxVal *float64
-
-			for _, r := range records {
-				if v, ok := r.Fields[col.Name]; ok {
-					f := toFloat64(v)
-					if maxVal == nil || f > *maxVal {
-						maxVal = &f
-					}
-				}
-			}
-
-			if maxVal != nil {
-				value = *maxVal
-			}
-		}
-
+		value := e.calculateAggregate(col, records)
 		result.Fields[alias] = value
 	}
 
@@ -474,98 +411,236 @@ func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, er
 	return []Record{result}, nil
 }
 
+// getColumnAlias returns the column alias or generates one from function and name.
+func (e *Engine) getColumnAlias(col Column) string {
+	if col.Alias != "" {
+		return col.Alias
+	}
+	return fmt.Sprintf("%s(%s)", col.Function, col.Name)
+}
+
+// calculateAggregate dispatches to the appropriate aggregate calculation.
+func (e *Engine) calculateAggregate(col Column, records []Record) interface{} {
+	switch strings.ToUpper(col.Function) {
+	case "COUNT":
+		return e.calculateCount(col, records)
+	case "SUM":
+		return e.calculateSum(col, records)
+	case "AVG":
+		return e.calculateAvg(col, records)
+	case "MIN":
+		return e.calculateMin(col, records)
+	case "MAX":
+		return e.calculateMax(col, records)
+	default:
+		return nil
+	}
+}
+
+// calculateCount counts records with the specified column.
+func (e *Engine) calculateCount(col Column, records []Record) int {
+	if col.Name == "*" {
+		return len(records)
+	}
+
+	count := 0
+	for _, r := range records {
+		if _, ok := r.Fields[col.Name]; ok {
+			count++
+		}
+	}
+
+	return count
+}
+
+// calculateSum sums numeric values in the specified column.
+func (e *Engine) calculateSum(col Column, records []Record) float64 {
+	var sum float64
+
+	for _, r := range records {
+		if v, ok := r.Fields[col.Name]; ok {
+			sum += toFloat64(v)
+		}
+	}
+
+	return sum
+}
+
+// calculateAvg calculates the average of numeric values in the specified column.
+func (e *Engine) calculateAvg(col Column, records []Record) float64 {
+	var sum float64
+	var count int
+
+	for _, r := range records {
+		if v, ok := r.Fields[col.Name]; ok {
+			sum += toFloat64(v)
+			count++
+		}
+	}
+
+	if count > 0 {
+		return sum / float64(count)
+	}
+
+	return 0.0
+}
+
+// calculateMin finds the minimum numeric value in the specified column.
+func (e *Engine) calculateMin(col Column, records []Record) interface{} {
+	var minVal *float64
+
+	for _, r := range records {
+		if v, ok := r.Fields[col.Name]; ok {
+			f := toFloat64(v)
+			if minVal == nil || f < *minVal {
+				minVal = &f
+			}
+		}
+	}
+
+	if minVal != nil {
+		return *minVal
+	}
+
+	return nil
+}
+
+// calculateMax finds the maximum numeric value in the specified column.
+func (e *Engine) calculateMax(col Column, records []Record) interface{} {
+	var maxVal *float64
+
+	for _, r := range records {
+		if v, ok := r.Fields[col.Name]; ok {
+			f := toFloat64(v)
+			if maxVal == nil || f > *maxVal {
+				maxVal = &f
+			}
+		}
+	}
+
+	if maxVal != nil {
+		return *maxVal
+	}
+
+	return nil
+}
+
 // formatOutput formats records to output format.
 func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 	var output strings.Builder
 
 	for _, record := range records {
-		// Select columns
-		var (
-			values []interface{}
-			keys   []string
-		)
-
-		if query.SelectAll {
-			for _, col := range record.Columns {
-				keys = append(keys, col)
-				values = append(values, record.Fields[col])
-			}
-		} else {
-			for _, col := range query.Columns {
-				var name string
-
-				switch {
-				case col.Function != "":
-					// For aggregate functions, use the function expression as key
-					if col.Alias != "" {
-						name = col.Alias
-					} else {
-						name = fmt.Sprintf("%s(%s)", col.Function, col.Name)
-					}
-				case col.Alias != "":
-					name = col.Alias
-				default:
-					name = col.Name
-				}
-
-				keys = append(keys, name)
-
-				switch {
-				case col.Function != "":
-					// Aggregate result - value stored under the formatted key
-					key := name
-					values = append(values, record.Fields[key])
-				case col.IsIndex:
-					key := fmt.Sprintf("_%d", col.Index)
-					values = append(values, record.Fields[key])
-				default:
-					values = append(values, record.Fields[col.Name])
-				}
-			}
-		}
-
-		switch e.outputFormat.Type {
-		case formatJSON:
-			obj := make(map[string]interface{})
-
-			for i, key := range keys {
-				if i < len(values) {
-					obj[key] = values[i]
-				}
-			}
-
-			jsonBytes, err := json.Marshal(obj)
-			if err != nil {
-				return nil, err
-			}
-
-			output.Write(jsonBytes)
-			output.WriteString(e.outputFormat.JSONConfig.RecordDelimiter)
-
-		case formatCSV:
-			for i, val := range values {
-				if i > 0 {
-					output.WriteString(e.outputFormat.CSVConfig.FieldDelimiter)
-				}
-
-				output.WriteString(formatCSVValue(val, e.outputFormat.CSVConfig))
-			}
-
-			output.WriteString(e.outputFormat.CSVConfig.RecordDelimiter)
-
-		default:
-			// Default to JSON
-			jsonBytes, err := json.Marshal(values)
-			if err != nil {
-				return nil, err
-			}
-
-			output.Write(jsonBytes)
-			output.WriteString("\n")
+		keys, values := e.extractColumnValues(record, query)
+		if err := e.writeFormattedRecord(&output, keys, values); err != nil {
+			return nil, err
 		}
 	}
 
 	return []byte(output.String()), nil
+}
+
+func (e *Engine) extractColumnValues(record Record, query *Query) ([]string, []interface{}) {
+	var (
+		values []interface{}
+		keys   []string
+	)
+
+	if query.SelectAll {
+		for _, col := range record.Columns {
+			keys = append(keys, col)
+			values = append(values, record.Fields[col])
+		}
+		return keys, values
+	}
+
+	for _, col := range query.Columns {
+		name := e.getColumnName(col)
+		keys = append(keys, name)
+		values = append(values, e.getColumnValue(record, col, name))
+	}
+
+	return keys, values
+}
+
+func (e *Engine) getColumnName(col Column) string {
+	switch {
+	case col.Function != "":
+		if col.Alias != "" {
+			return col.Alias
+		}
+		return fmt.Sprintf("%s(%s)", col.Function, col.Name)
+	case col.Alias != "":
+		return col.Alias
+	default:
+		return col.Name
+	}
+}
+
+func (e *Engine) getColumnValue(record Record, col Column, name string) interface{} {
+	switch {
+	case col.Function != "":
+		return record.Fields[name]
+	case col.IsIndex:
+		key := fmt.Sprintf("_%d", col.Index)
+		return record.Fields[key]
+	default:
+		return record.Fields[col.Name]
+	}
+}
+
+func (e *Engine) writeFormattedRecord(output *strings.Builder, keys []string, values []interface{}) error {
+	switch e.outputFormat.Type {
+	case formatJSON:
+		return e.writeJSONRecord(output, keys, values)
+	case formatCSV:
+		e.writeCSVRecord(output, values)
+		return nil
+	default:
+		return e.writeDefaultRecord(output, values)
+	}
+}
+
+func (e *Engine) writeJSONRecord(output *strings.Builder, keys []string, values []interface{}) error {
+	obj := make(map[string]interface{})
+
+	for i, key := range keys {
+		if i < len(values) {
+			obj[key] = values[i]
+		}
+	}
+
+	jsonBytes, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+
+	output.Write(jsonBytes)
+	output.WriteString(e.outputFormat.JSONConfig.RecordDelimiter)
+
+	return nil
+}
+
+func (e *Engine) writeCSVRecord(output *strings.Builder, values []interface{}) {
+	for i, val := range values {
+		if i > 0 {
+			output.WriteString(e.outputFormat.CSVConfig.FieldDelimiter)
+		}
+		output.WriteString(formatCSVValue(val, e.outputFormat.CSVConfig))
+	}
+
+	output.WriteString(e.outputFormat.CSVConfig.RecordDelimiter)
+}
+
+func (e *Engine) writeDefaultRecord(output *strings.Builder, values []interface{}) error {
+	jsonBytes, err := json.Marshal(values)
+	if err != nil {
+		return err
+	}
+
+	output.Write(jsonBytes)
+	output.WriteString("\n")
+
+	return nil
 }
 
 // ParseSQL parses an S3 Select SQL query.
@@ -698,94 +773,112 @@ func parseColumns(columnsStr string) ([]Column, error) {
 func parseWhereClause(where string) (*Condition, error) {
 	where = strings.TrimSpace(where)
 
-	// Handle AND/OR
 	andRegex := regexp.MustCompile(`(?i)\s+and\s+`)
 	orRegex := regexp.MustCompile(`(?i)\s+or\s+`)
 
 	if andParts := andRegex.Split(where, 2); len(andParts) == 2 {
-		left, err := parseWhereClause(andParts[0])
-		if err != nil {
-			return nil, err
-		}
-
-		right, err := parseWhereClause(andParts[1])
-		if err != nil {
-			return nil, err
-		}
-
-		left.And = right
-
-		return left, nil
+		return parseAndCondition(andParts)
 	}
 
 	if orParts := orRegex.Split(where, 2); len(orParts) == 2 {
-		left, err := parseWhereClause(orParts[0])
-		if err != nil {
-			return nil, err
-		}
-
-		right, err := parseWhereClause(orParts[1])
-		if err != nil {
-			return nil, err
-		}
-
-		left.Or = right
-
-		return left, nil
+		return parseOrCondition(orParts)
 	}
 
-	// Parse simple condition
+	return parseSimpleCondition(where)
+}
+
+func parseAndCondition(parts []string) (*Condition, error) {
+	left, err := parseWhereClause(parts[0])
+	if err != nil {
+		return nil, err
+	}
+
+	right, err := parseWhereClause(parts[1])
+	if err != nil {
+		return nil, err
+	}
+
+	left.And = right
+	return left, nil
+}
+
+func parseOrCondition(parts []string) (*Condition, error) {
+	left, err := parseWhereClause(parts[0])
+	if err != nil {
+		return nil, err
+	}
+
+	right, err := parseWhereClause(parts[1])
+	if err != nil {
+		return nil, err
+	}
+
+	left.Or = right
+	return left, nil
+}
+
+func parseSimpleCondition(where string) (*Condition, error) {
 	operators := []string{">=", "<=", "!=", "<>", "=", ">", "<", " LIKE ", " like ", " IS NULL", " is null", " IS NOT NULL", " is not null"}
 	for _, op := range operators {
 		if strings.Contains(where, op) {
 			parts := strings.SplitN(where, op, 2)
 			if len(parts) == 2 {
-				left := strings.TrimSpace(parts[0])
-				right := strings.TrimSpace(parts[1])
-
-				// Remove alias prefix
-				if strings.Contains(left, ".") {
-					leftParts := strings.SplitN(left, ".", 2)
-					if len(leftParts) == 2 {
-						left = leftParts[1]
-					}
-				}
-
-				// Parse right value
-				var rightVal interface{}
-
-				rightLower := strings.ToLower(right)
-				switch {
-				case strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(op), "null"):
-					rightVal = nil
-				case strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'"):
-					rightVal = right[1 : len(right)-1]
-				case strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\""):
-					rightVal = right[1 : len(right)-1]
-				default:
-					f, floatErr := strconv.ParseFloat(right, 64)
-					if floatErr == nil {
-						rightVal = f
-					} else {
-						b, boolErr := strconv.ParseBool(right)
-						if boolErr == nil {
-							rightVal = b
-						} else {
-							rightVal = right
-						}
-					}
-				}
+				left := parseLeftOperand(parts[0])
+				right := parseRightOperand(parts[1], op)
 
 				return &Condition{
 					Left:     left,
 					Operator: strings.TrimSpace(op),
-					Right:    rightVal,
+					Right:    right,
 				}, nil
 			}
 		}
 	}
 
 	return nil, fmt.Errorf("failed to parse WHERE clause: %s", where)
+}
+
+func parseLeftOperand(leftPart string) string {
+	left := strings.TrimSpace(leftPart)
+
+	if strings.Contains(left, ".") {
+		leftParts := strings.SplitN(left, ".", 2)
+		if len(leftParts) == 2 {
+			left = leftParts[1]
+		}
+	}
+
+	return left
+}
+
+func parseRightOperand(rightPart, operator string) interface{} {
+	right := strings.TrimSpace(rightPart)
+	rightLower := strings.ToLower(right)
+
+	switch {
+	case strings.HasPrefix(rightLower, "null") || strings.Contains(strings.ToLower(operator), "null"):
+		return nil
+	case strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'"):
+		return right[1 : len(right)-1]
+	case strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\""):
+		return right[1 : len(right)-1]
+	default:
+		return parseNumericOrBoolOrString(right)
+	}
+}
+
+func parseNumericOrBoolOrString(value string) interface{} {
+	f, floatErr := strconv.ParseFloat(value, 64)
+	if floatErr == nil {
+		return f
+	}
+
+	b, boolErr := strconv.ParseBool(value)
+	if boolErr == nil {
+		return b
+	}
+
+	return value
 }
 
 // evaluateCondition evaluates a condition against a record.

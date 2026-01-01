@@ -313,6 +313,7 @@ func TestCache(t *testing.T) {
 
 	// Test eviction
 	t.Run("Eviction", func(t *testing.T) {
+		//nolint:contextcheck // NewCache spawns writeBackWorker with its own per-operation contexts
 		smallCache := NewCache(CacheConfig{
 			MaxSize:    100,
 			MaxObjects: 3,

@@ -366,13 +366,9 @@ func (bm *BatchManager) DeleteJob(jobID string) error {
 func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 	defer atomic.AddInt32(&bm.runningJobs, -1)
 
-	// List all objects to replicate
 	objectsCh, errCh := bm.lister.ListObjects(ctx, job.SourceBucket, job.Prefix, true)
-
-	// Create work channel
 	workCh := make(chan ObjectListEntry, job.Concurrency*2)
 
-	// Start workers
 	var (
 		wg             sync.WaitGroup
 		bytesProcessed int64
@@ -380,17 +376,29 @@ func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 
 	startTime := time.Now()
 
-	for range job.Concurrency {
-		wg.Add(1)
+	bm.startReplicationWorkers(ctx, job, workCh, &wg, &bytesProcessed)
+	bm.feedObjectsToWorkers(ctx, job, objectsCh, workCh)
 
-		go func() {
-			defer wg.Done()
+	wg.Wait()
 
-			bm.replicationWorker(ctx, job, workCh, &bytesProcessed)
-		}()
+	if bm.checkForListingErrors(job, errCh) {
+		return
 	}
 
-	// Feed objects to workers
+	bm.finalizeJob(ctx, job, startTime, bytesProcessed)
+}
+
+func (bm *BatchManager) startReplicationWorkers(ctx context.Context, job *BatchJob, workCh chan ObjectListEntry, wg *sync.WaitGroup, bytesProcessed *int64) {
+	for range job.Concurrency {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			bm.replicationWorker(ctx, job, workCh, bytesProcessed)
+		}()
+	}
+}
+
+func (bm *BatchManager) feedObjectsToWorkers(ctx context.Context, job *BatchJob, objectsCh <-chan ObjectListEntry, workCh chan ObjectListEntry) {
 	go func() {
 		defer close(workCh)
 
@@ -403,62 +411,80 @@ func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 					return
 				}
 
-				// Apply filters
-				if !bm.matchesFilters(job, obj) {
-					atomic.AddInt64(&job.Progress.SkippedObjects, 1)
-					continue
-				}
-
-				atomic.AddInt64(&job.Progress.TotalObjects, 1)
-				atomic.AddInt64(&job.Progress.TotalBytes, obj.Size)
-
-				// Check for pause
-				select {
-				case <-job.pauseCh:
-					// Wait for resume
-					select {
-					case <-job.resumeCh:
-						// Continue
-					case <-ctx.Done():
-						return
-					}
-				default:
-				}
-
-				select {
-				case workCh <- obj:
-				case <-ctx.Done():
+				if bm.processObjectForBatch(ctx, job, obj, workCh) {
 					return
 				}
 			}
 		}
 	}()
+}
 
-	// Wait for completion
-	wg.Wait()
+func (bm *BatchManager) processObjectForBatch(ctx context.Context, job *BatchJob, obj ObjectListEntry, workCh chan ObjectListEntry) bool {
+	// Apply filters
+	if !bm.matchesFilters(job, obj) {
+		atomic.AddInt64(&job.Progress.SkippedObjects, 1)
+		return false
+	}
 
-	// Check for errors
+	atomic.AddInt64(&job.Progress.TotalObjects, 1)
+	atomic.AddInt64(&job.Progress.TotalBytes, obj.Size)
+
+	// Check for pause
+	if bm.handlePauseResume(ctx, job) {
+		return true
+	}
+
+	// Send to work channel
+	select {
+	case workCh <- obj:
+		return false
+	case <-ctx.Done():
+		return true
+	}
+}
+
+func (bm *BatchManager) handlePauseResume(ctx context.Context, job *BatchJob) bool {
+	select {
+	case <-job.pauseCh:
+		// Wait for resume
+		select {
+		case <-job.resumeCh:
+			return false
+		case <-ctx.Done():
+			return true
+		}
+	default:
+		return false
+	}
+}
+
+func (bm *BatchManager) checkForListingErrors(job *BatchJob, errCh <-chan error) bool {
 	select {
 	case err := <-errCh:
 		if err != nil {
 			bm.mu.Lock()
-
 			job.SetStatus(BatchJobStatusFailed)
 			job.Error = err.Error()
-
 			bm.mu.Unlock()
-
-			return
+			return true
 		}
 	default:
 	}
+	return false
+}
 
-	// Update final status
+func (bm *BatchManager) finalizeJob(ctx context.Context, job *BatchJob, startTime time.Time, bytesProcessed int64) {
 	bm.mu.Lock()
+	defer bm.mu.Unlock()
 
 	now := time.Now()
 	job.CompletedAt = &now
 
+	bm.setFinalJobStatus(ctx, job)
+	bm.calculateFinalStats(job, startTime, bytesProcessed)
+}
+
+func (bm *BatchManager) setFinalJobStatus(ctx context.Context, job *BatchJob) {
 	switch {
 	case ctx.Err() != nil:
 		if job.GetStatus() != BatchJobStatusCancelled {
@@ -470,14 +496,13 @@ func (bm *BatchManager) runJob(ctx context.Context, job *BatchJob) {
 	default:
 		job.SetStatus(BatchJobStatusCompleted)
 	}
+}
 
-	// Calculate final stats
+func (bm *BatchManager) calculateFinalStats(job *BatchJob, startTime time.Time, bytesProcessed int64) {
 	elapsed := time.Since(startTime).Seconds()
 	if elapsed > 0 {
 		job.Progress.BytesPerSecond = int64(float64(atomic.LoadInt64(&bytesProcessed)) / elapsed)
 	}
-
-	bm.mu.Unlock()
 }
 
 // replicationWorker processes objects for replication.
@@ -491,38 +516,58 @@ func (bm *BatchManager) replicationWorker(ctx context.Context, job *BatchJob, wo
 				return
 			}
 
-			// Replicate with retries
-			var err error
-			for attempt := 0; attempt <= job.MaxRetries; attempt++ {
-				err = bm.replicateObject(ctx, job, obj)
-				if err == nil {
-					break
-				}
-
-				// Wait before retry
-				if attempt < job.MaxRetries {
-					select {
-					case <-time.After(time.Duration(attempt+1) * time.Second):
-					case <-ctx.Done():
-						return
-					}
-				}
-			}
-
-			if err != nil {
-				atomic.AddInt64(&job.Progress.FailedObjects, 1)
-			} else {
-				atomic.AddInt64(&job.Progress.SuccessObjects, 1)
-				atomic.AddInt64(bytesProcessed, obj.Size)
-			}
-
-			atomic.AddInt64(&job.Progress.ProcessedObjects, 1)
-			atomic.AddInt64(&job.Progress.ProcessedBytes, obj.Size)
-
-			// Update ETA
-			bm.updateETA(job)
+			bm.processObject(ctx, job, obj, bytesProcessed)
 		}
 	}
+}
+
+func (bm *BatchManager) processObject(ctx context.Context, job *BatchJob, obj ObjectListEntry, bytesProcessed *int64) {
+	err := bm.replicateWithRetries(ctx, job, obj)
+
+	bm.updateJobProgress(job, obj, err, bytesProcessed)
+	bm.updateETA(job)
+}
+
+func (bm *BatchManager) replicateWithRetries(ctx context.Context, job *BatchJob, obj ObjectListEntry) error {
+	var err error
+
+	for attempt := 0; attempt <= job.MaxRetries; attempt++ {
+		err = bm.replicateObject(ctx, job, obj)
+		if err == nil {
+			return nil
+		}
+
+		if !bm.shouldRetry(ctx, attempt, job.MaxRetries) {
+			break
+		}
+	}
+
+	return err
+}
+
+func (bm *BatchManager) shouldRetry(ctx context.Context, attempt, maxRetries int) bool {
+	if attempt >= maxRetries {
+		return false
+	}
+
+	select {
+	case <-time.After(time.Duration(attempt+1) * time.Second):
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func (bm *BatchManager) updateJobProgress(job *BatchJob, obj ObjectListEntry, err error, bytesProcessed *int64) {
+	if err != nil {
+		atomic.AddInt64(&job.Progress.FailedObjects, 1)
+	} else {
+		atomic.AddInt64(&job.Progress.SuccessObjects, 1)
+		atomic.AddInt64(bytesProcessed, obj.Size)
+	}
+
+	atomic.AddInt64(&job.Progress.ProcessedObjects, 1)
+	atomic.AddInt64(&job.Progress.ProcessedBytes, obj.Size)
 }
 
 // replicateObject replicates a single object.
@@ -644,35 +689,57 @@ func (bm *BatchManager) updateETA(job *BatchJob) {
 
 // cleanupOldJobs removes old completed jobs if over the limit.
 func (bm *BatchManager) cleanupOldJobs() {
-	// Count completed jobs
+	completedJobs := bm.collectCompletedJobs()
+
+	if len(completedJobs) <= bm.historyLimit {
+		return
+	}
+
+	bm.removeOldestJobs(completedJobs)
+}
+
+func (bm *BatchManager) collectCompletedJobs() []*BatchJob {
 	var completedJobs []*BatchJob
 
 	for _, job := range bm.jobs {
-		status := job.GetStatus()
-		if status == BatchJobStatusCompleted || status == BatchJobStatusFailed || status == BatchJobStatusCancelled {
+		if bm.isJobCompleted(job) {
 			completedJobs = append(completedJobs, job)
 		}
 	}
 
-	// Remove oldest if over limit
-	if len(completedJobs) > bm.historyLimit {
-		// Sort by completion time
-		for i := range len(completedJobs) - 1 {
-			for j := i + 1; j < len(completedJobs); j++ {
-				if completedJobs[i].CompletedAt != nil && completedJobs[j].CompletedAt != nil {
-					if completedJobs[i].CompletedAt.After(*completedJobs[j].CompletedAt) {
-						completedJobs[i], completedJobs[j] = completedJobs[j], completedJobs[i]
-					}
-				}
+	return completedJobs
+}
+
+func (bm *BatchManager) isJobCompleted(job *BatchJob) bool {
+	status := job.GetStatus()
+	return status == BatchJobStatusCompleted || status == BatchJobStatusFailed || status == BatchJobStatusCancelled
+}
+
+func (bm *BatchManager) removeOldestJobs(completedJobs []*BatchJob) {
+	bm.sortJobsByCompletionTime(completedJobs)
+
+	toRemove := len(completedJobs) - bm.historyLimit
+	for i := range toRemove {
+		delete(bm.jobs, completedJobs[i].JobID)
+	}
+}
+
+func (bm *BatchManager) sortJobsByCompletionTime(jobs []*BatchJob) {
+	for i := range len(jobs) - 1 {
+		for j := i + 1; j < len(jobs); j++ {
+			if bm.shouldSwapJobs(jobs[i], jobs[j]) {
+				jobs[i], jobs[j] = jobs[j], jobs[i]
 			}
 		}
-
-		// Remove oldest
-		toRemove := len(completedJobs) - bm.historyLimit
-		for i := range toRemove {
-			delete(bm.jobs, completedJobs[i].JobID)
-		}
 	}
+}
+
+func (bm *BatchManager) shouldSwapJobs(job1, job2 *BatchJob) bool {
+	if job1.CompletedAt == nil || job2.CompletedAt == nil {
+		return false
+	}
+
+	return job1.CompletedAt.After(*job2.CompletedAt)
 }
 
 // MarshalJSON implements json.Marshaler.

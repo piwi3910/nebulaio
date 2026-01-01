@@ -35,11 +35,19 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
 
-	// Test LocalGroup
+	testLocalGroupOperations(t, mgr)
+	testGetGroupOperations(t, mgr)
+	testNodeGroupOperations(t, mgr)
+	testLocalGroupNodeChecks(t, mgr)
+	testReplicationAndAllGroupsChecks(t, mgr)
+}
+
+func testLocalGroupOperations(t *testing.T, mgr *PlacementGroupManager) {
 	localGroup := mgr.LocalGroup()
 	if localGroup == nil {
 		t.Fatal("LocalGroup returned nil")
@@ -52,8 +60,9 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if !localGroup.IsLocal {
 		t.Error("Expected local group IsLocal to be true")
 	}
+}
 
-	// Test GetGroup
+func testGetGroupOperations(t *testing.T, mgr *PlacementGroupManager) {
 	group, ok := mgr.GetGroup("pg-dc2")
 	if !ok {
 		t.Fatal("GetGroup failed for pg-dc2")
@@ -62,8 +71,9 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if group.Name != "Datacenter 2" {
 		t.Errorf("Expected name 'Datacenter 2', got '%s'", group.Name)
 	}
+}
 
-	// Test GetNodeGroup
+func testNodeGroupOperations(t *testing.T, mgr *PlacementGroupManager) {
 	nodeGroup, ok := mgr.GetNodeGroup("node1")
 	if !ok {
 		t.Fatal("GetNodeGroup failed for node1")
@@ -81,8 +91,9 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	if nodeGroup.ID != "pg-dc2" {
 		t.Errorf("Expected node5 in group 'pg-dc2', got '%s'", nodeGroup.ID)
 	}
+}
 
-	// Test IsLocalGroupNode
+func testLocalGroupNodeChecks(t *testing.T, mgr *PlacementGroupManager) {
 	if !mgr.IsLocalGroupNode("node1") {
 		t.Error("Expected node1 to be in local group")
 	}
@@ -95,13 +106,13 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 		t.Error("Expected node4 to NOT be in local group")
 	}
 
-	// Test LocalGroupNodes
 	nodes := mgr.LocalGroupNodes()
 	if len(nodes) != 3 {
 		t.Errorf("Expected 3 local nodes, got %d", len(nodes))
 	}
+}
 
-	// Test ReplicationTargets
+func testReplicationAndAllGroupsChecks(t *testing.T, mgr *PlacementGroupManager) {
 	targets := mgr.ReplicationTargets()
 	if len(targets) != 1 {
 		t.Errorf("Expected 1 replication target, got %d", len(targets))
@@ -111,7 +122,6 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 		t.Errorf("Expected replication target 'pg-dc2', got '%s'", targets[0].ID)
 	}
 
-	// Test AllGroups
 	allGroups := mgr.AllGroups()
 	if len(allGroups) != 2 {
 		t.Errorf("Expected 2 groups, got %d", len(allGroups))
@@ -133,6 +143,7 @@ func TestPlacementGroupManager_NodeOperations(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -194,6 +205,7 @@ func TestPlacementGroupManager_ErasureCoding(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -243,6 +255,7 @@ func TestPlacementGroupManager_StatusUpdate(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -273,6 +286,7 @@ func TestPlacementGroupManager_SingleNodeMode(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -349,6 +363,7 @@ func TestPlacementGroupManager_ConcurrentReads(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -402,6 +417,7 @@ func TestPlacementGroupManager_ConcurrentReadWrite(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -471,6 +487,7 @@ func TestPlacementGroupManager_ConcurrentStatusUpdates(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -523,6 +540,7 @@ func TestPlacementGroupManager_ConcurrentCallbacks(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -591,6 +609,7 @@ func TestPlacementGroupManager_CopyPreventsExternalMutation(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -645,6 +664,7 @@ func TestPlacementGroupManager_GetShardPlacementNodesForObject(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -726,6 +746,15 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 		t.Fatalf("Should handle empty config: %v", err)
 	}
 
+	testNilPointerLocalGroup(t, mgr)
+	testNilPointerGetGroup(t, mgr)
+	testNilPointerShardPlacement(t, mgr)
+	testNilPointerReplicationAndGroups(t, mgr)
+	testNilPointerGroupOperations(t, mgr)
+	testNilPointerClose(t, mgr)
+}
+
+func testNilPointerLocalGroup(t *testing.T, mgr *PlacementGroupManager) {
 	// LocalGroup should return nil gracefully
 	if mgr.LocalGroup() != nil {
 		t.Error("LocalGroup should return nil for empty config")
@@ -735,13 +764,17 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if mgr.LocalGroupNodes() != nil {
 		t.Error("LocalGroupNodes should return nil for empty config")
 	}
+}
 
+func testNilPointerGetGroup(t *testing.T, mgr *PlacementGroupManager) {
 	// GetGroup for non-existent group
 	group, ok := mgr.GetGroup("nonexistent")
 	if ok || group != nil {
 		t.Error("GetGroup should return nil for non-existent group")
 	}
+}
 
+func testNilPointerShardPlacement(t *testing.T, mgr *PlacementGroupManager) {
 	// GetShardPlacementNodes with no local group should return empty, no panic
 	nodes, err := mgr.GetShardPlacementNodes(3)
 	if err != nil {
@@ -761,7 +794,9 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if len(nodes) != 0 {
 		t.Error("GetShardPlacementNodesForObject should return empty slice on error")
 	}
+}
 
+func testNilPointerReplicationAndGroups(t *testing.T, mgr *PlacementGroupManager) {
 	// ReplicationTargets should return empty, not panic
 	targets := mgr.ReplicationTargets()
 	if len(targets) != 0 {
@@ -777,9 +812,11 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if len(allGroups) != 0 {
 		t.Error("AllGroups should be empty for empty config")
 	}
+}
 
+func testNilPointerGroupOperations(t *testing.T, mgr *PlacementGroupManager) {
 	// AddNodeToGroup on non-existent group should error gracefully
-	err = mgr.AddNodeToGroup("nonexistent", "node1")
+	err := mgr.AddNodeToGroup("nonexistent", "node1")
 	if err == nil {
 		t.Error("AddNodeToGroup should error for non-existent group")
 	}
@@ -795,9 +832,11 @@ func TestPlacementGroupManager_NilPointerHandling(t *testing.T) {
 	if err == nil {
 		t.Error("UpdateGroupStatus should error for non-existent group")
 	}
+}
 
+func testNilPointerClose(t *testing.T, mgr *PlacementGroupManager) {
 	// Close should not panic on empty manager
-	err = mgr.Close()
+	err := mgr.Close()
 	if err != nil {
 		t.Errorf("Close should not error: %v", err)
 	}
@@ -821,11 +860,19 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
 	defer mgr.Close()
 
+	testUnhealthyGroupHealthyState(t, mgr)
+	testUnhealthyGroupDegradeToMinNodes(t, mgr)
+	testUnhealthyGroupRemoveAllNodes(t, mgr)
+	testUnhealthyGroupRecovery(t, mgr)
+}
+
+func testUnhealthyGroupHealthyState(t *testing.T, mgr *PlacementGroupManager) {
 	// Verify initial healthy status
 	group := mgr.LocalGroup()
 	if group.Status != PlacementGroupStatusHealthy {
@@ -841,9 +888,11 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if len(nodes) != 3 {
 		t.Errorf("Expected 3 nodes, got %d", len(nodes))
 	}
+}
 
+func testUnhealthyGroupDegradeToMinNodes(t *testing.T, mgr *PlacementGroupManager) {
 	// Remove nodes to make the group degraded (below MinNodes)
-	err = mgr.RemoveNodeFromGroup("pg-main", "node4")
+	err := mgr.RemoveNodeFromGroup("pg-main", "node4")
 	if err != nil {
 		t.Fatalf("Failed to remove node: %v", err)
 	}
@@ -854,13 +903,13 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	}
 
 	// Verify group is now degraded
-	group = mgr.LocalGroup()
+	group := mgr.LocalGroup()
 	if group.Status != PlacementGroupStatusDegraded {
 		t.Errorf("Expected degraded status, got %s", group.Status)
 	}
 
 	// Shard placement should still work (with 2 nodes for 2 shards)
-	nodes, err = mgr.GetShardPlacementNodesForObject("bucket", "key", 2)
+	nodes, err := mgr.GetShardPlacementNodesForObject("bucket", "key", 2)
 	if err != nil {
 		t.Errorf("Shard placement should work when degraded: %v", err)
 	}
@@ -874,9 +923,11 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if err == nil {
 		t.Error("Shard placement should fail when requesting more shards than available nodes")
 	}
+}
 
+func testUnhealthyGroupRemoveAllNodes(t *testing.T, mgr *PlacementGroupManager) {
 	// Remove all remaining nodes
-	err = mgr.RemoveNodeFromGroup("pg-main", "node2")
+	err := mgr.RemoveNodeFromGroup("pg-main", "node2")
 	if err != nil {
 		t.Fatalf("Failed to remove node: %v", err)
 	}
@@ -887,7 +938,7 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	}
 
 	// Verify group has no nodes
-	group = mgr.LocalGroup()
+	group := mgr.LocalGroup()
 	if len(group.Nodes) != 0 {
 		t.Errorf("Expected 0 nodes, got %d", len(group.Nodes))
 	}
@@ -897,9 +948,11 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	if err == nil {
 		t.Error("Shard placement should fail with no nodes")
 	}
+}
 
+func testUnhealthyGroupRecovery(t *testing.T, mgr *PlacementGroupManager) {
 	// Add nodes back and verify recovery
-	err = mgr.AddNodeToGroup("pg-main", "node5")
+	err := mgr.AddNodeToGroup("pg-main", "node5")
 	if err != nil {
 		t.Fatalf("Failed to add node: %v", err)
 	}
@@ -915,13 +968,13 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	}
 
 	// Verify recovery to healthy
-	group = mgr.LocalGroup()
+	group := mgr.LocalGroup()
 	if group.Status != PlacementGroupStatusHealthy {
 		t.Errorf("Expected healthy status after recovery, got %s", group.Status)
 	}
 
 	// Shard placement should work again
-	nodes, err = mgr.GetShardPlacementNodesForObject("bucket", "key", 3)
+	nodes, err := mgr.GetShardPlacementNodesForObject("bucket", "key", 3)
 	if err != nil {
 		t.Errorf("Shard placement should work after recovery: %v", err)
 	}
@@ -948,6 +1001,7 @@ func TestPlacementGroupManager_NumShardsValidation(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}

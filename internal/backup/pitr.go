@@ -177,7 +177,6 @@ type WALManager struct {
 
 // BackupJob represents an active backup operation.
 type BackupJob struct {
-	ctx           context.Context
 	metadata      *BackupMetadata
 	cancel        context.CancelFunc
 	_errors       []error
@@ -188,7 +187,6 @@ type BackupJob struct {
 
 // RestoreJob represents an active restore operation.
 type RestoreJob struct {
-	ctx           context.Context
 	metadata      *RestoreMetadata
 	cancel        context.CancelFunc
 	_errors       []error
@@ -431,7 +429,6 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, backupType BackupType
 	jobCtx, cancel := context.WithCancel(ctx)
 	job := &BackupJob{
 		metadata: metadata,
-		ctx:      jobCtx,
 		cancel:   cancel,
 	}
 	bm.activeBackup = job
@@ -439,7 +436,7 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, backupType BackupType
 	bm.mu.Unlock()
 
 	// Start backup in goroutine
-	go bm.runBackup(job)
+	go bm.runBackup(jobCtx, job)
 
 	return metadata, nil
 }
@@ -484,7 +481,7 @@ func (bm *BackupManager) bucketsMatch(a, b []string) bool {
 }
 
 // runBackup runs the backup operation.
-func (bm *BackupManager) runBackup(job *BackupJob) {
+func (bm *BackupManager) runBackup(ctx context.Context, job *BackupJob) {
 	defer func() {
 		bm.mu.Lock()
 		bm.activeBackup = nil
@@ -513,9 +510,9 @@ func (bm *BackupManager) runBackup(job *BackupJob) {
 
 	// Backup each bucket
 	for _, bucket := range job.metadata.Buckets {
-		err := bm.backupBucket(job, bucket, &objectCount, &totalSize, &compressedSize, hasher)
+		err := bm.backupBucket(ctx, job, bucket, &objectCount, &totalSize, &compressedSize, hasher)
 		if err != nil {
-			if job.ctx.Err() != nil {
+			if ctx.Err() != nil {
 				job.metadata.Status = BackupStatusCancelled
 				return
 			}
@@ -539,9 +536,9 @@ func (bm *BackupManager) runBackup(job *BackupJob) {
 }
 
 // backupBucket backs up a single bucket.
-func (bm *BackupManager) backupBucket(job *BackupJob, bucket string, objectCount, totalSize, compressedSize *int64, hasher io.Writer) error {
+func (bm *BackupManager) backupBucket(ctx context.Context, job *BackupJob, bucket string, objectCount, totalSize, compressedSize *int64, hasher io.Writer) error {
 	// List all objects
-	objects, err := bm.storage.ListObjects(job.ctx, bucket, "")
+	objects, err := bm.storage.ListObjects(ctx, bucket, "")
 	if err != nil {
 		return fmt.Errorf("failed to list objects in bucket %s: %w", bucket, err)
 	}
@@ -565,8 +562,8 @@ func (bm *BackupManager) backupBucket(job *BackupJob, bucket string, objectCount
 
 	for _, obj := range objects {
 		select {
-		case <-job.ctx.Done():
-			return job.ctx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		default:
 		}
 
@@ -587,7 +584,7 @@ func (bm *BackupManager) backupBucket(job *BackupJob, bucket string, objectCount
 
 			defer func() { <-sem }()
 
-			err := bm.backupObject(job, bucket, o, hasher)
+			err := bm.backupObject(ctx, job, bucket, o, hasher)
 			if err != nil {
 				errMu.Lock()
 
@@ -611,8 +608,8 @@ func (bm *BackupManager) backupBucket(job *BackupJob, bucket string, objectCount
 }
 
 // backupObject backs up a single object.
-func (bm *BackupManager) backupObject(job *BackupJob, bucket string, obj *ObjectInfo, hasher io.Writer) error {
-	reader, _, err := bm.storage.GetObject(job.ctx, bucket, obj.Key)
+func (bm *BackupManager) backupObject(ctx context.Context, job *BackupJob, bucket string, obj *ObjectInfo, hasher io.Writer) error {
+	reader, _, err := bm.storage.GetObject(ctx, bucket, obj.Key)
 	if err != nil {
 		return fmt.Errorf("failed to get object %s/%s: %w", bucket, obj.Key, err)
 	}
@@ -793,7 +790,6 @@ func (bm *BackupManager) Restore(ctx context.Context, backupID string, targetBuc
 	jobCtx, cancel := context.WithCancel(ctx)
 	job := &RestoreJob{
 		metadata: metadata,
-		ctx:      jobCtx,
 		cancel:   cancel,
 	}
 	bm.activeRestore = job
@@ -801,7 +797,7 @@ func (bm *BackupManager) Restore(ctx context.Context, backupID string, targetBuc
 	bm.mu.Unlock()
 
 	// Start restore in goroutine
-	go bm.runRestore(job, backup)
+	go bm.runRestore(jobCtx, job, backup)
 
 	return metadata, nil
 }
@@ -853,7 +849,6 @@ func (bm *BackupManager) RestorePointInTime(ctx context.Context, targetTime time
 	jobCtx, cancel := context.WithCancel(ctx)
 	job := &RestoreJob{
 		metadata: metadata,
-		ctx:      jobCtx,
 		cancel:   cancel,
 	}
 	bm.activeRestore = job
@@ -861,13 +856,13 @@ func (bm *BackupManager) RestorePointInTime(ctx context.Context, targetTime time
 	bm.mu.Unlock()
 
 	// Start PITR restore in goroutine
-	go bm.runPITRRestore(job, baseBackup)
+	go bm.runPITRRestore(jobCtx, job, baseBackup)
 
 	return metadata, nil
 }
 
 // runRestore runs the restore operation.
-func (bm *BackupManager) runRestore(job *RestoreJob, backup *BackupMetadata) {
+func (bm *BackupManager) runRestore(ctx context.Context, job *RestoreJob, backup *BackupMetadata) {
 	defer func() {
 		bm.mu.Lock()
 		bm.activeRestore = nil
@@ -881,7 +876,7 @@ func (bm *BackupManager) runRestore(job *RestoreJob, backup *BackupMetadata) {
 
 	// Ensure target buckets exist
 	for _, bucket := range job.metadata.TargetBuckets {
-		exists, err := bm.storage.BucketExists(job.ctx, bucket)
+		exists, err := bm.storage.BucketExists(ctx, bucket)
 		if err != nil {
 			job.metadata.Status = RestoreStatusFailed
 			job.metadata.Error = err.Error()
@@ -890,7 +885,7 @@ func (bm *BackupManager) runRestore(job *RestoreJob, backup *BackupMetadata) {
 		}
 
 		if !exists {
-			err := bm.storage.CreateBucket(job.ctx, bucket)
+			err := bm.storage.CreateBucket(ctx, bucket)
 			if err != nil {
 				job.metadata.Status = RestoreStatusFailed
 				job.metadata.Error = err.Error()
@@ -902,9 +897,9 @@ func (bm *BackupManager) runRestore(job *RestoreJob, backup *BackupMetadata) {
 
 	// Restore from each backup in chain
 	for _, b := range backupChain {
-		err := bm.restoreFromBackup(job, b)
+		err := bm.restoreFromBackup(ctx, job, b)
 		if err != nil {
-			if job.ctx.Err() != nil {
+			if ctx.Err() != nil {
 				job.metadata.Status = RestoreStatusCancelled
 				return
 			}
@@ -921,7 +916,7 @@ func (bm *BackupManager) runRestore(job *RestoreJob, backup *BackupMetadata) {
 }
 
 // runPITRRestore runs a point-in-time restore.
-func (bm *BackupManager) runPITRRestore(job *RestoreJob, baseBackup *BackupMetadata) {
+func (bm *BackupManager) runPITRRestore(ctx context.Context, job *RestoreJob, baseBackup *BackupMetadata) {
 	defer func() {
 		bm.mu.Lock()
 		bm.activeRestore = nil
@@ -931,7 +926,7 @@ func (bm *BackupManager) runPITRRestore(job *RestoreJob, baseBackup *BackupMetad
 	job.metadata.Status = RestoreStatusInProgress
 
 	// First, restore from base backup
-	err := bm.restoreFromBackup(job, baseBackup)
+	err := bm.restoreFromBackup(ctx, job, baseBackup)
 	if err != nil {
 		job.metadata.Status = RestoreStatusFailed
 		job.metadata.Error = err.Error()
@@ -959,7 +954,7 @@ func (bm *BackupManager) runPITRRestore(job *RestoreJob, baseBackup *BackupMetad
 			continue
 		}
 
-		err := bm.applyWALEntry(job.ctx, entry, targetBucket)
+		err := bm.applyWALEntry(ctx, entry, targetBucket)
 		if err != nil {
 			job.metadata.Status = RestoreStatusFailed
 			job.metadata.Error = err.Error()
@@ -993,7 +988,7 @@ func (bm *BackupManager) buildBackupChain(backup *BackupMetadata) []*BackupMetad
 }
 
 // restoreFromBackup restores objects from a backup.
-func (bm *BackupManager) restoreFromBackup(job *RestoreJob, backup *BackupMetadata) error {
+func (bm *BackupManager) restoreFromBackup(ctx context.Context, job *RestoreJob, backup *BackupMetadata) error {
 	for i, bucket := range backup.Buckets {
 		targetBucket := bucket
 		if i < len(job.metadata.TargetBuckets) {
@@ -1002,7 +997,7 @@ func (bm *BackupManager) restoreFromBackup(job *RestoreJob, backup *BackupMetada
 
 		bucketPath := filepath.Join(backup.Location, bucket)
 
-		err := bm.restoreBucket(job, bucketPath, targetBucket)
+		err := bm.restoreBucket(ctx, job, bucketPath, targetBucket)
 		if err != nil {
 			return err
 		}
@@ -1012,7 +1007,7 @@ func (bm *BackupManager) restoreFromBackup(job *RestoreJob, backup *BackupMetada
 }
 
 // restoreBucket restores a single bucket.
-func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket string) error {
+func (bm *BackupManager) restoreBucket(ctx context.Context, job *RestoreJob, bucketPath, targetBucket string) error {
 	return filepath.Walk(bucketPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -1028,8 +1023,8 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 		}
 
 		select {
-		case <-job.ctx.Done():
-			return job.ctx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		default:
 		}
 
@@ -1085,7 +1080,7 @@ func (bm *BackupManager) restoreBucket(job *RestoreJob, bucketPath, targetBucket
 			Metadata:    objMeta.Metadata,
 		}
 
-		err = bm.storage.PutObject(job.ctx, targetBucket, key, reader, size, opts)
+		err = bm.storage.PutObject(ctx, targetBucket, key, reader, size, opts)
 		if err != nil {
 			return fmt.Errorf("failed to restore object: %w", err)
 		}
@@ -1172,7 +1167,12 @@ func (bm *BackupManager) applyRetentionPolicy() {
 	defer bm.mu.Unlock()
 
 	cutoff := time.Now().AddDate(0, 0, -bm.config.RetentionDays)
+	toDelete := bm.findExpiredBackups(cutoff)
+	toDelete = bm.applyMaxBackupsLimit(toDelete)
+	bm.deleteBackups(toDelete)
+}
 
+func (bm *BackupManager) findExpiredBackups(cutoff time.Time) []string {
 	var toDelete []string
 
 	for id, backup := range bm.backups {
@@ -1180,77 +1180,94 @@ func (bm *BackupManager) applyRetentionPolicy() {
 			continue
 		}
 
-		if backup.StartTime.Before(cutoff) {
-			// Check if this is a parent of another backup
-			isParent := false
-
-			for _, b := range bm.backups {
-				if b.ParentBackupID == id {
-					isParent = true
-					break
-				}
-			}
-
-			if !isParent {
-				toDelete = append(toDelete, id)
-			}
+		if backup.StartTime.Before(cutoff) && !bm.isParentBackup(id) {
+			toDelete = append(toDelete, id)
 		}
 	}
 
-	// Also apply max backups limit
-	if bm.config.MaxBackups > 0 && len(bm.backups)-len(toDelete) > bm.config.MaxBackups {
-		// Sort by age and mark oldest for deletion
-		var backups []*BackupMetadata
-		for _, b := range bm.backups {
-			backups = append(backups, b)
-		}
+	return toDelete
+}
 
-		sort.Slice(backups, func(i, j int) bool {
-			return backups[i].StartTime.Before(backups[j].StartTime)
-		})
-
-		for _, b := range backups {
-			if len(bm.backups)-len(toDelete) <= bm.config.MaxBackups {
-				break
-			}
-
-			if b.Status != BackupStatusCompleted {
-				continue
-			}
-			// Check if already marked or is parent
-			found := false
-
-			for _, id := range toDelete {
-				if id == b.ID {
-					found = true
-					break
-				}
-			}
-
-			if found {
-				continue
-			}
-
-			isParent := false
-
-			for _, other := range bm.backups {
-				if other.ParentBackupID == b.ID {
-					isParent = true
-					break
-				}
-			}
-
-			if !isParent {
-				toDelete = append(toDelete, b.ID)
-			}
+func (bm *BackupManager) isParentBackup(backupID string) bool {
+	for _, b := range bm.backups {
+		if b.ParentBackupID == backupID {
+			return true
 		}
 	}
+	return false
+}
 
-	// Delete marked backups
+func (bm *BackupManager) applyMaxBackupsLimit(toDelete []string) []string {
+	if bm.config.MaxBackups <= 0 {
+		return toDelete
+	}
+
+	if len(bm.backups)-len(toDelete) <= bm.config.MaxBackups {
+		return toDelete
+	}
+
+	backups := bm.getSortedBackups()
+	return bm.markOldestForDeletion(backups, toDelete)
+}
+
+func (bm *BackupManager) getSortedBackups() []*BackupMetadata {
+	var backups []*BackupMetadata
+	for _, b := range bm.backups {
+		backups = append(backups, b)
+	}
+
+	sort.Slice(backups, func(i, j int) bool {
+		return backups[i].StartTime.Before(backups[j].StartTime)
+	})
+
+	return backups
+}
+
+func (bm *BackupManager) markOldestForDeletion(backups []*BackupMetadata, toDelete []string) []string {
+	for _, b := range backups {
+		if len(bm.backups)-len(toDelete) <= bm.config.MaxBackups {
+			break
+		}
+
+		if !bm.canDeleteBackup(b, toDelete) {
+			continue
+		}
+
+		toDelete = append(toDelete, b.ID)
+	}
+
+	return toDelete
+}
+
+func (bm *BackupManager) canDeleteBackup(backup *BackupMetadata, toDelete []string) bool {
+	if backup.Status != BackupStatusCompleted {
+		return false
+	}
+
+	if bm.isAlreadyMarked(backup.ID, toDelete) {
+		return false
+	}
+
+	if bm.isParentBackup(backup.ID) {
+		return false
+	}
+
+	return true
+}
+
+func (bm *BackupManager) isAlreadyMarked(backupID string, toDelete []string) bool {
+	for _, id := range toDelete {
+		if id == backupID {
+			return true
+		}
+	}
+	return false
+}
+
+func (bm *BackupManager) deleteBackups(toDelete []string) {
 	for _, id := range toDelete {
 		backup := bm.backups[id]
 		_ = os.RemoveAll(backup.Location)
-
 		delete(bm.backups, id)
 	}
 }

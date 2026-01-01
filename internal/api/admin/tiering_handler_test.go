@@ -452,50 +452,30 @@ func (h *TestTieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Generate ID if not provided
+	policy := buildTestTieringPolicy(&req)
+
+	err = h.policyStore.Create(ctx, policy)
+	if err != nil {
+		handleTestTieringPolicyError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, policy)
+}
+
+func buildTestTieringPolicy(req *CreateTieringPolicyRequest) *tiering.AdvancedPolicy {
 	policyID := req.ID
 	if policyID == "" {
 		policyID = fmt.Sprintf("policy-%d", time.Now().UnixNano())
 	}
 
-	// Convert simple triggers/actions to internal format
 	triggers := convertSimpleTriggers(req.Triggers)
 	actions := convertSimpleActions(req.Actions)
-
-	// Build selector from bucket/prefix patterns
-	selector := tiering.PolicySelector{}
-	if req.BucketPattern != "" {
-		selector.Buckets = []string{req.BucketPattern}
-	}
-
-	if req.PrefixPattern != "" {
-		selector.Prefixes = []string{req.PrefixPattern}
-	}
-
-	// Build schedule config
-	var schedule tiering.ScheduleConfig
-
-	schedule.Enabled = req.CronExpression != ""
-
-	// Build anti-thrash config from advanced options
-	var antiThrash tiering.AntiThrashConfig
-	if req.AdvancedOptions != nil && req.AdvancedOptions.AntiThrashHours > 0 {
-		antiThrash.Enabled = true
-		antiThrash.MinTimeInTier = (time.Duration(req.AdvancedOptions.AntiThrashHours) * time.Hour).String()
-	}
-
-	// Build rate limit config
-	var rateLimit tiering.RateLimitConfig
-	if req.AdvancedOptions != nil && req.AdvancedOptions.RateLimit > 0 {
-		rateLimit.Enabled = true
-		rateLimit.MaxObjectsPerSecond = req.AdvancedOptions.RateLimit
-	}
-
-	// Build distributed config
-	var distributed tiering.DistributedConfig
-	if req.AdvancedOptions != nil && req.AdvancedOptions.DistributedExecution {
-		distributed.Enabled = true
-	}
+	selector := buildTestPolicySelector(req)
+	schedule := buildTestScheduleConfig(req)
+	antiThrash := buildTestAntiThrashConfig(req)
+	rateLimit := buildTestRateLimitConfig(req)
+	distributed := buildTestDistributedConfig(req)
 
 	policy := &tiering.AdvancedPolicy{
 		ID:          policyID,
@@ -516,6 +496,56 @@ func (h *TestTieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.
 		Version:     1,
 	}
 
+	applyTestPolicyDefaults(policy)
+	return policy
+}
+
+func buildTestPolicySelector(req *CreateTieringPolicyRequest) tiering.PolicySelector {
+	selector := tiering.PolicySelector{}
+	if req.BucketPattern != "" {
+		selector.Buckets = []string{req.BucketPattern}
+	}
+
+	if req.PrefixPattern != "" {
+		selector.Prefixes = []string{req.PrefixPattern}
+	}
+
+	return selector
+}
+
+func buildTestScheduleConfig(req *CreateTieringPolicyRequest) tiering.ScheduleConfig {
+	var schedule tiering.ScheduleConfig
+	schedule.Enabled = req.CronExpression != ""
+	return schedule
+}
+
+func buildTestAntiThrashConfig(req *CreateTieringPolicyRequest) tiering.AntiThrashConfig {
+	var antiThrash tiering.AntiThrashConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.AntiThrashHours > 0 {
+		antiThrash.Enabled = true
+		antiThrash.MinTimeInTier = (time.Duration(req.AdvancedOptions.AntiThrashHours) * time.Hour).String()
+	}
+	return antiThrash
+}
+
+func buildTestRateLimitConfig(req *CreateTieringPolicyRequest) tiering.RateLimitConfig {
+	var rateLimit tiering.RateLimitConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.RateLimit > 0 {
+		rateLimit.Enabled = true
+		rateLimit.MaxObjectsPerSecond = req.AdvancedOptions.RateLimit
+	}
+	return rateLimit
+}
+
+func buildTestDistributedConfig(req *CreateTieringPolicyRequest) tiering.DistributedConfig {
+	var distributed tiering.DistributedConfig
+	if req.AdvancedOptions != nil && req.AdvancedOptions.DistributedExecution {
+		distributed.Enabled = true
+	}
+	return distributed
+}
+
+func applyTestPolicyDefaults(policy *tiering.AdvancedPolicy) {
 	if policy.Type == "" {
 		policy.Type = tiering.PolicyTypeScheduled
 	}
@@ -523,25 +553,20 @@ func (h *TestTieringHandler) CreateTieringPolicy(w http.ResponseWriter, r *http.
 	if policy.Scope == "" {
 		policy.Scope = tiering.PolicyScopeGlobal
 	}
+}
 
-	err = h.policyStore.Create(ctx, policy)
-	if err != nil {
-		if containsString(err.Error(), "already exists") {
-			writeError(w, err.Error(), http.StatusConflict)
-			return
-		}
-
-		if containsString(err.Error(), "validation") {
-			writeError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		writeError(w, err.Error(), http.StatusInternalServerError)
-
+func handleTestTieringPolicyError(w http.ResponseWriter, err error) {
+	if containsString(err.Error(), "already exists") {
+		writeError(w, err.Error(), http.StatusConflict)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, policy)
+	if containsString(err.Error(), "validation") {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	writeError(w, err.Error(), http.StatusInternalServerError)
 }
 
 func (h *TestTieringHandler) GetTieringPolicy(w http.ResponseWriter, r *http.Request) {

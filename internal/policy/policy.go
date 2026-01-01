@@ -289,41 +289,57 @@ func (p *Policy) Evaluate(ctx EvalContext) (EvalResult, error) {
 		return EvalDefault, nil
 	}
 
-	// Build resource ARN if not provided
-	resource := ctx.Resource
-	if resource == "" {
-		if ctx.ObjectKey != "" {
-			resource = fmt.Sprintf("arn:aws:s3:::%s/%s", ctx.BucketName, ctx.ObjectKey)
-		} else {
-			resource = "arn:aws:s3:::" + ctx.BucketName
-		}
+	resource := p.buildResourceARN(ctx)
+
+	if denyResult := p.checkDenyStatements(ctx, resource); denyResult != EvalDefault {
+		return denyResult, nil
 	}
 
-	// First check for explicit denies (deny takes precedence)
-	for _, stmt := range p.Statement {
-		if stmt.Effect == EffectDeny {
-			matches, err := matchStatement(&stmt, ctx.Principal, ctx.Action, resource, ctx.Conditions)
-			if err != nil {
-				return EvalDefault, fmt.Errorf("error evaluating statement: %w", err)
-			}
+	return p.checkAllowStatements(ctx, resource)
+}
 
-			if matches {
-				return EvalDeny, nil
-			}
-		}
+func (p *Policy) buildResourceARN(ctx EvalContext) string {
+	if ctx.Resource != "" {
+		return ctx.Resource
 	}
 
-	// Then check for explicit allows
-	for _, stmt := range p.Statement {
-		if stmt.Effect == EffectAllow {
-			matches, err := matchStatement(&stmt, ctx.Principal, ctx.Action, resource, ctx.Conditions)
-			if err != nil {
-				return EvalDefault, fmt.Errorf("error evaluating statement: %w", err)
-			}
+	if ctx.ObjectKey != "" {
+		return fmt.Sprintf("arn:aws:s3:::%s/%s", ctx.BucketName, ctx.ObjectKey)
+	}
 
-			if matches {
-				return EvalAllow, nil
-			}
+	return "arn:aws:s3:::" + ctx.BucketName
+}
+
+func (p *Policy) checkDenyStatements(ctx EvalContext, resource string) EvalResult {
+	for _, stmt := range p.Statement {
+		if stmt.Effect != EffectDeny {
+			continue
+		}
+
+		matches, err := matchStatement(&stmt, ctx.Principal, ctx.Action, resource, ctx.Conditions)
+		if err != nil || !matches {
+			continue
+		}
+
+		return EvalDeny
+	}
+
+	return EvalDefault
+}
+
+func (p *Policy) checkAllowStatements(ctx EvalContext, resource string) (EvalResult, error) {
+	for _, stmt := range p.Statement {
+		if stmt.Effect != EffectAllow {
+			continue
+		}
+
+		matches, err := matchStatement(&stmt, ctx.Principal, ctx.Action, resource, ctx.Conditions)
+		if err != nil {
+			return EvalDefault, fmt.Errorf("error evaluating statement: %w", err)
+		}
+
+		if matches {
+			return EvalAllow, nil
 		}
 	}
 
@@ -455,59 +471,115 @@ func matchConditions(stmtConditions map[string]map[string]interface{}, condition
 		for key, expectedValue := range conditionMap {
 			actualValue, exists := conditions[key]
 
-			switch operator {
-			case "StringEquals":
-				if !exists || !matchConditionValue(expectedValue, actualValue, func(a, b string) bool { return a == b }) {
-					return false
-				}
-			case "StringNotEquals":
-				if exists && matchConditionValue(expectedValue, actualValue, func(a, b string) bool { return a == b }) {
-					return false
-				}
-			case "StringLike":
-				if !exists || !matchConditionValue(expectedValue, actualValue, matchWildcard) {
-					return false
-				}
-			case "StringNotLike":
-				if exists && matchConditionValue(expectedValue, actualValue, matchWildcard) {
-					return false
-				}
-			case "IpAddress":
-				if !exists || !matchConditionValue(expectedValue, actualValue, matchIPAddress) {
-					return false
-				}
-			case "NotIpAddress":
-				if exists && matchConditionValue(expectedValue, actualValue, matchIPAddress) {
-					return false
-				}
-			case "Bool":
-				if !exists {
-					return false
-				}
-
-				expectedBool := fmt.Sprintf("%v", expectedValue) == boolTrue
-
-				actualBool := actualValue == boolTrue
-				if expectedBool != actualBool {
-					return false
-				}
-			case "Null":
-				expectedNull := fmt.Sprintf("%v", expectedValue) == boolTrue
-				if expectedNull && exists {
-					return false
-				}
-
-				if !expectedNull && !exists {
-					return false
-				}
-			default:
-				// Unknown operator, skip
-				continue
+			if !evaluateConditionOperator(operator, expectedValue, actualValue, exists) {
+				return false
 			}
 		}
 	}
 
 	return true
+}
+
+// evaluateConditionOperator evaluates a single condition operator.
+func evaluateConditionOperator(operator string, expectedValue interface{}, actualValue string, exists bool) bool {
+	switch operator {
+	case "StringEquals":
+		return matchStringEquals(expectedValue, actualValue, exists)
+	case "StringNotEquals":
+		return matchStringNotEquals(expectedValue, actualValue, exists)
+	case "StringLike":
+		return matchStringLike(expectedValue, actualValue, exists)
+	case "StringNotLike":
+		return matchStringNotLike(expectedValue, actualValue, exists)
+	case "IpAddress":
+		return matchIPCondition(expectedValue, actualValue, exists)
+	case "NotIpAddress":
+		return matchNotIPCondition(expectedValue, actualValue, exists)
+	case "Bool":
+		return matchBoolCondition(expectedValue, actualValue, exists)
+	case "Null":
+		return matchNullCondition(expectedValue, exists)
+	default:
+		// Unknown operator - don't fail, just skip
+		return true
+	}
+}
+
+// matchStringEquals checks if actual equals expected string value.
+func matchStringEquals(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return false
+	}
+
+	return matchConditionValue(expected, actual, func(a, b string) bool { return a == b })
+}
+
+// matchStringNotEquals checks if actual does not equal expected string value.
+func matchStringNotEquals(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return true
+	}
+
+	return !matchConditionValue(expected, actual, func(a, b string) bool { return a == b })
+}
+
+// matchStringLike checks if actual matches expected wildcard pattern.
+func matchStringLike(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return false
+	}
+
+	return matchConditionValue(expected, actual, matchWildcard)
+}
+
+// matchStringNotLike checks if actual does not match expected wildcard pattern.
+func matchStringNotLike(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return true
+	}
+
+	return !matchConditionValue(expected, actual, matchWildcard)
+}
+
+// matchIPCondition checks if actual IP matches expected CIDR/IP pattern.
+func matchIPCondition(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return false
+	}
+
+	return matchConditionValue(expected, actual, matchIPAddress)
+}
+
+// matchNotIPCondition checks if actual IP does not match expected CIDR/IP pattern.
+func matchNotIPCondition(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return true
+	}
+
+	return !matchConditionValue(expected, actual, matchIPAddress)
+}
+
+// matchBoolCondition checks if actual boolean matches expected.
+func matchBoolCondition(expected interface{}, actual string, exists bool) bool {
+	if !exists {
+		return false
+	}
+
+	expectedBool := fmt.Sprintf("%v", expected) == boolTrue
+	actualBool := actual == boolTrue
+
+	return expectedBool == actualBool
+}
+
+// matchNullCondition checks if key existence matches expected null condition.
+func matchNullCondition(expected interface{}, exists bool) bool {
+	expectedNull := fmt.Sprintf("%v", expected) == boolTrue
+
+	if expectedNull {
+		return !exists
+	}
+
+	return exists
 }
 
 // matchConditionValue matches a condition value which can be a string or array.
@@ -566,62 +638,73 @@ func MapActionToS3Action(method, path string, isBucket bool) string {
 	method = strings.ToUpper(method)
 
 	if isBucket {
-		switch method {
-		case "GET":
-			if strings.Contains(path, "?policy") {
-				return ActionGetBucketPolicy
-			}
-
-			if strings.Contains(path, "?cors") {
-				return ActionGetBucketCORS
-			}
-
-			if strings.Contains(path, "?versioning") {
-				return ActionGetBucketVersioning
-			}
-
-			return ActionListBucket
-		case "PUT":
-			if strings.Contains(path, "?policy") {
-				return ActionPutBucketPolicy
-			}
-
-			if strings.Contains(path, "?cors") {
-				return ActionPutBucketCORS
-			}
-
-			if strings.Contains(path, "?versioning") {
-				return ActionPutBucketVersioning
-			}
-
-			return "s3:CreateBucket"
-		case "DELETE":
-			if strings.Contains(path, "?policy") {
-				return ActionDeleteBucketPolicy
-			}
-
-			if strings.Contains(path, "?cors") {
-				return ActionDeleteBucketCORS
-			}
-
-			return "s3:DeleteBucket"
-		case "HEAD":
-			return "s3:HeadBucket"
-		}
-	} else {
-		switch method {
-		case "GET":
-			return ActionGetObject
-		case "PUT":
-			return ActionPutObject
-		case "DELETE":
-			return ActionDeleteObject
-		case "HEAD":
-			return "s3:HeadObject"
-		case "POST":
-			return ActionPutObject
-		}
+		return mapBucketAction(method, path)
 	}
+	return mapObjectAction(method)
+}
 
+func mapBucketAction(method, path string) string {
+	switch method {
+	case "GET":
+		return getBucketGetAction(path)
+	case "PUT":
+		return getBucketPutAction(path)
+	case "DELETE":
+		return getBucketDeleteAction(path)
+	case "HEAD":
+		return "s3:HeadBucket"
+	}
+	return ""
+}
+
+func getBucketGetAction(path string) string {
+	if strings.Contains(path, "?policy") {
+		return ActionGetBucketPolicy
+	}
+	if strings.Contains(path, "?cors") {
+		return ActionGetBucketCORS
+	}
+	if strings.Contains(path, "?versioning") {
+		return ActionGetBucketVersioning
+	}
+	return ActionListBucket
+}
+
+func getBucketPutAction(path string) string {
+	if strings.Contains(path, "?policy") {
+		return ActionPutBucketPolicy
+	}
+	if strings.Contains(path, "?cors") {
+		return ActionPutBucketCORS
+	}
+	if strings.Contains(path, "?versioning") {
+		return ActionPutBucketVersioning
+	}
+	return "s3:CreateBucket"
+}
+
+func getBucketDeleteAction(path string) string {
+	if strings.Contains(path, "?policy") {
+		return ActionDeleteBucketPolicy
+	}
+	if strings.Contains(path, "?cors") {
+		return ActionDeleteBucketCORS
+	}
+	return "s3:DeleteBucket"
+}
+
+func mapObjectAction(method string) string {
+	switch method {
+	case "GET":
+		return ActionGetObject
+	case "PUT":
+		return ActionPutObject
+	case "DELETE":
+		return ActionDeleteObject
+	case "HEAD":
+		return "s3:HeadObject"
+	case "POST":
+		return ActionPutObject
+	}
 	return ""
 }
