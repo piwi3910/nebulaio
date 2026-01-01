@@ -182,30 +182,18 @@ linters:
         - pattern: '^panic$'
           msg: "Avoid panic, return errors instead"
 
-run:
-  go: '1.24'
-  timeout: 5m
-  tests: true
-  build-tags:
-    - integration
-  relative-path-mode: 'gomod'
+  # Exclusions configuration (v2 uses linters.exclusions)
+  exclusions:
+    # Path exclusions - skip these directories entirely
+    paths:
+      - vendor
+      - node_modules
+      - web
+      - ".*\\.pb\\.go$"
+      - ".*generated.*\\.go$"
 
-issues:
-  uniq-by-line: false
-
-  # Path exclusions - skip these directories entirely
-  exclude-dirs:
-    - vendor
-    - node_modules
-    - web
-
-  # File pattern exclusions
-  exclude-files:
-    - ".*\\.pb\\.go$"
-    - ".*generated.*\\.go$"
-
-  # Rule-based exclusions
-  exclude-rules:
+    # Rule-based exclusions
+    rules:
     # Exclude test files from certain checks
     - path: _test\.go
       linters:
@@ -330,3 +318,14 @@ issues:
     - linters:
         - godox
       text: "Line contains TODO/BUG/FIXME"
+
+run:
+  go: '1.24'
+  timeout: 5m
+  tests: true
+  build-tags:
+    - integration
+  relative-path-mode: 'gomod'
+
+issues:
+  uniq-by-line: false
