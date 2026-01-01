@@ -542,3 +542,41 @@ func (pm *PolicyManager) ipMatchesCIDR(ip, cidr string) bool {
 
 	return ip == cidr
 }
+
+// matchesAction checks if an action matches the policy actions.
+// This is a test helper for security testing.
+func (pm *PolicyManager) matchesAction(policyActions StringOrSlice, action string) bool {
+	for _, pa := range policyActions {
+		if pa == "*" || pa == action {
+			return true
+		}
+		// Handle wildcard patterns like s3:Get*
+		if len(pa) > 0 && pa[len(pa)-1] == '*' {
+			prefix := pa[:len(pa)-1]
+			if len(action) >= len(prefix) && action[:len(prefix)] == prefix {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// matchesResource checks if a resource matches the policy resources.
+// This is a test helper for security testing.
+func (pm *PolicyManager) matchesResource(policyResources StringOrSlice, resource string) bool {
+	for _, pr := range policyResources {
+		if pr == "*" || pr == resource {
+			return true
+		}
+		// Handle wildcard patterns like arn:aws:s3:::bucket/*
+		if len(pr) > 0 && pr[len(pr)-1] == '*' {
+			prefix := pr[:len(pr)-1]
+			if len(resource) >= len(prefix) && resource[:len(prefix)] == prefix {
+				return true
+			}
+		}
+	}
+
+	return false
+}
