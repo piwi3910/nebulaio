@@ -55,6 +55,9 @@ func NewQueue(cfg QueueConfig) *Queue {
 		cfg.MaxRetry = defaultQueueMaxRetry
 	}
 
+	// INTENTIONAL: Using context.Background() for the queue's lifetime context.
+	// This context controls the queue's background workers and is cancelled
+	// when the queue is stopped. It's not tied to any specific request.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Queue{

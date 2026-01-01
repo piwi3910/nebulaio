@@ -128,6 +128,8 @@ func (s *PolicyScheduler) Start(outputCh chan<- *AdvancedPolicy) error {
 	s.outputCh = outputCh
 
 	// Load scheduled policies
+	// INTENTIONAL: Using context.Background() during scheduler initialization.
+	// This is a startup operation that loads initial policies, not a request handler.
 	ctx := context.Background()
 
 	policies, err := s.store.ListByType(ctx, PolicyTypeScheduled)
@@ -261,6 +263,9 @@ func (s *PolicyScheduler) parseAndCalculateNext(cronExpr string) time.Time {
 func (s *PolicyScheduler) watchPolicies() {
 	defer s.wg.Done()
 
+	// INTENTIONAL: Using context.Background() for long-running watch operation.
+	// This is a background watcher that must run for the entire scheduler lifetime.
+	// Cancellation is handled via s.stopChan when the scheduler stops.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

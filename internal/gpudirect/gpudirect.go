@@ -508,6 +508,9 @@ func (s *Service) ReadAsync(handle uintptr, buf *GPUBuffer, offset, length int64
 
 	if !s.config.EnableAsyncTransfers {
 		// Fall back to sync if async disabled
+		// INTENTIONAL: Using context.Background() for async fallback.
+		// Async operations are fire-and-forget by design; the result is
+		// delivered via callback, not tied to a request context.
 		_, err := s.Read(context.Background(), handle, buf, offset, length)
 		if callback != nil {
 			callback(err)
@@ -540,6 +543,9 @@ func (s *Service) WriteAsync(handle uintptr, buf *GPUBuffer, offset, length int6
 	}
 
 	if !s.config.EnableAsyncTransfers {
+		// INTENTIONAL: Using context.Background() for async fallback.
+		// Async operations are fire-and-forget by design; the result is
+		// delivered via callback, not tied to a request context.
 		_, err := s.Write(context.Background(), handle, buf, offset, length)
 		if callback != nil {
 			callback(err)
@@ -681,6 +687,8 @@ func (s *Service) NewStorageReader(handle uintptr, buffer *GPUBuffer, length int
 }
 
 // Read implements io.Reader.
+// Note: io.Reader interface doesn't accept context, so we use context.Background().
+// For context-aware reads, use Service.Read() directly.
 func (r *StorageReader) Read(p []byte) (int, error) {
 	if r.offset >= r.length {
 		return 0, io.EOF
@@ -691,6 +699,8 @@ func (r *StorageReader) Read(p []byte) (int, error) {
 		toRead = r.length - r.offset
 	}
 
+	// INTENTIONAL: Using context.Background() because io.Reader doesn't accept context.
+	// For context-aware operations, use Service.Read() directly.
 	result, err := r.service.Read(context.Background(), r.handle, r.buffer, r.offset, toRead)
 	if err != nil {
 		return 0, err
@@ -720,7 +730,11 @@ func (s *Service) NewStorageWriter(handle uintptr, buffer *GPUBuffer) *StorageWr
 }
 
 // Write implements io.Writer.
+// Note: io.Writer interface doesn't accept context, so we use context.Background().
+// For context-aware writes, use Service.Write() directly.
 func (w *StorageWriter) Write(p []byte) (int, error) {
+	// INTENTIONAL: Using context.Background() because io.Writer doesn't accept context.
+	// For context-aware operations, use Service.Write() directly.
 	result, err := w.service.Write(context.Background(), w.handle, w.buffer, w.offset, int64(len(p)))
 	if err != nil {
 		return 0, err

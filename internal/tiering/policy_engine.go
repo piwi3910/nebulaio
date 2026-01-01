@@ -766,6 +766,9 @@ func (e *PolicyEngine) realtimeWorker(id int) {
 
 // handleRealtimeEvent handles a single real-time event.
 func (e *PolicyEngine) handleRealtimeEvent(event RealtimeEvent) {
+	// INTENTIONAL: Using context.Background() for background event processing.
+	// Real-time events are queued internally and processed asynchronously by workers.
+	// The timeout provides the cancellation mechanism for event processing.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -839,6 +842,9 @@ func (e *PolicyEngine) scheduledWorker() {
 
 // executeScheduledPolicy executes a scheduled policy.
 func (e *PolicyEngine) executeScheduledPolicy(policy *AdvancedPolicy) {
+	// INTENTIONAL: Using context.Background() for scheduled policy execution.
+	// Policies are triggered by an internal scheduler, not by external requests.
+	// The 30-minute timeout provides the cancellation mechanism for long-running policies.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
@@ -1014,6 +1020,9 @@ func (e *PolicyEngine) thresholdMonitor() {
 
 // checkThresholds checks all tier capacity thresholds.
 func (e *PolicyEngine) checkThresholds() {
+	// INTENTIONAL: Using context.Background() for periodic threshold checking.
+	// This is triggered by an internal timer, not by external requests.
+	// The timeout provides the cancellation mechanism for the check operation.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -1070,6 +1079,9 @@ func (e *PolicyEngine) thresholdWorker() {
 
 // handleThresholdEvent handles a threshold crossing event.
 func (e *PolicyEngine) handleThresholdEvent(event ThresholdEvent) {
+	// INTENTIONAL: Using context.Background() for background threshold event processing.
+	// Threshold events are generated internally by the threshold monitor.
+	// The timeout provides the cancellation mechanism for potentially long-running capacity operations.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 

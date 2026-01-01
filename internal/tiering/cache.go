@@ -327,6 +327,9 @@ func (c *Cache) writeBackWorker() {
 			continue
 		}
 
+		// INTENTIONAL: Using context.Background() for background write-back operation.
+		// Items are queued internally for async persistence, not tied to request contexts.
+		// The timeout provides the cancellation mechanism for I/O operations.
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		_, _ = c.backend.PutObject(ctx, item.bucket, item.key, bytes.NewReader(item.data), int64(len(item.data)))
 

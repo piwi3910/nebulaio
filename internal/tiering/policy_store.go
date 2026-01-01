@@ -253,6 +253,9 @@ func (s *HybridPolicyStore) syncFromMetadata() error {
 		return nil
 	}
 
+	// INTENTIONAL: Using context.Background() for background sync operation.
+	// This is called internally to refresh the policy cache, not tied to requests.
+	// The timeout provides the cancellation mechanism for the metadata fetch.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
