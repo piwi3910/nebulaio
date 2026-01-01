@@ -1,4 +1,3 @@
-// Package catalog implements S3 Inventory compatible catalog functionality.
 package catalog
 
 import (
