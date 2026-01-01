@@ -167,7 +167,7 @@ func TestS3SelectWithAudit(t *testing.T) {
 	}
 	defer auditLogger.Stop()
 
-	auditLogger.Start()
+	auditLogger.Start(context.Background())
 
 	// Create S3 Select engine
 	engine := s3select.NewEngine(
@@ -339,7 +339,7 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 	}
 	defer auditLogger.Stop()
 
-	auditLogger.Start()
+	auditLogger.Start(context.Background())
 
 	// Run concurrent operations
 	var wg sync.WaitGroup
@@ -436,7 +436,7 @@ func TestAuditIntegrityChain(t *testing.T) {
 	}
 	defer auditLogger.Stop()
 
-	auditLogger.Start()
+	auditLogger.Start(context.Background())
 
 	// Log a series of events
 	ctx := context.Background()
@@ -510,7 +510,7 @@ func TestWebhookAuditOutput(t *testing.T) {
 	}
 	defer auditLogger.Stop()
 
-	auditLogger.Start()
+	auditLogger.Start(context.Background())
 
 	// Log events
 	for i := range 5 {
@@ -758,7 +758,7 @@ func TestAdvancedFeatureIntegration(t *testing.T) {
 	}
 	defer auditLogger.Stop()
 
-	auditLogger.Start()
+	auditLogger.Start(context.Background())
 
 	// 2. Simulate a request flow
 	ctx := context.Background()
