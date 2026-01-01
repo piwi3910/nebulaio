@@ -412,6 +412,16 @@ export const adminApi = {
   enableTieringPolicy: (id: string) => apiClient.post(`/admin/tiering-policies/${id}/enable`),
   disableTieringPolicy: (id: string) => apiClient.post(`/admin/tiering-policies/${id}/disable`),
   getTieringPolicyStats: (id: string) => apiClient.get(`/admin/tiering-policies/${id}/stats`),
+
+  // API Explorer
+  getOpenAPISpec: (format: 'json' | 'yaml' = 'json') => apiClient.get(`/openapi.${format}`),
+  getAPIExplorerConfig: () => apiClient.get('/api-explorer/config'),
+  generateCodeSnippets: (data: {
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    body?: string;
+  }) => apiClient.post('/api-explorer/code-snippets', data),
 };
 
 // Console API (user-facing)
