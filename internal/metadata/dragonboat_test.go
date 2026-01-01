@@ -1100,7 +1100,7 @@ func TestLeaderElectionHelpers(t *testing.T) {
 	})
 
 	t.Run("LeaderAddress", func(t *testing.T) {
-		addr, err := store.LeaderAddress()
+		addr, err := store.LeaderAddress(context.Background())
 		if err != nil {
 			t.Logf("Failed to get leader address: %v (acceptable if no leader elected)", err)
 		} else if addr == "" {
@@ -1202,7 +1202,7 @@ func testRemoveNode(t *testing.T, ctx context.Context, store *DragonboatStore) {
 }
 
 func testGetConfiguration(t *testing.T, store *DragonboatStore) {
-	membership, err := store.GetConfiguration()
+	membership, err := store.GetConfiguration(context.Background())
 	if err != nil {
 		t.Errorf("Failed to get configuration: %v", err)
 	}
@@ -1213,7 +1213,7 @@ func testGetConfiguration(t *testing.T, store *DragonboatStore) {
 }
 
 func testGetServers(t *testing.T, store *DragonboatStore) {
-	servers, err := store.GetServers()
+	servers, err := store.GetServers(context.Background())
 	if err != nil {
 		t.Errorf("Failed to get servers: %v", err)
 	}
