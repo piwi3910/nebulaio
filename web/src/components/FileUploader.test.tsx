@@ -638,8 +638,8 @@ describe('FileUploader', () => {
         expect(screen.getByText('test-file.txt')).toBeInTheDocument();
       });
 
-      // Find and click the remove button
-      const removeButton = screen.getByRole('button', { name: '' });
+      // Find and click the remove button using aria-label
+      const removeButton = screen.getByRole('button', { name: /remove test-file\.txt/i });
 
       await act(async () => {
         fireEvent.click(removeButton);
@@ -712,9 +712,8 @@ describe('FileUploader', () => {
         expect(screen.getByText('error')).toBeInTheDocument();
       });
 
-      // Find and click the remove button for the error file
-      const removeButtons = screen.getAllByRole('button', { name: '' });
-      const removeButton = removeButtons[removeButtons.length - 1];
+      // Find and click the remove button using aria-label
+      const removeButton = screen.getByRole('button', { name: /remove test-file\.txt/i });
 
       await act(async () => {
         fireEvent.click(removeButton);

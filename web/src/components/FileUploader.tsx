@@ -203,7 +203,7 @@ export function FileUploader({
         onReject={handleReject}
         maxSize={maxSize}
         maxFiles={maxFiles}
-        accept={accept ? accept : undefined}
+        accept={accept}
         disabled={isUploading}
         styles={{
           root: {
@@ -303,6 +303,7 @@ export function FileUploader({
                         color="red"
                         size="sm"
                         onClick={() => removeFile(file.id)}
+                        aria-label={`Remove ${file.file.name}`}
                       >
                         <IconX size={14} />
                       </ActionIcon>
