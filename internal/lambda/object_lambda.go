@@ -574,15 +574,9 @@ func (s *ObjectLambdaService) applyWASMTransform(
 	}
 
 	// Execute the WASM transformation
+	// Errors are tracked via Prometheus metrics in the Transform method
 	output, headers, err := s.wasmRuntime.Transform(ctx, config, input, nil)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Str("module_bucket", config.ModuleBucket).
-			Str("module_key", config.ModuleKey).
-			Str("function", config.FunctionName).
-			Msg("WASM transformation failed")
-
 		return nil, nil, fmt.Errorf("WASM transformation failed: %w", err)
 	}
 

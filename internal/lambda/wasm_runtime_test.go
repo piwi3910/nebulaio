@@ -524,7 +524,7 @@ func TestWASMRuntimeClearCache(t *testing.T) {
 	runtime.mu.Unlock()
 
 	// Clear the cache
-	runtime.ClearCache()
+	runtime.ClearCache(ctx)
 
 	runtime.mu.RLock()
 	afterClearLen := len(runtime.moduleCache)

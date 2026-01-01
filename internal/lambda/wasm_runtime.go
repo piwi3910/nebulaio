@@ -12,11 +12,114 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog/log"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 )
+
+// WASM runtime constants.
+const (
+	// WASMPageSize is the size of a single WASM memory page (64KB).
+	WASMPageSize = 64 * 1024
+
+	// WASMPagesPerMB is the number of WASM pages per megabyte.
+	WASMPagesPerMB = 16
+
+	// WASMMaxMemoryPages is the maximum number of WASM memory pages (4GB limit / 64KB).
+	WASMMaxMemoryPages = 65535
+
+	// DefaultWASMMaxMemoryMB is the default maximum memory for WASM modules.
+	DefaultWASMMaxMemoryMB = 256
+
+	// DefaultWASMMaxExecutionTime is the default maximum execution time.
+	DefaultWASMMaxExecutionTime = 30 * time.Second
+
+	// DefaultWASMMaxInputSize is the default maximum input size (100 MB).
+	DefaultWASMMaxInputSize = 100 * 1024 * 1024
+
+	// DefaultWASMMaxOutputSize is the default maximum output size (100 MB).
+	DefaultWASMMaxOutputSize = 100 * 1024 * 1024
+
+	// DefaultWASMStreamingThreshold is the default streaming threshold (10 MB).
+	DefaultWASMStreamingThreshold = 10 * 1024 * 1024
+)
+
+// Prometheus metrics for WASM runtime.
+var (
+	wasmTransformationsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_wasm_transformations_total",
+			Help: "Total number of WASM transformations",
+		},
+		[]string{"status", "module"},
+	)
+
+	wasmTransformationDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "nebulaio_wasm_transformation_duration_seconds",
+			Help:    "Duration of WASM transformations in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"module"},
+	)
+
+	wasmActiveExecutions = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_wasm_active_executions",
+			Help: "Number of currently active WASM executions",
+		},
+	)
+
+	wasmModuleCacheSize = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_wasm_module_cache_size",
+			Help: "Number of compiled WASM modules in cache",
+		},
+	)
+
+	wasmModuleCacheHits = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_wasm_module_cache_hits_total",
+			Help: "Total number of WASM module cache hits",
+		},
+	)
+
+	wasmModuleCacheMisses = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_wasm_module_cache_misses_total",
+			Help: "Total number of WASM module cache misses",
+		},
+	)
+
+	wasmInputBytes = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_wasm_input_bytes_total",
+			Help: "Total bytes of input data processed by WASM transformations",
+		},
+	)
+
+	wasmOutputBytes = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_wasm_output_bytes_total",
+			Help: "Total bytes of output data produced by WASM transformations",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(
+		wasmTransformationsTotal,
+		wasmTransformationDuration,
+		wasmActiveExecutions,
+		wasmModuleCacheSize,
+		wasmModuleCacheHits,
+		wasmModuleCacheMisses,
+		wasmInputBytes,
+		wasmOutputBytes,
+	)
+}
 
 // WASMRuntime manages WebAssembly module execution for Object Lambda transformations.
 // It provides sandboxed execution with configurable resource limits.
@@ -61,12 +164,12 @@ type WASMRuntimeConfig struct {
 // DefaultWASMRuntimeConfig returns a WASMRuntimeConfig with sensible defaults.
 func DefaultWASMRuntimeConfig() *WASMRuntimeConfig {
 	return &WASMRuntimeConfig{
-		MaxMemoryMB:        256,
-		MaxExecutionTime:   30 * time.Second,
-		MaxInputSize:       100 * 1024 * 1024, // 100 MB
-		MaxOutputSize:      100 * 1024 * 1024, // 100 MB
+		MaxMemoryMB:        DefaultWASMMaxMemoryMB,
+		MaxExecutionTime:   DefaultWASMMaxExecutionTime,
+		MaxInputSize:       DefaultWASMMaxInputSize,
+		MaxOutputSize:      DefaultWASMMaxOutputSize,
 		EnableCaching:      true,
-		StreamingThreshold: 10 * 1024 * 1024, // 10 MB
+		StreamingThreshold: DefaultWASMStreamingThreshold,
 	}
 }
 
@@ -95,9 +198,9 @@ func NewWASMRuntime(ctx context.Context, config *WASMRuntimeConfig) (*WASMRuntim
 	// Create wazero runtime with memory limits
 	// Calculate memory pages safely (1 page = 64KB, so MB * 16 = pages)
 	// Limit to a safe maximum to prevent overflow
-	memoryPages := config.MaxMemoryMB * 16
-	if memoryPages > 65535 { // Max uint16 to be safe
-		memoryPages = 65535
+	memoryPages := config.MaxMemoryMB * WASMPagesPerMB
+	if memoryPages > WASMMaxMemoryPages {
+		memoryPages = WASMMaxMemoryPages
 	}
 
 	runtimeConfig := wazero.NewRuntimeConfig().
@@ -146,18 +249,30 @@ func (w *WASMRuntime) Transform(
 	input io.Reader,
 	metadata map[string]string,
 ) (io.Reader, map[string]string, error) {
+	startTime := time.Now()
+	moduleKey := fmt.Sprintf("%s/%s", config.ModuleBucket, config.ModuleKey)
+
 	if w.closed.Load() {
+		wasmTransformationsTotal.WithLabelValues("error", moduleKey).Inc()
+
 		return nil, nil, errors.New("WASM runtime is closed")
 	}
 
 	// Validate configuration
 	if err := w.validateConfig(config); err != nil {
+		wasmTransformationsTotal.WithLabelValues("error", moduleKey).Inc()
+
 		return nil, nil, err
 	}
 
 	// Track active executions for metrics
 	w.metricsActive.Add(1)
-	defer w.metricsActive.Add(-1)
+	wasmActiveExecutions.Inc()
+
+	defer func() {
+		w.metricsActive.Add(-1)
+		wasmActiveExecutions.Dec()
+	}()
 
 	// Create execution context with timeout
 	execCtx, cancel := context.WithTimeout(ctx, w.config.MaxExecutionTime)
@@ -166,8 +281,13 @@ func (w *WASMRuntime) Transform(
 	// Read input with size limit
 	inputData, err := w.readInputWithLimit(input)
 	if err != nil {
+		wasmTransformationsTotal.WithLabelValues("error", moduleKey).Inc()
+
 		return nil, nil, err
 	}
+
+	// Track input bytes
+	wasmInputBytes.Add(float64(len(inputData)))
 
 	// Check if streaming should be used for large inputs
 	if int64(len(inputData)) > w.config.StreamingThreshold {
@@ -180,6 +300,8 @@ func (w *WASMRuntime) Transform(
 	// Load and compile module
 	compiledModule, err := w.getOrCompileModule(execCtx, config.ModuleBucket, config.ModuleKey)
 	if err != nil {
+		wasmTransformationsTotal.WithLabelValues("error", moduleKey).Inc()
+
 		return nil, nil, fmt.Errorf("failed to load WASM module: %w", err)
 	}
 
@@ -192,8 +314,16 @@ func (w *WASMRuntime) Transform(
 		metadata,
 	)
 	if err != nil {
+		wasmTransformationsTotal.WithLabelValues("error", moduleKey).Inc()
+
 		return nil, nil, err
 	}
+
+	// Track metrics
+	duration := time.Since(startTime)
+	wasmTransformationsTotal.WithLabelValues("success", moduleKey).Inc()
+	wasmTransformationDuration.WithLabelValues(moduleKey).Observe(duration.Seconds())
+	wasmOutputBytes.Add(float64(len(outputData)))
 
 	return bytes.NewReader(outputData), outputMetadata, nil
 }
@@ -260,6 +390,7 @@ func (w *WASMRuntime) getOrCompileModule(
 		w.mu.RLock()
 		if cached, ok := w.moduleCache[cacheKey]; ok {
 			w.mu.RUnlock()
+			wasmModuleCacheHits.Inc()
 
 			log.Debug().
 				Str("bucket", bucket).
@@ -270,6 +401,7 @@ func (w *WASMRuntime) getOrCompileModule(
 		}
 
 		w.mu.RUnlock()
+		wasmModuleCacheMisses.Inc()
 	}
 
 	// Load module bytes
@@ -292,6 +424,7 @@ func (w *WASMRuntime) getOrCompileModule(
 	if w.config.EnableCaching {
 		w.mu.Lock()
 		w.moduleCache[cacheKey] = compiled
+		wasmModuleCacheSize.Set(float64(len(w.moduleCache)))
 		w.mu.Unlock()
 
 		log.Debug().
@@ -520,12 +653,20 @@ func (w *WASMRuntime) executeWithMemoryManagement(
 	return output, nil, nil
 }
 
-// ClearCache clears the compiled module cache.
-func (w *WASMRuntime) ClearCache() {
+// ClearCache clears the compiled module cache, closing all cached modules.
+func (w *WASMRuntime) ClearCache(ctx context.Context) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// Close all cached compiled modules before clearing
+	for key, module := range w.moduleCache {
+		if err := module.Close(ctx); err != nil {
+			log.Warn().Err(err).Str("module", key).Msg("Failed to close cached WASM module during cache clear")
+		}
+	}
+
 	w.moduleCache = make(map[string]wazero.CompiledModule)
+	wasmModuleCacheSize.Set(0)
 
 	log.Info().Msg("WASM module cache cleared")
 }
@@ -561,24 +702,6 @@ func (w *WASMRuntime) Close(ctx context.Context) error {
 	log.Info().Msg("WASM runtime closed")
 
 	return nil
-}
-
-// WASMTransformResult contains the result of a WASM transformation.
-type WASMTransformResult struct {
-	// Output is the transformed data
-	Output []byte
-
-	// Metadata contains output metadata from the transformation
-	Metadata map[string]string
-
-	// Duration is the time taken for the transformation
-	Duration time.Duration
-
-	// InputSize is the size of the input data
-	InputSize int64
-
-	// OutputSize is the size of the output data
-	OutputSize int64
 }
 
 // S3ModuleLoader loads WASM modules from S3 storage.
