@@ -226,7 +226,7 @@ func TestValidateIP(t *testing.T) {
 			name:      "IPv4 multicast",
 			ip:        "224.0.0.1",
 			shouldErr: true,
-			errMsg:    "multicast",
+			errMsg:    "link-local",
 		},
 
 		// Unspecified
