@@ -148,6 +148,11 @@ var defaultClient = NewClient(DefaultConfig())
 // This client has a 30-second timeout and default pooling settings.
 // The returned client is safe for concurrent use but should not be modified.
 // For custom timeouts or configurations, use NewClient() instead.
+//
+// WARNING: The returned client is shared across all callers. Modifying its
+// fields (Transport, Timeout, etc.) will affect all other users of this client
+// and may cause undefined behavior. Always create a new client with NewClient()
+// if you need custom configuration.
 func Default() *http.Client {
 	return defaultClient
 }
