@@ -182,143 +182,6 @@ linters:
         - pattern: '^panic$'
           msg: "Avoid panic, return errors instead"
 
-  # Note: The 'enable' section is not needed when using 'default: all'
-  # All linters are enabled by default, and specific ones are disabled above.
-
-  exclusions:
-    paths:
-      - vendor
-      - node_modules
-      - web
-      - ".*\\.pb\\.go$"
-      - ".*generated.*\\.go$"
-
-    rules:
-      # Exclude test files from certain checks
-      - path: _test\.go
-        linters:
-          - funlen         # Test functions can be long
-          - gocyclo        # Test complexity is acceptable
-          - gocognit       # Test complexity is acceptable
-          - errcheck       # Tests often intentionally ignore errors
-          - gosec          # Tests may use insecure operations
-          - exhaustruct    # Tests don't need full struct initialization
-          - varnamelen     # Short variable names acceptable in tests
-          - wrapcheck      # Tests don't need to wrap all errors
-          - paralleltest   # Not all tests should be parallel
-          - tparallel      # Not all tests should be parallel
-
-      # Exclude benchmark files
-      - path: _bench_test\.go
-        linters:
-          - funlen
-          - gocyclo
-          - gocognit
-          - errcheck
-          - exhaustruct
-          - varnamelen
-
-      # Exclude integration test files
-      - path: internal/integration/
-        linters:
-          - funlen
-          - gocyclo
-          - gosec
-
-      # Exclude generated or stub code
-      - path: internal/transport/rdma/
-        linters:
-          - unused      # RDMA transport has placeholder fields
-          - gocritic    # Stub implementations
-
-      - path: internal/dpu/
-        linters:
-          - unused      # DPU code has placeholder fields
-          - gocritic
-
-      - path: internal/backup/pitr\.go
-        linters:
-          - unused      # Progress tracking fields for future use
-
-      # Exclude specific paths from unused checks (reserved for future)
-      - path: internal/cache/dram/
-        linters:
-          - unused
-
-      - path: internal/catalog/
-        linters:
-          - unused
-
-      - path: internal/cluster/membership\.go
-        linters:
-          - unused
-
-      - path: internal/mcp/
-        linters:
-          - unused
-
-      - path: internal/metadata/raft\.go
-        linters:
-          - unused
-
-      - path: internal/nim/
-        linters:
-          - unused
-
-      - path: internal/object/service\.go
-        linters:
-          - unused
-
-      # Allow certain patterns in specific files
-      - path: internal/server/server\.go
-        text: "cyclomatic complexity"
-        linters:
-          - gocyclo
-          - gocognit
-
-      - path: internal/api/s3/
-        text: "cyclomatic complexity"
-        linters:
-          - gocyclo      # S3 API handlers have complex routing
-
-      # Allow InsecureSkipVerify in test helpers
-      - path: internal/.*test.*\.go
-        text: "G402.*InsecureSkipVerify"
-        linters:
-          - gosec
-
-      # Allow weak random in non-cryptographic contexts
-      - path: internal/.*
-        text: "G404.*weak random"
-        linters:
-          - gosec
-
-      # Allow init() for registration patterns
-      - path: internal/.*/.*\.go
-        text: "don't use `init` function"
-        linters:
-          - gochecknoinits
-
-      # Allow global variables for metrics, loggers, and config
-      - path: internal/metrics/.*\.go
-        linters:
-          - gochecknoglobals
-
-      - path: internal/config/.*\.go
-        linters:
-          - gochecknoglobals
-
-      # Allow globals in main package for CLI flags
-      - path: cmd/.*\.go
-        linters:
-          - gochecknoglobals
-          - gochecknoinits
-
-      # Allow TODO/FIXME comments - we track them in GitHub issues
-      - linters:
-          - godox
-        text: "Line contains TODO/BUG/FIXME"
-
 run:
   go: '1.24'
   timeout: 5m
@@ -329,3 +192,141 @@ run:
 
 issues:
   uniq-by-line: false
+
+  # Path exclusions - skip these directories entirely
+  exclude-dirs:
+    - vendor
+    - node_modules
+    - web
+
+  # File pattern exclusions
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*generated.*\\.go$"
+
+  # Rule-based exclusions
+  exclude-rules:
+    # Exclude test files from certain checks
+    - path: _test\.go
+      linters:
+        - funlen         # Test functions can be long
+        - gocyclo        # Test complexity is acceptable
+        - gocognit       # Test complexity is acceptable
+        - errcheck       # Tests often intentionally ignore errors
+        - gosec          # Tests may use insecure operations
+        - exhaustruct    # Tests don't need full struct initialization
+        - varnamelen     # Short variable names acceptable in tests
+        - wrapcheck      # Tests don't need to wrap all errors
+        - paralleltest   # Not all tests should be parallel
+        - tparallel      # Not all tests should be parallel
+
+    # Exclude benchmark files
+    - path: _bench_test\.go
+      linters:
+        - funlen
+        - gocyclo
+        - gocognit
+        - errcheck
+        - exhaustruct
+        - varnamelen
+
+    # Exclude integration test files
+    - path: internal/integration/
+      linters:
+        - funlen
+        - gocyclo
+        - gosec
+
+    # Exclude generated or stub code
+    - path: internal/transport/rdma/
+      linters:
+        - unused      # RDMA transport has placeholder fields
+        - gocritic    # Stub implementations
+
+    - path: internal/dpu/
+      linters:
+        - unused      # DPU code has placeholder fields
+        - gocritic
+
+    - path: internal/backup/pitr\.go
+      linters:
+        - unused      # Progress tracking fields for future use
+
+    # Exclude specific paths from unused checks (reserved for future)
+    - path: internal/cache/dram/
+      linters:
+        - unused
+
+    - path: internal/catalog/
+      linters:
+        - unused
+
+    - path: internal/cluster/membership\.go
+      linters:
+        - unused
+
+    - path: internal/mcp/
+      linters:
+        - unused
+
+    - path: internal/metadata/raft\.go
+      linters:
+        - unused
+
+    - path: internal/nim/
+      linters:
+        - unused
+
+    - path: internal/object/service\.go
+      linters:
+        - unused
+
+    # Allow certain patterns in specific files
+    - path: internal/server/server\.go
+      text: "cyclomatic complexity"
+      linters:
+        - gocyclo
+        - gocognit
+
+    - path: internal/api/s3/
+      text: "cyclomatic complexity"
+      linters:
+        - gocyclo      # S3 API handlers have complex routing
+
+    # Allow InsecureSkipVerify in test helpers
+    - path: internal/.*test.*\.go
+      text: "G402.*InsecureSkipVerify"
+      linters:
+        - gosec
+
+    # Allow weak random in non-cryptographic contexts
+    - path: internal/.*
+      text: "G404.*weak random"
+      linters:
+        - gosec
+
+    # Allow init() for registration patterns
+    - path: internal/.*/.*\.go
+      text: "don't use `init` function"
+      linters:
+        - gochecknoinits
+
+    # Allow global variables for metrics, loggers, and config
+    - path: internal/metrics/.*\.go
+      linters:
+        - gochecknoglobals
+
+    - path: internal/config/.*\.go
+      linters:
+        - gochecknoglobals
+
+    # Allow globals in main package for CLI flags
+    - path: cmd/.*\.go
+      linters:
+        - gochecknoglobals
+        - gochecknoinits
+
+    # Allow TODO/FIXME comments - we track them in GitHub issues
+    - linters:
+        - godox
+      text: "Line contains TODO/BUG/FIXME"
