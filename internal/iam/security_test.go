@@ -410,16 +410,19 @@ type EvaluateAccessResult struct {
 }
 
 // EvaluateAccess evaluates whether an action is allowed on a resource.
-func (pm *PolicyManager) EvaluateAccess(ctx context.Context, policyName, action, resource string) EvaluateAccessResult {
+func (pm *PolicyManager) EvaluateAccess(
+	ctx context.Context,
+	policyName,
+	action,
+	resource string,
+) EvaluateAccessResult {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 
-	storedPolicy, exists := pm.policies[policyName]
+	policy, exists := pm.policies[policyName]
 	if !exists {
 		return EvaluateAccessResult{Allowed: false}
 	}
-
-	policy := storedPolicy.Policy
 
 	// Check for explicit deny first
 	for _, stmt := range policy.Statements {
@@ -452,12 +455,10 @@ func (pm *PolicyManager) EvaluateAccessWithContext(
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 
-	storedPolicy, exists := pm.policies[policyName]
+	policy, exists := pm.policies[policyName]
 	if !exists {
 		return EvaluateAccessResult{Allowed: false}
 	}
-
-	policy := storedPolicy.Policy
 
 	// Check for explicit deny first
 	for _, stmt := range policy.Statements {
