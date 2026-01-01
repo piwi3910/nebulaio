@@ -3,12 +3,36 @@ package admin
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
+
+const (
+	maxBodySize      = 1024 * 1024 // 1MB max body size
+	maxHeaderCount   = 50          // Max number of headers
+	maxHeaderKeyLen  = 256         // Max header key length
+	maxHeaderValLen  = 8192        // Max header value length
+	maxURLLength     = 2048        // Max URL length
+	cacheMaxAge      = 3600        // Cache max age in seconds
+	configCacheMaxAge = 60         // Config cache max age in seconds
+)
+
+// allowedMethods defines the HTTP methods that are valid for code snippet generation.
+var allowedMethods = map[string]bool{
+	"GET":     true,
+	"POST":    true,
+	"PUT":     true,
+	"DELETE":  true,
+	"PATCH":   true,
+	"HEAD":    true,
+	"OPTIONS": true,
+}
 
 // OpenAPIHandler serves the OpenAPI specification.
 type OpenAPIHandler struct {
@@ -36,7 +60,7 @@ func (h *OpenAPIHandler) convertToJSON() {
 
 	var spec interface{}
 	if err := yaml.Unmarshal(h.specYAML, &spec); err != nil {
-		// If conversion fails, use empty spec
+		log.Error().Err(err).Msg("Failed to parse OpenAPI YAML specification")
 		h.specJSON = []byte("{}")
 
 		return
@@ -47,12 +71,14 @@ func (h *OpenAPIHandler) convertToJSON() {
 
 	jsonBytes, err := json.Marshal(spec)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal OpenAPI specification to JSON")
 		h.specJSON = []byte("{}")
 
 		return
 	}
 
 	h.specJSON = jsonBytes
+	log.Info().Int("size_bytes", len(jsonBytes)).Msg("OpenAPI specification converted to JSON")
 }
 
 // convertMapKeys recursively converts map[interface{}]interface{} to map[string]interface{}.
@@ -90,7 +116,7 @@ func convertMapKeys(v interface{}) interface{} {
 }
 
 // ServeOpenAPIJSON serves the OpenAPI specification as JSON.
-func (h *OpenAPIHandler) ServeOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
+func (h *OpenAPIHandler) ServeOpenAPIJSON(w http.ResponseWriter, _ *http.Request) {
 	h.mu.RLock()
 	specJSON := h.specJSON
 	h.mu.RUnlock()
@@ -103,7 +129,7 @@ func (h *OpenAPIHandler) ServeOpenAPIJSON(w http.ResponseWriter, r *http.Request
 }
 
 // ServeOpenAPIYAML serves the OpenAPI specification as YAML.
-func (h *OpenAPIHandler) ServeOpenAPIYAML(w http.ResponseWriter, r *http.Request) {
+func (h *OpenAPIHandler) ServeOpenAPIYAML(w http.ResponseWriter, _ *http.Request) {
 	h.mu.RLock()
 	specYAML := h.specYAML
 	h.mu.RUnlock()
@@ -158,13 +184,13 @@ func DefaultAPIExplorerConfig() *APIExplorerConfig {
 }
 
 // ServeAPIExplorerConfig serves the API Explorer configuration.
-func (h *OpenAPIHandler) ServeAPIExplorerConfig(w http.ResponseWriter, r *http.Request) {
+func (h *OpenAPIHandler) ServeAPIExplorerConfig(w http.ResponseWriter, _ *http.Request) {
 	config := DefaultAPIExplorerConfig()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(config)
+	_ = json.NewEncoder(w).Encode(config)
 }
 
 // RequestHistoryEntry represents a saved API request.
@@ -194,12 +220,82 @@ type GenerateCodeSnippetsRequest struct {
 	Body    string            `json:"body,omitempty"`
 }
 
+// validateCodeSnippetRequest validates the request for code snippet generation.
+func validateCodeSnippetRequest(req *GenerateCodeSnippetsRequest) error {
+	// Validate method
+	method := strings.ToUpper(strings.TrimSpace(req.Method))
+	if !allowedMethods[method] {
+		return &ValidationError{Field: "method", Message: "invalid HTTP method"}
+	}
+
+	req.Method = method
+
+	// Validate URL
+	if len(req.URL) > maxURLLength {
+		return &ValidationError{Field: "url", Message: "URL exceeds maximum length"}
+	}
+
+	parsedURL, err := url.Parse(req.URL)
+	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return &ValidationError{Field: "url", Message: "invalid URL format"}
+	}
+
+	// Only allow http and https schemes
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return &ValidationError{Field: "url", Message: "only http and https URLs are allowed"}
+	}
+
+	// Validate headers
+	if len(req.Headers) > maxHeaderCount {
+		return &ValidationError{Field: "headers", Message: "too many headers"}
+	}
+
+	for key, value := range req.Headers {
+		if len(key) > maxHeaderKeyLen {
+			return &ValidationError{Field: "headers", Message: "header key too long"}
+		}
+
+		if len(value) > maxHeaderValLen {
+			return &ValidationError{Field: "headers", Message: "header value too long"}
+		}
+	}
+
+	// Validate body size
+	if len(req.Body) > maxBodySize {
+		return &ValidationError{Field: "body", Message: "request body exceeds maximum size"}
+	}
+
+	return nil
+}
+
+// ValidationError represents a validation error.
+type ValidationError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
+func (e *ValidationError) Error() string {
+	return e.Field + ": " + e.Message
+}
+
 // GenerateCodeSnippets generates code snippets for the given request.
 func (h *OpenAPIHandler) GenerateCodeSnippets(w http.ResponseWriter, r *http.Request) {
+	// Limit request body size
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+
 	var req GenerateCodeSnippetsRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Debug().Err(err).Msg("Failed to decode code snippet request")
 		writeError(w, "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	// Validate request
+	if err := validateCodeSnippetRequest(&req); err != nil {
+		log.Debug().Err(err).Msg("Code snippet request validation failed")
+		writeError(w, err.Error(), http.StatusBadRequest)
 
 		return
 	}
@@ -213,9 +309,71 @@ func (h *OpenAPIHandler) GenerateCodeSnippets(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"snippets": snippets,
 	})
+}
+
+// escapeShellSingleQuote escapes single quotes for shell strings.
+func escapeShellSingleQuote(s string) string {
+	// Replace ' with '\'' (end quote, escaped quote, start quote)
+	return strings.ReplaceAll(s, "'", "'\\''")
+}
+
+// escapeJavaScriptString escapes a string for JavaScript single-quoted strings.
+func escapeJavaScriptString(s string) string {
+	replacer := strings.NewReplacer(
+		"\\", "\\\\",
+		"'", "\\'",
+		"\n", "\\n",
+		"\r", "\\r",
+		"\t", "\\t",
+	)
+
+	return replacer.Replace(s)
+}
+
+// escapePythonString escapes a string for Python single-quoted strings.
+func escapePythonString(s string) string {
+	replacer := strings.NewReplacer(
+		"\\", "\\\\",
+		"'", "\\'",
+		"\n", "\\n",
+		"\r", "\\r",
+		"\t", "\\t",
+	)
+
+	return replacer.Replace(s)
+}
+
+// escapeGoString escapes a string for Go double-quoted strings.
+func escapeGoString(s string) string {
+	replacer := strings.NewReplacer(
+		"\\", "\\\\",
+		"\"", "\\\"",
+		"\n", "\\n",
+		"\r", "\\r",
+		"\t", "\\t",
+	)
+
+	return replacer.Replace(s)
+}
+
+// escapeGoRawString escapes a string for Go raw strings (backticks).
+// Returns true if the string can be used as a raw string, false if it contains backticks.
+func escapeGoRawString(s string) (string, bool) {
+	if strings.Contains(s, "`") {
+		return "", false
+	}
+
+	return s, true
+}
+
+// sanitizeHeaderKey removes any characters that could be dangerous in header keys.
+var headerKeyRegex = regexp.MustCompile(`[^a-zA-Z0-9\-_]`)
+
+func sanitizeHeaderKey(key string) string {
+	return headerKeyRegex.ReplaceAllString(key, "")
 }
 
 func generateCurlSnippet(req GenerateCodeSnippetsRequest) string {
@@ -229,21 +387,30 @@ func generateCurlSnippet(req GenerateCodeSnippetsRequest) string {
 	}
 
 	for key, value := range req.Headers {
+		safeKey := sanitizeHeaderKey(key)
+		if safeKey == "" {
+			continue
+		}
+
+		safeValue := escapeShellSingleQuote(value)
 		builder.WriteString(" \\\n  -H '")
-		builder.WriteString(key)
+		builder.WriteString(safeKey)
 		builder.WriteString(": ")
-		builder.WriteString(value)
+		builder.WriteString(safeValue)
 		builder.WriteString("'")
 	}
 
 	if req.Body != "" {
+		safeBody := escapeShellSingleQuote(req.Body)
 		builder.WriteString(" \\\n  -d '")
-		builder.WriteString(req.Body)
+		builder.WriteString(safeBody)
 		builder.WriteString("'")
 	}
 
+	// URL is already validated, but we still escape for safety
+	safeURL := escapeShellSingleQuote(req.URL)
 	builder.WriteString(" \\\n  '")
-	builder.WriteString(req.URL)
+	builder.WriteString(safeURL)
 	builder.WriteString("'")
 
 	return builder.String()
@@ -252,8 +419,9 @@ func generateCurlSnippet(req GenerateCodeSnippetsRequest) string {
 func generateJavaScriptSnippet(req GenerateCodeSnippetsRequest) string {
 	var builder strings.Builder
 
+	safeURL := escapeJavaScriptString(req.URL)
 	builder.WriteString("const response = await fetch('")
-	builder.WriteString(req.URL)
+	builder.WriteString(safeURL)
 	builder.WriteString("', {\n")
 	builder.WriteString("  method: '")
 	builder.WriteString(req.Method)
@@ -262,14 +430,20 @@ func generateJavaScriptSnippet(req GenerateCodeSnippetsRequest) string {
 
 	headerCount := 0
 	for key, value := range req.Headers {
+		safeKey := sanitizeHeaderKey(key)
+		if safeKey == "" {
+			continue
+		}
+
 		if headerCount > 0 {
 			builder.WriteString(",\n")
 		}
 
+		safeValue := escapeJavaScriptString(value)
 		builder.WriteString("    '")
-		builder.WriteString(key)
+		builder.WriteString(safeKey)
 		builder.WriteString("': '")
-		builder.WriteString(value)
+		builder.WriteString(safeValue)
 		builder.WriteString("'")
 		headerCount++
 	}
@@ -277,9 +451,21 @@ func generateJavaScriptSnippet(req GenerateCodeSnippetsRequest) string {
 	builder.WriteString("\n  }")
 
 	if req.Body != "" {
-		builder.WriteString(",\n  body: JSON.stringify(")
-		builder.WriteString(req.Body)
-		builder.WriteString(")")
+		// Try to format as JSON if it's valid JSON
+		var jsonObj interface{}
+		if err := json.Unmarshal([]byte(req.Body), &jsonObj); err == nil {
+			// It's valid JSON, use JSON.stringify with the object
+			safeBody := escapeJavaScriptString(req.Body)
+			builder.WriteString(",\n  body: '")
+			builder.WriteString(safeBody)
+			builder.WriteString("'")
+		} else {
+			// Not JSON, use as plain string
+			safeBody := escapeJavaScriptString(req.Body)
+			builder.WriteString(",\n  body: '")
+			builder.WriteString(safeBody)
+			builder.WriteString("'")
+		}
 	}
 
 	builder.WriteString("\n});\n\nconst data = await response.json();\nconsole.log(data);")
@@ -290,23 +476,30 @@ func generateJavaScriptSnippet(req GenerateCodeSnippetsRequest) string {
 func generatePythonSnippet(req GenerateCodeSnippetsRequest) string {
 	var builder strings.Builder
 
+	safeURL := escapePythonString(req.URL)
 	builder.WriteString("import requests\n\n")
 	builder.WriteString("response = requests.")
 	builder.WriteString(strings.ToLower(req.Method))
 	builder.WriteString("(\n    '")
-	builder.WriteString(req.URL)
+	builder.WriteString(safeURL)
 	builder.WriteString("',\n    headers={\n")
 
 	headerCount := 0
 	for key, value := range req.Headers {
+		safeKey := sanitizeHeaderKey(key)
+		if safeKey == "" {
+			continue
+		}
+
 		if headerCount > 0 {
 			builder.WriteString(",\n")
 		}
 
+		safeValue := escapePythonString(value)
 		builder.WriteString("        '")
-		builder.WriteString(key)
+		builder.WriteString(safeKey)
 		builder.WriteString("': '")
-		builder.WriteString(value)
+		builder.WriteString(safeValue)
 		builder.WriteString("'")
 		headerCount++
 	}
@@ -314,8 +507,21 @@ func generatePythonSnippet(req GenerateCodeSnippetsRequest) string {
 	builder.WriteString("\n    }")
 
 	if req.Body != "" {
-		builder.WriteString(",\n    json=")
-		builder.WriteString(req.Body)
+		// Try to format as JSON if it's valid JSON
+		var jsonObj interface{}
+		if err := json.Unmarshal([]byte(req.Body), &jsonObj); err == nil {
+			// It's valid JSON, use as json parameter
+			safeBody := escapePythonString(req.Body)
+			builder.WriteString(",\n    data='")
+			builder.WriteString(safeBody)
+			builder.WriteString("'")
+		} else {
+			// Not JSON, use as data string
+			safeBody := escapePythonString(req.Body)
+			builder.WriteString(",\n    data='")
+			builder.WriteString(safeBody)
+			builder.WriteString("'")
+		}
 	}
 
 	builder.WriteString("\n)\n\nprint(response.json())")
@@ -325,6 +531,8 @@ func generatePythonSnippet(req GenerateCodeSnippetsRequest) string {
 
 func generateGoSnippet(req GenerateCodeSnippetsRequest) string {
 	var builder strings.Builder
+
+	safeURL := escapeGoString(req.URL)
 
 	builder.WriteString("package main\n\n")
 	builder.WriteString("import (\n")
@@ -340,29 +548,44 @@ func generateGoSnippet(req GenerateCodeSnippetsRequest) string {
 	builder.WriteString("func main() {\n")
 
 	if req.Body != "" {
-		builder.WriteString("\tbody := strings.NewReader(`")
-		builder.WriteString(req.Body)
-		builder.WriteString("`)\n")
+		// Try raw string first, fall back to escaped string
+		if rawBody, ok := escapeGoRawString(req.Body); ok {
+			builder.WriteString("\tbody := strings.NewReader(`")
+			builder.WriteString(rawBody)
+			builder.WriteString("`)\n")
+		} else {
+			safeBody := escapeGoString(req.Body)
+			builder.WriteString("\tbody := strings.NewReader(\"")
+			builder.WriteString(safeBody)
+			builder.WriteString("\")\n")
+		}
+
 		builder.WriteString("\treq, err := http.NewRequest(\"")
 		builder.WriteString(req.Method)
 		builder.WriteString("\", \"")
-		builder.WriteString(req.URL)
+		builder.WriteString(safeURL)
 		builder.WriteString("\", body)\n")
 	} else {
 		builder.WriteString("\treq, err := http.NewRequest(\"")
 		builder.WriteString(req.Method)
 		builder.WriteString("\", \"")
-		builder.WriteString(req.URL)
+		builder.WriteString(safeURL)
 		builder.WriteString("\", nil)\n")
 	}
 
 	builder.WriteString("\tif err != nil {\n\t\tpanic(err)\n\t}\n\n")
 
 	for key, value := range req.Headers {
+		safeKey := sanitizeHeaderKey(key)
+		if safeKey == "" {
+			continue
+		}
+
+		safeValue := escapeGoString(value)
 		builder.WriteString("\treq.Header.Set(\"")
-		builder.WriteString(key)
+		builder.WriteString(safeKey)
 		builder.WriteString("\", \"")
-		builder.WriteString(value)
+		builder.WriteString(safeValue)
 		builder.WriteString("\")\n")
 	}
 

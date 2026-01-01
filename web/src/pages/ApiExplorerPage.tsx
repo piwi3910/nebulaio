@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import SwaggerUI from 'swagger-ui-react';
 import 'swagger-ui-react/swagger-ui.css';
 import {
@@ -52,18 +52,13 @@ interface CodeSnippet {
   code: string;
 }
 
+interface PendingRequest {
+  startTime: number;
+  method: string;
+  path: string;
+}
+
 const MAX_HISTORY_SIZE = 50;
-
-// Custom request interceptor for Swagger UI
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const requestInterceptor = (request: any) => {
-  const token = useAuthStore.getState().accessToken;
-  if (token && request.headers) {
-    request.headers.Authorization = `Bearer ${token}`;
-  }
-
-  return request;
-};
 
 // Helper function to load history from localStorage
 function loadHistoryFromStorage(): RequestHistoryEntry[] {
@@ -87,6 +82,9 @@ export function ApiExplorerPage() {
   const [codeModalOpened, setCodeModalOpened] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { accessToken } = useAuthStore();
+
+  // Track pending requests by URL to correlate with responses
+  const pendingRequestsRef = useRef<Map<string, PendingRequest>>(new Map());
 
   // Save request history to localStorage
   const saveHistory = useCallback((history: RequestHistoryEntry[]) => {
@@ -201,6 +199,63 @@ export function ApiExplorerPage() {
     return colors[method.toUpperCase()] || 'gray';
   };
 
+  // Request interceptor for Swagger UI - tracks request start time
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const requestInterceptor = useCallback((request: any) => {
+    const token = useAuthStore.getState().accessToken;
+    if (token && request.headers) {
+      request.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // Track the request start time for API requests
+    if (request.url && request.url.includes('/api/v1/')) {
+      try {
+        const urlObj = new URL(request.url, window.location.origin);
+        const path = urlObj.pathname.replace('/api/v1', '');
+        pendingRequestsRef.current.set(request.url, {
+          startTime: Date.now(),
+          method: request.method || 'GET',
+          path,
+        });
+      } catch {
+        // Ignore URL parsing errors
+      }
+    }
+
+    return request;
+  }, []);
+
+  // Response interceptor for Swagger UI - records completed requests
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const responseInterceptor = useCallback((response: any) => {
+    // Track completed API requests
+    if (response.url && response.url.includes('/api/v1/')) {
+      const pending = pendingRequestsRef.current.get(response.url);
+      if (pending) {
+        const endTime = Date.now();
+        addToHistory({
+          timestamp: new Date().toISOString(),
+          method: pending.method,
+          path: pending.path,
+          statusCode: response.status,
+          responseTimeMs: endTime - pending.startTime,
+        });
+        pendingRequestsRef.current.delete(response.url);
+      }
+    }
+
+    return response;
+  }, [addToHistory]);
+
+  // Cleanup pending requests on unmount
+  useEffect(() => {
+    const pendingRequests = pendingRequestsRef.current;
+
+    return () => {
+      pendingRequests.clear();
+    };
+  }, []);
+
   return (
     <Container size="xl">
       <Stack gap="lg">
@@ -264,32 +319,7 @@ export function ApiExplorerPage() {
                 <SwaggerUI
                   url="/api/v1/openapi.json"
                   requestInterceptor={requestInterceptor}
-                  onComplete={(system) => {
-                    // Add custom plugin for tracking requests
-                    const originalFetch = window.fetch;
-                    window.fetch = async (...args) => {
-                      const startTime = Date.now();
-                      const response = await originalFetch(...args);
-                      const endTime = Date.now();
-
-                      // Track only API requests
-                      const url = typeof args[0] === 'string' ? args[0] : args[0].toString();
-                      if (url.includes('/api/v1/')) {
-                        const urlObj = new URL(url, window.location.origin);
-                        addToHistory({
-                          timestamp: new Date().toISOString(),
-                          method: (args[1] as RequestInit)?.method || 'GET',
-                          path: urlObj.pathname.replace('/api/v1', ''),
-                          statusCode: response.status,
-                          responseTimeMs: endTime - startTime,
-                        });
-                      }
-
-                      return response;
-                    };
-
-                    return system;
-                  }}
+                  responseInterceptor={responseInterceptor}
                   docExpansion="list"
                   defaultModelsExpandDepth={1}
                   persistAuthorization={true}
