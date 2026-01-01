@@ -182,35 +182,8 @@ linters:
         - pattern: '^panic$'
           msg: "Avoid panic, return errors instead"
 
-  enable:
-    # Security & Bug Detection (High Priority)
-    - gosec          # Security issues
-    - govet          # Go vet
-    - errcheck       # Unchecked errors
-    - staticcheck    # Comprehensive static analysis
-
-    # Common Mistakes
-    - ineffassign    # Ineffectual assignments
-    - unused         # Unused code
-
-    # Code Quality & Complexity
-    - gocyclo        # Cyclomatic complexity
-    - funlen         # Function length
-
-    # Best Practices
-    - errorlint      # Error handling
-    - gocritic       # Meta-linter with many checks
-    - revive         # Fast linter (replaces golint)
-
-    # Concurrency
-    - contextcheck   # Context usage
-
-    # Style
-    - misspell       # Spelling
-    - whitespace     # Whitespace issues
-
-    # Documentation
-    - godot          # Comment periods
+  # Note: The 'enable' section is not needed when using 'default: all'
+  # All linters are enabled by default, and specific ones are disabled above.
 
   exclusions:
     paths:
