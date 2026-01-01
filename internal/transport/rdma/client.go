@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/piwi3910/nebulaio/internal/httputil"
 )
 
 // Transport type names for metrics.
@@ -87,11 +89,9 @@ func NewClient(endpoints []string, config *ClientConfig) (*Client, error) {
 		ops:       make(map[string]*S3Operations),
 	}
 
-	// Set up HTTP fallback client
+	// Set up HTTP fallback client with connection pooling
 	if config.FallbackHTTP {
-		client.httpClient = &http.Client{
-			Timeout: config.RequestTimeout,
-		}
+		client.httpClient = httputil.NewClientWithTimeout(config.RequestTimeout)
 	}
 
 	return client, nil

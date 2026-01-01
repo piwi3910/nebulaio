@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/piwi3910/nebulaio/internal/httputil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1181,7 +1182,7 @@ func newWebhookOutput(cfg OutputConfig) (*WebhookOutput, error) {
 		name:      cfg.Name,
 		url:       cfg.URL,
 		authToken: cfg.AuthToken,
-		client:    &http.Client{Timeout: defaultFlushIntervalSec * time.Second},
+		client:    httputil.NewClientWithTimeout(defaultFlushIntervalSec * time.Second),
 		batch:     make([]*EnhancedAuditEvent, 0, batchSize),
 		batchSize: batchSize,
 	}, nil

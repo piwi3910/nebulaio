@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/klauspost/compress/zstd"
+	"github.com/piwi3910/nebulaio/internal/httputil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -222,10 +223,8 @@ func NewObjectLambdaService() *ObjectLambdaService {
 	svc := &ObjectLambdaService{
 		accessPoints:     make(map[string]*AccessPointConfig),
 		pendingResponses: make(map[string]chan *WriteGetObjectResponseInput),
-		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
-		transformers: make(map[BuiltInTransform]Transformer),
+		httpClient:       httputil.NewClientWithTimeout(60 * time.Second),
+		transformers:     make(map[BuiltInTransform]Transformer),
 	}
 
 	// Register built-in transformers

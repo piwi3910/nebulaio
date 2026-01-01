@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/piwi3910/nebulaio/internal/httputil"
 )
 
 // Cross-region replication configuration constants.
@@ -178,6 +179,7 @@ type ReplicationManager struct {
 	maxWorkers    int
 	endpoints     map[string]*RegionEndpoint // region -> endpoint
 	storage       ReplicationStorage
+	httpClient    *http.Client
 	metrics       *ReplicationMetricsCollector
 	ctx           context.Context //nolint:containedctx // Worker pool pattern - context managed by New/Close lifecycle
 	cancel        context.CancelFunc
@@ -244,6 +246,7 @@ func NewReplicationManager(storage ReplicationStorage, maxWorkers int) *Replicat
 		maxWorkers: maxWorkers,
 		endpoints:  make(map[string]*RegionEndpoint),
 		storage:    storage,
+		httpClient: httputil.NewClientWithTimeout(replicationHTTPTimeout),
 		metrics:    &ReplicationMetricsCollector{},
 		ctx:        ctx,
 		cancel:     cancel,
@@ -706,10 +709,8 @@ func (rm *ReplicationManager) putObjectRemote(ctx context.Context, endpoint *Reg
 	// Sign request
 	rm.signRequest(req, endpoint)
 
-	// Execute request
-	client := &http.Client{Timeout: replicationHTTPTimeout}
-
-	resp, err := client.Do(req)
+	// Execute request using shared HTTP client with connection pooling
+	resp, err := rm.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
