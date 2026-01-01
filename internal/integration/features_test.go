@@ -96,6 +96,7 @@ func TestDRAMCacheWithFirewall(t *testing.T) {
 
 	// Simulate requests going through firewall then cache
 	ctx := context.Background()
+	c.Start(ctx)
 	bucket := testBucket
 
 	// Track cache hits
@@ -263,6 +264,7 @@ func TestFirewallBandwidthWithCache(t *testing.T) {
 
 	// Simulate object retrieval with bandwidth tracking
 	ctx := context.Background()
+	c.Start(ctx)
 	bucket := "test-bucket"
 	key := bucket + "/large-object"
 	objectSize := int64(5 * 1024 * 1024) // 5MB object
@@ -324,6 +326,9 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 	})
 	defer c.Close()
 
+	ctx := t.Context()
+	c.Start(ctx)
+
 	// Create temp directory for audit
 	tmpDir := t.TempDir()
 
@@ -345,8 +350,6 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 	var wg sync.WaitGroup
 
 	errCh := make(chan error, 100)
-
-	ctx := context.Background()
 
 	for i := range 100 {
 		wg.Add(1)
@@ -692,6 +695,7 @@ func TestCacheEvictionUnderPressure(t *testing.T) {
 	defer c.Close()
 
 	ctx := context.Background()
+	c.Start(ctx)
 	bucket := "test-bucket"
 	objectSize := 1024 // 1KB per object
 
@@ -742,6 +746,9 @@ func TestAdvancedFeatureIntegration(t *testing.T) {
 	})
 	defer cache.Close()
 
+	ctx := t.Context()
+	cache.Start(ctx)
+
 	tmpDir := t.TempDir()
 
 	auditLogger, err := audit.NewEnhancedAuditLogger(audit.EnhancedConfig{
@@ -761,7 +768,6 @@ func TestAdvancedFeatureIntegration(t *testing.T) {
 	auditLogger.Start(context.Background())
 
 	// 2. Simulate a request flow
-	ctx := context.Background()
 	bucket := "production-data"
 	key := bucket + "/dataset/batch-001.csv"
 
