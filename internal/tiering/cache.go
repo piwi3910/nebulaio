@@ -88,6 +88,7 @@ func NewCache(config CacheConfig, cacheBackend backend.Backend) *Cache {
 	if config.WriteBack && cacheBackend != nil {
 		c.writeBackWg.Add(1)
 
+		//nolint:contextcheck // writeBackWorker creates per-operation contexts
 		go c.writeBackWorker()
 	}
 
