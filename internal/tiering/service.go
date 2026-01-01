@@ -336,6 +336,9 @@ func (s *Service) scanLoop() {
 		case <-s.stopChan:
 			return
 		case <-s.scanTicker.C:
+			// INTENTIONAL: Using context.Background() for background periodic scan.
+			// This is a fire-and-forget operation triggered by a timer, not a request.
+			// The scan should complete even if no request context is available.
 			s.runScan(context.Background())
 		}
 	}
@@ -371,6 +374,9 @@ func (s *Service) transitionWorker() {
 	defer s.workerWg.Done()
 
 	for job := range s.transitionCh {
+		// INTENTIONAL: Using context.Background() for background worker.
+		// Transition jobs are queued internally and processed asynchronously.
+		// The timeout provides the cancellation mechanism for long-running operations.
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		err := s.TransitionObject(ctx, job.info.Bucket, job.info.Key, job.result.TargetTier)
 

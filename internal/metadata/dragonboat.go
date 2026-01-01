@@ -286,9 +286,9 @@ func (s *DragonboatStore) JoinCluster(leaderNodeID uint64, nodeID uint64, raftAd
 
 // AddVoter adds a new voting member to the cluster
 // This must be called on the leader.
-func (s *DragonboatStore) AddVoter(nodeID string, raftAddr string) error {
+func (s *DragonboatStore) AddVoter(ctx context.Context, nodeID string, raftAddr string) error {
 	if !s.IsLeader() {
-		leaderAddr, _ := s.LeaderAddress(context.Background())
+		leaderAddr, _ := s.LeaderAddress(ctx)
 		return fmt.Errorf("not the leader, current leader address: %s", leaderAddr)
 	}
 
@@ -299,10 +299,10 @@ func (s *DragonboatStore) AddVoter(nodeID string, raftAddr string) error {
 		Str("raft_addr", raftAddr).
 		Msg("Adding voter to Dragonboat cluster")
 
-	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 
-	err := s.nodeHost.SyncRequestAddReplica(ctx, s.shardID, replicaID, raftAddr, 0)
+	err := s.nodeHost.SyncRequestAddReplica(timeoutCtx, s.shardID, replicaID, raftAddr, 0)
 	if err != nil {
 		return fmt.Errorf("failed to add voter: %w", err)
 	}
@@ -316,9 +316,9 @@ func (s *DragonboatStore) AddVoter(nodeID string, raftAddr string) error {
 
 // AddNonvoter adds a new non-voting member to the cluster
 // Non-voters receive log replication but don't vote in elections.
-func (s *DragonboatStore) AddNonvoter(nodeID string, raftAddr string) error {
+func (s *DragonboatStore) AddNonvoter(ctx context.Context, nodeID string, raftAddr string) error {
 	if !s.IsLeader() {
-		leaderAddr, _ := s.LeaderAddress(context.Background())
+		leaderAddr, _ := s.LeaderAddress(ctx)
 		return fmt.Errorf("not the leader, current leader address: %s", leaderAddr)
 	}
 
@@ -329,10 +329,10 @@ func (s *DragonboatStore) AddNonvoter(nodeID string, raftAddr string) error {
 		Str("raft_addr", raftAddr).
 		Msg("Adding non-voter to Dragonboat cluster")
 
-	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 
-	err := s.nodeHost.SyncRequestAddNonVoting(ctx, s.shardID, replicaID, raftAddr, 0)
+	err := s.nodeHost.SyncRequestAddNonVoting(timeoutCtx, s.shardID, replicaID, raftAddr, 0)
 	if err != nil {
 		return fmt.Errorf("failed to add non-voter: %w", err)
 	}
@@ -341,9 +341,9 @@ func (s *DragonboatStore) AddNonvoter(nodeID string, raftAddr string) error {
 }
 
 // RemoveServer removes a server from the cluster.
-func (s *DragonboatStore) RemoveServer(nodeID string) error {
+func (s *DragonboatStore) RemoveServer(ctx context.Context, nodeID string) error {
 	if !s.IsLeader() {
-		leaderAddr, _ := s.LeaderAddress(context.Background())
+		leaderAddr, _ := s.LeaderAddress(ctx)
 		return fmt.Errorf("not the leader, current leader address: %s", leaderAddr)
 	}
 
@@ -353,10 +353,10 @@ func (s *DragonboatStore) RemoveServer(nodeID string) error {
 		Uint64("replica_id", replicaID).
 		Msg("Removing server from Dragonboat cluster")
 
-	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 
-	err := s.nodeHost.SyncRequestDeleteReplica(ctx, s.shardID, replicaID, 0)
+	err := s.nodeHost.SyncRequestDeleteReplica(timeoutCtx, s.shardID, replicaID, 0)
 	if err != nil {
 		return fmt.Errorf("failed to remove server: %w", err)
 	}
@@ -440,9 +440,9 @@ func (s *DragonboatStore) GetClusterConfiguration(ctx context.Context) (*Cluster
 // TransferLeadership transfers leadership to another node
 // Dragonboat handles leader transfer automatically during configuration changes
 // This method initiates a transfer by requesting the target node to be the leader.
-func (s *DragonboatStore) TransferLeadership(targetID string, targetAddr string) error {
+func (s *DragonboatStore) TransferLeadership(ctx context.Context, targetID string, targetAddr string) error {
 	if !s.IsLeader() {
-		leaderAddr, _ := s.LeaderAddress(context.Background())
+		leaderAddr, _ := s.LeaderAddress(ctx)
 		return fmt.Errorf("not the leader, current leader address: %s", leaderAddr)
 	}
 
@@ -453,7 +453,7 @@ func (s *DragonboatStore) TransferLeadership(targetID string, targetAddr string)
 		Str("target_addr", targetAddr).
 		Msg("Requesting leadership transfer")
 
-	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 
 	// Request leadership transfer
@@ -468,7 +468,7 @@ func (s *DragonboatStore) TransferLeadership(targetID string, targetAddr string)
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-timeoutCtx.Done():
 			return errors.New("timeout waiting for leadership transfer")
 		case <-ticker.C:
 			leaderID, _, valid, err := s.nodeHost.GetLeaderID(s.shardID)
@@ -484,7 +484,13 @@ func (s *DragonboatStore) TransferLeadership(targetID string, targetAddr string)
 }
 
 // WaitForLeader waits for a leader to be elected.
+// The timeout parameter specifies the maximum wait duration.
+// Note: This method uses an internal context with the specified timeout
+// since it's typically called during initialization before a request context is available.
 func (s *DragonboatStore) WaitForLeader(timeout time.Duration) error {
+	// INTENTIONAL: Using context.Background() here because WaitForLeader is called
+	// during cluster initialization before any request context is available.
+	// The timeout parameter provides the cancellation mechanism.
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -505,11 +511,11 @@ func (s *DragonboatStore) WaitForLeader(timeout time.Duration) error {
 }
 
 // Snapshot triggers a manual snapshot.
-func (s *DragonboatStore) Snapshot() error {
-	ctx, cancel := context.WithTimeout(context.Background(), listOperationTimeout)
+func (s *DragonboatStore) Snapshot(ctx context.Context) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, listOperationTimeout)
 	defer cancel()
 
-	_, err := s.nodeHost.SyncRequestSnapshot(ctx, s.shardID, dragonboat.SnapshotOption{})
+	_, err := s.nodeHost.SyncRequestSnapshot(timeoutCtx, s.shardID, dragonboat.SnapshotOption{})
 
 	return err
 }

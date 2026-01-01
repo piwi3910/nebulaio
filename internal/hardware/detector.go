@@ -196,6 +196,9 @@ func (d *Detector) detectGPUs() []GPUInfo {
 
 	// Query GPU information
 	// All arguments are hardcoded to prevent command injection
+	// INTENTIONAL: Using context.Background() for hardware detection.
+	// This is called during system initialization, not tied to any request.
+	// The timeout provides the cancellation mechanism for the shell command.
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
@@ -299,6 +302,8 @@ func (d *Detector) checkP2PSupport(gpuIndex int) bool {
 
 	// Use nvidia-smi to check P2P support
 	// All arguments are hardcoded to prevent command injection
+	// INTENTIONAL: Using context.Background() for hardware capability check.
+	// This is called during system initialization, not tied to any request.
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
@@ -338,6 +343,7 @@ func (d *Detector) detectBlueFieldDPUs() []DPUInfo {
 
 	// Start MST
 	// All arguments are hardcoded to prevent command injection
+	// INTENTIONAL: Using context.Background() for DPU detection during initialization.
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 
@@ -393,6 +399,8 @@ func (d *Detector) getBlueFieldFirmware(index int) string {
 
 	// Query firmware version
 	// All arguments are hardcoded to prevent command injection
+	// INTENTIONAL: Using context.Background() for firmware version query.
+	// This is called during system initialization or on-demand detection.
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
 

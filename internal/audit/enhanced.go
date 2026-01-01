@@ -294,7 +294,14 @@ func (l *EnhancedAuditLogger) Stop() error {
 	var errs []error
 
 	for _, output := range l.outputs {
-		err := output.Flush(context.Background())
+		// INTENTIONAL: Using context.Background() during shutdown.
+		// The original context has been cancelled, but we still need to flush
+		// any remaining audit events before closing. A short timeout ensures
+		// shutdown completes in reasonable time even if flush is slow.
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := output.Flush(flushCtx)
+		flushCancel()
+
 		if err != nil {
 			errs = append(errs, err)
 		}

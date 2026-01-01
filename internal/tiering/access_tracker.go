@@ -360,6 +360,9 @@ func (t *AccessTracker) flush() {
 	t.pendingFlush = make(map[string]*ObjectAccessStats)
 	t.pendingFlushMu.Unlock()
 
+	// INTENTIONAL: Using context.Background() for background flush operation.
+	// This is called by an internal timer, not by external requests.
+	// The timeout provides the cancellation mechanism for I/O operations.
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 

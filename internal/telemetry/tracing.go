@@ -488,6 +488,9 @@ func (t *Tracer) batchProcessor() {
 
 // exportBatch exports a batch of spans.
 func (t *Tracer) exportBatch(spans []*Span) {
+	// INTENTIONAL: Using context.Background() for background span export.
+	// Spans are collected from completed requests and exported asynchronously.
+	// The original request contexts are no longer valid at export time.
 	ctx := context.Background()
 	for _, exporter := range t.exporters {
 		// Ignore export errors - best effort export
