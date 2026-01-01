@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/piwi3910/nebulaio/internal/httputil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -403,7 +404,7 @@ func NewS3Client(endpoint, accessKey, secretKey, region string, secure bool) *S3
 		secretKey: secretKey,
 		region:    region,
 		secure:    secure,
-		client:    &http.Client{Timeout: defaultHTTPTimeout},
+		client:    httputil.NewClientWithTimeout(defaultHTTPTimeout),
 	}
 }
 

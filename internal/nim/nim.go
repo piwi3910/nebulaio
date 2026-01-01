@@ -42,6 +42,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/piwi3910/nebulaio/internal/httputil"
 )
 
 // Common errors.
@@ -393,14 +395,12 @@ func NewClient(config *Config, backend NIMBackend) (*Client, error) {
 	}
 
 	c := &Client{
-		config: config,
-		httpClient: &http.Client{
-			Timeout: config.Timeout,
-		},
-		metrics: &Metrics{},
-		cache:   make(map[string]*cachedResult),
-		models:  make(map[string]*ModelInfo),
-		backend: backend,
+		config:     config,
+		httpClient: httputil.NewClientWithTimeout(config.Timeout),
+		metrics:    &Metrics{},
+		cache:      make(map[string]*cachedResult),
+		models:     make(map[string]*ModelInfo),
+		backend:    backend,
 	}
 
 	// Load available models

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/piwi3910/nebulaio/internal/httputil"
 )
 
 // SpanKind represents the kind of span.
@@ -756,9 +757,7 @@ func NewOTLPExporter(endpoint string, headers map[string]string) *OTLPExporter {
 	return &OTLPExporter{
 		endpoint: endpoint,
 		headers:  headers,
-		client: &http.Client{
-			Timeout: exporterTimeoutSec * time.Second,
-		},
+		client:   httputil.NewClientWithTimeout(exporterTimeoutSec * time.Second),
 	}
 }
 
@@ -785,9 +784,7 @@ type JaegerExporter struct {
 func NewJaegerExporter(endpoint string) *JaegerExporter {
 	return &JaegerExporter{
 		endpoint: endpoint,
-		client: &http.Client{
-			Timeout: exporterTimeoutSec * time.Second,
-		},
+		client:   httputil.NewClientWithTimeout(exporterTimeoutSec * time.Second),
 	}
 }
 
@@ -813,9 +810,7 @@ type ZipkinExporter struct {
 func NewZipkinExporter(endpoint string) *ZipkinExporter {
 	return &ZipkinExporter{
 		endpoint: endpoint,
-		client: &http.Client{
-			Timeout: exporterTimeoutSec * time.Second,
-		},
+		client:   httputil.NewClientWithTimeout(exporterTimeoutSec * time.Second),
 	}
 }
 

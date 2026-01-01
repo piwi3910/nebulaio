@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/piwi3910/nebulaio/internal/events"
+	"github.com/piwi3910/nebulaio/internal/httputil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -71,11 +72,9 @@ func NewWebhookTarget(config WebhookConfig) (*WebhookTarget, error) {
 		config.Timeout = 30 * time.Second
 	}
 
-	transport := &http.Transport{
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 10,
-		IdleConnTimeout:     90 * time.Second,
-	}
+	// Use shared httputil configuration for connection pooling
+	clientCfg := httputil.DefaultConfig()
+	clientCfg.Timeout = config.Timeout
 
 	if config.SkipTLSVerify {
 		log.Warn().
@@ -83,7 +82,7 @@ func NewWebhookTarget(config WebhookConfig) (*WebhookTarget, error) {
 			Msg("WARNING: TLS certificate verification disabled for webhook target - this should only be used in development/testing")
 		// G402: InsecureSkipVerify is user-configurable for dev/test environments
 		// Even when skipping verification, we still enforce TLS 1.2+ for encryption
-		transport.TLSClientConfig = &tls.Config{
+		clientCfg.TLSConfig = &tls.Config{
 			InsecureSkipVerify: true, //nolint:gosec // G402: User-configured for development/testing only
 			MinVersion:         tls.VersionTLS12,
 		}
@@ -91,10 +90,7 @@ func NewWebhookTarget(config WebhookConfig) (*WebhookTarget, error) {
 
 	return &WebhookTarget{
 		config: config,
-		client: &http.Client{
-			Timeout:   config.Timeout,
-			Transport: transport,
-		},
+		client: httputil.NewClient(clientCfg),
 	}, nil
 }
 
