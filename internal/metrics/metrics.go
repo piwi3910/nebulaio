@@ -923,11 +923,6 @@ func RecordRateLimitRequest(path string, allowed bool) {
 	RateLimitRequestsTotal.WithLabelValues(path, result).Inc()
 }
 
-// SetRateLimitActiveIPs sets the number of active IP rate limiters.
-func SetRateLimitActiveIPs(count int) {
-	RateLimitActiveIPs.Set(float64(count))
-}
-
 // IncrementRateLimitActiveIPs increments the active IP rate limiters count.
 func IncrementRateLimitActiveIPs() {
 	RateLimitActiveIPs.Inc()

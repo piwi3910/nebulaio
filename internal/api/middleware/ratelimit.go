@@ -3,6 +3,7 @@ package middleware
 import (
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -11,6 +12,47 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metrics"
 	"github.com/rs/zerolog/log"
 )
+
+// uuidPattern matches UUID strings in paths for normalization.
+var uuidPattern = regexp.MustCompile(
+	`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`,
+)
+
+// normalizePath normalizes a URL path for metrics to prevent high cardinality.
+// It replaces dynamic segments like bucket names, object keys, and UUIDs with placeholders.
+func normalizePath(path string) string {
+	// Replace UUIDs with placeholder
+	path = uuidPattern.ReplaceAllString(path, "{id}")
+
+	// Split path into segments
+	segments := strings.Split(path, "/")
+	normalized := make([]string, 0, len(segments))
+
+	for i, segment := range segments {
+		if segment == "" {
+			normalized = append(normalized, segment)
+
+			continue
+		}
+
+		// Check if previous segment indicates this is a dynamic value
+		if i > 0 {
+			prev := segments[i-1]
+			// Common S3 API patterns where next segment is dynamic
+			if prev == "buckets" || prev == "objects" || prev == "uploads" ||
+				prev == "versions" || prev == "users" || prev == "keys" ||
+				prev == "policies" || prev == "groups" {
+				normalized = append(normalized, "{"+prev[:len(prev)-1]+"}")
+
+				continue
+			}
+		}
+
+		normalized = append(normalized, segment)
+	}
+
+	return strings.Join(normalized, "/")
+}
 
 // Default rate limiting configuration values.
 const (
@@ -317,6 +359,8 @@ func RateLimitMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
 			// Extract client IP with trusted proxy validation
 			ip := rl.extractClientIP(r)
 			path := r.URL.Path
+			// Normalize path for metrics to prevent high cardinality
+			normalizedPath := normalizePath(path)
 
 			if !rl.Allow(ip) {
 				log.Warn().
@@ -325,14 +369,14 @@ func RateLimitMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
 					Str("method", r.Method).
 					Msg("Rate limit exceeded")
 
-				metrics.RecordRateLimitRequest(path, false)
+				metrics.RecordRateLimitRequest(normalizedPath, false)
 				w.Header().Set("Retry-After", "1")
 				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 
 				return
 			}
 
-			metrics.RecordRateLimitRequest(path, true)
+			metrics.RecordRateLimitRequest(normalizedPath, true)
 			next.ServeHTTP(w, r)
 		})
 	}
