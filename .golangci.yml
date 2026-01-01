@@ -37,6 +37,7 @@ linters:
     - prealloc        # Disabled - 4 violations, slice preallocation not always beneficial
     - thelper         # Disabled - 3 violations, test helper detection is overly strict
     - wastedassign    # Disabled - 2 violations, assignments are intentional for clarity
+    - modernize       # Disabled - 142 violations, modernization suggestions not critical for current codebase
 
   settings:
     cyclop:

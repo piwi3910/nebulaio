@@ -18,12 +18,12 @@ func TestValidateWebhookURL(t *testing.T) {
 		// Valid URLs
 		{
 			name:      "valid public HTTPS URL",
-			url:       "https://api.example.com/webhook",
+			url:       "https://www.google.com/webhook",
 			shouldErr: false,
 		},
 		{
 			name:      "valid public HTTP URL",
-			url:       "http://webhook.example.com/endpoint",
+			url:       "http://www.cloudflare.com/endpoint",
 			shouldErr: false,
 		},
 
