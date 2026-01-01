@@ -1,5 +1,6 @@
-// Package security provides TLS testing for NebulaIO.
 package security
+
+// provides TLS testing for NebulaIO.
 
 import (
 	"context"

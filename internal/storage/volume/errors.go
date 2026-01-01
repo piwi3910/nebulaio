@@ -16,7 +16,7 @@ var (
 	ErrBlockFull          = errors.New("block is full")
 	ErrInvalidBlockType   = errors.New("invalid block type")
 
-	// Volume errors.
+	// ErrVolumeNotOpen indicates the volume is not open for operations.
 	ErrVolumeNotOpen     = errors.New("volume is not open")
 	ErrVolumeFull        = errors.New("volume is full")
 	ErrVolumeCorrupted   = errors.New("volume is corrupted")

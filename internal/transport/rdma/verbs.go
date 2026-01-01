@@ -1,4 +1,6 @@
-// Package rdma provides the libibverbs abstraction layer for RDMA hardware integration.
+package rdma
+
+// provides the libibverbs abstraction layer for RDMA hardware integration.
 //
 // This file defines the interface between NebulaIO's RDMA transport and the
 // underlying RDMA hardware. It provides:
@@ -13,7 +15,6 @@
 // To build with hardware support:
 //
 //	go build -tags rdma_hw ./...
-package rdma
 
 import (
 	"context"
@@ -84,7 +85,7 @@ type VerbsBackend interface {
 	GetMetrics() map[string]interface{}
 }
 
-// Handle types for verbs objects.
+// VerbsContext is a handle to an RDMA verbs context.
 type VerbsContext uintptr
 type VerbsPD uintptr
 type VerbsCQ uintptr
@@ -109,7 +110,7 @@ const (
 	MRAccessRemoteAtomic = 1 << 3
 )
 
-// Work completion status.
+// WCStatus represents work completion status codes.
 type WCStatus int
 
 const (
@@ -137,7 +138,7 @@ const (
 	WCGeneralErr
 )
 
-// Work completion opcode.
+// WCOpcode represents work completion operation codes.
 type WCOpcode int
 
 const (

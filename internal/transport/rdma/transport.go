@@ -1,4 +1,6 @@
-// Package rdma provides RDMA (Remote Direct Memory Access) transport for S3 operations.
+package rdma
+
+// provides RDMA (Remote Direct Memory Access) transport for S3 operations.
 // This enables ultra-low latency object storage access by bypassing the kernel network stack
 // and enabling direct memory-to-memory transfers between client and server.
 //
@@ -6,7 +8,6 @@
 // - InfiniBand (highest performance)
 // - RoCE v2 (RDMA over Converged Ethernet)
 // - iWARP (Internet Wide Area RDMA Protocol)
-package rdma
 
 import (
 	"context"
