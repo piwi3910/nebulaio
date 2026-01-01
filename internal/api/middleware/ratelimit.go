@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/piwi3910/nebulaio/internal/metrics"
 	"github.com/rs/zerolog/log"
 )
 
@@ -230,6 +231,7 @@ func (rl *RateLimiter) cleanup() {
 		lastUsed := limiter.lastUsed.Load()
 		if now-lastUsed > staleTimeout {
 			rl.limiters.Delete(key)
+			metrics.DecrementRateLimitActiveIPs()
 		}
 
 		return true
@@ -260,6 +262,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 
 	if !loaded {
 		log.Debug().Str("ip", ip).Msg("Created new rate limiter")
+		metrics.IncrementRateLimitActiveIPs()
 	}
 
 	return limiter.Allow()
@@ -313,20 +316,23 @@ func RateLimitMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
 
 			// Extract client IP with trusted proxy validation
 			ip := rl.extractClientIP(r)
+			path := r.URL.Path
 
 			if !rl.Allow(ip) {
 				log.Warn().
 					Str("ip", ip).
-					Str("path", r.URL.Path).
+					Str("path", path).
 					Str("method", r.Method).
 					Msg("Rate limit exceeded")
 
+				metrics.RecordRateLimitRequest(path, false)
 				w.Header().Set("Retry-After", "1")
 				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 
 				return
 			}
 
+			metrics.RecordRateLimitRequest(path, true)
 			next.ServeHTTP(w, r)
 		})
 	}
