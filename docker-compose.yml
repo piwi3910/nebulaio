@@ -57,6 +57,18 @@ services:
       # AI/ML & High-Performance Features (2025)
       # =========================================================================
 
+      # S3 Object Lambda with WASM Runtime (uncomment to enable)
+      # Enables serverless object transformations using WebAssembly
+      # - NEBULAIO_OBJECT_LAMBDA_ENABLED=true
+      # - NEBULAIO_OBJECT_LAMBDA_WASM_ENABLED=true
+      # - NEBULAIO_OBJECT_LAMBDA_WASM_MAX_MEMORY_MB=256
+      # - NEBULAIO_OBJECT_LAMBDA_WASM_MAX_EXECUTION_TIME=30s
+      # - NEBULAIO_OBJECT_LAMBDA_WASM_MAX_INPUT_SIZE=104857600
+      # - NEBULAIO_OBJECT_LAMBDA_WASM_MAX_OUTPUT_SIZE=104857600
+      # - NEBULAIO_OBJECT_LAMBDA_WASM_STREAMING_THRESHOLD=10485760
+      # - NEBULAIO_OBJECT_LAMBDA_WASM_MODULE_PATH=/data/wasm
+      # - NEBULAIO_OBJECT_LAMBDA_WASM_CACHE_ENABLED=true
+
       # S3 Express One Zone (uncomment to enable)
       # - NEBULAIO_S3_EXPRESS_ENABLED=true
       # - NEBULAIO_S3_EXPRESS_DEFAULT_ZONE=use1-az1

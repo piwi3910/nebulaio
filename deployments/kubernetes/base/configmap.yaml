@@ -241,6 +241,21 @@ data:
     # AI/ML Features (2025)
     # =========================================================================
 
+    # S3 Object Lambda with WASM Runtime
+    # Serverless object transformations using WebAssembly
+    # object_lambda:
+    #   enabled: false
+    #   wasm:
+    #     enabled: true
+    #     max_memory_mb: 256           # Maximum memory for WASM modules
+    #     max_execution_time: 30s      # Maximum execution time
+    #     max_input_size: 104857600    # 100MB max input
+    #     max_output_size: 104857600   # 100MB max output
+    #     streaming_threshold: 10485760 # 10MB - objects larger use streaming
+    #     module_path: /data/wasm       # WASM module directory
+    #     cache_enabled: true           # Cache compiled modules
+    #     cache_max_modules: 100        # Maximum cached modules
+
     # S3 Express One Zone
     # Ultra-low latency storage with atomic append support
     # s3_express:
