@@ -1290,7 +1290,8 @@ func TestStreamingDecompressSizeLimitProtection(t *testing.T) {
 	originalMaxDecompress := GetMaxDecompressSize()
 
 	// Set low thresholds for testing
-	SetStreamingThreshold(100) // Low threshold to trigger streaming
+	// Note: Use a very low streaming threshold so even small compressed data triggers streaming
+	SetStreamingThreshold(10) // Very low threshold to trigger streaming
 	SetMaxDecompressSize(1024) // 1KB max decompress size
 	defer SetStreamingThreshold(originalThreshold)
 	defer SetMaxDecompressSize(originalMaxDecompress)
@@ -1298,7 +1299,8 @@ func TestStreamingDecompressSizeLimitProtection(t *testing.T) {
 	transformer := &DecompressTransformer{}
 
 	// Create test data that exceeds the limit when decompressed
-	testData := bytes.Repeat([]byte("A"), 2048) // 2KB uncompressed
+	// Use varied data to ensure compressed size is larger than the threshold
+	testData := bytes.Repeat([]byte("ABCDEFGH12345678"), 128) // 2KB uncompressed with varied content
 	compressed := compressWithGzip(testData)
 
 	params := map[string]interface{}{
@@ -1314,7 +1316,7 @@ func TestStreamingDecompressSizeLimitProtection(t *testing.T) {
 	// Reading should fail due to size limit
 	_, err = io.ReadAll(output)
 	if err == nil {
-		t.Error("Expected error when decompressed size exceeds limit")
+		t.Fatal("Expected error when decompressed size exceeds limit")
 	}
 
 	if !strings.Contains(err.Error(), "decompressed size exceeds maximum") {
