@@ -3054,6 +3054,7 @@ func TestPutObjectLegalHold(t *testing.T) {
 // presignedTestContext extends testContext with presigned URL testing capabilities.
 type presignedTestContext struct {
 	*testContext
+
 	presignGen  *auth.PresignedURLGenerator
 	accessKeyID string
 	secretKey   string
