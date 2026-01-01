@@ -65,7 +65,11 @@ func (s *CatalogService) writeParquet(w io.Writer, records []InventoryRecord) (i
 		parquetRecords = append(parquetRecords, inventoryToParquetRecord(&records[recIdx]))
 	}
 
-	// Write to buffer first to get accurate size
+	// Write to buffer first to get accurate size.
+	// Note: We use buffered writing to ensure atomic writes and accurate size reporting.
+	// For large inventories, the CatalogService.batchSize config limits records per batch,
+	// preventing excessive memory usage. Direct writer wrapping is not supported by
+	// the parquet-go library's WriteStop() which requires seekable output.
 	var buffer bytes.Buffer
 	bytesWritten, err := writeParquetRecords(&buffer, parquetRecords)
 
