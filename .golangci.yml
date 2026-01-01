@@ -8,8 +8,6 @@ linters:
     - errchkjson      # Disabled - overly strict for JSON encoding in HTTP handlers and tests
     - errname         # Disabled - existing error naming conventions are clear and established
     - errorlint       # Disabled - wrapped error checks too strict for existing error patterns
-    - wsl_v5          # Disabled - 955 whitespace violations across codebase, too strict for existing code style
-    - wsl             # Disabled - deprecated old version, replaced by wsl_v5 (also disabled)
     - exhaustruct     # Disabled - 50 violations, too strict for existing struct initialization patterns
     - varnamelen      # Disabled - 50 violations, existing variable naming is clear in context
     - nonamedreturns  # Disabled - 38 violations, named returns used intentionally for clarity
@@ -23,7 +21,6 @@ linters:
     - mnd             # Disabled - 50 violations, magic number constants would reduce clarity
     - revive          # Disabled - 50 violations, overlaps with other enabled linters
     - govet           # Disabled - 50 violations, needs case-by-case review
-    - godoclint       # Disabled - 50 violations, documentation style is consistent
     - funcorder       # Disabled - 50 violations, function ordering is logical not alphabetical
     - exhaustive      # Disabled - 8 violations, default cases handle exhaustiveness intentionally
     - forbidigo       # Disabled - 9 violations, some patterns are acceptable in context
@@ -32,12 +29,10 @@ linters:
     - gocognit        # Disabled - 3 violations, cognitive complexity matches cyclomatic complexity checks (both have min 20)
     - interfacebloat  # Disabled - 9 violations, large interfaces are intentional for compatibility
     - ireturn         # Disabled - 8 violations, returning interfaces is intentional
-    - modernize       # Disabled - 31 violations, style preference for Go 1.23+ features
     - nestif          # Disabled - 32 violations, complex business logic requires nesting
     - nilerr          # Disabled - 2 violations, nil errors are intentional in context
     - nilnil          # Disabled - 1 violation, returning (nil, nil) is intentional
     - nlreturn        # Disabled - 9 violations, return statement placement is style preference
-    - noinlineerr     # Disabled - 3 violations, inline errors are clearer in context
     - perfsprint      # Disabled - 2 violations, performance is acceptable
     - prealloc        # Disabled - 4 violations, slice preallocation not always beneficial
     - thelper         # Disabled - 3 violations, test helper detection is overly strict

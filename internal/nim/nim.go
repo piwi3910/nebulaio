@@ -59,11 +59,11 @@ var (
 
 // Default configuration values.
 const (
-	defaultTimeoutSeconds    = 60
-	defaultMaxRetries        = 3
-	defaultMaxBatchSize      = 100
-	modelLoadTimeoutSeconds  = 10
-	defaultVisionMaxTokens   = 1024
+	defaultTimeoutSeconds   = 60
+	defaultMaxRetries       = 3
+	defaultMaxBatchSize     = 100
+	modelLoadTimeoutSeconds = 10
+	defaultVisionMaxTokens  = 1024
 )
 
 // ModelType represents the type of AI model.

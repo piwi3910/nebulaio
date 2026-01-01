@@ -15,15 +15,15 @@ import (
 
 // Default quota constants.
 const (
-	defaultMaxStorageBytes      = 100 * 1024 * 1024 * 1024 * 1024 // 100 TB
-	defaultMaxBuckets           = 100
-	defaultMaxObjectsPerBucket  = 10000000                       // 10 million
-	defaultMaxObjectSize        = 5 * 1024 * 1024 * 1024 * 1024  // 5 TB
-	defaultMaxRequestsPerSecond = 10000
-	defaultMaxConcurrentUploads = 100
-	defaultMaxBandwidthBps      = 10 * 1024 * 1024 * 1024        // 10 Gbps
-	defaultMaxUsers             = 100
-	defaultMaxAccessKeys        = 10
+	defaultMaxStorageBytes       = 100 * 1024 * 1024 * 1024 * 1024 // 100 TB
+	defaultMaxBuckets            = 100
+	defaultMaxObjectsPerBucket   = 10000000                      // 10 million
+	defaultMaxObjectSize         = 5 * 1024 * 1024 * 1024 * 1024 // 5 TB
+	defaultMaxRequestsPerSecond  = 10000
+	defaultMaxConcurrentUploads  = 100
+	defaultMaxBandwidthBps       = 10 * 1024 * 1024 * 1024 // 10 Gbps
+	defaultMaxUsers              = 100
+	defaultMaxAccessKeys         = 10
 	defaultQuotaWarningThreshold = 0.8
 )
 

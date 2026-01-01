@@ -15,21 +15,21 @@ import (
 // Simulated backend configuration constants.
 const (
 	// Default latencies.
-	simDefaultLatencyMs  = 50
-	simStreamDelayMs     = 20
-	simLatencyFast       = 15
-	simLatencyMedium     = 80
-	simLatencyNormal     = 100
-	simLatencyModerate   = 150
-	simLatencySlow       = 200
-	simLatencySlower     = 250
-	simLatencyHigh       = 300
-	simLatencyVeryHigh   = 400
+	simDefaultLatencyMs = 50
+	simStreamDelayMs    = 20
+	simLatencyFast      = 15
+	simLatencyMedium    = 80
+	simLatencyNormal    = 100
+	simLatencyModerate  = 150
+	simLatencySlow      = 200
+	simLatencySlower    = 250
+	simLatencyHigh      = 300
+	simLatencyVeryHigh  = 400
 
 	// Model token limits.
-	simTokensSmall    = 2048
-	simTokensMedium   = 4096
-	simTokensLarge    = 8192
+	simTokensSmall     = 2048
+	simTokensMedium    = 4096
+	simTokensLarge     = 8192
 	simTokensVeryLarge = 32768
 
 	// Batch sizes.
@@ -46,23 +46,23 @@ const (
 	simIDByteSize     = 16
 
 	// Token estimation.
-	simCharsPerToken    = 4
-	simTokenOverhead    = 4
-	simEmbeddingDim     = 1024
+	simCharsPerToken     = 4
+	simTokenOverhead     = 4
+	simEmbeddingDim      = 1024
 	simHashMultiplier    = 31
 	simSineScaleFactor   = 0.001
 	simContentTruncLen   = 50
 	simHashIndexModifier = 17
 
 	// Confidence scores.
-	simHighConfidence      = 0.95
-	simConfidence92        = 0.92
-	simConfidence89        = 0.89
-	simMediumConfidence    = 0.88
-	simConfidence85        = 0.85
-	simConfidence78        = 0.78
-	simConfidence65        = 0.65
-	simLowConfidence       = 0.50
+	simHighConfidence   = 0.95
+	simConfidence92     = 0.92
+	simConfidence89     = 0.89
+	simMediumConfidence = 0.88
+	simConfidence85     = 0.85
+	simConfidence78     = 0.78
+	simConfidence65     = 0.65
+	simLowConfidence    = 0.50
 
 	// Token usage values.
 	simTokensLLMResponse        = 15
@@ -852,4 +852,3 @@ func (b *SimulatedBackend) generateVisionResults(task string) []struct {
 		}
 	}
 }
-

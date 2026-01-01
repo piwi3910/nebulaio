@@ -757,12 +757,12 @@ func (c *Catalog) CommitTable(ctx context.Context, request *UpdateTableRequest) 
 
 func (c *Catalog) validateRequirement(table *Table, req *TableRequirement) error {
 	validators := map[string]func(*Table, *TableRequirement) error{
-		"assert-table-uuid":               c.validateTableUUID,
-		"assert-ref-snapshot-id":          c.validateRefSnapshotID,
-		"assert-last-assigned-field-id":   c.validateLastAssignedFieldID,
-		"assert-current-schema-id":        c.validateCurrentSchemaID,
-		"assert-default-spec-id":          c.validateDefaultSpecID,
-		"assert-default-sort-order-id":    c.validateDefaultSortOrderID,
+		"assert-table-uuid":             c.validateTableUUID,
+		"assert-ref-snapshot-id":        c.validateRefSnapshotID,
+		"assert-last-assigned-field-id": c.validateLastAssignedFieldID,
+		"assert-current-schema-id":      c.validateCurrentSchemaID,
+		"assert-default-spec-id":        c.validateDefaultSpecID,
+		"assert-default-sort-order-id":  c.validateDefaultSortOrderID,
 	}
 
 	if validator, exists := validators[req.Type]; exists {

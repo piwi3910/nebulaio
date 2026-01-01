@@ -36,9 +36,9 @@ import (
 
 // Default pool configuration constants.
 const (
-	defaultMaxConnections  = 10
-	defaultConnectTimeout  = 10 * time.Second
-	defaultRequestTimeout  = 30 * time.Second
+	defaultMaxConnections = 10
+	defaultConnectTimeout = 10 * time.Second
+	defaultRequestTimeout = 30 * time.Second
 )
 
 // Provider implements auth.Provider for LDAP/Active Directory.

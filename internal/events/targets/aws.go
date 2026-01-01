@@ -11,13 +11,13 @@ import (
 
 // SQSConfig configures an AWS SQS target.
 type SQSConfig struct {
-	QueueURL            string `json:"queueUrl" yaml:"queueUrl"`
-	Region              string `json:"region" yaml:"region"`
-	AccessKeyID         string `json:"-" yaml:"accessKeyId,omitempty"`
-	SecretAccessKey     string `json:"-" yaml:"secretAccessKey,omitempty"`
-	SessionToken        string `json:"-" yaml:"sessionToken,omitempty"`
-	Endpoint            string `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
-	MessageGroupID      string `json:"messageGroupId,omitempty" yaml:"messageGroupId,omitempty"`
+	QueueURL            string           `json:"queueUrl" yaml:"queueUrl"`
+	Region              string           `json:"region" yaml:"region"`
+	AccessKeyID         string           `json:"-" yaml:"accessKeyId,omitempty"`
+	SecretAccessKey     string           `json:"-" yaml:"secretAccessKey,omitempty"`
+	SessionToken        string           `json:"-" yaml:"sessionToken,omitempty"`
+	Endpoint            string           `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
+	MessageGroupID      string           `json:"messageGroupId,omitempty" yaml:"messageGroupId,omitempty"`
 	events.TargetConfig `yaml:",inline"` //nolint:embeddedstructfieldcheck // Grouped with config fields
 
 	DelaySeconds int `json:"delay_seconds,omitempty" yaml:"delay_seconds,omitempty"`
@@ -172,13 +172,13 @@ func init() {
 
 // SNSConfig configures an AWS SNS target.
 type SNSConfig struct {
-	TopicARN            string `json:"topicArn" yaml:"topicArn"`
-	Region              string `json:"region" yaml:"region"`
-	AccessKeyID         string `json:"-" yaml:"accessKeyId,omitempty"`
-	SecretAccessKey     string `json:"-" yaml:"secretAccessKey,omitempty"`
-	SessionToken        string `json:"-" yaml:"sessionToken,omitempty"`
-	Endpoint            string `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
-	Subject             string `json:"subject,omitempty" yaml:"subject,omitempty"`
+	TopicARN            string           `json:"topicArn" yaml:"topicArn"`
+	Region              string           `json:"region" yaml:"region"`
+	AccessKeyID         string           `json:"-" yaml:"accessKeyId,omitempty"`
+	SecretAccessKey     string           `json:"-" yaml:"secretAccessKey,omitempty"`
+	SessionToken        string           `json:"-" yaml:"sessionToken,omitempty"`
+	Endpoint            string           `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
+	Subject             string           `json:"subject,omitempty" yaml:"subject,omitempty"`
 	events.TargetConfig `yaml:",inline"` //nolint:embeddedstructfieldcheck // Grouped with config fields
 }
 

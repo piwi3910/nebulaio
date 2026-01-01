@@ -611,10 +611,10 @@ func (b *SimulatedVerbsBackend) QueryQP(qp VerbsQP) (*VerbsQPAttr, error) {
 		State: simQP.state,
 		QPN:   simQP.qpNum,
 		Cap: VerbsQPCap{
-			MaxSendWR:  uint32(simQP.maxSend),  //nolint:gosec // G115: maxSend bounded by QP config
-			MaxRecvWR:  uint32(simQP.maxRecv),  //nolint:gosec // G115: maxRecv bounded by QP config
-			MaxSendSge: uint32(simQP.maxSge),   //nolint:gosec // G115: maxSge bounded by QP config
-			MaxRecvSge: uint32(simQP.maxSge),   //nolint:gosec // G115: maxSge bounded by QP config
+			MaxSendWR:  uint32(simQP.maxSend), //nolint:gosec // G115: maxSend bounded by QP config
+			MaxRecvWR:  uint32(simQP.maxRecv), //nolint:gosec // G115: maxRecv bounded by QP config
+			MaxSendSge: uint32(simQP.maxSge),  //nolint:gosec // G115: maxSge bounded by QP config
+			MaxRecvSge: uint32(simQP.maxSge),  //nolint:gosec // G115: maxSge bounded by QP config
 		},
 	}, nil
 }

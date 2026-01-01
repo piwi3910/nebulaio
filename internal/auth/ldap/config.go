@@ -9,9 +9,9 @@ import (
 
 // LDAP search scope constants.
 const (
-	scopeBaseObject    = 0 // ldap.ScopeBaseObject
-	scopeSingleLevel   = 1 // ldap.ScopeSingleLevel
-	scopeWholeSubtree  = 2 // ldap.ScopeWholeSubtree
+	scopeBaseObject   = 0 // ldap.ScopeBaseObject
+	scopeSingleLevel  = 1 // ldap.ScopeSingleLevel
+	scopeWholeSubtree = 2 // ldap.ScopeWholeSubtree
 )
 
 // Config holds LDAP provider configuration.
