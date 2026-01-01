@@ -138,12 +138,15 @@ func NewClientWithTLS(timeout time.Duration, tlsConfig *tls.Config) *http.Client
 	return NewClient(cfg)
 }
 
-// defaultClient is a package-level shared client for simple use cases.
+// defaultClient is a package-level shared HTTP client for simple use cases.
+// It is safe for concurrent use by multiple goroutines.
+// IMPORTANT: Do not modify the returned client's Transport or other fields.
 // Use NewClient() for cases requiring custom configuration.
 var defaultClient = NewClient(DefaultConfig())
 
 // Default returns the default shared HTTP client with connection pooling.
 // This client has a 30-second timeout and default pooling settings.
+// The returned client is safe for concurrent use but should not be modified.
 // For custom timeouts or configurations, use NewClient() instead.
 func Default() *http.Client {
 	return defaultClient

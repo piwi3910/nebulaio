@@ -875,10 +875,15 @@ type ReplicationMetricsSnapshot struct {
 	ActiveWorkers     int           `json:"activeWorkers"`
 }
 
-// Stop stops the replication manager.
+// Stop stops the replication manager and closes idle connections.
 func (rm *ReplicationManager) Stop() {
 	rm.cancel()
 	rm.wg.Wait()
+
+	// Close idle connections in HTTP client transport
+	if transport, ok := rm.httpClient.Transport.(*http.Transport); ok {
+		transport.CloseIdleConnections()
+	}
 }
 
 // ReplicationHandler handles HTTP requests for replication configuration.
