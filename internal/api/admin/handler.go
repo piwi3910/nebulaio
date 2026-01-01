@@ -674,13 +674,13 @@ func (h *Handler) ListNodes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get leader ID
-	leaderID := h.discovery.LeaderID()
+	leaderID := h.discovery.LeaderID(r.Context())
 
 	// Get cluster configuration to determine voters
 	voterMap := make(map[string]bool)
 
 	if dbStore, ok := h.store.(*metadata.DragonboatStore); ok {
-		config, err := dbStore.GetClusterConfiguration()
+		config, err := dbStore.GetClusterConfiguration(r.Context())
 		if err == nil {
 			for _, server := range config.Servers {
 				voterMap[strconv.FormatUint(server.ID, 10)] = server.IsVoter

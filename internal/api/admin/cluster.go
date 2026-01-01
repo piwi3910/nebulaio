@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -25,7 +26,7 @@ type ClusterStore interface {
 	RemoveServer(nodeID string) error
 	TransferLeadership(targetID, targetAddr string) error
 	GetServers() (map[uint64]string, error)
-	GetClusterConfiguration() (*metadata.ClusterConfiguration, error)
+	GetClusterConfiguration(ctx context.Context) (*metadata.ClusterConfiguration, error)
 	Stats() map[string]string
 	Snapshot() error
 	LastIndex() (uint64, error)
@@ -94,14 +95,14 @@ func (h *ClusterHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
 	// Get leader ID
 	leaderID := ""
 	if h.discovery != nil {
-		leaderID = h.discovery.LeaderID()
+		leaderID = h.discovery.LeaderID(r.Context())
 	}
 
 	// Get cluster configuration to determine voters
 	voterMap := make(map[string]bool)
 
 	if h.store != nil {
-		config, err := h.store.GetClusterConfiguration()
+		config, err := h.store.GetClusterConfiguration(r.Context())
 		if err == nil {
 			for _, server := range config.Servers {
 				voterMap[strconv.FormatUint(server.ID, 10)] = server.IsVoter
@@ -257,7 +258,7 @@ func (h *ClusterHandler) GetLeader(w http.ResponseWriter, r *http.Request) {
 	isLocal := h.store.IsLeader()
 
 	if h.discovery != nil {
-		leaderID = h.discovery.LeaderID()
+		leaderID = h.discovery.LeaderID(r.Context())
 	}
 
 	response := &LeaderResponse{
@@ -300,7 +301,7 @@ func (h *ClusterHandler) TransferLeadership(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Get target address from configuration
-	config, err := h.store.GetClusterConfiguration()
+	config, err := h.store.GetClusterConfiguration(r.Context())
 	if err != nil {
 		writeError(w, "Failed to get configuration", http.StatusInternalServerError)
 		return
@@ -351,7 +352,7 @@ func (h *ClusterHandler) GetRaftConfiguration(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	config, err := h.store.GetClusterConfiguration()
+	config, err := h.store.GetClusterConfiguration(r.Context())
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -447,7 +448,7 @@ func (h *ClusterHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request
 			}
 		}
 
-		leaderID = h.discovery.LeaderID()
+		leaderID = h.discovery.LeaderID(r.Context())
 	}
 
 	// Determine if cluster is healthy
@@ -500,13 +501,13 @@ func (h *ClusterHandler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Get leader ID
-	leaderID := h.discovery.LeaderID()
+	leaderID := h.discovery.LeaderID(r.Context())
 
 	// Get cluster configuration to determine voters
 	voterMap := make(map[string]bool)
 
 	if h.store != nil {
-		config, err := h.store.GetClusterConfiguration()
+		config, err := h.store.GetClusterConfiguration(r.Context())
 		if err == nil {
 			for _, server := range config.Servers {
 				voterMap[strconv.FormatUint(server.ID, 10)] = server.IsVoter

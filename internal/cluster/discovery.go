@@ -379,7 +379,7 @@ func (d *Discovery) IsLeader() bool {
 }
 
 // LeaderID returns the ID of the current leader.
-func (d *Discovery) LeaderID() string {
+func (d *Discovery) LeaderID(ctx context.Context) string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -393,10 +393,10 @@ func (d *Discovery) LeaderID() string {
 	}
 
 	// Get membership to find node info
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	membership, err := d.nodeHost.SyncGetShardMembership(ctx, d.shardID)
+	membership, err := d.nodeHost.SyncGetShardMembership(timeoutCtx, d.shardID)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get shard membership")
 		return ""

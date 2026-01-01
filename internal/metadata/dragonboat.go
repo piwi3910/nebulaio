@@ -369,11 +369,11 @@ func (s *DragonboatStore) RemoveServer(nodeID string) error {
 }
 
 // GetConfiguration returns the current cluster configuration.
-func (s *DragonboatStore) GetConfiguration() (*dragonboat.Membership, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), shortOperationTimeout)
+func (s *DragonboatStore) GetConfiguration(ctx context.Context) (*dragonboat.Membership, error) {
+	timeoutCtx, cancel := context.WithTimeout(ctx, shortOperationTimeout)
 	defer cancel()
 
-	membership, err := s.nodeHost.SyncGetShardMembership(ctx, s.shardID)
+	membership, err := s.nodeHost.SyncGetShardMembership(timeoutCtx, s.shardID)
 	if err != nil {
 		return nil, err
 	}
@@ -382,8 +382,8 @@ func (s *DragonboatStore) GetConfiguration() (*dragonboat.Membership, error) {
 }
 
 // GetServers returns the list of servers in the cluster.
-func (s *DragonboatStore) GetServers() (map[uint64]string, error) {
-	membership, err := s.GetConfiguration()
+func (s *DragonboatStore) GetServers(ctx context.Context) (map[uint64]string, error) {
+	membership, err := s.GetConfiguration(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -406,8 +406,8 @@ type ClusterConfiguration struct {
 }
 
 // GetClusterConfiguration returns the cluster configuration in a common format.
-func (s *DragonboatStore) GetClusterConfiguration() (*ClusterConfiguration, error) {
-	membership, err := s.GetConfiguration()
+func (s *DragonboatStore) GetClusterConfiguration(ctx context.Context) (*ClusterConfiguration, error) {
+	membership, err := s.GetConfiguration(ctx)
 	if err != nil {
 		return nil, err
 	}
