@@ -32,6 +32,7 @@ const (
 // IntegrationTestSuite is the base test suite for integration tests.
 type IntegrationTestSuite struct {
 	suite.Suite
+
 	ctx       context.Context //nolint:containedctx // Test suite pattern - context managed by SetupSuite/TearDownSuite
 	cancel    context.CancelFunc
 	dataDir   string
@@ -537,6 +538,7 @@ func TestHealthSuite(t *testing.T) {
 // Used for testing without a running server.
 type MockServerTestSuite struct {
 	suite.Suite
+
 	server *httptest.Server
 }
 
