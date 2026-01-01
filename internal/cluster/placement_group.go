@@ -862,7 +862,9 @@ func (m *PlacementGroupManager) Close() error {
 	m.closedMu.Unlock()
 
 	// Cancel context to stop accepting new callbacks
-	m.cancel()
+	if m.cancel != nil {
+		m.cancel()
+	}
 
 	// Close the callback pool to signal workers to exit
 	// This is now safe because closed flag prevents new sends
