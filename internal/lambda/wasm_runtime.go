@@ -1,5 +1,3 @@
-// Package lambda implements S3 Object Lambda functionality for transforming
-// objects on GET requests without creating derivative copies.
 package lambda
 
 import (
