@@ -391,8 +391,10 @@ func testSnapshotStopped(t *testing.T) {
 	}
 }
 
-// TestBucketOperations tests bucket CRUD operations.
-func TestBucketOperations(t *testing.T) {
+// setupTestStore creates a test DragonboatStore instance.
+func setupTestStore(t *testing.T) (*DragonboatStore, context.Context) {
+	t.Helper()
+
 	tmpDir := t.TempDir()
 	raftAddr := getRaftAddress(t)
 
@@ -411,10 +413,16 @@ func TestBucketOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create DragonboatStore: %v", err)
 	}
-	defer store.Close()
 
 	time.Sleep(2 * time.Second)
-	ctx := context.Background()
+
+	return store, t.Context()
+}
+
+// TestBucketOperations tests bucket CRUD operations.
+func TestBucketOperations(t *testing.T) {
+	store, ctx := setupTestStore(t)
+	defer store.Close()
 
 	t.Run("CreateBucket", func(t *testing.T) {
 		testCreateBucket(t, ctx, store)
@@ -903,28 +911,8 @@ func TestAccessKeyOperations(t *testing.T) {
 
 // TestPolicyOperations tests policy CRUD operations.
 func TestPolicyOperations(t *testing.T) {
-	tmpDir := t.TempDir()
-	raftAddr := getRaftAddress(t)
-
-	cfg := DragonboatConfig{
-		NodeID:      1,
-		ShardID:     1,
-		DataDir:     tmpDir,
-		RaftAddress: raftAddr,
-		Bootstrap:   true,
-		InitialMembers: map[uint64]string{
-			1: raftAddr,
-		},
-	}
-
-	store, err := NewDragonboatStore(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create DragonboatStore: %v", err)
-	}
+	store, ctx := setupTestStore(t)
 	defer store.Close()
-
-	time.Sleep(2 * time.Second)
-	ctx := context.Background()
 
 	t.Run("CreatePolicy", func(t *testing.T) {
 		testCreatePolicy(t, ctx, store)
