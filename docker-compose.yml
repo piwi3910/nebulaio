@@ -131,6 +131,18 @@ services:
       # - NEBULAIO_TIERING_COLD_BACKEND=fs
       # - NEBULAIO_TIERING_COLD_DIR=/data/tiering/cold
 
+      # =========================================================================
+      # Graceful Shutdown Configuration
+      # =========================================================================
+      # Configure shutdown timeouts (all values in seconds)
+      # - NEBULAIO_SHUTDOWN_TOTAL_TIMEOUT_SECONDS=30     # Max time for entire shutdown
+      # - NEBULAIO_SHUTDOWN_DRAIN_TIMEOUT_SECONDS=15     # Wait for in-flight requests
+      # - NEBULAIO_SHUTDOWN_WORKER_TIMEOUT_SECONDS=10    # Wait for background workers
+      # - NEBULAIO_SHUTDOWN_HTTP_TIMEOUT_SECONDS=10      # Wait for HTTP servers
+      # - NEBULAIO_SHUTDOWN_METADATA_TIMEOUT_SECONDS=10  # Wait for metadata store
+      # - NEBULAIO_SHUTDOWN_STORAGE_TIMEOUT_SECONDS=5    # Wait for storage backends
+      # - NEBULAIO_SHUTDOWN_FORCE_TIMEOUT_SECONDS=5      # Force shutdown after total timeout
+
     restart: unless-stopped
     healthcheck:
       # Use HTTPS since TLS is enabled by default

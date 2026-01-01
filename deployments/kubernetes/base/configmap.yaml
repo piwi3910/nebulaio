@@ -374,6 +374,17 @@ data:
     log_level: info
     log_format: json
 
+    # Graceful Shutdown Configuration
+    # Controls shutdown behavior and timeouts for all services
+    shutdown:
+      total_timeout_seconds: 30    # Maximum time for entire shutdown
+      drain_timeout_seconds: 15    # Time to wait for in-flight requests
+      worker_timeout_seconds: 10   # Time to wait for background workers
+      http_timeout_seconds: 10     # Time to wait for HTTP servers
+      metadata_timeout_seconds: 10 # Time to wait for metadata store
+      storage_timeout_seconds: 5   # Time to wait for storage backends
+      force_timeout_seconds: 5     # Time after total timeout to force shutdown
+
     metrics:
       enabled: true
       port: 9090

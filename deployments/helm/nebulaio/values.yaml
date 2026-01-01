@@ -1273,6 +1273,24 @@ dlp:
 logLevel: info
 logFormat: json
 
+# Graceful Shutdown Configuration
+# Controls shutdown behavior and timeouts for all services
+shutdown:
+  # -- Maximum time allowed for the entire shutdown sequence
+  totalTimeoutSeconds: 30
+  # -- Time to wait for in-flight requests to complete
+  drainTimeoutSeconds: 15
+  # -- Time to wait for background workers to stop
+  workerTimeoutSeconds: 10
+  # -- Time to wait for HTTP servers to shutdown
+  httpTimeoutSeconds: 10
+  # -- Time to wait for metadata store to close
+  metadataTimeoutSeconds: 10
+  # -- Time to wait for storage backends to close
+  storageTimeoutSeconds: 5
+  # -- Time after TotalTimeout at which shutdown is forced
+  forceTimeoutSeconds: 5
+
 # Network policy
 networkPolicy:
   # -- Enable network policy
