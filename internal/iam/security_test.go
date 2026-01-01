@@ -10,6 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test constants for IP matching.
+const (
+	testIPv4PrefixLen = 10 // Length of "192.168.1." prefix
+)
+
 // TestAuthorizationEnforcement tests that authorization is properly enforced.
 func TestAuthorizationEnforcement(t *testing.T) {
 	ctx := context.Background()
@@ -384,9 +389,10 @@ func TestPolicyInjectionPrevention(t *testing.T) {
 			},
 		}
 
-		for _, tc := range maliciousPolicies {
-			err := pm.CreatePolicy(ctx, tc.name, "Malicious policy", tc.policy)
-			assert.Error(t, err, "Policy with malicious content should be rejected: %s", tc.name)
+		for _, testCase := range maliciousPolicies {
+			err := pm.CreatePolicy(ctx, testCase.name, "Malicious policy", testCase.policy)
+			assert.Error(t, err,
+				"Policy with malicious content should be rejected: %s", testCase.name)
 		}
 	})
 
@@ -531,7 +537,7 @@ func (pm *PolicyManager) ipMatchesCIDR(ip, cidr string) bool {
 	// Check if IP falls within CIDR range
 	// This is a simplified implementation for testing
 	if cidr == "192.168.1.0/24" {
-		return len(ip) >= 10 && ip[:10] == "192.168.1."
+		return len(ip) >= testIPv4PrefixLen && ip[:testIPv4PrefixLen] == "192.168.1."
 	}
 
 	return ip == cidr

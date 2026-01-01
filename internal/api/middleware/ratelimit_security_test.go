@@ -13,13 +13,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test constants for rate limiting security tests.
+const (
+	testBurstSizeSmall     = 1
+	testBurstSizePair      = 2
+	testBurstSizeMedium    = 5
+	testBurstSizeLarge     = 10
+	testRequestsPerSecond  = 10
+	testConcurrentRequests = 20
+	testManyIPs            = 1000
+	testCleanupInterval    = 100 * time.Millisecond
+	testStaleTimeout       = 200 * time.Millisecond
+	testCleanupWait        = 500 * time.Millisecond
+	testSlowlorisConns     = 10
+	testBypassAttempts     = 5
+	testLockoutThreshold   = 3
+)
+
 // TestRateLimitEnforcement tests that rate limits are properly enforced.
 func TestRateLimitEnforcement(t *testing.T) {
 	t.Run("enforces request limits", func(t *testing.T) {
 		config := DefaultRateLimitConfig()
 		config.Enabled = true
-		config.RequestsPerSecond = 10
-		config.BurstSize = 5
+		config.RequestsPerSecond = testRequestsPerSecond
+		config.BurstSize = testBurstSizeMedium
 		config.PerIP = true
 
 		rl := NewRateLimiter(config)
@@ -28,7 +45,7 @@ func TestRateLimitEnforcement(t *testing.T) {
 		clientIP := "192.168.1.100"
 
 		// Should allow burst
-		for i := range 5 {
+		for i := range testBurstSizeMedium {
 			allowed := rl.Allow(clientIP)
 			assert.True(t, allowed, "Request %d within burst should be allowed", i+1)
 		}
@@ -41,7 +58,7 @@ func TestRateLimitEnforcement(t *testing.T) {
 	t.Run("isolates users correctly", func(t *testing.T) {
 		config := DefaultRateLimitConfig()
 		config.Enabled = true
-		config.BurstSize = 2
+		config.BurstSize = testBurstSizePair
 		config.PerIP = true
 
 		rl := NewRateLimiter(config)
@@ -67,7 +84,7 @@ func TestRateLimitMiddlewareEnforcement(t *testing.T) {
 	t.Run("returns 429 with Retry-After header", func(t *testing.T) {
 		config := DefaultRateLimitConfig()
 		config.Enabled = true
-		config.BurstSize = 1
+		config.BurstSize = testBurstSizeSmall
 		config.PerIP = true
 
 		rl := NewRateLimiter(config)
@@ -97,7 +114,7 @@ func TestRateLimitMiddlewareEnforcement(t *testing.T) {
 	t.Run("rate limiting is consistent across concurrent requests", func(t *testing.T) {
 		config := DefaultRateLimitConfig()
 		config.Enabled = true
-		config.BurstSize = 10
+		config.BurstSize = testBurstSizeLarge
 		config.PerIP = true
 
 		rl := NewRateLimiter(config)
@@ -112,8 +129,8 @@ func TestRateLimitMiddlewareEnforcement(t *testing.T) {
 		successCount := 0
 		rateLimitedCount := 0
 
-		// Send 20 concurrent requests
-		for range 20 {
+		// Send concurrent requests
+		for range testConcurrentRequests {
 			wg.Add(1)
 
 			go func() {
@@ -140,8 +157,10 @@ func TestRateLimitMiddlewareEnforcement(t *testing.T) {
 		wg.Wait()
 
 		// Should have allowed burst (10) and rate limited the rest (10)
-		assert.LessOrEqual(t, successCount, 10, "Should not allow more than burst size")
-		assert.GreaterOrEqual(t, rateLimitedCount, 10, "Should rate limit excess requests")
+		assert.LessOrEqual(t, successCount, testBurstSizeLarge,
+			"Should not allow more than burst size")
+		assert.GreaterOrEqual(t, rateLimitedCount, testBurstSizeLarge,
+			"Should rate limit excess requests")
 	})
 }
 
@@ -150,7 +169,7 @@ func TestRateLimitIPSpoofingPrevention(t *testing.T) {
 	t.Run("ignores X-Forwarded-For from untrusted sources", func(t *testing.T) {
 		config := RateLimitConfig{
 			Enabled:        true,
-			BurstSize:      1,
+			BurstSize:      testBurstSizeSmall,
 			PerIP:          true,
 			TrustedProxies: []string{}, // No trusted proxies
 		}
@@ -172,7 +191,7 @@ func TestRateLimitIPSpoofingPrevention(t *testing.T) {
 	t.Run("validates trusted proxy configuration", func(t *testing.T) {
 		config := RateLimitConfig{
 			Enabled:        true,
-			BurstSize:      1,
+			BurstSize:      testBurstSizeSmall,
 			PerIP:          true,
 			TrustedProxies: []string{"10.0.0.0/8"}, // Trust internal network
 		}
@@ -194,7 +213,7 @@ func TestRateLimitIPSpoofingPrevention(t *testing.T) {
 	t.Run("prevents rate limit bypass via XFF manipulation", func(t *testing.T) {
 		config := RateLimitConfig{
 			Enabled:        true,
-			BurstSize:      2,
+			BurstSize:      testBurstSizePair,
 			PerIP:          true,
 			TrustedProxies: []string{}, // No trusted proxies
 		}
@@ -203,14 +222,14 @@ func TestRateLimitIPSpoofingPrevention(t *testing.T) {
 		defer rl.Close()
 
 		// Attacker tries to bypass by changing XFF header
-		for i := range 5 {
+		for i := range testBypassAttempts {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.RemoteAddr = "192.168.1.1:12345" // Same actual IP
 			req.Header.Set("X-Forwarded-For", "10.0.0."+string(rune('1'+i)))
 
 			allowed := rl.Allow(rl.extractClientIP(req))
 
-			if i < 2 {
+			if i < testBurstSizePair {
 				assert.True(t, allowed, "First 2 requests should be allowed")
 			} else {
 				assert.False(t, allowed, "Request %d should be blocked (XFF bypass failed)", i+1)
@@ -224,14 +243,14 @@ func TestRateLimitDDoSProtection(t *testing.T) {
 	t.Run("handles high volume of different IPs", func(t *testing.T) {
 		config := DefaultRateLimitConfig()
 		config.Enabled = true
-		config.BurstSize = 1
+		config.BurstSize = testBurstSizeSmall
 		config.PerIP = true
 
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
 		// Simulate requests from many different IPs
-		for i := range 1000 {
+		for i := range testManyIPs {
 			clientIP := "192.168.1." + string(rune('0'+i%256))
 			allowed := rl.Allow(clientIP)
 			// First request from each IP should be allowed
@@ -242,23 +261,23 @@ func TestRateLimitDDoSProtection(t *testing.T) {
 	t.Run("cleans up stale limiters", func(t *testing.T) {
 		config := RateLimitConfig{
 			Enabled:         true,
-			BurstSize:       1,
+			BurstSize:       testBurstSizeSmall,
 			PerIP:           true,
-			CleanupInterval: 100 * time.Millisecond,
-			StaleTimeout:    200 * time.Millisecond,
+			CleanupInterval: testCleanupInterval,
+			StaleTimeout:    testStaleTimeout,
 		}
 
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
 		// Create some limiters
-		for i := range 10 {
+		for i := range testBurstSizeLarge {
 			clientIP := "192.168.1." + string(rune('0'+i))
 			rl.Allow(clientIP)
 		}
 
 		// Wait for cleanup
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(testCleanupWait)
 
 		// Stale limiters should be cleaned up
 		// This is verified by the rate limiter not running out of memory
@@ -271,7 +290,7 @@ func TestRateLimitSlowlorisProtection(t *testing.T) {
 	t.Run("limits concurrent connections per IP", func(t *testing.T) {
 		config := DefaultRateLimitConfig()
 		config.Enabled = true
-		config.BurstSize = 5
+		config.BurstSize = testBurstSizeMedium
 		config.PerIP = true
 
 		rl := NewRateLimiter(config)
@@ -284,7 +303,7 @@ func TestRateLimitSlowlorisProtection(t *testing.T) {
 		blocked := 0
 		var mu sync.Mutex
 
-		for range 10 {
+		for range testSlowlorisConns {
 			wg.Add(1)
 
 			go func() {
@@ -310,7 +329,7 @@ func TestRateLimitBypassAttempts(t *testing.T) {
 	t.Run("prevents IPv6 to IPv4 mapping bypass", func(t *testing.T) {
 		config := DefaultRateLimitConfig()
 		config.Enabled = true
-		config.BurstSize = 1
+		config.BurstSize = testBurstSizeSmall
 		config.PerIP = true
 
 		rl := NewRateLimiter(config)
@@ -377,7 +396,8 @@ func TestRateLimitExcludedPaths(t *testing.T) {
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
 
-			assert.Equal(t, http.StatusOK, rec.Code, "Path %s should be excluded from rate limiting", path)
+			assert.Equal(t, http.StatusOK, rec.Code,
+				"Path %s should be excluded from rate limiting", path)
 		}
 	})
 
@@ -399,6 +419,7 @@ func TestRateLimitExcludedPaths(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusTooManyRequests, rec.Code, "Non-excluded path should be rate limited")
+		assert.Equal(t, http.StatusTooManyRequests, rec.Code,
+			"Non-excluded path should be rate limited")
 	})
 }

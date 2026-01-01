@@ -13,6 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test constants for security validation.
+const (
+	maxLogLineLen = 100 // Maximum length for log output truncation
+)
+
 // TestJSONInjection tests protection against JSON injection attacks.
 func TestJSONInjection(t *testing.T) {
 	t.Run("detects JSON injection in policy content", func(t *testing.T) {
@@ -99,10 +104,10 @@ func TestPathTraversalComprehensive(t *testing.T) {
 			{"Slash variant", "..//..//"},
 		}
 
-		for _, tc := range encodedPayloads {
-			t.Run(tc.name, func(t *testing.T) {
-				assert.True(t, containsPathTraversalAdvanced(tc.payload),
-					"Should detect path traversal: %s", tc.payload)
+		for _, testCase := range encodedPayloads {
+			t.Run(testCase.name, func(t *testing.T) {
+				assert.True(t, containsPathTraversalAdvanced(testCase.payload),
+					"Should detect path traversal: %s", testCase.payload)
 			})
 		}
 	})
@@ -120,13 +125,13 @@ func TestPathTraversalComprehensive(t *testing.T) {
 			{"path/../other", "", false},
 		}
 
-		for _, tc := range tests {
-			t.Run(tc.input, func(t *testing.T) {
-				result, safe := normalizeSafePath(tc.input)
-				assert.Equal(t, tc.safe, safe, "Safety check for: %s", tc.input)
+		for _, testCase := range tests {
+			t.Run(testCase.input, func(t *testing.T) {
+				result, safe := normalizeSafePath(testCase.input)
+				assert.Equal(t, testCase.safe, safe, "Safety check for: %s", testCase.input)
 
 				if safe {
-					assert.Equal(t, tc.expected, result)
+					assert.Equal(t, testCase.expected, result)
 				}
 			})
 		}
@@ -493,9 +498,8 @@ func containsSSRFBypass(input string) bool {
 }
 
 func truncateForLog(s string) string {
-	const maxLen = 100
-	if len(s) > maxLen {
-		return s[:maxLen] + "..."
+	if len(s) > maxLogLineLen {
+		return s[:maxLogLineLen] + "..."
 	}
 
 	return s
