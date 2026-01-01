@@ -186,7 +186,6 @@ type IntegrityInfo struct {
 // EnhancedAuditLogger provides enhanced audit logging capabilities.
 type EnhancedAuditLogger struct {
 	// 8-byte fields (pointers, slices, channels, int64, functions)
-	ctx       context.Context
 	geoLookup GeoLookup
 	store     AuditStore
 	buffer    chan *EnhancedAuditEvent
@@ -252,13 +251,9 @@ func NewEnhancedAuditLogger(config EnhancedConfig, store AuditStore, geoLookup G
 		config.BufferSize = defaultBufferSize
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	logger := &EnhancedAuditLogger{
 		config:    config,
 		buffer:    make(chan *EnhancedAuditEvent, config.BufferSize),
-		ctx:       ctx,
-		cancel:    cancel,
 		geoLookup: geoLookup,
 		store:     store,
 	}
@@ -271,7 +266,6 @@ func NewEnhancedAuditLogger(config EnhancedConfig, store AuditStore, geoLookup G
 
 		output, err := CreateOutput(outputCfg)
 		if err != nil {
-			cancel()
 			return nil, fmt.Errorf("failed to create output %s: %w", outputCfg.Name, err)
 		}
 
@@ -282,10 +276,12 @@ func NewEnhancedAuditLogger(config EnhancedConfig, store AuditStore, geoLookup G
 }
 
 // Start begins processing audit events.
-func (l *EnhancedAuditLogger) Start() {
+func (l *EnhancedAuditLogger) Start(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	l.cancel = cancel
 	l.wg.Add(1)
 
-	go l.processEvents()
+	go l.processEvents(ctx)
 }
 
 // Stop gracefully shuts down the logger.
@@ -440,7 +436,7 @@ func (l *EnhancedAuditLogger) Export(ctx context.Context, filter AuditFilter, fo
 
 // Internal methods
 
-func (l *EnhancedAuditLogger) processEvents() {
+func (l *EnhancedAuditLogger) processEvents(ctx context.Context) {
 	defer l.wg.Done()
 
 	for {
@@ -449,17 +445,17 @@ func (l *EnhancedAuditLogger) processEvents() {
 			if !ok {
 				// Drain remaining
 				for event := range l.buffer {
-					_ = l.processEvent(l.ctx, event)
+					_ = l.processEvent(ctx, event)
 				}
 
 				return
 			}
 
-			err := l.processEvent(l.ctx, event)
+			err := l.processEvent(ctx, event)
 			if err != nil {
 				atomic.AddInt64(&l.stats.EventsFailed, 1)
 			}
-		case <-l.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}

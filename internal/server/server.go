@@ -667,7 +667,7 @@ func (s *Server) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to ensure root user: %w", err)
 	}
 
-	s.startAuditLogger()
+	s.startAuditLogger(ctx)
 
 	if err := s.startClusterDiscovery(ctx); err != nil {
 		return err
@@ -682,9 +682,9 @@ func (s *Server) Start(ctx context.Context) error {
 	return g.Wait()
 }
 
-func (s *Server) startAuditLogger() {
+func (s *Server) startAuditLogger(ctx context.Context) {
 	if s.auditLogger != nil {
-		s.auditLogger.Start()
+		s.auditLogger.Start(ctx)
 		log.Info().Msg("Audit logger started")
 	}
 }
