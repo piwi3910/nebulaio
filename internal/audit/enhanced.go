@@ -136,6 +136,7 @@ type FilterRule struct {
 // EnhancedAuditEvent extends AuditEvent with additional fields.
 type EnhancedAuditEvent struct {
 	AuditEvent
+
 	// 8-byte fields (pointers, int64)
 	Integrity      *IntegrityInfo  `json:"integrity,omitempty"`
 	Compliance     *ComplianceInfo `json:"compliance,omitempty"`

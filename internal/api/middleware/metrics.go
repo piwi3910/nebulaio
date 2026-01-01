@@ -266,6 +266,7 @@ func getErrorType(status int) string {
 // ByteCountingResponseWriter wraps http.ResponseWriter to count bytes written.
 type ByteCountingResponseWriter struct {
 	http.ResponseWriter
+
 	bytesWritten int64
 	statusCode   int
 }

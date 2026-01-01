@@ -19,7 +19,8 @@ type SQSConfig struct {
 	Endpoint            string `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
 	MessageGroupID      string `json:"messageGroupId,omitempty" yaml:"messageGroupId,omitempty"`
 	events.TargetConfig `yaml:",inline"`
-	DelaySeconds        int `json:"delaySeconds,omitempty" yaml:"delaySeconds,omitempty"`
+
+	DelaySeconds int `json:"delay_seconds,omitempty" yaml:"delay_seconds,omitempty"`
 }
 
 // DefaultSQSConfig returns a default SQS configuration.

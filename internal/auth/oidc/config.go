@@ -24,6 +24,7 @@ type Config struct {
 	// Structs
 	ClaimsMapping       ClaimsMapping `json:"claimsMapping,omitempty" yaml:"claimsMapping,omitempty"`
 	auth.ProviderConfig `yaml:",inline"`
+
 	// Strings
 	ClientSecret      string `json:"clientSecret"                yaml:"clientSecret"`
 	ClientID          string `json:"clientId"                    yaml:"clientId"`
