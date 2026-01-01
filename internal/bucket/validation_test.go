@@ -1,5 +1,3 @@
-// Package bucket provides input validation testing for bucket operations.
-// These tests verify comprehensive input validation for security.
 package bucket
 
 import (

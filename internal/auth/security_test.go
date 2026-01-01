@@ -1,5 +1,3 @@
-// Package auth provides authentication security testing.
-// These tests verify protection against authentication bypass attempts.
 package auth
 
 import (

@@ -1,5 +1,3 @@
-// Package middleware provides rate limiting security testing.
-// These tests verify rate limiting protects against abuse.
 package middleware
 
 import (
@@ -28,6 +26,7 @@ const (
 	testSlowlorisConns     = 10
 	testBypassAttempts     = 5
 	testLockoutThreshold   = 3
+	testClientIPAddr       = "192.168.1.1:12345"
 )
 
 // TestRateLimitEnforcement tests that rate limits are properly enforced.
@@ -96,7 +95,7 @@ func TestRateLimitMiddlewareEnforcement(t *testing.T) {
 
 		// First request should succeed
 		req1 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		req1.RemoteAddr = "192.168.1.1:12345"
+		req1.RemoteAddr = testClientIPAddr
 		rec1 := httptest.NewRecorder()
 		handler.ServeHTTP(rec1, req1)
 		assert.Equal(t, http.StatusOK, rec1.Code)
@@ -137,7 +136,7 @@ func TestRateLimitMiddlewareEnforcement(t *testing.T) {
 				defer wg.Done()
 
 				req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-				req.RemoteAddr = "192.168.1.1:12345"
+				req.RemoteAddr = testClientIPAddr
 				rec := httptest.NewRecorder()
 
 				handler.ServeHTTP(rec, req)
@@ -179,7 +178,7 @@ func TestRateLimitIPSpoofingPrevention(t *testing.T) {
 
 		// Create request with spoofed X-Forwarded-For
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req.RemoteAddr = "192.168.1.1:12345"
+		req.RemoteAddr = testClientIPAddr
 		req.Header.Set("X-Forwarded-For", "10.0.0.1") // Attempt to spoof
 
 		clientIP := rl.extractClientIP(req)
@@ -224,7 +223,7 @@ func TestRateLimitIPSpoofingPrevention(t *testing.T) {
 		// Attacker tries to bypass by changing XFF header
 		for i := range testBypassAttempts {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.RemoteAddr = "192.168.1.1:12345" // Same actual IP
+			req.RemoteAddr = testClientIPAddr // Same actual IP
 			req.Header.Set("X-Forwarded-For", "10.0.0."+string(rune('1'+i)))
 
 			allowed := rl.Allow(rl.extractClientIP(req))
@@ -415,7 +414,7 @@ func TestRateLimitExcludedPaths(t *testing.T) {
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/api/data", nil)
-		req.RemoteAddr = "192.168.1.1:12345"
+		req.RemoteAddr = testClientIPAddr
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 

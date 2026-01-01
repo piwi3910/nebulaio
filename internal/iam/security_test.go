@@ -1,5 +1,3 @@
-// Package iam provides IAM authorization security testing.
-// These tests verify protection against authorization bypass attempts.
 package iam
 
 import (
@@ -497,8 +495,7 @@ func (pm *PolicyManager) evaluateConditions(ctx context.Context, conditions map[
 	}
 
 	for condType, condValue := range conditions {
-		switch condType {
-		case "IpAddress":
+		if condType == "IpAddress" {
 			if !pm.evaluateIPCondition(ctx, condValue) {
 				return false
 			}
