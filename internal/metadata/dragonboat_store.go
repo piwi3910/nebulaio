@@ -920,7 +920,11 @@ func (s *DragonboatStore) GetClusterInfo(ctx context.Context) (*ClusterInfo, err
 		return nil, err
 	}
 
-	leaderID, _, _, _ := s.nodeHost.GetLeaderID(s.shardID)
+	leaderID, valid, term, ready := s.nodeHost.GetLeaderID(s.shardID)
+	// Intentionally ignore valid, term, ready - only leaderID is needed
+	_ = valid
+	_ = term
+	_ = ready
 	leaderAddr, _ := s.LeaderAddress(ctx)
 
 	return &ClusterInfo{

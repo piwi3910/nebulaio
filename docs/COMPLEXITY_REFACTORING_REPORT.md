@@ -10,11 +10,13 @@
 ## Completed Refactorings
 
 ### 1. internal/api/middleware/metrics.go
+
 **Original Complexity:** 35 (cyclomatic), 63 (cognitive)
 **New Complexity:** < 15 for all functions
 **Impact:** Eliminated 1 critical violation
 
-#### Changes Made:
+#### Changes Made
+
 - **Extracted** `extractBucketOperation()` - Handles all bucket-level operations
 - **Extracted** `extractObjectOperation()` - Handles all object-level operations
 - **Extracted** `extractBucketGetOperation()` - Handles bucket GET query parameters
@@ -23,17 +25,20 @@
 - **Extracted** `extractObjectDeleteOperation()` - Handles object DELETE operations
 - **Extracted** `extractObjectPostOperation()` - Handles object POST operations
 
-#### Result:
+#### Result
+
 Main function `extractS3Operation()` reduced from 120 lines with nested switches to 30 lines that delegates to specialized functions.
 
 ### 2. internal/dlp/dlp.go
+
 **Original Complexity:** 30 (getApplicableRules), 19 (scanContent), cognitive 97/62
 **New Complexity:** < 15 for all functions
 **Impact:** Eliminated 2 critical violations
 
-#### Changes Made:
+#### Changes Made
 
-**For getApplicableRules:**
+##### For getApplicableRules
+
 - **Extracted** `ruleMatchesConditions()` - Checks if rule conditions match request
 - **Extracted** `matchesBucketCondition()` - Validates bucket matching
 - **Extracted** `matchesPrefixCondition()` - Validates prefix matching
@@ -41,7 +46,8 @@ Main function `extractS3Operation()` reduced from 120 lines with nested switches
 - **Extracted** `matchesSizeConditions()` - Validates size constraints
 - **Extracted** `ruleMatchesExceptions()` - Checks exception rules
 
-**For scanContent:**
+##### For scanContent
+
 - **Extracted** `collectDataTypes()` - Gathers data types from rules
 - **Extracted** `scanLine()` - Processes a single line for patterns
 - **Extracted** `processMatches()` - Handles pattern match processing
@@ -50,14 +56,17 @@ Main function `extractS3Operation()` reduced from 120 lines with nested switches
 - **Extracted** `createFinding()` - Creates finding objects
 - **Added** `scanTracker` struct - Tracks scanning state
 
-#### Result:
+#### Result
+
 - getApplicableRules: 112 lines → 24 lines main function + 6 helpers
 - scanContent: 82 lines → 22 lines main function + 7 helpers
 
 ## Refactoring Patterns Demonstrated
 
 ### Pattern 1: Condition Extraction
-Extract complex conditional logic into named boolean functions:
+
+Extract complex conditional logic into named boolean functions
+
 ```go
 // Before
 if len(rule.Conditions.Buckets) > 0 {
@@ -80,7 +89,9 @@ if !e.matchesBucketCondition(rule.Conditions.Buckets, req.Bucket) {
 ```
 
 ### Pattern 2: Switch Case Extraction
-Extract each switch case into a separate function:
+
+Extract each switch case into a separate function
+
 ```go
 // Before
 switch method {
@@ -100,7 +111,9 @@ func handleGet(query map[string][]string) string { ... }
 ```
 
 ### Pattern 3: Pipeline Decomposition
-Break complex processing into pipeline stages:
+
+Break complex processing into pipeline stages
+
 ```go
 // Before
 for item := range items {
@@ -118,34 +131,40 @@ func processItem(...) { ... }
 ## Remaining High-Priority Violations
 
 ### Critical (Complexity > 40)
-| File | Function | Complexity | Type |
-|------|----------|------------|------|
-| internal/metadata/dragonboat_fsm.go | processCommand | 47 | Cyclomatic |
-| internal/metadata/dragonboat_store.go | ListObjectVersions | 39 | Cyclomatic |
-| internal/kms/kms_test.go | TestEncryptionService | 37 | Cyclomatic |
-| internal/express/express.go | ExpressListObjects | 77 | Cognitive |
-| internal/lifecycle/manager.go | processVersions | 73 | Cognitive |
+
+| File                                | Function        | Complexity | Type       |
+| ----------------------------------- | --------------- | ---------- | ---------- |
+| internal/metadata/dragonboat_fsm.go | processCommand  | 47         | Cyclomatic |
+| internal/metadata/dragonboat_store.go | ListObjectVersions    | 39         | Cyclomatic |
+| internal/kms/kms_test.go               | TestEncryptionService | 37         | Cyclomatic |
+| internal/express/express.go            | ExpressListObjects    | 77         | Cognitive  |
+| internal/lifecycle/manager.go          | processVersions       | 73         | Cognitive  |
 
 ### Very High (Complexity 25-40)
-| File | Function | Complexity | Type |
-|------|----------|------------|------|
-| internal/iceberg/catalog.go | applyUpdate | 29-35 | Both |
-| internal/policy/policy.go | matchConditions | 29-54 | Both |
-| internal/s3select/select.go | executeAggregates | 26-66 | Both |
-| internal/firewall/firewall.go | matchRule | 26-38 | Both |
-| internal/lambda/object_lambda.go | transformStreaming | 21-65 | Both |
+
+| File                             | Function           | Complexity | Type |
+| -------------------------------- | ------------------ | ---------- | ---- |
+| internal/iceberg/catalog.go      | applyUpdate        | 29-35      | Both |
+| internal/policy/policy.go        | matchConditions    | 29-54      | Both |
+| internal/s3select/select.go      | executeAggregates  | 26-66      | Both |
+| internal/firewall/firewall.go    | matchRule          | 26-38      | Both |
+| internal/lambda/object_lambda.go | transformStreaming | 21-65      | Both |
 
 ## Systematic Refactoring Strategy
 
 ### Phase 1: State Machines (Priority: HIGH)
-Files with large switch/case statements:
+
+Files with large switch/case statements
+
 - internal/metadata/dragonboat_fsm.go
 - internal/metadata/dragonboat_store.go
 
 **Strategy:** Extract each case into a separate handler function
 
 ### Phase 2: Validation/Matching Logic (Priority: HIGH)
-Files with complex conditional chains:
+
+Files with complex conditional chains
+
 - internal/policy/policy.go
 - internal/firewall/firewall.go
 - internal/iceberg/catalog.go
@@ -153,7 +172,9 @@ Files with complex conditional chains:
 **Strategy:** Extract each condition group into named boolean functions
 
 ### Phase 3: Processing Pipelines (Priority: MEDIUM)
-Files with complex loop processing:
+
+Files with complex loop processing
+
 - internal/lifecycle/manager.go
 - internal/express/express.go
 - internal/s3select/select.go
@@ -162,7 +183,9 @@ Files with complex loop processing:
 **Strategy:** Extract loop body into processItem() functions, create pipeline stages
 
 ### Phase 4: Test Files (Priority: LOW)
-Test files with table-driven tests:
+
+Test files with table-driven tests
+
 - internal/kms/kms_test.go
 - internal/storage/compression/compression_test.go
 - internal/cluster/placement_group_test.go
@@ -170,7 +193,9 @@ Test files with table-driven tests:
 **Strategy:** Break large tests into smaller, focused test functions
 
 ### Phase 5: Miscellaneous (Priority: LOW)
-Remaining files with complexity 16-24:
+
+Remaining files with complexity 16-24
+
 - Various handlers, services, and utilities
 
 **Strategy:** Apply appropriate pattern based on code structure
@@ -201,31 +226,34 @@ go test -v ./internal/path/to/package/...
 
 ## Recommendations for Continued Work
 
-1. **Start with State Machines:** The FSM and metadata store have clear extraction points
-2. **One Function at a Time:** Refactor incrementally with test verification between changes
-3. **Preserve Behavior:** All refactoring must maintain exact same behavior
-4. **Test Coverage:** Run existing tests after each refactoring
-5. **Code Review:** Complex functions likely have subtle bugs - review carefully while refactoring
-6. **Documentation:** Add comments explaining extracted helper functions
-7. **Consistent Naming:** Use verb phrases for functions (e.g., `matchesBucket`, `processCaseA`)
+1. **Start with State Machines** - The FSM and metadata store have clear extraction points
+2. **One Function at a Time** - Refactor incrementally with test verification between changes
+3. **Preserve Behavior** - All refactoring must maintain exact same behavior
+4. **Test Coverage** - Run existing tests after each refactoring
+5. **Code Review** - Complex functions likely have subtle bugs - review carefully while refactoring
+6. **Documentation** - Add comments explaining extracted helper functions
+7. **Consistent Naming** - Use verb phrases for functions (e.g., `matchesBucket`, `processCaseA`)
 
 ## Estimated Effort
 
-Based on the two completed refactorings:
-- **Simple extraction** (switch cases): ~15 minutes per function
-- **Complex extraction** (nested loops/conditions): ~30-45 minutes per function
-- **Very complex** (state machines, pipelines): ~1-2 hours per function
+Based on the two completed refactorings
 
-**Total estimated effort for remaining 150 violations:** 40-60 hours
+- **Simple extraction** (switch cases) - ~15 minutes per function
+- **Complex extraction** (nested loops/conditions) - ~30-45 minutes per function
+- **Very complex** (state machines, pipelines) - ~1-2 hours per function
 
-### Recommended Approach:
+**Total estimated effort for remaining 150 violations** - 40-60 hours
+
+### Recommended Approach
+
 1. Tackle critical violations first (10-15 hours for top 10)
 2. Systematic batch refactoring of similar patterns (20-30 hours)
 3. Final cleanup of remaining low-complexity violations (10-15 hours)
 
 ## Testing Checklist
 
-For each refactored file:
+For each refactored file
+
 - [ ] File compiles without errors
 - [ ] golangci-lint shows no complexity violations for refactored functions
 - [ ] Existing unit tests pass

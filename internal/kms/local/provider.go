@@ -42,11 +42,12 @@ import (
 
 // Config holds local KMS provider configuration.
 type Config struct {
-	KeyStorePath       string `json:"keyStorePath" yaml:"keyStorePath"`
-	MasterKeyFile      string `json:"masterKeyFile,omitempty" yaml:"masterKeyFile,omitempty"`
-	MasterPassword     string `json:"-" yaml:"masterPassword,omitempty"`
-	KeyDerivationSalt  string `json:"keyDerivationSalt,omitempty" yaml:"keyDerivationSalt,omitempty"`
 	kms.ProviderConfig `yaml:",inline"`
+
+	KeyStorePath      string `json:"keyStorePath" yaml:"keyStorePath"`
+	MasterKeyFile     string `json:"masterKeyFile,omitempty" yaml:"masterKeyFile,omitempty"`
+	MasterPassword    string `json:"-" yaml:"masterPassword,omitempty"`
+	KeyDerivationSalt string `json:"keyDerivationSalt,omitempty" yaml:"keyDerivationSalt,omitempty"`
 }
 
 // DefaultConfig returns a default local KMS configuration.

@@ -42,17 +42,18 @@ const (
 
 // Config holds Vault KMS provider configuration.
 type Config struct {
-	Address            string `json:"address" yaml:"address"`
-	Token              string `json:"-" yaml:"token"`
-	Namespace          string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
-	MountPath          string `json:"mountPath" yaml:"mountPath"`
-	TLSCACert          string `json:"tlsCaCert,omitempty" yaml:"tlsCaCert,omitempty"`
-	TLSClientCert      string `json:"tlsClientCert,omitempty" yaml:"tlsClientCert,omitempty"`
-	TLSClientKey       string `json:"tlsClientKey,omitempty" yaml:"tlsClientKey,omitempty"`
 	kms.ProviderConfig `yaml:",inline"`
-	Timeout            time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
-	MaxRetries         int           `json:"maxRetries,omitempty" yaml:"maxRetries,omitempty"`
-	TLSSkipVerify      bool          `json:"tlsSkipVerify,omitempty" yaml:"tlsSkipVerify,omitempty"`
+
+	Address       string `json:"address" yaml:"address"`
+	Token         string `json:"-" yaml:"token"`
+	Namespace     string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
+	MountPath     string `json:"mountPath" yaml:"mountPath"`
+	TLSCACert     string `json:"tlsCaCert,omitempty" yaml:"tlsCaCert,omitempty"`
+	TLSClientCert string `json:"tlsClientCert,omitempty" yaml:"tlsClientCert,omitempty"`
+	TLSClientKey  string `json:"tlsClientKey,omitempty" yaml:"tlsClientKey,omitempty"`
+	Timeout       time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	MaxRetries    int           `json:"maxRetries,omitempty" yaml:"maxRetries,omitempty"`
+	TLSSkipVerify bool          `json:"tlsSkipVerify,omitempty" yaml:"tlsSkipVerify,omitempty"`
 }
 
 // DefaultConfig returns a default Vault KMS configuration.

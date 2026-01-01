@@ -866,6 +866,7 @@ func (t *Tracer) HTTPMiddleware(next http.Handler) http.Handler {
 // responseWriterWrapper wraps http.ResponseWriter to capture status code.
 type responseWriterWrapper struct {
 	http.ResponseWriter
+
 	statusCode int
 }
 
