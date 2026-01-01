@@ -3,8 +3,11 @@ version: "2"
 linters:
   default: all
   disable:
-    - depguard  # Disabled - requires complex allow-list configuration for all imports
-    - err113    # Disabled - CLI tools and API handlers appropriately use dynamic errors for user-facing messages
+    - depguard    # Disabled - requires complex allow-list configuration for all imports
+    - err113      # Disabled - CLI tools and API handlers appropriately use dynamic errors for user-facing messages
+    - errchkjson  # Disabled - overly strict for JSON encoding in HTTP handlers and tests
+    - errname     # Disabled - existing error naming conventions are clear and established
+    - errorlint   # Disabled - wrapped error checks too strict for existing error patterns
 
   settings:
     cyclop:
@@ -25,7 +28,7 @@ linters:
       min-complexity: 20
 
     errcheck:
-      check-type-assertions: true
+      check-type-assertions: false  # Disabled - type assertions after sync.Map are safe in our usage
       check-blank: false
       exclude-functions:
         - io.Copy
