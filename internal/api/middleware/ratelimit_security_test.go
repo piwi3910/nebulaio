@@ -249,12 +249,14 @@ func TestRateLimitDDoSProtection(t *testing.T) {
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
-		// Simulate requests from many different IPs
-		for i := range testManyIPs {
-			clientIP := "192.168.1." + strconv.Itoa(i%256)
+		// Simulate requests from 256 unique IPs
+		uniqueIPCount := 256
+		for i := range uniqueIPCount {
+			// Each IP in the 192.168.1.0/24 range
+			clientIP := "192.168.1." + strconv.Itoa(i)
 			allowed := rl.Allow(clientIP)
-			// First request from each IP should be allowed
-			assert.True(t, allowed, "First request from IP should be allowed")
+			// First request from each unique IP should be allowed
+			assert.True(t, allowed, "First request from IP %s should be allowed", clientIP)
 		}
 	})
 
