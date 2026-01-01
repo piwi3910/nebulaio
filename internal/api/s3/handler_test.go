@@ -3271,6 +3271,7 @@ func TestPresignedPutObject(t *testing.T) {
 
 	reader, _, err := tc.object.GetObject(ctx, presignedTestBucket, "uploaded-key")
 	require.NoError(t, err, "Object was not created")
+	defer reader.Close()
 
 	body, err := io.ReadAll(reader)
 	require.NoError(t, err)
