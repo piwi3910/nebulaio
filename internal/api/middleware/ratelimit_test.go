@@ -304,3 +304,74 @@ func TestExtractDirectIP(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizePath(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		expected string
+	}{
+		{
+			name:     "simple path",
+			path:     "/api/health",
+			expected: "/api/health",
+		},
+		{
+			name:     "bucket path",
+			path:     "/buckets/my-bucket",
+			expected: "/buckets/{bucket}",
+		},
+		{
+			name:     "object path",
+			path:     "/buckets/my-bucket/objects/my-object.txt",
+			expected: "/buckets/{bucket}/objects/{object}",
+		},
+		{
+			name:     "UUID in path",
+			path:     "/uploads/550e8400-e29b-41d4-a716-446655440000",
+			expected: "/uploads/{upload}",
+		},
+		{
+			name:     "complex path with UUID",
+			path:     "/buckets/test-bucket/objects/550e8400-e29b-41d4-a716-446655440000/versions/v1",
+			expected: "/buckets/{bucket}/objects/{object}/versions/{version}",
+		},
+		{
+			name:     "users path",
+			path:     "/users/admin",
+			expected: "/users/{user}",
+		},
+		{
+			name:     "keys path",
+			path:     "/keys/access-key-123",
+			expected: "/keys/{key}",
+		},
+		{
+			name:     "policies path",
+			path:     "/policies/read-only",
+			expected: "/policies/{policy}",
+		},
+		{
+			name:     "groups path",
+			path:     "/groups/admins",
+			expected: "/groups/{group}",
+		},
+		{
+			name:     "root path",
+			path:     "/",
+			expected: "/",
+		},
+		{
+			name:     "empty path",
+			path:     "",
+			expected: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := normalizePath(tc.path)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}

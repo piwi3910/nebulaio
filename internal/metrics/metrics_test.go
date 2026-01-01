@@ -349,3 +349,61 @@ func BenchmarkSetStorageStats(b *testing.B) {
 		SetStorageStats(int64(i*1024), int64(1000000))
 	}
 }
+
+func TestRecordRateLimitRequest(t *testing.T) {
+	RateLimitRequestsTotal.Reset()
+
+	// Test allowed request
+	RecordRateLimitRequest("/api/buckets", true)
+	count := testutil.ToFloat64(RateLimitRequestsTotal.WithLabelValues("/api/buckets", "allowed"))
+	assert.InDelta(t, float64(1), count, 0.001)
+
+	// Test denied request
+	RecordRateLimitRequest("/api/buckets", false)
+	countDenied := testutil.ToFloat64(RateLimitRequestsTotal.WithLabelValues("/api/buckets", "denied"))
+	assert.InDelta(t, float64(1), countDenied, 0.001)
+
+	// Test multiple requests
+	RecordRateLimitRequest("/api/objects", true)
+	RecordRateLimitRequest("/api/objects", true)
+	RecordRateLimitRequest("/api/objects", false)
+
+	countObjects := testutil.ToFloat64(RateLimitRequestsTotal.WithLabelValues("/api/objects", "allowed"))
+	assert.InDelta(t, float64(2), countObjects, 0.001)
+	countObjectsDenied := testutil.ToFloat64(RateLimitRequestsTotal.WithLabelValues("/api/objects", "denied"))
+	assert.InDelta(t, float64(1), countObjectsDenied, 0.001)
+}
+
+func TestRateLimitActiveIPs(t *testing.T) {
+	RateLimitActiveIPs.Set(0) // Reset
+
+	IncrementRateLimitActiveIPs()
+	assert.InDelta(t, float64(1), testutil.ToFloat64(RateLimitActiveIPs), 0.001)
+
+	IncrementRateLimitActiveIPs()
+	assert.InDelta(t, float64(2), testutil.ToFloat64(RateLimitActiveIPs), 0.001)
+
+	DecrementRateLimitActiveIPs()
+	assert.InDelta(t, float64(1), testutil.ToFloat64(RateLimitActiveIPs), 0.001)
+
+	DecrementRateLimitActiveIPs()
+	assert.InDelta(t, float64(0), testutil.ToFloat64(RateLimitActiveIPs), 0.001)
+}
+
+func TestRateLimitMetricsRegistration(t *testing.T) {
+	// Verify rate limit metrics are registered properly
+	require.NotNil(t, RateLimitRequestsTotal)
+	require.NotNil(t, RateLimitActiveIPs)
+}
+
+func BenchmarkRecordRateLimitRequest(b *testing.B) {
+	for range b.N {
+		RecordRateLimitRequest("/api/buckets", true)
+	}
+}
+
+func BenchmarkRateLimitActiveIPs(b *testing.B) {
+	for range b.N {
+		IncrementRateLimitActiveIPs()
+	}
+}

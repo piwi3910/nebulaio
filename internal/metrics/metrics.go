@@ -17,6 +17,10 @@
 //   - nebulaio_raft_term: Current Raft term
 //   - nebulaio_cluster_nodes: Number of cluster nodes
 //
+// Rate Limit Metrics:
+//   - nebulaio_ratelimit_requests_total: Total requests by path and result (allowed/denied)
+//   - nebulaio_ratelimit_active_ips: Number of active IP rate limiters
+//
 // Use with Prometheus and Grafana for comprehensive monitoring dashboards.
 package metrics
 
@@ -531,6 +535,23 @@ var (
 		},
 		[]string{"volume_id"},
 	)
+
+	// RateLimitRequestsTotal tracks total requests processed by the rate limiter.
+	RateLimitRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_ratelimit_requests_total",
+			Help: "Total number of requests processed by the rate limiter",
+		},
+		[]string{"path", "result"},
+	)
+
+	// RateLimitActiveIPs tracks the number of active IP rate limiters.
+	RateLimitActiveIPs = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_ratelimit_active_ips",
+			Help: "Number of active IP rate limiters",
+		},
+	)
 )
 
 // Version is set at build time.
@@ -890,4 +911,24 @@ func SetVolumeCompactionLastRun(volumeID string, timestamp float64) {
 // ObserveVolumeCompactionDuration records the duration of a compaction operation.
 func ObserveVolumeCompactionDuration(volumeID string, duration float64) {
 	VolumeCompactionDuration.WithLabelValues(volumeID).Observe(duration)
+}
+
+// RecordRateLimitRequest records a rate limit request outcome.
+func RecordRateLimitRequest(path string, allowed bool) {
+	result := "allowed"
+	if !allowed {
+		result = "denied"
+	}
+
+	RateLimitRequestsTotal.WithLabelValues(path, result).Inc()
+}
+
+// IncrementRateLimitActiveIPs increments the active IP rate limiters count.
+func IncrementRateLimitActiveIPs() {
+	RateLimitActiveIPs.Inc()
+}
+
+// DecrementRateLimitActiveIPs decrements the active IP rate limiters count.
+func DecrementRateLimitActiveIPs() {
+	RateLimitActiveIPs.Dec()
 }
