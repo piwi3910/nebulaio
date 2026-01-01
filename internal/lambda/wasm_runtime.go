@@ -15,6 +15,7 @@ import (
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+	"golang.org/x/sync/singleflight"
 )
 
 // WASM runtime constants.
@@ -42,6 +43,12 @@ const (
 
 	// DefaultWASMStreamingThreshold is the default streaming threshold (10 MB).
 	DefaultWASMStreamingThreshold = 10 * 1024 * 1024
+
+	// DefaultWASMMaxModuleSize is the default maximum WASM module size (50 MB).
+	DefaultWASMMaxModuleSize = 50 * 1024 * 1024
+
+	// DefaultWASMMaxCacheEntries is the default maximum number of cached modules.
+	DefaultWASMMaxCacheEntries = 100
 )
 
 // Prometheus metrics for WASM runtime.
@@ -104,6 +111,13 @@ var (
 			Help: "Total bytes of output data produced by WASM transformations",
 		},
 	)
+
+	wasmModuleCacheEvictions = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "nebulaio_wasm_module_cache_evictions_total",
+			Help: "Total number of WASM modules evicted from cache",
+		},
+	)
 )
 
 func init() {
@@ -116,6 +130,7 @@ func init() {
 		wasmModuleCacheMisses,
 		wasmInputBytes,
 		wasmOutputBytes,
+		wasmModuleCacheEvictions,
 	)
 }
 
@@ -124,11 +139,13 @@ func init() {
 type WASMRuntime struct {
 	runtime       wazero.Runtime
 	moduleCache   map[string]wazero.CompiledModule
+	cacheOrder    []string // LRU order tracking: oldest first
 	moduleLoader  ModuleLoader
 	mu            sync.RWMutex
 	closed        atomic.Bool
 	config        *WASMRuntimeConfig
 	metricsActive atomic.Int64
+	compileGroup  singleflight.Group // Prevents concurrent compilation of same module
 }
 
 // WASMRuntimeConfig holds configuration for the WASM runtime.
@@ -157,6 +174,15 @@ type WASMRuntimeConfig struct {
 	// streaming mode is used for transformations.
 	// Default: 10 MB
 	StreamingThreshold int64
+
+	// MaxModuleSize is the maximum size of a WASM module file (in bytes).
+	// Default: 50 MB
+	MaxModuleSize int64
+
+	// MaxCacheEntries is the maximum number of compiled modules to cache.
+	// When exceeded, the least recently used module is evicted.
+	// Default: 100
+	MaxCacheEntries int
 }
 
 // DefaultWASMRuntimeConfig returns a WASMRuntimeConfig with sensible defaults.
@@ -168,6 +194,8 @@ func DefaultWASMRuntimeConfig() *WASMRuntimeConfig {
 		MaxOutputSize:      DefaultWASMMaxOutputSize,
 		EnableCaching:      true,
 		StreamingThreshold: DefaultWASMStreamingThreshold,
+		MaxModuleSize:      DefaultWASMMaxModuleSize,
+		MaxCacheEntries:    DefaultWASMMaxCacheEntries,
 	}
 }
 
@@ -219,6 +247,7 @@ func NewWASMRuntime(ctx context.Context, config *WASMRuntimeConfig) (*WASMRuntim
 	wasmRuntime := &WASMRuntime{
 		runtime:      runtime,
 		moduleCache:  make(map[string]wazero.CompiledModule),
+		cacheOrder:   make([]string, 0, config.MaxCacheEntries),
 		moduleLoader: &DefaultModuleLoader{},
 		config:       config,
 	}
@@ -377,18 +406,29 @@ func (w *WASMRuntime) readInputWithLimit(input io.Reader) ([]byte, error) {
 }
 
 // getOrCompileModule retrieves a compiled module from cache or compiles it.
+// Uses singleflight to prevent concurrent compilation of the same module.
 func (w *WASMRuntime) getOrCompileModule(
 	ctx context.Context,
 	bucket, key string,
 ) (wazero.CompiledModule, error) {
 	cacheKey := fmt.Sprintf("%s/%s", bucket, key)
 
-	// Check cache first
+	// Check context before proceeding
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Check cache first (with read lock)
 	if w.config.EnableCaching {
 		w.mu.RLock()
 		if cached, ok := w.moduleCache[cacheKey]; ok {
 			w.mu.RUnlock()
 			wasmModuleCacheHits.Inc()
+
+			// Update LRU order (requires write lock)
+			w.updateCacheOrder(cacheKey)
 
 			log.Debug().
 				Str("bucket", bucket).
@@ -397,41 +437,114 @@ func (w *WASMRuntime) getOrCompileModule(
 
 			return cached, nil
 		}
-
 		w.mu.RUnlock()
 		wasmModuleCacheMisses.Inc()
 	}
 
-	// Load module bytes
-	w.mu.RLock()
-	loader := w.moduleLoader
-	w.mu.RUnlock()
+	// Use singleflight to prevent concurrent compilation of the same module
+	result, err, _ := w.compileGroup.Do(cacheKey, func() (interface{}, error) {
+		// Double-check cache after acquiring singleflight (another goroutine may have cached it)
+		if w.config.EnableCaching {
+			w.mu.RLock()
+			if cached, ok := w.moduleCache[cacheKey]; ok {
+				w.mu.RUnlock()
 
-	moduleBytes, err := loader.LoadModule(ctx, bucket, key)
+				return cached, nil
+			}
+			w.mu.RUnlock()
+		}
+
+		// Load module bytes
+		w.mu.RLock()
+		loader := w.moduleLoader
+		w.mu.RUnlock()
+
+		moduleBytes, err := loader.LoadModule(ctx, bucket, key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load module: %w", err)
+		}
+
+		// Validate module size
+		if int64(len(moduleBytes)) > w.config.MaxModuleSize {
+			return nil, fmt.Errorf(
+				"WASM module size %d bytes exceeds maximum %d bytes",
+				len(moduleBytes),
+				w.config.MaxModuleSize,
+			)
+		}
+
+		// Compile module
+		compiled, err := w.runtime.CompileModule(ctx, moduleBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compile WASM module: %w", err)
+		}
+
+		// Cache the compiled module with eviction if needed
+		if w.config.EnableCaching {
+			w.mu.Lock()
+			w.evictIfNeeded(ctx)
+			w.moduleCache[cacheKey] = compiled
+			w.cacheOrder = append(w.cacheOrder, cacheKey)
+			wasmModuleCacheSize.Set(float64(len(w.moduleCache)))
+			w.mu.Unlock()
+
+			log.Debug().
+				Str("bucket", bucket).
+				Str("key", key).
+				Int("cache_size", len(w.moduleCache)).
+				Msg("Cached compiled WASM module")
+		}
+
+		return compiled, nil
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to load module: %w", err)
+		return nil, err
 	}
 
-	// Compile module
-	compiled, err := w.runtime.CompileModule(ctx, moduleBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile WASM module: %w", err)
+	return result.(wazero.CompiledModule), nil
+}
+
+// updateCacheOrder moves the accessed key to the end of the LRU order.
+func (w *WASMRuntime) updateCacheOrder(cacheKey string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Find and remove the key from its current position
+	for i, key := range w.cacheOrder {
+		if key == cacheKey {
+			w.cacheOrder = append(w.cacheOrder[:i], w.cacheOrder[i+1:]...)
+
+			break
+		}
 	}
 
-	// Cache the compiled module
-	if w.config.EnableCaching {
-		w.mu.Lock()
-		w.moduleCache[cacheKey] = compiled
-		wasmModuleCacheSize.Set(float64(len(w.moduleCache)))
-		w.mu.Unlock()
+	// Add to the end (most recently used)
+	w.cacheOrder = append(w.cacheOrder, cacheKey)
+}
 
-		log.Debug().
-			Str("bucket", bucket).
-			Str("key", key).
-			Msg("Cached compiled WASM module")
+// evictIfNeeded removes the least recently used module if cache is full.
+// Must be called with w.mu held.
+func (w *WASMRuntime) evictIfNeeded(ctx context.Context) {
+	for len(w.moduleCache) >= w.config.MaxCacheEntries && len(w.cacheOrder) > 0 {
+		// Evict the oldest (least recently used) entry
+		oldestKey := w.cacheOrder[0]
+		w.cacheOrder = w.cacheOrder[1:]
+
+		if module, ok := w.moduleCache[oldestKey]; ok {
+			if err := module.Close(ctx); err != nil {
+				log.Warn().Err(err).Str("module", oldestKey).Msg("Failed to close evicted WASM module")
+			}
+
+			delete(w.moduleCache, oldestKey)
+			wasmModuleCacheEvictions.Inc()
+
+			log.Debug().
+				Str("module", oldestKey).
+				Int("cache_size", len(w.moduleCache)).
+				Msg("Evicted WASM module from cache")
+		}
 	}
-
-	return compiled, nil
 }
 
 // executeTransformation runs the WASM transformation function.
@@ -664,6 +777,7 @@ func (w *WASMRuntime) ClearCache(ctx context.Context) {
 	}
 
 	w.moduleCache = make(map[string]wazero.CompiledModule)
+	w.cacheOrder = make([]string, 0, w.config.MaxCacheEntries)
 	wasmModuleCacheSize.Set(0)
 
 	log.Info().Msg("WASM module cache cleared")
@@ -691,6 +805,7 @@ func (w *WASMRuntime) Close(ctx context.Context) error {
 	}
 
 	w.moduleCache = nil
+	w.cacheOrder = nil
 
 	// Close the runtime
 	if err := w.runtime.Close(ctx); err != nil {
