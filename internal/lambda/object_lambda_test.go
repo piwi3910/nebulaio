@@ -1494,6 +1494,163 @@ func TestStreamingVsBufferedModeSelection(t *testing.T) {
 	}
 }
 
+// BenchmarkBufferedVsStreamingCompression compares memory and performance between
+// buffered and streaming compression modes.
+func BenchmarkBufferedVsStreamingCompression(b *testing.B) {
+	// Test data sizes
+	sizes := []int{
+		1 * 1024,        // 1KB
+		100 * 1024,      // 100KB
+		1 * 1024 * 1024, // 1MB
+	}
+
+	algorithms := []string{compressionGzip, compressionZstd}
+
+	for _, size := range sizes {
+		for _, alg := range algorithms {
+			testData := bytes.Repeat([]byte("Hello, World! "), size/14+1)[:size]
+
+			// Benchmark buffered mode
+			b.Run("buffered_"+alg+"_"+formatSize(size), func(b *testing.B) {
+				originalThreshold := GetStreamingThreshold()
+				SetStreamingThreshold(int64(size * 10)) // Force buffered mode
+				defer SetStreamingThreshold(originalThreshold)
+
+				transformer := &CompressTransformer{}
+				params := map[string]interface{}{
+					"algorithm":      alg,
+					"content_length": int64(size / 2), // Below threshold
+				}
+
+				b.ResetTimer()
+				b.ReportAllocs()
+
+				for i := 0; i < b.N; i++ {
+					output, _, _ := transformer.Transform(
+						context.Background(),
+						bytes.NewReader(testData),
+						params,
+					)
+					_, _ = io.ReadAll(output)
+				}
+			})
+
+			// Benchmark streaming mode
+			b.Run("streaming_"+alg+"_"+formatSize(size), func(b *testing.B) {
+				originalThreshold := GetStreamingThreshold()
+				SetStreamingThreshold(100) // Force streaming mode
+				defer SetStreamingThreshold(originalThreshold)
+
+				transformer := &CompressTransformer{}
+				params := map[string]interface{}{
+					"algorithm":      alg,
+					"content_length": int64(size), // Above threshold
+				}
+
+				b.ResetTimer()
+				b.ReportAllocs()
+
+				for i := 0; i < b.N; i++ {
+					output, _, _ := transformer.Transform(
+						context.Background(),
+						bytes.NewReader(testData),
+						params,
+					)
+					_, _ = io.ReadAll(output)
+				}
+			})
+		}
+	}
+}
+
+// BenchmarkBufferedVsStreamingDecompression compares memory and performance between
+// buffered and streaming decompression modes.
+func BenchmarkBufferedVsStreamingDecompression(b *testing.B) {
+	sizes := []int{
+		1 * 1024,        // 1KB
+		100 * 1024,      // 100KB
+		1 * 1024 * 1024, // 1MB
+	}
+
+	algorithms := []string{compressionGzip, compressionZstd}
+
+	for _, size := range sizes {
+		for _, alg := range algorithms {
+			testData := bytes.Repeat([]byte("Hello, World! "), size/14+1)[:size]
+			var compressed []byte
+
+			switch alg {
+			case compressionGzip:
+				compressed = compressWithGzip(testData)
+			case compressionZstd:
+				compressed = compressWithZstd(testData)
+			}
+
+			// Benchmark buffered mode
+			b.Run("buffered_"+alg+"_"+formatSize(size), func(b *testing.B) {
+				originalThreshold := GetStreamingThreshold()
+				SetStreamingThreshold(int64(len(compressed) * 10))
+				defer SetStreamingThreshold(originalThreshold)
+
+				transformer := &DecompressTransformer{}
+				params := map[string]interface{}{
+					"algorithm":      alg,
+					"content_length": int64(len(compressed) / 2),
+				}
+
+				b.ResetTimer()
+				b.ReportAllocs()
+
+				for i := 0; i < b.N; i++ {
+					output, _, _ := transformer.Transform(
+						context.Background(),
+						bytes.NewReader(compressed),
+						params,
+					)
+					_, _ = io.ReadAll(output)
+				}
+			})
+
+			// Benchmark streaming mode
+			b.Run("streaming_"+alg+"_"+formatSize(size), func(b *testing.B) {
+				originalThreshold := GetStreamingThreshold()
+				SetStreamingThreshold(100)
+				defer SetStreamingThreshold(originalThreshold)
+
+				transformer := &DecompressTransformer{}
+				params := map[string]interface{}{
+					"algorithm":      alg,
+					"content_length": int64(len(compressed)),
+				}
+
+				b.ResetTimer()
+				b.ReportAllocs()
+
+				for i := 0; i < b.N; i++ {
+					output, _, _ := transformer.Transform(
+						context.Background(),
+						bytes.NewReader(compressed),
+						params,
+					)
+					_, _ = io.ReadAll(output)
+				}
+			})
+		}
+	}
+}
+
+// formatSize formats a byte size for benchmark names.
+func formatSize(size int) string {
+	switch {
+	case size >= 1024*1024:
+		return string(rune('0'+size/(1024*1024))) + "MB"
+	case size >= 1024:
+		return string(rune('0'+size/1024)) + "KB"
+	default:
+		return string(rune('0'+size)) + "B"
+	}
+}
+
 // TestStreamingCompressionWithLevel tests streaming compression with custom levels.
 func TestStreamingCompressionWithLevel(t *testing.T) {
 	// Save and set a low streaming threshold for testing
