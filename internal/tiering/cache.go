@@ -87,8 +87,6 @@ func NewCache(config CacheConfig, cacheBackend backend.Backend) *Cache {
 	// Start write-back worker if enabled
 	if config.WriteBack && cacheBackend != nil {
 		c.writeBackWg.Add(1)
-
-		//nolint:contextcheck // writeBackWorker creates per-operation contexts
 		go c.writeBackWorker()
 	}
 
@@ -321,8 +319,6 @@ func (c *Cache) evictLRU() {
 }
 
 // writeBackWorker persists cached data to the backend.
-//
-//nolint:contextcheck // Creates per-operation contexts with timeout
 func (c *Cache) writeBackWorker() {
 	defer c.writeBackWg.Done()
 

@@ -143,7 +143,7 @@ func NewS3Client(ctx context.Context) (*s3.Client, error) {
 }
 
 // ParseS3URI parses an S3 URI (s3://bucket/key) into bucket and key.
-func ParseS3URI(uri string) (bucket, key string, isS3 bool) {
+func ParseS3URI(uri string) (string, string, bool) {
 	if len(uri) < s3URIPrefixLen || uri[:s3URIPrefixLen] != "s3://" {
 		return "", "", false
 	}
