@@ -1,5 +1,3 @@
-// Package security provides security testing for NebulaIO.
-// These tests verify protection against injection attacks.
 package security
 
 import (

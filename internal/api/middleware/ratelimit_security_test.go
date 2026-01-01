@@ -319,7 +319,7 @@ func TestRateLimitSlowlorisProtection(t *testing.T) {
 		wg.Wait()
 
 		// Some connections should be blocked
-		assert.Greater(t, blocked, 0, "Some connections should be blocked")
+		assert.Positive(t, blocked, "Some connections should be blocked")
 	})
 }
 

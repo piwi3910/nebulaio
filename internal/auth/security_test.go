@@ -253,7 +253,7 @@ func TestPasswordSecurityWithProduction(t *testing.T) {
 		require.NoError(t, err)
 
 		err = VerifyPassword(hash, "correctpassword123")
-		assert.Error(t, err, "Wrong case should not match")
+		require.Error(t, err, "Wrong case should not match")
 
 		err = VerifyPassword(hash, password)
 		assert.NoError(t, err, "Correct password should match")
