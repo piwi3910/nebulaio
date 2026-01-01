@@ -92,7 +92,7 @@ func TestValidateWebhookURL(t *testing.T) {
 			name:      "169.254.0.0/16 link-local blocked",
 			url:       "http://169.254.169.254/metadata",
 			shouldErr: true,
-			errMsg:    "private IP",
+			errMsg:    "link-local",
 		},
 
 		// Invalid URLs
@@ -212,7 +212,7 @@ func TestValidateIP(t *testing.T) {
 			name:      "IPv4 link-local",
 			ip:        "169.254.1.1",
 			shouldErr: true,
-			errMsg:    "private IP",
+			errMsg:    "link-local",
 		},
 		{
 			name:      "IPv6 link-local",
@@ -226,7 +226,7 @@ func TestValidateIP(t *testing.T) {
 			name:      "IPv4 multicast",
 			ip:        "224.0.0.1",
 			shouldErr: true,
-			errMsg:    "private IP",
+			errMsg:    "multicast",
 		},
 
 		// Unspecified
