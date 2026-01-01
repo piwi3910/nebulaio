@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -122,7 +123,7 @@ func (h *OpenAPIHandler) ServeOpenAPIJSON(w http.ResponseWriter, _ *http.Request
 	h.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", cacheMaxAge))
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(specJSON)
@@ -135,7 +136,7 @@ func (h *OpenAPIHandler) ServeOpenAPIYAML(w http.ResponseWriter, _ *http.Request
 	h.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/x-yaml")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", cacheMaxAge))
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(specYAML)
@@ -188,7 +189,7 @@ func (h *OpenAPIHandler) ServeAPIExplorerConfig(w http.ResponseWriter, _ *http.R
 	config := DefaultAPIExplorerConfig()
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=60")
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", configCacheMaxAge))
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(config)
 }

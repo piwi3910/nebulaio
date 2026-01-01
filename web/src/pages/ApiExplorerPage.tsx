@@ -34,7 +34,9 @@ import {
   IconDownload,
   IconInfoCircle,
   IconSearch,
+  IconX,
 } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
 import { useAuthStore } from '../stores/auth';
 import { apiClient } from '../api/client';
 
@@ -144,8 +146,13 @@ export function ApiExplorerPage() {
 
         setCodeSnippets(response.data.snippets || []);
         setCodeModalOpened(true);
-      } catch (error) {
-        console.error('Failed to generate code snippets:', error);
+      } catch {
+        notifications.show({
+          title: 'Error',
+          message: 'Failed to generate code snippets. Please try again.',
+          color: 'red',
+          icon: <IconX size={16} />,
+        });
       }
     },
     [accessToken]
@@ -165,8 +172,13 @@ export function ApiExplorerPage() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Failed to export spec:', error);
+    } catch {
+      notifications.show({
+        title: 'Export Failed',
+        message: `Failed to export OpenAPI specification as ${format.toUpperCase()}.`,
+        color: 'red',
+        icon: <IconX size={16} />,
+      });
     }
   }, []);
 
