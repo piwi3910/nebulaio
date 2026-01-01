@@ -1,5 +1,6 @@
-// Package security provides mTLS (mutual TLS) for internal communication in NebulaIO
 package security
+
+// mTLS (mutual TLS) for internal communication in NebulaIO
 
 import (
 	"context"
@@ -35,9 +36,9 @@ type CertificateType string
 
 // File permission constants.
 const (
-	certDirPermissions   = 0700 // Directory permissions for cert storage
-	certFilePermissions  = 0644 // Public cert file permissions
-	keyFilePermissions   = 0600 // Private key file permissions
+	certDirPermissions  = 0700 // Directory permissions for cert storage
+	certFilePermissions = 0644 // Public cert file permissions
+	keyFilePermissions  = 0600 // Private key file permissions
 )
 
 const (

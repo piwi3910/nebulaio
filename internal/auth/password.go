@@ -1,6 +1,6 @@
-// Package auth provides authentication and authorization functionality for NebulaIO.
-// It includes password validation, hashing, username and email validation, and
-// credential management utilities.
+package auth
+
+// Password validation, hashing, username and email validation utilities.
 //
 // Password Requirements:
 //   - Minimum 12 characters
@@ -19,7 +19,6 @@
 //	if err != nil {
 //	    log.Fatal("Failed to hash password:", err)
 //	}
-package auth
 
 import (
 	"errors"

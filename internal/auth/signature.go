@@ -14,9 +14,9 @@ import (
 
 // Signature validation constants.
 const (
-	regexMatchParts        = 2  // Expected number of parts in a regex match (full match + capture group)
-	signatureCredParts     = 5  // Number of parts in AWS Signature credential
-	timeSkewMinutes        = 15 // Maximum allowed time difference in minutes
+	regexMatchParts    = 2  // Expected number of parts in a regex match (full match + capture group)
+	signatureCredParts = 5  // Number of parts in AWS Signature credential
+	timeSkewMinutes    = 15 // Maximum allowed time difference in minutes
 )
 
 // SignatureValidator validates AWS Signature Version 4 requests.

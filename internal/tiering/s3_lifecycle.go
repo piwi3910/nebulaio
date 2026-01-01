@@ -420,7 +420,7 @@ func ParseS3LifecycleXML(data []byte) (*S3LifecycleConfiguration, error) {
 	return &config, nil
 }
 
-// ToS3LifecycleXML converts configuration to S3 XML format.
+// ToXML converts the S3LifecycleConfiguration to XML format.
 func (config *S3LifecycleConfiguration) ToXML() ([]byte, error) {
 	data, err := xml.MarshalIndent(config, "", "  ")
 	if err != nil {

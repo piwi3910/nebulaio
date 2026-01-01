@@ -190,7 +190,7 @@ func VerifyShard(shard []byte, expectedChecksum string) bool {
 	return hex.EncodeToString(hash[:]) == expectedChecksum
 }
 
-// ShardIndex returns true if the index is a data shard (vs parity).
+// IsDataShard returns true if the index is a data shard (vs parity).
 func (e *Encoder) IsDataShard(index int) bool {
 	return index < e.dataShards
 }

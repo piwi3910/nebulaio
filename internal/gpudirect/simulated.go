@@ -1,5 +1,6 @@
-// Package gpudirect provides a simulated GPUDirect backend for testing.
 package gpudirect
+
+// a simulated GPUDirect backend for testing.
 
 import (
 	"sync"

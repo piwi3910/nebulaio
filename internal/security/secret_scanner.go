@@ -1,5 +1,6 @@
-// Package security provides security-related functionality including secret scanning.
 package security
+
+// security-related functionality including secret scanning.
 
 import (
 	"bufio"

@@ -271,8 +271,8 @@ func testAsyncTransfer(t *testing.T, asyncOp func(*Service) asyncTransferOperati
 	defer service.ReleaseBuffer(buf)
 
 	var (
-		wg     sync.WaitGroup
-		opErr  error
+		wg    sync.WaitGroup
+		opErr error
 	)
 
 	wg.Add(1)

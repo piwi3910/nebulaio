@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -497,10 +498,12 @@ func (v *Volume) Stats() VolumeStats {
 
 // CompactionStats returns the current compaction statistics.
 func (v *Volume) CompactionStats() CompactionStats {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
-
-	return v.compactionStats
+	return CompactionStats{
+		DeletedObjectsCount:  atomic.LoadUint64(&v.compactionStats.DeletedObjectsCount),
+		ReclaimableBytes:     atomic.LoadUint64(&v.compactionStats.ReclaimableBytes),
+		ReplacedObjectsCount: atomic.LoadUint64(&v.compactionStats.ReplacedObjectsCount),
+		LastCompactionTime:   atomic.LoadInt64(&v.compactionStats.LastCompactionTime),
+	}
 }
 
 // VolumeStats contains volume statistics.

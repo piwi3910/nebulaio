@@ -760,7 +760,7 @@ func (s *ExpressService) ExpressCopyObject(ctx context.Context, srcBucket, srcKe
 	return s.ExpressPutObject(ctx, dstBucket, dstKey, bytes.NewReader(data), int64(len(data)), obj.Metadata)
 }
 
-// BatchAppend allows multiple append operations in a single request.
+// BatchAppendRequest allows multiple append operations in a single request.
 type BatchAppendRequest struct {
 	Bucket   string
 	Key      string
@@ -865,7 +865,7 @@ func (s *ExpressService) ExpressHeadObject(ctx context.Context, bucket, key stri
 	}, nil
 }
 
-// GenerateChecksumHeader creates checksum headers for express mode.
+// ChecksumHeader creates checksum headers for express mode.
 type ChecksumHeader struct {
 	Algorithm string
 	Value     string

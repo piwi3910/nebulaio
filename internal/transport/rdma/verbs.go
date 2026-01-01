@@ -1,4 +1,6 @@
-// Package rdma provides the libibverbs abstraction layer for RDMA hardware integration.
+package rdma
+
+// provides the libibverbs abstraction layer for RDMA hardware integration.
 //
 // This file defines the interface between NebulaIO's RDMA transport and the
 // underlying RDMA hardware. It provides:
@@ -13,7 +15,6 @@
 // To build with hardware support:
 //
 //	go build -tags rdma_hw ./...
-package rdma
 
 import (
 	"context"
@@ -84,7 +85,7 @@ type VerbsBackend interface {
 	GetMetrics() map[string]interface{}
 }
 
-// Handle types for verbs objects.
+// VerbsContext is a handle to an RDMA verbs context.
 type VerbsContext uintptr
 type VerbsPD uintptr
 type VerbsCQ uintptr
@@ -109,7 +110,7 @@ const (
 	MRAccessRemoteAtomic = 1 << 3
 )
 
-// Work completion status.
+// WCStatus represents work completion status codes.
 type WCStatus int
 
 const (
@@ -137,7 +138,7 @@ const (
 	WCGeneralErr
 )
 
-// Work completion opcode.
+// WCOpcode represents work completion operation codes.
 type WCOpcode int
 
 const (
@@ -611,10 +612,10 @@ func (b *SimulatedVerbsBackend) QueryQP(qp VerbsQP) (*VerbsQPAttr, error) {
 		State: simQP.state,
 		QPN:   simQP.qpNum,
 		Cap: VerbsQPCap{
-			MaxSendWR:  uint32(simQP.maxSend),  //nolint:gosec // G115: maxSend bounded by QP config
-			MaxRecvWR:  uint32(simQP.maxRecv),  //nolint:gosec // G115: maxRecv bounded by QP config
-			MaxSendSge: uint32(simQP.maxSge),   //nolint:gosec // G115: maxSge bounded by QP config
-			MaxRecvSge: uint32(simQP.maxSge),   //nolint:gosec // G115: maxSge bounded by QP config
+			MaxSendWR:  uint32(simQP.maxSend), //nolint:gosec // G115: maxSend bounded by QP config
+			MaxRecvWR:  uint32(simQP.maxRecv), //nolint:gosec // G115: maxRecv bounded by QP config
+			MaxSendSge: uint32(simQP.maxSge),  //nolint:gosec // G115: maxSge bounded by QP config
+			MaxRecvSge: uint32(simQP.maxSge),  //nolint:gosec // G115: maxSge bounded by QP config
 		},
 	}, nil
 }

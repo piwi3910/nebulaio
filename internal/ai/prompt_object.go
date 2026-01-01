@@ -448,7 +448,7 @@ func (s *PromptObjectService) recordMetrics(req *PromptRequest, resp *PromptResp
 	s.metrics.RequestsByBucket[req.Bucket]++
 }
 
-// Cache methods.
+// Get retrieves a cached prompt response by key.
 func (c *ResponseCache) Get(key string) *PromptResponse {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

@@ -76,13 +76,13 @@ type KeySpec struct {
 type Algorithm string
 
 const (
-	// Symmetric encryption algorithms.
+	// AlgorithmAES128 represents AES-128 symmetric encryption.
 	AlgorithmAES128    Algorithm = "AES_128"
 	AlgorithmAES256    Algorithm = "AES_256"
 	AlgorithmAES256GCM Algorithm = "AES_256_GCM"
 	AlgorithmChaCha20  Algorithm = "CHACHA20_POLY1305"
 
-	// Asymmetric encryption algorithms.
+	// AlgorithmRSA2048 represents RSA-2048 asymmetric encryption.
 	AlgorithmRSA2048   Algorithm = "RSA_2048"
 	AlgorithmRSA3072   Algorithm = "RSA_3072"
 	AlgorithmRSA4096   Algorithm = "RSA_4096"

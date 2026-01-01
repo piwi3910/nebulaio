@@ -1,9 +1,10 @@
 //go:build integration
 
-// Package integration provides integration tests for advanced features.
+package integration
+
+// Integration tests for advanced features.
 // These tests verify that feature components work together correctly.
 // Run with: go test -tags=integration ./internal/integration/...
-package integration
 
 import (
 	"bytes"

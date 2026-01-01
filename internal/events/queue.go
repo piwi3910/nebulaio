@@ -10,11 +10,11 @@ import (
 
 // Queue configuration constants.
 const (
-	defaultQueueSize          = 10000                   // Default event queue size
-	defaultMaxRetries         = 3                       // Default maximum retries for failed events
-	defaultWorkers            = 4                       // Default number of worker goroutines
-	eventPublishTimeout       = 30 * time.Second        // Timeout for publishing events
-	retryProcessorInterval    = 500 * time.Millisecond  // Interval for retry processor
+	defaultQueueSize       = 10000                  // Default event queue size
+	defaultMaxRetries      = 3                      // Default maximum retries for failed events
+	defaultWorkers         = 4                      // Default number of worker goroutines
+	eventPublishTimeout    = 30 * time.Second       // Timeout for publishing events
+	retryProcessorInterval = 500 * time.Millisecond // Interval for retry processor
 )
 
 // QueuedEvent represents an event in the queue.

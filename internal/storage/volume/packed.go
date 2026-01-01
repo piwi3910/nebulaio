@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"hash/crc32"
 	"io"
+	"sync/atomic"
 	"time"
 )
 
@@ -248,9 +249,9 @@ func (v *Volume) replaceExistingObject(bucket, key string) {
 	v.index.Delete(bucket, key)
 	v.super.ObjectCount--
 
-	v.compactionStats.ReplacedObjectsCount++
-	v.compactionStats.ReclaimableBytes += existing.Size
-	v.compactionStats.DeletedObjectsCount++
+	atomic.AddUint64(&v.compactionStats.ReplacedObjectsCount, 1)
+	atomic.AddUint64(&v.compactionStats.ReclaimableBytes, existing.Size)
+	atomic.AddUint64(&v.compactionStats.DeletedObjectsCount, 1)
 }
 
 func (v *Volume) allocateAndWriteBlocks(fullKey string, keyHash [16]byte, data []byte, size int64) (uint32, uint32, uint16, error) {
@@ -525,8 +526,8 @@ func (v *Volume) Delete(bucket, key string) error {
 	// Actual space reclamation happens during compaction
 
 	// Track for compaction stats - the deleted space becomes reclaimable
-	v.compactionStats.DeletedObjectsCount++
-	v.compactionStats.ReclaimableBytes += entry.Size
+	atomic.AddUint64(&v.compactionStats.DeletedObjectsCount, 1)
+	atomic.AddUint64(&v.compactionStats.ReclaimableBytes, entry.Size)
 
 	v.index.Delete(bucket, key)
 	v.super.ObjectCount--

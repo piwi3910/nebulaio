@@ -14,14 +14,14 @@ var (
 	ErrInvalidPath = errors.New("invalid path: potential directory traversal detected")
 )
 
-// directIOSupported returns false on non-Linux platforms
-// macOS and Windows don't support O_DIRECT in the same way
+// directIOSupported returns false on non-Linux platforms.
+// macOS and Windows don't support O_DIRECT in the same way.
 func directIOSupported() bool {
 	return false
 }
 
-// OpenFileDirect opens a file without direct I/O on non-Linux platforms
-// Falls back to regular file open
+// OpenFileDirect opens a file without direct I/O on non-Linux platforms.
+// Falls back to regular file open.
 func OpenFileDirect(path string, flag int, perm os.FileMode) (*os.File, error) {
 	// G304: Clean path to prevent directory traversal
 	cleanPath := filepath.Clean(path)
@@ -38,7 +38,7 @@ func OpenFileDirect(path string, flag int, perm os.FileMode) (*os.File, error) {
 	return file, nil
 }
 
-// CreateFileDirect creates a file without direct I/O on non-Linux platforms
+// CreateFileDirect creates a file without direct I/O on non-Linux platforms.
 func CreateFileDirect(path string, perm os.FileMode) (*os.File, error) {
 	// G304: Clean path to prevent directory traversal
 	cleanPath := filepath.Clean(path)
@@ -55,25 +55,25 @@ func CreateFileDirect(path string, perm os.FileMode) (*os.File, error) {
 	return file, nil
 }
 
-// Fallocate is not supported on non-Linux platforms
-// Falls back to Truncate which may not actually allocate disk blocks
+// Fallocate is not supported on non-Linux platforms.
+// Falls back to Truncate which may not actually allocate disk blocks.
 func Fallocate(file *os.File, size int64) error {
 	return file.Truncate(size)
 }
 
-// Fdatasync falls back to Sync on non-Linux platforms
+// Fdatasync falls back to Sync on non-Linux platforms.
 func Fdatasync(file *os.File) error {
 	return file.Sync()
 }
 
-// PunchHole is not supported on non-Linux platforms
-// Returns nil as a no-op
+// PunchHole is not supported on non-Linux platforms.
+// Returns nil as a no-op.
 func PunchHole(file *os.File, offset, length int64) error {
 	// Not supported - this is a no-op
 	return nil
 }
 
-// ZeroRange falls back to writing zeros on non-Linux platforms
+// ZeroRange falls back to writing zeros on non-Linux platforms.
 func ZeroRange(file *os.File, offset, length int64) error {
 	// Write actual zeros
 	zeros := make([]byte, 4096)
@@ -91,14 +91,14 @@ func ZeroRange(file *os.File, offset, length int64) error {
 	return nil
 }
 
-// Fadvise is not supported on non-Linux platforms
-// Returns nil as a no-op
+// Fadvise is not supported on non-Linux platforms.
+// Returns nil as a no-op.
 func Fadvise(file *os.File, offset, length int64, advice int) error {
 	// Not supported - this is a no-op
 	return nil
 }
 
-// Fadvise constants (defined for API compatibility)
+// Fadvise constants (defined for API compatibility).
 const (
 	FADV_NORMAL     = 0
 	FADV_RANDOM     = 1

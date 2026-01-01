@@ -385,6 +385,11 @@ func (s *ObjectLambdaService) applyWebhookTransform(
 	userIdentity UserIdentity,
 	webhookConfig *WebhookConfig,
 ) (io.Reader, map[string]string, error) {
+	// Validate webhook URL to prevent SSRF attacks
+	if err := validateWebhookURL(ctx, webhookConfig.URL); err != nil {
+		return nil, nil, fmt.Errorf("webhook URL validation failed: %w", err)
+	}
+
 	requestID := uuid.New().String()
 	outputToken := generateToken()
 	outputRoute := generateToken()

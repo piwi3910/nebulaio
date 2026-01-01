@@ -39,7 +39,7 @@ type EventType string
 
 // Event types for S3 operations.
 const (
-	// Object events.
+	// EventObjectCreated is fired when an object is created via PUT.
 	EventObjectCreated         EventType = "s3:ObjectCreated:Put"
 	EventObjectCreatedCopy     EventType = "s3:ObjectCreated:Copy"
 	EventObjectCreatedPost     EventType = "s3:ObjectCreated:Post"
@@ -49,44 +49,48 @@ const (
 	EventObjectAccessed        EventType = "s3:ObjectAccessed:Get"
 	EventObjectAccessedHead    EventType = "s3:ObjectAccessed:Head"
 
-	// Bucket events.
+	// EventBucketCreated is fired when a bucket is created.
 	EventBucketCreated EventType = "s3:BucketCreated"
 	EventBucketRemoved EventType = "s3:BucketRemoved"
 	EventBucketListed  EventType = "s3:BucketListed"
 
-	// Auth events.
+	// EventAuthLogin is fired when a user successfully logs in.
 	EventAuthLogin          EventType = "auth:Login"
 	EventAuthLoginFailed    EventType = "auth:LoginFailed"
 	EventAuthLogout         EventType = "auth:Logout"
 	EventAuthTokenRefreshed EventType = "auth:TokenRefreshed"
 
-	// Access key events.
+	// EventAccessKeyCreated is fired when an IAM access key is created.
 	EventAccessKeyCreated EventType = "iam:AccessKeyCreated"
 	EventAccessKeyDeleted EventType = "iam:AccessKeyDeleted"
 
-	// User events.
+	// EventUserCreated is fired when an IAM user is created.
 	EventUserCreated         EventType = "iam:UserCreated"
 	EventUserUpdated         EventType = "iam:UserUpdated"
 	EventUserDeleted         EventType = "iam:UserDeleted"
 	EventUserPasswordChanged EventType = "iam:UserPasswordChanged"
 
-	// Policy events.
+	// EventPolicyCreated is fired when an IAM policy is created.
 	EventPolicyCreated EventType = "iam:PolicyCreated"
 	EventPolicyUpdated EventType = "iam:PolicyUpdated"
 	EventPolicyDeleted EventType = "iam:PolicyDeleted"
 
-	// Multipart events.
+	// EventMultipartCreated is fired when a multipart upload is initiated.
 	EventMultipartCreated   EventType = "s3:MultipartUpload:Created"
 	EventMultipartAborted   EventType = "s3:MultipartUpload:Aborted"
 	EventMultipartCompleted EventType = "s3:MultipartUpload:Completed"
 	EventMultipartPartAdded EventType = "s3:MultipartUpload:PartAdded"
 
-	// Placement group events.
-	EventPlacementGroupNodeJoined    EventType = "cluster:PlacementGroup:NodeJoined"
-	EventPlacementGroupNodeLeft      EventType = "cluster:PlacementGroup:NodeLeft"
+	// EventPlacementGroupNodeJoined is fired when a node joins a placement group.
+	EventPlacementGroupNodeJoined EventType = "cluster:PlacementGroup:NodeJoined"
+	// EventPlacementGroupNodeLeft is fired when a node leaves a placement group.
+	EventPlacementGroupNodeLeft EventType = "cluster:PlacementGroup:NodeLeft"
+	// EventPlacementGroupStatusChanged is fired when a placement group changes status.
 	EventPlacementGroupStatusChanged EventType = "cluster:PlacementGroup:StatusChanged"
-	EventPlacementGroupCreated       EventType = "cluster:PlacementGroup:Created"
-	EventPlacementGroupDeleted       EventType = "cluster:PlacementGroup:Deleted"
+	// EventPlacementGroupCreated is fired when a placement group is created.
+	EventPlacementGroupCreated EventType = "cluster:PlacementGroup:Created"
+	// EventPlacementGroupDeleted is fired when a placement group is deleted.
+	EventPlacementGroupDeleted EventType = "cluster:PlacementGroup:Deleted"
 )
 
 // EventSource represents the source of the audit event.

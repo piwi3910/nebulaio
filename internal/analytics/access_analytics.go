@@ -57,27 +57,27 @@ const (
 
 // Analytics configuration constants.
 const (
-	defaultMinEventsForBaseline   = 100
-	defaultAnomalyThreshold       = 3.0
-	defaultBatchSize              = 1000
-	defaultEventChannelSize       = 10000
-	thresholdUnusualTime          = 2.0
-	thresholdHighVolume           = 5.0
-	thresholdHighVolumeWindowMins = 15
-	thresholdBulkDelete           = 100
-	thresholdBulkDeleteWindowMins = 5
-	thresholdGeoVelocity          = 500
-	thresholdDataExfiltration     = 10
-	thresholdRapidChanges         = 5
+	defaultMinEventsForBaseline     = 100
+	defaultAnomalyThreshold         = 3.0
+	defaultBatchSize                = 1000
+	defaultEventChannelSize         = 10000
+	thresholdUnusualTime            = 2.0
+	thresholdHighVolume             = 5.0
+	thresholdHighVolumeWindowMins   = 15
+	thresholdBulkDelete             = 100
+	thresholdBulkDeleteWindowMins   = 5
+	thresholdGeoVelocity            = 500
+	thresholdDataExfiltration       = 10
+	thresholdRapidChanges           = 5
 	thresholdRapidChangesWindowMins = 10
-	baselineDays                  = 24
-	minBaselineEvents             = 2
-	heatmapDegrees                = 180
-	embeddingDim                  = 1024
-	minGeoEventsForCheck          = 2
-	degreesToRadiansDivisor       = 180
-	haversineDivisor              = 2
-	bytesPerGB                    = 1024 * 1024 * 1024
+	baselineDays                    = 24
+	minBaselineEvents               = 2
+	heatmapDegrees                  = 180
+	embeddingDim                    = 1024
+	minGeoEventsForCheck            = 2
+	degreesToRadiansDivisor         = 180
+	haversineDivisor                = 2
+	bytesPerGB                      = 1024 * 1024 * 1024
 )
 
 // AccessEvent represents a single access event.
@@ -275,9 +275,9 @@ func NewAccessAnalytics(config *AnalyticsConfig, storage AnalyticsStorage, alert
 		config = &AnalyticsConfig{
 			BaselineWindow:       7 * 24 * time.Hour, // 7 days
 			MinEventsForBaseline: defaultMinEventsForBaseline,
-			AnomalyThreshold:     defaultAnomalyThreshold,      // 3 standard deviations
-			RetentionPeriod:      30 * 24 * time.Hour,          // 30 days
-			SamplingRate:         1.0,                          // 100%
+			AnomalyThreshold:     defaultAnomalyThreshold, // 3 standard deviations
+			RetentionPeriod:      30 * 24 * time.Hour,     // 30 days
+			SamplingRate:         1.0,                     // 100%
 			EnableRealTime:       true,
 			BatchSize:            defaultBatchSize,
 			FlushInterval:        time.Minute,
