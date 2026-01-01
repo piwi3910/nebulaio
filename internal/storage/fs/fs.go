@@ -279,6 +279,7 @@ func (b *Backend) GetStorageInfo(ctx context.Context) (*backend.StorageInfo, err
 		return nil, fmt.Errorf("%w: block size is zero", ErrInvalidFilesystemStats)
 	}
 
+	//nolint:gosec // G115: Bsize is always positive after zero check
 	blockSize := uint64(stat.Bsize)
 	total := stat.Blocks * blockSize
 	free := stat.Bfree * blockSize

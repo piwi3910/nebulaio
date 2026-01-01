@@ -818,39 +818,6 @@ func (mm *MigrationManager) migrateObject(ctx context.Context, activeJob *active
 	return nil
 }
 
-// logFailedObject logs a failed object migration.
-func (mm *MigrationManager) logFailedObject(jobID, bucket, key string, err error) {
-	entry := FailedObject{
-		Bucket:    bucket,
-		Key:       key,
-		Error:     err.Error(),
-		Timestamp: time.Now(),
-	}
-
-	data, marshalErr := json.Marshal(entry)
-	if marshalErr != nil {
-		log.Error().
-			Err(marshalErr).
-			Str("job_id", jobID).
-			Str("bucket", bucket).
-			Str("key", key).
-			Str("original_error", err.Error()).
-			Msg("failed to marshal migration failure entry - failure will not be logged to file")
-
-		return
-	}
-
-	_, writeErr := mm.failedLog.Write(append(data, '\n'))
-	if writeErr != nil {
-		log.Error().
-			Err(writeErr).
-			Str("job_id", jobID).
-			Str("bucket", bucket).
-			Str("key", key).
-			Msg("failed to write migration failure to log file")
-	}
-}
-
 // PauseMigration pauses the active migration.
 func (mm *MigrationManager) PauseMigration() error {
 	mm.mu.Lock()

@@ -549,13 +549,13 @@ func (s *DragonboatStore) calculatePagination(versions, deleteMarkers []*ObjectM
 	if len(versions) > maxKeys {
 		nextKeyMarker = versions[maxKeys].Key
 		nextVersionIDMarker = versions[maxKeys].VersionID
-		versions = versions[:maxKeys]
+		_ = versions[:maxKeys] // Truncate to maxKeys
 	} else if len(deleteMarkers) > 0 {
 		remaining := maxKeys - len(versions)
 		if remaining < len(deleteMarkers) {
 			nextKeyMarker = deleteMarkers[remaining].Key
 			nextVersionIDMarker = deleteMarkers[remaining].VersionID
-			deleteMarkers = deleteMarkers[:remaining]
+			_ = deleteMarkers[:remaining] // Truncate to remaining
 		}
 	}
 

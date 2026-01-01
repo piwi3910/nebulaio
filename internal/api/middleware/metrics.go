@@ -11,9 +11,10 @@ import (
 	"github.com/piwi3910/nebulaio/internal/metrics"
 )
 
-// HTTP method constants.
+// HTTP method and operation constants.
 const (
-	methodGET = "GET"
+	methodGET           = "GET"
+	operationUnknown    = "Unknown"
 )
 
 // MetricsMiddleware records request metrics.
@@ -97,7 +98,7 @@ func extractS3Operation(r *http.Request) string {
 		return extractObjectOperation(r)
 	}
 
-	return "Unknown"
+	return operationUnknown
 }
 
 // extractBucketOperation extracts bucket-level operation name.
@@ -115,7 +116,7 @@ func extractBucketOperation(r *http.Request) string {
 	case methodGET:
 		return extractBucketGetOperation(query)
 	default:
-		return "Unknown"
+		return operationUnknown
 	}
 }
 
@@ -173,7 +174,7 @@ func extractObjectOperation(r *http.Request) string {
 	case "POST":
 		return extractObjectPostOperation(query)
 	default:
-		return "Unknown"
+		return operationUnknown
 	}
 }
 
@@ -259,7 +260,7 @@ func getErrorType(status int) string {
 	case status >= http.StatusInternalServerError:
 		return "ServerError"
 	default:
-		return "Unknown"
+		return operationUnknown
 	}
 }
 
