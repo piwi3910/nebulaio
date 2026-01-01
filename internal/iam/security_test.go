@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -190,7 +191,7 @@ func TestActionValidation(t *testing.T) {
 				},
 			}
 
-			policyName := "valid-action-" + string(rune('a'+i))
+			policyName := "valid-action-" + strconv.Itoa(i)
 			err := pm.CreatePolicy(ctx, policyName, "Valid action policy", policy)
 			assert.NoError(t, err, "Policy with action %s should be accepted", action)
 		}

@@ -1,6 +1,7 @@
 package bucket
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -135,7 +136,7 @@ func TestTagSecurityValidation(t *testing.T) {
 	t.Run("rejects too many tags", func(t *testing.T) {
 		tags := make(map[string]string)
 		for i := range tagCountExceeded {
-			tags["key"+string(rune('a'+i))] = "value"
+			tags["key"+strconv.Itoa(i)] = "value"
 		}
 
 		err := validateBucketTags(tags)
