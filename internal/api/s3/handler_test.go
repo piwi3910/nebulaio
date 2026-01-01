@@ -3268,10 +3268,10 @@ func TestPresignedPutObject(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code, "Response body: %s", w.Body.String())
 
-	obj, err := tc.object.GetObject(ctx, presignedTestBucket, "uploaded-key", "")
+	reader, _, err := tc.object.GetObject(ctx, presignedTestBucket, "uploaded-key")
 	require.NoError(t, err, "Object was not created")
 
-	body, err := io.ReadAll(obj.Body)
+	body, err := io.ReadAll(reader)
 	require.NoError(t, err)
 	assert.Equal(t, content, string(body))
 }
@@ -3366,7 +3366,7 @@ func TestPresignedDeleteObject(t *testing.T) {
 	assert.True(t, w.Code == http.StatusNoContent || w.Code == http.StatusOK,
 		"Expected status 204 or 200, got %d: %s", w.Code, w.Body.String())
 
-	_, err = tc.object.GetObject(ctx, presignedTestBucket, "delete-me", "")
+	_, _, err = tc.object.GetObject(ctx, presignedTestBucket, "delete-me")
 	assert.Error(t, err, "Object should have been deleted")
 }
 
