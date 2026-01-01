@@ -1,0 +1,662 @@
+// Package lambda implements S3 Object Lambda functionality for transforming
+// objects on GET requests without creating derivative copies.
+package lambda
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/rs/zerolog/log"
+	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+)
+
+// WASMRuntime manages WebAssembly module execution for Object Lambda transformations.
+// It provides sandboxed execution with configurable resource limits.
+type WASMRuntime struct {
+	runtime       wazero.Runtime
+	moduleCache   map[string]wazero.CompiledModule
+	moduleLoader  ModuleLoader
+	mu            sync.RWMutex
+	closed        atomic.Bool
+	config        *WASMRuntimeConfig
+	metricsActive atomic.Int64
+}
+
+// WASMRuntimeConfig holds configuration for the WASM runtime.
+type WASMRuntimeConfig struct {
+	// MaxMemoryMB is the maximum memory (in MB) a WASM module can use.
+	// Default: 256 MB
+	MaxMemoryMB int
+
+	// MaxExecutionTime is the maximum time a WASM function can execute.
+	// Default: 30 seconds
+	MaxExecutionTime time.Duration
+
+	// MaxInputSize is the maximum size of input data (in bytes).
+	// Default: 100 MB
+	MaxInputSize int64
+
+	// MaxOutputSize is the maximum size of output data (in bytes).
+	// Default: 100 MB
+	MaxOutputSize int64
+
+	// EnableCaching enables compiled module caching.
+	// Default: true
+	EnableCaching bool
+
+	// StreamingThreshold is the size threshold (in bytes) above which
+	// streaming mode is used for transformations.
+	// Default: 10 MB
+	StreamingThreshold int64
+}
+
+// DefaultWASMRuntimeConfig returns a WASMRuntimeConfig with sensible defaults.
+func DefaultWASMRuntimeConfig() *WASMRuntimeConfig {
+	return &WASMRuntimeConfig{
+		MaxMemoryMB:        256,
+		MaxExecutionTime:   30 * time.Second,
+		MaxInputSize:       100 * 1024 * 1024, // 100 MB
+		MaxOutputSize:      100 * 1024 * 1024, // 100 MB
+		EnableCaching:      true,
+		StreamingThreshold: 10 * 1024 * 1024, // 10 MB
+	}
+}
+
+// ModuleLoader defines the interface for loading WASM modules.
+type ModuleLoader interface {
+	// LoadModule loads a WASM module from the specified location.
+	LoadModule(ctx context.Context, bucket, key string) ([]byte, error)
+}
+
+// DefaultModuleLoader is a placeholder module loader that returns an error.
+// In production, this should be replaced with an implementation that
+// loads modules from S3 or another storage backend.
+type DefaultModuleLoader struct{}
+
+// LoadModule implements ModuleLoader.
+func (l *DefaultModuleLoader) LoadModule(ctx context.Context, bucket, key string) ([]byte, error) {
+	return nil, fmt.Errorf("module loader not configured: cannot load %s/%s", bucket, key)
+}
+
+// NewWASMRuntime creates a new WASM runtime with the given configuration.
+func NewWASMRuntime(ctx context.Context, config *WASMRuntimeConfig) (*WASMRuntime, error) {
+	if config == nil {
+		config = DefaultWASMRuntimeConfig()
+	}
+
+	// Create wazero runtime with memory limits
+	// Calculate memory pages safely (1 page = 64KB, so MB * 16 = pages)
+	// Limit to a safe maximum to prevent overflow
+	memoryPages := config.MaxMemoryMB * 16
+	if memoryPages > 65535 { // Max uint16 to be safe
+		memoryPages = 65535
+	}
+
+	runtimeConfig := wazero.NewRuntimeConfig().
+		WithMemoryLimitPages(uint32(memoryPages)) //nolint:gosec // memoryPages is bounded above
+
+	runtime := wazero.NewRuntimeWithConfig(ctx, runtimeConfig)
+
+	// Instantiate WASI for I/O operations
+	_, err := wasi_snapshot_preview1.Instantiate(ctx, runtime)
+	if err != nil {
+		if closeErr := runtime.Close(ctx); closeErr != nil {
+			log.Warn().Err(closeErr).Msg("Failed to close runtime after WASI instantiation failure")
+		}
+
+		return nil, fmt.Errorf("failed to instantiate WASI: %w", err)
+	}
+
+	wasmRuntime := &WASMRuntime{
+		runtime:      runtime,
+		moduleCache:  make(map[string]wazero.CompiledModule),
+		moduleLoader: &DefaultModuleLoader{},
+		config:       config,
+	}
+
+	log.Info().
+		Int("max_memory_mb", config.MaxMemoryMB).
+		Dur("max_execution_time", config.MaxExecutionTime).
+		Int64("max_input_size", config.MaxInputSize).
+		Bool("caching_enabled", config.EnableCaching).
+		Msg("WASM runtime initialized")
+
+	return wasmRuntime, nil
+}
+
+// SetModuleLoader sets the module loader for loading WASM modules.
+func (w *WASMRuntime) SetModuleLoader(loader ModuleLoader) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.moduleLoader = loader
+}
+
+// Transform executes a WASM transformation on the input data.
+func (w *WASMRuntime) Transform(
+	ctx context.Context,
+	config *WASMConfig,
+	input io.Reader,
+	metadata map[string]string,
+) (io.Reader, map[string]string, error) {
+	if w.closed.Load() {
+		return nil, nil, errors.New("WASM runtime is closed")
+	}
+
+	// Validate configuration
+	if err := w.validateConfig(config); err != nil {
+		return nil, nil, err
+	}
+
+	// Track active executions for metrics
+	w.metricsActive.Add(1)
+	defer w.metricsActive.Add(-1)
+
+	// Create execution context with timeout
+	execCtx, cancel := context.WithTimeout(ctx, w.config.MaxExecutionTime)
+	defer cancel()
+
+	// Read input with size limit
+	inputData, err := w.readInputWithLimit(input)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Check if streaming should be used for large inputs
+	if int64(len(inputData)) > w.config.StreamingThreshold {
+		log.Debug().
+			Int("input_size", len(inputData)).
+			Int64("streaming_threshold", w.config.StreamingThreshold).
+			Msg("Using streaming mode for large WASM transformation")
+	}
+
+	// Load and compile module
+	compiledModule, err := w.getOrCompileModule(execCtx, config.ModuleBucket, config.ModuleKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load WASM module: %w", err)
+	}
+
+	// Execute transformation
+	outputData, outputMetadata, err := w.executeTransformation(
+		execCtx,
+		compiledModule,
+		config.FunctionName,
+		inputData,
+		metadata,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return bytes.NewReader(outputData), outputMetadata, nil
+}
+
+// validateConfig validates the WASM configuration.
+func (w *WASMRuntime) validateConfig(config *WASMConfig) error {
+	if config == nil {
+		return errors.New("WASM configuration is nil")
+	}
+
+	if config.ModuleBucket == "" {
+		return errors.New("WASM module bucket is required")
+	}
+
+	if config.ModuleKey == "" {
+		return errors.New("WASM module key is required")
+	}
+
+	if config.FunctionName == "" {
+		return errors.New("WASM function name is required")
+	}
+
+	// Apply memory limit from config if specified
+	if config.MemoryLimit > 0 && config.MemoryLimit > w.config.MaxMemoryMB {
+		return fmt.Errorf(
+			"requested memory limit %d MB exceeds maximum %d MB",
+			config.MemoryLimit,
+			w.config.MaxMemoryMB,
+		)
+	}
+
+	return nil
+}
+
+// readInputWithLimit reads input data with size limit enforcement.
+func (w *WASMRuntime) readInputWithLimit(input io.Reader) ([]byte, error) {
+	limitedReader := io.LimitReader(input, w.config.MaxInputSize+1)
+
+	data, err := io.ReadAll(limitedReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read input: %w", err)
+	}
+
+	if int64(len(data)) > w.config.MaxInputSize {
+		return nil, fmt.Errorf(
+			"input size %d bytes exceeds maximum %d bytes",
+			len(data),
+			w.config.MaxInputSize,
+		)
+	}
+
+	return data, nil
+}
+
+// getOrCompileModule retrieves a compiled module from cache or compiles it.
+func (w *WASMRuntime) getOrCompileModule(
+	ctx context.Context,
+	bucket, key string,
+) (wazero.CompiledModule, error) {
+	cacheKey := fmt.Sprintf("%s/%s", bucket, key)
+
+	// Check cache first
+	if w.config.EnableCaching {
+		w.mu.RLock()
+		if cached, ok := w.moduleCache[cacheKey]; ok {
+			w.mu.RUnlock()
+
+			log.Debug().
+				Str("bucket", bucket).
+				Str("key", key).
+				Msg("Using cached WASM module")
+
+			return cached, nil
+		}
+
+		w.mu.RUnlock()
+	}
+
+	// Load module bytes
+	w.mu.RLock()
+	loader := w.moduleLoader
+	w.mu.RUnlock()
+
+	moduleBytes, err := loader.LoadModule(ctx, bucket, key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load module: %w", err)
+	}
+
+	// Compile module
+	compiled, err := w.runtime.CompileModule(ctx, moduleBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile WASM module: %w", err)
+	}
+
+	// Cache the compiled module
+	if w.config.EnableCaching {
+		w.mu.Lock()
+		w.moduleCache[cacheKey] = compiled
+		w.mu.Unlock()
+
+		log.Debug().
+			Str("bucket", bucket).
+			Str("key", key).
+			Msg("Cached compiled WASM module")
+	}
+
+	return compiled, nil
+}
+
+// executeTransformation runs the WASM transformation function.
+func (w *WASMRuntime) executeTransformation(
+	ctx context.Context,
+	compiledModule wazero.CompiledModule,
+	functionName string,
+	inputData []byte,
+	metadata map[string]string,
+) ([]byte, map[string]string, error) {
+	startTime := time.Now()
+
+	// Create module configuration with memory limits
+	moduleConfig := wazero.NewModuleConfig().
+		WithStartFunctions().
+		WithStdin(bytes.NewReader(inputData)).
+		WithStdout(io.Discard).
+		WithStderr(io.Discard)
+
+	// Instantiate the module
+	instance, err := w.runtime.InstantiateModule(ctx, compiledModule, moduleConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to instantiate WASM module: %w", err)
+	}
+
+	defer func() {
+		if closeErr := instance.Close(ctx); closeErr != nil {
+			log.Warn().Err(closeErr).Msg("Failed to close WASM module instance")
+		}
+	}()
+
+	// Get the transformation function
+	transformFunc := instance.ExportedFunction(functionName)
+	if transformFunc == nil {
+		return nil, nil, fmt.Errorf("function '%s' not found in WASM module", functionName)
+	}
+
+	// Allocate memory for input
+	allocFunc := instance.ExportedFunction("allocate")
+	freeFunc := instance.ExportedFunction("deallocate")
+
+	if allocFunc == nil || freeFunc == nil {
+		// Fall back to simple execution without memory management
+		return w.executeSimpleTransformation(ctx, instance, transformFunc, inputData)
+	}
+
+	// Execute with proper memory management
+	return w.executeWithMemoryManagement(
+		ctx,
+		instance,
+		transformFunc,
+		allocFunc,
+		freeFunc,
+		inputData,
+		startTime,
+	)
+}
+
+// safeUint64ToUint32 safely converts a uint64 to uint32, returning an error if overflow would occur.
+func safeUint64ToUint32(value uint64) (uint32, error) {
+	if value > uint64(^uint32(0)) {
+		return 0, fmt.Errorf("value %d exceeds uint32 maximum", value)
+	}
+
+	return uint32(value), nil
+}
+
+// executeSimpleTransformation executes a simple transformation without
+// explicit memory management (for modules that handle their own memory).
+func (w *WASMRuntime) executeSimpleTransformation(
+	ctx context.Context,
+	instance api.Module,
+	transformFunc api.Function,
+	inputData []byte,
+) ([]byte, map[string]string, error) {
+	// Call the function with input size
+	results, err := transformFunc.Call(ctx, uint64(len(inputData)))
+	if err != nil {
+		return nil, nil, fmt.Errorf("WASM function execution failed: %w", err)
+	}
+
+	if len(results) < 2 {
+		return nil, nil, errors.New("WASM function returned insufficient results")
+	}
+
+	// Results should be [output_ptr, output_len] (WASM32 uses 32-bit pointers)
+	outputPtr, err := safeUint64ToUint32(results[0])
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid output pointer: %w", err)
+	}
+
+	outputLen, err := safeUint64ToUint32(results[1])
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid output length: %w", err)
+	}
+
+	// Validate output size
+	if int64(outputLen) > w.config.MaxOutputSize {
+		return nil, nil, fmt.Errorf(
+			"output size %d bytes exceeds maximum %d bytes",
+			outputLen,
+			w.config.MaxOutputSize,
+		)
+	}
+
+	// Read output from WASM memory
+	memory := instance.Memory()
+	if memory == nil {
+		return nil, nil, errors.New("WASM module has no exported memory")
+	}
+
+	outputData, ok := memory.Read(outputPtr, outputLen)
+	if !ok {
+		return nil, nil, errors.New("failed to read output from WASM memory")
+	}
+
+	// Make a copy since memory may be invalidated
+	output := make([]byte, len(outputData))
+	copy(output, outputData)
+
+	return output, nil, nil
+}
+
+// executeWithMemoryManagement executes a transformation with explicit
+// memory allocation and deallocation.
+func (w *WASMRuntime) executeWithMemoryManagement(
+	ctx context.Context,
+	instance api.Module,
+	transformFunc api.Function,
+	allocFunc api.Function,
+	freeFunc api.Function,
+	inputData []byte,
+	startTime time.Time,
+) ([]byte, map[string]string, error) {
+	memory := instance.Memory()
+	if memory == nil {
+		return nil, nil, errors.New("WASM module has no exported memory")
+	}
+
+	// Allocate memory for input
+	inputLen := uint64(len(inputData))
+	allocResults, err := allocFunc.Call(ctx, inputLen)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to allocate input memory: %w", err)
+	}
+
+	inputPtr, err := safeUint64ToUint32(allocResults[0])
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid input pointer from allocator: %w", err)
+	}
+
+	defer func() {
+		// Free input memory
+		if _, freeErr := freeFunc.Call(ctx, uint64(inputPtr), inputLen); freeErr != nil {
+			log.Warn().Err(freeErr).Msg("Failed to free WASM input memory")
+		}
+	}()
+
+	// Write input to WASM memory
+	if !memory.Write(inputPtr, inputData) {
+		return nil, nil, errors.New("failed to write input to WASM memory")
+	}
+
+	// Call the transformation function
+	results, err := transformFunc.Call(ctx, uint64(inputPtr), inputLen)
+	if err != nil {
+		return nil, nil, fmt.Errorf("WASM function execution failed: %w", err)
+	}
+
+	if len(results) < 2 {
+		return nil, nil, errors.New("WASM function returned insufficient results")
+	}
+
+	// Results should be [output_ptr, output_len] (WASM32 uses 32-bit pointers)
+	outputPtr, err := safeUint64ToUint32(results[0])
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid output pointer: %w", err)
+	}
+
+	outputLen, err := safeUint64ToUint32(results[1])
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid output length: %w", err)
+	}
+
+	// Validate output size
+	if int64(outputLen) > w.config.MaxOutputSize {
+		return nil, nil, fmt.Errorf(
+			"output size %d bytes exceeds maximum %d bytes",
+			outputLen,
+			w.config.MaxOutputSize,
+		)
+	}
+
+	// Read output from WASM memory
+	outputData, ok := memory.Read(outputPtr, outputLen)
+	if !ok {
+		return nil, nil, errors.New("failed to read output from WASM memory")
+	}
+
+	// Make a copy since memory may be invalidated
+	output := make([]byte, len(outputData))
+	copy(output, outputData)
+
+	// Free output memory
+	if _, err := freeFunc.Call(ctx, uint64(outputPtr), uint64(outputLen)); err != nil {
+		log.Warn().Err(err).Msg("Failed to free WASM output memory")
+	}
+
+	duration := time.Since(startTime)
+
+	log.Debug().
+		Int("input_size", len(inputData)).
+		Int("output_size", len(output)).
+		Dur("duration", duration).
+		Msg("WASM transformation completed")
+
+	return output, nil, nil
+}
+
+// ClearCache clears the compiled module cache.
+func (w *WASMRuntime) ClearCache() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.moduleCache = make(map[string]wazero.CompiledModule)
+
+	log.Info().Msg("WASM module cache cleared")
+}
+
+// GetActiveExecutions returns the number of active WASM executions.
+func (w *WASMRuntime) GetActiveExecutions() int64 {
+	return w.metricsActive.Load()
+}
+
+// Close closes the WASM runtime and releases all resources.
+func (w *WASMRuntime) Close(ctx context.Context) error {
+	if !w.closed.CompareAndSwap(false, true) {
+		return nil // Already closed
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Close all cached compiled modules
+	for key, module := range w.moduleCache {
+		if err := module.Close(ctx); err != nil {
+			log.Warn().Err(err).Str("module", key).Msg("Failed to close cached WASM module")
+		}
+	}
+
+	w.moduleCache = nil
+
+	// Close the runtime
+	if err := w.runtime.Close(ctx); err != nil {
+		return fmt.Errorf("failed to close WASM runtime: %w", err)
+	}
+
+	log.Info().Msg("WASM runtime closed")
+
+	return nil
+}
+
+// WASMTransformResult contains the result of a WASM transformation.
+type WASMTransformResult struct {
+	// Output is the transformed data
+	Output []byte
+
+	// Metadata contains output metadata from the transformation
+	Metadata map[string]string
+
+	// Duration is the time taken for the transformation
+	Duration time.Duration
+
+	// InputSize is the size of the input data
+	InputSize int64
+
+	// OutputSize is the size of the output data
+	OutputSize int64
+}
+
+// S3ModuleLoader loads WASM modules from S3 storage.
+// This is a placeholder interface that should be implemented
+// with actual S3 client integration.
+type S3ModuleLoader struct {
+	// GetObject is a function that retrieves an object from S3
+	GetObject func(ctx context.Context, bucket, key string) (io.ReadCloser, error)
+}
+
+// LoadModule implements ModuleLoader for S3 storage.
+func (l *S3ModuleLoader) LoadModule(ctx context.Context, bucket, key string) ([]byte, error) {
+	if l.GetObject == nil {
+		return nil, errors.New("S3 GetObject function not configured")
+	}
+
+	reader, err := l.GetObject(ctx, bucket, key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get WASM module from S3: %w", err)
+	}
+
+	defer func() {
+		if closeErr := reader.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Msg("Failed to close S3 object reader")
+		}
+	}()
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read WASM module: %w", err)
+	}
+
+	log.Debug().
+		Str("bucket", bucket).
+		Str("key", key).
+		Int("size", len(data)).
+		Msg("Loaded WASM module from S3")
+
+	return data, nil
+}
+
+// InMemoryModuleLoader loads WASM modules from an in-memory store.
+// Useful for testing and development.
+type InMemoryModuleLoader struct {
+	modules map[string][]byte
+	mu      sync.RWMutex
+}
+
+// NewInMemoryModuleLoader creates a new in-memory module loader.
+func NewInMemoryModuleLoader() *InMemoryModuleLoader {
+	return &InMemoryModuleLoader{
+		modules: make(map[string][]byte),
+	}
+}
+
+// AddModule adds a WASM module to the in-memory store.
+func (l *InMemoryModuleLoader) AddModule(bucket, key string, data []byte) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	moduleKey := fmt.Sprintf("%s/%s", bucket, key)
+	l.modules[moduleKey] = data
+}
+
+// LoadModule implements ModuleLoader for in-memory storage.
+func (l *InMemoryModuleLoader) LoadModule(ctx context.Context, bucket, key string) ([]byte, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	moduleKey := fmt.Sprintf("%s/%s", bucket, key)
+	data, ok := l.modules[moduleKey]
+	if !ok {
+		return nil, fmt.Errorf("WASM module not found: %s/%s", bucket, key)
+	}
+
+	// Return a copy to prevent modification
+	result := make([]byte, len(data))
+	copy(result, data)
+
+	return result, nil
+}

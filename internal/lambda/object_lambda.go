@@ -208,6 +208,7 @@ type ObjectLambdaService struct {
 	httpClient       *http.Client
 	transformers     map[BuiltInTransform]Transformer
 	pendingResponses map[string]chan *WriteGetObjectResponseInput
+	wasmRuntime      *WASMRuntime
 	mu               sync.RWMutex
 	pendingMu        sync.RWMutex
 }
@@ -231,7 +232,74 @@ func NewObjectLambdaService() *ObjectLambdaService {
 	// Register built-in transformers
 	svc.registerBuiltInTransformers()
 
+	// Initialize WASM runtime (lazy initialization - will be created on first use)
+	// This avoids startup overhead if WASM transformations are not used
+	svc.wasmRuntime = nil
+
 	return svc
+}
+
+// NewObjectLambdaServiceWithWASM creates a new Object Lambda service with WASM support enabled.
+func NewObjectLambdaServiceWithWASM(
+	ctx context.Context,
+	wasmConfig *WASMRuntimeConfig,
+) (*ObjectLambdaService, error) {
+	svc := NewObjectLambdaService()
+
+	wasmRuntime, err := NewWASMRuntime(ctx, wasmConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize WASM runtime: %w", err)
+	}
+
+	svc.wasmRuntime = wasmRuntime
+
+	return svc, nil
+}
+
+// SetWASMModuleLoader sets the module loader for WASM transformations.
+func (s *ObjectLambdaService) SetWASMModuleLoader(loader ModuleLoader) error {
+	if s.wasmRuntime == nil {
+		return errors.New("WASM runtime not initialized")
+	}
+
+	s.wasmRuntime.SetModuleLoader(loader)
+
+	return nil
+}
+
+// initWASMRuntime initializes the WASM runtime if not already initialized.
+func (s *ObjectLambdaService) initWASMRuntime(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.wasmRuntime != nil {
+		return nil
+	}
+
+	wasmRuntime, err := NewWASMRuntime(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to initialize WASM runtime: %w", err)
+	}
+
+	s.wasmRuntime = wasmRuntime
+
+	return nil
+}
+
+// Close closes the ObjectLambdaService and releases resources.
+func (s *ObjectLambdaService) Close(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.wasmRuntime != nil {
+		if err := s.wasmRuntime.Close(ctx); err != nil {
+			return fmt.Errorf("failed to close WASM runtime: %w", err)
+		}
+
+		s.wasmRuntime = nil
+	}
+
+	return nil
 }
 
 // registerBuiltInTransformers registers all built-in transformation functions.
@@ -500,9 +568,31 @@ func (s *ObjectLambdaService) applyWASMTransform(
 	input io.Reader,
 	config *WASMConfig,
 ) (io.Reader, map[string]string, error) {
-	// TODO: Implement WASM runtime integration
-	// This would use a WASM runtime like wasmtime or wasmer
-	return nil, nil, errors.New("WASM transformations not yet implemented")
+	// Initialize WASM runtime if needed (lazy initialization)
+	if err := s.initWASMRuntime(ctx); err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize WASM runtime: %w", err)
+	}
+
+	// Execute the WASM transformation
+	output, headers, err := s.wasmRuntime.Transform(ctx, config, input, nil)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("module_bucket", config.ModuleBucket).
+			Str("module_key", config.ModuleKey).
+			Str("function", config.FunctionName).
+			Msg("WASM transformation failed")
+
+		return nil, nil, fmt.Errorf("WASM transformation failed: %w", err)
+	}
+
+	log.Debug().
+		Str("module_bucket", config.ModuleBucket).
+		Str("module_key", config.ModuleKey).
+		Str("function", config.FunctionName).
+		Msg("WASM transformation completed successfully")
+
+	return output, headers, nil
 }
 
 // WriteGetObjectResponse handles the response from a Lambda function.
