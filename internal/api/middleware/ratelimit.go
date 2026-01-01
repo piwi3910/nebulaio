@@ -18,6 +18,18 @@ var uuidPattern = regexp.MustCompile(
 	`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`,
 )
 
+// pluralToSingular maps plural resource names to their singular form for path normalization.
+var pluralToSingular = map[string]string{
+	"buckets":  "bucket",
+	"objects":  "object",
+	"uploads":  "upload",
+	"versions": "version",
+	"users":    "user",
+	"keys":     "key",
+	"policies": "policy",
+	"groups":   "group",
+}
+
 // normalizePath normalizes a URL path for metrics to prevent high cardinality.
 // It replaces dynamic segments like bucket names, object keys, and UUIDs with placeholders.
 func normalizePath(path string) string {
@@ -38,11 +50,9 @@ func normalizePath(path string) string {
 		// Check if previous segment indicates this is a dynamic value
 		if i > 0 {
 			prev := segments[i-1]
-			// Common S3 API patterns where next segment is dynamic
-			if prev == "buckets" || prev == "objects" || prev == "uploads" ||
-				prev == "versions" || prev == "users" || prev == "keys" ||
-				prev == "policies" || prev == "groups" {
-				normalized = append(normalized, "{"+prev[:len(prev)-1]+"}")
+			// Look up the singular form from the mapping
+			if singular, ok := pluralToSingular[prev]; ok {
+				normalized = append(normalized, "{"+singular+"}")
 
 				continue
 			}
