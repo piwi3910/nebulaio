@@ -194,130 +194,130 @@ linters:
 
     # Rule-based exclusions
     rules:
-    # Exclude test files from certain checks
-    - path: _test\.go
-      linters:
-        - funlen         # Test functions can be long
-        - gocyclo        # Test complexity is acceptable
-        - gocognit       # Test complexity is acceptable
-        - errcheck       # Tests often intentionally ignore errors
-        - gosec          # Tests may use insecure operations
-        - exhaustruct    # Tests don't need full struct initialization
-        - varnamelen     # Short variable names acceptable in tests
-        - wrapcheck      # Tests don't need to wrap all errors
-        - paralleltest   # Not all tests should be parallel
-        - tparallel      # Not all tests should be parallel
+      # Exclude test files from certain checks
+      - path: _test\.go
+        linters:
+          - funlen
+          - gocyclo
+          - gocognit
+          - errcheck
+          - gosec
+          - exhaustruct
+          - varnamelen
+          - wrapcheck
+          - paralleltest
+          - tparallel
 
-    # Exclude benchmark files
-    - path: _bench_test\.go
-      linters:
-        - funlen
-        - gocyclo
-        - gocognit
-        - errcheck
-        - exhaustruct
-        - varnamelen
+      # Exclude benchmark files
+      - path: _bench_test\.go
+        linters:
+          - funlen
+          - gocyclo
+          - gocognit
+          - errcheck
+          - exhaustruct
+          - varnamelen
 
-    # Exclude integration test files
-    - path: internal/integration/
-      linters:
-        - funlen
-        - gocyclo
-        - gosec
+      # Exclude integration test files
+      - path: internal/integration/
+        linters:
+          - funlen
+          - gocyclo
+          - gosec
 
-    # Exclude generated or stub code
-    - path: internal/transport/rdma/
-      linters:
-        - unused      # RDMA transport has placeholder fields
-        - gocritic    # Stub implementations
+      # Exclude generated or stub code
+      - path: internal/transport/rdma/
+        linters:
+          - unused
+          - gocritic
 
-    - path: internal/dpu/
-      linters:
-        - unused      # DPU code has placeholder fields
-        - gocritic
+      - path: internal/dpu/
+        linters:
+          - unused
+          - gocritic
 
-    - path: internal/backup/pitr\.go
-      linters:
-        - unused      # Progress tracking fields for future use
+      - path: internal/backup/pitr\.go
+        linters:
+          - unused
 
-    # Exclude specific paths from unused checks (reserved for future)
-    - path: internal/cache/dram/
-      linters:
-        - unused
+      # Exclude specific paths from unused checks (reserved for future)
+      - path: internal/cache/dram/
+        linters:
+          - unused
 
-    - path: internal/catalog/
-      linters:
-        - unused
+      - path: internal/catalog/
+        linters:
+          - unused
 
-    - path: internal/cluster/membership\.go
-      linters:
-        - unused
+      - path: internal/cluster/membership\.go
+        linters:
+          - unused
 
-    - path: internal/mcp/
-      linters:
-        - unused
+      - path: internal/mcp/
+        linters:
+          - unused
 
-    - path: internal/metadata/raft\.go
-      linters:
-        - unused
+      - path: internal/metadata/raft\.go
+        linters:
+          - unused
 
-    - path: internal/nim/
-      linters:
-        - unused
+      - path: internal/nim/
+        linters:
+          - unused
 
-    - path: internal/object/service\.go
-      linters:
-        - unused
+      - path: internal/object/service\.go
+        linters:
+          - unused
 
-    # Allow certain patterns in specific files
-    - path: internal/server/server\.go
-      text: "cyclomatic complexity"
-      linters:
-        - gocyclo
-        - gocognit
+      # Allow certain patterns in specific files
+      - path: internal/server/server\.go
+        text: "cyclomatic complexity"
+        linters:
+          - gocyclo
+          - gocognit
 
-    - path: internal/api/s3/
-      text: "cyclomatic complexity"
-      linters:
-        - gocyclo      # S3 API handlers have complex routing
+      - path: internal/api/s3/
+        text: "cyclomatic complexity"
+        linters:
+          - gocyclo
 
-    # Allow InsecureSkipVerify in test helpers
-    - path: internal/.*test.*\.go
-      text: "G402.*InsecureSkipVerify"
-      linters:
-        - gosec
+      # Allow InsecureSkipVerify in test helpers
+      - path: internal/.*test.*\.go
+        text: "G402.*InsecureSkipVerify"
+        linters:
+          - gosec
 
-    # Allow weak random in non-cryptographic contexts
-    - path: internal/.*
-      text: "G404.*weak random"
-      linters:
-        - gosec
+      # Allow weak random in non-cryptographic contexts
+      - path: internal/.*
+        text: "G404.*weak random"
+        linters:
+          - gosec
 
-    # Allow init() for registration patterns
-    - path: internal/.*/.*\.go
-      text: "don't use `init` function"
-      linters:
-        - gochecknoinits
+      # Allow init() for registration patterns
+      - path: internal/.*/.*\.go
+        text: "don't use `init` function"
+        linters:
+          - gochecknoinits
 
-    # Allow global variables for metrics, loggers, and config
-    - path: internal/metrics/.*\.go
-      linters:
-        - gochecknoglobals
+      # Allow global variables for metrics, loggers, and config
+      - path: internal/metrics/.*\.go
+        linters:
+          - gochecknoglobals
 
-    - path: internal/config/.*\.go
-      linters:
-        - gochecknoglobals
+      - path: internal/config/.*\.go
+        linters:
+          - gochecknoglobals
 
-    # Allow globals in main package for CLI flags
-    - path: cmd/.*\.go
-      linters:
-        - gochecknoglobals
-        - gochecknoinits
+      # Allow globals in main package for CLI flags
+      - path: cmd/.*\.go
+        linters:
+          - gochecknoglobals
+          - gochecknoinits
 
-    # Allow TODO/FIXME comments - we track them in GitHub issues
-    - linters:
-        - godox
-      text: "Line contains TODO/BUG/FIXME"
+      # Allow TODO/FIXME comments - we track them in GitHub issues
+      - linters:
+          - godox
+        text: "Line contains TODO/BUG/FIXME"
 
 run:
   go: '1.24'
