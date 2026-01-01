@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/klauspost/compress/zstd"
 	"github.com/piwi3910/nebulaio/internal/httputil"
+	"github.com/piwi3910/nebulaio/internal/metrics"
 	"github.com/rs/zerolog/log"
 )
 
@@ -873,11 +874,17 @@ func detectCompressionAlgorithm(data []byte) string {
 }
 
 func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
+	startTime := time.Now()
+
 	// Get compression algorithm from params (default: gzip)
 	algorithm := compressionAlgGzip
 	if alg, ok := params["algorithm"].(string); ok {
 		algorithm = alg
 	}
+
+	// Track in-flight operations
+	metrics.IncrementLambdaOperationsInFlight(algorithm)
+	defer metrics.DecrementLambdaOperationsInFlight(algorithm)
 
 	// Get compression level from params
 	level := -1 // default level
@@ -905,7 +912,13 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 	}
 
 	if useStreaming {
-		return t.transformStreaming(ctx, input, algorithm, level)
+		result, headers, err := t.transformStreaming(ctx, input, algorithm, level)
+		duration := time.Since(startTime)
+		success := err == nil
+		// For streaming, we don't know exact sizes, so we record with 0 sizes
+		metrics.RecordLambdaCompression(algorithm, "compress", success, duration, 0, 0)
+
+		return result, headers, err
 	}
 
 	// Buffered mode for small files
@@ -914,12 +927,23 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 
 	data, err := io.ReadAll(limitedReader)
 	if err != nil {
+		duration := time.Since(startTime)
+		metrics.RecordLambdaCompression(algorithm, "compress", false, duration, 0, 0)
+
 		return nil, nil, err
 	}
 
-	if int64(len(data)) > maxSize {
+	originalSize := int64(len(data))
+
+	if originalSize > maxSize {
+		duration := time.Since(startTime)
+		metrics.RecordLambdaCompression(algorithm, "compress", false, duration, originalSize, 0)
+
 		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", maxSize)
 	}
+
+	// Record bytes processed (input)
+	metrics.RecordLambdaBytesProcessed(algorithm, "compress", originalSize)
 
 	var (
 		buf             bytes.Buffer
@@ -930,6 +954,9 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 	case compressionAlgGzip:
 		err := compressGzip(&buf, data, level)
 		if err != nil {
+			duration := time.Since(startTime)
+			metrics.RecordLambdaCompression(algorithm, "compress", false, duration, originalSize, 0)
+
 			return nil, nil, err
 		}
 
@@ -938,14 +965,24 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 	case compressionAlgZstd:
 		err := compressZstd(&buf, data, level)
 		if err != nil {
+			duration := time.Since(startTime)
+			metrics.RecordLambdaCompression(algorithm, "compress", false, duration, originalSize, 0)
+
 			return nil, nil, err
 		}
 
 		contentEncoding = compressionAlgZstd
 
 	default:
+		duration := time.Since(startTime)
+		metrics.RecordLambdaCompression(algorithm, "compress", false, duration, originalSize, 0)
+
 		return nil, nil, fmt.Errorf("unsupported compression algorithm: %s", algorithm)
 	}
+
+	compressedSize := int64(buf.Len())
+	duration := time.Since(startTime)
+	metrics.RecordLambdaCompression(algorithm, "compress", true, duration, originalSize, compressedSize)
 
 	return bytes.NewReader(buf.Bytes()), map[string]string{"Content-Encoding": contentEncoding}, nil
 }
@@ -1134,14 +1171,30 @@ func compressZstd(buf *bytes.Buffer, data []byte, level int) (err error) {
 type DecompressTransformer struct{}
 
 func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
+	startTime := time.Now()
 	algorithm := t.getAlgorithm(params)
+
+	// Track in-flight operations (use "unknown" if algorithm not yet detected)
+	metricsAlgorithm := algorithm
+	if metricsAlgorithm == "" {
+		metricsAlgorithm = "auto"
+	}
+	metrics.IncrementLambdaOperationsInFlight(metricsAlgorithm)
+	defer metrics.DecrementLambdaOperationsInFlight(metricsAlgorithm)
+
 	useStreaming := t.shouldUseStreaming(params, algorithm)
 
 	if useStreaming && algorithm != "" {
-		return t.transformStreaming(ctx, input, algorithm)
+		result, headers, err := t.transformStreaming(ctx, input, algorithm)
+		duration := time.Since(startTime)
+		success := err == nil
+		// For streaming, we don't know exact sizes, so we record with 0 sizes
+		metrics.RecordLambdaCompression(algorithm, "decompress", success, duration, 0, 0)
+
+		return result, headers, err
 	}
 
-	return t.transformBuffered(ctx, input, algorithm)
+	return t.transformBufferedWithMetrics(ctx, input, algorithm, startTime)
 }
 
 func (t *DecompressTransformer) getAlgorithm(params map[string]interface{}) string {
@@ -1170,30 +1223,59 @@ func (t *DecompressTransformer) shouldUseStreaming(params map[string]interface{}
 	return false
 }
 
-func (t *DecompressTransformer) transformBuffered(ctx context.Context, input io.Reader, algorithm string) (io.Reader, map[string]string, error) {
+func (t *DecompressTransformer) transformBufferedWithMetrics(ctx context.Context, input io.Reader, algorithm string, startTime time.Time) (io.Reader, map[string]string, error) {
 	maxSize := GetMaxTransformSize()
 	limitedReader := io.LimitReader(input, maxSize+1)
 
 	data, err := io.ReadAll(limitedReader)
 	if err != nil {
+		duration := time.Since(startTime)
+		metricsAlg := algorithm
+		if metricsAlg == "" {
+			metricsAlg = "unknown"
+		}
+		metrics.RecordLambdaCompression(metricsAlg, "decompress", false, duration, 0, 0)
+
 		return nil, nil, err
 	}
 
-	if int64(len(data)) > maxSize {
+	compressedSize := int64(len(data))
+
+	if compressedSize > maxSize {
+		duration := time.Since(startTime)
+		metricsAlg := algorithm
+		if metricsAlg == "" {
+			metricsAlg = "unknown"
+		}
+		metrics.RecordLambdaCompression(metricsAlg, "decompress", false, duration, compressedSize, 0)
+
 		return nil, nil, fmt.Errorf("object size exceeds maximum transform size of %d bytes", maxSize)
 	}
 
-	if algorithm == "" {
-		algorithm = detectCompressionAlgorithm(data)
-		if algorithm == "" {
+	// Auto-detect algorithm if not provided
+	detectedAlgorithm := algorithm
+	if detectedAlgorithm == "" {
+		detectedAlgorithm = detectCompressionAlgorithm(data)
+		if detectedAlgorithm == "" {
+			// Not compressed data, return as-is (no metrics for non-compressed data)
 			return bytes.NewReader(data), nil, nil
 		}
 	}
 
-	result, err := t.decompressData(data, algorithm, maxSize)
+	// Record bytes processed (compressed input)
+	metrics.RecordLambdaBytesProcessed(detectedAlgorithm, "decompress", compressedSize)
+
+	result, err := t.decompressData(data, detectedAlgorithm, maxSize)
 	if err != nil {
+		duration := time.Since(startTime)
+		metrics.RecordLambdaCompression(detectedAlgorithm, "decompress", false, duration, compressedSize, 0)
+
 		return nil, nil, err
 	}
+
+	decompressedSize := int64(len(result))
+	duration := time.Since(startTime)
+	metrics.RecordLambdaCompression(detectedAlgorithm, "decompress", true, duration, decompressedSize, compressedSize)
 
 	return bytes.NewReader(result), nil, nil
 }
