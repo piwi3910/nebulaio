@@ -35,6 +35,7 @@ func TestPlacementGroupManager_BasicOperations(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -142,6 +143,7 @@ func TestPlacementGroupManager_NodeOperations(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -203,6 +205,7 @@ func TestPlacementGroupManager_ErasureCoding(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -252,6 +255,7 @@ func TestPlacementGroupManager_StatusUpdate(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -282,6 +286,7 @@ func TestPlacementGroupManager_SingleNodeMode(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -358,6 +363,7 @@ func TestPlacementGroupManager_ConcurrentReads(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -411,6 +417,7 @@ func TestPlacementGroupManager_ConcurrentReadWrite(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -480,6 +487,7 @@ func TestPlacementGroupManager_ConcurrentStatusUpdates(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -532,6 +540,7 @@ func TestPlacementGroupManager_ConcurrentCallbacks(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -600,6 +609,7 @@ func TestPlacementGroupManager_CopyPreventsExternalMutation(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -654,6 +664,7 @@ func TestPlacementGroupManager_GetShardPlacementNodesForObject(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -849,6 +860,7 @@ func TestPlacementGroupManager_UnhealthyGroupOperations(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -989,6 +1001,7 @@ func TestPlacementGroupManager_NumShardsValidation(t *testing.T) {
 	}
 
 	mgr, err := NewPlacementGroupManager(config)
+	mgr.Start(t.Context())
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}

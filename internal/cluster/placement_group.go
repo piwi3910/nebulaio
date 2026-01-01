@@ -69,7 +69,6 @@ type PlacementGroupConfig struct {
 type PlacementGroupManager struct {
 	// 8-byte fields (interfaces, pointers, maps, channels, functions, uint64)
 	auditLogger          PlacementGroupAuditLogger
-	ctx                  context.Context
 	cancel               context.CancelFunc
 	nodeToGroup          map[string]PlacementGroupID
 	groups               map[PlacementGroupID]*PlacementGroup
@@ -93,22 +92,11 @@ type PlacementGroupManager struct {
 
 // NewPlacementGroupManager creates a new placement group manager.
 func NewPlacementGroupManager(config PlacementGroupConfig) (*PlacementGroupManager, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-
 	mgr := &PlacementGroupManager{
 		config:       config,
 		groups:       make(map[PlacementGroupID]*PlacementGroup),
 		nodeToGroup:  make(map[string]PlacementGroupID),
-		ctx:          ctx,
-		cancel:       cancel,
 		callbackPool: make(chan func(), callbackQueueSize),
-	}
-
-	// Start worker pool for callback execution
-	for range callbackPoolSize {
-		mgr.workerWg.Add(1)
-
-		go mgr.callbackWorker()
 	}
 
 	// Initialize groups from config
@@ -158,6 +146,19 @@ func NewPlacementGroupManager(config PlacementGroupConfig) (*PlacementGroupManag
 		Msg("Placement group manager initialized")
 
 	return mgr, nil
+}
+
+// Start starts the placement group manager workers with the given context.
+func (m *PlacementGroupManager) Start(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	m.cancel = cancel
+
+	// Start worker pool for callback execution
+	for range callbackPoolSize {
+		m.workerWg.Add(1)
+
+		go m.callbackWorker(ctx)
+	}
 }
 
 // LocalGroup returns a copy of the placement group this node belongs to.
@@ -802,10 +803,12 @@ func (m *PlacementGroupManager) copyGroup(g *PlacementGroup) *PlacementGroup {
 }
 
 // safeCallbackWithTimeout executes a callback function with panic recovery, timeout, and context cancellation.
-func (m *PlacementGroupManager) safeCallbackWithTimeout(fn func()) {
+//
+//nolint:funcorder // Helper called from workers, grouped with worker logic
+func (m *PlacementGroupManager) safeCallbackWithTimeout(ctx context.Context, fn func()) {
 	// Check if context is already cancelled (shutdown in progress)
 	select {
-	case <-m.ctx.Done():
+	case <-ctx.Done():
 		log.Debug().Msg("Skipping placement group callback - context cancelled")
 		return
 	default:
@@ -829,7 +832,7 @@ func (m *PlacementGroupManager) safeCallbackWithTimeout(fn func()) {
 	select {
 	case <-done:
 		// Callback completed successfully
-	case <-m.ctx.Done():
+	case <-ctx.Done():
 		// Context cancelled during callback execution (shutdown)
 		log.Debug().Msg("Placement group callback interrupted by shutdown")
 	case <-time.After(callbackTimeout):
@@ -841,9 +844,9 @@ func (m *PlacementGroupManager) safeCallbackWithTimeout(fn func()) {
 
 // safeCallback executes a callback function with panic recovery (deprecated, use safeCallbackWithTimeout).
 //
-//nolint:unused // Kept for backward compatibility.
-func (m *PlacementGroupManager) safeCallback(fn func()) {
-	m.safeCallbackWithTimeout(fn)
+//nolint:unused,funcorder // Kept for backward compatibility, grouped with callback logic
+func (m *PlacementGroupManager) safeCallback(ctx context.Context, fn func()) {
+	m.safeCallbackWithTimeout(ctx, fn)
 }
 
 // Close gracefully shuts down the placement group manager, cancelling any pending callbacks.
@@ -872,19 +875,19 @@ func (m *PlacementGroupManager) Close() error {
 }
 
 // callbackWorker processes callbacks from the pool.
-func (m *PlacementGroupManager) callbackWorker() {
+func (m *PlacementGroupManager) callbackWorker(ctx context.Context) {
 	defer m.workerWg.Done()
 
 	for callback := range m.callbackPool {
 		// Check if context is cancelled
 		select {
-		case <-m.ctx.Done():
+		case <-ctx.Done():
 			log.Debug().Msg("Callback worker exiting - context cancelled")
 			return
 		default:
 		}
 
-		m.safeCallbackWithTimeout(callback)
+		m.safeCallbackWithTimeout(ctx, callback)
 	}
 }
 
@@ -903,11 +906,6 @@ func (m *PlacementGroupManager) scheduleCallback(fn func()) {
 
 	// Keep the lock while sending to prevent Close() from closing the channel
 	select {
-	case <-m.ctx.Done():
-		m.closedMu.RUnlock()
-		log.Debug().Msg("Skipping callback - context cancelled")
-
-		return
 	case m.callbackPool <- fn:
 		m.closedMu.RUnlock()
 		// Callback queued successfully

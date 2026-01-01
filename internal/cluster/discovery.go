@@ -45,7 +45,6 @@ type DiscoveryConfig struct {
 
 // Discovery manages node discovery and cluster membership.
 type Discovery struct {
-	ctx        context.Context
 	members    map[string]*NodeInfo
 	nodeHost   *dragonboat.NodeHost
 	membership *Membership
@@ -82,13 +81,9 @@ type NodeMeta struct {
 
 // NewDiscovery creates a new Discovery instance.
 func NewDiscovery(config DiscoveryConfig) *Discovery {
-	ctx, cancel := context.WithCancel(context.Background())
-
 	return &Discovery{
 		config:  config,
 		members: make(map[string]*NodeInfo),
-		ctx:     ctx,
-		cancel:  cancel,
 	}
 }
 
@@ -103,6 +98,9 @@ func (d *Discovery) SetNodeHost(nh *dragonboat.NodeHost, shardID uint64) {
 
 // Start starts the discovery service.
 func (d *Discovery) Start(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	d.cancel = cancel
+
 	log.Info().
 		Str("node_id", d.config.NodeID).
 		Str("advertise_addr", d.config.AdvertiseAddr).
@@ -171,20 +169,22 @@ func (d *Discovery) Start(ctx context.Context) error {
 			// Start background retry
 			d.wg.Add(1)
 
-			go d.retryJoin()
+			go d.retryJoin(ctx)
 		}
 	}
 
 	// Start health check loop
 	d.wg.Add(1)
 
-	go d.healthCheckLoop()
+	go d.healthCheckLoop(ctx)
 
 	return nil
 }
 
 // retryJoin retries joining the cluster.
-func (d *Discovery) retryJoin() {
+//
+//nolint:funcorder // Helper called from Start(), grouped with startup logic
+func (d *Discovery) retryJoin(ctx context.Context) {
 	defer d.wg.Done()
 
 	ticker := time.NewTicker(5 * time.Second)
@@ -192,7 +192,7 @@ func (d *Discovery) retryJoin() {
 
 	for {
 		select {
-		case <-d.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			for _, addr := range d.config.JoinAddresses {
@@ -211,7 +211,9 @@ func (d *Discovery) retryJoin() {
 }
 
 // healthCheckLoop periodically updates member status.
-func (d *Discovery) healthCheckLoop() {
+//
+//nolint:funcorder // Helper called from Start(), grouped with startup logic
+func (d *Discovery) healthCheckLoop(ctx context.Context) {
 	defer d.wg.Done()
 
 	ticker := time.NewTicker(10 * time.Second)
@@ -219,7 +221,7 @@ func (d *Discovery) healthCheckLoop() {
 
 	for {
 		select {
-		case <-d.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			d.updateMemberStatus()
