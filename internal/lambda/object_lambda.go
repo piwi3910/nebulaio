@@ -915,7 +915,10 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 		result, headers, err := t.transformStreaming(ctx, input, algorithm, level)
 		duration := time.Since(startTime)
 		success := err == nil
-		// For streaming, we don't know exact sizes, so we record with 0 sizes
+		// For streaming mode, byte sizes are recorded as 0 since we process data
+		// incrementally without buffering. Duration and success/error counts are
+		// still tracked for observability. Use LambdaBytesProcessed for throughput
+		// metrics in streaming scenarios.
 		metrics.RecordLambdaCompression(algorithm, "compress", success, duration, 0, 0)
 
 		return result, headers, err
@@ -1174,7 +1177,7 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 	startTime := time.Now()
 	algorithm := t.getAlgorithm(params)
 
-	// Track in-flight operations (use "unknown" if algorithm not yet detected)
+	// Track in-flight operations (use "auto" if algorithm not yet detected)
 	metricsAlgorithm := algorithm
 	if metricsAlgorithm == "" {
 		metricsAlgorithm = "auto"
@@ -1188,7 +1191,9 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 		result, headers, err := t.transformStreaming(ctx, input, algorithm)
 		duration := time.Since(startTime)
 		success := err == nil
-		// For streaming, we don't know exact sizes, so we record with 0 sizes
+		// For streaming mode, byte sizes are recorded as 0 since we process data
+		// incrementally without buffering. Duration and success/error counts are
+		// still tracked for observability.
 		metrics.RecordLambdaCompression(algorithm, "decompress", success, duration, 0, 0)
 
 		return result, headers, err
@@ -1223,7 +1228,12 @@ func (t *DecompressTransformer) shouldUseStreaming(params map[string]interface{}
 	return false
 }
 
-func (t *DecompressTransformer) transformBufferedWithMetrics(ctx context.Context, input io.Reader, algorithm string, startTime time.Time) (io.Reader, map[string]string, error) {
+func (t *DecompressTransformer) transformBufferedWithMetrics(
+	ctx context.Context,
+	input io.Reader,
+	algorithm string,
+	startTime time.Time,
+) (io.Reader, map[string]string, error) {
 	maxSize := GetMaxTransformSize()
 	limitedReader := io.LimitReader(input, maxSize+1)
 
@@ -1232,7 +1242,7 @@ func (t *DecompressTransformer) transformBufferedWithMetrics(ctx context.Context
 		duration := time.Since(startTime)
 		metricsAlg := algorithm
 		if metricsAlg == "" {
-			metricsAlg = "unknown"
+			metricsAlg = "auto"
 		}
 		metrics.RecordLambdaCompression(metricsAlg, "decompress", false, duration, 0, 0)
 
@@ -1245,7 +1255,7 @@ func (t *DecompressTransformer) transformBufferedWithMetrics(ctx context.Context
 		duration := time.Since(startTime)
 		metricsAlg := algorithm
 		if metricsAlg == "" {
-			metricsAlg = "unknown"
+			metricsAlg = "auto"
 		}
 		metrics.RecordLambdaCompression(metricsAlg, "decompress", false, duration, compressedSize, 0)
 

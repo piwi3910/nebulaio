@@ -1054,9 +1054,12 @@ func TestCompressTransformerMetrics(t *testing.T) {
 			_, _ = io.ReadAll(output)
 
 			// Verify operations counter was incremented
-			opsCount := testutil.ToFloat64(metrics.LambdaCompressionOperations.WithLabelValues(tt.algorithm, tt.direction, "success"))
+			opsMetric := metrics.LambdaCompressionOperations.WithLabelValues(
+				tt.algorithm, tt.direction, "success")
+			opsCount := testutil.ToFloat64(opsMetric)
 			if opsCount < 1 {
-				t.Errorf("Expected at least 1 successful compression operation recorded for %s, got %v", tt.algorithm, opsCount)
+				t.Errorf("Expected at least 1 successful compression operation for %s, got %v",
+					tt.algorithm, opsCount)
 			}
 
 			// Verify bytes processed was recorded
@@ -1113,9 +1116,12 @@ func TestDecompressTransformerMetrics(t *testing.T) {
 			_, _ = io.ReadAll(output)
 
 			// Verify operations counter was incremented
-			opsCount := testutil.ToFloat64(metrics.LambdaCompressionOperations.WithLabelValues(tt.algorithm, "decompress", "success"))
+			opsMetric := metrics.LambdaCompressionOperations.WithLabelValues(
+				tt.algorithm, "decompress", "success")
+			opsCount := testutil.ToFloat64(opsMetric)
 			if opsCount < 1 {
-				t.Errorf("Expected at least 1 successful decompression operation recorded for %s, got %v", tt.algorithm, opsCount)
+				t.Errorf("Expected at least 1 successful decompression for %s, got %v",
+					tt.algorithm, opsCount)
 			}
 
 			// Verify bytes processed was recorded
@@ -1143,13 +1149,15 @@ func TestCompressionMetricsOnError(t *testing.T) {
 	}
 
 	// Verify error counter was incremented
-	errorCount := testutil.ToFloat64(metrics.LambdaCompressionOperations.WithLabelValues("invalid_algo", "compress", "error"))
+	errMetric := metrics.LambdaCompressionOperations.WithLabelValues(
+		"invalid_algo", "compress", "error")
+	errorCount := testutil.ToFloat64(errMetric)
 	if errorCount < 1 {
 		t.Errorf("Expected at least 1 error recorded, got %v", errorCount)
 	}
 }
 
-// TestDecompressionMetricsOnError verifies that decompression error metrics are recorded correctly.
+// TestDecompressionMetricsOnError verifies decompression error metrics are recorded.
 func TestDecompressionMetricsOnError(t *testing.T) {
 	transformer := &DecompressTransformer{}
 
@@ -1158,14 +1166,17 @@ func TestDecompressionMetricsOnError(t *testing.T) {
 
 	// Test with unsupported algorithm to trigger error
 	params := map[string]interface{}{"algorithm": "invalid_algo"}
-	_, _, err := transformer.Transform(context.Background(), strings.NewReader("test data"), params)
+	_, _, err := transformer.Transform(
+		context.Background(), strings.NewReader("test data"), params)
 
 	if err == nil {
 		t.Fatal("Expected error for invalid algorithm")
 	}
 
 	// Verify error counter was incremented
-	errorCount := testutil.ToFloat64(metrics.LambdaCompressionOperations.WithLabelValues("invalid_algo", "decompress", "error"))
+	errMetric := metrics.LambdaCompressionOperations.WithLabelValues(
+		"invalid_algo", "decompress", "error")
+	errorCount := testutil.ToFloat64(errMetric)
 	if errorCount < 1 {
 		t.Errorf("Expected at least 1 error recorded, got %v", errorCount)
 	}
