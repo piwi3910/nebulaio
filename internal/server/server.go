@@ -754,7 +754,10 @@ func (s *Server) startShutdownHandler(g *errgroup.Group, ctx context.Context) {
 		<-ctx.Done()
 		log.Info().Msg("Shutting down servers...")
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeoutSec*time.Second)
+		// Use WithoutCancel to create a fresh context for shutdown, derived from cancelled parent
+		// This ensures shutdown completes even though parent context is cancelled
+		baseCtx := context.WithoutCancel(ctx)
+		shutdownCtx, cancel := context.WithTimeout(baseCtx, defaultShutdownTimeoutSec*time.Second)
 		defer cancel()
 
 		s.stopClusterDiscovery()

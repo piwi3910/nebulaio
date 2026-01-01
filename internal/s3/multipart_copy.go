@@ -391,7 +391,9 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 
 	completedParts, copyErr := m.copyPartsParallel(ctx, cancel, opts, sourceMetadata, upload.UploadID, partSize, numParts)
 	if copyErr != nil {
-		_ = m.storage.AbortMultipartUpload(context.Background(), opts.DestBucket, opts.DestKey, upload.UploadID)
+		// Use detached context for cleanup to ensure it completes even if parent is cancelled
+		cleanupCtx := context.WithoutCancel(ctx)
+		_ = m.storage.AbortMultipartUpload(cleanupCtx, opts.DestBucket, opts.DestKey, upload.UploadID)
 		return nil, fmt.Errorf("multipart copy failed: %w", copyErr)
 	}
 
@@ -399,7 +401,9 @@ func (m *MultipartCopyManager) multipartCopy(ctx context.Context, opts *Multipar
 
 	completeResult, err := m.storage.CompleteMultipartUpload(ctx, opts.DestBucket, opts.DestKey, upload.UploadID, completedParts)
 	if err != nil {
-		_ = m.storage.AbortMultipartUpload(context.Background(), opts.DestBucket, opts.DestKey, upload.UploadID)
+		// Use detached context for cleanup to ensure it completes even if parent is cancelled
+		cleanupCtx := context.WithoutCancel(ctx)
+		_ = m.storage.AbortMultipartUpload(cleanupCtx, opts.DestBucket, opts.DestKey, upload.UploadID)
 		return nil, fmt.Errorf("failed to complete multipart upload: %w", err)
 	}
 
