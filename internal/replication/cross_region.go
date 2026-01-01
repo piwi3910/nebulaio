@@ -23,14 +23,14 @@ import (
 
 // Cross-region replication configuration constants.
 const (
-	taskChannelBufferSize   = 10000
-	arnBucketPartsCount     = 2
-	arnRegionPartsCount     = 4
-	replicationTaskTimeout  = 5 * time.Minute
-	maxReplicationRetries   = 3
-	latencyHistorySize      = 1000
-	latencyHistoryTrimStart = 500
-	replicationHTTPTimeout  = 30 * time.Minute
+	taskChannelBufferSize    = 10000
+	arnBucketPartsCount      = 2
+	arnRegionPartsCount      = 4
+	replicationTaskTimeout   = 5 * time.Minute
+	maxReplicationRetries    = 3
+	latencyHistorySize       = 1000
+	latencyHistoryTrimStart  = 500
+	replicationHTTPTimeout   = 30 * time.Minute
 	httpErrorStatusThreshold = 400
 )
 
@@ -179,7 +179,7 @@ type ReplicationManager struct {
 	endpoints     map[string]*RegionEndpoint // region -> endpoint
 	storage       ReplicationStorage
 	metrics       *ReplicationMetricsCollector
-	ctx           context.Context
+	ctx           context.Context //nolint:containedctx // Worker pool pattern - context managed by New/Close lifecycle
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
 }
