@@ -178,7 +178,7 @@ func (m *MockMetadataStore) GetClusterInfo(ctx context.Context) (*metadata.Clust
 	return nil, nil
 }
 func (m *MockMetadataStore) IsLeader() bool                 { return true }
-func (m *MockMetadataStore) LeaderAddress() (string, error) { return "", nil }
+func (m *MockMetadataStore) LeaderAddress(ctx context.Context) (string, error) { return "", nil }
 func (m *MockMetadataStore) PutObjectMeta(ctx context.Context, meta *metadata.ObjectMeta) error {
 	return nil
 }
