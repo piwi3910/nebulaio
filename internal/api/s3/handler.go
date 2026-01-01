@@ -169,22 +169,22 @@ func (h *Handler) handleBucketPut(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) getBucketPutHandler(query url.Values) func(http.ResponseWriter, *http.Request) {
 	handlers := map[string]func(http.ResponseWriter, *http.Request){
-		"versioning":            h.PutBucketVersioning,
-		"policy":                h.PutBucketPolicy,
-		"tagging":               h.PutBucketTagging,
-		"cors":                  h.PutBucketCORS,
-		"lifecycle":             h.PutBucketLifecycle,
-		"acl":                   h.PutBucketAcl,
-		"encryption":            h.PutBucketEncryption,
-		"website":               h.PutBucketWebsite,
-		"logging":               h.PutBucketLogging,
-		"notification":          h.PutBucketNotificationConfiguration,
-		"replication":           h.PutBucketReplication,
-		"object-lock":           h.PutObjectLockConfiguration,
-		"publicAccessBlock":     h.PutPublicAccessBlock,
-		"ownershipControls":     h.PutBucketOwnershipControls,
-		"accelerate":            h.PutBucketAccelerateConfiguration,
-		"intelligent-tiering":   h.PutBucketIntelligentTieringConfiguration,
+		"versioning":          h.PutBucketVersioning,
+		"policy":              h.PutBucketPolicy,
+		"tagging":             h.PutBucketTagging,
+		"cors":                h.PutBucketCORS,
+		"lifecycle":           h.PutBucketLifecycle,
+		"acl":                 h.PutBucketAcl,
+		"encryption":          h.PutBucketEncryption,
+		"website":             h.PutBucketWebsite,
+		"logging":             h.PutBucketLogging,
+		"notification":        h.PutBucketNotificationConfiguration,
+		"replication":         h.PutBucketReplication,
+		"object-lock":         h.PutObjectLockConfiguration,
+		"publicAccessBlock":   h.PutPublicAccessBlock,
+		"ownershipControls":   h.PutBucketOwnershipControls,
+		"accelerate":          h.PutBucketAccelerateConfiguration,
+		"intelligent-tiering": h.PutBucketIntelligentTieringConfiguration,
 	}
 
 	for param, handler := range handlers {
@@ -591,7 +591,7 @@ func (h *Handler) GetObject(w http.ResponseWriter, r *http.Request) {
 
 	// Set user metadata
 	for k, v := range meta.Metadata {
-		w.Header().Set("x-amz-meta-"+k, v)
+		w.Header().Set("X-Amz-Meta-"+k, v)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -714,7 +714,7 @@ func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for k, v := range meta.Metadata {
-		w.Header().Set("x-amz-meta-"+k, v)
+		w.Header().Set("X-Amz-Meta-"+k, v)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -1259,7 +1259,7 @@ func (h *Handler) GetObjectVersion(w http.ResponseWriter, r *http.Request) {
 
 	// Set user metadata
 	for k, v := range meta.Metadata {
-		w.Header().Set("x-amz-meta-"+k, v)
+		w.Header().Set("X-Amz-Meta-"+k, v)
 	}
 
 	w.WriteHeader(http.StatusOK)

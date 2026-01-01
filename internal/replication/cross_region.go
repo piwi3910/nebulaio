@@ -693,7 +693,7 @@ func (rm *ReplicationManager) putObjectRemote(ctx context.Context, endpoint *Reg
 
 	// Add metadata headers
 	for k, v := range opts.Metadata {
-		req.Header.Set("x-amz-meta-"+k, v)
+		req.Header.Set("X-Amz-Meta-"+k, v)
 	}
 
 	if opts.StorageClass != "" {
