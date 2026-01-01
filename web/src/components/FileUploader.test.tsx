@@ -56,10 +56,11 @@ vi.mock('@mantine/dropzone', () => {
     <div data-testid="dropzone-idle">{children}</div>
   );
 
+  /* eslint-disable react-hooks/immutability */
   const MockDropzone = (props: DropzoneProps) => {
     const { children, disabled, onDrop, onReject, maxSize, accept } = props;
 
-    // Store callbacks in registry for test access
+    // Store callbacks in registry for test access (intentional side effect for mocking)
     dropzoneRegistry.onDrop = onDrop;
     dropzoneRegistry.onReject = onReject;
     dropzoneRegistry.maxSize = maxSize;
@@ -75,6 +76,7 @@ vi.mock('@mantine/dropzone', () => {
       </div>
     );
   };
+  /* eslint-enable react-hooks/immutability */
 
   MockDropzone.Accept = MockDropzoneAccept;
   MockDropzone.Reject = MockDropzoneReject;
@@ -100,7 +102,6 @@ function createMockFile(
 }
 
 // Helper to simulate file selection using the dropzone registry
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function simulateFileSelect(_dropzone: HTMLElement, files: File[]) {
   if (dropzoneRegistry.disabled) return;
 
