@@ -84,9 +84,11 @@ func NewClient(cfg *ClientConfig) *http.Client {
 		idleConnTimeout = DefaultIdleConnTimeout
 	}
 
-	// Build TLS config
-	tlsConfig := cfg.TLSConfig
-	if tlsConfig == nil {
+	// Build TLS config - clone user-provided config to avoid mutation
+	var tlsConfig *tls.Config
+	if cfg.TLSConfig != nil {
+		tlsConfig = cfg.TLSConfig.Clone()
+	} else {
 		tlsConfig = &tls.Config{
 			MinVersion: tls.VersionTLS12,
 		}
