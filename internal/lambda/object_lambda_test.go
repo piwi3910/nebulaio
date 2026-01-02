@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -1270,13 +1271,13 @@ func TestStreamingCompressionContextCancellation(t *testing.T) {
 type slowReader struct {
 	reader      io.Reader
 	cancel      context.CancelFunc
-	cancelAfter int
-	readCount   int
+	cancelAfter int32
+	readCount   atomic.Int32
 }
 
 func (s *slowReader) Read(p []byte) (int, error) {
-	s.readCount++
-	if s.readCount >= s.cancelAfter {
+	count := s.readCount.Add(1)
+	if count >= s.cancelAfter {
 		s.cancel()
 	}
 
