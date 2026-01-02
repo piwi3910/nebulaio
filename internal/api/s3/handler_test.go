@@ -3132,6 +3132,57 @@ func setupPresignedTestContext(t *testing.T) *presignedTestContext {
 // PRESIGNED URL - GET OBJECT TESTS
 // =============================================================================
 
+// TestPresignedURLDirect tests presigned URL validation directly without the router.
+// This helps diagnose if issues are with the router/middleware or signature logic.
+func TestPresignedURLDirect(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+	ctx := context.Background()
+
+	presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      presignedTestBucket,
+		Key:         presignedTestKey,
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Region:      presignedTestRegion,
+		Endpoint:    tc.endpoint,
+		Expiration:  presignedDefaultExpiration,
+	})
+	require.NoError(t, err, "Failed to generate presigned URL")
+
+	t.Logf("Generated presigned URL: %s", presignedURL)
+
+	parsedURL, err := url.Parse(presignedURL)
+	require.NoError(t, err, "Failed to parse presigned URL")
+
+	req := httptest.NewRequest(http.MethodGet, parsedURL.RequestURI(), nil)
+	req.Host = parsedURL.Host
+
+	t.Logf("Request URL path: %s", req.URL.Path)
+	t.Logf("Request Host: %s", req.Host)
+
+	// Validate directly using auth functions
+	info, err := auth.ParsePresignedURL(req)
+	require.NoError(t, err, "Failed to parse presigned URL info")
+
+	t.Logf("Parsed AccessKeyID: %s", info.AccessKeyID)
+	t.Logf("Parsed Region: %s", info.Region)
+
+	// Validate using the same secret key that was used to generate
+	err = auth.ValidatePresignedSignature(req, info, tc.secretKey)
+	require.NoError(t, err, "Direct signature validation should pass")
+
+	// Now also test that the auth service can validate
+	accessKey, user, err := tc.auth.ValidateAccessKey(ctx, info.AccessKeyID)
+	require.NoError(t, err, "Auth service should find the access key")
+	assert.Equal(t, tc.secretKey, accessKey.SecretAccessKey, "Secret keys should match")
+	assert.Equal(t, tc.userID, user.ID, "User IDs should match")
+
+	// Validate signature using the key from auth service
+	err = auth.ValidatePresignedSignature(req, info, accessKey.SecretAccessKey)
+	require.NoError(t, err, "Signature validation with auth service key should pass")
+}
+
 func TestPresignedGetObject(t *testing.T) {
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
