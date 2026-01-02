@@ -62,7 +62,7 @@ func RegisterTargetFactory(targetType string, factory TargetFactory) {
 }
 
 // CreateTarget creates a target from configuration.
-func CreateTarget(targetType string, config map[string]interface{}) (Target, error) {
+func CreateTarget(targetType string, config map[string]any) (Target, error) {
 	factory, ok := targetFactories[targetType]
 	if !ok {
 		return nil, errors.New("unknown target type: " + targetType)

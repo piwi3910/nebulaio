@@ -623,6 +623,7 @@ func testGetObjectMeta(t *testing.T, ctx context.Context, store *DragonboatStore
 
 	if meta == nil {
 		t.Fatal("Expected metadata, got nil")
+		return
 	}
 
 	if meta.Key != "test-key" {
@@ -742,6 +743,7 @@ func testGetUser(t *testing.T, ctx context.Context, store *DragonboatStore) {
 
 	if user == nil {
 		t.Fatal("Expected user, got nil")
+		return
 	}
 
 	if user.Username != "testuser" {
@@ -757,6 +759,7 @@ func testGetUserByUsername(t *testing.T, ctx context.Context, store *DragonboatS
 
 	if user == nil {
 		t.Fatal("Expected user, got nil")
+		return
 	}
 
 	if user.ID != "user-123" {

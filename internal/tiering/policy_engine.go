@@ -438,13 +438,7 @@ func (e *PolicyEngine) matchesStorageClassesSelector(obj ObjectMetadata, storage
 		return true
 	}
 
-	for _, sc := range storageClasses {
-		if sc == obj.StorageClass {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(storageClasses, obj.StorageClass)
 }
 
 // matchesTagsSelector checks if object has all required tags with matching values.
@@ -699,17 +693,8 @@ func (e *PolicyEngine) isInScheduleWindow(schedule ScheduleConfig) bool {
 func (e *PolicyEngine) isInWindow(t time.Time, window MaintenanceWindow) bool {
 	// Check day of week
 	if len(window.DaysOfWeek) > 0 {
-		dayMatched := false
-
 		weekday := int(t.Weekday())
-		for _, day := range window.DaysOfWeek {
-			if day == weekday {
-				dayMatched = true
-				break
-			}
-		}
-
-		if !dayMatched {
+		if !slices.Contains(window.DaysOfWeek, weekday) {
 			return false
 		}
 	}

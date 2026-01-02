@@ -322,8 +322,8 @@ func (pr *ParquetReader) GetNumRows() int64 {
 }
 
 // ReadRows reads rows starting at the given offset.
-func (pr *ParquetReader) ReadRows(offset, limit int64) ([]map[string]interface{}, error) {
-	rows := make([]map[string]interface{}, 0, limit)
+func (pr *ParquetReader) ReadRows(offset, limit int64) ([]map[string]any, error) {
+	rows := make([]map[string]any, 0, limit)
 
 	currentRow := int64(0)
 	for _, rg := range pr.rowGroups {
