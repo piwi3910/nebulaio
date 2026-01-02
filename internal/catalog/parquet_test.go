@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // parquetMagic is the magic bytes that identify a valid Parquet file.
@@ -97,47 +100,28 @@ func TestInventoryToParquetRecord(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pr := inventoryToParquetRecord(&tt.record)
+			parquetRec := inventoryToParquetRecord(&tt.record)
 
 			// Verify basic fields
-			if pr.Bucket != tt.record.Bucket {
-				t.Errorf("Bucket: got %q, want %q", pr.Bucket, tt.record.Bucket)
-			}
-
-			if pr.Key != tt.record.Key {
-				t.Errorf("Key: got %q, want %q", pr.Key, tt.record.Key)
-			}
-
-			if pr.Size != tt.record.Size {
-				t.Errorf("Size: got %d, want %d", pr.Size, tt.record.Size)
-			}
-
-			if pr.LastModified != tt.record.LastModified.UnixMilli() {
-				t.Errorf("LastModified: got %d, want %d",
-					pr.LastModified, tt.record.LastModified.UnixMilli())
-			}
-
-			if pr.ETag != tt.record.ETag {
-				t.Errorf("ETag: got %q, want %q", pr.ETag, tt.record.ETag)
-			}
-
-			if pr.StorageClass != tt.record.StorageClass {
-				t.Errorf("StorageClass: got %q, want %q", pr.StorageClass, tt.record.StorageClass)
-			}
+			assert.Equal(t, tt.record.Bucket, parquetRec.Bucket, "Bucket mismatch")
+			assert.Equal(t, tt.record.Key, parquetRec.Key, "Key mismatch")
+			assert.Equal(t, tt.record.Size, parquetRec.Size, "Size mismatch")
+			assert.Equal(t, tt.record.LastModified.UnixMilli(), parquetRec.LastModified,
+				"LastModified mismatch")
+			assert.Equal(t, tt.record.ETag, parquetRec.ETag, "ETag mismatch")
+			assert.Equal(t, tt.record.StorageClass, parquetRec.StorageClass,
+				"StorageClass mismatch")
 
 			// Verify optional timestamp field
 			if tt.record.ObjectLockRetainUntilDate != nil {
-				if pr.ObjectLockRetainUntilDate == nil {
-					t.Error("ObjectLockRetainUntilDate: expected non-nil, got nil")
-				} else {
-					expectedMillis := tt.record.ObjectLockRetainUntilDate.UnixMilli()
-					if *pr.ObjectLockRetainUntilDate != expectedMillis {
-						t.Errorf("ObjectLockRetainUntilDate: got %d, want %d",
-							*pr.ObjectLockRetainUntilDate, expectedMillis)
-					}
-				}
-			} else if pr.ObjectLockRetainUntilDate != nil {
-				t.Error("ObjectLockRetainUntilDate: expected nil, got non-nil")
+				require.NotNil(t, parquetRec.ObjectLockRetainUntilDate,
+					"ObjectLockRetainUntilDate should not be nil")
+				expectedMillis := tt.record.ObjectLockRetainUntilDate.UnixMilli()
+				assert.Equal(t, expectedMillis, *parquetRec.ObjectLockRetainUntilDate,
+					"ObjectLockRetainUntilDate mismatch")
+			} else {
+				assert.Nil(t, parquetRec.ObjectLockRetainUntilDate,
+					"ObjectLockRetainUntilDate should be nil")
 			}
 		})
 	}
@@ -170,36 +154,20 @@ func TestWriteParquetRecords(t *testing.T) {
 	var buffer bytes.Buffer
 	size, err := writeParquetRecords(&buffer, records)
 
-	if err != nil {
-		t.Fatalf("writeParquetRecords failed: %v", err)
-	}
-
-	if size <= 0 {
-		t.Errorf("Expected positive size, got %d", size)
-	}
-
-	if buffer.Len() == 0 {
-		t.Error("Buffer should not be empty")
-	}
+	require.NoError(t, err, "writeParquetRecords should not fail")
+	assert.Greater(t, size, int64(0), "Expected positive size")
+	assert.NotEmpty(t, buffer.Bytes(), "Buffer should not be empty")
 
 	// Verify Parquet magic bytes (PAR1)
 	data := buffer.Bytes()
-	if len(data) < 4 {
-		t.Fatal("Parquet file too small")
-	}
+	require.GreaterOrEqual(t, len(data), 4, "Parquet file too small")
 
 	magic := string(data[:4])
-	if magic != parquetMagic {
-		t.Errorf("Expected Parquet magic %q, got %q", parquetMagic, magic)
-	}
+	assert.Equal(t, parquetMagic, magic, "Invalid Parquet header magic")
 
 	// Verify footer magic bytes
-	if len(data) >= 4 {
-		footerMagic := string(data[len(data)-4:])
-		if footerMagic != parquetMagic {
-			t.Errorf("Expected footer magic %q, got %q", parquetMagic, footerMagic)
-		}
-	}
+	footerMagic := string(data[len(data)-4:])
+	assert.Equal(t, parquetMagic, footerMagic, "Invalid Parquet footer magic")
 }
 
 func TestWriteParquetEmptyRecords(t *testing.T) {
@@ -207,13 +175,9 @@ func TestWriteParquetEmptyRecords(t *testing.T) {
 	var buffer bytes.Buffer
 
 	size, err := svc.writeParquet(&buffer, []InventoryRecord{})
-	if err != nil {
-		t.Fatalf("writeParquet with empty records failed: %v", err)
-	}
 
-	if size != 0 {
-		t.Errorf("Expected size 0 for empty records, got %d", size)
-	}
+	require.NoError(t, err, "writeParquet with empty records should not fail")
+	assert.Equal(t, int64(0), size, "Expected size 0 for empty records")
 }
 
 func TestWriteParquetIntegration(t *testing.T) {
@@ -266,29 +230,19 @@ func TestWriteParquetIntegration(t *testing.T) {
 	var buffer bytes.Buffer
 
 	size, err := svc.writeParquet(&buffer, records)
-	if err != nil {
-		t.Fatalf("writeParquet integration test failed: %v", err)
-	}
 
-	if size <= 0 {
-		t.Errorf("Expected positive size, got %d", size)
-	}
+	require.NoError(t, err, "writeParquet integration test should not fail")
+	assert.Greater(t, size, int64(0), "Expected positive size")
 
 	// Verify buffer contains valid Parquet data
 	data := buffer.Bytes()
-	if len(data) < 8 {
-		t.Fatal("Parquet file too small for valid structure")
-	}
+	require.GreaterOrEqual(t, len(data), 8, "Parquet file too small for valid structure")
 
 	// Check header magic
-	if string(data[:4]) != parquetMagic {
-		t.Errorf("Invalid Parquet header magic: %q", string(data[:4]))
-	}
+	assert.Equal(t, parquetMagic, string(data[:4]), "Invalid Parquet header magic")
 
 	// Check footer magic
-	if string(data[len(data)-4:]) != parquetMagic {
-		t.Errorf("Invalid Parquet footer magic: %q", string(data[len(data)-4:]))
-	}
+	assert.Equal(t, parquetMagic, string(data[len(data)-4:]), "Invalid Parquet footer magic")
 
 	t.Logf("Generated Parquet file size: %d bytes for %d records", size, len(records))
 }
@@ -298,15 +252,15 @@ func TestWriteParquetLargeDataset(t *testing.T) {
 	numRecords := 1000
 
 	records := make([]InventoryRecord, numRecords)
-	for i := range numRecords {
-		records[i] = InventoryRecord{
+	for idx := range numRecords {
+		records[idx] = InventoryRecord{
 			Bucket:       "large-bucket",
-			Key:          "file" + string(rune('0'+i%10)) + ".txt",
-			Size:         int64(i * 100),
-			LastModified: now.Add(-time.Duration(i) * time.Minute),
-			ETag:         "etag" + string(rune('0'+i%10)),
+			Key:          "file" + string(rune('0'+idx%10)) + ".txt",
+			Size:         int64(idx * 100),
+			LastModified: now.Add(-time.Duration(idx) * time.Minute),
+			ETag:         "etag" + string(rune('0'+idx%10)),
 			StorageClass: "STANDARD",
-			IsLatest:     i%2 == 0,
+			IsLatest:     idx%2 == 0,
 		}
 	}
 
@@ -314,26 +268,21 @@ func TestWriteParquetLargeDataset(t *testing.T) {
 	var buffer bytes.Buffer
 
 	size, err := svc.writeParquet(&buffer, records)
-	if err != nil {
-		t.Fatalf("writeParquet with %d records failed: %v", numRecords, err)
-	}
 
-	if size <= 0 {
-		t.Errorf("Expected positive size for %d records, got %d", numRecords, size)
-	}
+	require.NoError(t, err, "writeParquet with %d records should not fail", numRecords)
+	assert.Greater(t, size, int64(0), "Expected positive size for %d records", numRecords)
 
 	// Verify Parquet structure
 	data := buffer.Bytes()
-	if string(data[:4]) != parquetMagic || string(data[len(data)-4:]) != parquetMagic {
-		t.Error("Invalid Parquet file structure")
-	}
+	assert.Equal(t, parquetMagic, string(data[:4]), "Invalid Parquet header magic")
+	assert.Equal(t, parquetMagic, string(data[len(data)-4:]), "Invalid Parquet footer magic")
 
 	t.Logf("Generated Parquet file: %d bytes for %d records (%.2f bytes/record)",
 		size, numRecords, float64(size)/float64(numRecords))
 }
 
 func TestParquetInventoryRecordSchema(t *testing.T) {
-	pr := ParquetInventoryRecord{
+	parquetRec := ParquetInventoryRecord{
 		Bucket:       "schema-test",
 		Key:          "key.txt",
 		Size:         100,
@@ -344,16 +293,11 @@ func TestParquetInventoryRecordSchema(t *testing.T) {
 
 	// Verify the struct can be used with the parquet library
 	// This is a basic smoke test to ensure tags are valid
-	records := []ParquetInventoryRecord{pr}
+	records := []ParquetInventoryRecord{parquetRec}
 
 	var buffer bytes.Buffer
 	size, err := writeParquetRecords(&buffer, records)
 
-	if err != nil {
-		t.Fatalf("Failed to write single record: %v", err)
-	}
-
-	if size <= 0 {
-		t.Errorf("Expected positive size, got %d", size)
-	}
+	require.NoError(t, err, "Failed to write single record")
+	assert.Greater(t, size, int64(0), "Expected positive size")
 }

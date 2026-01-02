@@ -50,6 +50,9 @@ type ParquetInventoryRecord struct {
 }
 
 // DefaultParquetWriterConcurrency is the default number of parallel writers.
+// Value of 4 balances CPU utilization with memory overhead - each writer
+// maintains its own buffer. Higher values increase parallelism but also
+// memory usage. This matches common defaults in other Parquet implementations.
 const DefaultParquetWriterConcurrency = 4
 
 // writeParquet writes inventory records to a Parquet file with Snappy compression.
