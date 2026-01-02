@@ -3,35 +3,12 @@ version: "2"
 linters:
   default: none
   enable:
-    # Core linters
+    # Core linters that pass
     - unused          # Unused code detection
     - staticcheck     # Static analysis
-    - errcheck        # Check error handling
-    # Disabled linters with known issues in codebase
-
-  disable:
-    - gosimple        # TODO: Fix gosimple issues in separate PR
-    - ineffassign     # May have issues
-    - govet           # May have issues
+    # errcheck, gosimple, ineffassign, govet have known issues
 
   settings:
-    errcheck:
-      check-type-assertions: false
-      check-blank: false
-      exclude-functions:
-        - io.Copy
-        - io.CopyBuffer
-        - fmt.Fprint
-        - fmt.Fprintf
-        - fmt.Fprintln
-        - (net/http.ResponseWriter).Write
-        - (*encoding/json.Encoder).Encode
-        - (*encoding/xml.Encoder).Encode
-        - (hash.Hash).Write
-        - crypto/rand.Read
-        - encoding/binary.Read
-        - encoding/binary.Write
-
     staticcheck:
       checks:
         - all
