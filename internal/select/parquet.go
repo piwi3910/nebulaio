@@ -536,7 +536,7 @@ func (pr *ParquetReader) readInt96(reader io.Reader, desc *ColumnDescriptor) (an
 }
 
 // convertInt32 converts an int32 based on logical type.
-func (pr *ParquetReader) convertInt32(val int32, desc *ColumnDescriptor) interface{} {
+func (pr *ParquetReader) convertInt32(val int32, desc *ColumnDescriptor) any {
 	switch desc.Converted {
 	case ConvertedTypeDate:
 		// Days since Unix epoch
@@ -563,7 +563,7 @@ func (pr *ParquetReader) convertInt32(val int32, desc *ColumnDescriptor) interfa
 }
 
 // convertInt64 converts an int64 based on logical type.
-func (pr *ParquetReader) convertInt64(val int64, desc *ColumnDescriptor) interface{} {
+func (pr *ParquetReader) convertInt64(val int64, desc *ColumnDescriptor) any {
 	switch desc.Converted {
 	case ConvertedTypeTimestampMillis:
 		return time.UnixMilli(val).UTC()
@@ -581,12 +581,12 @@ func (pr *ParquetReader) convertInt64(val int64, desc *ColumnDescriptor) interfa
 }
 
 // convertByteArray converts a byte array based on logical type.
-func (pr *ParquetReader) convertByteArray(data []byte, desc *ColumnDescriptor) interface{} {
+func (pr *ParquetReader) convertByteArray(data []byte, desc *ColumnDescriptor) any {
 	switch desc.Converted {
 	case ConvertedTypeUTF8:
 		return string(data)
 	case ConvertedTypeJSON:
-		var result interface{}
+		var result any
 
 		err := json.Unmarshal(data, &result)
 		if err != nil {
