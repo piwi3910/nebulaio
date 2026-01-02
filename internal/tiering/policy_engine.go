@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -423,24 +424,12 @@ func (e *PolicyEngine) matchesCurrentTiersSelector(obj ObjectMetadata, currentTi
 		return true
 	}
 
-	for _, tier := range currentTiers {
-		if tier == obj.CurrentTier {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(currentTiers, obj.CurrentTier)
 }
 
 // matchesExcludeTiersSelector checks if object is not in any excluded tier.
 func (e *PolicyEngine) matchesExcludeTiersSelector(obj ObjectMetadata, excludeTiers []TierType) bool {
-	for _, tier := range excludeTiers {
-		if tier == obj.CurrentTier {
-			return false
-		}
-	}
-
-	return true
+	return !slices.Contains(excludeTiers, obj.CurrentTier)
 }
 
 // matchesStorageClassesSelector checks if object storage class matches any specified class.

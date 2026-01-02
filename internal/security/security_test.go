@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -603,13 +604,8 @@ func (r *RateLimiter) Allow(clientID string) bool {
 
 func isAllowedContentType(ct string) bool {
 	disallowed := []string{"text/html", "application/javascript", "text/javascript"}
-	for _, d := range disallowed {
-		if ct == d {
-			return false
-		}
-	}
 
-	return true
+	return !slices.Contains(disallowed, ct)
 }
 
 func securityHeadersMiddleware(next http.Handler) http.Handler {

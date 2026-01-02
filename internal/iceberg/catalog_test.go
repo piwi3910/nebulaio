@@ -1050,6 +1050,7 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 
 		if copied == nil {
 			t.Fatal("copyMetadata should return non-nil for complex metadata")
+			return
 		}
 
 		// Verify deep copy of nested structures

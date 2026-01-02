@@ -471,6 +471,7 @@ func testGetBucket(t *testing.T, ctx context.Context, store *DragonboatStore) {
 
 	if bucket == nil {
 		t.Fatal("Expected bucket, got nil")
+		return
 	}
 
 	if bucket.Name != "test-bucket" {

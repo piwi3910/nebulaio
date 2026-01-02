@@ -51,7 +51,7 @@ var (
 )
 
 // TargetFactory creates targets from configuration.
-type TargetFactory func(config map[string]interface{}) (Target, error)
+type TargetFactory func(config map[string]any) (Target, error)
 
 // targetFactories holds registered target factories.
 var targetFactories = make(map[string]TargetFactory)
