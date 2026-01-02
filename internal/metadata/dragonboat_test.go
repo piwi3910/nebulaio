@@ -964,6 +964,7 @@ func testGetPolicy(t *testing.T, ctx context.Context, store *DragonboatStore) {
 
 	if policy == nil {
 		t.Fatal("Expected policy, got nil")
+		return
 	}
 
 	if policy.Name != "test-policy" {
@@ -1175,6 +1176,7 @@ func testGetClusterInfo(t *testing.T, ctx context.Context, store *DragonboatStor
 
 	if info == nil {
 		t.Fatal("Expected cluster info, got nil")
+		return
 	}
 
 	if info.ClusterID == "" {
@@ -1373,6 +1375,7 @@ func testGetMultipartUpload(t *testing.T, ctx context.Context, store *Dragonboat
 
 	if upload == nil {
 		t.Fatal("Expected upload, got nil")
+		return
 	}
 
 	if upload.UploadID != uploadID {

@@ -350,7 +350,7 @@ func (pr *ParquetReader) ReadRows(offset, limit int64) ([]map[string]any, error)
 }
 
 // readRowGroup reads rows from a row group.
-func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[string]interface{}, error) {
+func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[string]any, error) {
 	if offset < 0 {
 		offset = 0
 	}
@@ -359,10 +359,10 @@ func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[
 		limit = rg.NumRows - offset
 	}
 
-	rows := make([]map[string]interface{}, 0, limit)
+	rows := make([]map[string]any, 0, limit)
 
 	// Read column data
-	columnData := make(map[string][]interface{})
+	columnData := make(map[string][]any)
 
 	for _, chunk := range rg.ColumnChunks {
 		colName := strings.Join(chunk.Descriptor.Path, ".")
