@@ -3159,10 +3159,19 @@ func TestPresignedGetObject(t *testing.T) {
 	})
 	require.NoError(t, err, "Failed to generate presigned URL")
 
+	t.Logf("DEBUG: Generated presigned URL: %s", presignedURL)
+
 	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+	t.Logf("DEBUG: Request URL path: %s", req.URL.Path)
+	t.Logf("DEBUG: Request Host: %s", req.Host)
+	t.Logf("DEBUG: Request Method: %s", req.Method)
+
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
+
+	t.Logf("DEBUG: Response Code: %d", w.Code)
+	t.Logf("DEBUG: Response Body: %s", w.Body.String())
 
 	assert.Equal(t, http.StatusOK, w.Code, "Response body: %s", w.Body.String())
 	assert.Equal(t, content, w.Body.String())
