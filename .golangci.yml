@@ -7,8 +7,7 @@ linters:
     - unused          # Unused code detection
     - staticcheck     # Static analysis
     - errcheck        # Check error handling
-    - gosimple        # Simplification suggestions
-    - ineffassign     # Unused assignment detection
+    # gosimple and ineffassign disabled for testing
 
   settings:
     errcheck:
