@@ -3,11 +3,31 @@ version: "2"
 linters:
   default: none
   enable:
-    # Adding linters back to find the failing one
+    # Core linters
     - unused          # Unused code detection
     - staticcheck     # Static analysis
+    - errcheck        # Check error handling
+    - gosimple        # Simplification suggestions
+    - ineffassign     # Unused assignment detection
 
   settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - io.Copy
+        - io.CopyBuffer
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (net/http.ResponseWriter).Write
+        - (*encoding/json.Encoder).Encode
+        - (*encoding/xml.Encoder).Encode
+        - (hash.Hash).Write
+        - crypto/rand.Read
+        - encoding/binary.Read
+        - encoding/binary.Write
+
     staticcheck:
       checks:
         - all
