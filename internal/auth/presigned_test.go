@@ -13,7 +13,6 @@ import (
 )
 
 func TestGeneratePresignedURL(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	gen := auth.NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
 
 	presignedURL, err := gen.GeneratePresignedURL(auth.PresignParams{
@@ -41,7 +40,6 @@ func TestGeneratePresignedURL(t *testing.T) {
 }
 
 func TestPresignedURLValidation(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	gen := auth.NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
 
 	secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
@@ -86,7 +84,6 @@ func TestPresignedURLValidation(t *testing.T) {
 }
 
 func TestPresignedURLWithEmptyKey(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	gen := auth.NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
 
 	presignedURL, err := gen.GeneratePresignedURL(auth.PresignParams{
@@ -110,7 +107,6 @@ func TestPresignedURLWithEmptyKey(t *testing.T) {
 }
 
 func TestPresignedURLWithVirtualHostedStyle(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	gen := auth.NewPresignedURLGenerator("us-east-1", "")
 
 	presignedURL, err := gen.GeneratePresignedURL(auth.PresignParams{
