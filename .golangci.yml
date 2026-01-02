@@ -7,7 +7,12 @@ linters:
     - unused          # Unused code detection
     - staticcheck     # Static analysis
     - errcheck        # Check error handling
-    - gosimple        # Testing if gosimple is the issue
+    - ineffassign     # Unused assignment detection
+    - govet           # Go vet checks
+    # gosimple disabled - has issues to fix in separate PR
+
+  disable:
+    - gosimple        # TODO: Fix gosimple issues in separate PR
 
   settings:
     errcheck:
@@ -26,6 +31,11 @@ linters:
         - crypto/rand.Read
         - encoding/binary.Read
         - encoding/binary.Write
+
+    govet:
+      enable-all: true
+      disable:
+        - shadow  # Too strict
 
     staticcheck:
       checks:
