@@ -165,7 +165,7 @@ func TestRateLimitMiddlewareEnforcement(t *testing.T) {
 		assert.Equal(t, testConcurrentRequests, totalRequests, "All requests should be processed")
 		assert.LessOrEqual(t, successCount, testBurstSizeLarge+1,
 			"Should not allow significantly more than burst size")
-		assert.Greater(t, rateLimitedCount, 0,
+		assert.Positive(t, rateLimitedCount,
 			"Some requests should be rate limited")
 	})
 }
