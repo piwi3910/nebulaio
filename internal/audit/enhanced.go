@@ -744,13 +744,7 @@ func (l *EnhancedAuditLogger) isPrivilegedOperation(event *EnhancedAuditEvent) b
 		EventAccessKeyCreated,
 		EventAccessKeyDeleted,
 	}
-	for _, op := range privilegedOps {
-		if event.EventType == op {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(privilegedOps, event.EventType)
 }
 
 func (l *EnhancedAuditLogger) maskSensitiveData(event *EnhancedAuditEvent) {

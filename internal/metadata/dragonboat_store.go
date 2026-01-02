@@ -660,7 +660,7 @@ func (s *DragonboatStore) AddUploadPart(ctx context.Context, bucket, key, upload
 }
 
 func (s *DragonboatStore) ListMultipartUploads(ctx context.Context, bucket string) ([]*MultipartUpload, error) {
-	prefix := []byte(fmt.Sprintf("%s%s/", prefixMultipart, bucket))
+	prefix := fmt.Appendf(nil, "%s%s/", prefixMultipart, bucket)
 
 	results, err := s.scan(prefix)
 	if err != nil {
@@ -1025,7 +1025,7 @@ func (s *DragonboatStore) determineSeekKey(filter audit.AuditFilter) []byte {
 	case filter.NextToken != "":
 		return []byte(filter.NextToken)
 	case !filter.EndTime.IsZero():
-		return []byte(fmt.Sprintf("%s%s", prefixAudit, filter.EndTime.Format(time.RFC3339Nano)+"~"))
+		return fmt.Appendf(nil, "%s%s", prefixAudit, filter.EndTime.Format(time.RFC3339Nano)+"~")
 	default:
 		seekKey := make([]byte, len(prefix)+1)
 		copy(seekKey, prefix)

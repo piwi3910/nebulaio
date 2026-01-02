@@ -374,7 +374,7 @@ func matchStatement(stmt *Statement, principal, action, resource string, conditi
 }
 
 // matchPrincipal checks if the principal matches the statement's Principal.
-func matchPrincipal(stmtPrincipal interface{}, principal string) bool {
+func matchPrincipal(stmtPrincipal any, principal string) bool {
 	switch p := stmtPrincipal.(type) {
 	case string:
 		if p == "*" {
@@ -382,7 +382,7 @@ func matchPrincipal(stmtPrincipal interface{}, principal string) bool {
 		}
 
 		return p == principal
-	case map[string]interface{}:
+	case map[string]any:
 		if aws, ok := p["AWS"]; ok {
 			return matchStringOrArray(aws, principal)
 		}
@@ -396,7 +396,7 @@ func matchPrincipal(stmtPrincipal interface{}, principal string) bool {
 }
 
 // matchAction checks if the action matches the statement's Action.
-func matchAction(stmtAction interface{}, action string) bool {
+func matchAction(stmtAction any, action string) bool {
 	return matchStringOrArrayWithWildcard(stmtAction, action)
 }
 
