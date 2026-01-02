@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -459,11 +460,10 @@ func (s *Service) IsOffloadAvailable(offloadType OffloadType) bool {
 		return false
 	}
 
-	for _, cap := range s.dpu.Capabilities {
-		if cap == offloadType {
-			_, ok := s.services[offloadType]
-			return ok
-		}
+	if slices.Contains(s.dpu.Capabilities, offloadType) {
+		_, ok := s.services[offloadType]
+
+		return ok
 	}
 
 	return false

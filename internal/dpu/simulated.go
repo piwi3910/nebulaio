@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 	"time"
 )
@@ -156,16 +157,7 @@ func (b *SimulatedBackend) StartService(offloadType OffloadType, config interfac
 	}
 
 	// Check if DPU supports this offload
-	supported := false
-
-	for _, cap := range b.selectedDPU.Capabilities {
-		if cap == offloadType {
-			supported = true
-			break
-		}
-	}
-
-	if !supported {
+	if !slices.Contains(b.selectedDPU.Capabilities, offloadType) {
 		return ErrOffloadNotSupported
 	}
 

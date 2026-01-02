@@ -560,7 +560,7 @@ func matchNotIPCondition(expected any, actual string, exists bool) bool {
 }
 
 // matchBoolCondition checks if actual boolean matches expected.
-func matchBoolCondition(expected interface{}, actual string, exists bool) bool {
+func matchBoolCondition(expected any, actual string, exists bool) bool {
 	if !exists {
 		return false
 	}
@@ -572,7 +572,7 @@ func matchBoolCondition(expected interface{}, actual string, exists bool) bool {
 }
 
 // matchNullCondition checks if key existence matches expected null condition.
-func matchNullCondition(expected interface{}, exists bool) bool {
+func matchNullCondition(expected any, exists bool) bool {
 	expectedNull := fmt.Sprintf("%v", expected) == boolTrue
 
 	if expectedNull {
@@ -583,7 +583,7 @@ func matchNullCondition(expected interface{}, exists bool) bool {
 }
 
 // matchConditionValue matches a condition value which can be a string or array.
-func matchConditionValue(expected interface{}, actual string, matcher func(string, string) bool) bool {
+func matchConditionValue(expected any, actual string, matcher func(string, string) bool) bool {
 	switch v := expected.(type) {
 	case string:
 		return matcher(v, actual)
