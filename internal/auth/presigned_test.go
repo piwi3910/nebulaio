@@ -1,4 +1,4 @@
-package auth
+package auth_test
 
 import (
 	"net/http"
@@ -7,62 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/piwi3910/nebulaio/internal/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildCanonicalURI(t *testing.T) {
-	gen := NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
-
-	tests := []struct {
-		name     string
-		endpoint string
-		bucket   string
-		key      string
-		expected string
-	}{
-		{
-			name:     "path-style with bucket and key",
-			endpoint: "http://localhost:9000",
-			bucket:   "test-bucket",
-			key:      "test-key",
-			expected: "/test-bucket/test-key",
-		},
-		{
-			name:     "path-style with bucket only",
-			endpoint: "http://localhost:9000",
-			bucket:   "test-bucket",
-			key:      "",
-			expected: "/test-bucket",
-		},
-		{
-			name:     "virtual-hosted with key",
-			endpoint: "",
-			bucket:   "test-bucket",
-			key:      "test-key",
-			expected: "/test-key",
-		},
-		{
-			name:     "virtual-hosted without key",
-			endpoint: "",
-			bucket:   "test-bucket",
-			key:      "",
-			expected: "/",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := gen.buildCanonicalURI(tc.endpoint, tc.bucket, tc.key)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
 func TestGeneratePresignedURL(t *testing.T) {
-	gen := NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
+	gen := auth.NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
 
-	presignedURL, err := gen.GeneratePresignedURL(PresignParams{
+	presignedURL, err := gen.GeneratePresignedURL(auth.PresignParams{
 		Method:      http.MethodGet,
 		Bucket:      "test-bucket",
 		Key:         "test-key",
@@ -87,11 +40,11 @@ func TestGeneratePresignedURL(t *testing.T) {
 }
 
 func TestPresignedURLValidation(t *testing.T) {
-	gen := NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
+	gen := auth.NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
 
 	secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
-	presignedURL, err := gen.GeneratePresignedURL(PresignParams{
+	presignedURL, err := gen.GeneratePresignedURL(auth.PresignParams{
 		Method:      http.MethodGet,
 		Bucket:      "test-bucket",
 		Key:         "test-key",
@@ -120,12 +73,59 @@ func TestPresignedURLValidation(t *testing.T) {
 	t.Logf("Request host: %s", req.Host)
 
 	// Parse the presigned URL info
-	info, err := ParsePresignedURL(req)
+	info, err := auth.ParsePresignedURL(req)
 	require.NoError(t, err, "Failed to parse presigned URL")
 
 	t.Logf("Parsed info - AccessKeyID: %s, Region: %s", info.AccessKeyID, info.Region)
 
 	// Validate the signature
-	err = ValidatePresignedSignature(req, info, secretKey)
+	err = auth.ValidatePresignedSignature(req, info, secretKey)
 	assert.NoError(t, err, "Signature validation should pass")
+}
+
+func TestPresignedURLWithEmptyKey(t *testing.T) {
+	gen := auth.NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
+
+	presignedURL, err := gen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "",
+		AccessKeyID: "AKIAIOSFODNN7EXAMPLE",
+		SecretKey:   "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		Region:      "us-east-1",
+		Endpoint:    "http://localhost:9000",
+		Expiration:  15 * time.Minute,
+	})
+
+	require.NoError(t, err)
+
+	parsedURL, err := url.Parse(presignedURL)
+	require.NoError(t, err)
+
+	// For path-style with empty key, path should be /bucket
+	assert.Equal(t, "/test-bucket", parsedURL.Path)
+}
+
+func TestPresignedURLWithVirtualHostedStyle(t *testing.T) {
+	gen := auth.NewPresignedURLGenerator("us-east-1", "")
+
+	presignedURL, err := gen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      "test-bucket",
+		Key:         "test-key",
+		AccessKeyID: "AKIAIOSFODNN7EXAMPLE",
+		SecretKey:   "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		Region:      "us-east-1",
+		Endpoint:    "",
+		Expiration:  15 * time.Minute,
+	})
+
+	require.NoError(t, err)
+
+	parsedURL, err := url.Parse(presignedURL)
+	require.NoError(t, err)
+
+	// Virtual-hosted style: bucket in host, key in path
+	assert.Contains(t, parsedURL.Host, "test-bucket")
+	assert.Equal(t, "/test-key", parsedURL.Path)
 }
