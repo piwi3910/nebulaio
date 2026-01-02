@@ -459,11 +459,11 @@ func generateTestSecureSessionID() string {
 	for i := range result {
 		n, err := rand.Int(rand.Reader, charsLen)
 		if err != nil {
-			// Fallback to less random but functional for tests
-			result[i] = chars[i%len(chars)]
-		} else {
-			result[i] = chars[n.Int64()]
+			// In tests, crypto/rand should always work
+			// If it fails, something is seriously wrong with the system
+			panic("crypto/rand failed: " + err.Error())
 		}
+		result[i] = chars[n.Int64()]
 	}
 
 	return string(result)

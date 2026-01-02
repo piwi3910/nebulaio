@@ -278,12 +278,18 @@ func TestRateLimitDDoSProtection(t *testing.T) {
 			rl.Allow(clientIP)
 		}
 
-		// Wait for cleanup
+		// Wait for cleanup to occur
 		time.Sleep(testCleanupWait)
 
-		// Stale limiters should be cleaned up
-		// This is verified by the rate limiter not running out of memory
-		// under sustained load in production
+		// After cleanup, new requests from the same IPs should be allowed again
+		// because their rate limiters were cleaned up and recreated fresh
+		for i := range testBurstSizeLarge {
+			clientIP := "192.168.1." + strconv.Itoa(i)
+			// First request after cleanup should be allowed (fresh limiter)
+			allowed := rl.Allow(clientIP)
+			assert.True(t, allowed,
+				"Request from IP %s should be allowed after cleanup", clientIP)
+		}
 	})
 }
 
@@ -340,14 +346,24 @@ func TestRateLimitBypassAttempts(t *testing.T) {
 		// Request with IPv4
 		req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 		req1.RemoteAddr = "127.0.0.1:12345"
-		rl.Allow(rl.extractClientIP(req1))
+		ip1 := rl.extractClientIP(req1)
 
 		// Request with IPv6-mapped IPv4 (::ffff:127.0.0.1)
 		req2 := httptest.NewRequest(http.MethodGet, "/", nil)
 		req2.RemoteAddr = "[::ffff:127.0.0.1]:12345"
+		ip2 := rl.extractClientIP(req2)
 
-		// Both should be treated as the same client for rate limiting purposes
-		// Implementation may normalize IPv6-mapped addresses
+		// Verify both IPs are extracted correctly
+		assert.Equal(t, "127.0.0.1", ip1, "IPv4 should be extracted correctly")
+		assert.Equal(t, "::ffff:127.0.0.1", ip2, "IPv6-mapped address should be extracted")
+
+		// Test rate limiting behavior - first request should be allowed
+		allowed1 := rl.Allow(ip1)
+		assert.True(t, allowed1, "First request from IPv4 should be allowed")
+
+		// Second request from same IPv4 should be rate limited (burst=1)
+		allowed2 := rl.Allow(ip1)
+		assert.False(t, allowed2, "Second request from same IP should be rate limited")
 	})
 
 	t.Run("handles malformed IP addresses gracefully", func(t *testing.T) {
