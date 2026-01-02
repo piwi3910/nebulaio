@@ -3684,10 +3684,18 @@ func TestPresignedURLWithSpecialCharactersInKey(t *testing.T) {
 		})
 		require.NoError(t, err, "Failed to generate presigned URL for key '%s'", key)
 
+		t.Logf("Key: %s", key)
+		t.Logf("Presigned URL: %s", presignedURL)
+
 		req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+		t.Logf("Request URL Path: %s", req.URL.Path)
+		t.Logf("Request Host: %s", req.Host)
+
 		w := httptest.NewRecorder()
 
 		tc.router.ServeHTTP(w, req)
+
+		t.Logf("Response status: %d, body: %s", w.Code, w.Body.String())
 
 		assert.Equal(t, http.StatusOK, w.Code,
 			"Key '%s': Response body: %s", key, w.Body.String())

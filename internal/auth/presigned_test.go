@@ -129,3 +129,56 @@ func TestPresignedURLWithVirtualHostedStyle(t *testing.T) {
 	assert.Contains(t, parsedURL.Host, "test-bucket")
 	assert.Equal(t, "/test-key", parsedURL.Path)
 }
+
+func TestPresignedURLWithSpecialCharacters(t *testing.T) {
+	gen := auth.NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
+	secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+	specialKeys := []string{
+		"folder/file.txt",
+		"path/to/deep/file.txt",
+		"file with spaces.txt",
+		"file-with-dashes.txt",
+		"file_with_underscores.txt",
+	}
+
+	for _, key := range specialKeys {
+		t.Run(key, func(t *testing.T) {
+			presignedURL, err := gen.GeneratePresignedURL(auth.PresignParams{
+				Method:      http.MethodGet,
+				Bucket:      "test-bucket",
+				Key:         key,
+				AccessKeyID: "AKIAIOSFODNN7EXAMPLE",
+				SecretKey:   secretKey,
+				Region:      "us-east-1",
+				Endpoint:    "http://localhost:9000",
+				Expiration:  15 * time.Minute,
+			})
+			require.NoError(t, err, "Failed to generate presigned URL for key '%s'", key)
+
+			t.Logf("Key: %s", key)
+			t.Logf("Presigned URL: %s", presignedURL)
+
+			// Parse the URL and create a request
+			parsedURL, err := url.Parse(presignedURL)
+			require.NoError(t, err)
+
+			t.Logf("Parsed URL path: %s", parsedURL.Path)
+			t.Logf("RequestURI: %s", parsedURL.RequestURI())
+
+			// Create a request from the presigned URL
+			req := httptest.NewRequest(http.MethodGet, parsedURL.RequestURI(), nil)
+			req.Host = parsedURL.Host
+
+			t.Logf("Request URL path: %s", req.URL.Path)
+
+			// Parse the presigned URL info
+			info, err := auth.ParsePresignedURL(req)
+			require.NoError(t, err, "Failed to parse presigned URL for key '%s'", key)
+
+			// Validate the signature
+			err = auth.ValidatePresignedSignature(req, info, secretKey)
+			assert.NoError(t, err, "Signature validation should pass for key '%s'", key)
+		})
+	}
+}
