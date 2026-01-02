@@ -35,7 +35,7 @@ const (
 
 // AttributeValue represents a span attribute value.
 type AttributeValue struct {
-	Value interface{} `json:"value"`
+	Value any `json:"value"`
 	Type  string      `json:"type"`
 }
 
@@ -311,7 +311,7 @@ func (t *Tracer) StartSpan(ctx context.Context, name string, opts ...SpanOption)
 type SpanOption func(*spanOptions)
 
 type spanOptions struct {
-	attributes map[string]interface{}
+	attributes map[string]any
 	links      []*SpanLink
 	kind       SpanKind
 }
@@ -324,7 +324,7 @@ func WithSpanKind(kind SpanKind) SpanOption {
 }
 
 // WithAttributes sets initial attributes.
-func WithAttributes(attrs map[string]interface{}) SpanOption {
+func WithAttributes(attrs map[string]any) SpanOption {
 	return func(o *spanOptions) {
 		o.attributes = attrs
 	}
@@ -338,7 +338,7 @@ func WithLinks(links []*SpanLink) SpanOption {
 }
 
 // SetAttribute sets an attribute on the span.
-func (s *Span) SetAttribute(key string, value interface{}) {
+func (s *Span) SetAttribute(key string, value any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -363,7 +363,7 @@ func (s *Span) SetAttribute(key string, value interface{}) {
 }
 
 // AddEvent adds an event to the span.
-func (s *Span) AddEvent(name string, attrs map[string]interface{}) {
+func (s *Span) AddEvent(name string, attrs map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -388,7 +388,7 @@ func (s *Span) RecordError(err error) {
 
 	s.SetAttribute("exception.type", fmt.Sprintf("%T", err))
 	s.SetAttribute("exception.message", err.Error())
-	s.AddEvent("exception", map[string]interface{}{
+	s.AddEvent("exception", map[string]any{
 		"exception.type":    fmt.Sprintf("%T", err),
 		"exception.message": err.Error(),
 	})
@@ -835,7 +835,7 @@ func (t *Tracer) HTTPMiddleware(next http.Handler) http.Handler {
 		// Start span
 		ctx, span := t.StartSpan(ctx, r.Method+" "+r.URL.Path,
 			WithSpanKind(SpanKindServer),
-			WithAttributes(map[string]interface{}{
+			WithAttributes(map[string]any{
 				"http.method":      r.Method,
 				"http.url":         r.URL.String(),
 				"http.host":        r.Host,
@@ -877,7 +877,7 @@ func (w *responseWriterWrapper) WriteHeader(code int) {
 func (t *Tracer) S3OperationSpan(ctx context.Context, operation, bucket, key string) (context.Context, *Span) {
 	return t.StartSpan(ctx, "s3."+operation,
 		WithSpanKind(SpanKindServer),
-		WithAttributes(map[string]interface{}{
+		WithAttributes(map[string]any{
 			"s3.operation": operation,
 			"s3.bucket":    bucket,
 			"s3.key":       key,
@@ -888,7 +888,7 @@ func (t *Tracer) S3OperationSpan(ctx context.Context, operation, bucket, key str
 func (t *Tracer) DatabaseSpan(ctx context.Context, operation, query string) (context.Context, *Span) {
 	return t.StartSpan(ctx, "db."+operation,
 		WithSpanKind(SpanKindClient),
-		WithAttributes(map[string]interface{}{
+		WithAttributes(map[string]any{
 			"db.operation": operation,
 			"db.statement": query,
 		}))
@@ -939,8 +939,8 @@ func NewMetricsBridge(tracer *Tracer) *MetricsBridge {
 }
 
 // GetMetrics returns current tracing metrics.
-func (m *MetricsBridge) GetMetrics() map[string]interface{} {
-	return map[string]interface{}{
+func (m *MetricsBridge) GetMetrics() map[string]any {
+	return map[string]any{
 		"active_spans": m.tracer.GetActiveSpans(),
 		"total_spans":  m.tracer.GetSpanCount(),
 	}
