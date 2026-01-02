@@ -481,7 +481,7 @@ func (h *ClusterHandler) GetClusterHealth(w http.ResponseWriter, r *http.Request
 type NodeMetricsResponse struct {
 	JoinedAt      time.Time              `json:"joined_at"`
 	LastHeartbeat time.Time              `json:"last_heartbeat"`
-	Storage       map[string]interface{} `json:"storage,omitempty"`
+	Storage       map[string]any `json:"storage,omitempty"`
 	NodeID        string                 `json:"node_id"`
 	Name          string                 `json:"name,omitempty"`
 	Address       string                 `json:"address"`
