@@ -481,7 +481,9 @@ func (w *WASMRuntime) getOrCompileModule(
 		// Cache the compiled module with eviction if needed
 		if w.config.EnableCaching {
 			w.mu.Lock()
-			w.evictIfNeeded(ctx)
+			// evictIfNeeded uses context.Background() internally to ensure cleanup
+			// completes even if the request context is cancelled
+			w.evictIfNeeded() //nolint:contextcheck // intentionally uses background context for cleanup
 			w.moduleCache[cacheKey] = compiled
 			w.cacheOrder = append(w.cacheOrder, cacheKey)
 			wasmModuleCacheSize.Set(float64(len(w.moduleCache)))
@@ -514,28 +516,38 @@ func (w *WASMRuntime) getOrCompileModule(
 // Must be called with w.mu held.
 func (w *WASMRuntime) updateCacheOrderLocked(cacheKey string) {
 	// Find and remove the key from its current position
+	found := false
+
 	for i, key := range w.cacheOrder {
 		if key == cacheKey {
 			w.cacheOrder = append(w.cacheOrder[:i], w.cacheOrder[i+1:]...)
+			found = true
 
 			break
 		}
 	}
 
-	// Add to the end (most recently used)
-	w.cacheOrder = append(w.cacheOrder, cacheKey)
+	// Only add to the end if the key was found (avoid duplicates from missing keys)
+	if found {
+		w.cacheOrder = append(w.cacheOrder, cacheKey)
+	}
 }
 
 // evictIfNeeded removes the least recently used module if cache is full.
 // Must be called with w.mu held.
-func (w *WASMRuntime) evictIfNeeded(ctx context.Context) {
+// Uses context.Background() for cleanup to ensure eviction completes even if
+// the request context is cancelled.
+func (w *WASMRuntime) evictIfNeeded() {
+	// Use background context for cleanup operations
+	cleanupCtx := context.Background()
+
 	for len(w.moduleCache) >= w.config.MaxCacheEntries && len(w.cacheOrder) > 0 {
 		// Evict the oldest (least recently used) entry
 		oldestKey := w.cacheOrder[0]
 		w.cacheOrder = w.cacheOrder[1:]
 
 		if module, ok := w.moduleCache[oldestKey]; ok {
-			if err := module.Close(ctx); err != nil {
+			if err := module.Close(cleanupCtx); err != nil {
 				log.Warn().Err(err).Str("module", oldestKey).Msg("Failed to close evicted WASM module")
 			}
 
