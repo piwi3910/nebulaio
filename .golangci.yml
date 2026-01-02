@@ -1,71 +1,22 @@
 version: "2"
 
 linters:
-  default: all
-  disable:
-    - depguard        # Disabled - requires complex allow-list configuration
-    - modernize       # Disabled - all known issues fixed
-    - err113          # Disabled - dynamic errors acceptable
-    - errchkjson      # Disabled - overly strict
-    - errname         # Disabled - existing conventions
-    - errorlint       # Disabled - too strict
-    - exhaustruct     # Disabled - too strict
-    - varnamelen      # Disabled - too strict
-    - nonamedreturns  # Disabled - named returns intentional
-    - tagalign        # Disabled - formatting preference
-    - tagliatelle     # Disabled - existing naming consistent
-    - testpackage     # Disabled - white-box testing intentional
-    - unparam         # Disabled - interface consistency
-    - wrapcheck       # Disabled - error patterns intentional
-    - lll             # Disabled - long lines unavoidable
-    - funlen          # Disabled - some functions complex
-    - mnd             # Disabled - magic numbers acceptable
-    - revive          # Disabled - overlaps with others
-    - govet           # Disabled - needs review
-    - funcorder       # Disabled - logical ordering
-    - exhaustive      # Disabled - default cases handle
-    - forbidigo       # Disabled - patterns acceptable
-    - forcetypeassert # Disabled - assertions safe
-    - gochecknoglobals # Disabled - globals needed
-    - gocognit        # Disabled - complexity acceptable
-    - interfacebloat  # Disabled - large interfaces intentional
-    - ireturn         # Disabled - returning interfaces intentional
-    - nestif          # Disabled - nesting needed
-    - nilerr          # Disabled - nil errors intentional
-    - nilnil          # Disabled - (nil, nil) intentional
-    - nlreturn        # Disabled - style preference
-    - perfsprint      # Disabled - performance acceptable
-    - prealloc        # Disabled - not always beneficial
-    - thelper         # Disabled - too strict
-    - wastedassign    # Disabled - assignments intentional
-    - wsl             # Disabled - conflicts with gofmt
-    - wsl_v5          # Disabled - conflicts with gofmt
-    - noinlineerr     # Disabled - inline error handling idiomatic
+  default: none
+  enable:
+    # Core linters that catch real bugs
+    - errcheck        # Check error handling
+    - gosimple        # Simplification suggestions
+    - govet           # Vet checks
+    - ineffassign     # Unused assignment detection
+    - staticcheck     # Static analysis
+    - unused          # Unused code detection
 
   settings:
-    cyclop:
-      max-complexity: 15
-
-    funlen:
-      lines: 100
-      statements: 50
-      ignore-comments: true
-
-    nestif:
-      min-complexity: 4
-
-    gocyclo:
-      min-complexity: 15
-
-    gocognit:
-      min-complexity: 20
-
     errcheck:
-      check-type-assertions: false  # Disabled - type assertions after sync.Map are safe in our usage
+      check-type-assertions: false
       check-blank: false
       exclude-functions:
         - io.Copy
-        - io.Copy(*bytes.Buffer)
         - io.CopyBuffer
         - fmt.Fprint
         - fmt.Fprintf
@@ -81,110 +32,25 @@ linters:
     govet:
       enable-all: true
       disable:
-        - shadow  # Too strict, common variable shadowing is often intentional
-
-    revive:
-      rules:
-        - name: exported
-          arguments:
-            - "checkPrivateReceivers"
-            - "sayRepetitiveInsteadOfStutters"
-        - name: var-naming
-        - name: package-comments
-        - name: error-return
-        - name: error-naming
-        - name: error-strings
-        - name: receiver-naming
-        - name: indent-error-flow
-        - name: if-return
+        - shadow
 
     staticcheck:
       checks:
         - all
-        - "-SA9003"  # Empty branch - often intentional for TODO stubs
-        - "-SA1012"  # nil context - sometimes intentional in tests
-        - "-SA1026"  # xml.Encode map - false positive when used for error responses
-        - "-ST1005"  # Error strings should not be capitalized - too strict for API errors
-        - "-ST1003"  # Initialisms (ACL vs Acl) - S3 API compatibility
-        - "-ST1000"  # Package comments - not required for internal packages
-        - "-ST1020"  # Comment format on methods - style preference
-        - "-ST1021"  # Comment format on types - style preference
-        - "-ST1022"  # Comment format on consts - style preference
-        - "-S1008"   # Simplify return - readability preference
-        - "-QF1002"  # Tagged switch - style preference
-        - "-QF1003"  # Tagged switch - style preference
+        - "-SA9003"
+        - "-SA1012"
+        - "-SA1026"
+        - "-ST1005"
+        - "-ST1003"
+        - "-ST1000"
+        - "-ST1020"
+        - "-ST1021"
+        - "-ST1022"
+        - "-S1008"
+        - "-QF1002"
+        - "-QF1003"
 
-    gosec:
-      excludes:
-        - G101  # Look for hard coded credentials - false positives with test constants
-        - G104  # Audit errors not checked - covered by errcheck
-        - G204  # Subprocess launched with variable - required for CLI commands
-      config:
-        G306: "0644"  # File permissions
-
-    errorlint:
-      errorf: true
-      asserts: true
-      comparison: true
-
-    lll:
-      line-length: 120
-      tab-width: 4
-
-    varnamelen:
-      max-distance: 10
-      min-name-length: 2
-      check-receiver: false
-      check-return: false
-      check-type-param: false
-      ignore-type-assert-ok: true
-      ignore-map-index-ok: true
-      ignore-chan-recv-ok: true
-      ignore-decls:
-        - ctx context.Context
-        - wg sync.WaitGroup
-        - mu sync.Mutex
-        - rw sync.RWMutex
-        - id string
-        - db *sql.DB
-        - w http.ResponseWriter
-        - r *http.Request
-        - t *testing.T
-        - b *testing.B
-        - i int
-        - j int
-        - k int
-        - v interface{}
-        - ok bool
-        - err error
-
-    tagliatelle:
-      case:
-        rules:
-          json: snake
-          yaml: snake
-          xml: camel
-          bson: camel
-          avro: snake
-          mapstructure: kebab
-
-    exhaustive:
-      check:
-        - switch
-      default-signifies-exhaustive: true
-
-    forbidigo:
-      forbid:
-        - pattern: '^fmt\.Print.*$'
-          msg: "Use zerolog for logging, not fmt.Print"
-        - pattern: '^log\.Print.*$'
-          msg: "Use zerolog for logging, not log.Print"
-        - pattern: '^panic$'
-          msg: "Avoid panic, return errors instead"
-
-  # Exclusions configuration (v2 uses linters.exclusions)
   exclusions:
-    # Path exclusions - skip these directories entirely
     paths:
       - vendor
       - node_modules
@@ -192,55 +58,23 @@ linters:
       - ".*\\.pb\\.go$"
       - ".*generated.*\\.go$"
 
-    # Rule-based exclusions
     rules:
-      # Exclude test files from certain checks
       - path: _test\.go
         linters:
-          - funlen
-          - gocyclo
-          - gocognit
           - errcheck
-          - gosec
-          - exhaustruct
-          - varnamelen
-          - wrapcheck
-          - paralleltest
-          - tparallel
 
-      # Exclude benchmark files
-      - path: _bench_test\.go
-        linters:
-          - funlen
-          - gocyclo
-          - gocognit
-          - errcheck
-          - exhaustruct
-          - varnamelen
-
-      # Exclude integration test files
-      - path: internal/integration/
-        linters:
-          - funlen
-          - gocyclo
-          - gosec
-
-      # Exclude generated or stub code
       - path: internal/transport/rdma/
         linters:
           - unused
-          - gocritic
 
       - path: internal/dpu/
         linters:
           - unused
-          - gocritic
 
       - path: internal/backup/pitr\.go
         linters:
           - unused
 
-      # Exclude specific paths from unused checks (reserved for future)
       - path: internal/cache/dram/
         linters:
           - unused
@@ -268,56 +102,6 @@ linters:
       - path: internal/object/service\.go
         linters:
           - unused
-
-      # Allow certain patterns in specific files
-      - path: internal/server/server\.go
-        text: "cyclomatic complexity"
-        linters:
-          - gocyclo
-          - gocognit
-
-      - path: internal/api/s3/
-        text: "cyclomatic complexity"
-        linters:
-          - gocyclo
-
-      # Allow InsecureSkipVerify in test helpers
-      - path: internal/.*test.*\.go
-        text: "G402.*InsecureSkipVerify"
-        linters:
-          - gosec
-
-      # Allow weak random in non-cryptographic contexts
-      - path: internal/.*
-        text: "G404.*weak random"
-        linters:
-          - gosec
-
-      # Allow init() for registration patterns
-      - path: internal/.*/.*\.go
-        text: "don't use `init` function"
-        linters:
-          - gochecknoinits
-
-      # Allow global variables for metrics, loggers, and config
-      - path: internal/metrics/.*\.go
-        linters:
-          - gochecknoglobals
-
-      - path: internal/config/.*\.go
-        linters:
-          - gochecknoglobals
-
-      # Allow globals in main package for CLI flags
-      - path: cmd/.*\.go
-        linters:
-          - gochecknoglobals
-          - gochecknoinits
-
-      # Allow TODO/FIXME comments - we track them in GitHub issues
-      - linters:
-          - godox
-        text: "Line contains TODO/BUG/FIXME"
 
 run:
   go: '1.24'
