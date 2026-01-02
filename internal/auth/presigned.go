@@ -591,7 +591,7 @@ func sha256Hex(data []byte) string {
 func awsURIEncode(s string, encodeSlash bool) string {
 	var result strings.Builder
 
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if isAWSUnreservedChar(c) || (!encodeSlash && c == '/') {
 			result.WriteByte(c)

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -143,7 +144,8 @@ func TestPresignedURLWithSpecialCharacters(t *testing.T) {
 	}
 
 	for _, key := range specialKeys {
-		t.Run(key, func(t *testing.T) {
+		testName := strings.ReplaceAll(key, "/", "_")
+		t.Run(testName, func(t *testing.T) {
 			presignedURL, err := gen.GeneratePresignedURL(auth.PresignParams{
 				Method:      http.MethodGet,
 				Bucket:      "test-bucket",
