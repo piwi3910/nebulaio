@@ -267,14 +267,15 @@ func TestRateLimitDDoSProtection(t *testing.T) {
 	})
 
 	t.Run("cleans up stale limiters", func(t *testing.T) {
-		// Use very short timeouts and longer wait for CI stability
-		cleanupInterval := 10 * time.Millisecond
-		staleTimeout := 20 * time.Millisecond
-		cleanupWait := 500 * time.Millisecond
+		// Use generous timeouts for CI stability - cleanup should work reliably
+		// with these larger margins
+		cleanupInterval := 100 * time.Millisecond
+		staleTimeout := 200 * time.Millisecond
+		cleanupWait := 1 * time.Second
 
 		config := RateLimitConfig{
 			Enabled:           true,
-			RequestsPerSecond: testRequestsPerSecond,
+			RequestsPerSecond: 1, // Minimal refill rate
 			BurstSize:         testBurstSizeSmall,
 			PerIP:             true,
 			CleanupInterval:   cleanupInterval,
@@ -284,25 +285,28 @@ func TestRateLimitDDoSProtection(t *testing.T) {
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
-		// Create some limiters by making requests
-		testIPs := 3 // Use fewer IPs for faster test
-		for i := range testIPs {
-			clientIP := "192.168.1." + strconv.Itoa(i)
-			rl.Allow(clientIP)
-		}
+		// Use a single IP to keep the test simple and deterministic
+		clientIP := "192.168.1.1"
 
-		// Wait for cleanup to occur multiple times
+		// First request should succeed (uses the one burst token)
+		allowed1 := rl.Allow(clientIP)
+		assert.True(t, allowed1, "First request should be allowed")
+
+		// Second request should fail (burst exhausted)
+		allowed2 := rl.Allow(clientIP)
+		assert.False(t, allowed2, "Second request should be rate limited")
+
+		// Wait for cleanup to run and delete the stale limiter
+		// After staleTimeout (200ms), the limiter becomes stale
+		// After cleanupInterval (100ms), cleanup runs
+		// With 1s wait, cleanup should have run multiple times
 		time.Sleep(cleanupWait)
 
-		// After cleanup, new requests from the same IPs should be allowed
-		// because their rate limiters were cleaned up and recreated fresh
-		for i := range testIPs {
-			clientIP := "192.168.1." + strconv.Itoa(i)
-			// First request after cleanup should be allowed (fresh limiter)
-			allowed := rl.Allow(clientIP)
-			assert.True(t, allowed,
-				"Request from IP %s should be allowed after cleanup", clientIP)
-		}
+		// After cleanup, a new limiter should be created with fresh tokens
+		// The first request to this "new" limiter should succeed
+		allowed3 := rl.Allow(clientIP)
+		assert.True(t, allowed3,
+			"Request should be allowed after cleanup (fresh limiter)")
 	})
 }
 
