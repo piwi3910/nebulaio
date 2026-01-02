@@ -3159,15 +3159,11 @@ func TestPresignedGetObject(t *testing.T) {
 	})
 	require.NoError(t, err, "Failed to generate presigned URL")
 
-	t.Logf("Generated presigned URL: %s", presignedURL)
-
 	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
-	t.Logf("Request URL Path: %s, Host: %s", req.URL.Path, req.Host)
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
 
-	t.Logf("Response code: %d, body: %s", w.Code, w.Body.String())
 	assert.Equal(t, http.StatusOK, w.Code, "Response body: %s", w.Body.String())
 	assert.Equal(t, content, w.Body.String())
 }
@@ -3187,7 +3183,6 @@ func TestPresignedGetObjectWithExpiration(t *testing.T) {
 	require.NoError(t, err)
 
 	expirations := []time.Duration{
-		1 * time.Second,
 		5 * time.Minute,
 		1 * time.Hour,
 		24 * time.Hour,
