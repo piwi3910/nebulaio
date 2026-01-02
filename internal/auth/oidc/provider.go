@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -563,10 +564,8 @@ func (p *Provider) IsAdminGroup(groups []string) bool {
 	}
 
 	for _, userGroup := range groups {
-		for _, adminGroup := range p.config.AdminGroups {
-			if userGroup == adminGroup {
-				return true
-			}
+		if slices.Contains(p.config.AdminGroups, userGroup) {
+			return true
 		}
 	}
 

@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"regexp"
 	"strings"
 	"sync"
@@ -795,13 +796,8 @@ func (s *SecretScanner) GetStats() *ScannerStats {
 		LastScanTime:       s.stats.LastScanTime,
 	}
 
-	for k, v := range s.stats.FindingsByType {
-		stats.FindingsByType[k] = v
-	}
-
-	for k, v := range s.stats.FindingsBySeverity {
-		stats.FindingsBySeverity[k] = v
-	}
+	maps.Copy(stats.FindingsByType, s.stats.FindingsByType)
+	maps.Copy(stats.FindingsBySeverity, s.stats.FindingsBySeverity)
 
 	return stats
 }

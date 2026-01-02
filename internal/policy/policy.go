@@ -424,7 +424,7 @@ func matchStringOrArray(value any, target string) bool {
 }
 
 // matchStringOrArrayWithWildcard matches with wildcard pattern support.
-func matchStringOrArrayWithWildcard(value interface{}, target string) bool {
+func matchStringOrArrayWithWildcard(value any, target string) bool {
 	switch v := value.(type) {
 	case string:
 		return matchWildcard(v, target)
@@ -466,7 +466,7 @@ func matchWildcard(pattern, target string) bool {
 }
 
 // matchConditions checks if conditions match.
-func matchConditions(stmtConditions map[string]map[string]interface{}, conditions map[string]string) bool {
+func matchConditions(stmtConditions map[string]map[string]any, conditions map[string]string) bool {
 	for operator, conditionMap := range stmtConditions {
 		for key, expectedValue := range conditionMap {
 			actualValue, exists := conditions[key]
@@ -481,7 +481,7 @@ func matchConditions(stmtConditions map[string]map[string]interface{}, condition
 }
 
 // evaluateConditionOperator evaluates a single condition operator.
-func evaluateConditionOperator(operator string, expectedValue interface{}, actualValue string, exists bool) bool {
+func evaluateConditionOperator(operator string, expectedValue any, actualValue string, exists bool) bool {
 	switch operator {
 	case "StringEquals":
 		return matchStringEquals(expectedValue, actualValue, exists)
