@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -441,9 +442,7 @@ func (s *Server) GetMetrics() *ServerMetrics {
 		RequestsByOp:      make(map[uint8]int64),
 	}
 
-	for op, count := range s.metrics.RequestsByOp {
-		m.RequestsByOp[op] = count
-	}
+	maps.Copy(m.RequestsByOp, s.metrics.RequestsByOp)
 
 	return m
 }

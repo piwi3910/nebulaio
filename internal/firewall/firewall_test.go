@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -981,19 +982,15 @@ func testBlocklistEntries(t *testing.T, fw *Firewall, blocklist []string) {
 	}
 
 	// Find a valid entry to test
-	for _, entry := range blocklist {
-		if entry == "10.0.0.0/8" {
-			req := &Request{
-				SourceIP:  "10.0.0.50",
-				Operation: "GetObject",
-			}
+	if slices.Contains(blocklist, "10.0.0.0/8") {
+		req := &Request{
+			SourceIP:  "10.0.0.50",
+			Operation: "GetObject",
+		}
 
-			decision := fw.Evaluate(context.Background(), req)
-			if decision.Allowed {
-				t.Error("Expected IP in blocklist to be denied")
-			}
-
-			break
+		decision := fw.Evaluate(context.Background(), req)
+		if decision.Allowed {
+			t.Error("Expected IP in blocklist to be denied")
 		}
 	}
 }

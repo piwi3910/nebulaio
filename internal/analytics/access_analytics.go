@@ -175,7 +175,7 @@ type AnomalyRule struct {
 
 // RuleCondition defines a condition for an anomaly rule.
 type RuleCondition struct {
-	Value    interface{} `json:"value"`
+	Value    any `json:"value"`
 	Field    string      `json:"field"`
 	Operator string      `json:"operator"`
 }

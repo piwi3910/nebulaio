@@ -90,7 +90,7 @@ type AdvancedPolicy struct {
 	RateLimit RateLimitConfig `json:"rateLimit" yaml:"rateLimit"`
 
 	// Distributed execution configuration
-	Distributed DistributedConfig `json:"distributed,omitempty" yaml:"distributed,omitempty"`
+	Distributed DistributedConfig `json:"distributed" yaml:"distributed"`
 
 	// Scope defines where the policy applies
 	Scope PolicyScope `json:"scope" yaml:"scope"`

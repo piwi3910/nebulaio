@@ -219,7 +219,7 @@ func newPolicyGetCmd() *cobra.Command {
 
 			if result.Policy != nil {
 				// Pretty print JSON
-				var prettyJSON map[string]interface{}
+				var prettyJSON map[string]any
 
 				err := json.Unmarshal([]byte(*result.Policy), &prettyJSON)
 				if err == nil {
