@@ -902,8 +902,7 @@ func (h *Handler) CreateMultipartUpload(w http.ResponseWriter, r *http.Request) 
 	userMetadata := make(map[string]string)
 
 	for key, values := range r.Header {
-		if strings.HasPrefix(strings.ToLower(key), "x-amz-meta-") {
-			metaKey := strings.TrimPrefix(strings.ToLower(key), "x-amz-meta-")
+		if metaKey, ok := strings.CutPrefix(strings.ToLower(key), "x-amz-meta-"); ok {
 			userMetadata[metaKey] = values[0]
 		}
 	}

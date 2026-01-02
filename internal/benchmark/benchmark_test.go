@@ -35,7 +35,7 @@ func BenchmarkSHA256_1KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		sha256.Sum256(data)
 	}
 }
@@ -46,7 +46,7 @@ func BenchmarkSHA256_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		sha256.Sum256(data)
 	}
 }

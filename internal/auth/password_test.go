@@ -399,7 +399,7 @@ func BenchmarkVerifyPassword(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		_ = VerifyPassword(hash, password)
 	}
 }

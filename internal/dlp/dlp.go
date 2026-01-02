@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -823,13 +824,7 @@ func (e *DLPEngine) matchesBucketCondition(buckets []string, bucket string) bool
 		return true
 	}
 
-	for _, b := range buckets {
-		if b == bucket {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(buckets, bucket)
 }
 
 // matchesPrefixCondition checks if key matches prefix conditions.
@@ -882,10 +877,8 @@ func (e *DLPEngine) ruleMatchesExceptions(rule *DLPRule, req *ScanRequest) bool 
 	}
 
 	// Check bucket exceptions
-	for _, b := range rule.Exceptions.Buckets {
-		if b == req.Bucket {
-			return true
-		}
+	if slices.Contains(rule.Exceptions.Buckets, req.Bucket) {
+		return true
 	}
 
 	// Check prefix exceptions

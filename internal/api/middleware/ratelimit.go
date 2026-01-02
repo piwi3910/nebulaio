@@ -192,10 +192,7 @@ func (l *TokenBucketLimiter) refillTokens(tokensToAdd int64) {
 	for {
 		current := l.tokens.Load()
 
-		newTokens := current + tokensToAdd
-		if newTokens > l.maxTokens {
-			newTokens = l.maxTokens
-		}
+		newTokens := min(current+tokensToAdd, l.maxTokens)
 
 		if l.tokens.CompareAndSwap(current, newTokens) {
 			break
