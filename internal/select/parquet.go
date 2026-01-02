@@ -603,7 +603,7 @@ func (pr *ParquetReader) convertByteArray(data []byte, desc *ColumnDescriptor) a
 }
 
 // convertInt96 converts INT96 to timestamp (Spark/Hive format).
-func (pr *ParquetReader) convertInt96(data []byte) interface{} {
+func (pr *ParquetReader) convertInt96(data []byte) any {
 	// INT96 is nanoseconds since midnight + Julian day
 	if len(data) != 12 {
 		return nil
@@ -658,7 +658,7 @@ func NewParquetSelectExecutor(reader io.ReadSeeker) (*ParquetSelectExecutor, err
 func (e *ParquetSelectExecutor) Execute(query *SelectQuery) (*SelectResult, error) {
 	result := &SelectResult{
 		Columns: query.Columns,
-		Rows:    make([][]interface{}, 0),
+		Rows:    make([][]any, 0),
 	}
 
 	// Read all rows (with pagination for large files)
@@ -690,7 +690,7 @@ func (e *ParquetSelectExecutor) Execute(query *SelectQuery) (*SelectResult, erro
 	return result, nil
 }
 
-func (e *ParquetSelectExecutor) processBatch(rows []map[string]interface{}, query *SelectQuery, result *SelectResult) (bool, error) {
+func (e *ParquetSelectExecutor) processBatch(rows []map[string]any, query *SelectQuery, result *SelectResult) (bool, error) {
 	for _, row := range rows {
 		matchesWhere, err := e.evaluateWhereClause(query, row)
 		if err != nil {
@@ -712,7 +712,7 @@ func (e *ParquetSelectExecutor) processBatch(rows []map[string]interface{}, quer
 	return false, nil
 }
 
-func (e *ParquetSelectExecutor) evaluateWhereClause(query *SelectQuery, row map[string]interface{}) (bool, error) {
+func (e *ParquetSelectExecutor) evaluateWhereClause(query *SelectQuery, row map[string]any) (bool, error) {
 	if query.Where == nil {
 		return true, nil
 	}
@@ -725,8 +725,8 @@ func (e *ParquetSelectExecutor) evaluateWhereClause(query *SelectQuery, row map[
 	return match, nil
 }
 
-func (e *ParquetSelectExecutor) projectColumns(query *SelectQuery, row map[string]interface{}) []interface{} {
-	var resultRow []interface{}
+func (e *ParquetSelectExecutor) projectColumns(query *SelectQuery, row map[string]any) []any {
+	var resultRow []any
 
 	if len(query.Columns) == 1 && query.Columns[0] == "*" {
 		// Select all columns
@@ -754,12 +754,12 @@ type SelectQuery struct {
 // SelectResult contains the query result.
 type SelectResult struct {
 	Columns []string
-	Rows    [][]interface{}
+	Rows    [][]any
 }
 
 // Condition represents a WHERE condition.
 type Condition struct {
-	Value    interface{}
+	Value    any
 	Left     *Condition
 	Right    *Condition
 	Column   string
@@ -783,7 +783,7 @@ const (
 )
 
 // evaluateCondition evaluates a condition against a row.
-func evaluateCondition(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateCondition(cond *Condition, row map[string]any) (bool, error) {
 	if cond == nil {
 		return true, nil
 	}
@@ -813,7 +813,7 @@ func evaluateCondition(cond *Condition, row map[string]interface{}) (bool, error
 }
 
 // evaluateAnd evaluates an AND condition.
-func evaluateAnd(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateAnd(cond *Condition, row map[string]any) (bool, error) {
 	left, err := evaluateCondition(cond.Left, row)
 	if err != nil || !left {
 		return false, err
@@ -822,7 +822,7 @@ func evaluateAnd(cond *Condition, row map[string]interface{}) (bool, error) {
 }
 
 // evaluateOr evaluates an OR condition.
-func evaluateOr(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateOr(cond *Condition, row map[string]any) (bool, error) {
 	left, err := evaluateCondition(cond.Left, row)
 	if err != nil {
 		return false, err
@@ -834,25 +834,25 @@ func evaluateOr(cond *Condition, row map[string]interface{}) (bool, error) {
 }
 
 // evaluateNot evaluates a NOT condition.
-func evaluateNot(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateNot(cond *Condition, row map[string]any) (bool, error) {
 	result, err := evaluateCondition(cond.Left, row)
 	return !result, err
 }
 
 // evaluateIsNull evaluates an IS NULL condition.
-func evaluateIsNull(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateIsNull(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	return val == nil, nil
 }
 
 // evaluateIsNotNull evaluates an IS NOT NULL condition.
-func evaluateIsNotNull(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateIsNotNull(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	return val != nil, nil
 }
 
 // evaluateComparison evaluates a comparison condition.
-func evaluateComparison(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateComparison(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	if val == nil {
 		return false, nil
@@ -877,7 +877,7 @@ func evaluateComparison(cond *Condition, row map[string]interface{}) (bool, erro
 }
 
 // compareValues compares two values.
-func compareValues(a, b interface{}) int {
+func compareValues(a, b any) int {
 	// Convert to strings for comparison
 	aStr := fmt.Sprint(a)
 	bStr := fmt.Sprint(b)
@@ -903,7 +903,7 @@ func compareValues(a, b interface{}) int {
 }
 
 // evaluateLike evaluates a LIKE condition.
-func evaluateLike(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateLike(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	if val == nil {
 		return false, nil
@@ -953,14 +953,14 @@ func matchPattern(value, pattern string) bool {
 }
 
 // evaluateBetween evaluates a BETWEEN condition.
-func evaluateBetween(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateBetween(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	if val == nil {
 		return false, nil
 	}
 
 	// Value should be a slice with [min, max]
-	bounds, ok := cond.Value.([]interface{})
+	bounds, ok := cond.Value.([]any)
 	if !ok || len(bounds) != 2 {
 		return false, errors.New("invalid BETWEEN bounds")
 	}
@@ -969,14 +969,14 @@ func evaluateBetween(cond *Condition, row map[string]interface{}) (bool, error) 
 }
 
 // evaluateIn evaluates an IN condition.
-func evaluateIn(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateIn(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	if val == nil {
 		return false, nil
 	}
 
 	// Value should be a slice
-	values, ok := cond.Value.([]interface{})
+	values, ok := cond.Value.([]any)
 	if !ok {
 		return false, errors.New("invalid IN values")
 	}
@@ -1048,7 +1048,7 @@ func formatJSON(result *SelectResult) ([]byte, error) {
 	var buf bytes.Buffer
 
 	for _, row := range result.Rows {
-		obj := make(map[string]interface{})
+		obj := make(map[string]any)
 
 		for i, col := range result.Columns {
 			if i < len(row) {
@@ -1091,7 +1091,7 @@ func formatCSV(result *SelectResult) ([]byte, error) {
 }
 
 // formatCSVValue formats a value for CSV output.
-func formatCSVValue(v interface{}) string {
+func formatCSVValue(v any) string {
 	if v == nil {
 		return ""
 	}
