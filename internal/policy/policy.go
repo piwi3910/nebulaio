@@ -46,10 +46,10 @@ type Policy struct {
 
 // Statement represents a single policy statement.
 type Statement struct {
-	Principal interface{}                       `json:"Principal"`
-	Action    interface{}                       `json:"Action"`
-	Resource  interface{}                       `json:"Resource"`
-	Condition map[string]map[string]interface{} `json:"Condition,omitempty"`
+	Principal any                       `json:"Principal"`
+	Action    any                       `json:"Action"`
+	Resource  any                       `json:"Resource"`
+	Condition map[string]map[string]any `json:"Condition,omitempty"`
 	Sid       string                            `json:"Sid,omitempty"`
 	Effect    string                            `json:"Effect"`
 }

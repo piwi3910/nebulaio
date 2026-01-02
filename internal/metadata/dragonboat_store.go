@@ -103,7 +103,7 @@ func (s *DragonboatStore) PutObjectMeta(ctx context.Context, meta *ObjectMeta) e
 }
 
 func (s *DragonboatStore) GetObjectMeta(ctx context.Context, bucket, key string) (*ObjectMeta, error) {
-	dbKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, key))
+	dbKey := fmt.Appendf(nil, "%s%s/%s", prefixObject, bucket, key)
 
 	data, err := s.get(dbKey)
 	if err == badger.ErrKeyNotFound {
@@ -136,7 +136,7 @@ func (s *DragonboatStore) DeleteObjectMeta(ctx context.Context, bucket, key stri
 }
 
 func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*ObjectListing, error) {
-	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObject, bucket))
+	dbPrefix := fmt.Appendf(nil, "%s%s/", prefixObject, bucket)
 
 	var (
 		objects        []*ObjectMeta
@@ -177,7 +177,7 @@ func (s *DragonboatStore) iterateObjectsForListing(bucket string, dbPrefix []byt
 
 func (s *DragonboatStore) getStartKey(bucket string, dbPrefix []byte, continuationToken string) []byte {
 	if continuationToken != "" {
-		return []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, continuationToken))
+		return fmt.Appendf(nil, "%s%s/%s", prefixObject, bucket, continuationToken)
 	}
 	return dbPrefix
 }

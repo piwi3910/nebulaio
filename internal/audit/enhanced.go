@@ -593,12 +593,8 @@ func (l *EnhancedAuditLogger) matchesBuckets(allowed []string, actual string) bo
 	if len(allowed) == 0 {
 		return true
 	}
-	for _, b := range allowed {
-		if b == actual {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(allowed, actual)
 }
 
 func (l *EnhancedAuditLogger) matchesIPs(allowed []string, actual string) bool {

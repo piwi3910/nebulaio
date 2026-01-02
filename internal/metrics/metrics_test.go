@@ -327,19 +327,19 @@ func TestVersionVariable(t *testing.T) {
 }
 
 func BenchmarkRecordRequest(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		RecordRequest("GET", "GetObject", 200, 10*time.Millisecond)
 	}
 }
 
 func BenchmarkRecordS3Operation(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		RecordS3Operation("GetObject", "test-bucket")
 	}
 }
 
 func BenchmarkIncrementActiveConnections(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		IncrementActiveConnections()
 	}
 }
