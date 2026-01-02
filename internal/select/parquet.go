@@ -436,7 +436,7 @@ func (pr *ParquetReader) readPage(page *Page, desc *ColumnDescriptor) ([]any, er
 
 // readValue reads a single value based on the column type.
 func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (any, error) {
-	type readFunc func(io.Reader, *ColumnDescriptor) (interface{}, error)
+	type readFunc func(io.Reader, *ColumnDescriptor) (any, error)
 
 	readers := map[ParquetType]readFunc{
 		ParquetTypeBoolean:           pr.readBoolean,
@@ -456,7 +456,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (an
 	return nil, fmt.Errorf("unsupported type: %d", desc.Type)
 }
 
-func (pr *ParquetReader) readBoolean(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readBoolean(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var b byte
 	err := binary.Read(reader, binary.LittleEndian, &b)
 	if err != nil {
@@ -465,7 +465,7 @@ func (pr *ParquetReader) readBoolean(reader io.Reader, desc *ColumnDescriptor) (
 	return b != 0, nil
 }
 
-func (pr *ParquetReader) readInt32(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readInt32(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var val int32
 	err := binary.Read(reader, binary.LittleEndian, &val)
 	if err != nil {
