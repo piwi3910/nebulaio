@@ -135,16 +135,18 @@ func TestPresignedURLWithSpecialCharacters(t *testing.T) {
 	gen := auth.NewPresignedURLGenerator("us-east-1", "http://localhost:9000")
 	secretKey := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
+	// Test cases with special characters - start with simpler ones
 	specialKeys := []string{
-		"folder/file.txt",
-		"path/to/deep/file.txt",
-		"file with spaces.txt",
-		"file-with-dashes.txt",
-		"file_with_underscores.txt",
+		"file-with-dashes.txt",        // dashes are unreserved, should work
+		"file_with_underscores.txt",   // underscores are unreserved, should work
+		"folder/file.txt",             // slashes should not be encoded
+		"path/to/deep/file.txt",       // multiple slashes
+		"file with spaces.txt",        // spaces need encoding
 	}
 
 	for _, key := range specialKeys {
 		testName := strings.ReplaceAll(key, "/", "_")
+		testName = strings.ReplaceAll(testName, " ", "_")
 		t.Run(testName, func(t *testing.T) {
 			presignedURL, err := gen.GeneratePresignedURL(auth.PresignParams{
 				Method:      http.MethodGet,
@@ -173,6 +175,7 @@ func TestPresignedURLWithSpecialCharacters(t *testing.T) {
 			req.Host = parsedURL.Host
 
 			t.Logf("Request URL path: %s", req.URL.Path)
+			t.Logf("Request URL RawPath: %s", req.URL.RawPath)
 
 			// Parse the presigned URL info
 			info, err := auth.ParsePresignedURL(req)
@@ -180,7 +183,7 @@ func TestPresignedURLWithSpecialCharacters(t *testing.T) {
 
 			// Validate the signature
 			err = auth.ValidatePresignedSignature(req, info, secretKey)
-			assert.NoError(t, err, "Signature validation should pass for key '%s'", key)
+			require.NoError(t, err, "Signature validation should pass for key '%s'", key)
 		})
 	}
 }
