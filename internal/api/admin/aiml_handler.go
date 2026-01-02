@@ -178,7 +178,7 @@ func (h *Handler) GetAIMLMetrics(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetFeatureMetrics(w http.ResponseWriter, r *http.Request) {
 	feature := chi.URLParam(r, "feature")
 
-	var metrics interface{}
+	var metrics any
 
 	switch feature {
 	case "s3-express", "s3express":
@@ -284,17 +284,17 @@ func (h *Handler) GetAIMLStatus(w http.ResponseWriter, r *http.Request) {
 // GetConfig returns the server configuration.
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	// Build config from actual configuration values
-	configResponse := make(map[string]interface{})
+	configResponse := make(map[string]any)
 
 	if h.config != nil {
-		configResponse["s3_express"] = map[string]interface{}{
+		configResponse["s3_express"] = map[string]any{
 			"enabled":              h.config.S3Express.Enabled,
 			"default_zone":         h.config.S3Express.DefaultZone,
 			"enable_atomic_append": h.config.S3Express.EnableAtomicAppend,
 			"session_duration":     h.config.S3Express.SessionDuration,
 			"max_append_size":      h.config.S3Express.MaxAppendSize,
 		}
-		configResponse["iceberg"] = map[string]interface{}{
+		configResponse["iceberg"] = map[string]any{
 			"enabled":             h.config.Iceberg.Enabled,
 			"catalog_type":        h.config.Iceberg.CatalogType,
 			"catalog_uri":         h.config.Iceberg.CatalogURI,
@@ -303,7 +303,7 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"default_file_format": h.config.Iceberg.DefaultFileFormat,
 			"snapshot_retention":  h.config.Iceberg.SnapshotRetention,
 		}
-		configResponse["mcp"] = map[string]interface{}{
+		configResponse["mcp"] = map[string]any{
 			"enabled":          h.config.MCP.Enabled,
 			"port":             h.config.MCP.Port,
 			"enable_tools":     h.config.MCP.EnableTools,
@@ -312,13 +312,13 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"auth_required":    h.config.MCP.AuthRequired,
 			"max_connections":  h.config.MCP.MaxConnections,
 		}
-		configResponse["gpudirect"] = map[string]interface{}{
+		configResponse["gpudirect"] = map[string]any{
 			"enabled":          h.config.GPUDirect.Enabled,
 			"buffer_pool_size": h.config.GPUDirect.BufferPoolSize,
 			"enable_async":     h.config.GPUDirect.EnableAsync,
 			"enable_p2p":       h.config.GPUDirect.EnableP2P,
 		}
-		configResponse["dpu"] = map[string]interface{}{
+		configResponse["dpu"] = map[string]any{
 			"enabled":            h.config.DPU.Enabled,
 			"device_index":       h.config.DPU.DeviceIndex,
 			"enable_crypto":      h.config.DPU.EnableCrypto,
@@ -326,7 +326,7 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"enable_rdma":        h.config.DPU.EnableRDMA,
 			"fallback_on_error":  h.config.DPU.FallbackOnError,
 		}
-		configResponse["rdma"] = map[string]interface{}{
+		configResponse["rdma"] = map[string]any{
 			"enabled":          h.config.RDMA.Enabled,
 			"port":             h.config.RDMA.Port,
 			"device_name":      h.config.RDMA.DeviceName,
@@ -334,7 +334,7 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"fallback_to_tcp":  h.config.RDMA.FallbackToTCP,
 		}
 		// Note: Sensitive fields like APIKey are intentionally excluded from the response
-		configResponse["nim"] = map[string]interface{}{
+		configResponse["nim"] = map[string]any{
 			"enabled":            h.config.NIM.Enabled,
 			"default_model":      h.config.NIM.DefaultModel,
 			"enable_streaming":   h.config.NIM.EnableStreaming,
@@ -344,32 +344,32 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Return placeholder defaults if config not set
-		configResponse["s3_express"] = map[string]interface{}{
+		configResponse["s3_express"] = map[string]any{
 			"enabled":              false,
 			"default_zone":         "use1-az1",
 			"enable_atomic_append": true,
 		}
-		configResponse["iceberg"] = map[string]interface{}{
+		configResponse["iceberg"] = map[string]any{
 			"enabled":      false,
 			"catalog_type": "rest",
 			"catalog_uri":  "http://localhost:8181",
 			"warehouse":    "s3://warehouse/",
 			"enable_acid":  true,
 		}
-		configResponse["mcp"] = map[string]interface{}{
+		configResponse["mcp"] = map[string]any{
 			"enabled":          false,
 			"port":             9005,
 			"enable_tools":     true,
 			"enable_resources": true,
 			"auth_required":    true,
 		}
-		configResponse["gpudirect"] = map[string]interface{}{
+		configResponse["gpudirect"] = map[string]any{
 			"enabled":          false,
 			"buffer_pool_size": 1073741824,
 			"enable_async":     true,
 			"enable_p2p":       true,
 		}
-		configResponse["dpu"] = map[string]interface{}{
+		configResponse["dpu"] = map[string]any{
 			"enabled":            false,
 			"device_index":       0,
 			"enable_crypto":      true,
@@ -377,14 +377,14 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 			"enable_rdma":        true,
 			"fallback_on_error":  true,
 		}
-		configResponse["rdma"] = map[string]interface{}{
+		configResponse["rdma"] = map[string]any{
 			"enabled":          false,
 			"port":             9100,
 			"device_name":      "mlx5_0",
 			"enable_zero_copy": true,
 			"fallback_to_tcp":  true,
 		}
-		configResponse["nim"] = map[string]interface{}{
+		configResponse["nim"] = map[string]any{
 			"enabled":            false,
 			"default_model":      "meta/llama-3.1-8b-instruct",
 			"enable_streaming":   true,
@@ -399,7 +399,7 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 
 // UpdateConfig updates the server configuration.
 func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
-	var config map[string]interface{}
+	var config map[string]any
 
 	err := json.NewDecoder(r.Body).Decode(&config)
 	if err != nil {
@@ -409,7 +409,7 @@ func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 
 	// In production, this would validate and persist the config
 	// For now, return success
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "ok",
 		"message": "Configuration updated. Restart required for changes to take effect.",
 	})
