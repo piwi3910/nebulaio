@@ -57,7 +57,7 @@ func BenchmarkSHA256_10MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		sha256.Sum256(data)
 	}
 }
@@ -70,7 +70,7 @@ func BenchmarkZstdCompress_1KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		encoder.EncodeAll(data, nil)
 	}
 }
@@ -82,7 +82,7 @@ func BenchmarkZstdCompress_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		encoder.EncodeAll(data, nil)
 	}
 }

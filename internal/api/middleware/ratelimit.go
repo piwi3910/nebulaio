@@ -161,11 +161,7 @@ func (l *TokenBucketLimiter) Allow() bool {
 
 // calculateElapsed calculates elapsed time with overflow protection.
 func (l *TokenBucketLimiter) calculateElapsed(now, lastRefill int64) int64 {
-	elapsed := now - lastRefill
-	if elapsed > maxElapsedNanos {
-		elapsed = maxElapsedNanos
-	}
-	return elapsed
+	return min(now-lastRefill, maxElapsedNanos)
 }
 
 // calculateTokensToAdd calculates how many tokens to add based on elapsed time.

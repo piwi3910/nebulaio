@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -889,10 +890,8 @@ func (e *DLPEngine) ruleMatchesExceptions(rule *DLPRule, req *ScanRequest) bool 
 	}
 
 	// Check user exceptions
-	for _, u := range rule.Exceptions.Users {
-		if u == req.UserID {
-			return true
-		}
+	if slices.Contains(rule.Exceptions.Users, req.UserID) {
+		return true
 	}
 
 	return false
@@ -1039,15 +1038,8 @@ func (e *DLPEngine) createFinding(pattern *DataPattern, rule *DLPRule, lineNum i
 
 // getContext returns surrounding lines for context.
 func (e *DLPEngine) getContext(lines [][]byte, lineNum, contextLines int) string {
-	start := lineNum - contextLines
-	if start < 0 {
-		start = 0
-	}
-
-	end := lineNum + contextLines + 1
-	if end > len(lines) {
-		end = len(lines)
-	}
+	start := max(lineNum-contextLines, 0)
+	end := min(lineNum+contextLines+1, len(lines))
 
 	var context []string
 
@@ -1128,13 +1120,8 @@ func (e *DLPEngine) GetStats() *DLPStats {
 		LastScanTime:       e.stats.LastScanTime,
 	}
 
-	for k, v := range e.stats.ViolationsByType {
-		stats.ViolationsByType[k] = v
-	}
-
-	for k, v := range e.stats.ViolationsByAction {
-		stats.ViolationsByAction[k] = v
-	}
+	maps.Copy(stats.ViolationsByType, e.stats.ViolationsByType)
+	maps.Copy(stats.ViolationsByAction, e.stats.ViolationsByAction)
 
 	return stats
 }
