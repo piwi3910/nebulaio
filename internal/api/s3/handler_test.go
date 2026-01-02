@@ -41,10 +41,11 @@ const (
 	presignedTestUserID        = "test-user-123"
 	presignedTestAccessKeyID   = "AKIAIOSFODNN7EXAMPLE"
 	presignedTestSecretKey     = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-	presignedDefaultExpiration = 15 * time.Minute
-	presignedTestContentLength = 7
-	presignedTestContent       = "content"
-	presignedMaxExpirationDays = 8 * 24 * time.Hour
+	presignedDefaultExpiration  = 15 * time.Minute
+	presignedTestContentLength  = 7
+	presignedTestContent        = "content"
+	presignedOverMaxExpiration  = 8 * 24 * time.Hour // Exceeds 7-day AWS limit
+	presignedMinimalExpiration  = 1 * time.Second    // For expired URL testing
 )
 
 // MockMetadataStore implements metadata.Store for testing.
@@ -3150,23 +3151,15 @@ func TestPresignedURLDirect(t *testing.T) {
 	})
 	require.NoError(t, err, "Failed to generate presigned URL")
 
-	t.Logf("Generated presigned URL: %s", presignedURL)
-
 	parsedURL, err := url.Parse(presignedURL)
 	require.NoError(t, err, "Failed to parse presigned URL")
 
 	req := httptest.NewRequest(http.MethodGet, parsedURL.RequestURI(), nil)
 	req.Host = parsedURL.Host
 
-	t.Logf("Request URL path: %s", req.URL.Path)
-	t.Logf("Request Host: %s", req.Host)
-
 	// Validate directly using auth functions
 	info, err := auth.ParsePresignedURL(req)
 	require.NoError(t, err, "Failed to parse presigned URL info")
-
-	t.Logf("Parsed AccessKeyID: %s", info.AccessKeyID)
-	t.Logf("Parsed Region: %s", info.Region)
 
 	// Validate using the same secret key that was used to generate
 	err = auth.ValidatePresignedSignature(req, info, presignedTestSecretKey)
@@ -3200,26 +3193,17 @@ func TestPresignedGetObject(t *testing.T) {
 	})
 	require.NoError(t, err, "Failed to generate presigned URL")
 
-	t.Logf("DEBUG: Generated presigned URL: %s", presignedURL)
-
 	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
-	t.Logf("DEBUG: Request URL path: %s", req.URL.Path)
-	t.Logf("DEBUG: Request Host: %s", req.Host)
-	t.Logf("DEBUG: Request Method: %s", req.Method)
 
 	w := httptest.NewRecorder()
 
 	tc.router.ServeHTTP(w, req)
-
-	t.Logf("DEBUG: Response Code: %d", w.Code)
-	t.Logf("DEBUG: Response Body: %s", w.Body.String())
 
 	assert.Equal(t, http.StatusOK, w.Code, "Response body: %s", w.Body.String())
 	assert.Equal(t, content, w.Body.String())
 }
 
 func TestPresignedGetObjectWithExpiration(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3262,7 +3246,6 @@ func TestPresignedGetObjectWithExpiration(t *testing.T) {
 }
 
 func TestPresignedGetObjectNotFound(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3293,7 +3276,6 @@ func TestPresignedGetObjectNotFound(t *testing.T) {
 // =============================================================================
 
 func TestPresignedPutObject(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3331,7 +3313,6 @@ func TestPresignedPutObject(t *testing.T) {
 }
 
 func TestPresignedPutObjectWithContentType(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3361,7 +3342,6 @@ func TestPresignedPutObjectWithContentType(t *testing.T) {
 }
 
 func TestPresignedPutObjectToBucketNotFound(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 
 	presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
@@ -3390,7 +3370,6 @@ func TestPresignedPutObjectToBucketNotFound(t *testing.T) {
 // =============================================================================
 
 func TestPresignedDeleteObject(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3428,7 +3407,6 @@ func TestPresignedDeleteObject(t *testing.T) {
 }
 
 func TestPresignedDeleteObjectNonExistent(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3461,7 +3439,6 @@ func TestPresignedDeleteObjectNonExistent(t *testing.T) {
 // =============================================================================
 
 func TestPresignedURLInvalidAccessKey(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3495,7 +3472,6 @@ func TestPresignedURLInvalidAccessKey(t *testing.T) {
 }
 
 func TestPresignedURLInvalidSignature(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3529,7 +3505,6 @@ func TestPresignedURLInvalidSignature(t *testing.T) {
 }
 
 func TestPresignedURLTamperedSignature(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3565,7 +3540,6 @@ func TestPresignedURLTamperedSignature(t *testing.T) {
 }
 
 func TestPresignedURLWrongHTTPMethod(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3602,7 +3576,6 @@ func TestPresignedURLWrongHTTPMethod(t *testing.T) {
 }
 
 func TestPresignedURLDisabledAccessKey(t *testing.T) {
-	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3685,18 +3658,11 @@ func TestPresignedURLWithSpecialCharactersInKey(t *testing.T) {
 		})
 		require.NoError(t, err, "Failed to generate presigned URL for key '%s'", key)
 
-		t.Logf("Key: %s", key)
-		t.Logf("Presigned URL: %s", presignedURL)
-
 		req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
-		t.Logf("Request URL Path: %s", req.URL.Path)
-		t.Logf("Request Host: %s", req.Host)
 
 		w := httptest.NewRecorder()
 
 		tc.router.ServeHTTP(w, req)
-
-		t.Logf("Response status: %d, body: %s", w.Code, w.Body.String())
 
 		assert.Equal(t, http.StatusOK, w.Code,
 			"Key '%s': Response body: %s", key, w.Body.String())
@@ -3792,10 +3758,48 @@ func TestPresignedURLMaxExpiration(t *testing.T) {
 		AccessKeyID: tc.accessKeyID,
 		SecretKey:   tc.secretKey,
 		Endpoint:    tc.endpoint,
-		Expiration:  presignedMaxExpirationDays,
+		Expiration:  presignedOverMaxExpiration,
 	})
 
 	assert.Error(t, err, "Expected error for expiration exceeding 7 days")
+}
+
+func TestPresignedURLExpired(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+	ctx := context.Background()
+
+	_, err := tc.bucket.CreateBucket(ctx, presignedTestBucket, tc.userID, presignedTestRegion, "")
+	require.NoError(t, err)
+
+	_, err = tc.object.PutObject(
+		ctx, presignedTestBucket, presignedTestKey,
+		strings.NewReader(presignedTestContent), presignedTestContentLength,
+		testContentTypePlain, tc.userID, nil,
+	)
+	require.NoError(t, err)
+
+	// Generate a presigned URL with minimal expiration (1 second)
+	presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      presignedTestBucket,
+		Key:         presignedTestKey,
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  presignedMinimalExpiration,
+	})
+	require.NoError(t, err)
+
+	// Wait for the URL to expire
+	time.Sleep(2 * time.Second)
+
+	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	// Expired URL should be rejected with 403 Forbidden
+	assert.Equal(t, http.StatusForbidden, w.Code, "Expired URL should be rejected")
 }
 
 func TestPresignedURLValidationErrors(t *testing.T) {

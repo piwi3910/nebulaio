@@ -160,22 +160,13 @@ func TestPresignedURLWithSpecialCharacters(t *testing.T) {
 			})
 			require.NoError(t, err, "Failed to generate presigned URL for key '%s'", key)
 
-			t.Logf("Key: %s", key)
-			t.Logf("Presigned URL: %s", presignedURL)
-
 			// Parse the URL and create a request
 			parsedURL, err := url.Parse(presignedURL)
 			require.NoError(t, err)
 
-			t.Logf("Parsed URL path: %s", parsedURL.Path)
-			t.Logf("RequestURI: %s", parsedURL.RequestURI())
-
 			// Create a request from the presigned URL
 			req := httptest.NewRequest(http.MethodGet, parsedURL.RequestURI(), nil)
 			req.Host = parsedURL.Host
-
-			t.Logf("Request URL path: %s", req.URL.Path)
-			t.Logf("Request URL RawPath: %s", req.URL.RawPath)
 
 			// Parse the presigned URL info
 			info, err := auth.ParsePresignedURL(req)
