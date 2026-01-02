@@ -34,17 +34,17 @@ const (
 	testContentTypePlain  = "text/plain"
 
 	// Presigned URL test constants.
-	presignedTestBucket         = "test-bucket"
-	presignedTestKey            = "test-key"
-	presignedTestRegion         = "us-east-1"
-	presignedTestEndpoint       = "http://localhost:9000"
-	presignedTestUserID         = "test-user-123"
-	presignedTestAccessKeyID    = "AKIAIOSFODNN7EXAMPLE"
-	presignedTestSecretKey      = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-	presignedDefaultExpiration  = 15 * time.Minute
-	presignedTestContentLength  = 7
-	presignedTestContent        = "content"
-	presignedMaxExpirationDays  = 8 * 24 * time.Hour
+	presignedTestBucket        = "test-bucket"
+	presignedTestKey           = "test-key"
+	presignedTestRegion        = "us-east-1"
+	presignedTestEndpoint      = "http://localhost:9000"
+	presignedTestUserID        = "test-user-123"
+	presignedTestAccessKeyID   = "AKIAIOSFODNN7EXAMPLE"
+	presignedTestSecretKey     = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+	presignedDefaultExpiration = 15 * time.Minute
+	presignedTestContentLength = 7
+	presignedTestContent       = "content"
+	presignedMaxExpirationDays = 8 * 24 * time.Hour
 )
 
 // MockMetadataStore implements metadata.Store for testing.
