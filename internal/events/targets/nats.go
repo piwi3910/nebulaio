@@ -180,14 +180,14 @@ func (t *NATSTarget) Close() error {
 var _ events.Target = (*NATSTarget)(nil)
 
 func init() {
-	events.RegisterTargetFactory("nats", func(config map[string]interface{}) (events.Target, error) {
+	events.RegisterTargetFactory("nats", func(config map[string]any) (events.Target, error) {
 		cfg := DefaultNATSConfig()
 
 		if name, ok := config["name"].(string); ok {
 			cfg.Name = name
 		}
 
-		if servers, ok := config["servers"].([]interface{}); ok {
+		if servers, ok := config["servers"].([]any); ok {
 			cfg.Servers = make([]string, len(servers))
 			for i, s := range servers {
 				if str, ok := s.(string); ok {

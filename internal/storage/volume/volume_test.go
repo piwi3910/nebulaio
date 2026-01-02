@@ -166,7 +166,7 @@ func TestListObjects(t *testing.T) {
 	// Store multiple objects
 	for i := range 10 {
 		key := fmt.Sprintf("prefix/key-%d", i)
-		data := []byte(fmt.Sprintf("data-%d", i))
+		data := fmt.Appendf(nil, "data-%d", i)
 		err := vol.Put("bucket1", key, bytes.NewReader(data), int64(len(data)))
 		require.NoError(t, err)
 	}
@@ -348,7 +348,7 @@ func TestPackedBlockPacking(t *testing.T) {
 	// Store many small objects that should pack into same block
 	for i := range 100 {
 		key := fmt.Sprintf("tiny-%d", i)
-		data := []byte(fmt.Sprintf("tiny-data-%d", i))
+		data := fmt.Appendf(nil, "tiny-data-%d", i)
 		err := vol.Put("bucket1", key, bytes.NewReader(data), int64(len(data)))
 		require.NoError(t, err)
 	}
@@ -361,7 +361,7 @@ func TestPackedBlockPacking(t *testing.T) {
 	// Verify all objects are readable
 	for i := range 100 {
 		key := fmt.Sprintf("tiny-%d", i)
-		expectedData := []byte(fmt.Sprintf("tiny-data-%d", i))
+		expectedData := fmt.Appendf(nil, "tiny-data-%d", i)
 		retrieved, err := vol.Get("bucket1", key)
 		require.NoError(t, err)
 		assert.Equal(t, expectedData, retrieved)
@@ -449,9 +449,11 @@ func BenchmarkPutSmallObject(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		key := fmt.Sprintf("bench-key-%d", i)
 		vol.Put("bucket", key, bytes.NewReader(data), int64(len(data)))
+		i++
 	}
 }
 
@@ -476,8 +478,10 @@ func BenchmarkGetSmallObject(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		key := fmt.Sprintf("bench-key-%d", i%1000)
 		vol.Get("bucket", key)
+		i++
 	}
 }

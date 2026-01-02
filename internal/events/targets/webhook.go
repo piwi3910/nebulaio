@@ -210,7 +210,7 @@ func (t *WebhookTarget) Close() error {
 var _ events.Target = (*WebhookTarget)(nil)
 
 func init() {
-	events.RegisterTargetFactory("webhook", func(config map[string]interface{}) (events.Target, error) {
+	events.RegisterTargetFactory("webhook", func(config map[string]any) (events.Target, error) {
 		cfg := DefaultWebhookConfig()
 
 		if name, ok := config["name"].(string); ok {

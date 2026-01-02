@@ -2,6 +2,7 @@ package site
 
 import (
 	"errors"
+	"maps"
 	"net/url"
 	"regexp"
 	"time"
@@ -14,7 +15,7 @@ const (
 
 // Site represents a remote site in the replication cluster.
 type Site struct {
-	LastSeen  time.Time  `json:"lastSeen,omitempty" yaml:"lastSeen,omitempty"`
+	LastSeen  time.Time  `json:"lastSeen" yaml:"lastSeen"`
 	Name      string     `json:"name" yaml:"name"`
 	Endpoint  string     `json:"endpoint" yaml:"endpoint"`
 	AccessKey string     `json:"accessKey" yaml:"accessKey"`
@@ -262,9 +263,7 @@ func (v *VectorClock) Compare(other *VectorClock) int {
 // Copy creates a copy of the vector clock.
 func (v *VectorClock) Copy() *VectorClock {
 	clockCopy := NewVectorClock()
-	for site, clock := range v.Clocks {
-		clockCopy.Clocks[site] = clock
-	}
+	maps.Copy(clockCopy.Clocks, v.Clocks)
 
 	return clockCopy
 }

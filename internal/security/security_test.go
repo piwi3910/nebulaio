@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -546,7 +547,7 @@ func validateJWTFormat(token string) (bool, error) {
 		return false, assert.AnError
 	}
 
-	var header map[string]interface{}
+	var header map[string]any
 	err = json.Unmarshal(headerBytes, &header)
 	if err != nil {
 		return false, assert.AnError
@@ -560,7 +561,7 @@ func validateJWTFormat(token string) (bool, error) {
 }
 
 func isTokenExpired(payload string) bool {
-	var claims map[string]interface{}
+	var claims map[string]any
 
 	err := json.Unmarshal([]byte(payload), &claims)
 	if err != nil {
@@ -603,13 +604,8 @@ func (r *RateLimiter) Allow(clientID string) bool {
 
 func isAllowedContentType(ct string) bool {
 	disallowed := []string{"text/html", "application/javascript", "text/javascript"}
-	for _, d := range disallowed {
-		if ct == d {
-			return false
-		}
-	}
 
-	return true
+	return !slices.Contains(disallowed, ct)
 }
 
 func securityHeadersMiddleware(next http.Handler) http.Handler {

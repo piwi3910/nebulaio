@@ -139,7 +139,7 @@ func (t *SQSTarget) Close() error {
 var _ events.Target = (*SQSTarget)(nil)
 
 func init() {
-	events.RegisterTargetFactory("sqs", func(config map[string]interface{}) (events.Target, error) {
+	events.RegisterTargetFactory("sqs", func(config map[string]any) (events.Target, error) {
 		cfg := DefaultSQSConfig()
 
 		if name, ok := config["name"].(string); ok {
@@ -298,7 +298,7 @@ func (t *SNSTarget) Close() error {
 var _ events.Target = (*SNSTarget)(nil)
 
 func init() {
-	events.RegisterTargetFactory("sns", func(config map[string]interface{}) (events.Target, error) {
+	events.RegisterTargetFactory("sns", func(config map[string]any) (events.Target, error) {
 		cfg := DefaultSNSConfig()
 
 		if name, ok := config["name"].(string); ok {

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -105,9 +106,7 @@ func (m *MockObjectStore) GetObject(ctx context.Context, bucket, key string) (io
 	metadata := map[string]string{
 		"Content-Type": obj.contentType,
 	}
-	for k, v := range obj.metadata {
-		metadata[k] = v
-	}
+	maps.Copy(metadata, obj.metadata)
 
 	return io.NopCloser(bytes.NewReader(obj.data)), metadata, nil
 }
@@ -205,7 +204,7 @@ func createTestConfig() *ServerConfig {
 }
 
 // Test helper to create a JSON-RPC request.
-func createJSONRPCRequest(method string, params interface{}, id interface{}) []byte {
+func createJSONRPCRequest(method string, params any, id any) []byte {
 	req := JSONRPCRequest{
 		JSONRPC: "2.0",
 		Method:  method,
@@ -247,10 +246,10 @@ func TestServerInitialize(t *testing.T) {
 	mockStore := NewMockObjectStore()
 	server := NewServer(mockStore, createTestConfig())
 
-	reqBody := createJSONRPCRequest("initialize", map[string]interface{}{
+	reqBody := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo": map[string]interface{}{
+		"capabilities":    map[string]any{},
+		"clientInfo": map[string]any{
 			"name":    "test-client",
 			"version": "1.0.0",
 		},
@@ -287,10 +286,10 @@ func TestServerListTools(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// First initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -350,10 +349,10 @@ func TestServerListBucketsTool(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// Initialize first
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -363,9 +362,9 @@ func TestServerListBucketsTool(t *testing.T) {
 	server.HandleHTTP(w, req)
 
 	// Call list_buckets tool
-	callReq := createJSONRPCRequest("tools/call", map[string]interface{}{
+	callReq := createJSONRPCRequest("tools/call", map[string]any{
 		"name":      "list_buckets",
-		"arguments": map[string]interface{}{},
+		"arguments": map[string]any{},
 	}, 2)
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(callReq))
@@ -401,10 +400,10 @@ func TestServerPutAndGetObject(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// Initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -415,9 +414,9 @@ func TestServerPutAndGetObject(t *testing.T) {
 
 	// Put object
 	testContent := "Hello, MCP World!"
-	putReq := createJSONRPCRequest("tools/call", map[string]interface{}{
+	putReq := createJSONRPCRequest("tools/call", map[string]any{
 		"name": "put_object",
-		"arguments": map[string]interface{}{
+		"arguments": map[string]any{
 			"bucket":       "test-bucket",
 			"key":          "test-file.txt",
 			"content":      testContent,
@@ -434,9 +433,9 @@ func TestServerPutAndGetObject(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Get object
-	getReq := createJSONRPCRequest("tools/call", map[string]interface{}{
+	getReq := createJSONRPCRequest("tools/call", map[string]any{
 		"name": "get_object",
-		"arguments": map[string]interface{}{
+		"arguments": map[string]any{
 			"bucket": "test-bucket",
 			"key":    "test-file.txt",
 		},
@@ -475,10 +474,10 @@ func TestServerDeleteObject(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// Initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -488,9 +487,9 @@ func TestServerDeleteObject(t *testing.T) {
 	server.HandleHTTP(w, req)
 
 	// Delete object
-	deleteReq := createJSONRPCRequest("tools/call", map[string]interface{}{
+	deleteReq := createJSONRPCRequest("tools/call", map[string]any{
 		"name": "delete_object",
-		"arguments": map[string]interface{}{
+		"arguments": map[string]any{
 			"bucket": "test-bucket",
 			"key":    "to-delete.txt",
 		},
@@ -505,9 +504,9 @@ func TestServerDeleteObject(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Verify object is deleted by trying to get it
-	getReq := createJSONRPCRequest("tools/call", map[string]interface{}{
+	getReq := createJSONRPCRequest("tools/call", map[string]any{
 		"name": "get_object",
-		"arguments": map[string]interface{}{
+		"arguments": map[string]any{
 			"bucket": "test-bucket",
 			"key":    "to-delete.txt",
 		},
@@ -538,10 +537,10 @@ func TestServerListPrompts(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// Initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -596,10 +595,10 @@ func TestServerGetPrompt(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// Initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -609,9 +608,9 @@ func TestServerGetPrompt(t *testing.T) {
 	server.HandleHTTP(w, req)
 
 	// Get prompt
-	getPromptReq := createJSONRPCRequest("prompts/get", map[string]interface{}{
+	getPromptReq := createJSONRPCRequest("prompts/get", map[string]any{
 		"name": "analyze_data",
-		"arguments": map[string]interface{}{
+		"arguments": map[string]any{
 			"bucket":        "my-bucket",
 			"key":           "data/file.csv",
 			"analysis_type": "summary",
@@ -634,12 +633,12 @@ func TestServerGetPrompt(t *testing.T) {
 
 	resultJSON, _ := json.Marshal(resp.Result)
 
-	var promptResult map[string]interface{}
+	var promptResult map[string]any
 
 	err = json.Unmarshal(resultJSON, &promptResult)
 	require.NoError(t, err)
 
-	messages, ok := promptResult["messages"].([]interface{})
+	messages, ok := promptResult["messages"].([]any)
 	require.True(t, ok)
 	assert.GreaterOrEqual(t, len(messages), 1)
 }
@@ -652,10 +651,10 @@ func TestServerListResources(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// Initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -705,10 +704,10 @@ func TestServerReadResource(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// Initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -718,7 +717,7 @@ func TestServerReadResource(t *testing.T) {
 	server.HandleHTTP(w, req)
 
 	// Read resource
-	readResourceReq := createJSONRPCRequest("resources/read", map[string]interface{}{
+	readResourceReq := createJSONRPCRequest("resources/read", map[string]any{
 		"uri": "s3://test-bucket/test.txt",
 	}, 2)
 
@@ -762,10 +761,10 @@ func TestServerHeadObject(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// Initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -775,9 +774,9 @@ func TestServerHeadObject(t *testing.T) {
 	server.HandleHTTP(w, req)
 
 	// Head object
-	headReq := createJSONRPCRequest("tools/call", map[string]interface{}{
+	headReq := createJSONRPCRequest("tools/call", map[string]any{
 		"name": "head_object",
-		"arguments": map[string]interface{}{
+		"arguments": map[string]any{
 			"bucket": "test-bucket",
 			"key":    "metadata-test.txt",
 		},
@@ -856,10 +855,10 @@ func TestServerToolNotFound(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// Initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -869,9 +868,9 @@ func TestServerToolNotFound(t *testing.T) {
 	server.HandleHTTP(w, req)
 
 	// Call non-existent tool
-	callReq := createJSONRPCRequest("tools/call", map[string]interface{}{
+	callReq := createJSONRPCRequest("tools/call", map[string]any{
 		"name":      "nonexistent_tool",
-		"arguments": map[string]interface{}{},
+		"arguments": map[string]any{},
 	}, 2)
 
 	req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(callReq))
@@ -894,10 +893,10 @@ func TestServerMetrics(t *testing.T) {
 	server := NewServer(mockStore, createTestConfig())
 
 	// Initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -908,9 +907,9 @@ func TestServerMetrics(t *testing.T) {
 
 	// Make several tool calls
 	for i := range 3 {
-		callReq := createJSONRPCRequest("tools/call", map[string]interface{}{
+		callReq := createJSONRPCRequest("tools/call", map[string]any{
 			"name":      "list_buckets",
-			"arguments": map[string]interface{}{},
+			"arguments": map[string]any{},
 		}, i+2)
 
 		req = httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(callReq))
@@ -932,17 +931,17 @@ func TestServerRegisterCustomTool(t *testing.T) {
 	customTool := &Tool{
 		Name:        "custom_tool",
 		Description: "A custom tool for testing",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"message": map[string]interface{}{
+			"properties": map[string]any{
+				"message": map[string]any{
 					"type":        "string",
 					"description": "A message to echo",
 				},
 			},
 			"required": []string{"message"},
 		},
-		Handler: func(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
+		Handler: func(ctx context.Context, args map[string]any) (*ToolResult, error) {
 			msg, _ := args["message"].(string)
 
 			return &ToolResult{
@@ -956,10 +955,10 @@ func TestServerRegisterCustomTool(t *testing.T) {
 	server.RegisterTool(customTool)
 
 	// Initialize
-	initReq := createJSONRPCRequest("initialize", map[string]interface{}{
+	initReq := createJSONRPCRequest("initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]interface{}{},
-		"clientInfo":      map[string]interface{}{"name": "test", "version": "1.0"},
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test", "version": "1.0"},
 	}, 1)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initReq))
@@ -969,9 +968,9 @@ func TestServerRegisterCustomTool(t *testing.T) {
 	server.HandleHTTP(w, req)
 
 	// Call custom tool
-	callReq := createJSONRPCRequest("tools/call", map[string]interface{}{
+	callReq := createJSONRPCRequest("tools/call", map[string]any{
 		"name": "custom_tool",
-		"arguments": map[string]interface{}{
+		"arguments": map[string]any{
 			"message": "Hello Custom!",
 		},
 	}, 2)
@@ -1014,11 +1013,11 @@ func TestServerInvalidJSONRPCVersion(t *testing.T) {
 	mockStore := NewMockObjectStore()
 	server := NewServer(mockStore, createTestConfig())
 
-	reqData, _ := json.Marshal(map[string]interface{}{
+	reqData, _ := json.Marshal(map[string]any{
 		"jsonrpc": "1.0",
 		"method":  "initialize",
 		"id":      1,
-		"params":  map[string]interface{}{},
+		"params":  map[string]any{},
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(reqData))

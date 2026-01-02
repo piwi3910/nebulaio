@@ -178,8 +178,8 @@ type AuditEvent struct {
 
 // AuditFilter contains filter criteria for listing audit events.
 type AuditFilter struct {
-	StartTime  time.Time `json:"start_time,omitempty"`
-	EndTime    time.Time `json:"end_time,omitempty"`
+	StartTime  time.Time `json:"start_time"`
+	EndTime    time.Time `json:"end_time"`
 	Bucket     string    `json:"bucket,omitempty"`
 	User       string    `json:"user,omitempty"`
 	EventType  string    `json:"event_type,omitempty"`

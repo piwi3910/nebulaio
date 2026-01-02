@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"sort"
 	"strings"
@@ -168,9 +169,9 @@ type Schema struct {
 
 // Field represents a schema field.
 type Field struct {
-	Type           interface{} `json:"type"`
-	InitialDefault interface{} `json:"initial-default,omitempty"`
-	WriteDefault   interface{} `json:"write-default,omitempty"`
+	Type           any `json:"type"`
+	InitialDefault any `json:"initial-default,omitempty"`
+	WriteDefault   any `json:"write-default,omitempty"`
 	Name           string      `json:"name"`
 	Doc            string      `json:"doc,omitempty"`
 	ID             int         `json:"id"`
@@ -448,9 +449,7 @@ func (c *Catalog) UpdateNamespace(ctx context.Context, namespace []string, remov
 	}
 
 	// Update properties
-	for key, value := range updates {
-		ns.Properties[key] = value
-	}
+	maps.Copy(ns.Properties, updates)
 
 	ns.UpdatedAt = time.Now()
 
@@ -957,9 +956,7 @@ func (c *Catalog) applySetProperties(metadata *TableMetadata, update *TableUpdat
 		metadata.Properties = make(map[string]string)
 	}
 
-	for k, v := range update.Properties {
-		metadata.Properties[k] = v
-	}
+	maps.Copy(metadata.Properties, update.Properties)
 }
 
 // applyRemoveProperties removes table properties.

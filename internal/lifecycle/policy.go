@@ -59,7 +59,7 @@ type And struct {
 // Expiration specifies when objects should be deleted.
 type Expiration struct {
 	// 8-byte fields
-	Date time.Time `json:"date,omitempty" xml:"Date,omitempty"`
+	Date time.Time `json:"date" xml:"Date"`
 	// 4-byte fields (int)
 	Days int `json:"days,omitempty" xml:"Days,omitempty"`
 	// 1-byte fields (bool)
@@ -69,7 +69,7 @@ type Expiration struct {
 // Transition specifies when objects should transition to a different storage class.
 type Transition struct {
 	// 8-byte fields
-	Date time.Time `json:"date,omitempty" xml:"Date,omitempty"`
+	Date time.Time `json:"date" xml:"Date"`
 	// Strings
 	StorageClass string `json:"storageClass" xml:"StorageClass"`
 	// 4-byte fields (int)

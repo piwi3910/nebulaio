@@ -3,6 +3,7 @@ package mocks
 
 import (
 	"context"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -373,9 +374,7 @@ func (m *MockMetadataStore) GetBuckets() map[string]*metadata.Bucket {
 	defer m.mu.RUnlock()
 
 	result := make(map[string]*metadata.Bucket)
-	for k, v := range m.buckets {
-		result[k] = v
-	}
+	maps.Copy(result, m.buckets)
 
 	return result
 }
@@ -388,9 +387,7 @@ func (m *MockMetadataStore) GetObjects(bucket string) map[string]*metadata.Objec
 	result := make(map[string]*metadata.ObjectMeta)
 
 	if objs, ok := m.objects[bucket]; ok {
-		for k, v := range objs {
-			result[k] = v
-		}
+		maps.Copy(result, objs)
 	}
 
 	return result

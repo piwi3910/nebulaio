@@ -26,6 +26,7 @@ func TestPredictiveEngine(t *testing.T) {
 
 		if pred == nil {
 			t.Fatal("expected prediction, got nil")
+			return
 		}
 
 		if pred.Confidence != 0 {
@@ -50,6 +51,7 @@ func TestPredictiveEngine(t *testing.T) {
 
 		if pred == nil {
 			t.Fatal("expected prediction, got nil")
+			return
 		}
 
 		// With data, should have some confidence

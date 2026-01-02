@@ -210,6 +210,7 @@ func TestDeviceSelection(t *testing.T) {
 			selected := transport.selectDevice(tt.devices)
 			if selected == nil {
 				t.Fatal("No device selected")
+				return
 			}
 
 			if selected.Name != tt.expected {
@@ -339,6 +340,7 @@ func TestListener(t *testing.T) {
 
 	if listener == nil {
 		t.Fatal("Listener should not be nil")
+		return
 	}
 
 	if listener.port != 9100 {
@@ -484,6 +486,7 @@ func TestClientMetrics(t *testing.T) {
 	metrics := client.GetMetrics()
 	if metrics == nil {
 		t.Fatal("Metrics should not be nil")
+		return
 	}
 
 	if metrics.Transport != "rdma" && metrics.Transport != "http" {

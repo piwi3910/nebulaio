@@ -103,7 +103,7 @@ func (s *DragonboatStore) PutObjectMeta(ctx context.Context, meta *ObjectMeta) e
 }
 
 func (s *DragonboatStore) GetObjectMeta(ctx context.Context, bucket, key string) (*ObjectMeta, error) {
-	dbKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, key))
+	dbKey := fmt.Appendf(nil, "%s%s/%s", prefixObject, bucket, key)
 
 	data, err := s.get(dbKey)
 	if err == badger.ErrKeyNotFound {
@@ -136,7 +136,7 @@ func (s *DragonboatStore) DeleteObjectMeta(ctx context.Context, bucket, key stri
 }
 
 func (s *DragonboatStore) ListObjects(ctx context.Context, bucket, prefix, delimiter string, maxKeys int, continuationToken string) (*ObjectListing, error) {
-	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObject, bucket))
+	dbPrefix := fmt.Appendf(nil, "%s%s/", prefixObject, bucket)
 
 	var (
 		objects        []*ObjectMeta
@@ -177,7 +177,7 @@ func (s *DragonboatStore) iterateObjectsForListing(bucket string, dbPrefix []byt
 
 func (s *DragonboatStore) getStartKey(bucket string, dbPrefix []byte, continuationToken string) []byte {
 	if continuationToken != "" {
-		return []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, continuationToken))
+		return fmt.Appendf(nil, "%s%s/%s", prefixObject, bucket, continuationToken)
 	}
 	return dbPrefix
 }
@@ -274,7 +274,7 @@ func (s *DragonboatStore) GetObjectVersion(ctx context.Context, bucket, key, ver
 	}
 
 	// Get specific version from version store
-	dbKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, key, versionID))
+	dbKey := fmt.Appendf(nil, "%s%s/%s#%s", prefixObjectVersion, bucket, key, versionID)
 
 	data, err := s.get(dbKey)
 	if err == badger.ErrKeyNotFound {
@@ -320,7 +320,7 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 
 // collectVersionedObjects retrieves all versioned objects from the version store.
 func (s *DragonboatStore) collectVersionedObjects(bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
-	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObjectVersion, bucket))
+	dbPrefix := fmt.Appendf(nil, "%s%s/", prefixObjectVersion, bucket)
 
 	return s.badger.View(func(txn *badger.Txn) error {
 		return s.iterateVersionedObjects(txn, dbPrefix, bucket, prefix, delimiter, keyMarker, versionIDMarker, maxKeys, versions, deleteMarkers, commonPrefixes, prefixSet)
@@ -382,7 +382,7 @@ func (s *DragonboatStore) processVersionedItem(item *badger.Item, dbPrefix []byt
 
 // collectCurrentObjects retrieves current/non-versioned objects from the main object store.
 func (s *DragonboatStore) collectCurrentObjects(bucket, prefix, delimiter string, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
-	objPrefix := []byte(fmt.Sprintf("%s%s/", prefixObject, bucket))
+	objPrefix := fmt.Appendf(nil, "%s%s/", prefixObject, bucket)
 
 	return s.badger.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -425,10 +425,10 @@ func (s *DragonboatStore) calculateStartKey(dbPrefix []byte, bucket, keyMarker, 
 	}
 
 	if versionIDMarker != "" {
-		return []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, keyMarker, versionIDMarker))
+		return fmt.Appendf(nil, "%s%s/%s#%s", prefixObjectVersion, bucket, keyMarker, versionIDMarker)
 	}
 
-	return []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, keyMarker))
+	return fmt.Appendf(nil, "%s%s/%s#", prefixObjectVersion, bucket, keyMarker)
 }
 
 func (s *DragonboatStore) parseVersionKey(key, dbPrefix []byte) (objKey, versionID string, shouldContinue bool) {
@@ -599,7 +599,7 @@ func (s *DragonboatStore) CreateMultipartUpload(ctx context.Context, upload *Mul
 }
 
 func (s *DragonboatStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*MultipartUpload, error) {
-	dbKey := []byte(fmt.Sprintf("%s%s/%s/%s", prefixMultipart, bucket, key, uploadID))
+	dbKey := fmt.Appendf(nil, "%s%s/%s/%s", prefixMultipart, bucket, key, uploadID)
 
 	data, err := s.get(dbKey)
 	if err == badger.ErrKeyNotFound {
@@ -660,7 +660,7 @@ func (s *DragonboatStore) AddUploadPart(ctx context.Context, bucket, key, upload
 }
 
 func (s *DragonboatStore) ListMultipartUploads(ctx context.Context, bucket string) ([]*MultipartUpload, error) {
-	prefix := []byte(fmt.Sprintf("%s%s/", prefixMultipart, bucket))
+	prefix := fmt.Appendf(nil, "%s%s/", prefixMultipart, bucket)
 
 	results, err := s.scan(prefix)
 	if err != nil {
@@ -1025,7 +1025,7 @@ func (s *DragonboatStore) determineSeekKey(filter audit.AuditFilter) []byte {
 	case filter.NextToken != "":
 		return []byte(filter.NextToken)
 	case !filter.EndTime.IsZero():
-		return []byte(fmt.Sprintf("%s%s", prefixAudit, filter.EndTime.Format(time.RFC3339Nano)+"~"))
+		return fmt.Appendf(nil, "%s%s", prefixAudit, filter.EndTime.Format(time.RFC3339Nano)+"~")
 	default:
 		seekKey := make([]byte, len(prefix)+1)
 		copy(seekKey, prefix)

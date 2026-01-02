@@ -299,13 +299,13 @@ func (s *S3Integration) UnregisterObject(bucket, key string) error {
 }
 
 // GetStatus returns the GPUDirect service status.
-func (s *S3Integration) GetStatus() map[string]interface{} {
+func (s *S3Integration) GetStatus() map[string]any {
 	gpus := s.service.GetGPUs()
 	metrics := s.service.GetMetrics()
 
-	gpuInfo := make([]map[string]interface{}, len(gpus))
+	gpuInfo := make([]map[string]any, len(gpus))
 	for i, gpu := range gpus {
-		gpuInfo[i] = map[string]interface{}{
+		gpuInfo[i] = map[string]any{
 			"device_id":          gpu.DeviceID,
 			"name":               gpu.Name,
 			"uuid":               gpu.UUID,
@@ -321,11 +321,11 @@ func (s *S3Integration) GetStatus() map[string]interface{} {
 	registeredFiles := len(s.handles)
 	s.mu.RUnlock()
 
-	return map[string]interface{}{
+	return map[string]any{
 		"available":        s.service.IsAvailable(),
 		"gpus":             gpuInfo,
 		"registered_files": registeredFiles,
-		"metrics": map[string]interface{}{
+		"metrics": map[string]any{
 			"read_bytes":         metrics.ReadBytes,
 			"write_bytes":        metrics.WriteBytes,
 			"read_ops":           metrics.ReadOps,

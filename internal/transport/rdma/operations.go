@@ -674,10 +674,7 @@ func (s *S3Operations) StreamGetObject(ctx context.Context, bucket, key string, 
 
 		// Read in chunks
 		for offset := int64(0); offset < totalSize; offset += int64(chunkSize) {
-			endOffset := offset + int64(chunkSize)
-			if endOffset > totalSize {
-				endOffset = totalSize
-			}
+			endOffset := min(offset+int64(chunkSize), totalSize)
 
 			// Get chunk with range
 			output, err := s.GetObject(ctx, bucket, key, &GetObjectOptions{

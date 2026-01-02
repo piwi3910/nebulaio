@@ -471,6 +471,7 @@ func testGetBucket(t *testing.T, ctx context.Context, store *DragonboatStore) {
 
 	if bucket == nil {
 		t.Fatal("Expected bucket, got nil")
+		return
 	}
 
 	if bucket.Name != "test-bucket" {
@@ -622,6 +623,7 @@ func testGetObjectMeta(t *testing.T, ctx context.Context, store *DragonboatStore
 
 	if meta == nil {
 		t.Fatal("Expected metadata, got nil")
+		return
 	}
 
 	if meta.Key != "test-key" {
@@ -741,6 +743,7 @@ func testGetUser(t *testing.T, ctx context.Context, store *DragonboatStore) {
 
 	if user == nil {
 		t.Fatal("Expected user, got nil")
+		return
 	}
 
 	if user.Username != "testuser" {
@@ -756,6 +759,7 @@ func testGetUserByUsername(t *testing.T, ctx context.Context, store *DragonboatS
 
 	if user == nil {
 		t.Fatal("Expected user, got nil")
+		return
 	}
 
 	if user.ID != "user-123" {
@@ -873,6 +877,7 @@ func TestAccessKeyOperations(t *testing.T) {
 
 		if key == nil {
 			t.Fatal("Expected access key, got nil")
+			return
 		}
 
 		if key.UserID != "user-123" {
@@ -960,6 +965,7 @@ func testGetPolicy(t *testing.T, ctx context.Context, store *DragonboatStore) {
 
 	if policy == nil {
 		t.Fatal("Expected policy, got nil")
+		return
 	}
 
 	if policy.Name != "test-policy" {
@@ -1171,6 +1177,7 @@ func testGetClusterInfo(t *testing.T, ctx context.Context, store *DragonboatStor
 
 	if info == nil {
 		t.Fatal("Expected cluster info, got nil")
+		return
 	}
 
 	if info.ClusterID == "" {
@@ -1277,6 +1284,7 @@ func TestAuditOperations(t *testing.T) {
 
 		if result == nil {
 			t.Fatal("Expected result, got nil")
+			return
 		}
 		// May be empty if store failed
 		if len(result.Events) > 0 {
@@ -1369,6 +1377,7 @@ func testGetMultipartUpload(t *testing.T, ctx context.Context, store *Dragonboat
 
 	if upload == nil {
 		t.Fatal("Expected upload, got nil")
+		return
 	}
 
 	if upload.UploadID != uploadID {
@@ -1656,12 +1665,14 @@ func BenchmarkStateMachineUpdate(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		entry := statemachine.Entry{
 			Index: uint64(i + 1),
 			Cmd:   cmdData,
 		}
 		sm.Update(entry)
+		i++
 	}
 }
 
@@ -1708,7 +1719,7 @@ func BenchmarkSnapshotSave(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		var buf strings.Builder
 		sm.SaveSnapshot(&buf, nil, done)
 	}

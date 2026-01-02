@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -65,7 +66,7 @@ func AssertErrorType(t *testing.T, expected, actual error) {
 
 // AssertEventually waits for a condition to become true within a timeout.
 // Useful for testing async operations.
-func AssertEventually(t *testing.T, condition func() bool, timeout, tick time.Duration, msgAndArgs ...interface{}) {
+func AssertEventually(t *testing.T, condition func() bool, timeout, tick time.Duration, msgAndArgs ...any) {
 	t.Helper()
 
 	deadline := time.Now().Add(timeout)
@@ -86,7 +87,7 @@ func AssertEventually(t *testing.T, condition func() bool, timeout, tick time.Du
 
 // RequireEventually waits for a condition to become true within a timeout.
 // Fails the test immediately if the condition is not met.
-func RequireEventually(t *testing.T, condition func() bool, timeout, tick time.Duration, msgAndArgs ...interface{}) {
+func RequireEventually(t *testing.T, condition func() bool, timeout, tick time.Duration, msgAndArgs ...any) {
 	t.Helper()
 
 	deadline := time.Now().Add(timeout)
@@ -107,7 +108,7 @@ func RequireEventually(t *testing.T, condition func() bool, timeout, tick time.D
 
 // AssertNever asserts that a condition is never true within a duration.
 // Useful for testing that something doesn't happen.
-func AssertNever(t *testing.T, condition func() bool, duration, tick time.Duration, msgAndArgs ...interface{}) {
+func AssertNever(t *testing.T, condition func() bool, duration, tick time.Duration, msgAndArgs ...any) {
 	t.Helper()
 
 	deadline := time.Now().Add(duration)
@@ -131,16 +132,7 @@ func AssertSliceContains[T comparable](t *testing.T, slice []T, expected ...T) {
 	t.Helper()
 
 	for _, e := range expected {
-		found := false
-
-		for _, s := range slice {
-			if s == e {
-				found = true
-				break
-			}
-		}
-
-		assert.True(t, found, "slice should contain %v", e)
+		assert.True(t, slices.Contains(slice, e), "slice should contain %v", e)
 	}
 }
 
@@ -149,11 +141,10 @@ func AssertSliceNotContains[T comparable](t *testing.T, slice []T, excluded ...T
 	t.Helper()
 
 	for _, e := range excluded {
-		for _, s := range slice {
-			if s == e {
-				assert.Fail(t, "slice should not contain element", "found: %v", e)
-				return
-			}
+		if slices.Contains(slice, e) {
+			assert.Fail(t, "slice should not contain element", "found: %v", e)
+
+			return
 		}
 	}
 }

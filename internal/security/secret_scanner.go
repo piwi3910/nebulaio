@@ -8,7 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -687,13 +689,7 @@ func (s *SecretScanner) scanStream(bucket, key string, reader io.Reader) []*Secr
 
 // isAllowed checks if a secret type is allowed.
 func (s *SecretScanner) isAllowed(t SecretType) bool {
-	for _, allowed := range s.config.AllowedTypes {
-		if allowed == t {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(s.config.AllowedTypes, t)
 }
 
 // redactMatch redacts a match for safe display.
@@ -712,15 +708,9 @@ func (s *SecretScanner) redactMatch(match string) string {
 
 // getContext returns surrounding lines for context.
 func (s *SecretScanner) getContext(lines [][]byte, lineNum, contextLines int) string {
-	start := lineNum - contextLines
-	if start < 0 {
-		start = 0
-	}
+	start := max(lineNum-contextLines, 0)
 
-	end := lineNum + contextLines + 1
-	if end > len(lines) {
-		end = len(lines)
-	}
+	end := min(lineNum+contextLines+1, len(lines))
 
 	var context []string
 
@@ -801,13 +791,8 @@ func (s *SecretScanner) GetStats() *ScannerStats {
 		LastScanTime:       s.stats.LastScanTime,
 	}
 
-	for k, v := range s.stats.FindingsByType {
-		stats.FindingsByType[k] = v
-	}
-
-	for k, v := range s.stats.FindingsBySeverity {
-		stats.FindingsBySeverity[k] = v
-	}
+	maps.Copy(stats.FindingsByType, s.stats.FindingsByType)
+	maps.Copy(stats.FindingsBySeverity, s.stats.FindingsBySeverity)
 
 	return stats
 }

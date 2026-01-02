@@ -68,10 +68,7 @@ func (e *Encoder) Encode(reader io.Reader) (*EncodedData, error) {
 	for i := range e.dataShards {
 		start := i * shardSize
 
-		end := start + shardSize
-		if end > len(data) {
-			end = len(data)
-		}
+		end := min(start+shardSize, len(data))
 
 		// Create shard with padding if needed
 		shards[i] = make([]byte, shardSize)

@@ -424,8 +424,7 @@ func (p *Provider) entryToUser(entry *ldap.Entry) *auth.User {
 
 // extractCNFromDN extracts the CN from a DN string.
 func extractCNFromDN(dn string) string {
-	parts := strings.Split(dn, ",")
-	for _, part := range parts {
+	for part := range strings.SplitSeq(dn, ",") {
 		part = strings.TrimSpace(part)
 		if strings.HasPrefix(strings.ToLower(part), "cn=") {
 			return part[3:]

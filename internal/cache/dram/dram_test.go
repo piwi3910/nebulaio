@@ -24,6 +24,8 @@ func TestNewCache(t *testing.T) {
 
 	if cache == nil {
 		t.Fatal("expected cache to be created")
+
+		return
 	}
 
 	if len(cache.shards) != 16 {

@@ -205,10 +205,7 @@ func (d *Decoder) ShardsNeeded(available []int) []int {
 	}
 
 	// We need (dataShards - len(available)) more shards
-	toFetch := d.dataShards - len(available)
-	if toFetch > len(needed) {
-		toFetch = len(needed)
-	}
+	toFetch := min(d.dataShards-len(available), len(needed))
 
 	return needed[:toFetch]
 }

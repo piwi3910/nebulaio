@@ -127,14 +127,14 @@ type ObjectMetadata struct {
 
 // Tool represents an MCP tool that agents can invoke.
 type Tool struct {
-	InputSchema map[string]interface{} `json:"inputSchema"`
+	InputSchema map[string]any `json:"inputSchema"`
 	Handler     ToolHandler            `json:"-"`
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
 }
 
 // ToolHandler is a function that handles tool invocations.
-type ToolHandler func(ctx context.Context, args map[string]interface{}) (*ToolResult, error)
+type ToolHandler func(ctx context.Context, args map[string]any) (*ToolResult, error)
 
 // ToolResult is the result of a tool invocation.
 type ToolResult struct {
@@ -185,9 +185,9 @@ type Session struct {
 
 // ClientCapabilities describes client capabilities.
 type ClientCapabilities struct {
-	Experimental map[string]interface{} `json:"experimental,omitempty"`
+	Experimental map[string]any `json:"experimental,omitempty"`
 	Roots        *RootsCapability       `json:"roots,omitempty"`
-	Sampling     map[string]interface{} `json:"sampling,omitempty"`
+	Sampling     map[string]any `json:"sampling,omitempty"`
 }
 
 // RootsCapability for roots support.
@@ -239,9 +239,9 @@ func (s *Server) registerBuiltInTools() {
 	s.RegisterTool(&Tool{
 		Name:        "list_buckets",
 		Description: "List all available S3 buckets",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type":       "object",
-			"properties": map[string]interface{}{},
+			"properties": map[string]any{},
 		},
 		Handler: s.handleListBuckets,
 	})
@@ -250,18 +250,18 @@ func (s *Server) registerBuiltInTools() {
 	s.RegisterTool(&Tool{
 		Name:        "list_objects",
 		Description: "List objects in a bucket with optional prefix filter",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"bucket": map[string]interface{}{
+			"properties": map[string]any{
+				"bucket": map[string]any{
 					"type":        "string",
 					"description": "The bucket name",
 				},
-				"prefix": map[string]interface{}{
+				"prefix": map[string]any{
 					"type":        "string",
 					"description": "Optional prefix to filter objects",
 				},
-				"max_keys": map[string]interface{}{
+				"max_keys": map[string]any{
 					"type":        "integer",
 					"description": "Maximum number of objects to return (default: 1000)",
 				},
@@ -275,14 +275,14 @@ func (s *Server) registerBuiltInTools() {
 	s.RegisterTool(&Tool{
 		Name:        "get_object",
 		Description: "Retrieve an object from S3 storage",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"bucket": map[string]interface{}{
+			"properties": map[string]any{
+				"bucket": map[string]any{
 					"type":        "string",
 					"description": "The bucket name",
 				},
-				"key": map[string]interface{}{
+				"key": map[string]any{
 					"type":        "string",
 					"description": "The object key",
 				},
@@ -296,22 +296,22 @@ func (s *Server) registerBuiltInTools() {
 	s.RegisterTool(&Tool{
 		Name:        "put_object",
 		Description: "Store an object in S3 storage",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"bucket": map[string]interface{}{
+			"properties": map[string]any{
+				"bucket": map[string]any{
 					"type":        "string",
 					"description": "The bucket name",
 				},
-				"key": map[string]interface{}{
+				"key": map[string]any{
 					"type":        "string",
 					"description": "The object key",
 				},
-				"content": map[string]interface{}{
+				"content": map[string]any{
 					"type":        "string",
 					"description": "The content to store",
 				},
-				"content_type": map[string]interface{}{
+				"content_type": map[string]any{
 					"type":        "string",
 					"description": "The content MIME type",
 				},
@@ -325,14 +325,14 @@ func (s *Server) registerBuiltInTools() {
 	s.RegisterTool(&Tool{
 		Name:        "delete_object",
 		Description: "Delete an object from S3 storage",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"bucket": map[string]interface{}{
+			"properties": map[string]any{
+				"bucket": map[string]any{
 					"type":        "string",
 					"description": "The bucket name",
 				},
-				"key": map[string]interface{}{
+				"key": map[string]any{
 					"type":        "string",
 					"description": "The object key",
 				},
@@ -346,14 +346,14 @@ func (s *Server) registerBuiltInTools() {
 	s.RegisterTool(&Tool{
 		Name:        "head_object",
 		Description: "Get metadata for an object without retrieving the content",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"bucket": map[string]interface{}{
+			"properties": map[string]any{
+				"bucket": map[string]any{
 					"type":        "string",
 					"description": "The bucket name",
 				},
-				"key": map[string]interface{}{
+				"key": map[string]any{
 					"type":        "string",
 					"description": "The object key",
 				},
@@ -367,14 +367,14 @@ func (s *Server) registerBuiltInTools() {
 	s.RegisterTool(&Tool{
 		Name:        "search_objects",
 		Description: "Search for objects matching a pattern",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"bucket": map[string]interface{}{
+			"properties": map[string]any{
+				"bucket": map[string]any{
 					"type":        "string",
 					"description": "The bucket name",
 				},
-				"pattern": map[string]interface{}{
+				"pattern": map[string]any{
 					"type":        "string",
 					"description": "Search pattern (supports * wildcard)",
 				},
@@ -388,22 +388,22 @@ func (s *Server) registerBuiltInTools() {
 	s.RegisterTool(&Tool{
 		Name:        "copy_object",
 		Description: "Copy an object within or between buckets",
-		InputSchema: map[string]interface{}{
+		InputSchema: map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"source_bucket": map[string]interface{}{
+			"properties": map[string]any{
+				"source_bucket": map[string]any{
 					"type":        "string",
 					"description": "The source bucket name",
 				},
-				"source_key": map[string]interface{}{
+				"source_key": map[string]any{
 					"type":        "string",
 					"description": "The source object key",
 				},
-				"dest_bucket": map[string]interface{}{
+				"dest_bucket": map[string]any{
 					"type":        "string",
 					"description": "The destination bucket name",
 				},
-				"dest_key": map[string]interface{}{
+				"dest_key": map[string]any{
 					"type":        "string",
 					"description": "The destination object key",
 				},
@@ -463,7 +463,7 @@ func (s *Server) RegisterPrompt(prompt *Prompt) {
 
 // Tool handlers
 
-func (s *Server) handleListBuckets(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
+func (s *Server) handleListBuckets(ctx context.Context, args map[string]any) (*ToolResult, error) {
 	buckets, err := s.store.ListBuckets(ctx)
 	if err != nil {
 		return &ToolResult{
@@ -484,7 +484,7 @@ func (s *Server) handleListBuckets(ctx context.Context, args map[string]interfac
 	}, nil
 }
 
-func (s *Server) handleListObjects(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
+func (s *Server) handleListObjects(ctx context.Context, args map[string]any) (*ToolResult, error) {
 	bucket, ok := args["bucket"].(string)
 	if !ok || bucket == "" {
 		return &ToolResult{
@@ -534,7 +534,7 @@ func (s *Server) handleListObjects(ctx context.Context, args map[string]interfac
 	}, nil
 }
 
-func (s *Server) handleGetObject(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
+func (s *Server) handleGetObject(ctx context.Context, args map[string]any) (*ToolResult, error) {
 	bucket, ok := args["bucket"].(string)
 	if !ok || bucket == "" {
 		return &ToolResult{
@@ -595,7 +595,7 @@ func (s *Server) handleGetObject(ctx context.Context, args map[string]interface{
 	}, nil
 }
 
-func (s *Server) handlePutObject(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
+func (s *Server) handlePutObject(ctx context.Context, args map[string]any) (*ToolResult, error) {
 	bucket, ok := args["bucket"].(string)
 	if !ok || bucket == "" {
 		return &ToolResult{
@@ -648,7 +648,7 @@ func (s *Server) handlePutObject(ctx context.Context, args map[string]interface{
 	}, nil
 }
 
-func (s *Server) handleDeleteObject(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
+func (s *Server) handleDeleteObject(ctx context.Context, args map[string]any) (*ToolResult, error) {
 	bucket, ok := args["bucket"].(string)
 	if !ok || bucket == "" {
 		return &ToolResult{
@@ -680,7 +680,7 @@ func (s *Server) handleDeleteObject(ctx context.Context, args map[string]interfa
 	}, nil
 }
 
-func (s *Server) handleHeadObject(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
+func (s *Server) handleHeadObject(ctx context.Context, args map[string]any) (*ToolResult, error) {
 	bucket, ok := args["bucket"].(string)
 	if !ok || bucket == "" {
 		return &ToolResult{
@@ -725,7 +725,7 @@ func (s *Server) handleHeadObject(ctx context.Context, args map[string]interface
 	}, nil
 }
 
-func (s *Server) handleSearchObjects(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
+func (s *Server) handleSearchObjects(ctx context.Context, args map[string]any) (*ToolResult, error) {
 	bucket, ok := args["bucket"].(string)
 	if !ok || bucket == "" {
 		return &ToolResult{
@@ -783,7 +783,7 @@ func (s *Server) handleSearchObjects(ctx context.Context, args map[string]interf
 	}, nil
 }
 
-func (s *Server) handleCopyObject(ctx context.Context, args map[string]interface{}) (*ToolResult, error) {
+func (s *Server) handleCopyObject(ctx context.Context, args map[string]any) (*ToolResult, error) {
 	srcBucket, ok := args["source_bucket"].(string)
 	if !ok || srcBucket == "" {
 		return &ToolResult{
@@ -858,22 +858,22 @@ func (s *Server) handleCopyObject(ctx context.Context, args map[string]interface
 // JSONRPCRequest represents a JSON-RPC 2.0 request.
 type JSONRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
-	ID      interface{}     `json:"id"`
+	ID      any     `json:"id"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
 }
 
 // JSONRPCResponse represents a JSON-RPC 2.0 response.
 type JSONRPCResponse struct {
-	ID      interface{}   `json:"id"`
-	Result  interface{}   `json:"result,omitempty"`
+	ID      any   `json:"id"`
+	Result  any   `json:"result,omitempty"`
 	Error   *JSONRPCError `json:"error,omitempty"`
 	JSONRPC string        `json:"jsonrpc"`
 }
 
 // JSONRPCError represents a JSON-RPC 2.0 error.
 type JSONRPCError struct {
-	Data    interface{} `json:"data,omitempty"`
+	Data    any `json:"data,omitempty"`
 	Message string      `json:"message"`
 	Code    int         `json:"code"`
 }
@@ -900,8 +900,8 @@ type InitializeResult struct {
 
 // ServerCapabilities describes server capabilities.
 type ServerCapabilities struct {
-	Experimental map[string]interface{} `json:"experimental,omitempty"`
-	Logging      map[string]interface{} `json:"logging,omitempty"`
+	Experimental map[string]any `json:"experimental,omitempty"`
+	Logging      map[string]any `json:"logging,omitempty"`
 	Prompts      *PromptsCapability     `json:"prompts,omitempty"`
 	Resources    *ResourcesCapability   `json:"resources,omitempty"`
 	Tools        *ToolsCapability       `json:"tools,omitempty"`
@@ -998,7 +998,7 @@ func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	s.metrics.mu.Unlock()
 }
 
-func (s *Server) handleRequest(ctx context.Context, req *JSONRPCRequest) (interface{}, error) {
+func (s *Server) handleRequest(ctx context.Context, req *JSONRPCRequest) (any, error) {
 	switch req.Method {
 	case "initialize":
 		return s.handleInitialize(ctx, req.Params)
@@ -1018,7 +1018,7 @@ func (s *Server) handleRequest(ctx context.Context, req *JSONRPCRequest) (interf
 	case "prompts/get":
 		return s.handleGetPrompt(ctx, req.Params)
 	case "ping":
-		return map[string]interface{}{}, nil
+		return map[string]any{}, nil
 	default:
 		return nil, ErrMethodNotFound
 	}
@@ -1064,27 +1064,27 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 	}, nil
 }
 
-func (s *Server) handleListTools(ctx context.Context) (map[string]interface{}, error) {
+func (s *Server) handleListTools(ctx context.Context) (map[string]any, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	tools := make([]map[string]interface{}, 0, len(s.tools))
+	tools := make([]map[string]any, 0, len(s.tools))
 	for _, tool := range s.tools {
-		tools = append(tools, map[string]interface{}{
+		tools = append(tools, map[string]any{
 			"name":        tool.Name,
 			"description": tool.Description,
 			"inputSchema": tool.InputSchema,
 		})
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"tools": tools,
 	}, nil
 }
 
 func (s *Server) handleCallTool(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
 	var callParams struct {
-		Arguments map[string]interface{} `json:"arguments"`
+		Arguments map[string]any `json:"arguments"`
 		Name      string                 `json:"name"`
 	}
 
@@ -1106,7 +1106,7 @@ func (s *Server) handleCallTool(ctx context.Context, params json.RawMessage) (*T
 	return tool.Handler(ctx, callParams.Arguments)
 }
 
-func (s *Server) handleListResources(ctx context.Context) (map[string]interface{}, error) {
+func (s *Server) handleListResources(ctx context.Context) (map[string]any, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -1128,12 +1128,12 @@ func (s *Server) handleListResources(ctx context.Context) (map[string]interface{
 		}
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"resources": resources,
 	}, nil
 }
 
-func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage) (map[string]interface{}, error) {
+func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage) (map[string]any, error) {
 	var readParams struct {
 		URI string `json:"uri"`
 	}
@@ -1174,8 +1174,8 @@ func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage)
 			sb.WriteString(fmt.Sprintf("%s\t%d\t%s\n", obj.Key, obj.Size, obj.LastModified.Format(time.RFC3339)))
 		}
 
-		return map[string]interface{}{
-			"contents": []map[string]interface{}{
+		return map[string]any{
+			"contents": []map[string]any{
 				{
 					"uri":      readParams.URI,
 					"mimeType": "text/plain",
@@ -1206,8 +1206,8 @@ func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage)
 		contentType = "application/octet-stream"
 	}
 
-	return map[string]interface{}{
-		"contents": []map[string]interface{}{
+	return map[string]any{
+		"contents": []map[string]any{
 			{
 				"uri":      readParams.URI,
 				"mimeType": contentType,
@@ -1217,7 +1217,7 @@ func (s *Server) handleReadResource(ctx context.Context, params json.RawMessage)
 	}, nil
 }
 
-func (s *Server) handleListPrompts(ctx context.Context) (map[string]interface{}, error) {
+func (s *Server) handleListPrompts(ctx context.Context) (map[string]any, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -1226,14 +1226,14 @@ func (s *Server) handleListPrompts(ctx context.Context) (map[string]interface{},
 		prompts = append(prompts, *p)
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"prompts": prompts,
 	}, nil
 }
 
-func (s *Server) handleGetPrompt(ctx context.Context, params json.RawMessage) (map[string]interface{}, error) {
+func (s *Server) handleGetPrompt(ctx context.Context, params json.RawMessage) (map[string]any, error) {
 	var getParams struct {
-		Arguments map[string]interface{} `json:"arguments"`
+		Arguments map[string]any `json:"arguments"`
 		Name      string                 `json:"name"`
 	}
 
@@ -1251,7 +1251,7 @@ func (s *Server) handleGetPrompt(ctx context.Context, params json.RawMessage) (m
 	}
 
 	// Generate prompt messages based on template
-	var messages []map[string]interface{}
+	var messages []map[string]any
 
 	switch prompt.Name {
 	case "analyze_data":
@@ -1263,10 +1263,10 @@ func (s *Server) handleGetPrompt(ctx context.Context, params json.RawMessage) (m
 			analysisType = at
 		}
 
-		messages = []map[string]interface{}{
+		messages = []map[string]any{
 			{
 				"role": "user",
-				"content": map[string]interface{}{
+				"content": map[string]any{
 					"type": "text",
 					"text": fmt.Sprintf("Please analyze the data stored in s3://%s/%s. Provide a %s of the content.", bucket, key, analysisType),
 				},
@@ -1286,10 +1286,10 @@ func (s *Server) handleGetPrompt(ctx context.Context, params json.RawMessage) (m
 			format = f
 		}
 
-		messages = []map[string]interface{}{
+		messages = []map[string]any{
 			{
 				"role": "user",
-				"content": map[string]interface{}{
+				"content": map[string]any{
 					"type": "text",
 					"text": fmt.Sprintf("Generate a %s report from the data in s3://%s/%s", format, bucket, prefix),
 				},
@@ -1297,13 +1297,13 @@ func (s *Server) handleGetPrompt(ctx context.Context, params json.RawMessage) (m
 		}
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"description": prompt.Description,
 		"messages":    messages,
 	}, nil
 }
 
-func (s *Server) sendError(w http.ResponseWriter, id interface{}, code int, message string) {
+func (s *Server) sendError(w http.ResponseWriter, id any, code int, message string) {
 	resp := JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,

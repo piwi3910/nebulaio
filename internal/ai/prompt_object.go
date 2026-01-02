@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -92,7 +94,7 @@ type PromptRequest struct {
 type PromptResponse struct {
 	CreatedAt      time.Time              `json:"created_at"`
 	Usage          *TokenUsage            `json:"usage,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
 	RequestID      string                 `json:"request_id"`
 	Bucket         string                 `json:"bucket"`
 	Key            string                 `json:"key"`
@@ -271,16 +273,7 @@ func (s *PromptObjectService) PromptObject(ctx context.Context, configName strin
 
 	// Check bucket permissions
 	if len(cfg.AllowedBuckets) > 0 {
-		allowed := false
-
-		for _, b := range cfg.AllowedBuckets {
-			if b == req.Bucket {
-				allowed = true
-				break
-			}
-		}
-
-		if !allowed {
+		if !slices.Contains(cfg.AllowedBuckets, req.Bucket) {
 			return nil, fmt.Errorf("bucket %s not allowed for config %s", req.Bucket, configName)
 		}
 	}
@@ -415,13 +408,8 @@ func (s *PromptObjectService) GetMetrics() *AIMetrics {
 		RequestsByModel:  make(map[string]int64),
 		RequestsByBucket: make(map[string]int64),
 	}
-	for k, v := range s.metrics.RequestsByModel {
-		metrics.RequestsByModel[k] = v
-	}
-
-	for k, v := range s.metrics.RequestsByBucket {
-		metrics.RequestsByBucket[k] = v
-	}
+	maps.Copy(metrics.RequestsByModel, s.metrics.RequestsByModel)
+	maps.Copy(metrics.RequestsByBucket, s.metrics.RequestsByBucket)
 
 	return metrics
 }
@@ -548,7 +536,7 @@ func (p *OpenAIProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 	})
 
 	// Build request
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"model":       req.Model,
 		"messages":    messages,
 		"max_tokens":  req.MaxTokens,
@@ -645,7 +633,7 @@ func (p *OpenAIProvider) StreamQuery(ctx context.Context, req *PromptRequest) (<
 }
 
 func (p *OpenAIProvider) Embed(ctx context.Context, content string) ([]float64, error) {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"model": "text-embedding-ada-002",
 		"input": content,
 	}
@@ -733,7 +721,7 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 		req.Bucket, req.Key, req.ObjectContentType, content, req.Prompt)
 
 	// Build request
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"model":      req.Model,
 		"max_tokens": req.MaxTokens,
 		"messages": []map[string]string{
@@ -789,11 +777,11 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 		return nil, decodeErr
 	}
 
-	var responseText string
+	var responseText strings.Builder
 
 	for _, c := range result.Content {
 		if c.Type == "text" {
-			responseText += c.Text
+			responseText.WriteString(c.Text)
 		}
 	}
 
@@ -802,7 +790,7 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 		Bucket:       req.Bucket,
 		Key:          req.Key,
 		Model:        req.Model,
-		Response:     responseText,
+		Response:     responseText.String(),
 		FinishReason: result.StopReason,
 		Usage: &TokenUsage{
 			PromptTokens:     result.Usage.InputTokens,
@@ -890,11 +878,11 @@ func (p *OllamaProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 		fullPrompt = req.SystemPrompt + "\n\n" + fullPrompt
 	}
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"model":  req.Model,
 		"prompt": fullPrompt,
 		"stream": false,
-		"options": map[string]interface{}{
+		"options": map[string]any{
 			"temperature": req.Temperature,
 			"num_predict": req.MaxTokens,
 		},
@@ -974,7 +962,7 @@ func (p *OllamaProvider) StreamQuery(ctx context.Context, req *PromptRequest) (<
 }
 
 func (p *OllamaProvider) Embed(ctx context.Context, content string) ([]float64, error) {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"model":  "nomic-embed-text",
 		"prompt": content,
 	}
@@ -1035,7 +1023,7 @@ func (p *ContentProcessor) ProcessForLLM(content io.Reader, contentType string, 
 	switch {
 	case strings.HasPrefix(contentType, "application/json"):
 		// Pretty print JSON for better readability
-		var v interface{}
+		var v any
 
 		err := json.Unmarshal(data, &v)
 		if err == nil {
@@ -1080,10 +1068,7 @@ func (p *ContentProcessor) ChunkContent(content string, chunkSize, overlap int) 
 	var chunks []string
 
 	for i := 0; i < len(content); i += chunkSize - overlap {
-		end := i + chunkSize
-		if end > len(content) {
-			end = len(content)
-		}
+		end := min(i+chunkSize, len(content))
 
 		chunks = append(chunks, content[i:end])
 		if end >= len(content) {
@@ -1133,7 +1118,7 @@ type PromptObjectInput struct {
 // PromptObjectOutput represents the S3-compatible API output.
 type PromptObjectOutput struct {
 	Usage          *TokenUsage            `json:"Usage,omitempty"`
-	Metadata       map[string]interface{} `json:"Metadata,omitempty"`
+	Metadata       map[string]any `json:"Metadata,omitempty"`
 	RequestID      string                 `json:"RequestId"`
 	Response       string                 `json:"Response"`
 	Model          string                 `json:"Model"`

@@ -67,7 +67,7 @@ type AlignedBufferPool struct {
 func NewAlignedBufferPool(alignment, blockSize int) *AlignedBufferPool {
 	return &AlignedBufferPool{
 		pool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				return AllocateAligned(blockSize, alignment)
 			},
 		},

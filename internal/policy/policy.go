@@ -46,10 +46,10 @@ type Policy struct {
 
 // Statement represents a single policy statement.
 type Statement struct {
-	Principal interface{}                       `json:"Principal"`
-	Action    interface{}                       `json:"Action"`
-	Resource  interface{}                       `json:"Resource"`
-	Condition map[string]map[string]interface{} `json:"Condition,omitempty"`
+	Principal any                       `json:"Principal"`
+	Action    any                       `json:"Action"`
+	Resource  any                       `json:"Resource"`
+	Condition map[string]map[string]any `json:"Condition,omitempty"`
 	Sid       string                            `json:"Sid,omitempty"`
 	Effect    string                            `json:"Effect"`
 }
@@ -170,7 +170,7 @@ func validateStatement(stmt *Statement, index int) error {
 }
 
 // validatePrincipal validates the Principal field.
-func validatePrincipal(principal interface{}, index int) error {
+func validatePrincipal(principal any, index int) error {
 	if principal == nil {
 		return fmt.Errorf("statement %d: Principal is required", index)
 	}
@@ -180,7 +180,7 @@ func validatePrincipal(principal interface{}, index int) error {
 		if p != "*" {
 			return fmt.Errorf("statement %d: invalid Principal string (must be '*')", index)
 		}
-	case map[string]interface{}:
+	case map[string]any:
 		if _, ok := p["AWS"]; !ok {
 			if _, ok := p["Service"]; !ok {
 				return fmt.Errorf("statement %d: Principal must contain 'AWS' or 'Service' key", index)
@@ -194,7 +194,7 @@ func validatePrincipal(principal interface{}, index int) error {
 }
 
 // validateAction validates the Action field.
-func validateAction(action interface{}, index int) error {
+func validateAction(action any, index int) error {
 	if action == nil {
 		return fmt.Errorf("statement %d: Action is required", index)
 	}
@@ -204,7 +204,7 @@ func validateAction(action interface{}, index int) error {
 		if !isValidAction(a) {
 			return fmt.Errorf("statement %d: invalid action '%s'", index, a)
 		}
-	case []interface{}:
+	case []any:
 		for _, act := range a {
 			actStr, ok := act.(string)
 			if !ok {
@@ -239,7 +239,7 @@ func isValidAction(action string) bool {
 }
 
 // validateResource validates the Resource field.
-func validateResource(resource interface{}, index int) error {
+func validateResource(resource any, index int) error {
 	if resource == nil {
 		return fmt.Errorf("statement %d: Resource is required", index)
 	}
@@ -249,7 +249,7 @@ func validateResource(resource interface{}, index int) error {
 		if !isValidResource(r) {
 			return fmt.Errorf("statement %d: invalid resource '%s'", index, r)
 		}
-	case []interface{}:
+	case []any:
 		for _, res := range r {
 			resStr, ok := res.(string)
 			if !ok {
@@ -374,7 +374,7 @@ func matchStatement(stmt *Statement, principal, action, resource string, conditi
 }
 
 // matchPrincipal checks if the principal matches the statement's Principal.
-func matchPrincipal(stmtPrincipal interface{}, principal string) bool {
+func matchPrincipal(stmtPrincipal any, principal string) bool {
 	switch p := stmtPrincipal.(type) {
 	case string:
 		if p == "*" {
@@ -382,7 +382,7 @@ func matchPrincipal(stmtPrincipal interface{}, principal string) bool {
 		}
 
 		return p == principal
-	case map[string]interface{}:
+	case map[string]any:
 		if aws, ok := p["AWS"]; ok {
 			return matchStringOrArray(aws, principal)
 		}
@@ -396,21 +396,21 @@ func matchPrincipal(stmtPrincipal interface{}, principal string) bool {
 }
 
 // matchAction checks if the action matches the statement's Action.
-func matchAction(stmtAction interface{}, action string) bool {
+func matchAction(stmtAction any, action string) bool {
 	return matchStringOrArrayWithWildcard(stmtAction, action)
 }
 
 // matchResource checks if the resource matches the statement's Resource.
-func matchResource(stmtResource interface{}, resource string) bool {
+func matchResource(stmtResource any, resource string) bool {
 	return matchStringOrArrayWithWildcard(stmtResource, resource)
 }
 
 // matchStringOrArray matches a value against a string or array of strings.
-func matchStringOrArray(value interface{}, target string) bool {
+func matchStringOrArray(value any, target string) bool {
 	switch v := value.(type) {
 	case string:
 		return v == "*" || v == target
-	case []interface{}:
+	case []any:
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				if s == "*" || s == target {
@@ -424,11 +424,11 @@ func matchStringOrArray(value interface{}, target string) bool {
 }
 
 // matchStringOrArrayWithWildcard matches with wildcard pattern support.
-func matchStringOrArrayWithWildcard(value interface{}, target string) bool {
+func matchStringOrArrayWithWildcard(value any, target string) bool {
 	switch v := value.(type) {
 	case string:
 		return matchWildcard(v, target)
-	case []interface{}:
+	case []any:
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				if matchWildcard(s, target) {
@@ -466,7 +466,7 @@ func matchWildcard(pattern, target string) bool {
 }
 
 // matchConditions checks if conditions match.
-func matchConditions(stmtConditions map[string]map[string]interface{}, conditions map[string]string) bool {
+func matchConditions(stmtConditions map[string]map[string]any, conditions map[string]string) bool {
 	for operator, conditionMap := range stmtConditions {
 		for key, expectedValue := range conditionMap {
 			actualValue, exists := conditions[key]
@@ -481,7 +481,7 @@ func matchConditions(stmtConditions map[string]map[string]interface{}, condition
 }
 
 // evaluateConditionOperator evaluates a single condition operator.
-func evaluateConditionOperator(operator string, expectedValue interface{}, actualValue string, exists bool) bool {
+func evaluateConditionOperator(operator string, expectedValue any, actualValue string, exists bool) bool {
 	switch operator {
 	case "StringEquals":
 		return matchStringEquals(expectedValue, actualValue, exists)
@@ -506,7 +506,7 @@ func evaluateConditionOperator(operator string, expectedValue interface{}, actua
 }
 
 // matchStringEquals checks if actual equals expected string value.
-func matchStringEquals(expected interface{}, actual string, exists bool) bool {
+func matchStringEquals(expected any, actual string, exists bool) bool {
 	if !exists {
 		return false
 	}
@@ -515,7 +515,7 @@ func matchStringEquals(expected interface{}, actual string, exists bool) bool {
 }
 
 // matchStringNotEquals checks if actual does not equal expected string value.
-func matchStringNotEquals(expected interface{}, actual string, exists bool) bool {
+func matchStringNotEquals(expected any, actual string, exists bool) bool {
 	if !exists {
 		return true
 	}
@@ -524,7 +524,7 @@ func matchStringNotEquals(expected interface{}, actual string, exists bool) bool
 }
 
 // matchStringLike checks if actual matches expected wildcard pattern.
-func matchStringLike(expected interface{}, actual string, exists bool) bool {
+func matchStringLike(expected any, actual string, exists bool) bool {
 	if !exists {
 		return false
 	}
@@ -533,7 +533,7 @@ func matchStringLike(expected interface{}, actual string, exists bool) bool {
 }
 
 // matchStringNotLike checks if actual does not match expected wildcard pattern.
-func matchStringNotLike(expected interface{}, actual string, exists bool) bool {
+func matchStringNotLike(expected any, actual string, exists bool) bool {
 	if !exists {
 		return true
 	}
@@ -542,7 +542,7 @@ func matchStringNotLike(expected interface{}, actual string, exists bool) bool {
 }
 
 // matchIPCondition checks if actual IP matches expected CIDR/IP pattern.
-func matchIPCondition(expected interface{}, actual string, exists bool) bool {
+func matchIPCondition(expected any, actual string, exists bool) bool {
 	if !exists {
 		return false
 	}
@@ -551,7 +551,7 @@ func matchIPCondition(expected interface{}, actual string, exists bool) bool {
 }
 
 // matchNotIPCondition checks if actual IP does not match expected CIDR/IP pattern.
-func matchNotIPCondition(expected interface{}, actual string, exists bool) bool {
+func matchNotIPCondition(expected any, actual string, exists bool) bool {
 	if !exists {
 		return true
 	}
@@ -560,7 +560,7 @@ func matchNotIPCondition(expected interface{}, actual string, exists bool) bool 
 }
 
 // matchBoolCondition checks if actual boolean matches expected.
-func matchBoolCondition(expected interface{}, actual string, exists bool) bool {
+func matchBoolCondition(expected any, actual string, exists bool) bool {
 	if !exists {
 		return false
 	}
@@ -572,7 +572,7 @@ func matchBoolCondition(expected interface{}, actual string, exists bool) bool {
 }
 
 // matchNullCondition checks if key existence matches expected null condition.
-func matchNullCondition(expected interface{}, exists bool) bool {
+func matchNullCondition(expected any, exists bool) bool {
 	expectedNull := fmt.Sprintf("%v", expected) == boolTrue
 
 	if expectedNull {
@@ -583,11 +583,11 @@ func matchNullCondition(expected interface{}, exists bool) bool {
 }
 
 // matchConditionValue matches a condition value which can be a string or array.
-func matchConditionValue(expected interface{}, actual string, matcher func(string, string) bool) bool {
+func matchConditionValue(expected any, actual string, matcher func(string, string) bool) bool {
 	switch v := expected.(type) {
 	case string:
 		return matcher(v, actual)
-	case []interface{}:
+	case []any:
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				if matcher(s, actual) {

@@ -526,7 +526,7 @@ func (h *TieringHandler) EnableTieringPolicy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"id":      id,
 		"enabled": true,
 		"message": "Policy enabled successfully",
@@ -553,7 +553,7 @@ func (h *TieringHandler) DisableTieringPolicy(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"id":      id,
 		"enabled": false,
 		"message": "Policy disabled successfully",
@@ -575,7 +575,7 @@ func (h *TieringHandler) GetTieringPolicyStats(w http.ResponseWriter, r *http.Re
 	policyStats, err := h.service.GetPolicyStats(ctx, id)
 	if err != nil {
 		// Return basic info without stats if stats not available
-		stats := map[string]interface{}{
+		stats := map[string]any{
 			"policy_id":   policy.ID,
 			"policy_name": policy.Name,
 			"enabled":     policy.Enabled,
@@ -588,7 +588,7 @@ func (h *TieringHandler) GetTieringPolicyStats(w http.ResponseWriter, r *http.Re
 	}
 
 	// Return policy with its stats
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"policy_id":            policy.ID,
 		"policy_name":          policy.Name,
 		"enabled":              policy.Enabled,
@@ -645,7 +645,7 @@ func GetObjectKeyFromRequest(r *http.Request) string {
 // WriteObjectAccessStatsResponse writes the access stats response for an object.
 func WriteObjectAccessStatsResponse(w http.ResponseWriter, bucket, key string, stats *tiering.ObjectAccessStats) {
 	if stats == nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]any{
 			"bucket":  bucket,
 			"key":     key,
 			"tracked": false,
@@ -655,7 +655,7 @@ func WriteObjectAccessStatsResponse(w http.ResponseWriter, bucket, key string, s
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"bucket":               bucket,
 		"key":                  key,
 		"tracked":              true,
@@ -671,7 +671,7 @@ func WriteObjectAccessStatsResponse(w http.ResponseWriter, bucket, key string, s
 
 // WriteManualTransitionResponse writes the success response for a manual transition.
 func WriteManualTransitionResponse(w http.ResponseWriter, bucket, key string, targetTier tiering.TierType) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"bucket":      bucket,
 		"key":         key,
 		"target_tier": targetTier,
@@ -720,8 +720,8 @@ func ParseInactiveDaysParam(r *http.Request, defaultDays int) int {
 }
 
 // WriteColdObjectsResponse writes the cold objects prediction response.
-func WriteColdObjectsResponse(w http.ResponseWriter, coldObjects interface{}, count, inactiveDays int) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+func WriteColdObjectsResponse(w http.ResponseWriter, coldObjects any, count, inactiveDays int) {
+	writeJSON(w, http.StatusOK, map[string]any{
 		"cold_objects":  coldObjects,
 		"count":         count,
 		"inactive_days": inactiveDays,
@@ -735,11 +735,11 @@ func (h *TieringHandler) GetBucketAccessStats(w http.ResponseWriter, r *http.Req
 
 	// Get all tracked keys for bucket (this is a simplified implementation)
 	// In production, you'd query the access tracker directly
-	response := map[string]interface{}{
+	response := map[string]any{
 		"bucket": bucket,
 		"limit":  limit,
 		"offset": offset,
-		"stats":  []interface{}{},
+		"stats":  []any{},
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -895,7 +895,7 @@ func (h *TieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"bucket":  bucket,
 		"message": "Lifecycle configuration applied successfully",
 		"rules":   len(config.Rules),
@@ -945,7 +945,7 @@ func (h *TieringHandler) GetTieringStatus(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	status := map[string]interface{}{
+	status := map[string]any{
 		"status":            "running",
 		"total_policies":    len(policies),
 		"enabled_policies":  enabledCount,
@@ -981,7 +981,7 @@ func (h *TieringHandler) GetTieringMetrics(w http.ResponseWriter, r *http.Reques
 		totalErrors += stats.Errors
 	}
 
-	metrics := map[string]interface{}{
+	metrics := map[string]any{
 		"total_executions":           totalExecutions,
 		"total_objects_transitioned": totalObjectsTransitioned,
 		"total_bytes_transitioned":   totalBytesTransitioned,
@@ -1014,7 +1014,7 @@ func (h *TieringHandler) GetAccessPrediction(w http.ResponseWriter, r *http.Requ
 	}
 
 	if prediction == nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]any{
 			"bucket":  bucket,
 			"key":     key,
 			"message": "Insufficient data for prediction",
@@ -1046,7 +1046,7 @@ func (h *TieringHandler) GetTierRecommendations(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"recommendations": recommendations,
 		"count":           len(recommendations),
 	})
@@ -1067,7 +1067,7 @@ func (h *TieringHandler) GetHotObjectsPrediction(w http.ResponseWriter, r *http.
 
 	hotObjects := h.service.GetHotObjects(ctx, limit)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"hot_objects": hotObjects,
 		"count":       len(hotObjects),
 	})
@@ -1102,7 +1102,7 @@ func (h *TieringHandler) GetAccessAnomalies(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"anomalies": anomalies,
 		"count":     len(anomalies),
 	})

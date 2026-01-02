@@ -537,7 +537,7 @@ func (b *SimulatedBackend) Infer(ctx context.Context, req *InferenceRequest) (*I
 
 	// Generate response based on model type
 	var (
-		output     interface{}
+		output     any
 		tokensUsed int
 	)
 
@@ -549,13 +549,13 @@ func (b *SimulatedBackend) Infer(ctx context.Context, req *InferenceRequest) (*I
 		output = b.generateEmbedding(fmt.Sprintf("%v", req.Input))
 		tokensUsed = simTokensEmbeddingResponse
 	case ModelTypeVision:
-		output = map[string]interface{}{
-			"detections": []map[string]interface{}{
+		output = map[string]any{
+			"detections": []map[string]any{
 				{"label": "object", "confidence": simHighConfidence},
 			},
 		}
 	case ModelTypeAudio:
-		output = map[string]interface{}{
+		output = map[string]any{
 			"transcription": "This is a simulated transcription of the audio.",
 		}
 	case ModelTypeMultimodal:

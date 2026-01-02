@@ -174,7 +174,7 @@ func (s *AuthTestSuite) TestLoginWithValidCredentials() {
 
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 
 	s.Contains(result, "access_token")
@@ -336,7 +336,7 @@ func (s *ClusterTestSuite) TestClusterStatus() {
 
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 
 	s.Contains(result, "status")
@@ -353,7 +353,7 @@ func (s *ClusterTestSuite) TestListNodes() {
 	s.Equal(http.StatusOK, resp.StatusCode)
 
 	var result struct {
-		Nodes []interface{} `json:"nodes"`
+		Nodes []any `json:"nodes"`
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
 
@@ -417,7 +417,7 @@ func (s *AIMLTestSuite) TestGetAIMLMetrics() {
 
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 
 	// Verify all feature metrics are present
@@ -440,7 +440,7 @@ func (s *AIMLTestSuite) TestGetConfig() {
 
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 
 	// Verify configuration structure
@@ -450,8 +450,8 @@ func (s *AIMLTestSuite) TestGetConfig() {
 }
 
 func (s *AIMLTestSuite) TestUpdateConfig() {
-	config := map[string]interface{}{
-		"s3_express": map[string]interface{}{
+	config := map[string]any{
+		"s3_express": map[string]any{
 			"enabled":      true,
 			"default_zone": "use1-az1",
 		},
@@ -471,7 +471,7 @@ func (s *AIMLTestSuite) TestUpdateConfig() {
 
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 
 	s.Equal("ok", result["status"])

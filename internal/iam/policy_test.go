@@ -729,15 +729,15 @@ func TestConditionMatches(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		condition map[string]interface{}
+		condition map[string]any
 		evalCtx   *EvaluationContext
 		name      string
 		expected  bool
 	}{
 		{
 			name: "StringEquals match",
-			condition: map[string]interface{}{
-				"StringEquals": map[string]interface{}{
+			condition: map[string]any{
+				"StringEquals": map[string]any{
 					"aws:username": "user1",
 				},
 			},
@@ -748,8 +748,8 @@ func TestConditionMatches(t *testing.T) {
 		},
 		{
 			name: "StringEquals no match",
-			condition: map[string]interface{}{
-				"StringEquals": map[string]interface{}{
+			condition: map[string]any{
+				"StringEquals": map[string]any{
 					"aws:username": "user2",
 				},
 			},
@@ -760,8 +760,8 @@ func TestConditionMatches(t *testing.T) {
 		},
 		{
 			name: "Bool SecureTransport true",
-			condition: map[string]interface{}{
-				"Bool": map[string]interface{}{
+			condition: map[string]any{
+				"Bool": map[string]any{
 					"aws:SecureTransport": "true",
 				},
 			},
@@ -772,8 +772,8 @@ func TestConditionMatches(t *testing.T) {
 		},
 		{
 			name: "Bool SecureTransport false",
-			condition: map[string]interface{}{
-				"Bool": map[string]interface{}{
+			condition: map[string]any{
+				"Bool": map[string]any{
 					"aws:SecureTransport": "true",
 				},
 			},
@@ -784,8 +784,8 @@ func TestConditionMatches(t *testing.T) {
 		},
 		{
 			name: "IpAddress match",
-			condition: map[string]interface{}{
-				"IpAddress": map[string]interface{}{
+			condition: map[string]any{
+				"IpAddress": map[string]any{
 					"aws:SourceIp": "192.168.1.100",
 				},
 			},
@@ -796,8 +796,8 @@ func TestConditionMatches(t *testing.T) {
 		},
 		{
 			name: "IfExists with nil value",
-			condition: map[string]interface{}{
-				"StringEqualsIfExists": map[string]interface{}{
+			condition: map[string]any{
+				"StringEqualsIfExists": map[string]any{
 					"custom:key": "value",
 				},
 			},

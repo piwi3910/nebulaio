@@ -335,10 +335,7 @@ func (e *PredictiveEngine) decomposeTimeSeries(data []float64) (trend, seasonal,
 	// Calculate trend using moving average
 	trend = make([]float64, n)
 
-	window := e.config.SeasonalityPeriod
-	if window > n {
-		window = n
-	}
+	window := min(e.config.SeasonalityPeriod, n)
 
 	for i := range n {
 		start := i - window/2

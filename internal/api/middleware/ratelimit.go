@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -161,11 +162,7 @@ func (l *TokenBucketLimiter) Allow() bool {
 
 // calculateElapsed calculates elapsed time with overflow protection.
 func (l *TokenBucketLimiter) calculateElapsed(now, lastRefill int64) int64 {
-	elapsed := now - lastRefill
-	if elapsed > maxElapsedNanos {
-		elapsed = maxElapsedNanos
-	}
-	return elapsed
+	return min(now-lastRefill, maxElapsedNanos)
 }
 
 // calculateTokensToAdd calculates how many tokens to add based on elapsed time.
@@ -192,10 +189,7 @@ func (l *TokenBucketLimiter) refillTokens(tokensToAdd int64) {
 	for {
 		current := l.tokens.Load()
 
-		newTokens := current + tokensToAdd
-		if newTokens > l.maxTokens {
-			newTokens = l.maxTokens
-		}
+		newTokens := min(current+tokensToAdd, l.maxTokens)
 
 		if l.tokens.CompareAndSwap(current, newTokens) {
 			break
@@ -277,7 +271,7 @@ func (rl *RateLimiter) cleanup() {
 	now := time.Now().UnixNano()
 	staleTimeout := rl.config.StaleTimeout.Nanoseconds()
 
-	rl.limiters.Range(func(key, value interface{}) bool {
+	rl.limiters.Range(func(key, value any) bool {
 		limiter := value.(*TokenBucketLimiter)
 
 		lastUsed := limiter.lastUsed.Load()
@@ -322,13 +316,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 
 // isExcludedPath checks if a path should be excluded from rate limiting.
 func (rl *RateLimiter) isExcludedPath(path string) bool {
-	for _, excluded := range rl.config.ExcludedPaths {
-		if path == excluded {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(rl.config.ExcludedPaths, path)
 }
 
 // isTrustedProxy checks if the given IP is from a trusted proxy.

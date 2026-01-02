@@ -820,7 +820,7 @@ func BenchmarkFilterMatches(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		filter.Matches("logs/app.log", tags)
 	}
 }
@@ -840,7 +840,7 @@ func BenchmarkLifecycleRuleValidate(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		rule.Validate()
 	}
 }

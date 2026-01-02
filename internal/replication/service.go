@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"sort"
 	"sync"
 	"time"
@@ -385,9 +386,7 @@ func (s *Service) ListConfigs() map[string]*Config {
 	defer s.mu.RUnlock()
 
 	configs := make(map[string]*Config)
-	for k, v := range s.configs {
-		configs[k] = v
-	}
+	maps.Copy(configs, s.configs)
 
 	return configs
 }

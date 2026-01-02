@@ -323,11 +323,11 @@ func (b *SimulatedBackend) Sync(stream uintptr) error {
 }
 
 // GetMetrics returns simulated backend metrics.
-func (b *SimulatedBackend) GetMetrics() map[string]interface{} {
+func (b *SimulatedBackend) GetMetrics() map[string]any {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	return map[string]interface{}{
+	return map[string]any{
 		"simulated":         true,
 		"gpu_count":         len(b.gpus),
 		"registered_files":  len(b.files),

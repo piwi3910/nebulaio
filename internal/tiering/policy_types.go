@@ -81,16 +81,16 @@ type AdvancedPolicy struct {
 	Selector PolicySelector `json:"selector" yaml:"selector"`
 
 	// AntiThrash prevents oscillation between tiers
-	AntiThrash AntiThrashConfig `json:"antiThrash,omitempty" yaml:"antiThrash,omitempty"`
+	AntiThrash AntiThrashConfig `json:"antiThrash" yaml:"antiThrash"`
 
 	// Schedule defines when the policy can execute
-	Schedule ScheduleConfig `json:"schedule,omitempty" yaml:"schedule,omitempty"`
+	Schedule ScheduleConfig `json:"schedule" yaml:"schedule"`
 
 	// RateLimit controls execution rate
-	RateLimit RateLimitConfig `json:"rateLimit,omitempty" yaml:"rateLimit,omitempty"`
+	RateLimit RateLimitConfig `json:"rateLimit" yaml:"rateLimit"`
 
 	// Distributed execution configuration
-	Distributed DistributedConfig `json:"distributed,omitempty" yaml:"distributed,omitempty"`
+	Distributed DistributedConfig `json:"distributed" yaml:"distributed"`
 
 	// Scope defines where the policy applies
 	Scope PolicyScope `json:"scope" yaml:"scope"`

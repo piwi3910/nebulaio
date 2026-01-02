@@ -188,7 +188,7 @@ func (b *Backend) GetPlacementGroupID() string {
 
 // metadataPath returns the filesystem path for object metadata.
 func (b *Backend) metadataPath(bucket, key string) string {
-	hash := md5.Sum([]byte(fmt.Sprintf("%s/%s", bucket, key))) //nolint:gosec // G401: MD5 for path distribution only
+	hash := md5.Sum(fmt.Appendf(nil, "%s/%s", bucket, key)) //nolint:gosec // G401: MD5 for path distribution only
 	hashHex := hex.EncodeToString(hash[:])
 	dir := filepath.Join(b.config.DataDir, "metadata", hashHex[:2], hashHex[2:4])
 

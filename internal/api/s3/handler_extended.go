@@ -253,10 +253,10 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(recordsMsg)
 
 	// Write stats message
-	statsMsg := createSelectEventMessage("Stats", []byte(fmt.Sprintf(
+	statsMsg := createSelectEventMessage("Stats", fmt.Appendf(nil,
 		`<Stats><BytesScanned>%d</BytesScanned><BytesProcessed>%d</BytesProcessed><BytesReturned>%d</BytesReturned></Stats>`,
 		result.BytesScanned, result.BytesProcessed, result.BytesReturned,
-	)))
+	))
 	_, _ = w.Write(statsMsg)
 
 	// Write end message

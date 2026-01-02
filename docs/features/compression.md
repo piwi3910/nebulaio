@@ -170,6 +170,108 @@ nebulaio admin compression-stats
 | JSON/API | 60-75% | $120-180 |
 | Text files | 50-65% | $100-150 |
 
+## Object Lambda Streaming Compression
+
+S3 Object Lambda supports streaming compression/decompression for transforming objects on GET requests. This feature uses a configurable threshold to determine when to use streaming mode vs. buffered mode, preventing memory exhaustion for large files.
+
+### Configuration
+
+```yaml
+lambda:
+  object_lambda:
+    max_transform_size: 100mb      # Maximum size for any transformation
+    streaming_threshold: 10mb       # Use streaming for files > 10MB
+    max_decompress_size: 1gb        # Maximum decompressed output size
+```
+
+### How It Works
+
+1. **Buffered Mode** (files < streaming_threshold):
+   - Entire file is read into memory
+   - Compressed/decompressed in one operation
+   - Lower latency for small files
+
+2. **Streaming Mode** (files >= streaming_threshold):
+   - Data processed in 32KB chunks
+   - Constant memory usage regardless of file size
+   - Prevents OOM on large concurrent requests
+
+### Supported Algorithms
+
+| Algorithm | Streaming Support | Use Case |
+|-----------|-------------------|----------|
+| gzip | Yes | Broad compatibility |
+| zstd | Yes | Better compression ratio |
+
+### Memory Usage Comparison
+
+| File Size | Buffered Mode | Streaming Mode |
+|-----------|---------------|----------------|
+| 1 MB | ~2 MB | ~64 KB |
+| 10 MB | ~20 MB | ~64 KB |
+| 100 MB | ~200 MB | ~64 KB |
+
+### Performance Characteristics
+
+- **Latency**: Streaming adds minimal overhead (~1-5% for large files)
+- **Throughput**: Comparable to buffered mode
+- **Memory**: Constant ~64KB per stream regardless of file size
+
+### Security: Decompression Bomb Protection
+
+The streaming decompressor enforces a maximum decompressed output size to prevent decompression bomb attacks:
+
+```yaml
+lambda:
+  object_lambda:
+    max_decompress_size: 1gb  # Limit decompressed output
+```
+
+If decompressed output exceeds this limit, the operation fails with an error.
+
+### Example Usage
+
+**Compress large file with Object Lambda:**
+
+```bash
+# Create access point with compression transformation
+aws s3control create-access-point-for-object-lambda \
+  --name compress-ap \
+  --configuration '{
+    "SupportingAccessPoint": "arn:aws:s3:region:account:accesspoint/source-ap",
+    "TransformationConfigurations": [{
+      "Actions": ["GetObject"],
+      "ContentTransformation": {
+        "BuiltinConfig": {
+          "Function": "compress",
+          "Parameters": {
+            "algorithm": "zstd",
+            "level": 3
+          }
+        }
+      }
+    }]
+  }'
+```
+
+### Monitoring
+
+Prometheus metrics for Object Lambda compression:
+
+| Metric | Description |
+|--------|-------------|
+| `nebulaio_lambda_compression_total` | Total compression operations |
+| `nebulaio_lambda_compression_bytes` | Bytes processed |
+| `nebulaio_lambda_compression_duration_seconds` | Operation duration |
+| `nebulaio_lambda_streaming_operations_total` | Operations using streaming mode |
+
+### Best Practices
+
+1. **Set appropriate threshold**: Default 10MB works for most cases
+2. **Monitor memory usage**: Use streaming for memory-constrained environments
+3. **Configure max_decompress_size**: Protect against malicious compressed files
+4. **Use zstd for large files**: Better compression ratio with similar speed
+
 ## Troubleshooting
 
 ### Low Compression Ratios

@@ -1,6 +1,7 @@
 package oidc
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -153,16 +154,7 @@ func TestDefaultConfig(t *testing.T) {
 		t.Error("default config should have type 'oidc'")
 	}
 
-	hasOpenID := false
-
-	for _, scope := range cfg.Scopes {
-		if scope == "openid" {
-			hasOpenID = true
-			break
-		}
-	}
-
-	if !hasOpenID {
+	if !slices.Contains(cfg.Scopes, "openid") {
 		t.Error("default config should have openid scope")
 	}
 
@@ -210,16 +202,7 @@ func TestProviderPresets(t *testing.T) {
 
 	t.Run("Auth0Config", func(t *testing.T) {
 		cfg := Auth0Config()
-		hasOpenID := false
-
-		for _, scope := range cfg.Scopes {
-			if scope == "openid" {
-				hasOpenID = true
-				break
-			}
-		}
-
-		if !hasOpenID {
+		if !slices.Contains(cfg.Scopes, "openid") {
 			t.Error("Auth0 config should have openid scope")
 		}
 	})
@@ -347,12 +330,12 @@ func TestClaimsToUser(t *testing.T) {
 	}
 
 	t.Run("FullClaims", func(t *testing.T) {
-		claims := map[string]interface{}{
+		claims := map[string]any{
 			"sub":                "user-123",
 			"preferred_username": "testuser",
 			"email":              "test@example.com",
 			"name":               "Test User",
-			"groups":             []interface{}{"users", "admins"},
+			"groups":             []any{"users", "admins"},
 			"department":         "Engineering",
 		}
 
@@ -384,7 +367,7 @@ func TestClaimsToUser(t *testing.T) {
 	})
 
 	t.Run("FallbackToSub", func(t *testing.T) {
-		claims := map[string]interface{}{
+		claims := map[string]any{
 			"sub": "user-123",
 		}
 
@@ -396,7 +379,7 @@ func TestClaimsToUser(t *testing.T) {
 	})
 
 	t.Run("GroupsAsStrings", func(t *testing.T) {
-		claims := map[string]interface{}{
+		claims := map[string]any{
 			"sub":    "user-123",
 			"groups": []string{"group1", "group2"},
 		}
@@ -409,7 +392,7 @@ func TestClaimsToUser(t *testing.T) {
 	})
 
 	t.Run("SingleGroupString", func(t *testing.T) {
-		claims := map[string]interface{}{
+		claims := map[string]any{
 			"sub":    "user-123",
 			"groups": "single-group",
 		}
@@ -424,8 +407,8 @@ func TestClaimsToUser(t *testing.T) {
 
 func TestExtractGroups(t *testing.T) {
 	t.Run("ArrayOfInterfaces", func(t *testing.T) {
-		claims := map[string]interface{}{
-			"groups": []interface{}{"group1", "group2", "group3"},
+		claims := map[string]any{
+			"groups": []any{"group1", "group2", "group3"},
 		}
 
 		groups := extractGroups(claims, "groups")
@@ -435,7 +418,7 @@ func TestExtractGroups(t *testing.T) {
 	})
 
 	t.Run("ArrayOfStrings", func(t *testing.T) {
-		claims := map[string]interface{}{
+		claims := map[string]any{
 			"groups": []string{"group1", "group2"},
 		}
 
@@ -446,7 +429,7 @@ func TestExtractGroups(t *testing.T) {
 	})
 
 	t.Run("SingleString", func(t *testing.T) {
-		claims := map[string]interface{}{
+		claims := map[string]any{
 			"groups": "single",
 		}
 
@@ -457,7 +440,7 @@ func TestExtractGroups(t *testing.T) {
 	})
 
 	t.Run("MissingClaim", func(t *testing.T) {
-		claims := map[string]interface{}{}
+		claims := map[string]any{}
 
 		groups := extractGroups(claims, "groups")
 		if len(groups) != 0 {

@@ -532,7 +532,7 @@ func TestTargetRegistry(t *testing.T) {
 	})
 
 	t.Run("CreateWebhookTarget", func(t *testing.T) {
-		config := map[string]interface{}{
+		config := map[string]any{
 			"name": "test-webhook",
 			"url":  "http://localhost:8080/webhook",
 		}
@@ -554,7 +554,7 @@ func TestTargetRegistry(t *testing.T) {
 	})
 
 	t.Run("CreateUnknownTarget", func(t *testing.T) {
-		config := map[string]interface{}{}
+		config := map[string]any{}
 
 		_, err := events.CreateTarget("unknown-type", config)
 		if err == nil {

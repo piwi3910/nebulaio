@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"sync"
 	"time"
@@ -508,9 +509,7 @@ func (m *Manager) GetAllSyncStates() map[string]*SyncState {
 	defer m.mu.RUnlock()
 
 	states := make(map[string]*SyncState)
-	for name, state := range m.syncState {
-		states[name] = state
-	}
+	maps.Copy(states, m.syncState)
 
 	return states
 }

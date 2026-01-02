@@ -19,6 +19,7 @@ package admin
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -742,7 +743,7 @@ func (h *Handler) GetRaftState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try to get detailed stats if the store supports it
-	response := map[string]interface{}{
+	response := map[string]any{
 		"state":     info.RaftState,
 		"leader_id": info.LeaderID,
 	}
@@ -784,7 +785,7 @@ func (h *Handler) GetStorageInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"cluster":   info,
 		"is_leader": h.store.IsLeader(),
 	})
@@ -910,7 +911,7 @@ func (h *Handler) GeneratePresignedURL(w http.ResponseWriter, r *http.Request) {
 
 // Helper functions
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
@@ -996,7 +997,7 @@ func (h *Handler) GetBucketVersioning(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"enabled": status == metadata.VersioningEnabled,
 		"status":  string(status),
 	})
@@ -1032,7 +1033,7 @@ func (h *Handler) SetBucketVersioning(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"enabled": req.Enabled,
 		"status":  string(status),
 	})
@@ -1045,14 +1046,14 @@ func (h *Handler) GetBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 	rules, err := h.bucket.GetLifecycle(r.Context(), bucketName)
 	if err != nil {
 		// Return empty rules if not configured
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]any{
 			"rules": []metadata.LifecycleRule{},
 		})
 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"rules": rules,
 	})
 }
@@ -1080,7 +1081,7 @@ func (h *Handler) SetBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"rules": req.Rules,
 	})
 }
@@ -1105,14 +1106,14 @@ func (h *Handler) GetBucketCORS(w http.ResponseWriter, r *http.Request) {
 	rules, err := h.bucket.GetCORS(r.Context(), bucketName)
 	if err != nil {
 		// Return empty rules if not configured
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]any{
 			"rules": []metadata.CORSRule{},
 		})
 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"rules": rules,
 	})
 }
@@ -1140,7 +1141,7 @@ func (h *Handler) SetBucketCORS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"rules": req.Rules,
 	})
 }
@@ -1165,14 +1166,14 @@ func (h *Handler) GetBucketPolicy(w http.ResponseWriter, r *http.Request) {
 	policy, err := h.bucket.GetBucketPolicy(r.Context(), bucketName)
 	if err != nil {
 		// Return empty policy if not configured
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]any{
 			"policy": "",
 		})
 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"policy": policy,
 	})
 }
@@ -1200,7 +1201,7 @@ func (h *Handler) SetBucketPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"policy": req.Policy,
 	})
 }
@@ -1225,14 +1226,14 @@ func (h *Handler) GetBucketTags(w http.ResponseWriter, r *http.Request) {
 	tags, err := h.bucket.GetBucketTags(r.Context(), bucketName)
 	if err != nil {
 		// Return empty tags if not configured
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]any{
 			"tags": map[string]string{},
 		})
 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"tags": tags,
 	})
 }
@@ -1260,7 +1261,7 @@ func (h *Handler) SetBucketTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"tags": req.Tags,
 	})
 }
@@ -1318,14 +1319,12 @@ func (h *Handler) AttachPolicyToUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if policy is already attached
-	for _, p := range user.Policies {
-		if p == policyName {
-			writeJSON(w, http.StatusOK, map[string]string{
-				"message": "Policy already attached to user",
-			})
+	if slices.Contains(user.Policies, policyName) {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"message": "Policy already attached to user",
+		})
 
-			return
-		}
+		return
 	}
 
 	// Attach policy
@@ -1430,7 +1429,7 @@ func (h *Handler) GetNodeMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build metrics response
-	metrics := map[string]interface{}{
+	metrics := map[string]any{
 		"node_id":        targetMember.NodeID,
 		"address":        targetMember.RaftAddr,
 		"role":           targetMember.Role,
@@ -1484,7 +1483,7 @@ func (h *Handler) GetStorageMetrics(w http.ResponseWriter, r *http.Request) {
 		usagePercent = float64(usedBytes) / float64(totalBytes) * 100
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"total_bytes":        totalBytes,
 		"used_bytes":         usedBytes,
 		"available_bytes":    availableBytes,

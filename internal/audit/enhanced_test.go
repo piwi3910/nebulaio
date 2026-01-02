@@ -808,7 +808,7 @@ func BenchmarkEnhancedAuditLogger(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		logger.Log(event)
 	}
 }

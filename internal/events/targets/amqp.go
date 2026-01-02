@@ -170,7 +170,7 @@ func (t *AMQPTarget) Close() error {
 var _ events.Target = (*AMQPTarget)(nil)
 
 func init() {
-	events.RegisterTargetFactory("amqp", func(config map[string]interface{}) (events.Target, error) {
+	events.RegisterTargetFactory("amqp", func(config map[string]any) (events.Target, error) {
 		cfg := DefaultAMQPConfig()
 
 		if name, ok := config["name"].(string); ok {

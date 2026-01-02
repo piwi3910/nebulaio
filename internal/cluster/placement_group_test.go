@@ -51,6 +51,8 @@ func testLocalGroupOperations(t *testing.T, mgr *PlacementGroupManager) {
 	localGroup := mgr.LocalGroup()
 	if localGroup == nil {
 		t.Fatal("LocalGroup returned nil")
+
+		return
 	}
 
 	if localGroup.ID != "pg-dc1" {

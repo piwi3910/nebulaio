@@ -1171,7 +1171,7 @@ func (krm *KeyRotationManager) ExportKey(ctx context.Context, keyID string) (str
 	}
 
 	// Create export structure (without raw key material)
-	export := map[string]interface{}{
+	export := map[string]any{
 		"id":          key.ID,
 		"alias":       key.Alias,
 		"type":        key.Type,
@@ -1192,7 +1192,7 @@ func (krm *KeyRotationManager) ExportKey(ctx context.Context, keyID string) (str
 
 // ImportKey imports a previously exported key.
 func (krm *KeyRotationManager) ImportKey(ctx context.Context, exportedKey string) (*EncryptionKey, error) {
-	var importData map[string]interface{}
+	var importData map[string]any
 
 	unmarshalErr := json.Unmarshal([]byte(exportedKey), &importData)
 	if unmarshalErr != nil {
@@ -1226,7 +1226,7 @@ func (krm *KeyRotationManager) ImportKey(ctx context.Context, exportedKey string
 		CreatedAt:   time.Now(),
 	}
 
-	if metadata, ok := importData["metadata"].(map[string]interface{}); ok {
+	if metadata, ok := importData["metadata"].(map[string]any); ok {
 		key.Metadata = make(map[string]string)
 		for k, v := range metadata {
 			if s, ok := v.(string); ok {

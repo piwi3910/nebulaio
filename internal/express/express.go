@@ -634,7 +634,7 @@ func (s *ExpressService) cleanupExpiredSessions() {
 	for range ticker.C {
 		now := time.Now()
 
-		s.sessions.Range(func(key, value interface{}) bool {
+		s.sessions.Range(func(key, value any) bool {
 			session := value.(*Session)
 			session.mu.RLock()
 			expired := now.After(session.ExpiresAt)

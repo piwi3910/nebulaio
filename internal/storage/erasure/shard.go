@@ -31,7 +31,7 @@ func NewShardManager(dataDir string) (*ShardManager, error) {
 // ShardPath returns the filesystem path for a shard.
 func (m *ShardManager) ShardPath(bucket, key string, shardIndex int) string {
 	// Use bucket/key hash to create a balanced directory structure
-	hash := md5.Sum([]byte(fmt.Sprintf("%s/%s", bucket, key))) //nolint:gosec // G401: MD5 for path distribution only
+	hash := md5.Sum(fmt.Appendf(nil, "%s/%s", bucket, key)) //nolint:gosec // G401: MD5 for path distribution only
 	hashHex := hex.EncodeToString(hash[:])
 
 	// Create a 2-level directory structure for better filesystem performance

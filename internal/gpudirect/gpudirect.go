@@ -209,7 +209,7 @@ type GDSBackend interface {
 	Sync(stream uintptr) error
 
 	// GetMetrics returns backend-specific metrics
-	GetMetrics() map[string]interface{}
+	GetMetrics() map[string]any
 }
 
 // NewService creates a new GPUDirect Storage service.
@@ -270,18 +270,12 @@ func NewService(config *Config, backend GDSBackend) (*Service, error) {
 
 // initBufferPool initializes the buffer pool for a GPU.
 func (s *Service) initBufferPool(deviceID int) error {
-	numBuffers := int(s.config.BufferPoolSize / s.config.MaxBufferSize)
-	if numBuffers < 1 {
-		numBuffers = 1
-	}
+	numBuffers := max(int(s.config.BufferPoolSize/s.config.MaxBufferSize), 1)
 
 	s.buffers[deviceID] = make([]*GPUBuffer, 0, numBuffers)
 
 	// Pre-allocate some buffers
-	initialBuffers := numBuffers / 4
-	if initialBuffers < 1 {
-		initialBuffers = 1
-	}
+	initialBuffers := max(numBuffers/4, 1)
 
 	for range initialBuffers {
 		buf, err := s.backend.AllocateBuffer(deviceID, s.config.MaxBufferSize)

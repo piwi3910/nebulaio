@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"strings"
 	"sync"
@@ -440,9 +441,7 @@ func (tm *TenantManager) UpdateTenant(ctx context.Context, id string, updates *T
 	}
 
 	if updates.Metadata != nil {
-		for k, v := range updates.Metadata {
-			tenant.Metadata[k] = v
-		}
+		maps.Copy(tenant.Metadata, updates.Metadata)
 	}
 
 	tenant.UpdatedAt = time.Now()
