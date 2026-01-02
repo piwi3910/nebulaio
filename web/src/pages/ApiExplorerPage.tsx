@@ -1,6 +1,55 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, Component, ReactNode } from 'react';
 import SwaggerUI from 'swagger-ui-react';
 import 'swagger-ui-react/swagger-ui.css';
+
+// Error boundary for Swagger UI component
+interface SwaggerErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface SwaggerErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class SwaggerErrorBoundary extends Component<SwaggerErrorBoundaryProps, SwaggerErrorBoundaryState> {
+  constructor(props: SwaggerErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): SwaggerErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <h3>Failed to load API documentation</h3>
+          <p style={{ color: '#666' }}>
+            {this.state.error?.message || 'An unexpected error occurred'}
+          </p>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#228be6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 import {
   Container,
   Title,
@@ -58,6 +107,21 @@ interface PendingRequest {
   startTime: number;
   method: string;
   path: string;
+}
+
+// Swagger UI interceptor types - using intersection with Swagger's native types
+interface SwaggerRequestFields {
+  url?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+interface SwaggerResponseFields {
+  url?: string;
+  status?: number;
+  headers?: Record<string, string>;
+  body?: string;
 }
 
 const MAX_HISTORY_SIZE = 50;
@@ -212,8 +276,7 @@ export function ApiExplorerPage() {
   };
 
   // Request interceptor for Swagger UI - tracks request start time
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const requestInterceptor = useCallback((request: any) => {
+  const requestInterceptor = useCallback(<T extends SwaggerRequestFields>(request: T): T => {
     const token = useAuthStore.getState().accessToken;
     if (token && request.headers) {
       request.headers.Authorization = `Bearer ${token}`;
@@ -238,12 +301,11 @@ export function ApiExplorerPage() {
   }, []);
 
   // Response interceptor for Swagger UI - records completed requests
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const responseInterceptor = useCallback((response: any) => {
+  const responseInterceptor = useCallback(<T extends SwaggerResponseFields>(response: T): T => {
     // Track completed API requests
     if (response.url && response.url.includes('/api/v1/')) {
       const pending = pendingRequestsRef.current.get(response.url);
-      if (pending) {
+      if (pending && response.status !== undefined) {
         const endTime = Date.now();
         addToHistory({
           timestamp: new Date().toISOString(),
@@ -328,15 +390,17 @@ export function ApiExplorerPage() {
 
             <Tabs.Panel value="explorer" p="md">
               <div className="swagger-ui-wrapper">
-                <SwaggerUI
-                  url="/api/v1/openapi.json"
-                  requestInterceptor={requestInterceptor}
-                  responseInterceptor={responseInterceptor}
-                  docExpansion="list"
-                  defaultModelsExpandDepth={1}
-                  persistAuthorization={true}
-                  tryItOutEnabled={true}
-                />
+                <SwaggerErrorBoundary>
+                  <SwaggerUI
+                    url="/api/v1/openapi.json"
+                    requestInterceptor={requestInterceptor}
+                    responseInterceptor={responseInterceptor}
+                    docExpansion="list"
+                    defaultModelsExpandDepth={1}
+                    persistAuthorization={true}
+                    tryItOutEnabled={true}
+                  />
+                </SwaggerErrorBoundary>
               </div>
             </Tabs.Panel>
 

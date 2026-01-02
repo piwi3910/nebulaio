@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/piwi3910/nebulaio/internal/metrics"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
@@ -118,6 +119,8 @@ func convertMapKeys(v interface{}) interface{} {
 
 // ServeOpenAPIJSON serves the OpenAPI specification as JSON.
 func (h *OpenAPIHandler) ServeOpenAPIJSON(w http.ResponseWriter, _ *http.Request) {
+	metrics.RecordOpenAPISpecRequest("json")
+
 	h.mu.RLock()
 	specJSON := h.specJSON
 	h.mu.RUnlock()
@@ -131,6 +134,8 @@ func (h *OpenAPIHandler) ServeOpenAPIJSON(w http.ResponseWriter, _ *http.Request
 
 // ServeOpenAPIYAML serves the OpenAPI specification as YAML.
 func (h *OpenAPIHandler) ServeOpenAPIYAML(w http.ResponseWriter, _ *http.Request) {
+	metrics.RecordOpenAPISpecRequest("yaml")
+
 	h.mu.RLock()
 	specYAML := h.specYAML
 	h.mu.RUnlock()
@@ -186,6 +191,7 @@ func DefaultAPIExplorerConfig() *APIExplorerConfig {
 
 // ServeAPIExplorerConfig serves the API Explorer configuration.
 func (h *OpenAPIHandler) ServeAPIExplorerConfig(w http.ResponseWriter, _ *http.Request) {
+	metrics.RecordAPIExplorerRequest("config", true)
 	config := DefaultAPIExplorerConfig()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -281,6 +287,8 @@ func (e *ValidationError) Error() string {
 
 // GenerateCodeSnippets generates code snippets for the given request.
 func (h *OpenAPIHandler) GenerateCodeSnippets(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+
 	// Limit request body size
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 
@@ -288,6 +296,7 @@ func (h *OpenAPIHandler) GenerateCodeSnippets(w http.ResponseWriter, r *http.Req
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Debug().Err(err).Msg("Failed to decode code snippet request")
+		metrics.RecordAPIExplorerRequest("code-snippets", false)
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 
 		return
@@ -296,6 +305,7 @@ func (h *OpenAPIHandler) GenerateCodeSnippets(w http.ResponseWriter, r *http.Req
 	// Validate request
 	if err := validateCodeSnippetRequest(&req); err != nil {
 		log.Debug().Err(err).Msg("Code snippet request validation failed")
+		metrics.RecordAPIExplorerRequest("code-snippets", false)
 		writeError(w, err.Error(), http.StatusBadRequest)
 
 		return
@@ -306,6 +316,14 @@ func (h *OpenAPIHandler) GenerateCodeSnippets(w http.ResponseWriter, r *http.Req
 		{Language: "javascript", Code: generateJavaScriptSnippet(req)},
 		{Language: "python", Code: generatePythonSnippet(req)},
 		{Language: "go", Code: generateGoSnippet(req)},
+	}
+
+	// Record metrics for successful generation
+	duration := time.Since(startTime)
+	metrics.RecordAPIExplorerRequest("code-snippets", true)
+
+	for _, snippet := range snippets {
+		metrics.RecordCodeSnippetGeneration(snippet.Language, true, duration)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
