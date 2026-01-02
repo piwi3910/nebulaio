@@ -64,7 +64,7 @@ type SpanLink struct {
 // Span represents a distributed tracing span.
 type Span struct {
 	StartTime     time.Time `json:"start_time"`
-	EndTime       time.Time `json:"end_time,omitempty"`
+	EndTime       time.Time `json:"end_time"`
 	tracer        *Tracer
 	Resource      *Resource                 `json:"resource,omitempty"`
 	Attributes    map[string]AttributeValue `json:"attributes"`

@@ -202,16 +202,7 @@ func TestProviderPresets(t *testing.T) {
 
 	t.Run("Auth0Config", func(t *testing.T) {
 		cfg := Auth0Config()
-		hasOpenID := false
-
-		for _, scope := range cfg.Scopes {
-			if scope == "openid" {
-				hasOpenID = true
-				break
-			}
-		}
-
-		if !hasOpenID {
+		if !slices.Contains(cfg.Scopes, "openid") {
 			t.Error("Auth0 config should have openid scope")
 		}
 	})

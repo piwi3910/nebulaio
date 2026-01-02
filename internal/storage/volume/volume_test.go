@@ -361,7 +361,7 @@ func TestPackedBlockPacking(t *testing.T) {
 	// Verify all objects are readable
 	for i := range 100 {
 		key := fmt.Sprintf("tiny-%d", i)
-		expectedData := []byte(fmt.Sprintf("tiny-data-%d", i))
+		expectedData := fmt.Appendf(nil, "tiny-data-%d", i)
 		retrieved, err := vol.Get("bucket1", key)
 		require.NoError(t, err)
 		assert.Equal(t, expectedData, retrieved)

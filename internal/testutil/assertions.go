@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -131,16 +132,7 @@ func AssertSliceContains[T comparable](t *testing.T, slice []T, expected ...T) {
 	t.Helper()
 
 	for _, e := range expected {
-		found := false
-
-		for _, s := range slice {
-			if s == e {
-				found = true
-				break
-			}
-		}
-
-		assert.True(t, found, "slice should contain %v", e)
+		assert.True(t, slices.Contains(slice, e), "slice should contain %v", e)
 	}
 }
 
@@ -149,11 +141,10 @@ func AssertSliceNotContains[T comparable](t *testing.T, slice []T, excluded ...T
 	t.Helper()
 
 	for _, e := range excluded {
-		for _, s := range slice {
-			if s == e {
-				assert.Fail(t, "slice should not contain element", "found: %v", e)
-				return
-			}
+		if slices.Contains(slice, e) {
+			assert.Fail(t, "slice should not contain element", "found: %v", e)
+
+			return
 		}
 	}
 }

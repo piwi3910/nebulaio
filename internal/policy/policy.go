@@ -533,7 +533,7 @@ func matchStringLike(expected any, actual string, exists bool) bool {
 }
 
 // matchStringNotLike checks if actual does not match expected wildcard pattern.
-func matchStringNotLike(expected interface{}, actual string, exists bool) bool {
+func matchStringNotLike(expected any, actual string, exists bool) bool {
 	if !exists {
 		return true
 	}
@@ -542,7 +542,7 @@ func matchStringNotLike(expected interface{}, actual string, exists bool) bool {
 }
 
 // matchIPCondition checks if actual IP matches expected CIDR/IP pattern.
-func matchIPCondition(expected interface{}, actual string, exists bool) bool {
+func matchIPCondition(expected any, actual string, exists bool) bool {
 	if !exists {
 		return false
 	}
@@ -551,7 +551,7 @@ func matchIPCondition(expected interface{}, actual string, exists bool) bool {
 }
 
 // matchNotIPCondition checks if actual IP does not match expected CIDR/IP pattern.
-func matchNotIPCondition(expected interface{}, actual string, exists bool) bool {
+func matchNotIPCondition(expected any, actual string, exists bool) bool {
 	if !exists {
 		return true
 	}
