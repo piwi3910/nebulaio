@@ -17,7 +17,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/piwi3910/nebulaio/internal/api/middleware"
-	"github.com/piwi3910/nebulaio/internal/audit"
 	"github.com/piwi3910/nebulaio/internal/auth"
 	"github.com/piwi3910/nebulaio/internal/bucket"
 	"github.com/piwi3910/nebulaio/internal/metadata"
