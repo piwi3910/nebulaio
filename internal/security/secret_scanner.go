@@ -712,15 +712,9 @@ func (s *SecretScanner) redactMatch(match string) string {
 
 // getContext returns surrounding lines for context.
 func (s *SecretScanner) getContext(lines [][]byte, lineNum, contextLines int) string {
-	start := lineNum - contextLines
-	if start < 0 {
-		start = 0
-	}
+	start := max(lineNum-contextLines, 0)
 
-	end := lineNum + contextLines + 1
-	if end > len(lines) {
-		end = len(lines)
-	}
+	end := min(lineNum+contextLines+1, len(lines))
 
 	var context []string
 

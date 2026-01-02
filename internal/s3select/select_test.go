@@ -517,7 +517,7 @@ func BenchmarkExecuteCSV(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		//nolint:unqueryvet // SELECT * is intentional for S3 Select benchmarking
 		_, _ = ExecuteCSV(data, "SELECT * FROM s3object WHERE value > 5000", true)
 	}
@@ -535,7 +535,7 @@ func BenchmarkExecuteJSON(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		//nolint:unqueryvet // SELECT * is intentional for S3 Select benchmarking
 		_, _ = ExecuteJSON(data, "SELECT * FROM s3object WHERE value > 5000", false)
 	}

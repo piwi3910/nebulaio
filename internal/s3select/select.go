@@ -292,8 +292,7 @@ func (e *Engine) parseJSON(data []byte) ([]Record, error) {
 func (e *Engine) parseJSONLines(data []byte) ([]Record, error) {
 	var records []Record
 
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

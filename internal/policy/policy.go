@@ -401,16 +401,16 @@ func matchAction(stmtAction any, action string) bool {
 }
 
 // matchResource checks if the resource matches the statement's Resource.
-func matchResource(stmtResource interface{}, resource string) bool {
+func matchResource(stmtResource any, resource string) bool {
 	return matchStringOrArrayWithWildcard(stmtResource, resource)
 }
 
 // matchStringOrArray matches a value against a string or array of strings.
-func matchStringOrArray(value interface{}, target string) bool {
+func matchStringOrArray(value any, target string) bool {
 	switch v := value.(type) {
 	case string:
 		return v == "*" || v == target
-	case []interface{}:
+	case []any:
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				if s == "*" || s == target {
@@ -428,7 +428,7 @@ func matchStringOrArrayWithWildcard(value interface{}, target string) bool {
 	switch v := value.(type) {
 	case string:
 		return matchWildcard(v, target)
-	case []interface{}:
+	case []any:
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				if matchWildcard(s, target) {
@@ -587,7 +587,7 @@ func matchConditionValue(expected interface{}, actual string, matcher func(strin
 	switch v := expected.(type) {
 	case string:
 		return matcher(v, actual)
-	case []interface{}:
+	case []any:
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				if matcher(s, actual) {
