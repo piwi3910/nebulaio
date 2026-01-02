@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -271,16 +273,7 @@ func (s *PromptObjectService) PromptObject(ctx context.Context, configName strin
 
 	// Check bucket permissions
 	if len(cfg.AllowedBuckets) > 0 {
-		allowed := false
-
-		for _, b := range cfg.AllowedBuckets {
-			if b == req.Bucket {
-				allowed = true
-				break
-			}
-		}
-
-		if !allowed {
+		if !slices.Contains(cfg.AllowedBuckets, req.Bucket) {
 			return nil, fmt.Errorf("bucket %s not allowed for config %s", req.Bucket, configName)
 		}
 	}
@@ -415,13 +408,8 @@ func (s *PromptObjectService) GetMetrics() *AIMetrics {
 		RequestsByModel:  make(map[string]int64),
 		RequestsByBucket: make(map[string]int64),
 	}
-	for k, v := range s.metrics.RequestsByModel {
-		metrics.RequestsByModel[k] = v
-	}
-
-	for k, v := range s.metrics.RequestsByBucket {
-		metrics.RequestsByBucket[k] = v
-	}
+	maps.Copy(metrics.RequestsByModel, s.metrics.RequestsByModel)
+	maps.Copy(metrics.RequestsByBucket, s.metrics.RequestsByBucket)
 
 	return metrics
 }

@@ -270,10 +270,7 @@ func NewService(config *Config, backend GDSBackend) (*Service, error) {
 
 // initBufferPool initializes the buffer pool for a GPU.
 func (s *Service) initBufferPool(deviceID int) error {
-	numBuffers := int(s.config.BufferPoolSize / s.config.MaxBufferSize)
-	if numBuffers < 1 {
-		numBuffers = 1
-	}
+	numBuffers := max(int(s.config.BufferPoolSize/s.config.MaxBufferSize), 1)
 
 	s.buffers[deviceID] = make([]*GPUBuffer, 0, numBuffers)
 

@@ -96,7 +96,7 @@ func BenchmarkZstdDecompress_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(compressed)))
 
-	for range b.N {
+	for b.Loop() {
 		decoder.DecodeAll(compressed, nil)
 	}
 }
@@ -109,7 +109,7 @@ func BenchmarkLZ4Compress_1KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		lz4.CompressBlock(data, dst, nil)
 	}
 }
@@ -121,7 +121,7 @@ func BenchmarkLZ4Compress_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		lz4.CompressBlock(data, dst, nil)
 	}
 }

@@ -316,11 +316,8 @@ func NewService(config *Config, backend DPUBackend) (*Service, error) {
 		return nil, ErrDPUNotAvailable
 	}
 
-	// Select DPU
-	index := config.DeviceIndex
-	if index < 0 {
-		index = 0 // Auto-select first available
-	}
+	// Select DPU (auto-select first available if negative)
+	index := max(config.DeviceIndex, 0)
 
 	if index >= len(dpus) {
 		return nil, fmt.Errorf("DPU index %d out of range (available: %d)", index, len(dpus))

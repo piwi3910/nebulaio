@@ -138,10 +138,10 @@ func (s *Service) EnsureRootUser(ctx context.Context) (bool, error) {
 				return false, ctx.Err()
 			case <-time.After(retryDelay):
 				// Exponential backoff with a cap
-				retryDelay = time.Duration(float64(retryDelay) * backoffMultiplier)
-				if retryDelay > maxRetryDelay {
-					retryDelay = maxRetryDelay
-				}
+				retryDelay = min(
+					time.Duration(float64(retryDelay)*backoffMultiplier),
+					maxRetryDelay,
+				)
 
 				continue
 			}
