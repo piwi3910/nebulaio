@@ -1528,7 +1528,7 @@ func BenchmarkBufferedVsStreamingCompression(b *testing.B) {
 				b.ResetTimer()
 				b.ReportAllocs()
 
-				for range b.N {
+				for b.Loop() {
 					output, _, _ := transformer.Transform(
 						context.Background(),
 						bytes.NewReader(testData),
@@ -1553,7 +1553,7 @@ func BenchmarkBufferedVsStreamingCompression(b *testing.B) {
 				b.ResetTimer()
 				b.ReportAllocs()
 
-				for range b.N {
+				for b.Loop() {
 					output, _, _ := transformer.Transform(
 						context.Background(),
 						bytes.NewReader(testData),
@@ -1604,7 +1604,7 @@ func BenchmarkBufferedVsStreamingDecompression(b *testing.B) {
 				b.ResetTimer()
 				b.ReportAllocs()
 
-				for range b.N {
+				for b.Loop() {
 					output, _, _ := transformer.Transform(
 						context.Background(),
 						bytes.NewReader(compressed),
@@ -1629,7 +1629,7 @@ func BenchmarkBufferedVsStreamingDecompression(b *testing.B) {
 				b.ResetTimer()
 				b.ReportAllocs()
 
-				for range b.N {
+				for b.Loop() {
 					output, _, _ := transformer.Transform(
 						context.Background(),
 						bytes.NewReader(compressed),
