@@ -24,11 +24,14 @@ jobs:
       - name: Tidy go modules
         run: go mod tidy
 
+      - name: Install golangci-lint
+        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
+
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: latest
-          args: --timeout=5m
+        run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m 2>&1 || true
+
+      - name: Run golangci-lint (strict)
+        run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m
 
   lint-docs:
     runs-on: ubuntu-latest
