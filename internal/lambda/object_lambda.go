@@ -1295,7 +1295,12 @@ func (t *DecompressTransformer) transformBufferedWithMetrics(
 
 	decompressedSize := int64(len(result))
 	duration := time.Since(startTime)
-	metrics.RecordLambdaCompression(detectedAlgorithm, "decompress", true, duration, decompressedSize, compressedSize)
+
+	// Note: For decompression, we pass decompressedSize as originalSize and compressedSize
+	// as compressedSize. The compression ratio is only calculated for compress operations
+	// (see RecordLambdaCompression), so these values are used for duration/operation tracking.
+	metrics.RecordLambdaCompression(
+		detectedAlgorithm, "decompress", true, duration, decompressedSize, compressedSize)
 
 	return bytes.NewReader(result), nil, nil
 }
