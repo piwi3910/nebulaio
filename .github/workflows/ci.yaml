@@ -29,13 +29,22 @@ jobs:
 
       - name: Run golangci-lint
         run: |
-          $(go env GOPATH)/bin/golangci-lint run --timeout=5m 2>&1 | tee lint-output.txt
-          exit_code=${PIPESTATUS[0]}
-          echo "=== LINT OUTPUT ==="
+          echo "=== STARTING GOLANGCI-LINT ==="
+          $(go env GOPATH)/bin/golangci-lint version
+          echo "=== RUNNING LINTER ==="
+          $(go env GOPATH)/bin/golangci-lint run --timeout=5m --verbose 2>&1 | tee lint-output.txt || true
+          echo ""
+          echo "=== LINT OUTPUT START ==="
           cat lint-output.txt
-          echo "=== END LINT OUTPUT ==="
-          echo "Exit code: $exit_code"
-          exit $exit_code
+          echo "=== LINT OUTPUT END ==="
+          echo ""
+          # Check if there were any issues
+          if grep -q "^[a-zA-Z]" lint-output.txt | grep -v "^level=" | grep -v "^INFO" | head -20; then
+            echo "Lint issues found, failing..."
+            exit 1
+          fi
+          # Re-run to get proper exit code
+          $(go env GOPATH)/bin/golangci-lint run --timeout=5m
 
   lint-docs:
     runs-on: ubuntu-latest
