@@ -3651,7 +3651,6 @@ func TestPresignedURLDisabledAccessKey(t *testing.T) {
 // =============================================================================
 
 func TestPresignedURLWithSpecialCharactersInKey(t *testing.T) {
-	t.Skip("Skip for binary search")
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
