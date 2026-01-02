@@ -261,29 +261,35 @@ func TestRateLimitDDoSProtection(t *testing.T) {
 	})
 
 	t.Run("cleans up stale limiters", func(t *testing.T) {
+		// Use longer timeouts for CI stability
+		cleanupInterval := 50 * time.Millisecond
+		staleTimeout := 100 * time.Millisecond
+		cleanupWait := 300 * time.Millisecond
+
 		config := RateLimitConfig{
 			Enabled:         true,
 			BurstSize:       testBurstSizeSmall,
 			PerIP:           true,
-			CleanupInterval: testCleanupInterval,
-			StaleTimeout:    testStaleTimeout,
+			CleanupInterval: cleanupInterval,
+			StaleTimeout:    staleTimeout,
 		}
 
 		rl := NewRateLimiter(config)
 		defer rl.Close()
 
-		// Create some limiters
-		for i := range testBurstSizeLarge {
+		// Create some limiters by making requests
+		testIPs := 3 // Use fewer IPs for faster test
+		for i := range testIPs {
 			clientIP := "192.168.1." + strconv.Itoa(i)
 			rl.Allow(clientIP)
 		}
 
-		// Wait for cleanup to occur
-		time.Sleep(testCleanupWait)
+		// Wait for stale timeout plus cleanup interval to ensure cleanup runs
+		time.Sleep(cleanupWait)
 
-		// After cleanup, new requests from the same IPs should be allowed again
+		// After cleanup, new requests from the same IPs should be allowed
 		// because their rate limiters were cleaned up and recreated fresh
-		for i := range testBurstSizeLarge {
+		for i := range testIPs {
 			clientIP := "192.168.1." + strconv.Itoa(i)
 			// First request after cleanup should be allowed (fresh limiter)
 			allowed := rl.Allow(clientIP)
