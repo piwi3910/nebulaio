@@ -88,7 +88,7 @@ func (g *PresignedURLGenerator) GeneratePresignedURL(params PresignParams) (stri
 	dateStamp := now.Format("20060102")
 
 	credentialScope := fmt.Sprintf("%s/%s/%s/%s", dateStamp, params.Region, serviceS3, requestTypeAWS4)
-	canonicalURI := g.buildCanonicalURI(params.Key)
+	canonicalURI := g.buildCanonicalURI(params.Endpoint, params.Bucket, params.Key)
 	host := g.getHost(params.Endpoint, params.Bucket)
 	signedHeaders := g.buildSignedHeaders(params.Headers)
 
@@ -154,10 +154,21 @@ func (g *PresignedURLGenerator) validateExpiration(expiration time.Duration) (in
 	return expirationSeconds, nil
 }
 
-func (g *PresignedURLGenerator) buildCanonicalURI(key string) string {
-	canonicalURI := "/" + key
-	if key == "" {
-		canonicalURI = "/"
+func (g *PresignedURLGenerator) buildCanonicalURI(endpoint, bucket, key string) string {
+	var canonicalURI string
+
+	if endpoint != "" {
+		// Path-style URL: include bucket in the path
+		canonicalURI = "/" + bucket
+		if key != "" {
+			canonicalURI += "/" + key
+		}
+	} else {
+		// Virtual-hosted style: just the key
+		canonicalURI = "/" + key
+		if key == "" {
+			canonicalURI = "/"
+		}
 	}
 
 	return canonicalURI
