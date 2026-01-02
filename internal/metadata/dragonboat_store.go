@@ -274,7 +274,7 @@ func (s *DragonboatStore) GetObjectVersion(ctx context.Context, bucket, key, ver
 	}
 
 	// Get specific version from version store
-	dbKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, key, versionID))
+	dbKey := fmt.Appendf(nil, "%s%s/%s#%s", prefixObjectVersion, bucket, key, versionID)
 
 	data, err := s.get(dbKey)
 	if err == badger.ErrKeyNotFound {
@@ -320,7 +320,7 @@ func (s *DragonboatStore) ListObjectVersions(ctx context.Context, bucket, prefix
 
 // collectVersionedObjects retrieves all versioned objects from the version store.
 func (s *DragonboatStore) collectVersionedObjects(bucket, prefix, delimiter, keyMarker, versionIDMarker string, maxKeys int, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
-	dbPrefix := []byte(fmt.Sprintf("%s%s/", prefixObjectVersion, bucket))
+	dbPrefix := fmt.Appendf(nil, "%s%s/", prefixObjectVersion, bucket)
 
 	return s.badger.View(func(txn *badger.Txn) error {
 		return s.iterateVersionedObjects(txn, dbPrefix, bucket, prefix, delimiter, keyMarker, versionIDMarker, maxKeys, versions, deleteMarkers, commonPrefixes, prefixSet)
@@ -382,7 +382,7 @@ func (s *DragonboatStore) processVersionedItem(item *badger.Item, dbPrefix []byt
 
 // collectCurrentObjects retrieves current/non-versioned objects from the main object store.
 func (s *DragonboatStore) collectCurrentObjects(bucket, prefix, delimiter string, versions, deleteMarkers *[]*ObjectMeta, commonPrefixes *[]string, prefixSet map[string]bool) error {
-	objPrefix := []byte(fmt.Sprintf("%s%s/", prefixObject, bucket))
+	objPrefix := fmt.Appendf(nil, "%s%s/", prefixObject, bucket)
 
 	return s.badger.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions

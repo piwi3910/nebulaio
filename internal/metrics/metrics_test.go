@@ -397,13 +397,13 @@ func TestRateLimitMetricsRegistration(t *testing.T) {
 }
 
 func BenchmarkRecordRateLimitRequest(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		RecordRateLimitRequest("/api/buckets", true)
 	}
 }
 
 func BenchmarkRateLimitActiveIPs(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		IncrementRateLimitActiveIPs()
 	}
 }

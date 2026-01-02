@@ -170,7 +170,7 @@ func validateStatement(stmt *Statement, index int) error {
 }
 
 // validatePrincipal validates the Principal field.
-func validatePrincipal(principal interface{}, index int) error {
+func validatePrincipal(principal any, index int) error {
 	if principal == nil {
 		return fmt.Errorf("statement %d: Principal is required", index)
 	}
@@ -180,7 +180,7 @@ func validatePrincipal(principal interface{}, index int) error {
 		if p != "*" {
 			return fmt.Errorf("statement %d: invalid Principal string (must be '*')", index)
 		}
-	case map[string]interface{}:
+	case map[string]any:
 		if _, ok := p["AWS"]; !ok {
 			if _, ok := p["Service"]; !ok {
 				return fmt.Errorf("statement %d: Principal must contain 'AWS' or 'Service' key", index)
@@ -194,7 +194,7 @@ func validatePrincipal(principal interface{}, index int) error {
 }
 
 // validateAction validates the Action field.
-func validateAction(action interface{}, index int) error {
+func validateAction(action any, index int) error {
 	if action == nil {
 		return fmt.Errorf("statement %d: Action is required", index)
 	}

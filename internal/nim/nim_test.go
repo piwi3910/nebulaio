@@ -965,7 +965,7 @@ func BenchmarkChat(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		_, _ = client.Chat(context.Background(), req)
 	}
 }

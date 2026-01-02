@@ -601,12 +601,8 @@ func (l *EnhancedAuditLogger) matchesIPs(allowed []string, actual string) bool {
 	if len(allowed) == 0 {
 		return true
 	}
-	for _, ip := range allowed {
-		if ip == actual {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(allowed, actual)
 }
 
 func (l *EnhancedAuditLogger) matchesResults(allowed []Result, actual Result) bool {
