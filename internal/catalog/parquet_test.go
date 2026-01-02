@@ -155,7 +155,7 @@ func TestWriteParquetRecords(t *testing.T) {
 	size, err := writeParquetRecords(&buffer, records)
 
 	require.NoError(t, err, "writeParquetRecords should not fail")
-	assert.Greater(t, size, int64(0), "Expected positive size")
+	assert.Positive(t, size, "Expected positive size")
 	assert.NotEmpty(t, buffer.Bytes(), "Buffer should not be empty")
 
 	// Verify Parquet magic bytes (PAR1)
@@ -232,7 +232,7 @@ func TestWriteParquetIntegration(t *testing.T) {
 	size, err := svc.writeParquet(&buffer, records)
 
 	require.NoError(t, err, "writeParquet integration test should not fail")
-	assert.Greater(t, size, int64(0), "Expected positive size")
+	assert.Positive(t, size, "Expected positive size")
 
 	// Verify buffer contains valid Parquet data
 	data := buffer.Bytes()
@@ -270,7 +270,7 @@ func TestWriteParquetLargeDataset(t *testing.T) {
 	size, err := svc.writeParquet(&buffer, records)
 
 	require.NoError(t, err, "writeParquet with %d records should not fail", numRecords)
-	assert.Greater(t, size, int64(0), "Expected positive size for %d records", numRecords)
+	assert.Positive(t, size, "Expected positive size for %d records", numRecords)
 
 	// Verify Parquet structure
 	data := buffer.Bytes()
@@ -299,5 +299,5 @@ func TestParquetInventoryRecordSchema(t *testing.T) {
 	size, err := writeParquetRecords(&buffer, records)
 
 	require.NoError(t, err, "Failed to write single record")
-	assert.Greater(t, size, int64(0), "Expected positive size")
+	assert.Positive(t, size, "Expected positive size")
 }
