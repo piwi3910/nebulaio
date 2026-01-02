@@ -377,7 +377,7 @@ func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[
 
 	// Build rows
 	for i := range limit {
-		row := make(map[string]interface{})
+		row := make(map[string]any)
 
 		for colName, values := range columnData {
 			idx := offset + i
@@ -393,8 +393,8 @@ func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[
 }
 
 // readColumnChunk reads values from a column chunk.
-func (pr *ParquetReader) readColumnChunk(chunk *ColumnChunk) ([]interface{}, error) {
-	values := make([]interface{}, 0)
+func (pr *ParquetReader) readColumnChunk(chunk *ColumnChunk) ([]any, error) {
+	values := make([]any, 0)
 
 	for _, page := range chunk.Pages {
 		pageValues, err := pr.readPage(page, chunk.Descriptor)

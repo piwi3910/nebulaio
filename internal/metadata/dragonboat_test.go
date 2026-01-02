@@ -877,6 +877,7 @@ func TestAccessKeyOperations(t *testing.T) {
 
 		if key == nil {
 			t.Fatal("Expected access key, got nil")
+			return
 		}
 
 		if key.UserID != "user-123" {
@@ -1283,6 +1284,7 @@ func TestAuditOperations(t *testing.T) {
 
 		if result == nil {
 			t.Fatal("Expected result, got nil")
+			return
 		}
 		// May be empty if store failed
 		if len(result.Events) > 0 {
