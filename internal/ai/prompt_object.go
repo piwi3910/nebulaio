@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/piwi3910/nebulaio/internal/httputil"
 )
 
 // PromptObjectService provides AI/LLM integration for querying objects.
@@ -448,7 +450,7 @@ func (s *PromptObjectService) recordMetrics(req *PromptRequest, resp *PromptResp
 	s.metrics.RequestsByBucket[req.Bucket]++
 }
 
-// Cache methods.
+// Get retrieves a cached prompt response by key.
 func (c *ResponseCache) Get(key string) *PromptResponse {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -505,7 +507,7 @@ func NewOpenAIProvider(apiKey string) *OpenAIProvider {
 	return &OpenAIProvider{
 		apiKey:   apiKey,
 		endpoint: "https://api.openai.com/v1",
-		client:   &http.Client{Timeout: 60 * time.Second},
+		client:   httputil.NewClientWithTimeout(60 * time.Second),
 	}
 }
 
@@ -703,7 +705,7 @@ func NewAnthropicProvider(apiKey string) *AnthropicProvider {
 	return &AnthropicProvider{
 		apiKey:   apiKey,
 		endpoint: "https://api.anthropic.com/v1",
-		client:   &http.Client{Timeout: 60 * time.Second},
+		client:   httputil.NewClientWithTimeout(60 * time.Second),
 	}
 }
 
@@ -857,7 +859,7 @@ func NewOllamaProvider(endpoint string) *OllamaProvider {
 
 	return &OllamaProvider{
 		endpoint: endpoint,
-		client:   &http.Client{Timeout: 120 * time.Second},
+		client:   httputil.NewClientWithTimeout(120 * time.Second),
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/piwi3910/nebulaio/internal/httputil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -294,7 +295,14 @@ func (l *EnhancedAuditLogger) Stop() error {
 	var errs []error
 
 	for _, output := range l.outputs {
-		err := output.Flush(context.Background())
+		// INTENTIONAL: Using context.Background() during shutdown.
+		// The original context has been cancelled, but we still need to flush
+		// any remaining audit events before closing. A short timeout ensures
+		// shutdown completes in reasonable time even if flush is slow.
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := output.Flush(flushCtx)
+		flushCancel()
+
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -1174,7 +1182,7 @@ func newWebhookOutput(cfg OutputConfig) (*WebhookOutput, error) {
 		name:      cfg.Name,
 		url:       cfg.URL,
 		authToken: cfg.AuthToken,
-		client:    &http.Client{Timeout: defaultFlushIntervalSec * time.Second},
+		client:    httputil.NewClientWithTimeout(defaultFlushIntervalSec * time.Second),
 		batch:     make([]*EnhancedAuditEvent, 0, batchSize),
 		batchSize: batchSize,
 	}, nil

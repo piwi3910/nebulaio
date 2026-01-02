@@ -557,8 +557,6 @@ func listObjects(ctx context.Context, client *s3.Client, uri string, recursive b
 	return nil
 }
 
-
-
 // NewCopyCmd creates the cp alias command.
 func NewCopyCmd() *cobra.Command {
 	var recursive bool

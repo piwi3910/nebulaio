@@ -15,15 +15,15 @@ import (
 
 // Default quota constants.
 const (
-	defaultMaxStorageBytes      = 100 * 1024 * 1024 * 1024 * 1024 // 100 TB
-	defaultMaxBuckets           = 100
-	defaultMaxObjectsPerBucket  = 10000000                       // 10 million
-	defaultMaxObjectSize        = 5 * 1024 * 1024 * 1024 * 1024  // 5 TB
-	defaultMaxRequestsPerSecond = 10000
-	defaultMaxConcurrentUploads = 100
-	defaultMaxBandwidthBps      = 10 * 1024 * 1024 * 1024        // 10 Gbps
-	defaultMaxUsers             = 100
-	defaultMaxAccessKeys        = 10
+	defaultMaxStorageBytes       = 100 * 1024 * 1024 * 1024 * 1024 // 100 TB
+	defaultMaxBuckets            = 100
+	defaultMaxObjectsPerBucket   = 10000000                      // 10 million
+	defaultMaxObjectSize         = 5 * 1024 * 1024 * 1024 * 1024 // 5 TB
+	defaultMaxRequestsPerSecond  = 10000
+	defaultMaxConcurrentUploads  = 100
+	defaultMaxBandwidthBps       = 10 * 1024 * 1024 * 1024 // 10 Gbps
+	defaultMaxUsers              = 100
+	defaultMaxAccessKeys         = 10
 	defaultQuotaWarningThreshold = 0.8
 )
 
@@ -213,6 +213,8 @@ func (tm *TenantManager) loadTenants() error {
 		return nil
 	}
 
+	// INTENTIONAL: Using context.Background() during initialization.
+	// This is called when the tenant manager starts, not during request handling.
 	tenants, err := tm.storage.ListTenants(context.Background())
 	if err != nil {
 		return err
@@ -896,7 +898,11 @@ func NewTenantMiddleware(manager *TenantManager) *TenantMiddleware {
 }
 
 // ExtractTenantFromHeader extracts tenant from request headers.
-func (m *TenantMiddleware) ExtractTenantFromHeader(header string, value string) (*Tenant, error) {
+func (m *TenantMiddleware) ExtractTenantFromHeader(
+	ctx context.Context,
+	header string,
+	value string,
+) (*Tenant, error) {
 	var (
 		tenant *Tenant
 		err    error
@@ -904,11 +910,11 @@ func (m *TenantMiddleware) ExtractTenantFromHeader(header string, value string) 
 
 	switch header {
 	case "X-Tenant-ID":
-		tenant, err = m.manager.GetTenant(context.Background(), value)
+		tenant, err = m.manager.GetTenant(ctx, value)
 	case "X-Tenant-Namespace":
-		tenant, err = m.manager.GetTenantByNamespace(context.Background(), value)
+		tenant, err = m.manager.GetTenantByNamespace(ctx, value)
 	case "X-Tenant-Slug":
-		tenant, err = m.manager.GetTenantBySlug(context.Background(), value)
+		tenant, err = m.manager.GetTenantBySlug(ctx, value)
 	default:
 		return nil, fmt.Errorf("unsupported tenant header: %s", header)
 	}

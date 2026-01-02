@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/piwi3910/nebulaio/internal/httputil"
 )
 
 // SpanKind represents the kind of span.
@@ -488,6 +489,9 @@ func (t *Tracer) batchProcessor() {
 
 // exportBatch exports a batch of spans.
 func (t *Tracer) exportBatch(spans []*Span) {
+	// INTENTIONAL: Using context.Background() for background span export.
+	// Spans are collected from completed requests and exported asynchronously.
+	// The original request contexts are no longer valid at export time.
 	ctx := context.Background()
 	for _, exporter := range t.exporters {
 		// Ignore export errors - best effort export
@@ -753,9 +757,7 @@ func NewOTLPExporter(endpoint string, headers map[string]string) *OTLPExporter {
 	return &OTLPExporter{
 		endpoint: endpoint,
 		headers:  headers,
-		client: &http.Client{
-			Timeout: exporterTimeoutSec * time.Second,
-		},
+		client:   httputil.NewClientWithTimeout(exporterTimeoutSec * time.Second),
 	}
 }
 
@@ -782,9 +784,7 @@ type JaegerExporter struct {
 func NewJaegerExporter(endpoint string) *JaegerExporter {
 	return &JaegerExporter{
 		endpoint: endpoint,
-		client: &http.Client{
-			Timeout: exporterTimeoutSec * time.Second,
-		},
+		client:   httputil.NewClientWithTimeout(exporterTimeoutSec * time.Second),
 	}
 }
 
@@ -810,9 +810,7 @@ type ZipkinExporter struct {
 func NewZipkinExporter(endpoint string) *ZipkinExporter {
 	return &ZipkinExporter{
 		endpoint: endpoint,
-		client: &http.Client{
-			Timeout: exporterTimeoutSec * time.Second,
-		},
+		client:   httputil.NewClientWithTimeout(exporterTimeoutSec * time.Second),
 	}
 }
 

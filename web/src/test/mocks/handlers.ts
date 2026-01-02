@@ -218,4 +218,18 @@ export const handlers = [
   http.get('/health', () => {
     return HttpResponse.json({ status: 'ok' });
   }),
+
+  // File upload endpoint - success case
+  http.post('/api/v1/console/buckets/:bucket/objects', async ({ params }) => {
+    const { bucket } = params;
+
+    // Simulate successful upload
+    return HttpResponse.json({
+      key: 'test-file.txt',
+      bucket: bucket as string,
+      size: 1024,
+      etag: '"abc123"',
+      last_modified: new Date().toISOString(),
+    }, { status: 201 });
+  }),
 ];

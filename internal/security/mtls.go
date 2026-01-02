@@ -1,5 +1,6 @@
-// Package security provides mTLS (mutual TLS) for internal communication in NebulaIO
 package security
+
+// mTLS (mutual TLS) for internal communication in NebulaIO
 
 import (
 	"context"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/piwi3910/nebulaio/internal/httputil"
 )
 
 // contextKey is a custom type for context keys to avoid collisions.
@@ -35,9 +37,9 @@ type CertificateType string
 
 // File permission constants.
 const (
-	certDirPermissions   = 0700 // Directory permissions for cert storage
-	certFilePermissions  = 0644 // Public cert file permissions
-	keyFilePermissions   = 0600 // Private key file permissions
+	certDirPermissions  = 0700 // Directory permissions for cert storage
+	certFilePermissions = 0644 // Public cert file permissions
+	keyFilePermissions  = 0600 // Private key file permissions
 )
 
 const (
@@ -542,16 +544,8 @@ func (m *MTLSManager) GetHTTPClient(bundle *CertificateBundle) (*http.Client, er
 		return nil, err
 	}
 
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-		MaxIdleConns:    100,
-		IdleConnTimeout: 90 * time.Second,
-	}
-
-	return &http.Client{
-		Transport: transport,
-		Timeout:   30 * time.Second,
-	}, nil
+	// Use shared httputil for consistent connection pooling
+	return httputil.NewClientWithTLS(30*time.Second, tlsConfig), nil
 }
 
 // CreateHTTPServer creates an HTTP server with mTLS.

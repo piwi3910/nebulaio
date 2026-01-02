@@ -664,7 +664,7 @@ func (s *AdvancedService) TransitionObject(ctx context.Context, bucket, key stri
 	return s.tierManager.TransitionObject(ctx, bucket, key, targetTier)
 }
 
-// Stats returns service statistics.
+// AdvancedServiceStats contains service statistics.
 type AdvancedServiceStats struct {
 	CacheStats         *CacheStats        `json:"cacheStats,omitempty"`
 	AccessTrackerStats AccessTrackerStats `json:"accessTrackerStats"`

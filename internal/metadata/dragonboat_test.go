@@ -1462,7 +1462,7 @@ func TestSnapshotOperations(t *testing.T) {
 			t.Skip("Not leader, skipping snapshot test")
 		}
 
-		err := store.Snapshot()
+		err := store.Snapshot(context.Background())
 		if err != nil {
 			t.Errorf("Failed to create snapshot: %v", err)
 		}

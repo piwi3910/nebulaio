@@ -1,5 +1,6 @@
-// Package gpudirect provides S3 API integration for GPUDirect Storage.
 package gpudirect
+
+// S3 API integration for GPUDirect Storage.
 
 import (
 	"context"

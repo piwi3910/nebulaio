@@ -1,6 +1,7 @@
-// Package security provides security testing for NebulaIO.
-// These tests verify protection against common vulnerabilities.
 package security
+
+// provides security testing for NebulaIO.
+// These tests verify protection against common vulnerabilities.
 
 import (
 	"encoding/base64"

@@ -21,14 +21,14 @@ const (
 type ClusterStore interface {
 	IsLeader() bool
 	LeaderAddress(ctx context.Context) (string, error)
-	AddVoter(nodeID string, raftAddr string) error
-	AddNonvoter(nodeID string, raftAddr string) error
-	RemoveServer(nodeID string) error
-	TransferLeadership(targetID, targetAddr string) error
+	AddVoter(ctx context.Context, nodeID string, raftAddr string) error
+	AddNonvoter(ctx context.Context, nodeID string, raftAddr string) error
+	RemoveServer(ctx context.Context, nodeID string) error
+	TransferLeadership(ctx context.Context, targetID, targetAddr string) error
 	GetServers(ctx context.Context) (map[uint64]string, error)
 	GetClusterConfiguration(ctx context.Context) (*metadata.ClusterConfiguration, error)
 	Stats() map[string]string
-	Snapshot() error
+	Snapshot(ctx context.Context) error
 	LastIndex() (uint64, error)
 	AppliedIndex() (uint64, error)
 }
@@ -187,9 +187,9 @@ func (h *ClusterHandler) AddNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.AsVoter {
-		err = h.store.AddVoter(req.NodeID, req.RaftAddr)
+		err = h.store.AddVoter(r.Context(), req.NodeID, req.RaftAddr)
 	} else {
-		err = h.store.AddNonvoter(req.NodeID, req.RaftAddr)
+		err = h.store.AddNonvoter(r.Context(), req.NodeID, req.RaftAddr)
 	}
 
 	if err != nil {
@@ -227,7 +227,7 @@ func (h *ClusterHandler) RemoveNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.store.RemoveServer(nodeID)
+	err := h.store.RemoveServer(r.Context(), nodeID)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -321,7 +321,7 @@ func (h *ClusterHandler) TransferLeadership(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	transferErr := h.store.TransferLeadership(req.TargetID, targetAddr)
+	transferErr := h.store.TransferLeadership(r.Context(), req.TargetID, targetAddr)
 	if transferErr != nil {
 		writeError(w, transferErr.Error(), http.StatusInternalServerError)
 		return
@@ -397,7 +397,7 @@ func (h *ClusterHandler) TriggerSnapshot(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err := h.store.Snapshot()
+	err := h.store.Snapshot(r.Context())
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

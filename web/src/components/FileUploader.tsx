@@ -134,23 +134,28 @@ export function FileUploader({
 
     setIsUploading(false);
 
-    const successCount = files.filter((f) => f.status === 'completed').length;
-    const errorCount = files.filter((f) => f.status === 'error').length;
+    // Use callback to get current state to avoid stale closure
+    setFiles((currentFiles) => {
+      const successCount = currentFiles.filter((f) => f.status === 'completed').length;
+      const errorCount = currentFiles.filter((f) => f.status === 'error').length;
 
-    if (errorCount === 0) {
-      notifications.show({
-        title: 'Upload complete',
-        message: `Successfully uploaded ${successCount} file(s)`,
-        color: 'green',
-      });
-      onUploadComplete?.();
-    } else {
-      notifications.show({
-        title: 'Upload partially complete',
-        message: `${successCount} succeeded, ${errorCount} failed`,
-        color: 'yellow',
-      });
-    }
+      if (errorCount === 0) {
+        notifications.show({
+          title: 'Upload complete',
+          message: `Successfully uploaded ${successCount} file(s)`,
+          color: 'green',
+        });
+        onUploadComplete?.();
+      } else {
+        notifications.show({
+          title: 'Upload partially complete',
+          message: `${successCount} succeeded, ${errorCount} failed`,
+          color: 'yellow',
+        });
+      }
+
+      return currentFiles;
+    });
   };
 
   const clearCompleted = () => {
@@ -198,7 +203,7 @@ export function FileUploader({
         onReject={handleReject}
         maxSize={maxSize}
         maxFiles={maxFiles}
-        accept={accept ? accept : undefined}
+        accept={accept}
         disabled={isUploading}
         styles={{
           root: {
@@ -298,6 +303,7 @@ export function FileUploader({
                         color="red"
                         size="sm"
                         onClick={() => removeFile(file.id)}
+                        aria-label={`Remove ${file.file.name}`}
                       >
                         <IconX size={14} />
                       </ActionIcon>

@@ -3,13 +3,66 @@ package middleware
 import (
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/piwi3910/nebulaio/internal/metrics"
 	"github.com/rs/zerolog/log"
 )
+
+// uuidPattern matches UUID strings in paths for normalization.
+var uuidPattern = regexp.MustCompile(
+	`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`,
+)
+
+// pluralToSingular maps plural resource names to their singular form for path normalization.
+var pluralToSingular = map[string]string{
+	"buckets":  "bucket",
+	"objects":  "object",
+	"uploads":  "upload",
+	"versions": "version",
+	"users":    "user",
+	"keys":     "key",
+	"policies": "policy",
+	"groups":   "group",
+}
+
+// normalizePath normalizes a URL path for metrics to prevent high cardinality.
+// It replaces dynamic segments like bucket names, object keys, and UUIDs with placeholders.
+func normalizePath(path string) string {
+	// Replace UUIDs with placeholder
+	path = uuidPattern.ReplaceAllString(path, "{id}")
+
+	// Split path into segments
+	segments := strings.Split(path, "/")
+	normalized := make([]string, 0, len(segments))
+
+	for i, segment := range segments {
+		if segment == "" {
+			normalized = append(normalized, segment)
+
+			continue
+		}
+
+		// Check if previous segment indicates this is a dynamic value
+		if i > 0 {
+			prev := segments[i-1]
+			// Look up the singular form from the mapping
+			if singular, ok := pluralToSingular[prev]; ok {
+				normalized = append(normalized, "{"+singular+"}")
+
+				continue
+			}
+		}
+
+		normalized = append(normalized, segment)
+	}
+
+	return strings.Join(normalized, "/")
+}
 
 // Default rate limiting configuration values.
 const (
@@ -230,6 +283,7 @@ func (rl *RateLimiter) cleanup() {
 		lastUsed := limiter.lastUsed.Load()
 		if now-lastUsed > staleTimeout {
 			rl.limiters.Delete(key)
+			metrics.DecrementRateLimitActiveIPs()
 		}
 
 		return true
@@ -260,6 +314,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 
 	if !loaded {
 		log.Debug().Str("ip", ip).Msg("Created new rate limiter")
+		metrics.IncrementRateLimitActiveIPs()
 	}
 
 	return limiter.Allow()
@@ -313,20 +368,25 @@ func RateLimitMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
 
 			// Extract client IP with trusted proxy validation
 			ip := rl.extractClientIP(r)
+			path := r.URL.Path
+			// Normalize path for metrics to prevent high cardinality
+			normalizedPath := normalizePath(path)
 
 			if !rl.Allow(ip) {
 				log.Warn().
 					Str("ip", ip).
-					Str("path", r.URL.Path).
+					Str("path", path).
 					Str("method", r.Method).
 					Msg("Rate limit exceeded")
 
+				metrics.RecordRateLimitRequest(normalizedPath, false)
 				w.Header().Set("Retry-After", "1")
 				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 
 				return
 			}
 
+			metrics.RecordRateLimitRequest(normalizedPath, true)
 			next.ServeHTTP(w, r)
 		})
 	}

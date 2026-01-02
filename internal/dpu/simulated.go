@@ -1,5 +1,6 @@
-// Package dpu provides a simulated BlueField DPU backend for testing.
 package dpu
+
+// a simulated BlueField DPU backend for testing.
 
 import (
 	"bytes"

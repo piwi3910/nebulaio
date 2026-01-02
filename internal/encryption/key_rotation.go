@@ -49,11 +49,11 @@ const (
 
 // Key rotation configuration constants.
 const (
-	defaultRetainVersionsMaster       = 3  // Default versions to retain for master keys
-	defaultRetainVersionsData         = 5  // Default versions to retain for data keys
-	defaultRetainVersionsBucket       = 3  // Default versions to retain for bucket keys
-	defaultReencryptionConcurrency    = 10 // Default concurrency for reencryption jobs
-	minKeyVersionPartsForDeletion     = 2  // Minimum parts needed to identify key version
+	defaultRetainVersionsMaster    = 3  // Default versions to retain for master keys
+	defaultRetainVersionsData      = 5  // Default versions to retain for data keys
+	defaultRetainVersionsBucket    = 3  // Default versions to retain for bucket keys
+	defaultReencryptionConcurrency = 10 // Default concurrency for reencryption jobs
+	minKeyVersionPartsForDeletion  = 2  // Minimum parts needed to identify key version
 )
 
 // KeyAlgorithm represents the encryption algorithm.

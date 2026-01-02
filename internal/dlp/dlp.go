@@ -22,7 +22,7 @@ import (
 type DataType string
 
 const (
-	// PII - Personally Identifiable Information.
+	// DataTypeSSN represents Social Security Number data type (PII).
 	DataTypeSSN           DataType = "ssn"            // Social Security Number
 	DataTypePassport      DataType = "passport"       // Passport Number
 	DataTypeDriverLicense DataType = "driver_license" // Driver's License
@@ -30,34 +30,34 @@ const (
 	DataTypeTaxID         DataType = "tax_id"         // Tax ID
 	DataTypeDateOfBirth   DataType = "date_of_birth"  // Date of Birth
 
-	// Financial.
+	// DataTypeCreditCard represents credit card number data type.
 	DataTypeCreditCard    DataType = "credit_card"    // Credit Card Number
 	DataTypeBankAccount   DataType = "bank_account"   // Bank Account Number
 	DataTypeIBAN          DataType = "iban"           // International Bank Account Number
 	DataTypeSWIFT         DataType = "swift"          // SWIFT/BIC Code
 	DataTypeRoutingNumber DataType = "routing_number" // Bank Routing Number
 
-	// Contact Information.
+	// DataTypeEmail represents email address data type.
 	DataTypeEmail     DataType = "email"      // Email Address
 	DataTypePhone     DataType = "phone"      // Phone Number
 	DataTypeAddress   DataType = "address"    // Physical Address
 	DataTypeIPAddress DataType = "ip_address" // IP Address
 
-	// Healthcare.
+	// DataTypeMedicalRecord represents medical record data type.
 	DataTypeMedicalRecord    DataType = "medical_record"    // Medical Record Number
 	DataTypeHealthInsurance  DataType = "health_insurance"  // Health Insurance ID
 	DataTypeDrugPrescription DataType = "drug_prescription" // Drug/Prescription Info
 
-	// Credentials.
+	// DataTypePassword represents password/credential data type.
 	DataTypePassword       DataType = "password"       // Password
 	DataTypeAPIKey         DataType = "api_key"        // API Key
 	DataTypeCryptocurrency DataType = "cryptocurrency" // Crypto Wallet/Key
 
-	// Legal.
+	// DataTypeLegalCase represents legal case number data type.
 	DataTypeLegalCase DataType = "legal_case" // Legal Case Number
 	DataTypeContract  DataType = "contract"   // Contract Information
 
-	// Custom.
+	// DataTypeCustom represents custom user-defined data type.
 	DataTypeCustom DataType = "custom" // Custom Pattern
 )
 

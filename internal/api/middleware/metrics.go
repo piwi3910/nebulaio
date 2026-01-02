@@ -13,8 +13,8 @@ import (
 
 // HTTP method and operation constants.
 const (
-	methodGET           = "GET"
-	operationUnknown    = "Unknown"
+	methodGET        = "GET"
+	operationUnknown = "Unknown"
 )
 
 // MetricsMiddleware records request metrics.

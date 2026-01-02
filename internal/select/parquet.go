@@ -439,14 +439,14 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 	type readFunc func(io.Reader, *ColumnDescriptor) (interface{}, error)
 
 	readers := map[ParquetType]readFunc{
-		ParquetTypeBoolean:             pr.readBoolean,
-		ParquetTypeInt32:               pr.readInt32,
-		ParquetTypeInt64:               pr.readInt64,
-		ParquetTypeFloat:               pr.readFloat,
-		ParquetTypeDouble:              pr.readDouble,
-		ParquetTypeByteArray:           pr.readByteArray,
-		ParquetTypeFixedLenByteArray:   pr.readFixedLenByteArray,
-		ParquetTypeInt96:               pr.readInt96,
+		ParquetTypeBoolean:           pr.readBoolean,
+		ParquetTypeInt32:             pr.readInt32,
+		ParquetTypeInt64:             pr.readInt64,
+		ParquetTypeFloat:             pr.readFloat,
+		ParquetTypeDouble:            pr.readDouble,
+		ParquetTypeByteArray:         pr.readByteArray,
+		ParquetTypeFixedLenByteArray: pr.readFixedLenByteArray,
+		ParquetTypeInt96:             pr.readInt96,
 	}
 
 	if readFn, ok := readers[desc.Type]; ok {

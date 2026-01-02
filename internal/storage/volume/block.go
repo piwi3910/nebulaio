@@ -141,7 +141,7 @@ type IndexEntry struct {
 	KeyHash       [16]byte
 }
 
-// MarshalSuperblock serializes a Superblock to bytes.
+// Marshal serializes the Superblock to bytes.
 func (s *Superblock) Marshal() []byte {
 	buf := make([]byte, superblockBufferSize)
 	copy(buf[0:8], s.Magic[:])
@@ -204,7 +204,7 @@ func UnmarshalSuperblock(buf []byte) (*Superblock, error) {
 	return s, nil
 }
 
-// MarshalBlockHeader serializes a BlockHeader to bytes.
+// Marshal serializes the BlockHeader to bytes.
 func (h *BlockHeader) Marshal() []byte {
 	buf := make([]byte, BlockHeaderSize)
 	buf[0] = h.Type
@@ -236,7 +236,7 @@ func UnmarshalBlockHeader(buf []byte) (*BlockHeader, error) {
 	return h, nil
 }
 
-// MarshalObjectEntry serializes an ObjectEntry to bytes.
+// Marshal serializes the ObjectEntry to bytes.
 func (e *ObjectEntry) Marshal() []byte {
 	buf := make([]byte, ObjectEntrySize)
 	copy(buf[0:16], e.KeyHash[:])
