@@ -38,7 +38,7 @@ type Config struct {
 	GroupSearch GroupSearchConfig `json:"groupSearch" yaml:"groupSearch"`
 
 	// Connection pool settings
-	Pool PoolConfig `json:"pool,omitempty" yaml:"pool,omitempty"`
+	Pool PoolConfig `json:"pool" yaml:"pool"`
 }
 
 // TLSConfig holds TLS settings for LDAP.

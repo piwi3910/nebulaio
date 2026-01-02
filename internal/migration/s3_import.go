@@ -492,8 +492,7 @@ func (c *S3Client) GetObject(ctx context.Context, bucket, key string) (io.ReadCl
 	metadata := make(map[string]string)
 
 	for k, v := range resp.Header {
-		if strings.HasPrefix(strings.ToLower(k), "x-amz-meta-") {
-			metaKey := strings.TrimPrefix(strings.ToLower(k), "x-amz-meta-")
+		if metaKey, ok := strings.CutPrefix(strings.ToLower(k), "x-amz-meta-"); ok {
 			metadata[metaKey] = v[0]
 		}
 	}

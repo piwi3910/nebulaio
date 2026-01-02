@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -315,13 +316,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 
 // isExcludedPath checks if a path should be excluded from rate limiting.
 func (rl *RateLimiter) isExcludedPath(path string) bool {
-	for _, excluded := range rl.config.ExcludedPaths {
-		if path == excluded {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(rl.config.ExcludedPaths, path)
 }
 
 // isTrustedProxy checks if the given IP is from a trusted proxy.

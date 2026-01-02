@@ -580,7 +580,7 @@ func (sm *stateMachine) preserveOldVersion(txn *badger.Txn, currentKey []byte) e
 		return err
 	}
 
-	oldVersionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID))
+	oldVersionKey := fmt.Appendf(nil, "%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID)
 	return txn.Set(oldVersionKey, oldData)
 }
 
@@ -589,7 +589,7 @@ func (sm *stateMachine) storeVersionHistory(txn *badger.Txn, meta *ObjectMeta) e
 		return nil
 	}
 
-	versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, meta.Bucket, meta.Key, meta.VersionID))
+	versionKey := fmt.Appendf(nil, "%s%s/%s#%s", prefixObjectVersion, meta.Bucket, meta.Key, meta.VersionID)
 
 	versionData, err := json.Marshal(meta)
 	if err != nil {
@@ -632,7 +632,7 @@ func (sm *stateMachine) applyDeleteObjectVersion(bucket, objKey, versionID strin
 }
 
 func (sm *stateMachine) deleteVersionKey(txn *badger.Txn, bucket, objKey, versionID string) error {
-	versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID))
+	versionKey := fmt.Appendf(nil, "%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID)
 	err := txn.Delete(versionKey)
 	if err != nil && err != badger.ErrKeyNotFound {
 		return err

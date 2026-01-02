@@ -228,7 +228,7 @@ func BenchmarkBufferPreallocatedWrite_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		buf := bytes.NewBuffer(make([]byte, 0, len(data)))
 		buf.Write(data)
 	}
@@ -241,7 +241,7 @@ func BenchmarkIOCopy_1KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		src := bytes.NewReader(data)
 		dst := &bytes.Buffer{}
 		io.Copy(dst, src)
@@ -254,7 +254,7 @@ func BenchmarkIOCopy_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		src := bytes.NewReader(data)
 		dst := &bytes.Buffer{}
 		io.Copy(dst, src)
@@ -267,7 +267,7 @@ func BenchmarkIOCopy_10MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		src := bytes.NewReader(data)
 		dst := &bytes.Buffer{}
 		io.Copy(dst, src)
@@ -282,7 +282,7 @@ func BenchmarkIOCopyBuffer_1MB_32KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		src := bytes.NewReader(data)
 		dst := &bytes.Buffer{}
 		io.CopyBuffer(dst, src, buf)
@@ -296,7 +296,7 @@ func BenchmarkIOCopyBuffer_1MB_256KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		src := bytes.NewReader(data)
 		dst := &bytes.Buffer{}
 		io.CopyBuffer(dst, src, buf)

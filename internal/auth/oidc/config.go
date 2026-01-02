@@ -22,7 +22,7 @@ type Config struct {
 	AdminGroups    []string      `json:"adminGroups,omitempty"    yaml:"adminGroups,omitempty"`
 	RequestTimeout time.Duration `json:"requestTimeout"           yaml:"requestTimeout"`
 	// Structs
-	ClaimsMapping       ClaimsMapping    `json:"claimsMapping,omitempty" yaml:"claimsMapping,omitempty"`
+	ClaimsMapping       ClaimsMapping    `json:"claimsMapping" yaml:"claimsMapping"`
 	auth.ProviderConfig `yaml:",inline"` //nolint:embeddedstructfieldcheck // Grouped by size for memory layout
 
 	// Strings
