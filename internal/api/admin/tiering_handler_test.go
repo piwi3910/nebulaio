@@ -705,7 +705,7 @@ func (h *TestTieringHandler) EnableTieringPolicy(w http.ResponseWriter, r *http.
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"id":      id,
 		"enabled": true,
 		"message": "Policy enabled successfully",
@@ -731,7 +731,7 @@ func (h *TestTieringHandler) DisableTieringPolicy(w http.ResponseWriter, r *http
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"id":      id,
 		"enabled": false,
 		"message": "Policy disabled successfully",
@@ -750,7 +750,7 @@ func (h *TestTieringHandler) GetTieringPolicyStats(w http.ResponseWriter, r *htt
 
 	policyStats, err := h.policyStore.GetStats(ctx, id)
 	if err != nil {
-		stats := map[string]interface{}{
+		stats := map[string]any{
 			"policy_id":   policy.ID,
 			"policy_name": policy.Name,
 			"enabled":     policy.Enabled,
@@ -761,7 +761,7 @@ func (h *TestTieringHandler) GetTieringPolicyStats(w http.ResponseWriter, r *htt
 		return
 	}
 
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"policy_id":            policy.ID,
 		"policy_name":          policy.Name,
 		"enabled":              policy.Enabled,
@@ -780,11 +780,11 @@ func (h *TestTieringHandler) GetBucketAccessStats(w http.ResponseWriter, r *http
 	bucket := chi.URLParam(r, "bucket")
 	limit, offset := ParsePaginationParams(r)
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"bucket": bucket,
 		"limit":  limit,
 		"offset": offset,
-		"stats":  []interface{}{},
+		"stats":  []any{},
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -847,7 +847,7 @@ func (h *TestTieringHandler) PutS3Lifecycle(w http.ResponseWriter, r *http.Reque
 
 	h.tierManager.SetS3LifecycleConfiguration(bucket, &config)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"bucket":  bucket,
 		"message": "Lifecycle configuration applied successfully",
 		"rules":   len(config.Rules),
@@ -878,7 +878,7 @@ func (h *TestTieringHandler) GetTieringStatus(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	status := map[string]interface{}{
+	status := map[string]any{
 		"status":           "running",
 		"total_policies":   len(policies),
 		"enabled_policies": enabledCount,
@@ -910,7 +910,7 @@ func (h *TestTieringHandler) GetTieringMetrics(w http.ResponseWriter, r *http.Re
 		totalErrors += stats.Errors
 	}
 
-	metrics := map[string]interface{}{
+	metrics := map[string]any{
 		"total_executions":           totalExecutions,
 		"total_objects_transitioned": totalObjectsTransitioned,
 		"total_bytes_transitioned":   totalBytesTransitioned,
@@ -932,7 +932,7 @@ func (h *TestTieringHandler) GetAccessPrediction(w http.ResponseWriter, r *http.
 
 	prediction := h.predictiveEngine.GetPrediction(bucket, key)
 	if prediction == nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]any{
 			"bucket":  bucket,
 			"key":     key,
 			"message": "Insufficient data for prediction",
@@ -956,7 +956,7 @@ func (h *TestTieringHandler) GetTierRecommendations(w http.ResponseWriter, r *ht
 
 	recommendations := h.predictiveEngine.GetRecommendations(limit)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"recommendations": recommendations,
 		"count":           len(recommendations),
 	})
@@ -976,7 +976,7 @@ func (h *TestTieringHandler) GetHotObjectsPrediction(w http.ResponseWriter, r *h
 
 	hotObjects := h.accessTracker.GetHotObjects(ctx, limit)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"hot_objects": hotObjects,
 		"count":       len(hotObjects),
 	})
@@ -1003,7 +1003,7 @@ func (h *TestTieringHandler) GetAccessAnomalies(w http.ResponseWriter, r *http.R
 
 	anomalies := h.anomalyDetector.GetAnomalies(limit)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"anomalies": anomalies,
 		"count":     len(anomalies),
 	})
@@ -1399,7 +1399,7 @@ func TestGetPolicyStats(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var stats map[string]interface{}
+		var stats map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&stats)
 		require.NoError(t, err)
@@ -1434,7 +1434,7 @@ func TestEnableDisableTieringPolicy(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -1455,7 +1455,7 @@ func TestEnableDisableTieringPolicy(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -1499,7 +1499,7 @@ func TestGetObjectAccessStats(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -1519,7 +1519,7 @@ func TestGetObjectAccessStats(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -1537,7 +1537,7 @@ func TestGetBucketAccessStats(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
@@ -1559,7 +1559,7 @@ func TestGetHotObjects(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
@@ -1581,7 +1581,7 @@ func TestGetColdObjects(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
@@ -1613,7 +1613,7 @@ func TestManualTransition(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -1815,7 +1815,7 @@ func TestSetS3LifecycleConfiguration(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -1906,7 +1906,7 @@ func TestGetAccessPrediction(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -1944,7 +1944,7 @@ func TestGetTierRecommendations(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -1973,7 +1973,7 @@ func TestGetTierRecommendations(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -2005,7 +2005,7 @@ func TestGetAccessAnomalies(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -2022,7 +2022,7 @@ func TestGetAccessAnomalies(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -2050,7 +2050,7 @@ func TestGetAccessAnomalies(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -2081,7 +2081,7 @@ func TestGetTieringStatus(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
@@ -2111,7 +2111,7 @@ func TestGetTieringMetrics(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 
 	err := json.NewDecoder(rr.Body).Decode(&response)
 	require.NoError(t, err)
@@ -2136,7 +2136,7 @@ func TestPaginationParameters(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
@@ -2155,7 +2155,7 @@ func TestPaginationParameters(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		err := json.NewDecoder(rr.Body).Decode(&response)
 		require.NoError(t, err)
