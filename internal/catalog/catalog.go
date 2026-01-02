@@ -871,12 +871,7 @@ func (s *CatalogService) writeJSON(w io.Writer, records []InventoryRecord) (int6
 	return 0, nil
 }
 
-// writeParquet writes records in Parquet format (placeholder - needs parquet library).
-func (s *CatalogService) writeParquet(w io.Writer, records []InventoryRecord) (int64, error) {
-	// TODO: Implement parquet writing using xitongsys/parquet-go
-	// For now, fall back to JSON
-	return s.writeJSON(w, records)
-}
+// writeParquet is implemented in parquet.go with full Parquet format support.
 
 // recordToRow converts a record to a CSV row.
 func (s *CatalogService) recordToRow(rec InventoryRecord, fields []string) []string {

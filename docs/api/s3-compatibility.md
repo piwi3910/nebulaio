@@ -208,7 +208,7 @@ Some AWS-specific features are not applicable or have limited support.
 | Operation | Limitation |
 | ----------- | ------------ |
 | `GetBucketAnalyticsConfiguration` | Basic metrics only |
-| `GetBucketInventoryConfiguration` | Simplified inventory |
+| `GetBucketInventoryConfiguration` | Supports CSV, JSON, Parquet formats |
 | `GetBucketMetricsConfiguration` | Prometheus metrics preferred |
 | `PutBucketIntelligentTieringConfiguration` | Use NebulaIO tiering instead |
 
