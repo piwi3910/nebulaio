@@ -66,7 +66,7 @@ func AssertErrorType(t *testing.T, expected, actual error) {
 
 // AssertEventually waits for a condition to become true within a timeout.
 // Useful for testing async operations.
-func AssertEventually(t *testing.T, condition func() bool, timeout, tick time.Duration, msgAndArgs ...interface{}) {
+func AssertEventually(t *testing.T, condition func() bool, timeout, tick time.Duration, msgAndArgs ...any) {
 	t.Helper()
 
 	deadline := time.Now().Add(timeout)
@@ -87,7 +87,7 @@ func AssertEventually(t *testing.T, condition func() bool, timeout, tick time.Du
 
 // RequireEventually waits for a condition to become true within a timeout.
 // Fails the test immediately if the condition is not met.
-func RequireEventually(t *testing.T, condition func() bool, timeout, tick time.Duration, msgAndArgs ...interface{}) {
+func RequireEventually(t *testing.T, condition func() bool, timeout, tick time.Duration, msgAndArgs ...any) {
 	t.Helper()
 
 	deadline := time.Now().Add(timeout)
@@ -108,7 +108,7 @@ func RequireEventually(t *testing.T, condition func() bool, timeout, tick time.D
 
 // AssertNever asserts that a condition is never true within a duration.
 // Useful for testing that something doesn't happen.
-func AssertNever(t *testing.T, condition func() bool, duration, tick time.Duration, msgAndArgs ...interface{}) {
+func AssertNever(t *testing.T, condition func() bool, duration, tick time.Duration, msgAndArgs ...any) {
 	t.Helper()
 
 	deadline := time.Now().Add(duration)
