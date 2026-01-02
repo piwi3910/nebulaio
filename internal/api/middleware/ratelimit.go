@@ -271,7 +271,7 @@ func (rl *RateLimiter) cleanup() {
 	now := time.Now().UnixNano()
 	staleTimeout := rl.config.StaleTimeout.Nanoseconds()
 
-	rl.limiters.Range(func(key, value interface{}) bool {
+	rl.limiters.Range(func(key, value any) bool {
 		limiter := value.(*TokenBucketLimiter)
 
 		lastUsed := limiter.lastUsed.Load()

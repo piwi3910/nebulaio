@@ -108,7 +108,7 @@ func TestExecuteCSVSelectStar(t *testing.T) {
 	}
 
 	// Verify first record
-	var record map[string]interface{}
+	var record map[string]any
 	err = json.Unmarshal([]byte(lines[0]), &record)
 	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
@@ -130,7 +130,7 @@ func TestExecuteCSVSelectColumns(t *testing.T) {
 		t.Errorf("expected 3 records, got %d", len(lines))
 	}
 
-	var record map[string]interface{}
+	var record map[string]any
 	err = json.Unmarshal([]byte(lines[0]), &record)
 	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
@@ -185,7 +185,7 @@ func TestExecuteCSVCount(t *testing.T) {
 		t.Errorf("expected 1 record for COUNT, got %d", len(lines))
 	}
 
-	var record map[string]interface{}
+	var record map[string]any
 	err = json.Unmarshal([]byte(lines[0]), &record)
 	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
@@ -207,7 +207,7 @@ Gizmo,15,4`
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
 
-	var record map[string]interface{}
+	var record map[string]any
 	err = json.Unmarshal(result.Records, &record)
 	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
@@ -229,7 +229,7 @@ Gizmo,15,4`
 		t.Fatalf("ExecuteCSV failed: %v", err)
 	}
 
-	var record map[string]interface{}
+	var record map[string]any
 	err = json.Unmarshal(result.Records, &record)
 	if err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
@@ -336,7 +336,7 @@ Charlie,35,Chicago`
 		t.Errorf("expected 1 record (Alice), got %d", len(lines))
 	}
 
-	var record map[string]interface{}
+	var record map[string]any
 	json.Unmarshal([]byte(lines[0]), &record)
 
 	if record["name"] != "Alice" {
@@ -368,7 +368,7 @@ Gizmo,15`
 		t.Fatalf("ExecuteCSV MIN failed: %v", err)
 	}
 
-	var record map[string]interface{}
+	var record map[string]any
 	json.Unmarshal(result.Records, &record)
 
 	if record["MIN(price)"] != float64(10) {
@@ -480,7 +480,7 @@ Bob,Simple text`
 		t.Errorf("expected 2 records, got %d", len(lines))
 	}
 
-	var record map[string]interface{}
+	var record map[string]any
 	json.Unmarshal([]byte(lines[0]), &record)
 
 	if record["name"] != "Alice, Jr." {

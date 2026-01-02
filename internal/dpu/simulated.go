@@ -144,7 +144,7 @@ func (b *SimulatedBackend) SelectDPU(index int) (*DPUInfo, error) {
 }
 
 // StartService starts an offload service.
-func (b *SimulatedBackend) StartService(offloadType OffloadType, config interface{}) error {
+func (b *SimulatedBackend) StartService(offloadType OffloadType, config any) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -424,7 +424,7 @@ func (b *SimulatedBackend) Decompress(ctx context.Context, algorithm string, dat
 }
 
 // GetMetrics returns simulated backend metrics.
-func (b *SimulatedBackend) GetMetrics() map[string]interface{} {
+func (b *SimulatedBackend) GetMetrics() map[string]any {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
@@ -433,7 +433,7 @@ func (b *SimulatedBackend) GetMetrics() map[string]interface{} {
 		activeServices = append(activeServices, string(svc))
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"simulated":       true,
 		"dpu_count":       len(b.dpus),
 		"selected_dpu":    b.selectedDPU != nil,

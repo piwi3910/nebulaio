@@ -378,7 +378,7 @@ func (sm *stateMachine) handleDeleteAuditEvent(data []byte) error {
 }
 
 // Lookup performs a read-only query on the state machine.
-func (sm *stateMachine) Lookup(query interface{}) (interface{}, error) {
+func (sm *stateMachine) Lookup(query any) (any, error) {
 	// Dragonboat read queries are not used in our implementation
 	// All reads go directly to BadgerDB
 	return nil, ErrLookupNotSupported

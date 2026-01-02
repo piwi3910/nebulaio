@@ -2993,7 +2993,7 @@ func (h *Handler) PutObjectLegalHold(w http.ResponseWriter, r *http.Request) {
 
 // Helper functions
 
-func writeXML(w http.ResponseWriter, status int, v interface{}) {
+func writeXML(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(xml.Header))

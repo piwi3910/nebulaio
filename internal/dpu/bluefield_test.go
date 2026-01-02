@@ -327,7 +327,7 @@ func TestServiceGetStatus(t *testing.T) {
 	assert.NotNil(t, status["services"])
 	assert.NotNil(t, status["metrics"])
 
-	dpuInfo := status["dpu"].(map[string]interface{})
+	dpuInfo := status["dpu"].(map[string]any)
 	assert.Equal(t, "BlueField-3 DPU", dpuInfo["model"])
 }
 

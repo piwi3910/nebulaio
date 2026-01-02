@@ -165,7 +165,7 @@ func TestRedactTransformer(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		params   map[string]interface{}
+		params   map[string]any
 		contains string
 	}{
 		{
@@ -183,7 +183,7 @@ func TestRedactTransformer(t *testing.T) {
 		{
 			name:     "custom replacement",
 			input:    "Email: test@test.com",
-			params:   map[string]interface{}{"replacement": "***HIDDEN***"},
+			params:   map[string]any{"replacement": "***HIDDEN***"},
 			contains: "***HIDDEN***",
 		},
 	}
@@ -225,7 +225,7 @@ func TestPIIMaskTransformer(t *testing.T) {
 
 	data, _ := io.ReadAll(output)
 
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal result: %v", err)
@@ -260,26 +260,26 @@ func TestFilterFieldsTransformer(t *testing.T) {
 	}`
 
 	tests := []struct {
-		params map[string]interface{}
-		check  func(map[string]interface{}) bool
+		params map[string]any
+		check  func(map[string]any) bool
 		name   string
 	}{
 		{
 			name: "include fields",
-			params: map[string]interface{}{
-				"include": []interface{}{"id", "name"},
+			params: map[string]any{
+				"include": []any{"id", "name"},
 			},
-			check: func(r map[string]interface{}) bool {
+			check: func(r map[string]any) bool {
 				_, hasSecret := r["secret"]
 				return !hasSecret && r["id"] != nil && r["name"] != nil
 			},
 		},
 		{
 			name: "exclude fields",
-			params: map[string]interface{}{
-				"exclude": []interface{}{"secret"},
+			params: map[string]any{
+				"exclude": []any{"secret"},
 			},
-			check: func(r map[string]interface{}) bool {
+			check: func(r map[string]any) bool {
 				_, hasSecret := r["secret"]
 				return !hasSecret && r["id"] != nil
 			},
@@ -295,7 +295,7 @@ func TestFilterFieldsTransformer(t *testing.T) {
 
 			data, _ := io.ReadAll(output)
 
-			var result map[string]interface{}
+			var result map[string]any
 			err = json.Unmarshal(data, &result)
 			if err != nil {
 				t.Fatalf("Failed to unmarshal result: %v", err)
@@ -566,7 +566,7 @@ func TestCompressTransformer(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		params    map[string]interface{}
+		params    map[string]any
 		algorithm string
 	}{
 		{
@@ -576,22 +576,22 @@ func TestCompressTransformer(t *testing.T) {
 		},
 		{
 			name:      "gzip explicit",
-			params:    map[string]interface{}{"algorithm": compressionGzip},
+			params:    map[string]any{"algorithm": compressionGzip},
 			algorithm: compressionGzip,
 		},
 		{
 			name:      "gzip with level",
-			params:    map[string]interface{}{"algorithm": compressionGzip, "level": 9},
+			params:    map[string]any{"algorithm": compressionGzip, "level": 9},
 			algorithm: compressionGzip,
 		},
 		{
 			name:      "zstd",
-			params:    map[string]interface{}{"algorithm": compressionZstd},
+			params:    map[string]any{"algorithm": compressionZstd},
 			algorithm: compressionZstd,
 		},
 		{
 			name:      "zstd with level",
-			params:    map[string]interface{}{"algorithm": compressionZstd, "level": 5},
+			params:    map[string]any{"algorithm": compressionZstd, "level": 5},
 			algorithm: compressionZstd,
 		},
 	}
@@ -653,7 +653,7 @@ func TestCompressTransformer(t *testing.T) {
 
 func TestCompressTransformerUnsupportedAlgorithm(t *testing.T) {
 	transformer := &CompressTransformer{}
-	params := map[string]interface{}{"algorithm": "unsupported"}
+	params := map[string]any{"algorithm": "unsupported"}
 
 	_, _, err := transformer.Transform(context.Background(), strings.NewReader("test"), params)
 	if err == nil {
@@ -671,7 +671,7 @@ func TestDecompressTransformer(t *testing.T) {
 
 	tests := []struct {
 		compress func([]byte) []byte
-		params   map[string]interface{}
+		params   map[string]any
 		name     string
 	}{
 		{
@@ -698,7 +698,7 @@ func TestDecompressTransformer(t *testing.T) {
 
 				return buf.Bytes()
 			},
-			params: map[string]interface{}{"algorithm": compressionGzip},
+			params: map[string]any{"algorithm": compressionGzip},
 		},
 		{
 			name: "zstd auto-detect",
@@ -714,7 +714,7 @@ func TestDecompressTransformer(t *testing.T) {
 				encoder, _ := zstd.NewWriter(nil)
 				return encoder.EncodeAll(data, nil)
 			},
-			params: map[string]interface{}{"algorithm": compressionZstd},
+			params: map[string]any{"algorithm": compressionZstd},
 		},
 	}
 
@@ -753,7 +753,7 @@ func TestDecompressTransformerUncompressedData(t *testing.T) {
 
 func TestDecompressTransformerUnsupportedAlgorithm(t *testing.T) {
 	transformer := &DecompressTransformer{}
-	params := map[string]interface{}{"algorithm": "unsupported"}
+	params := map[string]any{"algorithm": "unsupported"}
 
 	_, _, err := transformer.Transform(context.Background(), strings.NewReader("test"), params)
 	if err == nil {
@@ -826,7 +826,7 @@ func TestDecompressionBombProtection(t *testing.T) {
 			testData := bytes.Repeat([]byte("A"), tc.inputSize)
 			compressedData := tc.compressFunc(testData)
 
-			params := map[string]interface{}{"algorithm": tc.algorithm}
+			params := map[string]any{"algorithm": tc.algorithm}
 			_, _, err := transformer.Transform(context.Background(), bytes.NewReader(compressedData), params)
 
 			if tc.shouldSucceed {
@@ -884,7 +884,7 @@ func TestCompressionSizeLimit(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			testData := bytes.Repeat([]byte("B"), tc.inputSize)
-			params := map[string]interface{}{"algorithm": compressionGzip}
+			params := map[string]any{"algorithm": compressionGzip}
 
 			_, _, err := transformer.Transform(context.Background(), bytes.NewReader(testData), params)
 
@@ -1062,7 +1062,7 @@ func TestStreamingCompressionGzip(t *testing.T) {
 	// Create test data larger than threshold
 	testData := bytes.Repeat([]byte("Hello, World! "), 200) // ~2.8KB
 
-	params := map[string]interface{}{
+	params := map[string]any{
 		"algorithm":      compressionGzip,
 		"content_length": int64(len(testData)),
 	}
@@ -1116,7 +1116,7 @@ func TestStreamingCompressionZstd(t *testing.T) {
 	// Create test data larger than threshold
 	testData := bytes.Repeat([]byte("Hello, World! "), 200) // ~2.8KB
 
-	params := map[string]interface{}{
+	params := map[string]any{
 		"algorithm":      compressionZstd,
 		"content_length": int64(len(testData)),
 	}
@@ -1171,7 +1171,7 @@ func TestStreamingDecompressionGzip(t *testing.T) {
 	testData := bytes.Repeat([]byte("Hello, World! "), 200) // ~2.8KB
 	compressed := compressWithGzip(testData)
 
-	params := map[string]interface{}{
+	params := map[string]any{
 		"algorithm":      compressionGzip,
 		"content_length": int64(len(compressed)),
 	}
@@ -1205,7 +1205,7 @@ func TestStreamingDecompressionZstd(t *testing.T) {
 	testData := bytes.Repeat([]byte("Hello, World! "), 200) // ~2.8KB
 	compressed := compressWithZstd(testData)
 
-	params := map[string]interface{}{
+	params := map[string]any{
 		"algorithm":      compressionZstd,
 		"content_length": int64(len(compressed)),
 	}
@@ -1242,7 +1242,7 @@ func TestStreamingCompressionContextCancellation(t *testing.T) {
 	// Create a context that we'll cancel
 	ctx, cancel := context.WithCancel(context.Background())
 
-	params := map[string]interface{}{
+	params := map[string]any{
 		"algorithm":      compressionGzip,
 		"content_length": int64(len(testData)),
 	}
@@ -1304,7 +1304,7 @@ func TestStreamingDecompressSizeLimitProtection(t *testing.T) {
 	testData := bytes.Repeat([]byte("ABCDEFGH12345678"), 128) // 2KB uncompressed with varied content
 	compressed := compressWithGzip(testData)
 
-	params := map[string]interface{}{
+	params := map[string]any{
 		"algorithm":      compressionGzip,
 		"content_length": int64(len(compressed)),
 	}
@@ -1459,7 +1459,7 @@ func TestStreamingVsBufferedModeSelection(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			params := map[string]interface{}{
+			params := map[string]any{
 				"algorithm":      compressionGzip,
 				"content_length": tc.contentLength,
 			}
@@ -1520,7 +1520,7 @@ func BenchmarkBufferedVsStreamingCompression(b *testing.B) {
 				defer SetStreamingThreshold(originalThreshold)
 
 				transformer := &CompressTransformer{}
-				params := map[string]interface{}{
+				params := map[string]any{
 					"algorithm":      alg,
 					"content_length": int64(size / 2), // Below threshold
 				}
@@ -1545,7 +1545,7 @@ func BenchmarkBufferedVsStreamingCompression(b *testing.B) {
 				defer SetStreamingThreshold(originalThreshold)
 
 				transformer := &CompressTransformer{}
-				params := map[string]interface{}{
+				params := map[string]any{
 					"algorithm":      alg,
 					"content_length": int64(size), // Above threshold
 				}
@@ -1596,7 +1596,7 @@ func BenchmarkBufferedVsStreamingDecompression(b *testing.B) {
 				defer SetStreamingThreshold(originalThreshold)
 
 				transformer := &DecompressTransformer{}
-				params := map[string]interface{}{
+				params := map[string]any{
 					"algorithm":      alg,
 					"content_length": int64(len(compressed) / 2),
 				}
@@ -1621,7 +1621,7 @@ func BenchmarkBufferedVsStreamingDecompression(b *testing.B) {
 				defer SetStreamingThreshold(originalThreshold)
 
 				transformer := &DecompressTransformer{}
-				params := map[string]interface{}{
+				params := map[string]any{
 					"algorithm":      alg,
 					"content_length": int64(len(compressed)),
 				}
@@ -1679,7 +1679,7 @@ func TestStreamingCompressionWithLevel(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			params := map[string]interface{}{
+			params := map[string]any{
 				"algorithm":      tc.algorithm,
 				"level":          tc.level,
 				"content_length": int64(len(testData)),

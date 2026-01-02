@@ -121,7 +121,7 @@ type Transport struct {
 
 // Device represents an RDMA-capable network device.
 type Device struct {
-	_handle       interface{}
+	_handle       any
 	FirmwareVer   string
 	NodeType      string
 	Transport     string
@@ -153,7 +153,7 @@ type PortInfo struct {
 // ProtectionDomain isolates RDMA resources.
 type ProtectionDomain struct {
 	device  *Device
-	_handle interface{} // Reserved for RDMA implementation
+	_handle any // Reserved for RDMA implementation
 }
 
 // MemoryRegion represents registered memory for RDMA operations.
@@ -181,7 +181,7 @@ type MemoryPool struct {
 
 // QueuePair represents an RDMA queue pair for communication.
 type QueuePair struct {
-	_handle    interface{}
+	_handle    any
 	SendCQ     *CompletionQueue
 	RecvCQ     *CompletionQueue
 	State      string
@@ -194,7 +194,7 @@ type QueuePair struct {
 
 // CompletionQueue handles work request completions.
 type CompletionQueue struct {
-	_handle interface{}
+	_handle any
 	channel chan *WorkCompletion
 	Size    int
 	Count   int64
@@ -766,7 +766,7 @@ func (t *Transport) Close() error {
 	}
 
 	// Close all connections
-	t.connections.Range(func(key, value interface{}) bool {
+	t.connections.Range(func(key, value any) bool {
 		_ = t.Disconnect(key.(string))
 		return true
 	})

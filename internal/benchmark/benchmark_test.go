@@ -143,7 +143,7 @@ func BenchmarkLZ4Decompress_1MB(b *testing.B) {
 
 // BenchmarkJSONMarshal benchmarks JSON marshaling.
 func BenchmarkJSONMarshal_SmallObject(b *testing.B) {
-	obj := map[string]interface{}{
+	obj := map[string]any{
 		"id":         "12345",
 		"name":       "test-object",
 		"size":       1024,
@@ -158,9 +158,9 @@ func BenchmarkJSONMarshal_SmallObject(b *testing.B) {
 }
 
 func BenchmarkJSONMarshal_LargeObject(b *testing.B) {
-	items := make([]map[string]interface{}, 1000)
+	items := make([]map[string]any, 1000)
 	for i := range items {
-		items[i] = map[string]interface{}{
+		items[i] = map[string]any{
 			"id":         i,
 			"name":       "test-object",
 			"size":       1024 * i,
@@ -173,7 +173,7 @@ func BenchmarkJSONMarshal_LargeObject(b *testing.B) {
 		}
 	}
 
-	obj := map[string]interface{}{
+	obj := map[string]any{
 		"items": items,
 		"total": len(items),
 	}
@@ -188,7 +188,7 @@ func BenchmarkJSONMarshal_LargeObject(b *testing.B) {
 func BenchmarkJSONUnmarshal_SmallObject(b *testing.B) {
 	data := []byte(`{"id":"12345","name":"test-object","size":1024,"created_at":"2024-01-01T00:00:00Z"}`)
 
-	var obj map[string]interface{}
+	var obj map[string]any
 
 	b.ResetTimer()
 
@@ -330,7 +330,7 @@ func BenchmarkZstdCompress_1MB_Parallel(b *testing.B) {
 }
 
 func BenchmarkJSONMarshal_Parallel(b *testing.B) {
-	obj := map[string]interface{}{
+	obj := map[string]any{
 		"id":         "12345",
 		"name":       "test-object",
 		"size":       1024,

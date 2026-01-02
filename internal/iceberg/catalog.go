@@ -169,9 +169,9 @@ type Schema struct {
 
 // Field represents a schema field.
 type Field struct {
-	Type           interface{} `json:"type"`
-	InitialDefault interface{} `json:"initial-default,omitempty"`
-	WriteDefault   interface{} `json:"write-default,omitempty"`
+	Type           any `json:"type"`
+	InitialDefault any `json:"initial-default,omitempty"`
+	WriteDefault   any `json:"write-default,omitempty"`
 	Name           string      `json:"name"`
 	Doc            string      `json:"doc,omitempty"`
 	ID             int         `json:"id"`

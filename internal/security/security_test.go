@@ -547,7 +547,7 @@ func validateJWTFormat(token string) (bool, error) {
 		return false, assert.AnError
 	}
 
-	var header map[string]interface{}
+	var header map[string]any
 	err = json.Unmarshal(headerBytes, &header)
 	if err != nil {
 		return false, assert.AnError
@@ -561,7 +561,7 @@ func validateJWTFormat(token string) (bool, error) {
 }
 
 func isTokenExpired(payload string) bool {
-	var claims map[string]interface{}
+	var claims map[string]any
 
 	err := json.Unmarshal([]byte(payload), &claims)
 	if err != nil {

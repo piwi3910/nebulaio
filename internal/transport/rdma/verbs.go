@@ -82,7 +82,7 @@ type VerbsBackend interface {
 	PostRDMAWrite(qp VerbsQP, localAddr, remoteAddr uintptr, length int, lkey, rkey uint32) error
 
 	// Metrics
-	GetMetrics() map[string]interface{}
+	GetMetrics() map[string]any
 }
 
 // VerbsContext is a handle to an RDMA verbs context.
@@ -740,8 +740,8 @@ func (b *SimulatedVerbsBackend) PostRDMAWrite(qp VerbsQP, localAddr, remoteAddr 
 	return nil
 }
 
-func (b *SimulatedVerbsBackend) GetMetrics() map[string]interface{} {
-	return map[string]interface{}{
+func (b *SimulatedVerbsBackend) GetMetrics() map[string]any {
+	return map[string]any{
 		"simulated":      true,
 		"devices_opened": atomic.LoadInt64(&b.metrics.DevicesOpened),
 		"pds_created":    atomic.LoadInt64(&b.metrics.PDsCreated),
@@ -979,6 +979,6 @@ func (t *VerbsTransport) PollCompletions(numEntries int) ([]VerbsWorkCompletion,
 }
 
 // GetMetrics returns transport metrics.
-func (t *VerbsTransport) GetMetrics() map[string]interface{} {
+func (t *VerbsTransport) GetMetrics() map[string]any {
 	return t.backend.GetMetrics()
 }

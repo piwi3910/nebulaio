@@ -270,7 +270,7 @@ func (m *MockMultipartService) Reset() {
 // MockEventTarget implements event target for testing.
 type MockEventTarget struct {
 	publishErr error
-	publishFn  func(event interface{}) error
+	publishFn  func(event any) error
 	name       string
 	published  int
 	mu         sync.RWMutex
@@ -302,7 +302,7 @@ func (m *MockEventTarget) SetHealthy(healthy bool) {
 }
 
 // SetPublishFunc sets a custom publish function.
-func (m *MockEventTarget) SetPublishFunc(fn func(event interface{}) error) {
+func (m *MockEventTarget) SetPublishFunc(fn func(event any) error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -310,7 +310,7 @@ func (m *MockEventTarget) SetPublishFunc(fn func(event interface{}) error) {
 }
 
 // Publish publishes an event.
-func (m *MockEventTarget) Publish(event interface{}) error {
+func (m *MockEventTarget) Publish(event any) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

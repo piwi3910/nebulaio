@@ -198,7 +198,7 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Token
 
 // ValidateToken validates a JWT token and returns the claims.
 func (s *Service) ValidateToken(tokenString string) (*TokenClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}

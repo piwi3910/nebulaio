@@ -39,7 +39,7 @@ type Column struct {
 
 // Condition represents a WHERE condition.
 type Condition struct {
-	Right    interface{}
+	Right    any
 	And      *Condition
 	Or       *Condition
 	Left     string
@@ -202,7 +202,7 @@ func (e *Engine) Execute(data []byte, sql string) (*Result, error) {
 
 // Record represents a data record.
 type Record struct {
-	Fields  map[string]interface{}
+	Fields  map[string]any
 	Columns []string // Ordered column names
 }
 
@@ -263,7 +263,7 @@ func (e *Engine) parseCSV(data []byte) ([]Record, error) {
 
 	for i := startRow; i < len(rows); i++ {
 		row := rows[i]
-		fields := make(map[string]interface{})
+		fields := make(map[string]any)
 
 		for j, val := range row {
 			if j < len(headers) {
@@ -308,7 +308,7 @@ func (e *Engine) parseJSONLines(data []byte) ([]Record, error) {
 func (e *Engine) parseJSONLine(line string) []Record {
 	var records []Record
 
-	var obj map[string]interface{}
+	var obj map[string]any
 
 	err := json.Unmarshal([]byte(line), &obj)
 	if err == nil {
@@ -317,7 +317,7 @@ func (e *Engine) parseJSONLine(line string) []Record {
 	}
 
 	// Try as array
-	var arr []interface{}
+	var arr []any
 
 	err = json.Unmarshal([]byte(line), &arr)
 	if err != nil {
@@ -325,7 +325,7 @@ func (e *Engine) parseJSONLine(line string) []Record {
 	}
 
 	for _, item := range arr {
-		if rec, ok := item.(map[string]interface{}); ok {
+		if rec, ok := item.(map[string]any); ok {
 			records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
 		}
 	}
@@ -336,7 +336,7 @@ func (e *Engine) parseJSONLine(line string) []Record {
 func (e *Engine) parseJSONDocument(data []byte) ([]Record, error) {
 	var records []Record
 
-	var obj interface{}
+	var obj any
 
 	err := json.Unmarshal(data, &obj)
 	if err != nil {
@@ -344,11 +344,11 @@ func (e *Engine) parseJSONDocument(data []byte) ([]Record, error) {
 	}
 
 	switch v := obj.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		records = append(records, Record{Fields: v, Columns: getKeys(v)})
-	case []interface{}:
+	case []any:
 		for _, item := range v {
-			if rec, ok := item.(map[string]interface{}); ok {
+			if rec, ok := item.(map[string]any); ok {
 				records = append(records, Record{Fields: rec, Columns: getKeys(rec)})
 			}
 		}
@@ -394,7 +394,7 @@ func (e *Engine) executeQuery(query *Query, records []Record) ([]Record, error) 
 
 // executeAggregates handles aggregate functions.
 func (e *Engine) executeAggregates(query *Query, records []Record) ([]Record, error) {
-	result := Record{Fields: make(map[string]interface{})}
+	result := Record{Fields: make(map[string]any)}
 	columns := make([]string, 0, len(query.Columns))
 
 	for _, col := range query.Columns {
@@ -419,7 +419,7 @@ func (e *Engine) getColumnAlias(col Column) string {
 }
 
 // calculateAggregate dispatches to the appropriate aggregate calculation.
-func (e *Engine) calculateAggregate(col Column, records []Record) interface{} {
+func (e *Engine) calculateAggregate(col Column, records []Record) any {
 	switch strings.ToUpper(col.Function) {
 	case "COUNT":
 		return e.calculateCount(col, records)
@@ -485,7 +485,7 @@ func (e *Engine) calculateAvg(col Column, records []Record) float64 {
 }
 
 // calculateMin finds the minimum numeric value in the specified column.
-func (e *Engine) calculateMin(col Column, records []Record) interface{} {
+func (e *Engine) calculateMin(col Column, records []Record) any {
 	var minVal *float64
 
 	for _, r := range records {
@@ -505,7 +505,7 @@ func (e *Engine) calculateMin(col Column, records []Record) interface{} {
 }
 
 // calculateMax finds the maximum numeric value in the specified column.
-func (e *Engine) calculateMax(col Column, records []Record) interface{} {
+func (e *Engine) calculateMax(col Column, records []Record) any {
 	var maxVal *float64
 
 	for _, r := range records {
@@ -538,9 +538,9 @@ func (e *Engine) formatOutput(records []Record, query *Query) ([]byte, error) {
 	return []byte(output.String()), nil
 }
 
-func (e *Engine) extractColumnValues(record Record, query *Query) ([]string, []interface{}) {
+func (e *Engine) extractColumnValues(record Record, query *Query) ([]string, []any) {
 	var (
-		values []interface{}
+		values []any
 		keys   []string
 	)
 
@@ -575,7 +575,7 @@ func (e *Engine) getColumnName(col Column) string {
 	}
 }
 
-func (e *Engine) getColumnValue(record Record, col Column, name string) interface{} {
+func (e *Engine) getColumnValue(record Record, col Column, name string) any {
 	switch {
 	case col.Function != "":
 		return record.Fields[name]
@@ -587,7 +587,7 @@ func (e *Engine) getColumnValue(record Record, col Column, name string) interfac
 	}
 }
 
-func (e *Engine) writeFormattedRecord(output *strings.Builder, keys []string, values []interface{}) error {
+func (e *Engine) writeFormattedRecord(output *strings.Builder, keys []string, values []any) error {
 	switch e.outputFormat.Type {
 	case formatJSON:
 		return e.writeJSONRecord(output, keys, values)
@@ -599,8 +599,8 @@ func (e *Engine) writeFormattedRecord(output *strings.Builder, keys []string, va
 	}
 }
 
-func (e *Engine) writeJSONRecord(output *strings.Builder, keys []string, values []interface{}) error {
-	obj := make(map[string]interface{})
+func (e *Engine) writeJSONRecord(output *strings.Builder, keys []string, values []any) error {
+	obj := make(map[string]any)
 
 	for i, key := range keys {
 		if i < len(values) {
@@ -619,7 +619,7 @@ func (e *Engine) writeJSONRecord(output *strings.Builder, keys []string, values 
 	return nil
 }
 
-func (e *Engine) writeCSVRecord(output *strings.Builder, values []interface{}) {
+func (e *Engine) writeCSVRecord(output *strings.Builder, values []any) {
 	for i, val := range values {
 		if i > 0 {
 			output.WriteString(e.outputFormat.CSVConfig.FieldDelimiter)
@@ -630,7 +630,7 @@ func (e *Engine) writeCSVRecord(output *strings.Builder, values []interface{}) {
 	output.WriteString(e.outputFormat.CSVConfig.RecordDelimiter)
 }
 
-func (e *Engine) writeDefaultRecord(output *strings.Builder, values []interface{}) error {
+func (e *Engine) writeDefaultRecord(output *strings.Builder, values []any) error {
 	jsonBytes, err := json.Marshal(values)
 	if err != nil {
 		return err
@@ -850,7 +850,7 @@ func parseLeftOperand(leftPart string) string {
 	return left
 }
 
-func parseRightOperand(rightPart, operator string) interface{} {
+func parseRightOperand(rightPart, operator string) any {
 	right := strings.TrimSpace(rightPart)
 	rightLower := strings.ToLower(right)
 
@@ -866,7 +866,7 @@ func parseRightOperand(rightPart, operator string) interface{} {
 	}
 }
 
-func parseNumericOrBoolOrString(value string) interface{} {
+func parseNumericOrBoolOrString(value string) any {
 	f, floatErr := strconv.ParseFloat(value, 64)
 	if floatErr == nil {
 		return f
@@ -926,7 +926,7 @@ func evaluateSingleCondition(cond *Condition, record Record) bool {
 
 // Helper functions
 
-func getKeys(m map[string]interface{}) []string {
+func getKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
@@ -935,7 +935,7 @@ func getKeys(m map[string]interface{}) []string {
 	return keys
 }
 
-func parseValue(s string) interface{} {
+func parseValue(s string) any {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil
@@ -958,7 +958,7 @@ func parseValue(s string) interface{} {
 	return s
 }
 
-func toFloat64(v interface{}) float64 {
+func toFloat64(v any) float64 {
 	switch val := v.(type) {
 	case float64:
 		return val
@@ -980,7 +980,7 @@ func toFloat64(v interface{}) float64 {
 	return 0
 }
 
-func toString(v interface{}) string {
+func toString(v any) string {
 	if v == nil {
 		return ""
 	}
@@ -988,7 +988,7 @@ func toString(v interface{}) string {
 	return fmt.Sprintf("%v", v)
 }
 
-func compareValues(a, b interface{}) int {
+func compareValues(a, b any) int {
 	aFloat := toFloat64(a)
 	bFloat := toFloat64(b)
 
@@ -1022,7 +1022,7 @@ func matchLike(value, pattern string) bool {
 	return matched
 }
 
-func formatCSVValue(v interface{}, config *CSVOutputConfig) string {
+func formatCSVValue(v any, config *CSVOutputConfig) string {
 	s := toString(v)
 	needsQuote := config.QuoteFields == "ALWAYS" ||
 		strings.Contains(s, config.FieldDelimiter) ||

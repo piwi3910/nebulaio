@@ -209,7 +209,7 @@ type GDSBackend interface {
 	Sync(stream uintptr) error
 
 	// GetMetrics returns backend-specific metrics
-	GetMetrics() map[string]interface{}
+	GetMetrics() map[string]any
 }
 
 // NewService creates a new GPUDirect Storage service.

@@ -45,7 +45,7 @@ type Policy struct {
 type Statement struct {
 	Principal    *Principal             `json:"Principal,omitempty"`
 	NotPrincipal *Principal             `json:"NotPrincipal,omitempty"`
-	Condition    map[string]interface{} `json:"Condition,omitempty"`
+	Condition    map[string]any `json:"Condition,omitempty"`
 	Sid          string                 `json:"Sid,omitempty"`
 	Effect       Effect                 `json:"Effect"`
 	Action       StringOrSlice          `json:"Action,omitempty"`
@@ -698,7 +698,7 @@ func (pm *PolicyManager) isValidResource(resource string) bool {
 }
 
 // validateCondition validates condition block.
-func (pm *PolicyManager) validateCondition(condition map[string]interface{}) error {
+func (pm *PolicyManager) validateCondition(condition map[string]any) error {
 	for operator := range condition {
 		// Check base operator or with IfExists suffix
 		baseOp := strings.TrimSuffix(operator, "IfExists")
@@ -723,7 +723,7 @@ func NewPolicyEvaluator(pm *PolicyManager) *PolicyEvaluator {
 // EvaluationContext contains the context for policy evaluation.
 type EvaluationContext struct {
 	RequestTime time.Time
-	Conditions  map[string]interface{}
+	Conditions  map[string]any
 	UserID      string
 	UserArn     string
 	Action      string
@@ -953,9 +953,9 @@ func (pe *PolicyEvaluator) resourceMatches(stmt Statement, resource string) bool
 }
 
 // conditionMatches evaluates condition block.
-func (pe *PolicyEvaluator) conditionMatches(condition map[string]interface{}, evalCtx *EvaluationContext) bool {
+func (pe *PolicyEvaluator) conditionMatches(condition map[string]any, evalCtx *EvaluationContext) bool {
 	for operator, keys := range condition {
-		keysMap, ok := keys.(map[string]interface{})
+		keysMap, ok := keys.(map[string]any)
 		if !ok {
 			return false
 		}
@@ -972,7 +972,7 @@ func (pe *PolicyEvaluator) conditionMatches(condition map[string]interface{}, ev
 }
 
 // getConditionValue gets the actual value for a condition key.
-func (pe *PolicyEvaluator) getConditionValue(key string, evalCtx *EvaluationContext) interface{} {
+func (pe *PolicyEvaluator) getConditionValue(key string, evalCtx *EvaluationContext) any {
 	switch key {
 	case "aws:SourceIp":
 		return evalCtx.SourceIP
@@ -995,7 +995,7 @@ func (pe *PolicyEvaluator) getConditionValue(key string, evalCtx *EvaluationCont
 }
 
 // evaluateCondition evaluates a single condition.
-func (pe *PolicyEvaluator) evaluateCondition(operator string, actual, expected interface{}) bool {
+func (pe *PolicyEvaluator) evaluateCondition(operator string, actual, expected any) bool {
 	// Handle IfExists suffix
 	ifExists := strings.HasSuffix(operator, "IfExists")
 	if ifExists {

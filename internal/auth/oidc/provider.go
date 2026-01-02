@@ -176,7 +176,7 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string) (*auth.User,
 	}
 
 	// Extract claims
-	var claims map[string]interface{}
+	var claims map[string]any
 	err = userInfo.Claims(&claims)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
@@ -213,7 +213,7 @@ func (p *Provider) ValidateToken(ctx context.Context, idToken string) (*auth.Use
 	}
 
 	// Extract claims
-	var claims map[string]interface{}
+	var claims map[string]any
 	err = token.Claims(&claims)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
@@ -366,7 +366,7 @@ func (p *Provider) HandleCallback(ctx context.Context, code, stateValue string) 
 	}
 
 	// Verify nonce
-	var claims map[string]interface{}
+	var claims map[string]any
 	err = idToken.Claims(&claims)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse claims: %w", err)
@@ -409,7 +409,7 @@ type TokenResponse struct {
 }
 
 // claimsToUser converts OIDC claims to an auth.User.
-func (p *Provider) claimsToUser(claims map[string]interface{}) *auth.User {
+func (p *Provider) claimsToUser(claims map[string]any) *auth.User {
 	mapping := p.config.ClaimsMapping
 	user := &auth.User{
 		Provider:   p.Name(),
@@ -428,7 +428,7 @@ func (p *Provider) claimsToUser(claims map[string]interface{}) *auth.User {
 }
 
 // extractUsername extracts username from claims with fallback to sub.
-func (p *Provider) extractUsername(user *auth.User, claims map[string]interface{}, mapping ClaimsMapping) {
+func (p *Provider) extractUsername(user *auth.User, claims map[string]any, mapping ClaimsMapping) {
 	if mapping.Username != "" {
 		if val, ok := claims[mapping.Username].(string); ok {
 			user.Username = val
@@ -442,7 +442,7 @@ func (p *Provider) extractUsername(user *auth.User, claims map[string]interface{
 }
 
 // extractEmail extracts email from claims.
-func (p *Provider) extractEmail(user *auth.User, claims map[string]interface{}, mapping ClaimsMapping) {
+func (p *Provider) extractEmail(user *auth.User, claims map[string]any, mapping ClaimsMapping) {
 	if mapping.Email != "" {
 		if val, ok := claims[mapping.Email].(string); ok {
 			user.Email = val
@@ -451,7 +451,7 @@ func (p *Provider) extractEmail(user *auth.User, claims map[string]interface{}, 
 }
 
 // extractDisplayName extracts display name from claims.
-func (p *Provider) extractDisplayName(user *auth.User, claims map[string]interface{}, mapping ClaimsMapping) {
+func (p *Provider) extractDisplayName(user *auth.User, claims map[string]any, mapping ClaimsMapping) {
 	if mapping.DisplayName != "" {
 		if val, ok := claims[mapping.DisplayName].(string); ok {
 			user.DisplayName = val
@@ -460,27 +460,27 @@ func (p *Provider) extractDisplayName(user *auth.User, claims map[string]interfa
 }
 
 // extractGroups extracts groups from claims.
-func (p *Provider) extractGroups(user *auth.User, claims map[string]interface{}, mapping ClaimsMapping) {
+func (p *Provider) extractGroups(user *auth.User, claims map[string]any, mapping ClaimsMapping) {
 	if mapping.Groups != "" {
 		user.Groups = extractGroups(claims, mapping.Groups)
 	}
 }
 
 // extractProviderID extracts provider ID from sub claim.
-func (p *Provider) extractProviderID(user *auth.User, claims map[string]interface{}) {
+func (p *Provider) extractProviderID(user *auth.User, claims map[string]any) {
 	if sub, ok := claims["sub"].(string); ok {
 		user.ProviderID = sub
 	}
 }
 
 // extractAdditionalAttributes extracts additional mapped attributes.
-func (p *Provider) extractAdditionalAttributes(user *auth.User, claims map[string]interface{}, mapping ClaimsMapping) {
+func (p *Provider) extractAdditionalAttributes(user *auth.User, claims map[string]any, mapping ClaimsMapping) {
 	for key, claimName := range mapping.Additional {
 		if val, ok := claims[claimName]; ok {
 			switch v := val.(type) {
 			case string:
 				user.Attributes[key] = []string{v}
-			case []interface{}:
+			case []any:
 				var strs []string
 				for _, item := range v {
 					if s, ok := item.(string); ok {
@@ -494,7 +494,7 @@ func (p *Provider) extractAdditionalAttributes(user *auth.User, claims map[strin
 }
 
 // extractGroups extracts groups from claims.
-func extractGroups(claims map[string]interface{}, groupsClaim string) []string {
+func extractGroups(claims map[string]any, groupsClaim string) []string {
 	var groups []string
 
 	val, ok := claims[groupsClaim]
@@ -503,7 +503,7 @@ func extractGroups(claims map[string]interface{}, groupsClaim string) []string {
 	}
 
 	switch v := val.(type) {
-	case []interface{}:
+	case []any:
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				groups = append(groups, s)

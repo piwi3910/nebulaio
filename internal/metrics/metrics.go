@@ -745,7 +745,7 @@ func statusCodeToString(status int) string {
 // DragonboatStore is an interface to avoid circular dependencies
 // This should match the relevant methods from internal/metadata.DragonboatStore.
 type DragonboatStore interface {
-	GetNodeHost() interface{} // Returns *dragonboat.NodeHost
+	GetNodeHost() any // Returns *dragonboat.NodeHost
 	IsLeader() bool
 }
 
