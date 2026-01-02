@@ -28,23 +28,7 @@ jobs:
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
 
       - name: Run golangci-lint
-        run: |
-          echo "=== STARTING GOLANGCI-LINT ==="
-          $(go env GOPATH)/bin/golangci-lint version
-          echo "=== RUNNING LINTER ==="
-          $(go env GOPATH)/bin/golangci-lint run --timeout=5m --verbose 2>&1 | tee lint-output.txt || true
-          echo ""
-          echo "=== LINT OUTPUT START ==="
-          cat lint-output.txt
-          echo "=== LINT OUTPUT END ==="
-          echo ""
-          # Check if there were any issues
-          if grep -q "^[a-zA-Z]" lint-output.txt | grep -v "^level=" | grep -v "^INFO" | head -20; then
-            echo "Lint issues found, failing..."
-            exit 1
-          fi
-          # Re-run to get proper exit code
-          $(go env GOPATH)/bin/golangci-lint run --timeout=5m
+        run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m
 
   lint-docs:
     runs-on: ubuntu-latest
