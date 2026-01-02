@@ -1,14 +1,46 @@
 version: "2"
 
 linters:
-  default: none
-  enable:
-    - errcheck
-    - gosimple
-    - ineffassign
-    - staticcheck
-    - unused
-    - typecheck
+  default: all
+  disable:
+    - depguard        # Disabled - requires complex allow-list configuration
+    - modernize       # Disabled - all known issues fixed
+    - err113          # Disabled - dynamic errors acceptable
+    - errchkjson      # Disabled - overly strict
+    - errname         # Disabled - existing conventions
+    - errorlint       # Disabled - too strict
+    - exhaustruct     # Disabled - too strict
+    - varnamelen      # Disabled - too strict
+    - nonamedreturns  # Disabled - named returns intentional
+    - tagalign        # Disabled - formatting preference
+    - tagliatelle     # Disabled - existing naming consistent
+    - testpackage     # Disabled - white-box testing intentional
+    - unparam         # Disabled - interface consistency
+    - wrapcheck       # Disabled - error patterns intentional
+    - lll             # Disabled - long lines unavoidable
+    - funlen          # Disabled - some functions complex
+    - mnd             # Disabled - magic numbers acceptable
+    - revive          # Disabled - overlaps with others
+    - govet           # Disabled - needs review
+    - funcorder       # Disabled - logical ordering
+    - exhaustive      # Disabled - default cases handle
+    - forbidigo       # Disabled - patterns acceptable
+    - forcetypeassert # Disabled - assertions safe
+    - gochecknoglobals # Disabled - globals needed
+    - gocognit        # Disabled - complexity acceptable
+    - interfacebloat  # Disabled - large interfaces intentional
+    - ireturn         # Disabled - returning interfaces intentional
+    - nestif          # Disabled - nesting needed
+    - nilerr          # Disabled - nil errors intentional
+    - nilnil          # Disabled - (nil, nil) intentional
+    - nlreturn        # Disabled - style preference
+    - perfsprint      # Disabled - performance acceptable
+    - prealloc        # Disabled - not always beneficial
+    - thelper         # Disabled - too strict
+    - wastedassign    # Disabled - assignments intentional
+    - wsl             # Disabled - conflicts with gofmt
+    - wsl_v5          # Disabled - conflicts with gofmt
+    - noinlineerr     # Disabled - inline error handling idiomatic
 
   settings:
     cyclop:
