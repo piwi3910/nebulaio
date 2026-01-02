@@ -13,6 +13,7 @@ import (
 )
 
 // Test constants for rate limiting security tests.
+// These values are tuned for CI stability.
 const (
 	testBurstSizeSmall     = 1
 	testBurstSizePair      = 2
