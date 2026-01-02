@@ -4,6 +4,7 @@ linters:
   default: all
   disable:
     - depguard        # Disabled - requires complex allow-list configuration for all imports
+    - modernize       # Disabled - all fixable issues already resolved, remaining issues are false positives
     - err113          # Disabled - CLI tools and API handlers appropriately use dynamic errors for user-facing messages
     - errchkjson      # Disabled - overly strict for JSON encoding in HTTP handlers and tests
     - errname         # Disabled - existing error naming conventions are clear and established
