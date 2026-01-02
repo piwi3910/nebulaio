@@ -126,6 +126,10 @@ interface SwaggerResponseFields {
 
 const MAX_HISTORY_SIZE = 50;
 
+// UI dimension constants
+const HISTORY_SCROLL_HEIGHT = 500;
+const CODE_SNIPPET_SCROLL_HEIGHT = 300;
+
 // Helper function to load history from localStorage
 function loadHistoryFromStorage(): RequestHistoryEntry[] {
   const stored = localStorage.getItem('nebulaio-api-history');
@@ -133,6 +137,7 @@ function loadHistoryFromStorage(): RequestHistoryEntry[] {
     try {
       return JSON.parse(stored) as RequestHistoryEntry[];
     } catch {
+      // Invalid JSON in localStorage, reset to empty array
       return [];
     }
   }
@@ -211,6 +216,7 @@ export function ApiExplorerPage() {
         setCodeSnippets(response.data.snippets || []);
         setCodeModalOpened(true);
       } catch {
+        // Error is intentionally not logged to console as the notification handles user feedback
         notifications.show({
           title: 'Error',
           message: 'Failed to generate code snippets. Please try again.',
@@ -237,6 +243,7 @@ export function ApiExplorerPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch {
+      // Error is intentionally not logged to console as the notification handles user feedback
       notifications.show({
         title: 'Export Failed',
         message: `Failed to export OpenAPI specification as ${format.toUpperCase()}.`,
@@ -293,7 +300,7 @@ export function ApiExplorerPage() {
           path,
         });
       } catch {
-        // Ignore URL parsing errors
+        // URL parsing errors are expected for malformed URLs; silently ignore
       }
     }
 
@@ -438,7 +445,7 @@ export function ApiExplorerPage() {
                     </Stack>
                   </Card>
                 ) : (
-                  <ScrollArea h={500}>
+                  <ScrollArea h={HISTORY_SCROLL_HEIGHT}>
                     <Table striped highlightOnHover>
                       <Table.Thead>
                         <Table.Tr>
@@ -549,7 +556,7 @@ export function ApiExplorerPage() {
                     )}
                   </CopyButton>
                 </Group>
-                <ScrollArea h={300}>
+                <ScrollArea h={CODE_SNIPPET_SCROLL_HEIGHT}>
                   <Code block>{snippet.code}</Code>
                 </ScrollArea>
               </div>

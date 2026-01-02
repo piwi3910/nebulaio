@@ -336,12 +336,21 @@ func TestSanitizeHeaderKey(t *testing.T) {
 		input    string
 		expected string
 	}{
+		// Canonical header keys are Title-Case
 		{"Content-Type", "Content-Type"},
 		{"X-Custom-Header", "X-Custom-Header"},
 		{"Authorization", "Authorization"},
-		{"invalid<key>", "invalidkey"},
-		{"header:with:colons", "headerwithcolons"},
-		{"X_Custom_Header", "X_Custom_Header"},
+		// Invalid characters are removed, then canonicalized
+		{"invalid<key>", "Invalidkey"},
+		{"header:with:colons", "Headerwithcolons"},
+		// Underscores are preserved, then canonicalized
+		{"X_Custom_Header", "X_custom_header"},
+		// Lowercase inputs get canonicalized to Title-Case
+		{"content-type", "Content-Type"},
+		{"x-api-key", "X-Api-Key"},
+		{"authorization", "Authorization"},
+		// Empty input after sanitization
+		{"<>:", ""},
 	}
 
 	for _, tt := range tests {
@@ -350,6 +359,48 @@ func TestSanitizeHeaderKey(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestCanonicalHeaderFormatInSnippets(t *testing.T) {
+	// Test that generated code snippets use canonical header format
+	req := GenerateCodeSnippetsRequest{
+		Method: "GET",
+		URL:    "https://api.example.com/users",
+		Headers: map[string]string{
+			"content-type":   "application/json",
+			"x-api-key":      "test-key",
+			"authorization":  "Bearer token",
+			"x-custom-header": "value",
+		},
+	}
+
+	// Test curl snippet
+	curlResult := generateCurlSnippet(req)
+	assert.Contains(t, curlResult, "Content-Type:")
+	assert.Contains(t, curlResult, "X-Api-Key:")
+	assert.Contains(t, curlResult, "Authorization:")
+	assert.Contains(t, curlResult, "X-Custom-Header:")
+	// Should not contain lowercase versions
+	assert.NotContains(t, curlResult, "content-type:")
+	assert.NotContains(t, curlResult, "x-api-key:")
+
+	// Test JavaScript snippet
+	jsResult := generateJavaScriptSnippet(req)
+	assert.Contains(t, jsResult, "'Content-Type':")
+	assert.Contains(t, jsResult, "'X-Api-Key':")
+	assert.Contains(t, jsResult, "'Authorization':")
+
+	// Test Python snippet
+	pyResult := generatePythonSnippet(req)
+	assert.Contains(t, pyResult, "'Content-Type':")
+	assert.Contains(t, pyResult, "'X-Api-Key':")
+	assert.Contains(t, pyResult, "'Authorization':")
+
+	// Test Go snippet
+	goResult := generateGoSnippet(req)
+	assert.Contains(t, goResult, `"Content-Type"`)
+	assert.Contains(t, goResult, `"X-Api-Key"`)
+	assert.Contains(t, goResult, `"Authorization"`)
 }
 
 func TestGenerateCurlSnippet(t *testing.T) {

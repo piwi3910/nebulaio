@@ -62,7 +62,10 @@ func (h *OpenAPIHandler) convertToJSON() {
 
 	var spec interface{}
 	if err := yaml.Unmarshal(h.specYAML, &spec); err != nil {
-		log.Error().Err(err).Msg("Failed to parse OpenAPI YAML specification")
+		log.Error().
+			Err(err).
+			Int("yaml_size_bytes", len(h.specYAML)).
+			Msg("Failed to parse OpenAPI YAML specification")
 		h.specJSON = []byte("{}")
 
 		return
@@ -73,7 +76,10 @@ func (h *OpenAPIHandler) convertToJSON() {
 
 	jsonBytes, err := json.Marshal(spec)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal OpenAPI specification to JSON")
+		log.Error().
+			Err(err).
+			Int("yaml_size_bytes", len(h.specYAML)).
+			Msg("Failed to marshal OpenAPI specification to JSON")
 		h.specJSON = []byte("{}")
 
 		return
@@ -388,11 +394,17 @@ func escapeGoRawString(s string) (string, bool) {
 	return s, true
 }
 
-// sanitizeHeaderKey removes any characters that could be dangerous in header keys.
+// sanitizeHeaderKey removes any characters that could be dangerous in header keys
+// and returns the canonical HTTP header format (Title-Case).
 var headerKeyRegex = regexp.MustCompile(`[^a-zA-Z0-9\-_]`)
 
 func sanitizeHeaderKey(key string) string {
-	return headerKeyRegex.ReplaceAllString(key, "")
+	sanitized := headerKeyRegex.ReplaceAllString(key, "")
+	if sanitized == "" {
+		return ""
+	}
+	// Apply canonical HTTP header formatting (Title-Case)
+	return http.CanonicalHeaderKey(sanitized)
 }
 
 func generateCurlSnippet(req GenerateCodeSnippetsRequest) string {
