@@ -609,12 +609,8 @@ func (l *EnhancedAuditLogger) matchesResults(allowed []Result, actual Result) bo
 	if len(allowed) == 0 {
 		return true
 	}
-	for _, r := range allowed {
-		if r == actual {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(allowed, actual)
 }
 
 func (l *EnhancedAuditLogger) addIntegrity(event *EnhancedAuditEvent) {

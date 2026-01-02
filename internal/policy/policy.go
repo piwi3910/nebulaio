@@ -204,7 +204,7 @@ func validateAction(action any, index int) error {
 		if !isValidAction(a) {
 			return fmt.Errorf("statement %d: invalid action '%s'", index, a)
 		}
-	case []interface{}:
+	case []any:
 		for _, act := range a {
 			actStr, ok := act.(string)
 			if !ok {
@@ -239,7 +239,7 @@ func isValidAction(action string) bool {
 }
 
 // validateResource validates the Resource field.
-func validateResource(resource interface{}, index int) error {
+func validateResource(resource any, index int) error {
 	if resource == nil {
 		return fmt.Errorf("statement %d: Resource is required", index)
 	}
@@ -249,7 +249,7 @@ func validateResource(resource interface{}, index int) error {
 		if !isValidResource(r) {
 			return fmt.Errorf("statement %d: invalid resource '%s'", index, r)
 		}
-	case []interface{}:
+	case []any:
 		for _, res := range r {
 			resStr, ok := res.(string)
 			if !ok {

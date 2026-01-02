@@ -425,10 +425,10 @@ func (s *DragonboatStore) calculateStartKey(dbPrefix []byte, bucket, keyMarker, 
 	}
 
 	if versionIDMarker != "" {
-		return []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, keyMarker, versionIDMarker))
+		return fmt.Appendf(nil, "%s%s/%s#%s", prefixObjectVersion, bucket, keyMarker, versionIDMarker)
 	}
 
-	return []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, keyMarker))
+	return fmt.Appendf(nil, "%s%s/%s#", prefixObjectVersion, bucket, keyMarker)
 }
 
 func (s *DragonboatStore) parseVersionKey(key, dbPrefix []byte) (objKey, versionID string, shouldContinue bool) {
@@ -599,7 +599,7 @@ func (s *DragonboatStore) CreateMultipartUpload(ctx context.Context, upload *Mul
 }
 
 func (s *DragonboatStore) GetMultipartUpload(ctx context.Context, bucket, key, uploadID string) (*MultipartUpload, error) {
-	dbKey := []byte(fmt.Sprintf("%s%s/%s/%s", prefixMultipart, bucket, key, uploadID))
+	dbKey := fmt.Appendf(nil, "%s%s/%s/%s", prefixMultipart, bucket, key, uploadID)
 
 	data, err := s.get(dbKey)
 	if err == badger.ErrKeyNotFound {
