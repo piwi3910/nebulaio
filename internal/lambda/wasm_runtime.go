@@ -420,15 +420,14 @@ func (w *WASMRuntime) getOrCompileModule(
 	default:
 	}
 
-	// Check cache first (with read lock)
+	// Check cache first (with write lock to atomically update LRU order)
 	if w.config.EnableCaching {
-		w.mu.RLock()
+		w.mu.Lock()
 		if cached, ok := w.moduleCache[cacheKey]; ok {
-			w.mu.RUnlock()
+			// Update LRU order atomically with cache access
+			w.updateCacheOrderLocked(cacheKey)
+			w.mu.Unlock()
 			wasmModuleCacheHits.Inc()
-
-			// Update LRU order (requires write lock)
-			w.updateCacheOrder(cacheKey)
 
 			log.Debug().
 				Str("bucket", bucket).
@@ -437,7 +436,7 @@ func (w *WASMRuntime) getOrCompileModule(
 
 			return cached, nil
 		}
-		w.mu.RUnlock()
+		w.mu.Unlock()
 		wasmModuleCacheMisses.Inc()
 	}
 
@@ -502,14 +501,18 @@ func (w *WASMRuntime) getOrCompileModule(
 		return nil, err
 	}
 
-	return result.(wazero.CompiledModule), nil
+	// Safe type assertion with error handling
+	compiled, ok := result.(wazero.CompiledModule)
+	if !ok {
+		return nil, errors.New("unexpected type from singleflight: expected CompiledModule")
+	}
+
+	return compiled, nil
 }
 
-// updateCacheOrder moves the accessed key to the end of the LRU order.
-func (w *WASMRuntime) updateCacheOrder(cacheKey string) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
+// updateCacheOrderLocked moves the accessed key to the end of the LRU order.
+// Must be called with w.mu held.
+func (w *WASMRuntime) updateCacheOrderLocked(cacheKey string) {
 	// Find and remove the key from its current position
 	for i, key := range w.cacheOrder {
 		if key == cacheKey {
