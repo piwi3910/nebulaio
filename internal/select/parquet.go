@@ -501,7 +501,7 @@ func (pr *ParquetReader) readDouble(reader io.Reader, desc *ColumnDescriptor) (a
 	return val, nil
 }
 
-func (pr *ParquetReader) readByteArray(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readByteArray(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var length int32
 	err := binary.Read(reader, binary.LittleEndian, &length)
 	if err != nil {
@@ -517,7 +517,7 @@ func (pr *ParquetReader) readByteArray(reader io.Reader, desc *ColumnDescriptor)
 	return pr.convertByteArray(data, desc), nil
 }
 
-func (pr *ParquetReader) readFixedLenByteArray(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readFixedLenByteArray(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	data := make([]byte, desc.Precision)
 	_, err := io.ReadFull(reader, data)
 	if err != nil {
@@ -526,7 +526,7 @@ func (pr *ParquetReader) readFixedLenByteArray(reader io.Reader, desc *ColumnDes
 	return pr.convertByteArray(data, desc), nil
 }
 
-func (pr *ParquetReader) readInt96(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readInt96(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	data := make([]byte, 12)
 	_, err := io.ReadFull(reader, data)
 	if err != nil {
