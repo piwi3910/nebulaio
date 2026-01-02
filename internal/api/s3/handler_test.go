@@ -3602,7 +3602,7 @@ func TestPresignedURLWrongHTTPMethod(t *testing.T) {
 }
 
 func TestPresignedURLDisabledAccessKey(t *testing.T) {
-	// skip removed
+	t.Skip("Skip for binary search")
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3651,7 +3651,7 @@ func TestPresignedURLDisabledAccessKey(t *testing.T) {
 // =============================================================================
 
 func TestPresignedURLWithSpecialCharactersInKey(t *testing.T) {
-	// skip removed
+	t.Skip("Skip for binary search")
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3696,7 +3696,7 @@ func TestPresignedURLWithSpecialCharactersInKey(t *testing.T) {
 }
 
 func TestPresignedURLWithQueryParameters(t *testing.T) {
-	// skip removed
+	t.Skip("Skip for binary search")
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3733,7 +3733,7 @@ func TestPresignedURLWithQueryParameters(t *testing.T) {
 }
 
 func TestPresignedURLMultipleURLsSameObject(t *testing.T) {
-	// skip removed
+	t.Skip("Skip for binary search")
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3777,7 +3777,7 @@ func TestPresignedURLMultipleURLsSameObject(t *testing.T) {
 }
 
 func TestPresignedURLMaxExpiration(t *testing.T) {
-	// skip removed
+	t.Skip("Skip for binary search")
 	tc := setupPresignedTestContext(t)
 
 	_, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
@@ -3794,7 +3794,7 @@ func TestPresignedURLMaxExpiration(t *testing.T) {
 }
 
 func TestPresignedURLValidationErrors(t *testing.T) {
-	// skip removed
+	t.Skip("Skip for binary search")
 	tc := setupPresignedTestContext(t)
 
 	tests := []struct {
@@ -3848,7 +3848,7 @@ func TestPresignedURLValidationErrors(t *testing.T) {
 }
 
 func TestPresignedHeadObject(t *testing.T) {
-	// skip removed
+	t.Skip("Skip for binary search")
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
