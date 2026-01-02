@@ -833,7 +833,7 @@ func (sm *stateMachine) applyCreateMultipartUpload(upload *MultipartUpload) erro
 
 func (sm *stateMachine) applyAbortMultipartUpload(bucket, objKey, uploadID string) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		key := []byte(fmt.Sprintf("%s%s/%s/%s", prefixMultipart, bucket, objKey, uploadID))
+		key := fmt.Appendf(nil, "%s%s/%s/%s", prefixMultipart, bucket, objKey, uploadID)
 		return txn.Delete(key)
 	})
 }
@@ -844,7 +844,7 @@ func (sm *stateMachine) applyCompleteMultipartUpload(bucket, objKey, uploadID st
 
 func (sm *stateMachine) applyAddUploadPart(bucket, objKey, uploadID string, part *UploadPart) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		key := []byte(fmt.Sprintf("%s%s/%s/%s", prefixMultipart, bucket, objKey, uploadID))
+		key := fmt.Appendf(nil, "%s%s/%s/%s", prefixMultipart, bucket, objKey, uploadID)
 
 		item, err := txn.Get(key)
 		if err != nil {
@@ -908,7 +908,7 @@ func (sm *stateMachine) applyRemoveNode(nodeID string) error {
 func (sm *stateMachine) applyStoreAuditEvent(event *audit.AuditEvent) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
 		// Use timestamp + ID as key for time-based ordering
-		key := []byte(fmt.Sprintf("%s%s:%s", prefixAudit, event.Timestamp.Format(time.RFC3339Nano), event.ID))
+		key := fmt.Appendf(nil, "%s%s:%s", prefixAudit, event.Timestamp.Format(time.RFC3339Nano), event.ID)
 
 		data, err := json.Marshal(event)
 		if err != nil {

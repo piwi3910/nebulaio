@@ -205,7 +205,7 @@ type WebsiteConfig struct {
 	RedirectAllRequestsTo struct {
 		HostName string `json:"host_name"`
 		Protocol string `json:"protocol"`
-	} `json:"redirect_all_requests_to,omitempty"`
+	} `json:"redirect_all_requests_to"`
 	RoutingRules []WebsiteRoutingRule `json:"routing_rules,omitempty"`
 }
 
@@ -560,7 +560,7 @@ const (
 // AccessKey represents an S3-compatible access key.
 type AccessKey struct {
 	CreatedAt       time.Time `json:"created_at"`
-	LastUsedAt      time.Time `json:"last_used_at,omitempty"`
+	LastUsedAt      time.Time `json:"last_used_at"`
 	AccessKeyID     string    `json:"access_key_id"`
 	SecretAccessKey string    `json:"secret_access_key"`
 	UserID          string    `json:"user_id"`

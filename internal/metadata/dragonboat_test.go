@@ -1708,7 +1708,7 @@ func BenchmarkSnapshotSave(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		var buf strings.Builder
 		sm.SaveSnapshot(&buf, nil, done)
 	}

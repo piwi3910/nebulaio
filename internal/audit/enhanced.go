@@ -585,12 +585,8 @@ func (l *EnhancedAuditLogger) matchesUsers(allowed []string, actual string) bool
 	if len(allowed) == 0 {
 		return true
 	}
-	for _, u := range allowed {
-		if u == actual {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(allowed, actual)
 }
 
 func (l *EnhancedAuditLogger) matchesBuckets(allowed []string, actual string) bool {
