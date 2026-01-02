@@ -688,13 +688,7 @@ func (s *SecretScanner) scanStream(bucket, key string, reader io.Reader) []*Secr
 
 // isAllowed checks if a secret type is allowed.
 func (s *SecretScanner) isAllowed(t SecretType) bool {
-	for _, allowed := range s.config.AllowedTypes {
-		if allowed == t {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(s.config.AllowedTypes, t)
 }
 
 // redactMatch redacts a match for safe display.

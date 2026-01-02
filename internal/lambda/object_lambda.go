@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -327,14 +328,9 @@ func (s *ObjectLambdaService) TransformObject(
 	var transform *ContentTransformation
 
 	for _, tc := range cfg.TransformationConfigurations {
-		for _, action := range tc.Actions {
-			if action == "GetObject" {
-				transform = &tc.ContentTransformation
-				break
-			}
-		}
+		if slices.Contains(tc.Actions, "GetObject") {
+			transform = &tc.ContentTransformation
 
-		if transform != nil {
 			break
 		}
 	}

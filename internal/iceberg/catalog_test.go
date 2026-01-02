@@ -981,6 +981,8 @@ func TestCopyMetadataErrorHandling(t *testing.T) {
 
 		if copied == nil {
 			t.Fatal("copyMetadata should return non-nil for valid metadata")
+
+			return
 		}
 
 		if copied.TableUUID != validMetadata.TableUUID {

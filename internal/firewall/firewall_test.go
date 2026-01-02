@@ -22,6 +22,8 @@ func TestNewFirewall(t *testing.T) {
 
 	if fw == nil {
 		t.Fatal("Firewall is nil")
+
+		return
 	}
 
 	if !fw.config.Enabled {

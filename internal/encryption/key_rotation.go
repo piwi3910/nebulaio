@@ -1171,7 +1171,7 @@ func (krm *KeyRotationManager) ExportKey(ctx context.Context, keyID string) (str
 	}
 
 	// Create export structure (without raw key material)
-	export := map[string]interface{}{
+	export := map[string]any{
 		"id":          key.ID,
 		"alias":       key.Alias,
 		"type":        key.Type,

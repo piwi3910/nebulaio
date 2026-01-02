@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
@@ -71,13 +72,7 @@ func isLocalhost(hostname string) bool {
 		"::",
 	}
 
-	for _, alias := range localhostAliases {
-		if hostname == alias {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(localhostAliases, hostname)
 }
 
 // validateIP checks if an IP address is blocked for SSRF protection.

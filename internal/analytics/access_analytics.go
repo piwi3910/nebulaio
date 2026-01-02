@@ -651,7 +651,7 @@ func (aa *AccessAnalytics) evaluateOperator(fieldValue any, operator string, con
 	}
 }
 
-func (aa *AccessAnalytics) evaluateInOperator(fieldValue, condValue interface{}) bool {
+func (aa *AccessAnalytics) evaluateInOperator(fieldValue, condValue any) bool {
 	values, ok := condValue.([]string)
 	if !ok {
 		return false
@@ -666,7 +666,7 @@ func (aa *AccessAnalytics) evaluateInOperator(fieldValue, condValue interface{})
 	return false
 }
 
-func (aa *AccessAnalytics) evaluateContainsOperator(fieldValue, condValue interface{}) bool {
+func (aa *AccessAnalytics) evaluateContainsOperator(fieldValue, condValue any) bool {
 	s, ok := fieldValue.(string)
 	if !ok {
 		return false
