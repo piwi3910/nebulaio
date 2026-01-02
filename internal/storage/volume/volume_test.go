@@ -449,9 +449,11 @@ func BenchmarkPutSmallObject(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		key := fmt.Sprintf("bench-key-%d", i)
 		vol.Put("bucket", key, bytes.NewReader(data), int64(len(data)))
+		i++
 	}
 }
 
@@ -476,8 +478,10 @@ func BenchmarkGetSmallObject(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		key := fmt.Sprintf("bench-key-%d", i%1000)
 		vol.Get("bucket", key)
+		i++
 	}
 }

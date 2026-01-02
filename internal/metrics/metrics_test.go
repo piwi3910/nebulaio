@@ -345,8 +345,10 @@ func BenchmarkIncrementActiveConnections(b *testing.B) {
 }
 
 func BenchmarkSetStorageStats(b *testing.B) {
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		SetStorageStats(int64(i*1024), int64(1000000))
+		i++
 	}
 }
 

@@ -452,13 +452,15 @@ func BenchmarkRawDeviceWrite(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(4096)
 
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		key := "bench-key-" + string(rune(i%10000))
 
 		err := vol.Put("bench", key, data)
 		if err != nil {
 			b.Fatal(err)
 		}
+		i++
 	}
 }
 
@@ -501,12 +503,14 @@ func BenchmarkRawDeviceRead(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(4096)
 
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		key := "bench-key-" + string(rune(i%1000))
 
 		_, err := vol.Get("bench", key)
 		if err != nil {
 			b.Fatal(err)
 		}
+		i++
 	}
 }

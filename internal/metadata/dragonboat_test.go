@@ -1665,12 +1665,14 @@ func BenchmarkStateMachineUpdate(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		entry := statemachine.Entry{
 			Index: uint64(i + 1),
 			Cmd:   cmdData,
 		}
 		sm.Update(entry)
+		i++
 	}
 }
 
