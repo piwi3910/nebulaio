@@ -474,7 +474,7 @@ func (pr *ParquetReader) readInt32(reader io.Reader, desc *ColumnDescriptor) (an
 	return pr.convertInt32(val, desc), nil
 }
 
-func (pr *ParquetReader) readInt64(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readInt64(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var val int64
 	err := binary.Read(reader, binary.LittleEndian, &val)
 	if err != nil {
@@ -483,7 +483,7 @@ func (pr *ParquetReader) readInt64(reader io.Reader, desc *ColumnDescriptor) (in
 	return pr.convertInt64(val, desc), nil
 }
 
-func (pr *ParquetReader) readFloat(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readFloat(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var val float32
 	err := binary.Read(reader, binary.LittleEndian, &val)
 	if err != nil {
@@ -492,7 +492,7 @@ func (pr *ParquetReader) readFloat(reader io.Reader, desc *ColumnDescriptor) (in
 	return float64(val), nil
 }
 
-func (pr *ParquetReader) readDouble(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readDouble(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var val float64
 	err := binary.Read(reader, binary.LittleEndian, &val)
 	if err != nil {
