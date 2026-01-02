@@ -3219,7 +3219,7 @@ func TestPresignedGetObject(t *testing.T) {
 }
 
 func TestPresignedGetObjectWithExpiration(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3262,7 +3262,7 @@ func TestPresignedGetObjectWithExpiration(t *testing.T) {
 }
 
 func TestPresignedGetObjectNotFound(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3293,7 +3293,7 @@ func TestPresignedGetObjectNotFound(t *testing.T) {
 // =============================================================================
 
 func TestPresignedPutObject(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3331,7 +3331,7 @@ func TestPresignedPutObject(t *testing.T) {
 }
 
 func TestPresignedPutObjectWithContentType(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3361,7 +3361,7 @@ func TestPresignedPutObjectWithContentType(t *testing.T) {
 }
 
 func TestPresignedPutObjectToBucketNotFound(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 
 	presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
@@ -3390,7 +3390,7 @@ func TestPresignedPutObjectToBucketNotFound(t *testing.T) {
 // =============================================================================
 
 func TestPresignedDeleteObject(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3428,7 +3428,7 @@ func TestPresignedDeleteObject(t *testing.T) {
 }
 
 func TestPresignedDeleteObjectNonExistent(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3461,7 +3461,7 @@ func TestPresignedDeleteObjectNonExistent(t *testing.T) {
 // =============================================================================
 
 func TestPresignedURLInvalidAccessKey(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3495,7 +3495,7 @@ func TestPresignedURLInvalidAccessKey(t *testing.T) {
 }
 
 func TestPresignedURLInvalidSignature(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3529,7 +3529,7 @@ func TestPresignedURLInvalidSignature(t *testing.T) {
 }
 
 func TestPresignedURLTamperedSignature(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3565,7 +3565,7 @@ func TestPresignedURLTamperedSignature(t *testing.T) {
 }
 
 func TestPresignedURLWrongHTTPMethod(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3602,7 +3602,7 @@ func TestPresignedURLWrongHTTPMethod(t *testing.T) {
 }
 
 func TestPresignedURLDisabledAccessKey(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3651,7 +3651,7 @@ func TestPresignedURLDisabledAccessKey(t *testing.T) {
 // =============================================================================
 
 func TestPresignedURLWithSpecialCharactersInKey(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3696,7 +3696,7 @@ func TestPresignedURLWithSpecialCharactersInKey(t *testing.T) {
 }
 
 func TestPresignedURLWithQueryParameters(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3733,7 +3733,7 @@ func TestPresignedURLWithQueryParameters(t *testing.T) {
 }
 
 func TestPresignedURLMultipleURLsSameObject(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
@@ -3777,7 +3777,7 @@ func TestPresignedURLMultipleURLsSameObject(t *testing.T) {
 }
 
 func TestPresignedURLMaxExpiration(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 
 	_, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
@@ -3794,7 +3794,7 @@ func TestPresignedURLMaxExpiration(t *testing.T) {
 }
 
 func TestPresignedURLValidationErrors(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 
 	tests := []struct {
@@ -3848,7 +3848,7 @@ func TestPresignedURLValidationErrors(t *testing.T) {
 }
 
 func TestPresignedHeadObject(t *testing.T) {
-	t.Skip("Skip to isolate failure")
+	// skip removed
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 
