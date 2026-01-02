@@ -57,7 +57,7 @@ const (
 type BackupMetadata struct {
 	StartTime       time.Time         `json:"startTime"`
 	PointInTime     time.Time         `json:"pointInTime"`
-	EndTime         time.Time         `json:"endTime,omitempty"`
+	EndTime         time.Time         `json:"endTime"`
 	Tags            map[string]string `json:"tags,omitempty"`
 	Error           string            `json:"error,omitempty"`
 	ParentBackupID  string            `json:"parentBackupId,omitempty"`

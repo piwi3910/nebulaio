@@ -381,14 +381,14 @@ func TestValidateEmail(t *testing.T) {
 // Benchmark tests.
 func BenchmarkValidatePasswordStrength(b *testing.B) {
 	password := testValidPassword
-	for range b.N {
+	for b.Loop() {
 		_ = ValidatePasswordStrength(password)
 	}
 }
 
 func BenchmarkHashPassword(b *testing.B) {
 	password := testValidPassword
-	for range b.N {
+	for b.Loop() {
 		_, _ = HashPassword(password)
 	}
 }

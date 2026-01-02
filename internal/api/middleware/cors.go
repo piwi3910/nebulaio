@@ -185,8 +185,7 @@ func (m *S3CORSMiddleware) areHeadersAllowed(allowedHeaders []string, requestedH
 	}
 
 	// Parse requested headers
-	requested := strings.Split(requestedHeaders, ",")
-	for _, reqHeader := range requested {
+	for reqHeader := range strings.SplitSeq(requestedHeaders, ",") {
 		reqHeader = strings.TrimSpace(strings.ToLower(reqHeader))
 		if reqHeader == "" {
 			continue

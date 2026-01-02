@@ -789,11 +789,11 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 		return nil, decodeErr
 	}
 
-	var responseText string
+	var responseText strings.Builder
 
 	for _, c := range result.Content {
 		if c.Type == "text" {
-			responseText += c.Text
+			responseText.WriteString(c.Text)
 		}
 	}
 
@@ -802,7 +802,7 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 		Bucket:       req.Bucket,
 		Key:          req.Key,
 		Model:        req.Model,
-		Response:     responseText,
+		Response:     responseText.String(),
 		FinishReason: result.StopReason,
 		Usage: &TokenUsage{
 			PromptTokens:     result.Usage.InputTokens,
@@ -1080,10 +1080,7 @@ func (p *ContentProcessor) ChunkContent(content string, chunkSize, overlap int) 
 	var chunks []string
 
 	for i := 0; i < len(content); i += chunkSize - overlap {
-		end := i + chunkSize
-		if end > len(content) {
-			end = len(content)
-		}
+		end := min(i+chunkSize, len(content))
 
 		chunks = append(chunks, content[i:end])
 		if end >= len(content) {
