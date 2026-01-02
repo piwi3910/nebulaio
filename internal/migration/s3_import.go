@@ -949,10 +949,7 @@ func (r *RateLimitedReader) Read(p []byte) (int, error) {
 	}
 
 	// Calculate how much we can read
-	toRead := int64(len(p))
-	if toRead > r.bucket {
-		toRead = r.bucket
-	}
+	toRead := min(int64(len(p)), r.bucket)
 
 	if toRead == 0 {
 		// Wait for bucket to refill

@@ -641,7 +641,7 @@ func (sm *stateMachine) deleteVersionKey(txn *badger.Txn, bucket, objKey, versio
 }
 
 func (sm *stateMachine) getCurrentVersionMeta(txn *badger.Txn, bucket, objKey string) (*ObjectMeta, []byte, error) {
-	currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, objKey))
+	currentKey := fmt.Appendf(nil, "%s%s/%s", prefixObject, bucket, objKey)
 
 	item, err := txn.Get(currentKey)
 	if err != nil {
@@ -664,7 +664,7 @@ func (sm *stateMachine) getCurrentVersionMeta(txn *badger.Txn, bucket, objKey st
 }
 
 func (sm *stateMachine) promoteNextVersion(txn *badger.Txn, bucket, objKey string, currentKey []byte) error {
-	prefix := []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, objKey))
+	prefix := fmt.Appendf(nil, "%s%s/%s#", prefixObjectVersion, bucket, objKey)
 	opts := badger.DefaultIteratorOptions
 	opts.Prefix = prefix
 	opts.Reverse = true
@@ -820,7 +820,7 @@ func (sm *stateMachine) applyDeletePolicy(name string) error {
 
 func (sm *stateMachine) applyCreateMultipartUpload(upload *MultipartUpload) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		key := []byte(fmt.Sprintf("%s%s/%s/%s", prefixMultipart, upload.Bucket, upload.Key, upload.UploadID))
+		key := fmt.Appendf(nil, "%s%s/%s/%s", prefixMultipart, upload.Bucket, upload.Key, upload.UploadID)
 
 		data, err := json.Marshal(upload)
 		if err != nil {

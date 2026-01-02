@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -576,12 +577,8 @@ func (l *EnhancedAuditLogger) matchesEventTypes(allowed []EventType, actual Even
 	if len(allowed) == 0 {
 		return true
 	}
-	for _, et := range allowed {
-		if et == actual {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(allowed, actual)
 }
 
 func (l *EnhancedAuditLogger) matchesUsers(allowed []string, actual string) bool {

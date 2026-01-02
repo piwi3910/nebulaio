@@ -868,7 +868,7 @@ func BenchmarkFirewallEvaluate(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		fw.Evaluate(context.Background(), req)
 	}
 }
@@ -878,7 +878,7 @@ func BenchmarkTokenBucket(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		tb.Allow()
 	}
 }
@@ -888,7 +888,7 @@ func BenchmarkBandwidthTracker(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		bt.TryConsume(1024)
 	}
 }
