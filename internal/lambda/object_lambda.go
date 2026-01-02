@@ -1179,12 +1179,14 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 	algorithm := t.getAlgorithm(params)
 
 	// Track in-flight operations (use auto if algorithm not yet detected)
+	// Use pointer so defer sees updated value after auto-detection
 	metricsAlgorithm := algorithm
 	if metricsAlgorithm == "" {
 		metricsAlgorithm = compressionAlgAuto
 	}
 	metrics.IncrementLambdaOperationsInFlight(metricsAlgorithm)
-	defer metrics.DecrementLambdaOperationsInFlight(metricsAlgorithm)
+	finalAlgorithm := &metricsAlgorithm
+	defer func() { metrics.DecrementLambdaOperationsInFlight(*finalAlgorithm) }()
 
 	useStreaming := t.shouldUseStreaming(params, algorithm)
 
@@ -1200,7 +1202,7 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 		return result, headers, err
 	}
 
-	return t.transformBufferedWithMetrics(ctx, input, algorithm, startTime)
+	return t.transformBufferedWithMetrics(ctx, input, algorithm, startTime, finalAlgorithm)
 }
 
 func (t *DecompressTransformer) getAlgorithm(params map[string]interface{}) string {
@@ -1234,6 +1236,7 @@ func (t *DecompressTransformer) transformBufferedWithMetrics(
 	input io.Reader,
 	algorithm string,
 	startTime time.Time,
+	finalAlgorithm *string,
 ) (io.Reader, map[string]string, error) {
 	maxSize := GetMaxTransformSize()
 	limitedReader := io.LimitReader(input, maxSize+1)
@@ -1271,6 +1274,12 @@ func (t *DecompressTransformer) transformBufferedWithMetrics(
 			// Not compressed data, return as-is (no metrics for non-compressed data)
 			return bytes.NewReader(data), nil, nil
 		}
+
+		// Swap in-flight gauge from "auto" to detected algorithm and update pointer
+		// so defer decrements the correct algorithm label
+		metrics.DecrementLambdaOperationsInFlight(compressionAlgAuto)
+		metrics.IncrementLambdaOperationsInFlight(detectedAlgorithm)
+		*finalAlgorithm = detectedAlgorithm
 	}
 
 	// Record bytes processed (compressed input)

@@ -424,7 +424,7 @@ var (
 			Name: "nebulaio_lambda_compression_operations_total",
 			Help: "Total Lambda compression/decompression operations",
 		},
-		[]string{"algorithm", "direction", "status"},
+		[]string{"algorithm", "operation", "status"},
 	)
 
 	// LambdaCompressionDuration tracks Lambda compression operation duration.
@@ -434,15 +434,15 @@ var (
 			Help:    "Duration of Lambda compression/decompression operations",
 			Buckets: prometheus.ExponentialBuckets(0.001, 2, 12),
 		},
-		[]string{"algorithm", "direction"},
+		[]string{"algorithm", "operation"},
 	)
 
 	// LambdaCompressionRatio tracks compression effectiveness.
 	LambdaCompressionRatio = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "nebulaio_lambda_compression_ratio",
-			Help:    "Compression ratio (original/compressed size)",
-			Buckets: []float64{1.0, 1.5, 2.0, 3.0, 5.0, 10.0, 20.0, 50.0, 100.0},
+			Help:    "Compression ratio (compressed_size / original_size)",
+			Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 		},
 		[]string{"algorithm"},
 	)
@@ -487,7 +487,7 @@ var (
 			Name: "nebulaio_lambda_compression_bytes_processed_total",
 			Help: "Total bytes processed by Lambda compression/decompression operations",
 		},
-		[]string{"algorithm", "direction"},
+		[]string{"algorithm", "operation"},
 	)
 
 	// VolumeCompactionReclaimableBytes tracks bytes that can be reclaimed via compaction.
@@ -840,19 +840,24 @@ func RecordBackupWALSyncFailure() {
 }
 
 // RecordLambdaCompression records a Lambda compression/decompression operation.
-func RecordLambdaCompression(algorithm, direction string, success bool, duration time.Duration, originalSize, compressedSize int64) {
+func RecordLambdaCompression(
+	algorithm, operation string,
+	success bool,
+	duration time.Duration,
+	originalSize, compressedSize int64,
+) {
 	status := "success"
 	if !success {
 		status = "error"
 	}
 
-	LambdaCompressionOperations.WithLabelValues(algorithm, direction, status).Inc()
+	LambdaCompressionOperations.WithLabelValues(algorithm, operation, status).Inc()
 
 	if success {
-		LambdaCompressionDuration.WithLabelValues(algorithm, direction).Observe(duration.Seconds())
+		LambdaCompressionDuration.WithLabelValues(algorithm, operation).Observe(duration.Seconds())
 
-		if direction == "compress" && compressedSize > 0 {
-			ratio := float64(originalSize) / float64(compressedSize)
+		if operation == "compress" && originalSize > 0 {
+			ratio := float64(compressedSize) / float64(originalSize)
 			LambdaCompressionRatio.WithLabelValues(algorithm).Observe(ratio)
 		}
 	}
@@ -884,8 +889,8 @@ func SetLambdaStreamingThreshold(size int64) {
 }
 
 // RecordLambdaBytesProcessed records bytes processed by Lambda operations.
-func RecordLambdaBytesProcessed(algorithm, direction string, bytes int64) {
-	LambdaBytesProcessed.WithLabelValues(algorithm, direction).Add(float64(bytes))
+func RecordLambdaBytesProcessed(algorithm, operation string, bytes int64) {
+	LambdaBytesProcessed.WithLabelValues(algorithm, operation).Add(float64(bytes))
 }
 
 // SetVolumeCompactionReclaimableBytes sets the reclaimable bytes for a volume.

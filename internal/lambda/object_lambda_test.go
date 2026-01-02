@@ -1027,17 +1027,17 @@ func TestCompressTransformerMetrics(t *testing.T) {
 	tests := []struct {
 		name      string
 		algorithm string
-		direction string
+		operation string
 	}{
 		{
 			name:      "gzip compression metrics",
 			algorithm: "gzip",
-			direction: "compress",
+			operation: "compress",
 		},
 		{
 			name:      "zstd compression metrics",
 			algorithm: "zstd",
-			direction: "compress",
+			operation: "compress",
 		},
 	}
 
@@ -1055,7 +1055,7 @@ func TestCompressTransformerMetrics(t *testing.T) {
 
 			// Verify operations counter was incremented
 			opsMetric := metrics.LambdaCompressionOperations.WithLabelValues(
-				tt.algorithm, tt.direction, "success")
+				tt.algorithm, tt.operation, "success")
 			opsCount := testutil.ToFloat64(opsMetric)
 			if opsCount < 1 {
 				t.Errorf("Expected at least 1 successful compression operation for %s, got %v",
@@ -1063,7 +1063,7 @@ func TestCompressTransformerMetrics(t *testing.T) {
 			}
 
 			// Verify bytes processed was recorded
-			bytesProcessed := testutil.ToFloat64(metrics.LambdaBytesProcessed.WithLabelValues(tt.algorithm, tt.direction))
+			bytesProcessed := testutil.ToFloat64(metrics.LambdaBytesProcessed.WithLabelValues(tt.algorithm, tt.operation))
 			if bytesProcessed < float64(len(testData)) {
 				t.Errorf("Expected at least %d bytes processed for %s, got %v", len(testData), tt.algorithm, bytesProcessed)
 			}
