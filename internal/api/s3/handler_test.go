@@ -3695,7 +3695,6 @@ func TestPresignedURLWithSpecialCharactersInKey(t *testing.T) {
 }
 
 func TestPresignedURLWithQueryParameters(t *testing.T) {
-	t.Skip("Skip for binary search")
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
 

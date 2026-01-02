@@ -159,15 +159,17 @@ func (g *PresignedURLGenerator) buildCanonicalURI(endpoint, bucket, key string) 
 
 	if endpoint != "" {
 		// Path-style URL: include bucket in the path
+		// Bucket names don't need encoding, but keys do (except for slashes)
 		canonicalURI = "/" + bucket
 		if key != "" {
-			canonicalURI += "/" + key
+			canonicalURI += "/" + awsURIEncode(key, false)
 		}
 	} else {
 		// Virtual-hosted style: just the key
-		canonicalURI = "/" + key
 		if key == "" {
 			canonicalURI = "/"
+		} else {
+			canonicalURI = "/" + awsURIEncode(key, false)
 		}
 	}
 
@@ -302,7 +304,8 @@ func (g *PresignedURLGenerator) buildURL(endpoint, bucket, key string, queryPara
 
 	path := ""
 	if key != "" {
-		path = "/" + url.PathEscape(key)
+		// Use AWS URI encoding (don't encode slashes in object keys)
+		path = "/" + awsURIEncode(key, false)
 	}
 
 	return baseURL + path + "?" + g.buildCanonicalQueryString(queryParams)
@@ -458,9 +461,15 @@ func ValidatePresignedSignature(r *http.Request, info *PresignedURLInfo, secretK
 	credentialScope := fmt.Sprintf("%s/%s/%s/%s", info.DateStamp, info.Region, info.Service, requestTypeAWS4)
 
 	// Get the canonical URI (path)
+	// r.URL.Path is decoded, so we need to re-encode it using AWS URI encoding
+	// to match the encoding used when generating the signature.
+	// Don't encode slashes as they are path separators in S3 object keys.
 	canonicalURI := r.URL.Path
 	if canonicalURI == "" {
 		canonicalURI = "/"
+	} else {
+		// Re-encode the path using AWS URI encoding rules
+		canonicalURI = awsURIEncodePath(canonicalURI)
 	}
 
 	// Build canonical headers from request
@@ -574,4 +583,36 @@ func hmacSHA256Hex(key, data []byte) string {
 func sha256Hex(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
+}
+
+// awsURIEncode encodes a string per AWS URI encoding rules.
+// AWS requires encoding all characters except unreserved characters: A-Z, a-z, 0-9, '-', '.', '_', '~'.
+// For S3, forward slashes in object keys should NOT be encoded.
+func awsURIEncode(s string, encodeSlash bool) string {
+	var result strings.Builder
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if isAWSUnreservedChar(c) || (!encodeSlash && c == '/') {
+			result.WriteByte(c)
+		} else {
+			result.WriteString(fmt.Sprintf("%%%02X", c))
+		}
+	}
+
+	return result.String()
+}
+
+// awsURIEncodePath encodes a URL path per AWS URI encoding rules.
+// This is a convenience wrapper that encodes the path without encoding slashes.
+func awsURIEncodePath(path string) string {
+	return awsURIEncode(path, false)
+}
+
+// isAWSUnreservedChar checks if a character is an AWS unreserved character.
+func isAWSUnreservedChar(c byte) bool {
+	return (c >= 'A' && c <= 'Z') ||
+		(c >= 'a' && c <= 'z') ||
+		(c >= '0' && c <= '9') ||
+		c == '-' || c == '.' || c == '_' || c == '~'
 }
