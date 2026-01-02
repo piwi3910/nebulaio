@@ -409,13 +409,13 @@ func (pr *ParquetReader) readColumnChunk(chunk *ColumnChunk) ([]any, error) {
 }
 
 // readPage reads values from a data page.
-func (pr *ParquetReader) readPage(page *Page, desc *ColumnDescriptor) ([]interface{}, error) {
+func (pr *ParquetReader) readPage(page *Page, desc *ColumnDescriptor) ([]any, error) {
 	data := page.Data
 
 	// Decompress if needed
 	// (Simplified - real implementation would check metadata)
 
-	values := make([]interface{}, 0, page.NumValues)
+	values := make([]any, 0, page.NumValues)
 
 	reader := bytes.NewReader(data)
 	for range page.NumValues {
@@ -435,7 +435,7 @@ func (pr *ParquetReader) readPage(page *Page, desc *ColumnDescriptor) ([]interfa
 }
 
 // readValue reads a single value based on the column type.
-func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	type readFunc func(io.Reader, *ColumnDescriptor) (interface{}, error)
 
 	readers := map[ParquetType]readFunc{

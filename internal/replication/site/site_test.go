@@ -199,6 +199,7 @@ func TestConfigHelpers(t *testing.T) {
 		site := cfg.GetSite("remote1")
 		if site == nil {
 			t.Fatal("should find site remote1")
+			return
 		}
 
 		if site.Name != "remote1" {
