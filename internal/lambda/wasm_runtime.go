@@ -563,12 +563,13 @@ func (w *WASMRuntime) evictIfNeeded() {
 }
 
 // executeTransformation runs the WASM transformation function.
+// Note: metadata parameter is reserved for future use to pass object metadata to WASM modules.
 func (w *WASMRuntime) executeTransformation(
 	ctx context.Context,
 	compiledModule wazero.CompiledModule,
 	functionName string,
 	inputData []byte,
-	metadata map[string]string,
+	_ map[string]string, // metadata reserved for future use
 ) ([]byte, map[string]string, error) {
 	startTime := time.Now()
 
