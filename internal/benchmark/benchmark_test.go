@@ -192,7 +192,7 @@ func BenchmarkJSONUnmarshal_SmallObject(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		json.Unmarshal(data, &obj)
 	}
 }
@@ -204,7 +204,7 @@ func BenchmarkBufferWrite_1KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		var buf bytes.Buffer
 		buf.Write(data)
 	}
@@ -216,7 +216,7 @@ func BenchmarkBufferWrite_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		var buf bytes.Buffer
 		buf.Write(data)
 	}

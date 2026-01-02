@@ -97,7 +97,7 @@ type MigrationConfig struct {
 // MigrationJob represents a migration job.
 type MigrationJob struct {
 	StartTime time.Time          `json:"startTime"`
-	EndTime   time.Time          `json:"endTime,omitempty"`
+	EndTime   time.Time          `json:"endTime"`
 	Config    *MigrationConfig   `json:"config"`
 	Progress  *MigrationProgress `json:"progress"`
 	Resume    *ResumeState       `json:"resume,omitempty"`

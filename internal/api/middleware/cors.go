@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -178,10 +179,8 @@ func (m *S3CORSMiddleware) areHeadersAllowed(allowedHeaders []string, requestedH
 	}
 
 	// Check for wildcard
-	for _, h := range allowedHeaders {
-		if h == "*" {
-			return true
-		}
+	if slices.Contains(allowedHeaders, "*") {
+		return true
 	}
 
 	// Parse requested headers

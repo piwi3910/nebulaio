@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -105,9 +106,7 @@ func (m *MockObjectStore) GetObject(ctx context.Context, bucket, key string) (io
 	metadata := map[string]string{
 		"Content-Type": obj.contentType,
 	}
-	for k, v := range obj.metadata {
-		metadata[k] = v
-	}
+	maps.Copy(metadata, obj.metadata)
 
 	return io.NopCloser(bytes.NewReader(obj.data)), metadata, nil
 }

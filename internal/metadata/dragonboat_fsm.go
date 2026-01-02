@@ -520,7 +520,7 @@ func (sm *stateMachine) applyUpdateBucket(bucket *Bucket) error {
 
 func (sm *stateMachine) applyPutObjectMeta(meta *ObjectMeta) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		key := []byte(fmt.Sprintf("%s%s/%s", prefixObject, meta.Bucket, meta.Key))
+		key := fmt.Appendf(nil, "%s%s/%s", prefixObject, meta.Bucket, meta.Key)
 
 		data, err := json.Marshal(meta)
 		if err != nil {
@@ -533,14 +533,14 @@ func (sm *stateMachine) applyPutObjectMeta(meta *ObjectMeta) error {
 
 func (sm *stateMachine) applyDeleteObjectMeta(bucket, objKey string) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		key := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, objKey))
+		key := fmt.Appendf(nil, "%s%s/%s", prefixObject, bucket, objKey)
 		return txn.Delete(key)
 	})
 }
 
 func (sm *stateMachine) applyPutObjectMetaVersioned(meta *ObjectMeta, preserveOldVersions bool) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, meta.Bucket, meta.Key))
+		currentKey := fmt.Appendf(nil, "%s%s/%s", prefixObject, meta.Bucket, meta.Key)
 
 		if preserveOldVersions {
 			if err := sm.preserveOldVersion(txn, currentKey); err != nil {

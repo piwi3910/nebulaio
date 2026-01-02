@@ -35,7 +35,7 @@ type Config struct {
 	UserSearch UserSearchConfig `json:"userSearch" yaml:"userSearch"`
 
 	// Group search configuration
-	GroupSearch GroupSearchConfig `json:"groupSearch,omitempty" yaml:"groupSearch,omitempty"`
+	GroupSearch GroupSearchConfig `json:"groupSearch" yaml:"groupSearch"`
 
 	// Connection pool settings
 	Pool PoolConfig `json:"pool,omitempty" yaml:"pool,omitempty"`
