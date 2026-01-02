@@ -316,12 +316,13 @@ func (w *WASMRuntime) Transform(
 	// Track input bytes
 	wasmInputBytes.Add(float64(len(inputData)))
 
-	// Check if streaming should be used for large inputs
+	// Log when input exceeds streaming threshold (currently processed in-memory)
+	// Future optimization: implement true streaming for large inputs
 	if int64(len(inputData)) > w.config.StreamingThreshold {
 		log.Debug().
 			Int("input_size", len(inputData)).
 			Int64("streaming_threshold", w.config.StreamingThreshold).
-			Msg("Using streaming mode for large WASM transformation")
+			Msg("Processing large input for WASM transformation")
 	}
 
 	// Load and compile module

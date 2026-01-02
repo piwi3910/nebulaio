@@ -9,6 +9,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestNewWASMRuntime tests the creation of a new WASM runtime.
@@ -40,23 +43,20 @@ func TestNewWASMRuntime(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runtime, err := NewWASMRuntime(ctx, tt.config)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewWASMRuntime() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
 
 				return
 			}
 
-			if runtime != nil {
-				defer func() {
-					if closeErr := runtime.Close(ctx); closeErr != nil {
-						t.Errorf("Failed to close runtime: %v", closeErr)
-					}
-				}()
+			require.NoError(t, err)
+			require.NotNil(t, runtime)
 
-				if runtime.closed.Load() {
-					t.Error("Runtime should not be closed after creation")
-				}
-			}
+			defer func() {
+				require.NoError(t, runtime.Close(ctx))
+			}()
+
+			assert.False(t, runtime.closed.Load(), "Runtime should not be closed after creation")
 		})
 	}
 }
@@ -65,29 +65,12 @@ func TestNewWASMRuntime(t *testing.T) {
 func TestDefaultWASMRuntimeConfig(t *testing.T) {
 	config := DefaultWASMRuntimeConfig()
 
-	if config.MaxMemoryMB != 256 {
-		t.Errorf("Expected MaxMemoryMB = 256, got %d", config.MaxMemoryMB)
-	}
-
-	if config.MaxExecutionTime != 30*time.Second {
-		t.Errorf("Expected MaxExecutionTime = 30s, got %v", config.MaxExecutionTime)
-	}
-
-	if config.MaxInputSize != 100*1024*1024 {
-		t.Errorf("Expected MaxInputSize = 100MB, got %d", config.MaxInputSize)
-	}
-
-	if config.MaxOutputSize != 100*1024*1024 {
-		t.Errorf("Expected MaxOutputSize = 100MB, got %d", config.MaxOutputSize)
-	}
-
-	if !config.EnableCaching {
-		t.Error("Expected EnableCaching = true")
-	}
-
-	if config.StreamingThreshold != 10*1024*1024 {
-		t.Errorf("Expected StreamingThreshold = 10MB, got %d", config.StreamingThreshold)
-	}
+	assert.Equal(t, 256, config.MaxMemoryMB)
+	assert.Equal(t, 30*time.Second, config.MaxExecutionTime)
+	assert.Equal(t, int64(100*1024*1024), config.MaxInputSize)
+	assert.Equal(t, int64(100*1024*1024), config.MaxOutputSize)
+	assert.True(t, config.EnableCaching)
+	assert.Equal(t, int64(10*1024*1024), config.StreamingThreshold)
 }
 
 // TestWASMRuntimeClose tests closing the runtime.
@@ -95,26 +78,16 @@ func TestWASMRuntimeClose(t *testing.T) {
 	ctx := context.Background()
 
 	runtime, err := NewWASMRuntime(ctx, nil)
-	if err != nil {
-		t.Fatalf("Failed to create runtime: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Close should succeed
-	err = runtime.Close(ctx)
-	if err != nil {
-		t.Errorf("Close() error = %v", err)
-	}
+	require.NoError(t, runtime.Close(ctx))
 
 	// Close again should be idempotent
-	err = runtime.Close(ctx)
-	if err != nil {
-		t.Errorf("Second Close() error = %v", err)
-	}
+	require.NoError(t, runtime.Close(ctx))
 
 	// Runtime should be marked as closed
-	if !runtime.closed.Load() {
-		t.Error("Runtime should be marked as closed")
-	}
+	assert.True(t, runtime.closed.Load(), "Runtime should be marked as closed")
 }
 
 // TestWASMRuntimeTransformClosed tests transformation on a closed runtime.
@@ -122,14 +95,9 @@ func TestWASMRuntimeTransformClosed(t *testing.T) {
 	ctx := context.Background()
 
 	runtime, err := NewWASMRuntime(ctx, nil)
-	if err != nil {
-		t.Fatalf("Failed to create runtime: %v", err)
-	}
+	require.NoError(t, err)
 
-	err = runtime.Close(ctx)
-	if err != nil {
-		t.Fatalf("Failed to close runtime: %v", err)
-	}
+	require.NoError(t, runtime.Close(ctx))
 
 	config := &WASMConfig{
 		ModuleBucket: "test-bucket",
@@ -138,13 +106,8 @@ func TestWASMRuntimeTransformClosed(t *testing.T) {
 	}
 
 	_, _, err = runtime.Transform(ctx, config, strings.NewReader("test"), nil)
-	if err == nil {
-		t.Error("Expected error when transforming on closed runtime")
-	}
-
-	if !strings.Contains(err.Error(), "closed") {
-		t.Errorf("Expected 'closed' in error message, got: %v", err)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "closed")
 }
 
 // TestWASMRuntimeValidateConfig tests configuration validation.
@@ -152,14 +115,10 @@ func TestWASMRuntimeValidateConfig(t *testing.T) {
 	ctx := context.Background()
 
 	runtime, err := NewWASMRuntime(ctx, nil)
-	if err != nil {
-		t.Fatalf("Failed to create runtime: %v", err)
-	}
+	require.NoError(t, err)
 
 	defer func() {
-		if closeErr := runtime.Close(ctx); closeErr != nil {
-			t.Errorf("Failed to close runtime: %v", closeErr)
-		}
+		require.NoError(t, runtime.Close(ctx))
 	}()
 
 	tests := []struct {
@@ -217,16 +176,11 @@ func TestWASMRuntimeValidateConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := runtime.validateConfig(tt.config)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateConfig() error = %v, wantErr %v", err, tt.wantErr)
-
-				return
-			}
-
-			if tt.wantErr && tt.errContains != "" {
-				if !strings.Contains(strings.ToLower(err.Error()), tt.errContains) {
-					t.Errorf("Expected error containing '%s', got: %v", tt.errContains, err)
-				}
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, strings.ToLower(err.Error()), tt.errContains)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -245,14 +199,10 @@ func TestWASMRuntimeInputSizeLimit(t *testing.T) {
 	}
 
 	runtime, err := NewWASMRuntime(ctx, config)
-	if err != nil {
-		t.Fatalf("Failed to create runtime: %v", err)
-	}
+	require.NoError(t, err)
 
 	defer func() {
-		if closeErr := runtime.Close(ctx); closeErr != nil {
-			t.Errorf("Failed to close runtime: %v", closeErr)
-		}
+		require.NoError(t, runtime.Close(ctx))
 	}()
 
 	tests := []struct {
@@ -282,14 +232,11 @@ func TestWASMRuntimeInputSizeLimit(t *testing.T) {
 			input := bytes.Repeat([]byte("A"), tt.inputSize)
 			_, err := runtime.readInputWithLimit(bytes.NewReader(input))
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("readInputWithLimit() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if tt.wantErr && err != nil {
-				if !strings.Contains(err.Error(), "exceeds maximum") {
-					t.Errorf("Expected 'exceeds maximum' in error, got: %v", err)
-				}
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "exceeds maximum")
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -339,16 +286,11 @@ func TestInMemoryModuleLoader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			data, err := loader.LoadModule(ctx, tt.bucket, tt.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("LoadModule() error = %v, wantErr %v", err, tt.wantErr)
-
-				return
-			}
-
-			if !tt.wantErr {
-				if !bytes.Equal(data, moduleData) {
-					t.Error("Loaded module data does not match")
-				}
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, moduleData, data)
 			}
 		})
 	}
@@ -381,6 +323,8 @@ func TestInMemoryModuleLoaderConcurrency(t *testing.T) {
 	wg.Wait()
 
 	// Read modules concurrently
+	errCh := make(chan error, numReaders)
+
 	for range numReaders {
 		wg.Add(1)
 
@@ -393,19 +337,27 @@ func TestInMemoryModuleLoaderConcurrency(t *testing.T) {
 
 				data, err := loader.LoadModule(ctx, bucket, key)
 				if err != nil {
-					t.Errorf("LoadModule failed: %v", err)
+					errCh <- err
 
 					return
 				}
 
 				if len(data) != 100 {
-					t.Errorf("Expected data length 100, got %d", len(data))
+					errCh <- errors.New("expected data length 100")
+
+					return
 				}
 			}
 		}()
 	}
 
 	wg.Wait()
+	close(errCh)
+
+	// Check for any errors from goroutines
+	for err := range errCh {
+		require.NoError(t, err)
+	}
 }
 
 // TestDefaultModuleLoader tests the default module loader.
@@ -414,13 +366,8 @@ func TestDefaultModuleLoader(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := loader.LoadModule(ctx, "bucket", "key")
-	if err == nil {
-		t.Error("Expected error from default module loader")
-	}
-
-	if !strings.Contains(err.Error(), "not configured") {
-		t.Errorf("Expected 'not configured' in error, got: %v", err)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not configured")
 }
 
 // TestS3ModuleLoader tests the S3 module loader.
@@ -460,14 +407,11 @@ func TestS3ModuleLoader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			data, err := tt.loader.LoadModule(ctx, "bucket", "key")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("LoadModule() error = %v, wantErr %v", err, tt.wantErr)
-
-				return
-			}
-
-			if !tt.wantErr && data == nil {
-				t.Error("Expected data to be returned")
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, data)
 			}
 		})
 	}
@@ -478,14 +422,10 @@ func TestWASMRuntimeSetModuleLoader(t *testing.T) {
 	ctx := context.Background()
 
 	runtime, err := NewWASMRuntime(ctx, nil)
-	if err != nil {
-		t.Fatalf("Failed to create runtime: %v", err)
-	}
+	require.NoError(t, err)
 
 	defer func() {
-		if closeErr := runtime.Close(ctx); closeErr != nil {
-			t.Errorf("Failed to close runtime: %v", closeErr)
-		}
+		require.NoError(t, runtime.Close(ctx))
 	}()
 
 	loader := NewInMemoryModuleLoader()
@@ -493,13 +433,8 @@ func TestWASMRuntimeSetModuleLoader(t *testing.T) {
 
 	// Verify the loader was set by trying to load a non-existent module
 	_, err = runtime.getOrCompileModule(ctx, "bucket", "key")
-	if err == nil {
-		t.Error("Expected error when loading non-existent module")
-	}
-
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Expected 'not found' in error, got: %v", err)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
 }
 
 // TestWASMRuntimeClearCache tests clearing the module cache.
@@ -507,14 +442,10 @@ func TestWASMRuntimeClearCache(t *testing.T) {
 	ctx := context.Background()
 
 	runtime, err := NewWASMRuntime(ctx, nil)
-	if err != nil {
-		t.Fatalf("Failed to create runtime: %v", err)
-	}
+	require.NoError(t, err)
 
 	defer func() {
-		if closeErr := runtime.Close(ctx); closeErr != nil {
-			t.Errorf("Failed to close runtime: %v", closeErr)
-		}
+		require.NoError(t, runtime.Close(ctx))
 	}()
 
 	// Add a mock entry to the cache (normally this would be a compiled module)
@@ -530,9 +461,7 @@ func TestWASMRuntimeClearCache(t *testing.T) {
 	afterClearLen := len(runtime.moduleCache)
 	runtime.mu.RUnlock()
 
-	if afterClearLen != 0 {
-		t.Errorf("Expected empty cache after clear, got %d entries", afterClearLen)
-	}
+	assert.Equal(t, 0, afterClearLen, "Expected empty cache after clear")
 
 	// Verify it started empty (sanity check)
 	if initialLen != 0 {
@@ -545,33 +474,21 @@ func TestWASMRuntimeGetActiveExecutions(t *testing.T) {
 	ctx := context.Background()
 
 	runtime, err := NewWASMRuntime(ctx, nil)
-	if err != nil {
-		t.Fatalf("Failed to create runtime: %v", err)
-	}
+	require.NoError(t, err)
 
 	defer func() {
-		if closeErr := runtime.Close(ctx); closeErr != nil {
-			t.Errorf("Failed to close runtime: %v", closeErr)
-		}
+		require.NoError(t, runtime.Close(ctx))
 	}()
 
 	// Initially should be 0
-	if runtime.GetActiveExecutions() != 0 {
-		t.Errorf("Expected 0 active executions, got %d", runtime.GetActiveExecutions())
-	}
+	assert.Equal(t, int64(0), runtime.GetActiveExecutions())
 
 	// Simulate incrementing (normally done during Transform)
 	runtime.metricsActive.Add(1)
-
-	if runtime.GetActiveExecutions() != 1 {
-		t.Errorf("Expected 1 active execution, got %d", runtime.GetActiveExecutions())
-	}
+	assert.Equal(t, int64(1), runtime.GetActiveExecutions())
 
 	runtime.metricsActive.Add(-1)
-
-	if runtime.GetActiveExecutions() != 0 {
-		t.Errorf("Expected 0 active executions after decrement, got %d", runtime.GetActiveExecutions())
-	}
+	assert.Equal(t, int64(0), runtime.GetActiveExecutions())
 }
 
 // TestObjectLambdaServiceWithWASM tests creating the service with WASM support.
@@ -598,22 +515,17 @@ func TestObjectLambdaServiceWithWASM(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, err := NewObjectLambdaServiceWithWASM(ctx, tt.config)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewObjectLambdaServiceWithWASM() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
 
 				return
 			}
 
-			if svc != nil {
-				if svc.wasmRuntime == nil {
-					t.Error("Expected WASM runtime to be initialized")
-				}
+			require.NoError(t, err)
+			require.NotNil(t, svc)
+			assert.NotNil(t, svc.wasmRuntime, "Expected WASM runtime to be initialized")
 
-				err = svc.Close(ctx)
-				if err != nil {
-					t.Errorf("Close() error = %v", err)
-				}
-			}
+			require.NoError(t, svc.Close(ctx))
 		})
 	}
 }
@@ -626,27 +538,18 @@ func TestObjectLambdaServiceSetWASMModuleLoader(t *testing.T) {
 		svc := NewObjectLambdaService()
 
 		err := svc.SetWASMModuleLoader(NewInMemoryModuleLoader())
-		if err == nil {
-			t.Error("Expected error when WASM runtime not initialized")
-		}
+		require.Error(t, err)
 	})
 
 	t.Run("with WASM runtime", func(t *testing.T) {
 		svc, err := NewObjectLambdaServiceWithWASM(ctx, nil)
-		if err != nil {
-			t.Fatalf("Failed to create service: %v", err)
-		}
+		require.NoError(t, err)
 
 		defer func() {
-			if closeErr := svc.Close(ctx); closeErr != nil {
-				t.Errorf("Close() error = %v", closeErr)
-			}
+			require.NoError(t, svc.Close(ctx))
 		}()
 
-		err = svc.SetWASMModuleLoader(NewInMemoryModuleLoader())
-		if err != nil {
-			t.Errorf("SetWASMModuleLoader() error = %v", err)
-		}
+		require.NoError(t, svc.SetWASMModuleLoader(NewInMemoryModuleLoader()))
 	})
 }
 
@@ -656,32 +559,19 @@ func TestObjectLambdaServiceInitWASMRuntime(t *testing.T) {
 	svc := NewObjectLambdaService()
 
 	// WASM runtime should be nil initially
-	if svc.wasmRuntime != nil {
-		t.Error("Expected WASM runtime to be nil initially")
-	}
+	assert.Nil(t, svc.wasmRuntime, "Expected WASM runtime to be nil initially")
 
 	// Initialize the runtime
-	err := svc.initWASMRuntime(ctx)
-	if err != nil {
-		t.Errorf("initWASMRuntime() error = %v", err)
-	}
+	require.NoError(t, svc.initWASMRuntime(ctx))
 
 	// Should be initialized now
-	if svc.wasmRuntime == nil {
-		t.Error("Expected WASM runtime to be initialized")
-	}
+	assert.NotNil(t, svc.wasmRuntime, "Expected WASM runtime to be initialized")
 
 	// Calling again should be idempotent
-	err = svc.initWASMRuntime(ctx)
-	if err != nil {
-		t.Errorf("Second initWASMRuntime() error = %v", err)
-	}
+	require.NoError(t, svc.initWASMRuntime(ctx))
 
 	// Cleanup
-	err = svc.Close(ctx)
-	if err != nil {
-		t.Errorf("Close() error = %v", err)
-	}
+	require.NoError(t, svc.Close(ctx))
 }
 
 // TestObjectLambdaServiceClose tests closing the service.
@@ -691,27 +581,17 @@ func TestObjectLambdaServiceClose(t *testing.T) {
 	t.Run("without WASM runtime", func(t *testing.T) {
 		svc := NewObjectLambdaService()
 
-		err := svc.Close(ctx)
-		if err != nil {
-			t.Errorf("Close() error = %v", err)
-		}
+		require.NoError(t, svc.Close(ctx))
 	})
 
 	t.Run("with WASM runtime", func(t *testing.T) {
 		svc, err := NewObjectLambdaServiceWithWASM(ctx, nil)
-		if err != nil {
-			t.Fatalf("Failed to create service: %v", err)
-		}
+		require.NoError(t, err)
 
-		err = svc.Close(ctx)
-		if err != nil {
-			t.Errorf("Close() error = %v", err)
-		}
+		require.NoError(t, svc.Close(ctx))
 
 		// Verify runtime is nil after close
-		if svc.wasmRuntime != nil {
-			t.Error("Expected WASM runtime to be nil after close")
-		}
+		assert.Nil(t, svc.wasmRuntime, "Expected WASM runtime to be nil after close")
 	})
 }
 
@@ -721,9 +601,7 @@ func TestWASMTransformWithAccessPoint(t *testing.T) {
 	svc := NewObjectLambdaService()
 
 	defer func() {
-		if closeErr := svc.Close(ctx); closeErr != nil {
-			t.Errorf("Close() error = %v", closeErr)
-		}
+		require.NoError(t, svc.Close(ctx))
 	}()
 
 	cfg := &AccessPointConfig{
@@ -744,13 +622,10 @@ func TestWASMTransformWithAccessPoint(t *testing.T) {
 		},
 	}
 
-	err := svc.CreateAccessPoint(cfg)
-	if err != nil {
-		t.Fatalf("CreateAccessPoint failed: %v", err)
-	}
+	require.NoError(t, svc.CreateAccessPoint(cfg))
 
 	// Transformation should fail because no module loader is configured
-	_, _, err = svc.TransformObject(
+	_, _, err := svc.TransformObject(
 		ctx,
 		"wasm-ap",
 		"test-object",
@@ -760,7 +635,5 @@ func TestWASMTransformWithAccessPoint(t *testing.T) {
 	)
 
 	// We expect an error because we don't have a real WASM module loaded
-	if err == nil {
-		t.Error("Expected error when WASM module cannot be loaded")
-	}
+	require.Error(t, err, "Expected error when WASM module cannot be loaded")
 }
