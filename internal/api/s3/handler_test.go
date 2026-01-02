@@ -3065,7 +3065,6 @@ type presignedTestContext struct {
 // setupPresignedTestContext creates a test context configured for presigned URL tests.
 func setupPresignedTestContext(t *testing.T) *presignedTestContext {
 	t.Helper()
-	t.Skip("Temporarily skipping presigned tests to isolate CI failure")
 
 	store := NewMockMetadataStore()
 	storage := NewMockStorageBackend()
