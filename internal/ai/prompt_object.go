@@ -94,7 +94,7 @@ type PromptRequest struct {
 type PromptResponse struct {
 	CreatedAt      time.Time              `json:"created_at"`
 	Usage          *TokenUsage            `json:"usage,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
 	RequestID      string                 `json:"request_id"`
 	Bucket         string                 `json:"bucket"`
 	Key            string                 `json:"key"`
@@ -536,7 +536,7 @@ func (p *OpenAIProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 	})
 
 	// Build request
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"model":       req.Model,
 		"messages":    messages,
 		"max_tokens":  req.MaxTokens,
@@ -633,7 +633,7 @@ func (p *OpenAIProvider) StreamQuery(ctx context.Context, req *PromptRequest) (<
 }
 
 func (p *OpenAIProvider) Embed(ctx context.Context, content string) ([]float64, error) {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"model": "text-embedding-ada-002",
 		"input": content,
 	}
@@ -721,7 +721,7 @@ func (p *AnthropicProvider) Query(ctx context.Context, req *PromptRequest) (*Pro
 		req.Bucket, req.Key, req.ObjectContentType, content, req.Prompt)
 
 	// Build request
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"model":      req.Model,
 		"max_tokens": req.MaxTokens,
 		"messages": []map[string]string{
@@ -878,11 +878,11 @@ func (p *OllamaProvider) Query(ctx context.Context, req *PromptRequest) (*Prompt
 		fullPrompt = req.SystemPrompt + "\n\n" + fullPrompt
 	}
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"model":  req.Model,
 		"prompt": fullPrompt,
 		"stream": false,
-		"options": map[string]interface{}{
+		"options": map[string]any{
 			"temperature": req.Temperature,
 			"num_predict": req.MaxTokens,
 		},
@@ -962,7 +962,7 @@ func (p *OllamaProvider) StreamQuery(ctx context.Context, req *PromptRequest) (<
 }
 
 func (p *OllamaProvider) Embed(ctx context.Context, content string) ([]float64, error) {
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"model":  "nomic-embed-text",
 		"prompt": content,
 	}
@@ -1023,7 +1023,7 @@ func (p *ContentProcessor) ProcessForLLM(content io.Reader, contentType string, 
 	switch {
 	case strings.HasPrefix(contentType, "application/json"):
 		// Pretty print JSON for better readability
-		var v interface{}
+		var v any
 
 		err := json.Unmarshal(data, &v)
 		if err == nil {
@@ -1118,7 +1118,7 @@ type PromptObjectInput struct {
 // PromptObjectOutput represents the S3-compatible API output.
 type PromptObjectOutput struct {
 	Usage          *TokenUsage            `json:"Usage,omitempty"`
-	Metadata       map[string]interface{} `json:"Metadata,omitempty"`
+	Metadata       map[string]any `json:"Metadata,omitempty"`
 	RequestID      string                 `json:"RequestId"`
 	Response       string                 `json:"Response"`
 	Model          string                 `json:"Model"`
