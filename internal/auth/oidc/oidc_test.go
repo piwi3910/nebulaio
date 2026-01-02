@@ -1,6 +1,7 @@
 package oidc
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -153,16 +154,7 @@ func TestDefaultConfig(t *testing.T) {
 		t.Error("default config should have type 'oidc'")
 	}
 
-	hasOpenID := false
-
-	for _, scope := range cfg.Scopes {
-		if scope == "openid" {
-			hasOpenID = true
-			break
-		}
-	}
-
-	if !hasOpenID {
+	if !slices.Contains(cfg.Scopes, "openid") {
 		t.Error("default config should have openid scope")
 	}
 

@@ -166,7 +166,7 @@ func TestListObjects(t *testing.T) {
 	// Store multiple objects
 	for i := range 10 {
 		key := fmt.Sprintf("prefix/key-%d", i)
-		data := []byte(fmt.Sprintf("data-%d", i))
+		data := fmt.Appendf(nil, "data-%d", i)
 		err := vol.Put("bucket1", key, bytes.NewReader(data), int64(len(data)))
 		require.NoError(t, err)
 	}
@@ -348,7 +348,7 @@ func TestPackedBlockPacking(t *testing.T) {
 	// Store many small objects that should pack into same block
 	for i := range 100 {
 		key := fmt.Sprintf("tiny-%d", i)
-		data := []byte(fmt.Sprintf("tiny-data-%d", i))
+		data := fmt.Appendf(nil, "tiny-data-%d", i)
 		err := vol.Put("bucket1", key, bytes.NewReader(data), int64(len(data)))
 		require.NoError(t, err)
 	}

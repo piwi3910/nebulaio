@@ -506,7 +506,7 @@ func evaluateConditionOperator(operator string, expectedValue any, actualValue s
 }
 
 // matchStringEquals checks if actual equals expected string value.
-func matchStringEquals(expected interface{}, actual string, exists bool) bool {
+func matchStringEquals(expected any, actual string, exists bool) bool {
 	if !exists {
 		return false
 	}
@@ -515,7 +515,7 @@ func matchStringEquals(expected interface{}, actual string, exists bool) bool {
 }
 
 // matchStringNotEquals checks if actual does not equal expected string value.
-func matchStringNotEquals(expected interface{}, actual string, exists bool) bool {
+func matchStringNotEquals(expected any, actual string, exists bool) bool {
 	if !exists {
 		return true
 	}
@@ -524,7 +524,7 @@ func matchStringNotEquals(expected interface{}, actual string, exists bool) bool
 }
 
 // matchStringLike checks if actual matches expected wildcard pattern.
-func matchStringLike(expected interface{}, actual string, exists bool) bool {
+func matchStringLike(expected any, actual string, exists bool) bool {
 	if !exists {
 		return false
 	}
