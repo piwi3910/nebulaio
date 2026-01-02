@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -104,13 +105,7 @@ func (s *StringOrSlice) Contains(value string) bool {
 		return false
 	}
 
-	for _, v := range *s {
-		if v == value {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(*s, value)
 }
 
 // S3Actions defines all supported S3 actions.
@@ -392,10 +387,8 @@ func (pm *PolicyManager) DeletePolicy(ctx context.Context, name string) error {
 
 	// Check if policy is attached to any user or group
 	for userID, policies := range pm.userPolicies {
-		for _, p := range policies {
-			if p == name {
-				return fmt.Errorf("policy %s is attached to user %s", name, userID)
-			}
+		if slices.Contains(policies, name) {
+			return fmt.Errorf("policy %s is attached to user %s", name, userID)
 		}
 	}
 
@@ -434,10 +427,8 @@ func (pm *PolicyManager) AttachUserPolicy(ctx context.Context, userID, policyNam
 	}
 
 	// Check if already attached
-	for _, p := range pm.userPolicies[userID] {
-		if p == policyName {
-			return nil // Already attached
-		}
+	if slices.Contains(pm.userPolicies[userID], policyName) {
+		return nil // Already attached
 	}
 
 	pm.userPolicies[userID] = append(pm.userPolicies[userID], policyName)

@@ -619,7 +619,7 @@ func (aa *AccessAnalytics) matchesCondition(event *AccessEvent, cond RuleConditi
 	return aa.evaluateOperator(fieldValue, cond.Operator, cond.Value)
 }
 
-func (aa *AccessAnalytics) getFieldValue(event *AccessEvent, field string) interface{} {
+func (aa *AccessAnalytics) getFieldValue(event *AccessEvent, field string) any {
 	switch field {
 	case "access_type":
 		return string(event.AccessType)
@@ -636,7 +636,7 @@ func (aa *AccessAnalytics) getFieldValue(event *AccessEvent, field string) inter
 	}
 }
 
-func (aa *AccessAnalytics) evaluateOperator(fieldValue interface{}, operator string, condValue interface{}) bool {
+func (aa *AccessAnalytics) evaluateOperator(fieldValue any, operator string, condValue any) bool {
 	switch operator {
 	case "eq":
 		return fieldValue == condValue

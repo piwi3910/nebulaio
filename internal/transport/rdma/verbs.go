@@ -509,10 +509,7 @@ func (b *SimulatedVerbsBackend) PollCQ(cq VerbsCQ, numEntries int) ([]VerbsWorkC
 	}
 
 	// Return any queued completions
-	count := numEntries
-	if len(simCQ.completions) < count {
-		count = len(simCQ.completions)
-	}
+	count := min(numEntries, len(simCQ.completions))
 
 	result := simCQ.completions[:count]
 	simCQ.completions = simCQ.completions[count:]
