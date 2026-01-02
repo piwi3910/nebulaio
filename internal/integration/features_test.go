@@ -128,7 +128,7 @@ func TestDRAMCacheWithFirewall(t *testing.T) {
 		} else {
 			misses++
 			// Simulate fetching and caching
-			data := []byte(fmt.Sprintf("data-for-object-%d", i%10))
+			data := fmt.Appendf(nil, "data-for-object-%d", i%10)
 			c.Put(ctx, key, data, "application/octet-stream", fmt.Sprintf("etag-%d", i%10))
 		}
 	}
@@ -377,7 +377,7 @@ func TestConcurrentAdvancedFeatures(t *testing.T) {
 			// Try cache
 			_, found := c.Get(ctx, key)
 			if !found {
-				err := c.Put(ctx, key, []byte(fmt.Sprintf("data-%d", id)), "text/plain", "etag")
+				err := c.Put(ctx, key, fmt.Appendf(nil, "data-%d", id), "text/plain", "etag")
 				if err != nil {
 					errCh <- fmt.Errorf("cache put failed: %w", err)
 				}

@@ -29,7 +29,7 @@ type Config struct {
 	BindPassword string `json:"bindPassword" yaml:"bindPassword"`
 
 	// TLS configuration
-	TLS TLSConfig `json:"tls,omitempty" yaml:"tls,omitempty"`
+	TLS TLSConfig `json:"tls" yaml:"tls"`
 
 	// User search configuration
 	UserSearch UserSearchConfig `json:"userSearch" yaml:"userSearch"`

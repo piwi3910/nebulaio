@@ -275,10 +275,7 @@ func (s *Service) initBufferPool(deviceID int) error {
 	s.buffers[deviceID] = make([]*GPUBuffer, 0, numBuffers)
 
 	// Pre-allocate some buffers
-	initialBuffers := numBuffers / 4
-	if initialBuffers < 1 {
-		initialBuffers = 1
-	}
+	initialBuffers := max(numBuffers/4, 1)
 
 	for range initialBuffers {
 		buf, err := s.backend.AllocateBuffer(deviceID, s.config.MaxBufferSize)

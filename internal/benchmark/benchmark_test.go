@@ -136,7 +136,7 @@ func BenchmarkLZ4Decompress_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(compressed)))
 
-	for range b.N {
+	for b.Loop() {
 		lz4.UncompressBlock(compressed, output)
 	}
 }
@@ -152,7 +152,7 @@ func BenchmarkJSONMarshal_SmallObject(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		json.Marshal(obj)
 	}
 }
@@ -180,7 +180,7 @@ func BenchmarkJSONMarshal_LargeObject(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		json.Marshal(obj)
 	}
 }

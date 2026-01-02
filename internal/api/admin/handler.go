@@ -19,6 +19,7 @@ package admin
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1318,14 +1319,12 @@ func (h *Handler) AttachPolicyToUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if policy is already attached
-	for _, p := range user.Policies {
-		if p == policyName {
-			writeJSON(w, http.StatusOK, map[string]string{
-				"message": "Policy already attached to user",
-			})
+	if slices.Contains(user.Policies, policyName) {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"message": "Policy already attached to user",
+		})
 
-			return
-		}
+		return
 	}
 
 	// Attach policy
