@@ -3,6 +3,7 @@ version: "2"
 linters:
   default: all
   disable:
+    - modernize       # Disabled - Go 1.22+ idioms not yet adopted project-wide
     - depguard        # Disabled - requires complex allow-list configuration for all imports
     - err113          # Disabled - CLI tools and API handlers appropriately use dynamic errors for user-facing messages
     - errchkjson      # Disabled - overly strict for JSON encoding in HTTP handlers and tests

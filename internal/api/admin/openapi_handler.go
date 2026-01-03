@@ -482,21 +482,11 @@ func generateJavaScriptSnippet(req GenerateCodeSnippetsRequest) string {
 	builder.WriteString("\n  }")
 
 	if req.Body != "" {
-		// Try to format as JSON if it's valid JSON
-		var jsonObj interface{}
-		if err := json.Unmarshal([]byte(req.Body), &jsonObj); err == nil {
-			// It's valid JSON, use JSON.stringify with the object
-			safeBody := escapeJavaScriptString(req.Body)
-			builder.WriteString(",\n  body: '")
-			builder.WriteString(safeBody)
-			builder.WriteString("'")
-		} else {
-			// Not JSON, use as plain string
-			safeBody := escapeJavaScriptString(req.Body)
-			builder.WriteString(",\n  body: '")
-			builder.WriteString(safeBody)
-			builder.WriteString("'")
-		}
+		// Add request body (escaped for JavaScript string literal)
+		safeBody := escapeJavaScriptString(req.Body)
+		builder.WriteString(",\n  body: '")
+		builder.WriteString(safeBody)
+		builder.WriteString("'")
 	}
 
 	builder.WriteString("\n});\n\nconst data = await response.json();\nconsole.log(data);")
@@ -538,21 +528,11 @@ func generatePythonSnippet(req GenerateCodeSnippetsRequest) string {
 	builder.WriteString("\n    }")
 
 	if req.Body != "" {
-		// Try to format as JSON if it's valid JSON
-		var jsonObj interface{}
-		if err := json.Unmarshal([]byte(req.Body), &jsonObj); err == nil {
-			// It's valid JSON, use as json parameter
-			safeBody := escapePythonString(req.Body)
-			builder.WriteString(",\n    data='")
-			builder.WriteString(safeBody)
-			builder.WriteString("'")
-		} else {
-			// Not JSON, use as data string
-			safeBody := escapePythonString(req.Body)
-			builder.WriteString(",\n    data='")
-			builder.WriteString(safeBody)
-			builder.WriteString("'")
-		}
+		// Add request body (escaped for Python string literal)
+		safeBody := escapePythonString(req.Body)
+		builder.WriteString(",\n    data='")
+		builder.WriteString(safeBody)
+		builder.WriteString("'")
 	}
 
 	builder.WriteString("\n)\n\nprint(response.json())")

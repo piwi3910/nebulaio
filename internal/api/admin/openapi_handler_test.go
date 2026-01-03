@@ -612,7 +612,7 @@ func TestValidationError(t *testing.T) {
 // Helper function to create a map with n headers.
 func makeHeaders(n int) map[string]string {
 	headers := make(map[string]string)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		headers["X-Header-"+string(rune('A'+i%26))+string(rune('0'+i/26))] = "value"
 	}
 
