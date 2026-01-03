@@ -18,7 +18,6 @@ const (
 
 // TestJSONInjection tests protection against JSON injection attacks.
 func TestJSONInjection(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("detects JSON injection in policy content", func(t *testing.T) {
 		jsonInjectionPayloads := []string{
 			`{"key": "value", "__proto__": {"isAdmin": true}}`,
