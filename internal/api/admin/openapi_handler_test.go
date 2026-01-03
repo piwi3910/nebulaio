@@ -566,10 +566,10 @@ func TestValidateCodeSnippetRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateCodeSnippetRequest(&tt.req)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errMsg)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}

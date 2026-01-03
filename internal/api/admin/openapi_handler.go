@@ -412,7 +412,7 @@ func generateCurlSnippet(req GenerateCodeSnippetsRequest) string {
 
 	builder.WriteString("curl")
 
-	if req.Method != "GET" {
+	if req.Method != http.MethodGet {
 		builder.WriteString(" -X ")
 		builder.WriteString(req.Method)
 	}
