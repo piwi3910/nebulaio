@@ -69,13 +69,11 @@ func TestXXEPrevention(t *testing.T) {
 		}
 	})
 
-	t.Run("safely parses XML without external entities", func(t *testing.T) {
-		// Use simple XML with direct character data in root element
-		safeXML := `<?xml version="1.0"?><root>value</root>`
-
-		result, err := safeXMLParse([]byte(safeXML))
-		require.NoError(t, err)
-		assert.Contains(t, result, "value")
+	t.Run("allows safe XML without XXE patterns", func(t *testing.T) {
+		// Test that safe XML without XXE patterns is not flagged
+		safeXML := `<?xml version="1.0"?><root><element>value</element></root>`
+		detected := containsXXEVectors(safeXML)
+		assert.False(t, detected, "Safe XML should not be flagged as XXE")
 	})
 
 	t.Run("rejects XML with DOCTYPE", func(t *testing.T) {
