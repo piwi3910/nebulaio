@@ -641,6 +641,14 @@ func (s *Server) setupAdminServer() {
 		consoleHandler.RegisterRoutes(r)
 	})
 
+	// OpenAPI documentation endpoints (public)
+	openAPIHandler := admin.NewOpenAPIHandler(admin.OpenAPISpec)
+	r.Get("/api/v1/openapi.json", openAPIHandler.ServeOpenAPIJSON)
+	r.Get("/api/v1/openapi.yaml", openAPIHandler.ServeOpenAPIYAML)
+	r.Get("/api/v1/openapi", openAPIHandler.ServeOpenAPI)
+	r.Get("/api/v1/api-explorer/config", openAPIHandler.ServeAPIExplorerConfig)
+	r.Post("/api/v1/api-explorer/code-snippets", openAPIHandler.GenerateCodeSnippets)
+
 	s.adminServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.cfg.AdminPort),
 		Handler:           r,

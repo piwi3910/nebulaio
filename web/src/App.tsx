@@ -22,6 +22,7 @@ const AIMLFeaturesPage = lazy(() => import('./pages/AIMLFeaturesPage').then(m =>
 const SecurityFeaturesPage = lazy(() => import('./pages/SecurityFeaturesPage').then(m => ({ default: m.SecurityFeaturesPage })));
 const TieringPoliciesPage = lazy(() => import('./pages/TieringPoliciesPage').then(m => ({ default: m.TieringPoliciesPage })));
 const PredictiveAnalyticsPage = lazy(() => import('./pages/PredictiveAnalyticsPage').then(m => ({ default: m.PredictiveAnalyticsPage })));
+const ApiExplorerPage = lazy(() => import('./pages/ApiExplorerPage').then(m => ({ default: m.ApiExplorerPage })));
 
 // Loading fallback component
 function PageLoader() {
@@ -182,6 +183,16 @@ export default function App() {
               <AdminRoute>
                 <Suspense fallback={<ContentLoader />}>
                   <PredictiveAnalyticsPage />
+                </Suspense>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="api-explorer"
+            element={
+              <AdminRoute>
+                <Suspense fallback={<ContentLoader />}>
+                  <ApiExplorerPage />
                 </Suspense>
               </AdminRoute>
             }

@@ -49,6 +49,10 @@ services:
       # S3 Select (enabled by default)
       - NEBULAIO_S3SELECT_ENABLED=true
 
+      # API Explorer (enabled by default in web console)
+      # - NEBULAIO_API_EXPLORER_ENABLED=true
+      # - NEBULAIO_API_EXPLORER_MAX_HISTORY_SIZE=50
+
       # Audit Logging (enabled by default)
       - NEBULAIO_AUDIT_ENABLED=true
       - NEBULAIO_AUDIT_FILE_PATH=/data/audit/audit.log

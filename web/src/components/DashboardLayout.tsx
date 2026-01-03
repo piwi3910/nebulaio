@@ -31,6 +31,7 @@ import {
   IconLock,
   IconDatabase,
   IconChartDots,
+  IconApi,
 } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/auth';
 
@@ -53,6 +54,7 @@ const navItems: NavItem[] = [
   { label: 'Audit Logs', icon: <IconClipboardList size={20} />, path: '/audit-logs', adminOnly: true },
   { label: 'AI/ML Features', icon: <IconBrain size={20} />, path: '/ai-ml-features', adminOnly: true },
   { label: 'Security', icon: <IconLock size={20} />, path: '/security', adminOnly: true },
+  { label: 'API Explorer', icon: <IconApi size={20} />, path: '/api-explorer', adminOnly: true },
   { label: 'Settings', icon: <IconSettings size={20} />, path: '/settings' },
 ];
 

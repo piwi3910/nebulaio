@@ -552,6 +552,42 @@ var (
 			Help: "Number of active IP rate limiters",
 		},
 	)
+
+	// APIExplorerRequestsTotal tracks total API Explorer requests.
+	APIExplorerRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_api_explorer_requests_total",
+			Help: "Total number of API Explorer requests",
+		},
+		[]string{"endpoint", "status"},
+	)
+
+	// APIExplorerCodeSnippetsTotal tracks code snippet generation requests.
+	APIExplorerCodeSnippetsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_api_explorer_code_snippets_total",
+			Help: "Total number of code snippet generation requests",
+		},
+		[]string{"language", "status"},
+	)
+
+	// APIExplorerCodeSnippetDuration tracks code snippet generation duration.
+	APIExplorerCodeSnippetDuration = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "nebulaio_api_explorer_code_snippet_duration_seconds",
+			Help:    "Duration of code snippet generation",
+			Buckets: prometheus.ExponentialBuckets(0.0001, 2, 10),
+		},
+	)
+
+	// OpenAPISpecRequestsTotal tracks OpenAPI spec requests.
+	OpenAPISpecRequestsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_openapi_spec_requests_total",
+			Help: "Total number of OpenAPI specification requests",
+		},
+		[]string{"format"},
+	)
 )
 
 // Version is set at build time.
@@ -931,4 +967,33 @@ func IncrementRateLimitActiveIPs() {
 // DecrementRateLimitActiveIPs decrements the active IP rate limiters count.
 func DecrementRateLimitActiveIPs() {
 	RateLimitActiveIPs.Dec()
+}
+
+// RecordAPIExplorerRequest records an API Explorer request.
+func RecordAPIExplorerRequest(endpoint string, success bool) {
+	status := statusSuccess
+	if !success {
+		status = statusFailure
+	}
+
+	APIExplorerRequestsTotal.WithLabelValues(endpoint, status).Inc()
+}
+
+// RecordCodeSnippetGeneration records a code snippet generation request.
+func RecordCodeSnippetGeneration(language string, success bool, duration time.Duration) {
+	status := statusSuccess
+	if !success {
+		status = statusFailure
+	}
+
+	APIExplorerCodeSnippetsTotal.WithLabelValues(language, status).Inc()
+
+	if success {
+		APIExplorerCodeSnippetDuration.Observe(duration.Seconds())
+	}
+}
+
+// RecordOpenAPISpecRequest records an OpenAPI specification request.
+func RecordOpenAPISpecRequest(format string) {
+	OpenAPISpecRequestsTotal.WithLabelValues(format).Inc()
 }
