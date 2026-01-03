@@ -95,6 +95,24 @@ nebulaio_lambda_operations_in_flight{algorithm="..."}                           
 - Values closer to 1 indicate poor compression (e.g., 0.9 = 10% size reduction)
 - Buckets: 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
 
+**Streaming Mode Limitations:**
+Large files that exceed the streaming threshold are processed in streaming mode for memory efficiency.
+In streaming mode, the following metrics behaviors apply:
+- `nebulaio_lambda_compression_bytes_processed_total`: Records 0 bytes (streaming doesn't buffer full content)
+- `nebulaio_lambda_compression_ratio`: Not calculated (requires knowing both sizes)
+- `nebulaio_lambda_compression_duration_seconds`: Accurately recorded
+- `nebulaio_lambda_compression_operations_total`: Accurately recorded
+- `nebulaio_lambda_operations_in_flight`: Accurately tracked
+
+For accurate throughput metrics in streaming scenarios, use network-level metrics or S3 request metrics.
+
+**Auto-Detection Algorithm Label:**
+When decompressing without a specified algorithm, the system auto-detects the compression format.
+During auto-detection:
+- The `algorithm="auto"` label is used for in-flight tracking until detection completes
+- Final metrics (operations, duration) use the detected algorithm (e.g., `gzip`, `zstd`)
+- If data is not compressed, no metrics are recorded (operation skipped)
+
 **Example Queries:**
 
 ```promql
