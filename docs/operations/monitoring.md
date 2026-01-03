@@ -71,6 +71,49 @@ nebulaio_replication_healthy{destination="..."}                    # Health stat
 
 ```bash
 
+### Lambda Compression Metrics
+
+Metrics for S3 Object Lambda compression and decompression operations:
+
+```bash
+
+nebulaio_lambda_compression_operations_total{algorithm="...",operation="...",status="..."}  # Total operations
+nebulaio_lambda_compression_duration_seconds{algorithm="...",operation="..."}               # Operation duration histogram
+nebulaio_lambda_compression_ratio{algorithm="..."}                                          # Compression ratio (compressed/original)
+nebulaio_lambda_compression_bytes_processed_total{algorithm="...",operation="..."}          # Total bytes processed
+nebulaio_lambda_operations_in_flight{algorithm="..."}                                       # Current in-flight operations
+
+```bash
+
+**Labels:**
+- `algorithm`: Compression algorithm (`gzip`, `zstd`, or `auto` for auto-detection)
+- `operation`: Operation type (`compress` or `decompress`)
+- `status`: Result status (`success` or `error`)
+
+**Compression Ratio Interpretation:**
+- Values closer to 0 indicate better compression (e.g., 0.3 = 70% size reduction)
+- Values closer to 1 indicate poor compression (e.g., 0.9 = 10% size reduction)
+- Buckets: 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
+
+**Example Queries:**
+
+```promql
+# Compression operations rate by algorithm
+rate(nebulaio_lambda_compression_operations_total[5m])
+
+# Average compression ratio
+avg(nebulaio_lambda_compression_ratio) by (algorithm)
+
+# P95 compression latency
+histogram_quantile(0.95, rate(nebulaio_lambda_compression_duration_seconds_bucket[5m]))
+
+# Total bytes compressed per second
+sum(rate(nebulaio_lambda_compression_bytes_processed_total{operation="compress"}[5m]))
+
+# Current in-flight operations
+sum(nebulaio_lambda_operations_in_flight) by (algorithm)
+```
+
 ## Grafana Dashboards
 
 ### Request Rate Panel
