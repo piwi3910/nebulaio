@@ -16,13 +16,13 @@ import (
 )
 
 const (
-	maxBodySize      = 1024 * 1024 // 1MB max body size
-	maxHeaderCount   = 50          // Max number of headers
-	maxHeaderKeyLen  = 256         // Max header key length
-	maxHeaderValLen  = 8192        // Max header value length
-	maxURLLength     = 2048        // Max URL length
-	cacheMaxAge      = 3600        // Cache max age in seconds
-	configCacheMaxAge = 60         // Config cache max age in seconds
+	maxBodySize       = 1024 * 1024 // 1MB max body size
+	maxHeaderCount    = 50          // Max number of headers
+	maxHeaderKeyLen   = 256         // Max header key length
+	maxHeaderValLen   = 8192        // Max header value length
+	maxURLLength      = 2048        // Max URL length
+	cacheMaxAge       = 3600        // Cache max age in seconds
+	configCacheMaxAge = 60          // Config cache max age in seconds
 )
 
 // allowedMethods defines the HTTP methods that are valid for code snippet generation.

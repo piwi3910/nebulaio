@@ -367,9 +367,9 @@ func TestCanonicalHeaderFormatInSnippets(t *testing.T) {
 		Method: "GET",
 		URL:    "https://api.example.com/users",
 		Headers: map[string]string{
-			"content-type":   "application/json",
-			"x-api-key":      "test-key",
-			"authorization":  "Bearer token",
+			"content-type":    "application/json",
+			"x-api-key":       "test-key",
+			"authorization":   "Bearer token",
 			"x-custom-header": "value",
 		},
 	}
