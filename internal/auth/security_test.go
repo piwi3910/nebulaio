@@ -20,7 +20,6 @@ const (
 
 // TestAuthenticationBypass tests protection against authentication bypass attempts.
 func TestAuthenticationBypass(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("rejects empty token", func(t *testing.T) {
 		emptyTokens := []string{
 			"",
@@ -102,7 +101,6 @@ func TestAuthenticationBypass(t *testing.T) {
 
 // TestTokenSecurityValidation tests JWT token security validation.
 func TestTokenSecurityValidation(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("rejects alg:none tokens", func(t *testing.T) {
 		algNoneTokens := []string{
 			"eyJhbGciOiJub25lIn0.eyJ0ZXN0IjoidGVzdCJ9.",
@@ -158,7 +156,6 @@ func TestTokenSecurityValidation(t *testing.T) {
 
 // TestBruteForceProtection tests protection against brute force attacks.
 func TestBruteForceProtection(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("locks account after too many failed attempts", func(t *testing.T) {
 		tracker := NewTestLoginAttemptTracker(testMaxRetries, testLockoutDuration*time.Minute)
 
@@ -205,7 +202,6 @@ func TestBruteForceProtection(t *testing.T) {
 
 // TestSessionSecurity tests session security.
 func TestSessionSecurity(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("rejects session fixation attempts", func(t *testing.T) {
 		attackerSessionID := "attacker-provided-session-id"
 
@@ -240,7 +236,6 @@ func TestSessionSecurity(t *testing.T) {
 
 // TestPasswordSecurityWithProduction tests password handling security using production functions.
 func TestPasswordSecurityWithProduction(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("password hashing produces unique hashes", func(t *testing.T) {
 		password := "TestPassword123"
 

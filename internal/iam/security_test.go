@@ -16,7 +16,6 @@ const (
 
 // TestAuthorizationEnforcement tests that authorization is properly enforced.
 func TestAuthorizationEnforcement(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	ctx := context.Background()
 	pm := NewPolicyManager(nil)
 
@@ -52,7 +51,6 @@ func TestAuthorizationEnforcement(t *testing.T) {
 
 // TestExplicitDenyOverridesAllow tests that explicit deny always wins.
 func TestExplicitDenyOverridesAllow(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	ctx := context.Background()
 	pm := NewPolicyManager(nil)
 
@@ -89,7 +87,6 @@ func TestExplicitDenyOverridesAllow(t *testing.T) {
 
 // TestWildcardBypassPrevention tests that wildcard patterns cannot be bypassed.
 func TestWildcardBypassPrevention(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	ctx := context.Background()
 	pm := NewPolicyManager(nil)
 
@@ -152,7 +149,6 @@ func TestWildcardBypassPrevention(t *testing.T) {
 
 // TestActionValidation tests that only valid actions are accepted.
 func TestActionValidation(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	ctx := context.Background()
 	pm := NewPolicyManager(nil)
 
@@ -204,7 +200,6 @@ func TestActionValidation(t *testing.T) {
 
 // TestResourceValidation tests that resources are properly validated.
 func TestResourceValidation(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	ctx := context.Background()
 	pm := NewPolicyManager(nil)
 
@@ -261,7 +256,6 @@ func TestResourceValidation(t *testing.T) {
 
 // TestConditionEnforcement tests that conditions are properly enforced.
 func TestConditionEnforcement(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	ctx := context.Background()
 	pm := NewPolicyManager(nil)
 
@@ -303,7 +297,6 @@ func TestConditionEnforcement(t *testing.T) {
 
 // TestPrivilegeEscalationPrevention tests prevention of privilege escalation.
 func TestPrivilegeEscalationPrevention(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	ctx := context.Background()
 	pm := NewPolicyManager(nil)
 
@@ -359,7 +352,6 @@ func TestPrivilegeEscalationPrevention(t *testing.T) {
 
 // TestPolicyInjectionPrevention tests prevention of policy injection attacks.
 func TestPolicyInjectionPrevention(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	ctx := context.Background()
 	pm := NewPolicyManager(nil)
 

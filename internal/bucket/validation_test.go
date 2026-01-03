@@ -23,7 +23,6 @@ const (
 // TestBucketNameSecurityValidation tests security aspects of bucket name validation.
 // This uses the production validateBucketName function from service.go.
 func TestBucketNameSecurityValidation(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("valid bucket names pass validation", func(t *testing.T) {
 		validNames := []string{
 			"my-bucket",
@@ -120,7 +119,6 @@ func TestBucketNameSecurityValidation(t *testing.T) {
 // TestTagSecurityValidation tests security aspects of bucket tag validation.
 // This uses the production validateBucketTags function from service.go.
 func TestTagSecurityValidation(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("valid tags pass validation", func(t *testing.T) {
 		validTags := []map[string]string{
 			{"env": "production"},
@@ -189,7 +187,6 @@ func TestTagSecurityValidation(t *testing.T) {
 
 // TestObjectKeySecurityValidation tests object key validation for security.
 func TestObjectKeySecurityValidation(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("valid object keys", func(t *testing.T) {
 		validKeys := []string{
 			"simple-key",
@@ -248,7 +245,6 @@ func TestObjectKeySecurityValidation(t *testing.T) {
 
 // TestMetadataSecurityValidation tests object metadata validation for security.
 func TestMetadataSecurityValidation(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("valid metadata passes", func(t *testing.T) {
 		validMetadata := map[string]string{
 			"Content-Type":        "application/json",
@@ -287,7 +283,6 @@ func TestMetadataSecurityValidation(t *testing.T) {
 
 // TestContentTypeSecurityValidation tests content type risk assessment.
 func TestContentTypeSecurityValidation(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("safe content types", func(t *testing.T) {
 		safeTypes := []string{
 			"application/json",
@@ -328,7 +323,6 @@ func TestContentTypeSecurityValidation(t *testing.T) {
 
 // TestACLSecurityValidation tests ACL validation.
 func TestACLSecurityValidation(t *testing.T) {
-	t.Skip("Temporarily skipping to isolate CI failure")
 	t.Run("accepts valid canned ACLs", func(t *testing.T) {
 		validACLs := []string{
 			"private",
