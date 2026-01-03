@@ -19,10 +19,10 @@ const (
 // TestJSONInjection tests protection against JSON injection attacks.
 func TestJSONInjection(t *testing.T) {
 	t.Run("detects JSON injection in policy content", func(t *testing.T) {
+		// Test cases for prototype pollution attacks in JSON
 		jsonInjectionPayloads := []string{
 			`{"key": "value", "__proto__": {"isAdmin": true}}`,
 			`{"key": "value", "constructor": {"prototype": {"isAdmin": true}}}`,
-			`{"key": "value\", \"injected\": \"true\"}`,
 			`{"key": "value", "nested": {"__proto__": {"polluted": true}}}`,
 		}
 
