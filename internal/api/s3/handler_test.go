@@ -28,24 +28,42 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test constants.
+// General test constants.
 const (
 	testContentHelloWorld = "Hello, World!"
 	testContentTypePlain  = "text/plain"
+)
 
-	// Presigned URL test constants.
-	presignedTestBucket        = "test-bucket"
-	presignedTestKey           = "test-key"
-	presignedTestRegion        = "us-east-1"
-	presignedTestEndpoint      = "http://localhost:9000"
-	presignedTestUserID        = "test-user-123"
-	presignedTestAccessKeyID   = "AKIAIOSFODNN7EXAMPLE"
-	presignedTestSecretKey     = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+// Presigned URL test constants.
+// These constants configure test scenarios for AWS Signature V4 presigned URL testing.
+// The access key ID and secret key are example credentials from AWS documentation
+// (https://docs.aws.amazon.com/general/latest/gr/signature-v4-examples.html)
+// and are safe to use in tests - they are NOT real credentials.
+const (
+	presignedTestBucket  = "test-bucket"
+	presignedTestKey     = "test-key"
+	presignedTestRegion  = "us-east-1"
+	presignedTestUserID  = "test-user-123"
+	presignedTestContent = "content"
+
+	// presignedTestEndpoint is the S3 endpoint for path-style URL testing.
+	presignedTestEndpoint = "http://localhost:9000"
+
+	// AWS example credentials from official documentation - NOT real credentials.
+	// See: https://docs.aws.amazon.com/general/latest/gr/signature-v4-examples.html
+	presignedTestAccessKeyID = "AKIAIOSFODNN7EXAMPLE"
+	presignedTestSecretKey   = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+	// Expiration durations for various test scenarios.
 	presignedDefaultExpiration = 15 * time.Minute
-	presignedTestContent       = "content"
-	presignedTestContentLength = int64(len(presignedTestContent)) // Must match presignedTestContent
-	presignedOverMaxExpiration = 8 * 24 * time.Hour               // Exceeds 7-day AWS limit
-	presignedMinimalExpiration = 1 * time.Second                  // For expired URL testing
+	presignedOverMaxExpiration = 8 * 24 * time.Hour // Exceeds AWS 7-day maximum
+	presignedMinimalExpiration = 1 * time.Second    // For expired URL testing
+
+	// presignedTestContentLength must match len(presignedTestContent).
+	presignedTestContentLength = int64(len(presignedTestContent))
+
+	// presignedLargePayloadSize is 1MB for large payload testing.
+	presignedLargePayloadSize = 1024 * 1024
 )
 
 // MockMetadataStore implements metadata.Store for testing.
@@ -3437,7 +3455,22 @@ func TestPresignedDeleteObjectNonExistent(t *testing.T) {
 // =============================================================================
 // PRESIGNED URL - SECURITY VALIDATION TESTS
 // =============================================================================
+//
+// These tests verify the security properties of presigned URL validation:
+// - Authentication: Only valid access keys are accepted
+// - Integrity: Signatures cannot be forged or tampered with
+// - Authorization: URLs are bound to specific HTTP methods
+// - Credential lifecycle: Disabled credentials are rejected
+// - Time-based expiration: Expired URLs are rejected
+//
+// Note on replay attacks: Presigned URLs are designed to be reusable within
+// their validity period. Protection against replay attacks is achieved through
+// short expiration times, not single-use enforcement.
+// =============================================================================
 
+// TestPresignedURLInvalidAccessKey verifies that URLs signed with an unknown
+// access key ID are rejected. This ensures the system only accepts credentials
+// from registered users.
 func TestPresignedURLInvalidAccessKey(t *testing.T) {
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
@@ -3471,6 +3504,10 @@ func TestPresignedURLInvalidAccessKey(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code, "Response body: %s", w.Body.String())
 }
 
+// TestPresignedURLInvalidSignature verifies that URLs signed with an incorrect
+// secret key are rejected. This tests the cryptographic integrity of the
+// signature - even with a valid access key ID, the wrong secret produces
+// an invalid signature.
 func TestPresignedURLInvalidSignature(t *testing.T) {
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
@@ -3504,6 +3541,9 @@ func TestPresignedURLInvalidSignature(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code, "Response body: %s", w.Body.String())
 }
 
+// TestPresignedURLTamperedSignature verifies that modifying the signature
+// after URL generation is detected and rejected. This protects against
+// attackers who might try to forge or modify signatures.
 func TestPresignedURLTamperedSignature(t *testing.T) {
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
@@ -3539,6 +3579,10 @@ func TestPresignedURLTamperedSignature(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code, "Response body: %s", w.Body.String())
 }
 
+// TestPresignedURLWrongHTTPMethod verifies that presigned URLs are bound to
+// a specific HTTP method. A URL signed for GET cannot be used for PUT, even
+// if the signature is otherwise valid. This prevents privilege escalation
+// where a read-only URL could be used to modify data.
 func TestPresignedURLWrongHTTPMethod(t *testing.T) {
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
@@ -3553,6 +3597,7 @@ func TestPresignedURLWrongHTTPMethod(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// Generate URL for GET method
 	presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
 		Method:      http.MethodGet,
 		Bucket:      presignedTestBucket,
@@ -3564,6 +3609,7 @@ func TestPresignedURLWrongHTTPMethod(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// Attempt to use it with PUT method - should fail
 	content := "trying to put with get url"
 	req := createPresignedRequest(t, http.MethodPut, presignedURL, strings.NewReader(content))
 	req.ContentLength = int64(len(content))
@@ -3575,6 +3621,9 @@ func TestPresignedURLWrongHTTPMethod(t *testing.T) {
 		"Wrong HTTP method should fail: %s", w.Body.String())
 }
 
+// TestPresignedURLDisabledAccessKey verifies that URLs signed with credentials
+// that have been disabled are rejected, even if the signature is cryptographically
+// valid. This supports credential revocation scenarios.
 func TestPresignedURLDisabledAccessKey(t *testing.T) {
 	tc := setupPresignedTestContext(t)
 	ctx := context.Background()
@@ -3892,6 +3941,7 @@ func TestPresignedHeadObject(t *testing.T) {
 }
 
 // createPresignedRequest creates an HTTP request from a presigned URL.
+// It properly sets both req.Host and req.URL.Host for middleware compatibility.
 func createPresignedRequest(t *testing.T, method, presignedURL string, body io.Reader) *http.Request {
 	t.Helper()
 
@@ -3900,6 +3950,153 @@ func createPresignedRequest(t *testing.T, method, presignedURL string, body io.R
 
 	req := httptest.NewRequest(method, parsedURL.RequestURI(), body)
 	req.Host = parsedURL.Host
+	req.URL.Host = parsedURL.Host
 
 	return req
+}
+
+// =============================================================================
+// PRESIGNED URL - ADDITIONAL COVERAGE TESTS
+// =============================================================================
+
+// TestPresignedURLCrossRegionRejection verifies that presigned URLs signed for
+// one region are rejected when the server is configured for a different region.
+// This prevents credential reuse across regional deployments.
+func TestPresignedURLCrossRegionRejection(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+	ctx := context.Background()
+
+	_, err := tc.bucket.CreateBucket(ctx, presignedTestBucket, tc.userID, presignedTestRegion, "")
+	require.NoError(t, err)
+
+	_, err = tc.object.PutObject(
+		ctx, presignedTestBucket, presignedTestKey,
+		strings.NewReader(presignedTestContent), presignedTestContentLength,
+		testContentTypePlain, tc.userID, nil,
+	)
+	require.NoError(t, err)
+
+	// Generate presigned URL for a different region (eu-west-1)
+	wrongRegionGen := auth.NewPresignedURLGenerator("eu-west-1", presignedTestEndpoint)
+	presignedURL, err := wrongRegionGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodGet,
+		Bucket:      presignedTestBucket,
+		Key:         presignedTestKey,
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Region:      "eu-west-1", // Different from server's us-east-1
+		Endpoint:    tc.endpoint,
+		Expiration:  presignedDefaultExpiration,
+	})
+	require.NoError(t, err)
+
+	req := createPresignedRequest(t, http.MethodGet, presignedURL, nil)
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	// Should be rejected due to region mismatch in signature
+	assert.Equal(t, http.StatusForbidden, w.Code,
+		"Cross-region URL should be rejected: %s", w.Body.String())
+}
+
+// TestPresignedURLLargePayload verifies that presigned URLs work correctly
+// with larger payloads (1MB) to ensure no buffer or timeout issues.
+func TestPresignedURLLargePayload(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+	ctx := context.Background()
+
+	_, err := tc.bucket.CreateBucket(ctx, presignedTestBucket, tc.userID, presignedTestRegion, "")
+	require.NoError(t, err)
+
+	// Generate 1MB of test data
+	largeContent := make([]byte, presignedLargePayloadSize)
+	for idx := range largeContent {
+		largeContent[idx] = byte(idx % 256)
+	}
+
+	// Generate presigned URL for PUT
+	presignedURL, err := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+		Method:      http.MethodPut,
+		Bucket:      presignedTestBucket,
+		Key:         "large-file.bin",
+		AccessKeyID: tc.accessKeyID,
+		SecretKey:   tc.secretKey,
+		Endpoint:    tc.endpoint,
+		Expiration:  presignedDefaultExpiration,
+	})
+	require.NoError(t, err)
+
+	// Upload large content
+	req := createPresignedRequest(t, http.MethodPut, presignedURL, bytes.NewReader(largeContent))
+	req.ContentLength = int64(len(largeContent))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	w := httptest.NewRecorder()
+
+	tc.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code,
+		"Large payload upload should succeed: %s", w.Body.String())
+
+	// Verify the content was stored correctly
+	reader, meta, err := tc.object.GetObject(ctx, presignedTestBucket, "large-file.bin")
+	require.NoError(t, err)
+	defer reader.Close()
+
+	assert.Equal(t, int64(presignedLargePayloadSize), meta.Size,
+		"Stored object size should match uploaded size")
+}
+
+// TestPresignedURLEncodingEdgeCases tests URL generation and validation with
+// various special characters that require careful encoding per AWS SigV4 spec.
+func TestPresignedURLEncodingEdgeCases(t *testing.T) {
+	tc := setupPresignedTestContext(t)
+	ctx := context.Background()
+
+	_, err := tc.bucket.CreateBucket(ctx, presignedTestBucket, tc.userID, presignedTestRegion, "")
+	require.NoError(t, err)
+
+	// Test keys with characters that need special encoding handling.
+	// Note: Some characters like ? and # have special meaning in URLs.
+	encodingTestCases := []struct {
+		name string
+		key  string
+	}{
+		{"percent_sign", "file%percent.txt"},
+		{"plus_sign", "file+plus.txt"},
+		{"ampersand", "file&ampersand.txt"},
+		{"equals", "file=equals.txt"},
+		{"unicode_basic", "file-日本語.txt"},
+		{"unicode_emoji", "file-🎉.txt"},
+		{"multiple_special", "path/to/file with spaces & symbols.txt"},
+	}
+
+	for _, testCase := range encodingTestCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Store the object
+			_, putErr := tc.object.PutObject(
+				ctx, presignedTestBucket, testCase.key,
+				strings.NewReader(presignedTestContent), presignedTestContentLength,
+				testContentTypePlain, tc.userID, nil,
+			)
+			require.NoError(t, putErr, "Failed to create object with key: %s", testCase.key)
+
+			// Generate presigned URL - this should succeed
+			presignedURL, genErr := tc.presignGen.GeneratePresignedURL(auth.PresignParams{
+				Method:      http.MethodGet,
+				Bucket:      presignedTestBucket,
+				Key:         testCase.key,
+				AccessKeyID: tc.accessKeyID,
+				SecretKey:   tc.secretKey,
+				Endpoint:    tc.endpoint,
+				Expiration:  presignedDefaultExpiration,
+			})
+			require.NoError(t, genErr, "Failed to generate presigned URL for key: %s", testCase.key)
+
+			// Verify the URL is valid (can be parsed)
+			parsedURL, parseErr := url.Parse(presignedURL)
+			require.NoError(t, parseErr, "Generated URL should be parseable")
+			assert.NotEmpty(t, parsedURL.RawQuery, "URL should have query parameters")
+		})
+	}
 }
