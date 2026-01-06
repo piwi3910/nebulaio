@@ -122,6 +122,23 @@ ingress:
   #      - admin.example.com
   #      - console.example.com
 
+# API Explorer configuration
+apiExplorer:
+  # -- Enable API Explorer in web console
+  enabled: true
+  # -- API Explorer title
+  title: "NebulaIO API Explorer"
+  # -- API Explorer description
+  description: "Interactive API documentation for NebulaIO Admin and S3 APIs"
+  # -- Supported code snippet languages
+  supportedLanguages:
+    - curl
+    - javascript
+    - python
+    - go
+  # -- Maximum request history size (stored in browser localStorage)
+  maxRequestHistorySize: 50
+
 # Resource configuration
 resources:
   requests:

@@ -3,6 +3,7 @@ version: "2"
 linters:
   default: all
   disable:
+    - modernize       # Disabled - Go 1.22+ idioms not yet adopted project-wide
     - depguard        # Disabled - requires complex allow-list configuration for all imports
     - err113          # Disabled - CLI tools and API handlers appropriately use dynamic errors for user-facing messages
     - errchkjson      # Disabled - overly strict for JSON encoding in HTTP handlers and tests
@@ -37,7 +38,6 @@ linters:
     - prealloc        # Disabled - 4 violations, slice preallocation not always beneficial
     - thelper         # Disabled - 3 violations, test helper detection is overly strict
     - wastedassign    # Disabled - 2 violations, assignments are intentional for clarity
-    - modernize       # Disabled - 142 violations, modernization suggestions not critical for current codebase
     - wsl             # Disabled - whitespace linter too strict, conflicts with gofmt
     - wsl_v5          # Disabled - whitespace linter v5 too strict, conflicts with gofmt
     - noinlineerr     # Disabled - inline error handling is idiomatic in Go
