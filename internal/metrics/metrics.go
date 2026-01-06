@@ -490,6 +490,41 @@ var (
 		[]string{"algorithm", "direction"},
 	)
 
+	// LambdaStreamingOperationsTotal tracks streaming vs buffered Lambda operations.
+	LambdaStreamingOperationsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_lambda_streaming_operations_total",
+			Help: "Total Lambda operations by mode (streaming vs buffered)",
+		},
+		[]string{"algorithm", "direction", "mode", "status"},
+	)
+
+	// LambdaStreamingBytesTotal tracks bytes processed in streaming mode.
+	LambdaStreamingBytesTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_lambda_streaming_bytes_total",
+			Help: "Total bytes processed in streaming mode",
+		},
+		[]string{"algorithm", "direction"},
+	)
+
+	// LambdaDecompressSizeExceeded tracks decompression bomb protection triggers.
+	LambdaDecompressSizeExceeded = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "nebulaio_lambda_decompress_size_exceeded_total",
+			Help: "Total decompression operations blocked due to size limit",
+		},
+		[]string{"algorithm"},
+	)
+
+	// LambdaMaxDecompressSize tracks the configured max decompress size.
+	LambdaMaxDecompressSize = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "nebulaio_lambda_max_decompress_size_bytes",
+			Help: "Configured maximum decompressed size limit for bomb protection",
+		},
+	)
+
 	// VolumeCompactionReclaimableBytes tracks bytes that can be reclaimed via compaction.
 	VolumeCompactionReclaimableBytes = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{

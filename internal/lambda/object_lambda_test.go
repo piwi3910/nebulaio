@@ -14,12 +14,32 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Test constants.
 const (
 	compressionGzip = "gzip"
 	compressionZstd = "zstd"
+)
+
+// Benchmark and test configuration constants.
+const (
+	// testStreamingThresholdLow forces streaming mode in tests.
+	testStreamingThresholdLow = 100
+	// testStreamingThreshold1KB is a 1KB threshold for testing.
+	testStreamingThreshold1KB = 1024
+	// testStreamingThreshold512B is a 512B threshold for testing.
+	testStreamingThreshold512B = 512
+	// testStreamingThresholdMultiplier is used to set threshold above data size.
+	testStreamingThresholdMultiplier = 10
+	// testDecompressSizeLimit is the max decompress size for testing.
+	testDecompressSizeLimit = 1024
+	// testSmallThreshold is used to trigger streaming for small data.
+	testSmallThreshold = 10
+	// testPatternString is the repeating pattern for test data.
+	testPatternString = "Hello, World! "
 )
 
 func TestCreateAccessPoint(t *testing.T) {
@@ -42,22 +62,13 @@ func TestCreateAccessPoint(t *testing.T) {
 	}
 
 	err := svc.CreateAccessPoint(cfg)
-	if err != nil {
-		t.Fatalf("CreateAccessPoint failed: %v", err)
-	}
+	require.NoError(t, err, "CreateAccessPoint should succeed")
 
 	retrieved, err := svc.GetAccessPoint("test-ap")
-	if err != nil {
-		t.Fatalf("GetAccessPoint failed: %v", err)
-	}
+	require.NoError(t, err, "GetAccessPoint should succeed")
 
-	if retrieved.Name != "test-ap" {
-		t.Errorf("Expected name 'test-ap', got '%s'", retrieved.Name)
-	}
-
-	if retrieved.Arn == "" {
-		t.Error("ARN should be auto-generated")
-	}
+	assert.Equal(t, "test-ap", retrieved.Name, "Name should match")
+	assert.NotEmpty(t, retrieved.Arn, "ARN should be auto-generated")
 }
 
 func TestCreateAccessPointValidation(t *testing.T) {
@@ -1055,7 +1066,7 @@ func TestStreamingThresholdConfiguration(t *testing.T) {
 func TestStreamingCompressionGzip(t *testing.T) {
 	// Save and set a low streaming threshold for testing
 	originalThreshold := GetStreamingThreshold()
-	SetStreamingThreshold(1024) // 1KB threshold for testing
+	SetStreamingThreshold(testStreamingThreshold1KB)
 	defer SetStreamingThreshold(originalThreshold)
 
 	transformer := &CompressTransformer{}
@@ -1109,7 +1120,7 @@ func TestStreamingCompressionGzip(t *testing.T) {
 func TestStreamingCompressionZstd(t *testing.T) {
 	// Save and set a low streaming threshold for testing
 	originalThreshold := GetStreamingThreshold()
-	SetStreamingThreshold(1024) // 1KB threshold for testing
+	SetStreamingThreshold(testStreamingThreshold1KB)
 	defer SetStreamingThreshold(originalThreshold)
 
 	transformer := &CompressTransformer{}
@@ -1163,7 +1174,7 @@ func TestStreamingCompressionZstd(t *testing.T) {
 func TestStreamingDecompressionGzip(t *testing.T) {
 	// Save and set a low streaming threshold for testing
 	originalThreshold := GetStreamingThreshold()
-	SetStreamingThreshold(512) // 512B threshold for testing (compressed size)
+	SetStreamingThreshold(testStreamingThreshold512B)
 	defer SetStreamingThreshold(originalThreshold)
 
 	transformer := &DecompressTransformer{}
@@ -1197,7 +1208,7 @@ func TestStreamingDecompressionGzip(t *testing.T) {
 func TestStreamingDecompressionZstd(t *testing.T) {
 	// Save and set a low streaming threshold for testing
 	originalThreshold := GetStreamingThreshold()
-	SetStreamingThreshold(512) // 512B threshold for testing (compressed size)
+	SetStreamingThreshold(testStreamingThreshold512B)
 	defer SetStreamingThreshold(originalThreshold)
 
 	transformer := &DecompressTransformer{}
@@ -1232,7 +1243,7 @@ func TestStreamingDecompressionZstd(t *testing.T) {
 func TestStreamingCompressionContextCancellation(t *testing.T) {
 	// Save and set a low streaming threshold for testing
 	originalThreshold := GetStreamingThreshold()
-	SetStreamingThreshold(1024) // 1KB threshold for testing
+	SetStreamingThreshold(testStreamingThreshold1KB)
 	defer SetStreamingThreshold(originalThreshold)
 
 	transformer := &CompressTransformer{}
@@ -1293,8 +1304,8 @@ func TestStreamingDecompressSizeLimitProtection(t *testing.T) {
 
 	// Set low thresholds for testing
 	// Note: Use a very low streaming threshold so even small compressed data triggers streaming
-	SetStreamingThreshold(10) // Very low threshold to trigger streaming
-	SetMaxDecompressSize(1024) // 1KB max decompress size
+	SetStreamingThreshold(testSmallThreshold)
+	SetMaxDecompressSize(testDecompressSizeLimit)
 	defer SetStreamingThreshold(originalThreshold)
 	defer SetMaxDecompressSize(originalMaxDecompress)
 
@@ -1420,7 +1431,7 @@ func TestStreamingThresholdConcurrency(t *testing.T) {
 func TestStreamingVsBufferedModeSelection(t *testing.T) {
 	// Save and set thresholds
 	originalThreshold := GetStreamingThreshold()
-	SetStreamingThreshold(1024) // 1KB threshold
+	SetStreamingThreshold(testStreamingThreshold1KB)
 	defer SetStreamingThreshold(originalThreshold)
 
 	compressTransformer := &CompressTransformer{}
@@ -1517,7 +1528,8 @@ func BenchmarkBufferedVsStreamingCompression(b *testing.B) {
 			// Benchmark buffered mode
 			b.Run("buffered_"+alg+"_"+formatSize(size), func(b *testing.B) {
 				originalThreshold := GetStreamingThreshold()
-				SetStreamingThreshold(int64(size * 10)) // Force buffered mode
+				// Force buffered mode by setting threshold above data size
+				SetStreamingThreshold(int64(size * testStreamingThresholdMultiplier))
 				defer SetStreamingThreshold(originalThreshold)
 
 				transformer := &CompressTransformer{}
@@ -1530,19 +1542,24 @@ func BenchmarkBufferedVsStreamingCompression(b *testing.B) {
 				b.ReportAllocs()
 
 				for b.Loop() {
-					output, _, _ := transformer.Transform(
+					output, _, err := transformer.Transform(
 						context.Background(),
 						bytes.NewReader(testData),
 						params,
 					)
-					_, _ = io.ReadAll(output)
+					if err != nil {
+						b.Fatalf("Transform failed: %v", err)
+					}
+					if _, err = io.ReadAll(output); err != nil {
+						b.Fatalf("ReadAll failed: %v", err)
+					}
 				}
 			})
 
 			// Benchmark streaming mode
 			b.Run("streaming_"+alg+"_"+formatSize(size), func(b *testing.B) {
 				originalThreshold := GetStreamingThreshold()
-				SetStreamingThreshold(100) // Force streaming mode
+				SetStreamingThreshold(testStreamingThresholdLow) // Force streaming mode
 				defer SetStreamingThreshold(originalThreshold)
 
 				transformer := &CompressTransformer{}
@@ -1555,12 +1572,17 @@ func BenchmarkBufferedVsStreamingCompression(b *testing.B) {
 				b.ReportAllocs()
 
 				for b.Loop() {
-					output, _, _ := transformer.Transform(
+					output, _, err := transformer.Transform(
 						context.Background(),
 						bytes.NewReader(testData),
 						params,
 					)
-					_, _ = io.ReadAll(output)
+					if err != nil {
+						b.Fatalf("Transform failed: %v", err)
+					}
+					if _, err = io.ReadAll(output); err != nil {
+						b.Fatalf("ReadAll failed: %v", err)
+					}
 				}
 			})
 		}
@@ -1593,7 +1615,8 @@ func BenchmarkBufferedVsStreamingDecompression(b *testing.B) {
 			// Benchmark buffered mode
 			b.Run("buffered_"+alg+"_"+formatSize(size), func(b *testing.B) {
 				originalThreshold := GetStreamingThreshold()
-				SetStreamingThreshold(int64(len(compressed) * 10))
+				// Force buffered mode by setting threshold above compressed size
+				SetStreamingThreshold(int64(len(compressed) * testStreamingThresholdMultiplier))
 				defer SetStreamingThreshold(originalThreshold)
 
 				transformer := &DecompressTransformer{}
@@ -1606,19 +1629,24 @@ func BenchmarkBufferedVsStreamingDecompression(b *testing.B) {
 				b.ReportAllocs()
 
 				for b.Loop() {
-					output, _, _ := transformer.Transform(
+					output, _, err := transformer.Transform(
 						context.Background(),
 						bytes.NewReader(compressed),
 						params,
 					)
-					_, _ = io.ReadAll(output)
+					if err != nil {
+						b.Fatalf("Transform failed: %v", err)
+					}
+					if _, err = io.ReadAll(output); err != nil {
+						b.Fatalf("ReadAll failed: %v", err)
+					}
 				}
 			})
 
 			// Benchmark streaming mode
 			b.Run("streaming_"+alg+"_"+formatSize(size), func(b *testing.B) {
 				originalThreshold := GetStreamingThreshold()
-				SetStreamingThreshold(100)
+				SetStreamingThreshold(testStreamingThresholdLow) // Force streaming mode
 				defer SetStreamingThreshold(originalThreshold)
 
 				transformer := &DecompressTransformer{}
@@ -1631,12 +1659,17 @@ func BenchmarkBufferedVsStreamingDecompression(b *testing.B) {
 				b.ReportAllocs()
 
 				for b.Loop() {
-					output, _, _ := transformer.Transform(
+					output, _, err := transformer.Transform(
 						context.Background(),
 						bytes.NewReader(compressed),
 						params,
 					)
-					_, _ = io.ReadAll(output)
+					if err != nil {
+						b.Fatalf("Transform failed: %v", err)
+					}
+					if _, err = io.ReadAll(output); err != nil {
+						b.Fatalf("ReadAll failed: %v", err)
+					}
 				}
 			})
 		}
@@ -1659,7 +1692,7 @@ func formatSize(size int) string {
 func TestStreamingCompressionWithLevel(t *testing.T) {
 	// Save and set a low streaming threshold for testing
 	originalThreshold := GetStreamingThreshold()
-	SetStreamingThreshold(1024) // 1KB threshold
+	SetStreamingThreshold(testStreamingThreshold1KB)
 	defer SetStreamingThreshold(originalThreshold)
 
 	transformer := &CompressTransformer{}
