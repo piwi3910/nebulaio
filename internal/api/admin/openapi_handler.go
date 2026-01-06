@@ -22,9 +22,9 @@ const (
 	maxHeaderValLen = 8192        // Max header value length
 	maxURLLength    = 2048        // Max URL length
 
-	// Default cache durations (can be overridden via OpenAPIHandlerConfig)
-	defaultCacheMaxAge       = 3600 // Default cache max age in seconds (1 hour)
-	defaultConfigCacheMaxAge = 60   // Default config cache max age in seconds (1 minute)
+	// Default cache durations (can be overridden via OpenAPIHandlerConfig).
+	defaultCacheMaxAge       = 3600 // Default cache max age in seconds (1 hour).
+	defaultConfigCacheMaxAge = 60   // Default config cache max age in seconds (1 minute).
 )
 
 // allowedMethods defines the HTTP methods that are valid for code snippet generation.
