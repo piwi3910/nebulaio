@@ -3399,7 +3399,7 @@ func TestPresignedDeleteObject(t *testing.T) {
 
 	tc.router.ServeHTTP(w, req)
 
-	assert.True(t, w.Code == http.StatusNoContent || w.Code == http.StatusOK,
+	assert.Contains(t, []int{http.StatusNoContent, http.StatusOK}, w.Code,
 		"Expected status 204 or 200, got %d: %s", w.Code, w.Body.String())
 
 	_, _, err = tc.object.GetObject(ctx, presignedTestBucket, "delete-me")
@@ -3430,7 +3430,7 @@ func TestPresignedDeleteObjectNonExistent(t *testing.T) {
 	tc.router.ServeHTTP(w, req)
 
 	// S3 returns 204 even for nonexistent objects on DELETE
-	assert.True(t, w.Code == http.StatusNoContent || w.Code == http.StatusOK,
+	assert.Contains(t, []int{http.StatusNoContent, http.StatusOK}, w.Code,
 		"Expected status 204 or 200, got %d: %s", w.Code, w.Body.String())
 }
 
