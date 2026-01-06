@@ -38,8 +38,6 @@ const (
 	testDecompressSizeLimit = 1024
 	// testSmallThreshold is used to trigger streaming for small data.
 	testSmallThreshold = 10
-	// testPatternString is the repeating pattern for test data.
-	testPatternString = "Hello, World! "
 )
 
 func TestCreateAccessPoint(t *testing.T) {
