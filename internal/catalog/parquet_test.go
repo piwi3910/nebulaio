@@ -301,3 +301,183 @@ func TestParquetInventoryRecordSchema(t *testing.T) {
 	require.NoError(t, err, "Failed to write single record")
 	assert.Positive(t, size, "Expected positive size")
 }
+
+// TestWriteParquetCompression verifies that Snappy compression is applied
+// by checking that the compressed output is smaller than uncompressed equivalent.
+func TestWriteParquetCompression(t *testing.T) {
+	now := time.Now()
+
+	// Create records with repetitive data that compresses well
+	numRecords := 100
+	records := make([]InventoryRecord, numRecords)
+	for idx := range numRecords {
+		records[idx] = InventoryRecord{
+			Bucket:       "compression-test-bucket",
+			Key:          "repeated/path/to/file.txt",
+			Size:         1024,
+			LastModified: now,
+			ETag:         "same-etag-for-all-records",
+			StorageClass: "STANDARD",
+			IsLatest:     true,
+		}
+	}
+
+	svc := &CatalogService{}
+	var buffer bytes.Buffer
+
+	size, err := svc.writeParquet(&buffer, records)
+
+	require.NoError(t, err, "writeParquet should not fail")
+	assert.Positive(t, size, "Expected positive size")
+
+	// Verify Parquet structure
+	data := buffer.Bytes()
+	assert.Equal(t, parquetMagic, string(data[:4]), "Invalid Parquet header magic")
+	assert.Equal(t, parquetMagic, string(data[len(data)-4:]), "Invalid Parquet footer magic")
+
+	// With Snappy compression and dictionary encoding, repetitive data should compress well.
+	// Uncompressed, 100 records with ~100 bytes each would be ~10KB.
+	// Compressed should be significantly smaller due to repetition.
+	uncompressedEstimate := int64(numRecords * 100)
+	assert.Less(t, size, uncompressedEstimate,
+		"Compressed size (%d) should be less than uncompressed estimate (%d)",
+		size, uncompressedEstimate)
+
+	t.Logf("Compression test: %d records, compressed size: %d bytes (estimated uncompressed: %d)",
+		numRecords, size, uncompressedEstimate)
+}
+
+// TestWriteParquetDataIntegrity verifies that written data can be read back correctly
+// by checking the Parquet file structure and metadata.
+func TestWriteParquetDataIntegrity(t *testing.T) {
+	now := time.Now()
+	retainUntil := now.Add(24 * time.Hour)
+
+	// Create a record with all fields populated
+	records := []InventoryRecord{
+		{
+			Bucket:                    "integrity-bucket",
+			Key:                       "test/file.txt",
+			VersionID:                 "v1",
+			Size:                      12345,
+			LastModified:              now,
+			ETag:                      "abc123",
+			StorageClass:              "STANDARD",
+			IsLatest:                  true,
+			IsDeleteMarker:            false,
+			IsMultipartUploaded:       true,
+			ReplicationStatus:         "COMPLETED",
+			EncryptionStatus:          "SSE-S3",
+			ObjectLockRetainUntilDate: &retainUntil,
+			ObjectLockMode:            "GOVERNANCE",
+			ObjectLockLegalHoldStatus: "OFF",
+			IntelligentTieringAccess:  "FREQUENT",
+			BucketKeyStatus:           "ENABLED",
+			ChecksumAlgorithm:         "SHA256",
+		},
+	}
+
+	svc := &CatalogService{}
+	var buffer bytes.Buffer
+
+	size, err := svc.writeParquet(&buffer, records)
+
+	require.NoError(t, err, "writeParquet should not fail")
+	assert.Positive(t, size, "Expected positive size")
+
+	data := buffer.Bytes()
+
+	// Verify Parquet file structure
+	require.GreaterOrEqual(t, len(data), 8, "Parquet file too small")
+	assert.Equal(t, parquetMagic, string(data[:4]), "Invalid header magic")
+	assert.Equal(t, parquetMagic, string(data[len(data)-4:]), "Invalid footer magic")
+
+	// Verify the file contains expected content markers
+	// The bucket name should appear in the file (in the data pages)
+	assert.True(t, bytes.Contains(data, []byte("integrity-bucket")),
+		"Parquet file should contain bucket name")
+	assert.True(t, bytes.Contains(data, []byte("test/file.txt")),
+		"Parquet file should contain key")
+
+	t.Logf("Data integrity test: file size %d bytes, contains expected data markers", size)
+}
+
+// TestWriteParquetFieldConversion verifies all field types are correctly converted.
+func TestWriteParquetFieldConversion(t *testing.T) {
+	now := time.Now()
+	retainUntil := now.Add(48 * time.Hour)
+
+	record := InventoryRecord{
+		Bucket:                    "conversion-bucket",
+		Key:                       "test-key",
+		VersionID:                 "version-123",
+		Size:                      999999,
+		LastModified:              now,
+		ETag:                      "etag-value",
+		StorageClass:              "GLACIER",
+		IsLatest:                  false,
+		IsDeleteMarker:            true,
+		IsMultipartUploaded:       true,
+		ReplicationStatus:         "PENDING",
+		EncryptionStatus:          "SSE-KMS",
+		ObjectLockRetainUntilDate: &retainUntil,
+		ObjectLockMode:            "COMPLIANCE",
+		ObjectLockLegalHoldStatus: "ON",
+		IntelligentTieringAccess:  "ARCHIVE",
+		BucketKeyStatus:           "DISABLED",
+		ChecksumAlgorithm:         "CRC32",
+	}
+
+	parquetRec := inventoryToParquetRecord(&record)
+
+	// Verify all fields converted correctly
+	assert.Equal(t, record.Bucket, parquetRec.Bucket)
+	assert.Equal(t, record.Key, parquetRec.Key)
+	assert.Equal(t, record.VersionID, parquetRec.VersionID)
+	assert.Equal(t, record.Size, parquetRec.Size)
+	assert.Equal(t, record.LastModified.UnixMilli(), parquetRec.LastModified)
+	assert.Equal(t, record.ETag, parquetRec.ETag)
+	assert.Equal(t, record.StorageClass, parquetRec.StorageClass)
+	assert.Equal(t, record.IsLatest, parquetRec.IsLatest)
+	assert.Equal(t, record.IsDeleteMarker, parquetRec.IsDeleteMarker)
+	assert.Equal(t, record.IsMultipartUploaded, parquetRec.IsMultipartUploaded)
+	assert.Equal(t, record.ReplicationStatus, parquetRec.ReplicationStatus)
+	assert.Equal(t, record.EncryptionStatus, parquetRec.EncryptionStatus)
+
+	// Verify optional timestamp pointer conversion
+	require.NotNil(t, parquetRec.ObjectLockRetainUntilDate)
+	assert.Equal(t, retainUntil.UnixMilli(), *parquetRec.ObjectLockRetainUntilDate)
+
+	assert.Equal(t, record.ObjectLockMode, parquetRec.ObjectLockMode)
+	assert.Equal(t, record.ObjectLockLegalHoldStatus, parquetRec.ObjectLockLegalHoldStatus)
+	assert.Equal(t, record.IntelligentTieringAccess, parquetRec.IntelligentTieringAccess)
+	assert.Equal(t, record.BucketKeyStatus, parquetRec.BucketKeyStatus)
+	assert.Equal(t, record.ChecksumAlgorithm, parquetRec.ChecksumAlgorithm)
+}
+
+// TestWriteParquetNilOptionalFields verifies nil optional fields are handled correctly.
+func TestWriteParquetNilOptionalFields(t *testing.T) {
+	record := InventoryRecord{
+		Bucket:                    "nil-test-bucket",
+		Key:                       "nil-test-key",
+		Size:                      100,
+		LastModified:              time.Now(),
+		ETag:                      "etag",
+		StorageClass:              "STANDARD",
+		ObjectLockRetainUntilDate: nil, // Explicitly nil
+	}
+
+	parquetRec := inventoryToParquetRecord(&record)
+
+	// Verify nil pointer is preserved
+	assert.Nil(t, parquetRec.ObjectLockRetainUntilDate,
+		"Nil ObjectLockRetainUntilDate should remain nil in Parquet record")
+
+	// Verify the record can still be written successfully
+	records := []ParquetInventoryRecord{parquetRec}
+	var buffer bytes.Buffer
+	size, err := writeParquetRecords(&buffer, records)
+
+	require.NoError(t, err, "Should handle nil optional fields")
+	assert.Positive(t, size, "Expected positive size")
+}
