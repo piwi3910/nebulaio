@@ -16,13 +16,15 @@ import (
 )
 
 const (
-	maxBodySize       = 1024 * 1024 // 1MB max body size
-	maxHeaderCount    = 50          // Max number of headers
-	maxHeaderKeyLen   = 256         // Max header key length
-	maxHeaderValLen   = 8192        // Max header value length
-	maxURLLength      = 2048        // Max URL length
-	cacheMaxAge       = 3600        // Cache max age in seconds
-	configCacheMaxAge = 60          // Config cache max age in seconds
+	maxBodySize     = 1024 * 1024 // 1MB max body size
+	maxHeaderCount  = 50          // Max number of headers
+	maxHeaderKeyLen = 256         // Max header key length
+	maxHeaderValLen = 8192        // Max header value length
+	maxURLLength    = 2048        // Max URL length
+
+	// Default cache durations (can be overridden via OpenAPIHandlerConfig)
+	defaultCacheMaxAge       = 3600 // Default cache max age in seconds (1 hour)
+	defaultConfigCacheMaxAge = 60   // Default config cache max age in seconds (1 minute)
 )
 
 // allowedMethods defines the HTTP methods that are valid for code snippet generation.
@@ -36,17 +38,52 @@ var allowedMethods = map[string]bool{
 	"OPTIONS": true,
 }
 
+// OpenAPIHandlerConfig holds configuration options for the OpenAPI handler.
+type OpenAPIHandlerConfig struct {
+	// CacheMaxAge is the max-age for OpenAPI spec responses in seconds (default: 3600)
+	CacheMaxAge int
+	// ConfigCacheMaxAge is the max-age for API Explorer config responses in seconds (default: 60)
+	ConfigCacheMaxAge int
+}
+
+// DefaultOpenAPIHandlerConfig returns the default configuration.
+func DefaultOpenAPIHandlerConfig() OpenAPIHandlerConfig {
+	return OpenAPIHandlerConfig{
+		CacheMaxAge:       defaultCacheMaxAge,
+		ConfigCacheMaxAge: defaultConfigCacheMaxAge,
+	}
+}
+
 // OpenAPIHandler serves the OpenAPI specification.
+// TODO: Consider adding rate limiting for the code generation endpoint to prevent abuse.
 type OpenAPIHandler struct {
-	specJSON []byte
-	specYAML []byte
-	mu       sync.RWMutex
+	specJSON          []byte
+	specYAML          []byte
+	cacheMaxAge       int
+	configCacheMaxAge int
+	mu                sync.RWMutex
 }
 
 // NewOpenAPIHandler creates a new OpenAPI handler with the embedded specification.
 func NewOpenAPIHandler(yamlSpec []byte) *OpenAPIHandler {
+	return NewOpenAPIHandlerWithConfig(yamlSpec, DefaultOpenAPIHandlerConfig())
+}
+
+// NewOpenAPIHandlerWithConfig creates a new OpenAPI handler with custom configuration.
+func NewOpenAPIHandlerWithConfig(yamlSpec []byte, config OpenAPIHandlerConfig) *OpenAPIHandler {
+	// Apply defaults for zero values
+	if config.CacheMaxAge <= 0 {
+		config.CacheMaxAge = defaultCacheMaxAge
+	}
+
+	if config.ConfigCacheMaxAge <= 0 {
+		config.ConfigCacheMaxAge = defaultConfigCacheMaxAge
+	}
+
 	handler := &OpenAPIHandler{
-		specYAML: yamlSpec,
+		specYAML:          yamlSpec,
+		cacheMaxAge:       config.CacheMaxAge,
+		configCacheMaxAge: config.ConfigCacheMaxAge,
 	}
 
 	// Convert YAML to JSON
@@ -129,10 +166,11 @@ func (h *OpenAPIHandler) ServeOpenAPIJSON(w http.ResponseWriter, _ *http.Request
 
 	h.mu.RLock()
 	specJSON := h.specJSON
+	cacheAge := h.cacheMaxAge
 	h.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", cacheMaxAge))
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", cacheAge))
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(specJSON)
@@ -144,10 +182,11 @@ func (h *OpenAPIHandler) ServeOpenAPIYAML(w http.ResponseWriter, _ *http.Request
 
 	h.mu.RLock()
 	specYAML := h.specYAML
+	cacheAge := h.cacheMaxAge
 	h.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/x-yaml")
-	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", cacheMaxAge))
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", cacheAge))
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(specYAML)
@@ -200,8 +239,12 @@ func (h *OpenAPIHandler) ServeAPIExplorerConfig(w http.ResponseWriter, _ *http.R
 	metrics.RecordAPIExplorerRequest("config", true)
 	config := DefaultAPIExplorerConfig()
 
+	h.mu.RLock()
+	cacheAge := h.configCacheMaxAge
+	h.mu.RUnlock()
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", configCacheMaxAge))
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", cacheAge))
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(config)
 }

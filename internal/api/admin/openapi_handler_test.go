@@ -36,6 +36,52 @@ func TestNewOpenAPIHandler_InvalidYAML(t *testing.T) {
 	assert.Equal(t, []byte("{}"), handler.specJSON)
 }
 
+func TestDefaultOpenAPIHandlerConfig(t *testing.T) {
+	config := DefaultOpenAPIHandlerConfig()
+
+	assert.Equal(t, 3600, config.CacheMaxAge)
+	assert.Equal(t, 60, config.ConfigCacheMaxAge)
+}
+
+func TestNewOpenAPIHandlerWithConfig(t *testing.T) {
+	yamlSpec := []byte(`openapi: "3.0.0"
+info:
+  title: Test API
+  version: "1.0.0"
+paths: {}`)
+
+	config := OpenAPIHandlerConfig{
+		CacheMaxAge:       7200,
+		ConfigCacheMaxAge: 120,
+	}
+
+	handler := NewOpenAPIHandlerWithConfig(yamlSpec, config)
+
+	require.NotNil(t, handler)
+	assert.Equal(t, 7200, handler.cacheMaxAge)
+	assert.Equal(t, 120, handler.configCacheMaxAge)
+}
+
+func TestNewOpenAPIHandlerWithConfig_DefaultsForZeroValues(t *testing.T) {
+	yamlSpec := []byte(`openapi: "3.0.0"
+info:
+  title: Test API
+  version: "1.0.0"
+paths: {}`)
+
+	// Zero values should use defaults
+	config := OpenAPIHandlerConfig{
+		CacheMaxAge:       0,
+		ConfigCacheMaxAge: 0,
+	}
+
+	handler := NewOpenAPIHandlerWithConfig(yamlSpec, config)
+
+	require.NotNil(t, handler)
+	assert.Equal(t, 3600, handler.cacheMaxAge)
+	assert.Equal(t, 60, handler.configCacheMaxAge)
+}
+
 func TestServeOpenAPIJSON(t *testing.T) {
 	yamlSpec := []byte(`openapi: "3.0.0"
 info:

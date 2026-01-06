@@ -130,6 +130,11 @@ const MAX_HISTORY_SIZE = 50;
 const HISTORY_SCROLL_HEIGHT = 500;
 const CODE_SNIPPET_SCROLL_HEIGHT = 300;
 
+// Pending request timeout in milliseconds (30 seconds)
+// Requests older than this are considered stale and cleaned up to prevent memory leaks
+const PENDING_REQUEST_TIMEOUT_MS = 30000;
+const PENDING_REQUEST_CLEANUP_INTERVAL_MS = 10000;
+
 // Helper function to load history from localStorage
 function loadHistoryFromStorage(): RequestHistoryEntry[] {
   const stored = localStorage.getItem('nebulaio-api-history');
@@ -215,8 +220,9 @@ export function ApiExplorerPage() {
 
         setCodeSnippets(response.data.snippets || []);
         setCodeModalOpened(true);
-      } catch {
-        // Error is intentionally not logged to console as the notification handles user feedback
+      } catch (error) {
+        // Log error for debugging while showing user-friendly notification
+        console.error('Failed to generate code snippets:', error);
         notifications.show({
           title: 'Error',
           message: 'Failed to generate code snippets. Please try again.',
@@ -242,8 +248,9 @@ export function ApiExplorerPage() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch {
-      // Error is intentionally not logged to console as the notification handles user feedback
+    } catch (error) {
+      // Log error for debugging while showing user-friendly notification
+      console.error(`Failed to export OpenAPI spec as ${format}:`, error);
       notifications.show({
         title: 'Export Failed',
         message: `Failed to export OpenAPI specification as ${format.toUpperCase()}.`,
@@ -328,11 +335,26 @@ export function ApiExplorerPage() {
     return response;
   }, [addToHistory]);
 
-  // Cleanup pending requests on unmount
+  // Cleanup stale pending requests periodically and on unmount
   useEffect(() => {
     const pendingRequests = pendingRequestsRef.current;
 
+    // Periodic cleanup of stale pending requests to prevent memory leaks
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const staleUrls: string[] = [];
+
+      pendingRequests.forEach((request, url) => {
+        if (now - request.startTime > PENDING_REQUEST_TIMEOUT_MS) {
+          staleUrls.push(url);
+        }
+      });
+
+      staleUrls.forEach((url) => pendingRequests.delete(url));
+    }, PENDING_REQUEST_CLEANUP_INTERVAL_MS);
+
     return () => {
+      clearInterval(cleanupInterval);
       pendingRequests.clear();
     };
   }, []);
