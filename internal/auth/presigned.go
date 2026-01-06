@@ -281,13 +281,13 @@ func (g *PresignedURLGenerator) getHost(endpoint, bucket string) string {
 	}
 
 	// Parse the endpoint to get the host
-	u, err := url.Parse(endpoint)
+	parsedEndpoint, err := url.Parse(endpoint)
 	if err != nil {
 		return endpoint
 	}
 
 	// For path-style URLs, just return the host
-	return u.Host
+	return parsedEndpoint.Host
 }
 
 // buildURL constructs the final presigned URL.
