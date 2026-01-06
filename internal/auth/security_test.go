@@ -220,6 +220,10 @@ func TestSessionSecurity(t *testing.T) {
 
 			assert.GreaterOrEqual(t, len(sessionID), testSessionIDLength,
 				"Session ID should have sufficient length")
+
+			// Verify generated session ID passes format validation
+			assert.True(t, validateSessionIDFormat(sessionID),
+				"Generated session ID should pass format validation")
 		}
 	})
 
@@ -447,8 +451,21 @@ func validateClaimsExpiry(claims TestTokenClaims) TokenValidationResult {
 	return TokenValidationResult{Valid: true}
 }
 
-func validateSessionIDFormat(_ string) bool {
-	return false
+func validateSessionIDFormat(sessionID string) bool {
+	// Session ID must be exactly testSessionIDLength characters
+	if len(sessionID) != testSessionIDLength {
+		return false
+	}
+
+	// Session ID must only contain alphanumeric characters
+	const validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	for _, char := range sessionID {
+		if !strings.ContainsRune(validChars, char) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func generateTestSecureSessionID() string {
