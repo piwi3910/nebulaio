@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"slices"
 	"sync"
 	"time"
 
@@ -322,11 +323,10 @@ func (m *PlacementGroupManager) AddNodeToGroup(groupID PlacementGroupID, nodeID 
 	}
 
 	// Check if already in this group
-	for _, n := range group.Nodes {
-		if n == nodeID {
-			m.mu.Unlock()
-			return nil // Already a member
-		}
+	if slices.Contains(group.Nodes, nodeID) {
+		m.mu.Unlock()
+
+		return nil // Already a member
 	}
 
 	// Check max nodes

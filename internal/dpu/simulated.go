@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 	"time"
 )
@@ -143,7 +144,7 @@ func (b *SimulatedBackend) SelectDPU(index int) (*DPUInfo, error) {
 }
 
 // StartService starts an offload service.
-func (b *SimulatedBackend) StartService(offloadType OffloadType, config interface{}) error {
+func (b *SimulatedBackend) StartService(offloadType OffloadType, config any) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -156,16 +157,7 @@ func (b *SimulatedBackend) StartService(offloadType OffloadType, config interfac
 	}
 
 	// Check if DPU supports this offload
-	supported := false
-
-	for _, cap := range b.selectedDPU.Capabilities {
-		if cap == offloadType {
-			supported = true
-			break
-		}
-	}
-
-	if !supported {
+	if !slices.Contains(b.selectedDPU.Capabilities, offloadType) {
 		return ErrOffloadNotSupported
 	}
 
@@ -432,7 +424,7 @@ func (b *SimulatedBackend) Decompress(ctx context.Context, algorithm string, dat
 }
 
 // GetMetrics returns simulated backend metrics.
-func (b *SimulatedBackend) GetMetrics() map[string]interface{} {
+func (b *SimulatedBackend) GetMetrics() map[string]any {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
@@ -441,7 +433,7 @@ func (b *SimulatedBackend) GetMetrics() map[string]interface{} {
 		activeServices = append(activeServices, string(svc))
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"simulated":       true,
 		"dpu_count":       len(b.dpus),
 		"selected_dpu":    b.selectedDPU != nil,

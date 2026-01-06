@@ -35,7 +35,7 @@ func BenchmarkSHA256_1KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		sha256.Sum256(data)
 	}
 }
@@ -46,7 +46,7 @@ func BenchmarkSHA256_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		sha256.Sum256(data)
 	}
 }
@@ -57,7 +57,7 @@ func BenchmarkSHA256_10MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		sha256.Sum256(data)
 	}
 }
@@ -70,7 +70,7 @@ func BenchmarkZstdCompress_1KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		encoder.EncodeAll(data, nil)
 	}
 }
@@ -82,7 +82,7 @@ func BenchmarkZstdCompress_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		encoder.EncodeAll(data, nil)
 	}
 }
@@ -96,7 +96,7 @@ func BenchmarkZstdDecompress_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(compressed)))
 
-	for range b.N {
+	for b.Loop() {
 		decoder.DecodeAll(compressed, nil)
 	}
 }
@@ -109,7 +109,7 @@ func BenchmarkLZ4Compress_1KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		lz4.CompressBlock(data, dst, nil)
 	}
 }
@@ -121,7 +121,7 @@ func BenchmarkLZ4Compress_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		lz4.CompressBlock(data, dst, nil)
 	}
 }
@@ -136,14 +136,14 @@ func BenchmarkLZ4Decompress_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(compressed)))
 
-	for range b.N {
+	for b.Loop() {
 		lz4.UncompressBlock(compressed, output)
 	}
 }
 
 // BenchmarkJSONMarshal benchmarks JSON marshaling.
 func BenchmarkJSONMarshal_SmallObject(b *testing.B) {
-	obj := map[string]interface{}{
+	obj := map[string]any{
 		"id":         "12345",
 		"name":       "test-object",
 		"size":       1024,
@@ -152,15 +152,15 @@ func BenchmarkJSONMarshal_SmallObject(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		json.Marshal(obj)
 	}
 }
 
 func BenchmarkJSONMarshal_LargeObject(b *testing.B) {
-	items := make([]map[string]interface{}, 1000)
+	items := make([]map[string]any, 1000)
 	for i := range items {
-		items[i] = map[string]interface{}{
+		items[i] = map[string]any{
 			"id":         i,
 			"name":       "test-object",
 			"size":       1024 * i,
@@ -173,14 +173,14 @@ func BenchmarkJSONMarshal_LargeObject(b *testing.B) {
 		}
 	}
 
-	obj := map[string]interface{}{
+	obj := map[string]any{
 		"items": items,
 		"total": len(items),
 	}
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		json.Marshal(obj)
 	}
 }
@@ -188,11 +188,11 @@ func BenchmarkJSONMarshal_LargeObject(b *testing.B) {
 func BenchmarkJSONUnmarshal_SmallObject(b *testing.B) {
 	data := []byte(`{"id":"12345","name":"test-object","size":1024,"created_at":"2024-01-01T00:00:00Z"}`)
 
-	var obj map[string]interface{}
+	var obj map[string]any
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		json.Unmarshal(data, &obj)
 	}
 }
@@ -204,7 +204,7 @@ func BenchmarkBufferWrite_1KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		var buf bytes.Buffer
 		buf.Write(data)
 	}
@@ -216,7 +216,7 @@ func BenchmarkBufferWrite_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		var buf bytes.Buffer
 		buf.Write(data)
 	}
@@ -228,7 +228,7 @@ func BenchmarkBufferPreallocatedWrite_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		buf := bytes.NewBuffer(make([]byte, 0, len(data)))
 		buf.Write(data)
 	}
@@ -241,7 +241,7 @@ func BenchmarkIOCopy_1KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		src := bytes.NewReader(data)
 		dst := &bytes.Buffer{}
 		io.Copy(dst, src)
@@ -254,7 +254,7 @@ func BenchmarkIOCopy_1MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		src := bytes.NewReader(data)
 		dst := &bytes.Buffer{}
 		io.Copy(dst, src)
@@ -267,7 +267,7 @@ func BenchmarkIOCopy_10MB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		src := bytes.NewReader(data)
 		dst := &bytes.Buffer{}
 		io.Copy(dst, src)
@@ -282,7 +282,7 @@ func BenchmarkIOCopyBuffer_1MB_32KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		src := bytes.NewReader(data)
 		dst := &bytes.Buffer{}
 		io.CopyBuffer(dst, src, buf)
@@ -296,7 +296,7 @@ func BenchmarkIOCopyBuffer_1MB_256KB(b *testing.B) {
 	b.ResetTimer()
 	b.SetBytes(int64(len(data)))
 
-	for range b.N {
+	for b.Loop() {
 		src := bytes.NewReader(data)
 		dst := &bytes.Buffer{}
 		io.CopyBuffer(dst, src, buf)
@@ -330,7 +330,7 @@ func BenchmarkZstdCompress_1MB_Parallel(b *testing.B) {
 }
 
 func BenchmarkJSONMarshal_Parallel(b *testing.B) {
-	obj := map[string]interface{}{
+	obj := map[string]any{
 		"id":         "12345",
 		"name":       "test-object",
 		"size":       1024,

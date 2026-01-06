@@ -29,16 +29,16 @@ type Config struct {
 	BindPassword string `json:"bindPassword" yaml:"bindPassword"`
 
 	// TLS configuration
-	TLS TLSConfig `json:"tls,omitempty" yaml:"tls,omitempty"`
+	TLS TLSConfig `json:"tls" yaml:"tls"`
 
 	// User search configuration
 	UserSearch UserSearchConfig `json:"userSearch" yaml:"userSearch"`
 
 	// Group search configuration
-	GroupSearch GroupSearchConfig `json:"groupSearch,omitempty" yaml:"groupSearch,omitempty"`
+	GroupSearch GroupSearchConfig `json:"groupSearch" yaml:"groupSearch"`
 
 	// Connection pool settings
-	Pool PoolConfig `json:"pool,omitempty" yaml:"pool,omitempty"`
+	Pool PoolConfig `json:"pool" yaml:"pool"`
 }
 
 // TLSConfig holds TLS settings for LDAP.

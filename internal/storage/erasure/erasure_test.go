@@ -497,7 +497,7 @@ func BenchmarkEncode(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		_, _ = enc.Encode(bytes.NewReader(data))
 	}
 }
@@ -512,7 +512,7 @@ func BenchmarkDecode(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		_, _ = dec.Decode(&DecodeInput{
 			Shards:       encoded.Shards,
 			OriginalSize: encoded.OriginalSize,

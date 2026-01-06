@@ -153,7 +153,7 @@ func (t *RedisTarget) Publish(ctx context.Context, event *events.S3Event) error 
 	// } else {
 	//     args := &redis.XAddArgs{
 	//         Stream: t.config.Stream,
-	//         Values: map[string]interface{}{"event": body},
+	//         Values: map[string]any{"event": body},
 	//     }
 	//     if t.config.MaxLen > 0 {
 	//         args.MaxLen = t.config.MaxLen
@@ -192,7 +192,7 @@ func (t *RedisTarget) Close() error {
 var _ events.Target = (*RedisTarget)(nil)
 
 func init() {
-	events.RegisterTargetFactory("redis", func(config map[string]interface{}) (events.Target, error) {
+	events.RegisterTargetFactory("redis", func(config map[string]any) (events.Target, error) {
 		cfg := DefaultRedisConfig()
 
 		if name, ok := config["name"].(string); ok {

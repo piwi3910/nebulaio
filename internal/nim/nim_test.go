@@ -965,7 +965,7 @@ func BenchmarkChat(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		_, _ = client.Chat(context.Background(), req)
 	}
 }
@@ -984,7 +984,7 @@ func BenchmarkEmbed(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		_, _ = client.Embed(context.Background(), req)
 	}
 }
@@ -1007,7 +1007,7 @@ func BenchmarkBatch(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		_, _ = client.Batch(context.Background(), req)
 	}
 }

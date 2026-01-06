@@ -383,13 +383,15 @@ func BenchmarkDirectIOWrite(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		key := "key-" + string(rune(i%1000))
 
 		err := vol.Put("bench", key, bytes.NewReader(data), int64(len(data)))
 		if err != nil {
 			b.Fatal(err)
 		}
+		i++
 	}
 }
 
@@ -424,12 +426,14 @@ func BenchmarkDirectIORead(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		key := "key-" + string(rune(i%100))
 
 		_, err := vol.Get("bench", key)
 		if err != nil {
 			b.Fatal(err)
 		}
+		i++
 	}
 }

@@ -327,26 +327,28 @@ func TestVersionVariable(t *testing.T) {
 }
 
 func BenchmarkRecordRequest(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		RecordRequest("GET", "GetObject", 200, 10*time.Millisecond)
 	}
 }
 
 func BenchmarkRecordS3Operation(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		RecordS3Operation("GetObject", "test-bucket")
 	}
 }
 
 func BenchmarkIncrementActiveConnections(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		IncrementActiveConnections()
 	}
 }
 
 func BenchmarkSetStorageStats(b *testing.B) {
-	for i := range b.N {
+	var i int
+	for b.Loop() {
 		SetStorageStats(int64(i*1024), int64(1000000))
+		i++
 	}
 }
 
@@ -397,13 +399,13 @@ func TestRateLimitMetricsRegistration(t *testing.T) {
 }
 
 func BenchmarkRecordRateLimitRequest(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		RecordRateLimitRequest("/api/buckets", true)
 	}
 }
 
 func BenchmarkRateLimitActiveIPs(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		IncrementRateLimitActiveIPs()
 	}
 }

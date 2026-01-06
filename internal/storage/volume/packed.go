@@ -321,10 +321,7 @@ func (v *Volume) writeSpanningData(blockNum uint32, data []byte, blocksNeeded in
 	remaining := data
 
 	for i := range blocksNeeded {
-		writeSize := BlockSize
-		if len(remaining) < BlockSize {
-			writeSize = len(remaining)
-		}
+		writeSize := min(len(remaining), BlockSize)
 
 		//nolint:gosec // G115: i is bounded by blocksNeeded which fits in uint32
 		err := v.writeBlock(blockNum+uint32(i), remaining[:writeSize])
@@ -464,10 +461,7 @@ func (v *Volume) Get(bucket, key string) ([]byte, error) {
 				return nil, err
 			}
 
-			copySize := BlockSize
-			if len(remaining) < BlockSize {
-				copySize = len(remaining)
-			}
+			copySize := min(len(remaining), BlockSize)
 
 			copy(remaining[:copySize], block[:copySize])
 			remaining = remaining[copySize:]

@@ -322,8 +322,8 @@ func (pr *ParquetReader) GetNumRows() int64 {
 }
 
 // ReadRows reads rows starting at the given offset.
-func (pr *ParquetReader) ReadRows(offset, limit int64) ([]map[string]interface{}, error) {
-	rows := make([]map[string]interface{}, 0, limit)
+func (pr *ParquetReader) ReadRows(offset, limit int64) ([]map[string]any, error) {
+	rows := make([]map[string]any, 0, limit)
 
 	currentRow := int64(0)
 	for _, rg := range pr.rowGroups {
@@ -350,7 +350,7 @@ func (pr *ParquetReader) ReadRows(offset, limit int64) ([]map[string]interface{}
 }
 
 // readRowGroup reads rows from a row group.
-func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[string]interface{}, error) {
+func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[string]any, error) {
 	if offset < 0 {
 		offset = 0
 	}
@@ -359,10 +359,10 @@ func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[
 		limit = rg.NumRows - offset
 	}
 
-	rows := make([]map[string]interface{}, 0, limit)
+	rows := make([]map[string]any, 0, limit)
 
 	// Read column data
-	columnData := make(map[string][]interface{})
+	columnData := make(map[string][]any)
 
 	for _, chunk := range rg.ColumnChunks {
 		colName := strings.Join(chunk.Descriptor.Path, ".")
@@ -377,7 +377,7 @@ func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[
 
 	// Build rows
 	for i := range limit {
-		row := make(map[string]interface{})
+		row := make(map[string]any)
 
 		for colName, values := range columnData {
 			idx := offset + i
@@ -393,8 +393,8 @@ func (pr *ParquetReader) readRowGroup(rg *RowGroup, offset, limit int64) ([]map[
 }
 
 // readColumnChunk reads values from a column chunk.
-func (pr *ParquetReader) readColumnChunk(chunk *ColumnChunk) ([]interface{}, error) {
-	values := make([]interface{}, 0)
+func (pr *ParquetReader) readColumnChunk(chunk *ColumnChunk) ([]any, error) {
+	values := make([]any, 0)
 
 	for _, page := range chunk.Pages {
 		pageValues, err := pr.readPage(page, chunk.Descriptor)
@@ -409,13 +409,13 @@ func (pr *ParquetReader) readColumnChunk(chunk *ColumnChunk) ([]interface{}, err
 }
 
 // readPage reads values from a data page.
-func (pr *ParquetReader) readPage(page *Page, desc *ColumnDescriptor) ([]interface{}, error) {
+func (pr *ParquetReader) readPage(page *Page, desc *ColumnDescriptor) ([]any, error) {
 	data := page.Data
 
 	// Decompress if needed
 	// (Simplified - real implementation would check metadata)
 
-	values := make([]interface{}, 0, page.NumValues)
+	values := make([]any, 0, page.NumValues)
 
 	reader := bytes.NewReader(data)
 	for range page.NumValues {
@@ -435,8 +435,8 @@ func (pr *ParquetReader) readPage(page *Page, desc *ColumnDescriptor) ([]interfa
 }
 
 // readValue reads a single value based on the column type.
-func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
-	type readFunc func(io.Reader, *ColumnDescriptor) (interface{}, error)
+func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (any, error) {
+	type readFunc func(io.Reader, *ColumnDescriptor) (any, error)
 
 	readers := map[ParquetType]readFunc{
 		ParquetTypeBoolean:           pr.readBoolean,
@@ -456,7 +456,7 @@ func (pr *ParquetReader) readValue(reader io.Reader, desc *ColumnDescriptor) (in
 	return nil, fmt.Errorf("unsupported type: %d", desc.Type)
 }
 
-func (pr *ParquetReader) readBoolean(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readBoolean(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var b byte
 	err := binary.Read(reader, binary.LittleEndian, &b)
 	if err != nil {
@@ -465,7 +465,7 @@ func (pr *ParquetReader) readBoolean(reader io.Reader, desc *ColumnDescriptor) (
 	return b != 0, nil
 }
 
-func (pr *ParquetReader) readInt32(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readInt32(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var val int32
 	err := binary.Read(reader, binary.LittleEndian, &val)
 	if err != nil {
@@ -474,7 +474,7 @@ func (pr *ParquetReader) readInt32(reader io.Reader, desc *ColumnDescriptor) (in
 	return pr.convertInt32(val, desc), nil
 }
 
-func (pr *ParquetReader) readInt64(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readInt64(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var val int64
 	err := binary.Read(reader, binary.LittleEndian, &val)
 	if err != nil {
@@ -483,7 +483,7 @@ func (pr *ParquetReader) readInt64(reader io.Reader, desc *ColumnDescriptor) (in
 	return pr.convertInt64(val, desc), nil
 }
 
-func (pr *ParquetReader) readFloat(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readFloat(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var val float32
 	err := binary.Read(reader, binary.LittleEndian, &val)
 	if err != nil {
@@ -492,7 +492,7 @@ func (pr *ParquetReader) readFloat(reader io.Reader, desc *ColumnDescriptor) (in
 	return float64(val), nil
 }
 
-func (pr *ParquetReader) readDouble(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readDouble(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var val float64
 	err := binary.Read(reader, binary.LittleEndian, &val)
 	if err != nil {
@@ -501,7 +501,7 @@ func (pr *ParquetReader) readDouble(reader io.Reader, desc *ColumnDescriptor) (i
 	return val, nil
 }
 
-func (pr *ParquetReader) readByteArray(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readByteArray(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	var length int32
 	err := binary.Read(reader, binary.LittleEndian, &length)
 	if err != nil {
@@ -517,7 +517,7 @@ func (pr *ParquetReader) readByteArray(reader io.Reader, desc *ColumnDescriptor)
 	return pr.convertByteArray(data, desc), nil
 }
 
-func (pr *ParquetReader) readFixedLenByteArray(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readFixedLenByteArray(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	data := make([]byte, desc.Precision)
 	_, err := io.ReadFull(reader, data)
 	if err != nil {
@@ -526,7 +526,7 @@ func (pr *ParquetReader) readFixedLenByteArray(reader io.Reader, desc *ColumnDes
 	return pr.convertByteArray(data, desc), nil
 }
 
-func (pr *ParquetReader) readInt96(reader io.Reader, desc *ColumnDescriptor) (interface{}, error) {
+func (pr *ParquetReader) readInt96(reader io.Reader, desc *ColumnDescriptor) (any, error) {
 	data := make([]byte, 12)
 	_, err := io.ReadFull(reader, data)
 	if err != nil {
@@ -536,7 +536,7 @@ func (pr *ParquetReader) readInt96(reader io.Reader, desc *ColumnDescriptor) (in
 }
 
 // convertInt32 converts an int32 based on logical type.
-func (pr *ParquetReader) convertInt32(val int32, desc *ColumnDescriptor) interface{} {
+func (pr *ParquetReader) convertInt32(val int32, desc *ColumnDescriptor) any {
 	switch desc.Converted {
 	case ConvertedTypeDate:
 		// Days since Unix epoch
@@ -563,7 +563,7 @@ func (pr *ParquetReader) convertInt32(val int32, desc *ColumnDescriptor) interfa
 }
 
 // convertInt64 converts an int64 based on logical type.
-func (pr *ParquetReader) convertInt64(val int64, desc *ColumnDescriptor) interface{} {
+func (pr *ParquetReader) convertInt64(val int64, desc *ColumnDescriptor) any {
 	switch desc.Converted {
 	case ConvertedTypeTimestampMillis:
 		return time.UnixMilli(val).UTC()
@@ -581,12 +581,12 @@ func (pr *ParquetReader) convertInt64(val int64, desc *ColumnDescriptor) interfa
 }
 
 // convertByteArray converts a byte array based on logical type.
-func (pr *ParquetReader) convertByteArray(data []byte, desc *ColumnDescriptor) interface{} {
+func (pr *ParquetReader) convertByteArray(data []byte, desc *ColumnDescriptor) any {
 	switch desc.Converted {
 	case ConvertedTypeUTF8:
 		return string(data)
 	case ConvertedTypeJSON:
-		var result interface{}
+		var result any
 
 		err := json.Unmarshal(data, &result)
 		if err != nil {
@@ -603,7 +603,7 @@ func (pr *ParquetReader) convertByteArray(data []byte, desc *ColumnDescriptor) i
 }
 
 // convertInt96 converts INT96 to timestamp (Spark/Hive format).
-func (pr *ParquetReader) convertInt96(data []byte) interface{} {
+func (pr *ParquetReader) convertInt96(data []byte) any {
 	// INT96 is nanoseconds since midnight + Julian day
 	if len(data) != 12 {
 		return nil
@@ -658,7 +658,7 @@ func NewParquetSelectExecutor(reader io.ReadSeeker) (*ParquetSelectExecutor, err
 func (e *ParquetSelectExecutor) Execute(query *SelectQuery) (*SelectResult, error) {
 	result := &SelectResult{
 		Columns: query.Columns,
-		Rows:    make([][]interface{}, 0),
+		Rows:    make([][]any, 0),
 	}
 
 	// Read all rows (with pagination for large files)
@@ -690,7 +690,7 @@ func (e *ParquetSelectExecutor) Execute(query *SelectQuery) (*SelectResult, erro
 	return result, nil
 }
 
-func (e *ParquetSelectExecutor) processBatch(rows []map[string]interface{}, query *SelectQuery, result *SelectResult) (bool, error) {
+func (e *ParquetSelectExecutor) processBatch(rows []map[string]any, query *SelectQuery, result *SelectResult) (bool, error) {
 	for _, row := range rows {
 		matchesWhere, err := e.evaluateWhereClause(query, row)
 		if err != nil {
@@ -712,7 +712,7 @@ func (e *ParquetSelectExecutor) processBatch(rows []map[string]interface{}, quer
 	return false, nil
 }
 
-func (e *ParquetSelectExecutor) evaluateWhereClause(query *SelectQuery, row map[string]interface{}) (bool, error) {
+func (e *ParquetSelectExecutor) evaluateWhereClause(query *SelectQuery, row map[string]any) (bool, error) {
 	if query.Where == nil {
 		return true, nil
 	}
@@ -725,8 +725,8 @@ func (e *ParquetSelectExecutor) evaluateWhereClause(query *SelectQuery, row map[
 	return match, nil
 }
 
-func (e *ParquetSelectExecutor) projectColumns(query *SelectQuery, row map[string]interface{}) []interface{} {
-	var resultRow []interface{}
+func (e *ParquetSelectExecutor) projectColumns(query *SelectQuery, row map[string]any) []any {
+	var resultRow []any
 
 	if len(query.Columns) == 1 && query.Columns[0] == "*" {
 		// Select all columns
@@ -754,12 +754,12 @@ type SelectQuery struct {
 // SelectResult contains the query result.
 type SelectResult struct {
 	Columns []string
-	Rows    [][]interface{}
+	Rows    [][]any
 }
 
 // Condition represents a WHERE condition.
 type Condition struct {
-	Value    interface{}
+	Value    any
 	Left     *Condition
 	Right    *Condition
 	Column   string
@@ -783,7 +783,7 @@ const (
 )
 
 // evaluateCondition evaluates a condition against a row.
-func evaluateCondition(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateCondition(cond *Condition, row map[string]any) (bool, error) {
 	if cond == nil {
 		return true, nil
 	}
@@ -813,7 +813,7 @@ func evaluateCondition(cond *Condition, row map[string]interface{}) (bool, error
 }
 
 // evaluateAnd evaluates an AND condition.
-func evaluateAnd(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateAnd(cond *Condition, row map[string]any) (bool, error) {
 	left, err := evaluateCondition(cond.Left, row)
 	if err != nil || !left {
 		return false, err
@@ -822,7 +822,7 @@ func evaluateAnd(cond *Condition, row map[string]interface{}) (bool, error) {
 }
 
 // evaluateOr evaluates an OR condition.
-func evaluateOr(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateOr(cond *Condition, row map[string]any) (bool, error) {
 	left, err := evaluateCondition(cond.Left, row)
 	if err != nil {
 		return false, err
@@ -834,25 +834,25 @@ func evaluateOr(cond *Condition, row map[string]interface{}) (bool, error) {
 }
 
 // evaluateNot evaluates a NOT condition.
-func evaluateNot(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateNot(cond *Condition, row map[string]any) (bool, error) {
 	result, err := evaluateCondition(cond.Left, row)
 	return !result, err
 }
 
 // evaluateIsNull evaluates an IS NULL condition.
-func evaluateIsNull(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateIsNull(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	return val == nil, nil
 }
 
 // evaluateIsNotNull evaluates an IS NOT NULL condition.
-func evaluateIsNotNull(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateIsNotNull(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	return val != nil, nil
 }
 
 // evaluateComparison evaluates a comparison condition.
-func evaluateComparison(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateComparison(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	if val == nil {
 		return false, nil
@@ -877,7 +877,7 @@ func evaluateComparison(cond *Condition, row map[string]interface{}) (bool, erro
 }
 
 // compareValues compares two values.
-func compareValues(a, b interface{}) int {
+func compareValues(a, b any) int {
 	// Convert to strings for comparison
 	aStr := fmt.Sprint(a)
 	bStr := fmt.Sprint(b)
@@ -903,7 +903,7 @@ func compareValues(a, b interface{}) int {
 }
 
 // evaluateLike evaluates a LIKE condition.
-func evaluateLike(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateLike(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	if val == nil {
 		return false, nil
@@ -953,14 +953,14 @@ func matchPattern(value, pattern string) bool {
 }
 
 // evaluateBetween evaluates a BETWEEN condition.
-func evaluateBetween(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateBetween(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	if val == nil {
 		return false, nil
 	}
 
 	// Value should be a slice with [min, max]
-	bounds, ok := cond.Value.([]interface{})
+	bounds, ok := cond.Value.([]any)
 	if !ok || len(bounds) != 2 {
 		return false, errors.New("invalid BETWEEN bounds")
 	}
@@ -969,14 +969,14 @@ func evaluateBetween(cond *Condition, row map[string]interface{}) (bool, error) 
 }
 
 // evaluateIn evaluates an IN condition.
-func evaluateIn(cond *Condition, row map[string]interface{}) (bool, error) {
+func evaluateIn(cond *Condition, row map[string]any) (bool, error) {
 	val := row[cond.Column]
 	if val == nil {
 		return false, nil
 	}
 
 	// Value should be a slice
-	values, ok := cond.Value.([]interface{})
+	values, ok := cond.Value.([]any)
 	if !ok {
 		return false, errors.New("invalid IN values")
 	}
@@ -1048,7 +1048,7 @@ func formatJSON(result *SelectResult) ([]byte, error) {
 	var buf bytes.Buffer
 
 	for _, row := range result.Rows {
-		obj := make(map[string]interface{})
+		obj := make(map[string]any)
 
 		for i, col := range result.Columns {
 			if i < len(row) {
@@ -1091,7 +1091,7 @@ func formatCSV(result *SelectResult) ([]byte, error) {
 }
 
 // formatCSVValue formats a value for CSV output.
-func formatCSVValue(v interface{}) string {
+func formatCSVValue(v any) string {
 	if v == nil {
 		return ""
 	}

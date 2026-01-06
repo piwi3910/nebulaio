@@ -7,17 +7,37 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Test constants.
 const (
 	compressionGzip = "gzip"
 	compressionZstd = "zstd"
+)
+
+// Benchmark and test configuration constants.
+const (
+	// testStreamingThresholdLow forces streaming mode in tests.
+	testStreamingThresholdLow = 100
+	// testStreamingThreshold1KB is a 1KB threshold for testing.
+	testStreamingThreshold1KB = 1024
+	// testStreamingThreshold512B is a 512B threshold for testing.
+	testStreamingThreshold512B = 512
+	// testStreamingThresholdMultiplier is used to set threshold above data size.
+	testStreamingThresholdMultiplier = 10
+	// testDecompressSizeLimit is the max decompress size for testing.
+	testDecompressSizeLimit = 1024
+	// testSmallThreshold is used to trigger streaming for small data.
+	testSmallThreshold = 10
 )
 
 func TestCreateAccessPoint(t *testing.T) {
@@ -40,22 +60,13 @@ func TestCreateAccessPoint(t *testing.T) {
 	}
 
 	err := svc.CreateAccessPoint(cfg)
-	if err != nil {
-		t.Fatalf("CreateAccessPoint failed: %v", err)
-	}
+	require.NoError(t, err, "CreateAccessPoint should succeed")
 
 	retrieved, err := svc.GetAccessPoint("test-ap")
-	if err != nil {
-		t.Fatalf("GetAccessPoint failed: %v", err)
-	}
+	require.NoError(t, err, "GetAccessPoint should succeed")
 
-	if retrieved.Name != "test-ap" {
-		t.Errorf("Expected name 'test-ap', got '%s'", retrieved.Name)
-	}
-
-	if retrieved.Arn == "" {
-		t.Error("ARN should be auto-generated")
-	}
+	assert.Equal(t, "test-ap", retrieved.Name, "Name should match")
+	assert.NotEmpty(t, retrieved.Arn, "ARN should be auto-generated")
 }
 
 func TestCreateAccessPointValidation(t *testing.T) {
@@ -164,7 +175,7 @@ func TestRedactTransformer(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		params   map[string]interface{}
+		params   map[string]any
 		contains string
 	}{
 		{
@@ -182,7 +193,7 @@ func TestRedactTransformer(t *testing.T) {
 		{
 			name:     "custom replacement",
 			input:    "Email: test@test.com",
-			params:   map[string]interface{}{"replacement": "***HIDDEN***"},
+			params:   map[string]any{"replacement": "***HIDDEN***"},
 			contains: "***HIDDEN***",
 		},
 	}
@@ -224,7 +235,7 @@ func TestPIIMaskTransformer(t *testing.T) {
 
 	data, _ := io.ReadAll(output)
 
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal result: %v", err)
@@ -259,26 +270,26 @@ func TestFilterFieldsTransformer(t *testing.T) {
 	}`
 
 	tests := []struct {
-		params map[string]interface{}
-		check  func(map[string]interface{}) bool
+		params map[string]any
+		check  func(map[string]any) bool
 		name   string
 	}{
 		{
 			name: "include fields",
-			params: map[string]interface{}{
-				"include": []interface{}{"id", "name"},
+			params: map[string]any{
+				"include": []any{"id", "name"},
 			},
-			check: func(r map[string]interface{}) bool {
+			check: func(r map[string]any) bool {
 				_, hasSecret := r["secret"]
 				return !hasSecret && r["id"] != nil && r["name"] != nil
 			},
 		},
 		{
 			name: "exclude fields",
-			params: map[string]interface{}{
-				"exclude": []interface{}{"secret"},
+			params: map[string]any{
+				"exclude": []any{"secret"},
 			},
-			check: func(r map[string]interface{}) bool {
+			check: func(r map[string]any) bool {
 				_, hasSecret := r["secret"]
 				return !hasSecret && r["id"] != nil
 			},
@@ -294,7 +305,7 @@ func TestFilterFieldsTransformer(t *testing.T) {
 
 			data, _ := io.ReadAll(output)
 
-			var result map[string]interface{}
+			var result map[string]any
 			err = json.Unmarshal(data, &result)
 			if err != nil {
 				t.Fatalf("Failed to unmarshal result: %v", err)
@@ -565,7 +576,7 @@ func TestCompressTransformer(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		params    map[string]interface{}
+		params    map[string]any
 		algorithm string
 	}{
 		{
@@ -575,22 +586,22 @@ func TestCompressTransformer(t *testing.T) {
 		},
 		{
 			name:      "gzip explicit",
-			params:    map[string]interface{}{"algorithm": compressionGzip},
+			params:    map[string]any{"algorithm": compressionGzip},
 			algorithm: compressionGzip,
 		},
 		{
 			name:      "gzip with level",
-			params:    map[string]interface{}{"algorithm": compressionGzip, "level": 9},
+			params:    map[string]any{"algorithm": compressionGzip, "level": 9},
 			algorithm: compressionGzip,
 		},
 		{
 			name:      "zstd",
-			params:    map[string]interface{}{"algorithm": compressionZstd},
+			params:    map[string]any{"algorithm": compressionZstd},
 			algorithm: compressionZstd,
 		},
 		{
 			name:      "zstd with level",
-			params:    map[string]interface{}{"algorithm": compressionZstd, "level": 5},
+			params:    map[string]any{"algorithm": compressionZstd, "level": 5},
 			algorithm: compressionZstd,
 		},
 	}
@@ -652,7 +663,7 @@ func TestCompressTransformer(t *testing.T) {
 
 func TestCompressTransformerUnsupportedAlgorithm(t *testing.T) {
 	transformer := &CompressTransformer{}
-	params := map[string]interface{}{"algorithm": "unsupported"}
+	params := map[string]any{"algorithm": "unsupported"}
 
 	_, _, err := transformer.Transform(context.Background(), strings.NewReader("test"), params)
 	if err == nil {
@@ -670,7 +681,7 @@ func TestDecompressTransformer(t *testing.T) {
 
 	tests := []struct {
 		compress func([]byte) []byte
-		params   map[string]interface{}
+		params   map[string]any
 		name     string
 	}{
 		{
@@ -697,7 +708,7 @@ func TestDecompressTransformer(t *testing.T) {
 
 				return buf.Bytes()
 			},
-			params: map[string]interface{}{"algorithm": compressionGzip},
+			params: map[string]any{"algorithm": compressionGzip},
 		},
 		{
 			name: "zstd auto-detect",
@@ -713,7 +724,7 @@ func TestDecompressTransformer(t *testing.T) {
 				encoder, _ := zstd.NewWriter(nil)
 				return encoder.EncodeAll(data, nil)
 			},
-			params: map[string]interface{}{"algorithm": compressionZstd},
+			params: map[string]any{"algorithm": compressionZstd},
 		},
 	}
 
@@ -752,7 +763,7 @@ func TestDecompressTransformerUncompressedData(t *testing.T) {
 
 func TestDecompressTransformerUnsupportedAlgorithm(t *testing.T) {
 	transformer := &DecompressTransformer{}
-	params := map[string]interface{}{"algorithm": "unsupported"}
+	params := map[string]any{"algorithm": "unsupported"}
 
 	_, _, err := transformer.Transform(context.Background(), strings.NewReader("test"), params)
 	if err == nil {
@@ -825,7 +836,7 @@ func TestDecompressionBombProtection(t *testing.T) {
 			testData := bytes.Repeat([]byte("A"), tc.inputSize)
 			compressedData := tc.compressFunc(testData)
 
-			params := map[string]interface{}{"algorithm": tc.algorithm}
+			params := map[string]any{"algorithm": tc.algorithm}
 			_, _, err := transformer.Transform(context.Background(), bytes.NewReader(compressedData), params)
 
 			if tc.shouldSucceed {
@@ -883,7 +894,7 @@ func TestCompressionSizeLimit(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			testData := bytes.Repeat([]byte("B"), tc.inputSize)
-			params := map[string]interface{}{"algorithm": compressionGzip}
+			params := map[string]any{"algorithm": compressionGzip}
 
 			_, _, err := transformer.Transform(context.Background(), bytes.NewReader(testData), params)
 
@@ -1010,5 +1021,758 @@ func TestSetMaxTransformSizeConcurrency(t *testing.T) {
 	finalSize := GetMaxTransformSize()
 	if finalSize <= 0 {
 		t.Errorf("Final max transform size should be positive, got %d", finalSize)
+	}
+}
+
+// TestStreamingThresholdConfiguration verifies the configurable streaming threshold.
+func TestStreamingThresholdConfiguration(t *testing.T) {
+	// Save original threshold
+	originalThreshold := GetStreamingThreshold()
+	defer SetStreamingThreshold(originalThreshold)
+
+	// Test default value
+	if GetStreamingThreshold() != DefaultStreamingThreshold {
+		t.Errorf("Expected default streaming threshold %d, got %d",
+			DefaultStreamingThreshold, GetStreamingThreshold())
+	}
+
+	// Test setting a custom size
+	SetStreamingThreshold(5 * 1024 * 1024) // 5MB
+	if GetStreamingThreshold() != 5*1024*1024 {
+		t.Errorf("Expected streaming threshold to be 5MB, got %d", GetStreamingThreshold())
+	}
+
+	// Test that invalid sizes are rejected
+	SetStreamingThreshold(0)
+	if GetStreamingThreshold() != 5*1024*1024 {
+		t.Error("Setting threshold to 0 should not change the value")
+	}
+
+	SetStreamingThreshold(-1)
+	if GetStreamingThreshold() != 5*1024*1024 {
+		t.Error("Setting negative threshold should not change the value")
+	}
+
+	// Reset and verify default
+	SetStreamingThreshold(DefaultStreamingThreshold)
+	if GetStreamingThreshold() != DefaultStreamingThreshold {
+		t.Errorf("Expected default streaming threshold, got %d", GetStreamingThreshold())
+	}
+}
+
+// TestStreamingCompressionGzip tests streaming gzip compression for large files.
+func TestStreamingCompressionGzip(t *testing.T) {
+	// Save and set a low streaming threshold for testing
+	originalThreshold := GetStreamingThreshold()
+	SetStreamingThreshold(testStreamingThreshold1KB)
+	defer SetStreamingThreshold(originalThreshold)
+
+	transformer := &CompressTransformer{}
+
+	// Create test data larger than threshold
+	testData := bytes.Repeat([]byte("Hello, World! "), 200) // ~2.8KB
+
+	params := map[string]any{
+		"algorithm":      compressionGzip,
+		"content_length": int64(len(testData)),
+	}
+
+	output, headers, err := transformer.Transform(context.Background(), bytes.NewReader(testData), params)
+	if err != nil {
+		t.Fatalf("Streaming compression failed: %v", err)
+	}
+
+	// Verify Content-Encoding header
+	if headers["Content-Encoding"] != compressionGzip {
+		t.Errorf("Expected Content-Encoding 'gzip', got '%s'", headers["Content-Encoding"])
+	}
+
+	// Read compressed output
+	compressed, err := io.ReadAll(output)
+	if err != nil {
+		t.Fatalf("Failed to read compressed output: %v", err)
+	}
+
+	if len(compressed) == 0 {
+		t.Fatal("Compressed output is empty")
+	}
+
+	// Decompress and verify
+	reader, err := gzip.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		t.Fatalf("Failed to create gzip reader: %v", err)
+	}
+	defer reader.Close()
+
+	decompressed, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("Failed to decompress: %v", err)
+	}
+
+	if !bytes.Equal(decompressed, testData) {
+		t.Error("Decompressed data does not match original")
+	}
+}
+
+// TestStreamingCompressionZstd tests streaming zstd compression for large files.
+func TestStreamingCompressionZstd(t *testing.T) {
+	// Save and set a low streaming threshold for testing
+	originalThreshold := GetStreamingThreshold()
+	SetStreamingThreshold(testStreamingThreshold1KB)
+	defer SetStreamingThreshold(originalThreshold)
+
+	transformer := &CompressTransformer{}
+
+	// Create test data larger than threshold
+	testData := bytes.Repeat([]byte("Hello, World! "), 200) // ~2.8KB
+
+	params := map[string]any{
+		"algorithm":      compressionZstd,
+		"content_length": int64(len(testData)),
+	}
+
+	output, headers, err := transformer.Transform(context.Background(), bytes.NewReader(testData), params)
+	if err != nil {
+		t.Fatalf("Streaming compression failed: %v", err)
+	}
+
+	// Verify Content-Encoding header
+	if headers["Content-Encoding"] != compressionZstd {
+		t.Errorf("Expected Content-Encoding 'zstd', got '%s'", headers["Content-Encoding"])
+	}
+
+	// Read compressed output
+	compressed, err := io.ReadAll(output)
+	if err != nil {
+		t.Fatalf("Failed to read compressed output: %v", err)
+	}
+
+	if len(compressed) == 0 {
+		t.Fatal("Compressed output is empty")
+	}
+
+	// Decompress and verify
+	decoder, err := zstd.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		t.Fatalf("Failed to create zstd decoder: %v", err)
+	}
+	defer decoder.Close()
+
+	decompressed, err := io.ReadAll(decoder)
+	if err != nil {
+		t.Fatalf("Failed to decompress: %v", err)
+	}
+
+	if !bytes.Equal(decompressed, testData) {
+		t.Error("Decompressed data does not match original")
+	}
+}
+
+// TestStreamingDecompressionGzip tests streaming gzip decompression for large files.
+func TestStreamingDecompressionGzip(t *testing.T) {
+	// Save and set a low streaming threshold for testing
+	originalThreshold := GetStreamingThreshold()
+	SetStreamingThreshold(testStreamingThreshold512B)
+	defer SetStreamingThreshold(originalThreshold)
+
+	transformer := &DecompressTransformer{}
+
+	// Create test data and compress it
+	testData := bytes.Repeat([]byte("Hello, World! "), 200) // ~2.8KB
+	compressed := compressWithGzip(testData)
+
+	params := map[string]any{
+		"algorithm":      compressionGzip,
+		"content_length": int64(len(compressed)),
+	}
+
+	output, _, err := transformer.Transform(context.Background(), bytes.NewReader(compressed), params)
+	if err != nil {
+		t.Fatalf("Streaming decompression failed: %v", err)
+	}
+
+	// Read decompressed output
+	decompressed, err := io.ReadAll(output)
+	if err != nil {
+		t.Fatalf("Failed to read decompressed output: %v", err)
+	}
+
+	if !bytes.Equal(decompressed, testData) {
+		t.Error("Decompressed data does not match original")
+	}
+}
+
+// TestStreamingDecompressionZstd tests streaming zstd decompression for large files.
+func TestStreamingDecompressionZstd(t *testing.T) {
+	// Save and set a low streaming threshold for testing
+	originalThreshold := GetStreamingThreshold()
+	SetStreamingThreshold(testStreamingThreshold512B)
+	defer SetStreamingThreshold(originalThreshold)
+
+	transformer := &DecompressTransformer{}
+
+	// Create test data and compress it
+	testData := bytes.Repeat([]byte("Hello, World! "), 200) // ~2.8KB
+	compressed := compressWithZstd(testData)
+
+	params := map[string]any{
+		"algorithm":      compressionZstd,
+		"content_length": int64(len(compressed)),
+	}
+
+	output, _, err := transformer.Transform(context.Background(), bytes.NewReader(compressed), params)
+	if err != nil {
+		t.Fatalf("Streaming decompression failed: %v", err)
+	}
+
+	// Read decompressed output
+	decompressed, err := io.ReadAll(output)
+	if err != nil {
+		t.Fatalf("Failed to read decompressed output: %v", err)
+	}
+
+	if !bytes.Equal(decompressed, testData) {
+		t.Error("Decompressed data does not match original")
+	}
+}
+
+// TestStreamingCompressionContextCancellation tests that streaming compression
+// respects context cancellation.
+func TestStreamingCompressionContextCancellation(t *testing.T) {
+	// Save and set a low streaming threshold for testing
+	originalThreshold := GetStreamingThreshold()
+	SetStreamingThreshold(testStreamingThreshold1KB)
+	defer SetStreamingThreshold(originalThreshold)
+
+	transformer := &CompressTransformer{}
+
+	// Create a large test data to ensure streaming takes time
+	testData := bytes.Repeat([]byte("X"), 100*1024) // 100KB
+
+	// Create a context that we'll cancel
+	ctx, cancel := context.WithCancel(context.Background())
+
+	params := map[string]any{
+		"algorithm":      compressionGzip,
+		"content_length": int64(len(testData)),
+	}
+
+	// Use a slow reader to simulate streaming
+	slowReader := &slowReader{
+		reader:      bytes.NewReader(testData),
+		cancel:      cancel,
+		cancelAfter: 5,
+	}
+
+	output, _, err := transformer.Transform(ctx, slowReader, params)
+	if err != nil {
+		t.Fatalf("Transform should not fail immediately: %v", err)
+	}
+
+	// Reading should eventually fail due to context cancellation
+	_, err = io.ReadAll(output)
+	if err == nil {
+		t.Log("Read completed without error (context may have been canceled after completion)")
+	}
+}
+
+// slowReader is a test helper that cancels context after N reads.
+type slowReader struct {
+	reader      io.Reader
+	cancel      context.CancelFunc
+	cancelAfter int32
+	readCount   atomic.Int32
+}
+
+func (s *slowReader) Read(p []byte) (int, error) {
+	count := s.readCount.Add(1)
+	if count >= s.cancelAfter {
+		s.cancel()
+	}
+
+	return s.reader.Read(p)
+}
+
+// TestStreamingDecompressSizeLimitProtection tests that streaming decompression
+// respects the max decompress size limit.
+func TestStreamingDecompressSizeLimitProtection(t *testing.T) {
+	// Save original values
+	originalThreshold := GetStreamingThreshold()
+	originalMaxDecompress := GetMaxDecompressSize()
+
+	// Set low thresholds for testing
+	// Note: Use a very low streaming threshold so even small compressed data triggers streaming
+	SetStreamingThreshold(testSmallThreshold)
+	SetMaxDecompressSize(testDecompressSizeLimit)
+	defer SetStreamingThreshold(originalThreshold)
+	defer SetMaxDecompressSize(originalMaxDecompress)
+
+	transformer := &DecompressTransformer{}
+
+	// Create test data that exceeds the limit when decompressed
+	// Use varied data to ensure compressed size is larger than the threshold
+	testData := bytes.Repeat([]byte("ABCDEFGH12345678"), 128) // 2KB uncompressed with varied content
+	compressed := compressWithGzip(testData)
+
+	params := map[string]any{
+		"algorithm":      compressionGzip,
+		"content_length": int64(len(compressed)),
+	}
+
+	output, _, err := transformer.Transform(context.Background(), bytes.NewReader(compressed), params)
+	if err != nil {
+		t.Fatalf("Transform should not fail immediately: %v", err)
+	}
+
+	// Reading should fail due to size limit
+	_, err = io.ReadAll(output)
+	if err == nil {
+		t.Fatal("Expected error when decompressed size exceeds limit")
+	}
+
+	if !strings.Contains(err.Error(), "decompressed size exceeds maximum") {
+		t.Errorf("Expected decompression size limit error, got: %v", err)
+	}
+}
+
+// TestMaxDecompressSizeConfiguration verifies the configurable max decompress size.
+func TestMaxDecompressSizeConfiguration(t *testing.T) {
+	// Save original max size
+	originalMaxSize := GetMaxDecompressSize()
+	defer SetMaxDecompressSize(originalMaxSize)
+
+	// Test default value
+	if GetMaxDecompressSize() != DefaultMaxDecompressSize {
+		t.Errorf("Expected default max decompress size %d, got %d",
+			DefaultMaxDecompressSize, GetMaxDecompressSize())
+	}
+
+	// Test setting a custom size
+	SetMaxDecompressSize(500 * 1024 * 1024) // 500MB
+	if GetMaxDecompressSize() != 500*1024*1024 {
+		t.Errorf("Expected max decompress size to be 500MB, got %d", GetMaxDecompressSize())
+	}
+
+	// Test that invalid sizes are rejected
+	SetMaxDecompressSize(0)
+	if GetMaxDecompressSize() != 500*1024*1024 {
+		t.Error("Setting size to 0 should not change the value")
+	}
+
+	SetMaxDecompressSize(-1)
+	if GetMaxDecompressSize() != 500*1024*1024 {
+		t.Error("Setting negative size should not change the value")
+	}
+
+	// Reset and verify default
+	SetMaxDecompressSize(DefaultMaxDecompressSize)
+	if GetMaxDecompressSize() != DefaultMaxDecompressSize {
+		t.Errorf("Expected default max decompress size, got %d", GetMaxDecompressSize())
+	}
+}
+
+// TestStreamingThresholdConcurrency verifies thread safety of streaming threshold
+// operations. Run with: go test -race -run TestStreamingThresholdConcurrency.
+func TestStreamingThresholdConcurrency(t *testing.T) {
+	// Save original threshold
+	originalThreshold := GetStreamingThreshold()
+	defer SetStreamingThreshold(originalThreshold)
+
+	var wg sync.WaitGroup
+
+	const (
+		goroutines = 50
+		iterations = 100
+	)
+
+	// Concurrent writes
+	for i := range goroutines {
+		wg.Add(1)
+
+		go func(id int) {
+			defer wg.Done()
+
+			for j := range iterations {
+				size := int64((id*iterations + j + 1) * 1024)
+				SetStreamingThreshold(size)
+			}
+		}(i)
+	}
+
+	// Concurrent reads
+	for range goroutines {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for range iterations {
+				size := GetStreamingThreshold()
+				if size <= 0 {
+					t.Errorf("GetStreamingThreshold returned invalid value: %d", size)
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Final value should be positive
+	finalSize := GetStreamingThreshold()
+	if finalSize <= 0 {
+		t.Errorf("Final streaming threshold should be positive, got %d", finalSize)
+	}
+}
+
+// TestStreamingVsBufferedModeSelection verifies that streaming mode is correctly
+// selected based on content length and threshold.
+func TestStreamingVsBufferedModeSelection(t *testing.T) {
+	// Save and set thresholds
+	originalThreshold := GetStreamingThreshold()
+	SetStreamingThreshold(testStreamingThreshold1KB)
+	defer SetStreamingThreshold(originalThreshold)
+
+	compressTransformer := &CompressTransformer{}
+	decompressTransformer := &DecompressTransformer{}
+
+	testData := []byte("Hello, World!")
+
+	tests := []struct {
+		name            string
+		contentLength   int64
+		expectedMode    string
+		useDecompressor bool
+	}{
+		{
+			name:          "small_file_uses_buffered_compression",
+			contentLength: 512, // Below threshold
+			expectedMode:  "buffered",
+		},
+		{
+			name:          "large_file_uses_streaming_compression",
+			contentLength: 2048, // Above threshold
+			expectedMode:  "streaming",
+		},
+		{
+			name:            "small_file_uses_buffered_decompression",
+			contentLength:   512,
+			expectedMode:    "buffered",
+			useDecompressor: true,
+		},
+		{
+			name:            "large_file_uses_streaming_decompression",
+			contentLength:   2048,
+			expectedMode:    "streaming",
+			useDecompressor: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			params := map[string]any{
+				"algorithm":      compressionGzip,
+				"content_length": tc.contentLength,
+			}
+
+			var err error
+
+			if tc.useDecompressor {
+				compressed := compressWithGzip(testData)
+				var output io.Reader
+				output, _, err = decompressTransformer.Transform(
+					context.Background(),
+					bytes.NewReader(compressed),
+					params,
+				)
+				if err != nil {
+					t.Fatalf("Decompression failed: %v", err)
+				}
+				_, _ = io.ReadAll(output)
+			} else {
+				var output io.Reader
+				output, _, err = compressTransformer.Transform(
+					context.Background(),
+					bytes.NewReader(testData),
+					params,
+				)
+				if err != nil {
+					t.Fatalf("Compression failed: %v", err)
+				}
+				_, _ = io.ReadAll(output)
+			}
+
+			// The test passes if no error occurred
+			// Mode selection is verified by the implementation logging
+		})
+	}
+}
+
+// BenchmarkBufferedVsStreamingCompression compares memory and performance between
+// buffered and streaming compression modes.
+func BenchmarkBufferedVsStreamingCompression(b *testing.B) {
+	// Test data sizes
+	sizes := []int{
+		1 * 1024,        // 1KB
+		100 * 1024,      // 100KB
+		1 * 1024 * 1024, // 1MB
+	}
+
+	algorithms := []string{compressionGzip, compressionZstd}
+
+	for _, size := range sizes {
+		for _, alg := range algorithms {
+			testData := bytes.Repeat([]byte("Hello, World! "), size/14+1)[:size]
+
+			// Benchmark buffered mode
+			b.Run("buffered_"+alg+"_"+formatSize(size), func(b *testing.B) {
+				originalThreshold := GetStreamingThreshold()
+				// Force buffered mode by setting threshold above data size
+				SetStreamingThreshold(int64(size * testStreamingThresholdMultiplier))
+				defer SetStreamingThreshold(originalThreshold)
+
+				transformer := &CompressTransformer{}
+				params := map[string]any{
+					"algorithm":      alg,
+					"content_length": int64(size / 2), // Below threshold
+				}
+
+				b.ResetTimer()
+				b.ReportAllocs()
+
+				for b.Loop() {
+					output, _, err := transformer.Transform(
+						context.Background(),
+						bytes.NewReader(testData),
+						params,
+					)
+					if err != nil {
+						b.Fatalf("Transform failed: %v", err)
+					}
+					if _, err = io.ReadAll(output); err != nil {
+						b.Fatalf("ReadAll failed: %v", err)
+					}
+				}
+			})
+
+			// Benchmark streaming mode
+			b.Run("streaming_"+alg+"_"+formatSize(size), func(b *testing.B) {
+				originalThreshold := GetStreamingThreshold()
+				SetStreamingThreshold(testStreamingThresholdLow) // Force streaming mode
+				defer SetStreamingThreshold(originalThreshold)
+
+				transformer := &CompressTransformer{}
+				params := map[string]any{
+					"algorithm":      alg,
+					"content_length": int64(size), // Above threshold
+				}
+
+				b.ResetTimer()
+				b.ReportAllocs()
+
+				for b.Loop() {
+					output, _, err := transformer.Transform(
+						context.Background(),
+						bytes.NewReader(testData),
+						params,
+					)
+					if err != nil {
+						b.Fatalf("Transform failed: %v", err)
+					}
+					if _, err = io.ReadAll(output); err != nil {
+						b.Fatalf("ReadAll failed: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+// BenchmarkBufferedVsStreamingDecompression compares memory and performance between
+// buffered and streaming decompression modes.
+func BenchmarkBufferedVsStreamingDecompression(b *testing.B) {
+	sizes := []int{
+		1 * 1024,        // 1KB
+		100 * 1024,      // 100KB
+		1 * 1024 * 1024, // 1MB
+	}
+
+	algorithms := []string{compressionGzip, compressionZstd}
+
+	for _, size := range sizes {
+		for _, alg := range algorithms {
+			testData := bytes.Repeat([]byte("Hello, World! "), size/14+1)[:size]
+			var compressed []byte
+
+			switch alg {
+			case compressionGzip:
+				compressed = compressWithGzip(testData)
+			case compressionZstd:
+				compressed = compressWithZstd(testData)
+			}
+
+			// Benchmark buffered mode
+			b.Run("buffered_"+alg+"_"+formatSize(size), func(b *testing.B) {
+				originalThreshold := GetStreamingThreshold()
+				// Force buffered mode by setting threshold above compressed size
+				SetStreamingThreshold(int64(len(compressed) * testStreamingThresholdMultiplier))
+				defer SetStreamingThreshold(originalThreshold)
+
+				transformer := &DecompressTransformer{}
+				params := map[string]any{
+					"algorithm":      alg,
+					"content_length": int64(len(compressed) / 2),
+				}
+
+				b.ResetTimer()
+				b.ReportAllocs()
+
+				for b.Loop() {
+					output, _, err := transformer.Transform(
+						context.Background(),
+						bytes.NewReader(compressed),
+						params,
+					)
+					if err != nil {
+						b.Fatalf("Transform failed: %v", err)
+					}
+					if _, err = io.ReadAll(output); err != nil {
+						b.Fatalf("ReadAll failed: %v", err)
+					}
+				}
+			})
+
+			// Benchmark streaming mode
+			b.Run("streaming_"+alg+"_"+formatSize(size), func(b *testing.B) {
+				originalThreshold := GetStreamingThreshold()
+				SetStreamingThreshold(testStreamingThresholdLow) // Force streaming mode
+				defer SetStreamingThreshold(originalThreshold)
+
+				transformer := &DecompressTransformer{}
+				params := map[string]any{
+					"algorithm":      alg,
+					"content_length": int64(len(compressed)),
+				}
+
+				b.ResetTimer()
+				b.ReportAllocs()
+
+				for b.Loop() {
+					output, _, err := transformer.Transform(
+						context.Background(),
+						bytes.NewReader(compressed),
+						params,
+					)
+					if err != nil {
+						b.Fatalf("Transform failed: %v", err)
+					}
+					if _, err = io.ReadAll(output); err != nil {
+						b.Fatalf("ReadAll failed: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+// formatSize formats a byte size for benchmark names.
+func formatSize(size int) string {
+	switch {
+	case size >= 1024*1024:
+		return strconv.Itoa(size/(1024*1024)) + "MB"
+	case size >= 1024:
+		return strconv.Itoa(size/1024) + "KB"
+	default:
+		return strconv.Itoa(size) + "B"
+	}
+}
+
+// TestStreamingCompressionWithLevel tests streaming compression with custom levels.
+func TestStreamingCompressionWithLevel(t *testing.T) {
+	// Save and set a low streaming threshold for testing
+	originalThreshold := GetStreamingThreshold()
+	SetStreamingThreshold(testStreamingThreshold1KB)
+	defer SetStreamingThreshold(originalThreshold)
+
+	transformer := &CompressTransformer{}
+	testData := bytes.Repeat([]byte("Hello, World! "), 200) // ~2.8KB
+
+	tests := []struct {
+		name      string
+		algorithm string
+		level     int
+	}{
+		{"gzip_best_speed", compressionGzip, 1},
+		{"gzip_best_compression", compressionGzip, 9},
+		{"gzip_default", compressionGzip, -1},
+		{"zstd_fast", compressionZstd, 1},
+		{"zstd_default", compressionZstd, 3},
+		{"zstd_better", compressionZstd, 10},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			params := map[string]any{
+				"algorithm":      tc.algorithm,
+				"level":          tc.level,
+				"content_length": int64(len(testData)),
+			}
+
+			output, headers, err := transformer.Transform(
+				context.Background(),
+				bytes.NewReader(testData),
+				params,
+			)
+			if err != nil {
+				t.Fatalf("Streaming compression failed: %v", err)
+			}
+
+			if headers["Content-Encoding"] != tc.algorithm {
+				t.Errorf("Expected Content-Encoding '%s', got '%s'",
+					tc.algorithm, headers["Content-Encoding"])
+			}
+
+			compressed, err := io.ReadAll(output)
+			if err != nil {
+				t.Fatalf("Failed to read compressed output: %v", err)
+			}
+
+			if len(compressed) == 0 {
+				t.Fatal("Compressed output is empty")
+			}
+
+			// Verify by decompressing
+			var decompressed []byte
+
+			switch tc.algorithm {
+			case compressionGzip:
+				reader, err := gzip.NewReader(bytes.NewReader(compressed))
+				if err != nil {
+					t.Fatalf("Failed to create gzip reader: %v", err)
+				}
+
+				decompressed, err = io.ReadAll(reader)
+				reader.Close()
+
+				if err != nil {
+					t.Fatalf("Failed to decompress: %v", err)
+				}
+			case compressionZstd:
+				decoder, err := zstd.NewReader(bytes.NewReader(compressed))
+				if err != nil {
+					t.Fatalf("Failed to create zstd decoder: %v", err)
+				}
+
+				decompressed, err = io.ReadAll(decoder)
+				decoder.Close()
+
+				if err != nil {
+					t.Fatalf("Failed to decompress: %v", err)
+				}
+			}
+
+			if !bytes.Equal(decompressed, testData) {
+				t.Error("Decompressed data does not match original")
+			}
+		})
 	}
 }

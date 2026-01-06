@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"maps"
 	"net/http"
 	"sync"
 	"time"
@@ -166,9 +167,7 @@ func (w *Worker) replicateObject(ctx context.Context, client *minio.Client, item
 	}
 
 	// Copy user metadata
-	for k, v := range info.UserMetadata {
-		opts.UserMetadata[k] = v
-	}
+	maps.Copy(opts.UserMetadata, info.UserMetadata)
 
 	// Set storage class if specified
 	if rule.Destination.StorageClass != "" {

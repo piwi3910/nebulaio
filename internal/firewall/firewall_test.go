@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -21,6 +22,8 @@ func TestNewFirewall(t *testing.T) {
 
 	if fw == nil {
 		t.Fatal("Firewall is nil")
+
+		return
 	}
 
 	if !fw.config.Enabled {
@@ -868,7 +871,7 @@ func BenchmarkFirewallEvaluate(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		fw.Evaluate(context.Background(), req)
 	}
 }
@@ -878,7 +881,7 @@ func BenchmarkTokenBucket(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		tb.Allow()
 	}
 }
@@ -888,7 +891,7 @@ func BenchmarkBandwidthTracker(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		bt.TryConsume(1024)
 	}
 }
@@ -981,19 +984,15 @@ func testBlocklistEntries(t *testing.T, fw *Firewall, blocklist []string) {
 	}
 
 	// Find a valid entry to test
-	for _, entry := range blocklist {
-		if entry == "10.0.0.0/8" {
-			req := &Request{
-				SourceIP:  "10.0.0.50",
-				Operation: "GetObject",
-			}
+	if slices.Contains(blocklist, "10.0.0.0/8") {
+		req := &Request{
+			SourceIP:  "10.0.0.50",
+			Operation: "GetObject",
+		}
 
-			decision := fw.Evaluate(context.Background(), req)
-			if decision.Allowed {
-				t.Error("Expected IP in blocklist to be denied")
-			}
-
-			break
+		decision := fw.Evaluate(context.Background(), req)
+		if decision.Allowed {
+			t.Error("Expected IP in blocklist to be denied")
 		}
 	}
 }

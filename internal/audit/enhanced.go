@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -576,60 +577,40 @@ func (l *EnhancedAuditLogger) matchesEventTypes(allowed []EventType, actual Even
 	if len(allowed) == 0 {
 		return true
 	}
-	for _, et := range allowed {
-		if et == actual {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(allowed, actual)
 }
 
 func (l *EnhancedAuditLogger) matchesUsers(allowed []string, actual string) bool {
 	if len(allowed) == 0 {
 		return true
 	}
-	for _, u := range allowed {
-		if u == actual {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(allowed, actual)
 }
 
 func (l *EnhancedAuditLogger) matchesBuckets(allowed []string, actual string) bool {
 	if len(allowed) == 0 {
 		return true
 	}
-	for _, b := range allowed {
-		if b == actual {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(allowed, actual)
 }
 
 func (l *EnhancedAuditLogger) matchesIPs(allowed []string, actual string) bool {
 	if len(allowed) == 0 {
 		return true
 	}
-	for _, ip := range allowed {
-		if ip == actual {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(allowed, actual)
 }
 
 func (l *EnhancedAuditLogger) matchesResults(allowed []Result, actual Result) bool {
 	if len(allowed) == 0 {
 		return true
 	}
-	for _, r := range allowed {
-		if r == actual {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(allowed, actual)
 }
 
 func (l *EnhancedAuditLogger) addIntegrity(event *EnhancedAuditEvent) {
@@ -763,13 +744,7 @@ func (l *EnhancedAuditLogger) isPrivilegedOperation(event *EnhancedAuditEvent) b
 		EventAccessKeyCreated,
 		EventAccessKeyDeleted,
 	}
-	for _, op := range privilegedOps {
-		if event.EventType == op {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(privilegedOps, event.EventType)
 }
 
 func (l *EnhancedAuditLogger) maskSensitiveData(event *EnhancedAuditEvent) {

@@ -168,10 +168,10 @@ type InferenceRequest struct {
 	Model string `json:"model"`
 
 	// Input is the input data (text, image URL, audio URL, etc.)
-	Input interface{} `json:"input"`
+	Input any `json:"input"`
 
 	// Parameters are model-specific parameters
-	Parameters map[string]interface{} `json:"parameters,omitempty"`
+	Parameters map[string]any `json:"parameters,omitempty"`
 
 	// Stream enables streaming response
 	Stream bool `json:"stream,omitempty"`
@@ -252,7 +252,7 @@ type VisionRequest struct {
 	ImageURL   string                 `json:"image_url,omitempty"`
 	ImageBytes []byte                 `json:"image_bytes,omitempty"`
 	Task       string                 `json:"task"` // "classification", "detection", "segmentation"
-	Parameters map[string]interface{} `json:"parameters,omitempty"`
+	Parameters map[string]any `json:"parameters,omitempty"`
 }
 
 // VisionResponse represents a vision inference response.
@@ -281,7 +281,7 @@ type InferenceResponse struct {
 	Model string `json:"model"`
 
 	// Output is the inference output
-	Output interface{} `json:"output"`
+	Output any `json:"output"`
 
 	// Latency is the inference latency in milliseconds
 	LatencyMs int `json:"latency_ms"`
@@ -657,10 +657,10 @@ func NewObjectInference(client *Client) *ObjectInference {
 }
 
 // InferFromObject performs inference using an S3 object as input.
-func (o *ObjectInference) InferFromObject(ctx context.Context, bucket, key string, model string, params map[string]interface{}) (*InferenceResponse, error) {
+func (o *ObjectInference) InferFromObject(ctx context.Context, bucket, key string, model string, params map[string]any) (*InferenceResponse, error) {
 	req := &InferenceRequest{
 		Model: model,
-		Input: map[string]interface{}{
+		Input: map[string]any{
 			"s3_uri": fmt.Sprintf("s3://%s/%s", bucket, key),
 		},
 		Parameters: params,
@@ -721,7 +721,7 @@ func (s *S3Integration) ProcessOnUpload(ctx context.Context, bucket, key, conten
 	case contentType == "image/jpeg" || contentType == "image/png":
 		req = &InferenceRequest{
 			Model: "nvidia/grounding-dino",
-			Input: map[string]interface{}{
+			Input: map[string]any{
 				"image": data,
 			},
 		}
@@ -738,10 +738,10 @@ func (s *S3Integration) ProcessOnUpload(ctx context.Context, bucket, key, conten
 }
 
 // GetStatus returns NIM integration status.
-func (s *S3Integration) GetStatus() map[string]interface{} {
+func (s *S3Integration) GetStatus() map[string]any {
 	metrics := s.client.GetMetrics()
 
-	return map[string]interface{}{
+	return map[string]any{
 		"available":        true,
 		"requests_total":   metrics.RequestsTotal,
 		"requests_success": metrics.RequestsSuccess,
@@ -767,7 +767,7 @@ func (s *S3Integration) Close() error {
 }
 
 // _doRequest is a helper for making HTTP requests to NIM API (reserved for future use).
-func (c *Client) _doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
+func (c *Client) _doRequest(ctx context.Context, method, path string, body any) ([]byte, error) {
 	var bodyReader io.Reader
 
 	if body != nil {

@@ -158,14 +158,14 @@ func (t *KafkaTarget) Close() error {
 var _ events.Target = (*KafkaTarget)(nil)
 
 func init() {
-	events.RegisterTargetFactory("kafka", func(config map[string]interface{}) (events.Target, error) {
+	events.RegisterTargetFactory("kafka", func(config map[string]any) (events.Target, error) {
 		cfg := DefaultKafkaConfig()
 
 		if name, ok := config["name"].(string); ok {
 			cfg.Name = name
 		}
 
-		if brokers, ok := config["brokers"].([]interface{}); ok {
+		if brokers, ok := config["brokers"].([]any); ok {
 			cfg.Brokers = make([]string, len(brokers))
 			for i, b := range brokers {
 				if s, ok := b.(string); ok {

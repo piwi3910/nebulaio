@@ -180,6 +180,7 @@ func TestConfigHelpers(t *testing.T) {
 		local := cfg.GetLocalSite()
 		if local == nil {
 			t.Fatal("should return local site")
+			return
 		}
 
 		if local.Name != "local" {
@@ -198,6 +199,7 @@ func TestConfigHelpers(t *testing.T) {
 		site := cfg.GetSite("remote1")
 		if site == nil {
 			t.Fatal("should find site remote1")
+			return
 		}
 
 		if site.Name != "remote1" {

@@ -881,8 +881,7 @@ func (h *MultipartCopyHandler) HandleCopyObject(w http.ResponseWriter, r *http.R
 	opts.Metadata = make(map[string]string)
 
 	for key, values := range r.Header {
-		if strings.HasPrefix(strings.ToLower(key), "x-amz-meta-") {
-			metaKey := strings.TrimPrefix(strings.ToLower(key), "x-amz-meta-")
+		if metaKey, found := strings.CutPrefix(strings.ToLower(key), "x-amz-meta-"); found {
 			opts.Metadata[metaKey] = values[0]
 		}
 	}

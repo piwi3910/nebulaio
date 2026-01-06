@@ -3,6 +3,7 @@ package oidc
 import (
 	"errors"
 	"net/url"
+	"slices"
 	"time"
 
 	"github.com/piwi3910/nebulaio/internal/auth"
@@ -22,7 +23,7 @@ type Config struct {
 	AdminGroups    []string      `json:"adminGroups,omitempty"    yaml:"adminGroups,omitempty"`
 	RequestTimeout time.Duration `json:"requestTimeout"           yaml:"requestTimeout"`
 	// Structs
-	ClaimsMapping       ClaimsMapping    `json:"claimsMapping,omitempty" yaml:"claimsMapping,omitempty"`
+	ClaimsMapping       ClaimsMapping    `json:"claimsMapping" yaml:"claimsMapping"`
 	auth.ProviderConfig `yaml:",inline"` //nolint:embeddedstructfieldcheck // Grouped by size for memory layout
 
 	// Strings
@@ -148,16 +149,7 @@ func (c *Config) Validate() error {
 	}
 
 	// Ensure at least openid scope
-	hasOpenID := false
-
-	for _, scope := range c.Scopes {
-		if scope == scopeOpenID {
-			hasOpenID = true
-			break
-		}
-	}
-
-	if !hasOpenID {
+	if !slices.Contains(c.Scopes, scopeOpenID) {
 		return errors.New("'" + scopeOpenID + "' scope is required")
 	}
 

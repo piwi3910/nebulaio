@@ -100,9 +100,8 @@ func ParseTaggingHeader(header string) (map[string]string, error) {
 	}
 
 	tags := make(map[string]string)
-	pairs := strings.Split(header, "&")
 
-	for _, pair := range pairs {
+	for pair := range strings.SplitSeq(header, "&") {
 		if pair == "" {
 			continue
 		}

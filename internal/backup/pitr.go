@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -57,7 +58,7 @@ const (
 type BackupMetadata struct {
 	StartTime       time.Time         `json:"startTime"`
 	PointInTime     time.Time         `json:"pointInTime"`
-	EndTime         time.Time         `json:"endTime,omitempty"`
+	EndTime         time.Time         `json:"endTime"`
 	Tags            map[string]string `json:"tags,omitempty"`
 	Error           string            `json:"error,omitempty"`
 	ParentBackupID  string            `json:"parentBackupId,omitempty"`
@@ -76,9 +77,9 @@ type BackupMetadata struct {
 
 // RestoreMetadata contains metadata about a restore operation.
 type RestoreMetadata struct {
-	PointInTime     time.Time     `json:"pointInTime,omitempty"`
+	PointInTime     time.Time     `json:"pointInTime"`
 	StartTime       time.Time     `json:"startTime"`
-	EndTime         time.Time     `json:"endTime,omitempty"`
+	EndTime         time.Time     `json:"endTime"`
 	ID              string        `json:"id"`
 	BackupID        string        `json:"backupId"`
 	Status          RestoreStatus `json:"status"`
@@ -1256,12 +1257,7 @@ func (bm *BackupManager) canDeleteBackup(backup *BackupMetadata, toDelete []stri
 }
 
 func (bm *BackupManager) isAlreadyMarked(backupID string, toDelete []string) bool {
-	for _, id := range toDelete {
-		if id == backupID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(toDelete, backupID)
 }
 
 func (bm *BackupManager) deleteBackups(toDelete []string) {

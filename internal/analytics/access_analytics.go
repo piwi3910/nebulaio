@@ -175,7 +175,7 @@ type AnomalyRule struct {
 
 // RuleCondition defines a condition for an anomaly rule.
 type RuleCondition struct {
-	Value    interface{} `json:"value"`
+	Value    any `json:"value"`
 	Field    string      `json:"field"`
 	Operator string      `json:"operator"`
 }
@@ -619,7 +619,7 @@ func (aa *AccessAnalytics) matchesCondition(event *AccessEvent, cond RuleConditi
 	return aa.evaluateOperator(fieldValue, cond.Operator, cond.Value)
 }
 
-func (aa *AccessAnalytics) getFieldValue(event *AccessEvent, field string) interface{} {
+func (aa *AccessAnalytics) getFieldValue(event *AccessEvent, field string) any {
 	switch field {
 	case "access_type":
 		return string(event.AccessType)
@@ -636,7 +636,7 @@ func (aa *AccessAnalytics) getFieldValue(event *AccessEvent, field string) inter
 	}
 }
 
-func (aa *AccessAnalytics) evaluateOperator(fieldValue interface{}, operator string, condValue interface{}) bool {
+func (aa *AccessAnalytics) evaluateOperator(fieldValue any, operator string, condValue any) bool {
 	switch operator {
 	case "eq":
 		return fieldValue == condValue
@@ -651,7 +651,7 @@ func (aa *AccessAnalytics) evaluateOperator(fieldValue interface{}, operator str
 	}
 }
 
-func (aa *AccessAnalytics) evaluateInOperator(fieldValue, condValue interface{}) bool {
+func (aa *AccessAnalytics) evaluateInOperator(fieldValue, condValue any) bool {
 	values, ok := condValue.([]string)
 	if !ok {
 		return false
@@ -666,7 +666,7 @@ func (aa *AccessAnalytics) evaluateInOperator(fieldValue, condValue interface{})
 	return false
 }
 
-func (aa *AccessAnalytics) evaluateContainsOperator(fieldValue, condValue interface{}) bool {
+func (aa *AccessAnalytics) evaluateContainsOperator(fieldValue, condValue any) bool {
 	s, ok := fieldValue.(string)
 	if !ok {
 		return false

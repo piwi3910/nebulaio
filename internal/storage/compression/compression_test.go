@@ -589,7 +589,7 @@ func BenchmarkCompression(b *testing.B) {
 
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, _ = comp.Compress(data)
 		}
 	})
@@ -599,7 +599,7 @@ func BenchmarkCompression(b *testing.B) {
 
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, _ = comp.Compress(data)
 		}
 	})
@@ -609,7 +609,7 @@ func BenchmarkCompression(b *testing.B) {
 
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, _ = comp.Compress(data)
 		}
 	})
@@ -619,7 +619,7 @@ func BenchmarkCompression(b *testing.B) {
 
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, _ = comp.Compress(data)
 		}
 	})
@@ -637,7 +637,7 @@ func BenchmarkDecompression(b *testing.B) {
 
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, _ = comp.Decompress(compressed)
 		}
 	})
@@ -648,7 +648,7 @@ func BenchmarkDecompression(b *testing.B) {
 
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, _ = comp.Decompress(compressed)
 		}
 	})
@@ -659,7 +659,7 @@ func BenchmarkDecompression(b *testing.B) {
 
 		b.ResetTimer()
 
-		for range b.N {
+		for b.Loop() {
 			_, _ = comp.Decompress(compressed)
 		}
 	})

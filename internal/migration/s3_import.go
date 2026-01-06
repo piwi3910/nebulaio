@@ -97,7 +97,7 @@ type MigrationConfig struct {
 // MigrationJob represents a migration job.
 type MigrationJob struct {
 	StartTime time.Time          `json:"startTime"`
-	EndTime   time.Time          `json:"endTime,omitempty"`
+	EndTime   time.Time          `json:"endTime"`
 	Config    *MigrationConfig   `json:"config"`
 	Progress  *MigrationProgress `json:"progress"`
 	Resume    *ResumeState       `json:"resume,omitempty"`
@@ -492,8 +492,7 @@ func (c *S3Client) GetObject(ctx context.Context, bucket, key string) (io.ReadCl
 	metadata := make(map[string]string)
 
 	for k, v := range resp.Header {
-		if strings.HasPrefix(strings.ToLower(k), "x-amz-meta-") {
-			metaKey := strings.TrimPrefix(strings.ToLower(k), "x-amz-meta-")
+		if metaKey, ok := strings.CutPrefix(strings.ToLower(k), "x-amz-meta-"); ok {
 			metadata[metaKey] = v[0]
 		}
 	}
@@ -950,10 +949,7 @@ func (r *RateLimitedReader) Read(p []byte) (int, error) {
 	}
 
 	// Calculate how much we can read
-	toRead := int64(len(p))
-	if toRead > r.bucket {
-		toRead = r.bucket
-	}
+	toRead := min(int64(len(p)), r.bucket)
 
 	if toRead == 0 {
 		// Wait for bucket to refill

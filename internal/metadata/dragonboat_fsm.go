@@ -378,7 +378,7 @@ func (sm *stateMachine) handleDeleteAuditEvent(data []byte) error {
 }
 
 // Lookup performs a read-only query on the state machine.
-func (sm *stateMachine) Lookup(query interface{}) (interface{}, error) {
+func (sm *stateMachine) Lookup(query any) (any, error) {
 	// Dragonboat read queries are not used in our implementation
 	// All reads go directly to BadgerDB
 	return nil, ErrLookupNotSupported
@@ -520,7 +520,7 @@ func (sm *stateMachine) applyUpdateBucket(bucket *Bucket) error {
 
 func (sm *stateMachine) applyPutObjectMeta(meta *ObjectMeta) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		key := []byte(fmt.Sprintf("%s%s/%s", prefixObject, meta.Bucket, meta.Key))
+		key := fmt.Appendf(nil, "%s%s/%s", prefixObject, meta.Bucket, meta.Key)
 
 		data, err := json.Marshal(meta)
 		if err != nil {
@@ -533,14 +533,14 @@ func (sm *stateMachine) applyPutObjectMeta(meta *ObjectMeta) error {
 
 func (sm *stateMachine) applyDeleteObjectMeta(bucket, objKey string) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		key := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, objKey))
+		key := fmt.Appendf(nil, "%s%s/%s", prefixObject, bucket, objKey)
 		return txn.Delete(key)
 	})
 }
 
 func (sm *stateMachine) applyPutObjectMetaVersioned(meta *ObjectMeta, preserveOldVersions bool) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, meta.Bucket, meta.Key))
+		currentKey := fmt.Appendf(nil, "%s%s/%s", prefixObject, meta.Bucket, meta.Key)
 
 		if preserveOldVersions {
 			if err := sm.preserveOldVersion(txn, currentKey); err != nil {
@@ -580,7 +580,7 @@ func (sm *stateMachine) preserveOldVersion(txn *badger.Txn, currentKey []byte) e
 		return err
 	}
 
-	oldVersionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID))
+	oldVersionKey := fmt.Appendf(nil, "%s%s/%s#%s", prefixObjectVersion, oldMeta.Bucket, oldMeta.Key, oldMeta.VersionID)
 	return txn.Set(oldVersionKey, oldData)
 }
 
@@ -589,7 +589,7 @@ func (sm *stateMachine) storeVersionHistory(txn *badger.Txn, meta *ObjectMeta) e
 		return nil
 	}
 
-	versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, meta.Bucket, meta.Key, meta.VersionID))
+	versionKey := fmt.Appendf(nil, "%s%s/%s#%s", prefixObjectVersion, meta.Bucket, meta.Key, meta.VersionID)
 
 	versionData, err := json.Marshal(meta)
 	if err != nil {
@@ -632,7 +632,7 @@ func (sm *stateMachine) applyDeleteObjectVersion(bucket, objKey, versionID strin
 }
 
 func (sm *stateMachine) deleteVersionKey(txn *badger.Txn, bucket, objKey, versionID string) error {
-	versionKey := []byte(fmt.Sprintf("%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID))
+	versionKey := fmt.Appendf(nil, "%s%s/%s#%s", prefixObjectVersion, bucket, objKey, versionID)
 	err := txn.Delete(versionKey)
 	if err != nil && err != badger.ErrKeyNotFound {
 		return err
@@ -641,7 +641,7 @@ func (sm *stateMachine) deleteVersionKey(txn *badger.Txn, bucket, objKey, versio
 }
 
 func (sm *stateMachine) getCurrentVersionMeta(txn *badger.Txn, bucket, objKey string) (*ObjectMeta, []byte, error) {
-	currentKey := []byte(fmt.Sprintf("%s%s/%s", prefixObject, bucket, objKey))
+	currentKey := fmt.Appendf(nil, "%s%s/%s", prefixObject, bucket, objKey)
 
 	item, err := txn.Get(currentKey)
 	if err != nil {
@@ -664,7 +664,7 @@ func (sm *stateMachine) getCurrentVersionMeta(txn *badger.Txn, bucket, objKey st
 }
 
 func (sm *stateMachine) promoteNextVersion(txn *badger.Txn, bucket, objKey string, currentKey []byte) error {
-	prefix := []byte(fmt.Sprintf("%s%s/%s#", prefixObjectVersion, bucket, objKey))
+	prefix := fmt.Appendf(nil, "%s%s/%s#", prefixObjectVersion, bucket, objKey)
 	opts := badger.DefaultIteratorOptions
 	opts.Prefix = prefix
 	opts.Reverse = true
@@ -820,7 +820,7 @@ func (sm *stateMachine) applyDeletePolicy(name string) error {
 
 func (sm *stateMachine) applyCreateMultipartUpload(upload *MultipartUpload) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		key := []byte(fmt.Sprintf("%s%s/%s/%s", prefixMultipart, upload.Bucket, upload.Key, upload.UploadID))
+		key := fmt.Appendf(nil, "%s%s/%s/%s", prefixMultipart, upload.Bucket, upload.Key, upload.UploadID)
 
 		data, err := json.Marshal(upload)
 		if err != nil {
@@ -833,7 +833,7 @@ func (sm *stateMachine) applyCreateMultipartUpload(upload *MultipartUpload) erro
 
 func (sm *stateMachine) applyAbortMultipartUpload(bucket, objKey, uploadID string) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		key := []byte(fmt.Sprintf("%s%s/%s/%s", prefixMultipart, bucket, objKey, uploadID))
+		key := fmt.Appendf(nil, "%s%s/%s/%s", prefixMultipart, bucket, objKey, uploadID)
 		return txn.Delete(key)
 	})
 }
@@ -844,7 +844,7 @@ func (sm *stateMachine) applyCompleteMultipartUpload(bucket, objKey, uploadID st
 
 func (sm *stateMachine) applyAddUploadPart(bucket, objKey, uploadID string, part *UploadPart) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
-		key := []byte(fmt.Sprintf("%s%s/%s/%s", prefixMultipart, bucket, objKey, uploadID))
+		key := fmt.Appendf(nil, "%s%s/%s/%s", prefixMultipart, bucket, objKey, uploadID)
 
 		item, err := txn.Get(key)
 		if err != nil {
@@ -908,7 +908,7 @@ func (sm *stateMachine) applyRemoveNode(nodeID string) error {
 func (sm *stateMachine) applyStoreAuditEvent(event *audit.AuditEvent) error {
 	return sm.db.Update(func(txn *badger.Txn) error {
 		// Use timestamp + ID as key for time-based ordering
-		key := []byte(fmt.Sprintf("%s%s:%s", prefixAudit, event.Timestamp.Format(time.RFC3339Nano), event.ID))
+		key := fmt.Appendf(nil, "%s%s:%s", prefixAudit, event.Timestamp.Format(time.RFC3339Nano), event.ID)
 
 		data, err := json.Marshal(event)
 		if err != nil {

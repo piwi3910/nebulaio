@@ -237,6 +237,14 @@ data:
     #   timeout: 300               # Query timeout seconds
     #   worker_pool_size: 10
 
+    # Object Lambda
+    # Transform objects on-the-fly during GET requests
+    # object_lambda:
+    #   enabled: true
+    #   streaming_threshold: 10485760   # 10MB - use streaming above this size
+    #   max_decompress_size: 1073741824 # 1GB - decompression bomb protection
+    #   max_transform_size: 104857600   # 100MB - max buffered transform size
+
     # =========================================================================
     # AI/ML Features (2025)
     # =========================================================================

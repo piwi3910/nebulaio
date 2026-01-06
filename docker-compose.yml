@@ -49,6 +49,12 @@ services:
       # S3 Select (enabled by default)
       - NEBULAIO_S3SELECT_ENABLED=true
 
+      # Object Lambda (enabled by default with streaming support)
+      - NEBULAIO_OBJECT_LAMBDA_ENABLED=true
+      # - NEBULAIO_OBJECT_LAMBDA_STREAMING_THRESHOLD=10485760   # 10MB
+      # - NEBULAIO_OBJECT_LAMBDA_MAX_DECOMPRESS_SIZE=1073741824 # 1GB
+      # - NEBULAIO_OBJECT_LAMBDA_MAX_TRANSFORM_SIZE=104857600   # 100MB
+
       # Audit Logging (enabled by default)
       - NEBULAIO_AUDIT_ENABLED=true
       - NEBULAIO_AUDIT_FILE_PATH=/data/audit/audit.log

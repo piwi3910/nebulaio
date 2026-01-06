@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -95,7 +96,7 @@ type WebhookConfig struct {
 
 // BuiltInConfig defines built-in transformation settings.
 type BuiltInConfig struct {
-	Parameters map[string]interface{} `json:"parameters,omitempty"`
+	Parameters map[string]any `json:"parameters,omitempty"`
 	Function   BuiltInTransform       `json:"function"`
 }
 
@@ -215,7 +216,7 @@ type ObjectLambdaService struct {
 
 // Transformer interface for built-in transformations.
 type Transformer interface {
-	Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error)
+	Transform(ctx context.Context, input io.Reader, params map[string]any) (io.Reader, map[string]string, error)
 }
 
 // NewObjectLambdaService creates a new Object Lambda service.
@@ -327,14 +328,9 @@ func (s *ObjectLambdaService) TransformObject(
 	var transform *ContentTransformation
 
 	for _, tc := range cfg.TransformationConfigurations {
-		for _, action := range tc.Actions {
-			if action == "GetObject" {
-				transform = &tc.ContentTransformation
-				break
-			}
-		}
+		if slices.Contains(tc.Actions, "GetObject") {
+			transform = &tc.ContentTransformation
 
-		if transform != nil {
 			break
 		}
 	}
@@ -541,7 +537,7 @@ func generateToken() string {
 // RedactTransformer redacts sensitive patterns from text.
 type RedactTransformer struct{}
 
-func (t *RedactTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
+func (t *RedactTransformer) Transform(ctx context.Context, input io.Reader, params map[string]any) (io.Reader, map[string]string, error) {
 	data, err := io.ReadAll(input)
 	if err != nil {
 		return nil, nil, err
@@ -556,7 +552,7 @@ func (t *RedactTransformer) Transform(ctx context.Context, input io.Reader, para
 	}
 
 	// Override with custom patterns if provided
-	if customPatterns, ok := params["patterns"].([]interface{}); ok {
+	if customPatterns, ok := params["patterns"].([]any); ok {
 		patterns = make([]string, len(customPatterns))
 		for i, p := range customPatterns {
 			patterns[i] = p.(string)
@@ -581,13 +577,13 @@ func (t *RedactTransformer) Transform(ctx context.Context, input io.Reader, para
 // PIIMaskTransformer masks PII in JSON data.
 type PIIMaskTransformer struct{}
 
-func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
+func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, params map[string]any) (io.Reader, map[string]string, error) {
 	data, err := io.ReadAll(input)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var obj map[string]interface{}
+	var obj map[string]any
 	err = json.Unmarshal(data, &obj)
 	if err != nil {
 		// Not JSON, try text redaction
@@ -606,9 +602,9 @@ func (t *PIIMaskTransformer) Transform(ctx context.Context, input io.Reader, par
 	return bytes.NewReader(result), map[string]string{"Content-Type": "application/json"}, nil
 }
 
-func (t *PIIMaskTransformer) getPIIFields(params map[string]interface{}) []string {
+func (t *PIIMaskTransformer) getPIIFields(params map[string]any) []string {
 	piiFields := []string{"email", "phone", "ssn", "credit_card", "password", "secret", "token"}
-	if customFields, ok := params["fields"].([]interface{}); ok {
+	if customFields, ok := params["fields"].([]any); ok {
 		piiFields = make([]string, len(customFields))
 		for i, f := range customFields {
 			piiFields[i] = f.(string)
@@ -617,7 +613,7 @@ func (t *PIIMaskTransformer) getPIIFields(params map[string]interface{}) []strin
 	return piiFields
 }
 
-func (t *PIIMaskTransformer) maskValue(v interface{}) interface{} {
+func (t *PIIMaskTransformer) maskValue(v any) any {
 	if s, ok := v.(string); ok {
 		if len(s) > 4 {
 			return s[:2] + strings.Repeat("*", len(s)-4) + s[len(s)-2:]
@@ -627,7 +623,7 @@ func (t *PIIMaskTransformer) maskValue(v interface{}) interface{} {
 	return "****"
 }
 
-func (t *PIIMaskTransformer) maskPIIRecursive(obj map[string]interface{}, piiFields []string) {
+func (t *PIIMaskTransformer) maskPIIRecursive(obj map[string]any, piiFields []string) {
 	for key, value := range obj {
 		if t.shouldMaskField(key, piiFields) {
 			obj[key] = t.maskValue(value)
@@ -648,21 +644,21 @@ func (t *PIIMaskTransformer) shouldMaskField(key string, piiFields []string) boo
 	return false
 }
 
-func (t *PIIMaskTransformer) maskNestedStructures(value interface{}, piiFields []string) {
+func (t *PIIMaskTransformer) maskNestedStructures(value any, piiFields []string) {
 	// Recurse into nested objects
-	if nested, ok := value.(map[string]interface{}); ok {
+	if nested, ok := value.(map[string]any); ok {
 		t.maskPIIRecursive(nested, piiFields)
 	}
 
 	// Recurse into arrays
-	if arr, ok := value.([]interface{}); ok {
+	if arr, ok := value.([]any); ok {
 		t.maskArrayItems(arr, piiFields)
 	}
 }
 
-func (t *PIIMaskTransformer) maskArrayItems(arr []interface{}, piiFields []string) {
+func (t *PIIMaskTransformer) maskArrayItems(arr []any, piiFields []string) {
 	for _, item := range arr {
-		if nested, ok := item.(map[string]interface{}); ok {
+		if nested, ok := item.(map[string]any); ok {
 			t.maskPIIRecursive(nested, piiFields)
 		}
 	}
@@ -671,21 +667,21 @@ func (t *PIIMaskTransformer) maskArrayItems(arr []interface{}, piiFields []strin
 // FilterFieldsTransformer filters JSON fields.
 type FilterFieldsTransformer struct{}
 
-func (t *FilterFieldsTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
+func (t *FilterFieldsTransformer) Transform(ctx context.Context, input io.Reader, params map[string]any) (io.Reader, map[string]string, error) {
 	data, err := io.ReadAll(input)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var obj map[string]interface{}
+	var obj map[string]any
 	err = json.Unmarshal(data, &obj)
 	if err != nil {
 		return nil, nil, fmt.Errorf("input must be JSON: %w", err)
 	}
 
 	// Fields to include (whitelist)
-	if includeFields, ok := params["include"].([]interface{}); ok {
-		filtered := make(map[string]interface{})
+	if includeFields, ok := params["include"].([]any); ok {
+		filtered := make(map[string]any)
 		for _, f := range includeFields {
 			field := f.(string)
 			if v, exists := obj[field]; exists {
@@ -697,7 +693,7 @@ func (t *FilterFieldsTransformer) Transform(ctx context.Context, input io.Reader
 	}
 
 	// Fields to exclude (blacklist)
-	if excludeFields, ok := params["exclude"].([]interface{}); ok {
+	if excludeFields, ok := params["exclude"].([]any); ok {
 		for _, f := range excludeFields {
 			delete(obj, f.(string))
 		}
@@ -714,7 +710,7 @@ func (t *FilterFieldsTransformer) Transform(ctx context.Context, input io.Reader
 // ConvertJSONTransformer converts CSV to JSON.
 type ConvertJSONTransformer struct{}
 
-func (t *ConvertJSONTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
+func (t *ConvertJSONTransformer) Transform(ctx context.Context, input io.Reader, params map[string]any) (io.Reader, map[string]string, error) {
 	data, err := io.ReadAll(input)
 	if err != nil {
 		return nil, nil, err
@@ -872,7 +868,7 @@ func detectCompressionAlgorithm(data []byte) string {
 	}
 }
 
-func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
+func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]any) (io.Reader, map[string]string, error) {
 	// Get compression algorithm from params (default: gzip)
 	algorithm := compressionAlgGzip
 	if alg, ok := params["algorithm"].(string); ok {
@@ -1133,7 +1129,7 @@ func compressZstd(buf *bytes.Buffer, data []byte, level int) (err error) {
 // DecompressTransformer decompresses content.
 type DecompressTransformer struct{}
 
-func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]interface{}) (io.Reader, map[string]string, error) {
+func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, params map[string]any) (io.Reader, map[string]string, error) {
 	algorithm := t.getAlgorithm(params)
 	useStreaming := t.shouldUseStreaming(params, algorithm)
 
@@ -1144,14 +1140,14 @@ func (t *DecompressTransformer) Transform(ctx context.Context, input io.Reader, 
 	return t.transformBuffered(ctx, input, algorithm)
 }
 
-func (t *DecompressTransformer) getAlgorithm(params map[string]interface{}) string {
+func (t *DecompressTransformer) getAlgorithm(params map[string]any) string {
 	if alg, ok := params["algorithm"].(string); ok {
 		return strings.ToLower(alg)
 	}
 	return ""
 }
 
-func (t *DecompressTransformer) shouldUseStreaming(params map[string]interface{}, algorithm string) bool {
+func (t *DecompressTransformer) shouldUseStreaming(params map[string]any, algorithm string) bool {
 	contentLength, ok := params["content_length"].(int64)
 	if !ok {
 		return false

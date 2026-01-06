@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -794,16 +795,7 @@ func (fw *Firewall) matchTimeWindow(window *TimeWindow, t time.Time) bool {
 	// Check day of week
 	if len(window.DaysOfWeek) > 0 {
 		day := int(t.Weekday())
-		found := false
-
-		for _, d := range window.DaysOfWeek {
-			if d == day {
-				found = true
-				break
-			}
-		}
-
-		if !found {
+		if !slices.Contains(window.DaysOfWeek, day) {
 			return false
 		}
 	}
@@ -984,13 +976,7 @@ func (fw *Firewall) getOrCreateBucketBandwidth(bucket string) *BandwidthTracker 
 // Helper functions
 
 func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(slice, item)
 }
 
 func matchWildcard(patterns []string, value string) bool {

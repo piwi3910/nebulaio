@@ -720,6 +720,49 @@ AI inference on stored objects using NVIDIA NIM.
 
 ---
 
+## Object Lambda Configuration
+
+S3 Object Lambda enables data transformation during GET requests without creating derivative copies.
+
+### Transform Settings
+
+| Option | Type | Default | Description |
+| -------- | ------ | --------- | ------------- |
+| `lambda.object_lambda.max_transform_size` | int64 | `104857600` | Maximum input size for transforms (100MB) |
+| `lambda.object_lambda.streaming_threshold` | int64 | `10485760` | Size above which streaming mode is used (10MB) |
+| `lambda.object_lambda.max_decompress_size` | int64 | `1073741824` | Maximum decompressed output size (1GB) |
+
+### Streaming Compression
+
+For files larger than `streaming_threshold`, Object Lambda uses streaming compression/decompression to maintain constant memory usage regardless of file size.
+
+| Mode | Behavior | Memory Usage |
+| ------ | ---------- | -------------- |
+| Buffered | Entire file in memory | ~2x file size |
+| Streaming | 32KB chunks | ~64KB constant |
+
+**Configuration Example:**
+
+```yaml
+lambda:
+  object_lambda:
+    max_transform_size: 100mb      # Maximum size for any transformation
+    streaming_threshold: 10mb       # Use streaming for files > 10MB
+    max_decompress_size: 1gb        # Decompression bomb protection
+```
+
+**Environment Variables:**
+
+| Setting | Environment Variable |
+| --------- | ---------------------- |
+| `max_transform_size` | `NEBULAIO_LAMBDA_OBJECT_LAMBDA_MAX_TRANSFORM_SIZE` |
+| `streaming_threshold` | `NEBULAIO_LAMBDA_OBJECT_LAMBDA_STREAMING_THRESHOLD` |
+| `max_decompress_size` | `NEBULAIO_LAMBDA_OBJECT_LAMBDA_MAX_DECOMPRESS_SIZE` |
+
+See [Compression Documentation](../features/compression.md#object-lambda-streaming-compression) for detailed streaming compression information.
+
+---
+
 ## Example Configurations
 
 ### Development (Single Node)

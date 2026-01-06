@@ -544,9 +544,9 @@ func (d *Detector) parseSpeed(rate string) uint64 {
 }
 
 // GetRecommendedConfig returns recommended configuration based on hardware.
-func (d *Detector) GetRecommendedConfig() map[string]interface{} {
+func (d *Detector) GetRecommendedConfig() map[string]any {
 	caps := d.GetCapabilities()
-	config := make(map[string]interface{})
+	config := make(map[string]any)
 
 	if caps.GPUAvailable {
 		config["gpudirect"] = d.buildGPUConfig(&caps)
@@ -564,8 +564,8 @@ func (d *Detector) GetRecommendedConfig() map[string]interface{} {
 }
 
 // buildGPUConfig builds GPU configuration based on capabilities.
-func (d *Detector) buildGPUConfig(caps *HardwareCapabilities) map[string]interface{} {
-	gpuConfig := map[string]interface{}{
+func (d *Detector) buildGPUConfig(caps *HardwareCapabilities) map[string]any {
+	gpuConfig := map[string]any{
 		"enabled":          true,
 		"buffer_pool_size": 1024 * 1024 * 1024, // 1GB default
 		"enable_async":     true,
@@ -595,8 +595,8 @@ func (d *Detector) buildGPUConfig(caps *HardwareCapabilities) map[string]interfa
 }
 
 // buildDPUConfig builds DPU configuration based on capabilities.
-func (d *Detector) buildDPUConfig(caps *HardwareCapabilities) map[string]interface{} {
-	dpuConfig := map[string]interface{}{
+func (d *Detector) buildDPUConfig(caps *HardwareCapabilities) map[string]any {
+	dpuConfig := map[string]any{
 		"enabled":            true,
 		"enable_crypto":      false,
 		"enable_compression": false,
@@ -619,8 +619,8 @@ func (d *Detector) buildDPUConfig(caps *HardwareCapabilities) map[string]interfa
 }
 
 // buildRDMAConfig builds RDMA configuration based on capabilities.
-func (d *Detector) buildRDMAConfig(caps *HardwareCapabilities) map[string]interface{} {
-	rdmaConfig := map[string]interface{}{
+func (d *Detector) buildRDMAConfig(caps *HardwareCapabilities) map[string]any {
+	rdmaConfig := map[string]any{
 		"enabled":          true,
 		"port":             9100,
 		"enable_zero_copy": true,

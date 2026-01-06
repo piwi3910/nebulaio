@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -221,7 +222,7 @@ type Metrics struct {
 // OffloadService represents an offload service running on the DPU.
 type OffloadService struct {
 	StartTime time.Time   `json:"start_time"`
-	Config    interface{} `json:"config"`
+	Config    any `json:"config"`
 	Type      OffloadType `json:"type"`
 	Name      string      `json:"name"`
 	Status    string      `json:"status"`
@@ -256,7 +257,7 @@ type DPUBackend interface {
 	SelectDPU(index int) (*DPUInfo, error)
 
 	// StartService starts an offload service
-	StartService(offloadType OffloadType, config interface{}) error
+	StartService(offloadType OffloadType, config any) error
 
 	// StopService stops an offload service
 	StopService(offloadType OffloadType) error
@@ -277,7 +278,7 @@ type DPUBackend interface {
 	Decompress(ctx context.Context, algorithm string, data []byte) ([]byte, error)
 
 	// GetMetrics returns backend-specific metrics
-	GetMetrics() map[string]interface{}
+	GetMetrics() map[string]any
 
 	// HealthCheck performs a health check
 	HealthCheck() error
@@ -316,11 +317,8 @@ func NewService(config *Config, backend DPUBackend) (*Service, error) {
 		return nil, ErrDPUNotAvailable
 	}
 
-	// Select DPU
-	index := config.DeviceIndex
-	if index < 0 {
-		index = 0 // Auto-select first available
-	}
+	// Select DPU (auto-select first available if negative)
+	index := max(config.DeviceIndex, 0)
 
 	if index >= len(dpus) {
 		return nil, fmt.Errorf("DPU index %d out of range (available: %d)", index, len(dpus))
@@ -355,7 +353,7 @@ func (s *Service) Start(ctx context.Context) {
 
 // startOffloadService starts a specific offload service.
 func (s *Service) startOffloadService(offloadType OffloadType) error {
-	var serviceConfig interface{}
+	var serviceConfig any
 
 	switch offloadType {
 	case OffloadStorage:
@@ -462,11 +460,10 @@ func (s *Service) IsOffloadAvailable(offloadType OffloadType) bool {
 		return false
 	}
 
-	for _, cap := range s.dpu.Capabilities {
-		if cap == offloadType {
-			_, ok := s.services[offloadType]
-			return ok
-		}
+	if slices.Contains(s.dpu.Capabilities, offloadType) {
+		_, ok := s.services[offloadType]
+
+		return ok
 	}
 
 	return false
@@ -663,13 +660,13 @@ func (s *Service) GetMetrics() *Metrics {
 }
 
 // GetStatus returns the overall DPU status.
-func (s *Service) GetStatus() map[string]interface{} {
+func (s *Service) GetStatus() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	services := make([]map[string]interface{}, 0, len(s.services))
+	services := make([]map[string]any, 0, len(s.services))
 	for _, svc := range s.services {
-		services = append(services, map[string]interface{}{
+		services = append(services, map[string]any{
 			"type":       svc.Type,
 			"name":       svc.Name,
 			"status":     svc.Status,
@@ -677,14 +674,14 @@ func (s *Service) GetStatus() map[string]interface{} {
 		})
 	}
 
-	status := map[string]interface{}{
+	status := map[string]any{
 		"available": s.dpu != nil,
 		"services":  services,
 		"metrics":   s.GetMetrics(),
 	}
 
 	if s.dpu != nil {
-		status["dpu"] = map[string]interface{}{
+		status["dpu"] = map[string]any{
 			"index":            s.dpu.Index,
 			"model":            s.dpu.Model,
 			"firmware_version": s.dpu.FirmwareVersion,

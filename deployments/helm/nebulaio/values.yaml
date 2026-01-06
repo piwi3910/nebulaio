@@ -696,6 +696,22 @@ s3Select:
   # -- Worker pool size for concurrent queries
   workerPoolSize: 10
 
+# Object Lambda
+# Transform objects on-the-fly during GET requests
+objectLambda:
+  # -- Enable Object Lambda
+  enabled: true
+  # -- Streaming threshold in bytes (use streaming for content above this size)
+  streamingThreshold: 10485760  # 10MB
+  # -- Maximum decompressed size to prevent decompression bombs
+  maxDecompressSize: 1073741824  # 1GB
+  # -- Maximum transform size for buffered operations
+  maxTransformSize: 104857600  # 100MB
+  # -- Default compression algorithm: gzip, zstd
+  defaultCompressionAlgorithm: gzip
+  # -- Default compression level (1-9 for gzip, 1-22 for zstd)
+  defaultCompressionLevel: 6
+
 # Batch Replication
 # Bulk data migration and disaster recovery
 batchReplication:
