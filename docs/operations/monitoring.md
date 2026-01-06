@@ -176,6 +176,96 @@ sum(nebulaio_lambda_operations_in_flight) by (algorithm)
 
 ```bash
 
+### Lambda Compression Operations Panel
+
+```json
+
+{
+  "title": "Lambda Compression Operations",
+  "type": "timeseries",
+  "targets": [
+    {
+      "expr": "sum(rate(nebulaio_lambda_compression_operations_total{status=\"success\"}[5m])) by (algorithm, operation)",
+      "legendFormat": "{{algorithm}} {{operation}} success"
+    },
+    {
+      "expr": "sum(rate(nebulaio_lambda_compression_operations_total{status=\"error\"}[5m])) by (algorithm, operation)",
+      "legendFormat": "{{algorithm}} {{operation}} error"
+    }
+  ]
+}
+
+```bash
+
+### Lambda Compression Latency Panel
+
+```json
+
+{
+  "title": "Lambda Compression Latency",
+  "type": "timeseries",
+  "targets": [
+    {
+      "expr": "histogram_quantile(0.50, sum(rate(nebulaio_lambda_compression_duration_seconds_bucket[5m])) by (le, algorithm, operation))",
+      "legendFormat": "{{algorithm}} {{operation}} p50"
+    },
+    {
+      "expr": "histogram_quantile(0.95, sum(rate(nebulaio_lambda_compression_duration_seconds_bucket[5m])) by (le, algorithm, operation))",
+      "legendFormat": "{{algorithm}} {{operation}} p95"
+    },
+    {
+      "expr": "histogram_quantile(0.99, sum(rate(nebulaio_lambda_compression_duration_seconds_bucket[5m])) by (le, algorithm, operation))",
+      "legendFormat": "{{algorithm}} {{operation}} p99"
+    }
+  ]
+}
+
+```bash
+
+### Lambda Compression Ratio Panel
+
+```json
+
+{
+  "title": "Average Compression Ratio by Algorithm",
+  "type": "gauge",
+  "targets": [{
+    "expr": "avg(nebulaio_lambda_compression_ratio) by (algorithm)",
+    "legendFormat": "{{algorithm}}"
+  }],
+  "fieldConfig": {
+    "defaults": {
+      "min": 0,
+      "max": 1,
+      "thresholds": {
+        "mode": "absolute",
+        "steps": [
+          {"color": "green", "value": 0},
+          {"color": "yellow", "value": 0.5},
+          {"color": "red", "value": 0.8}
+        ]
+      }
+    }
+  }
+}
+
+```bash
+
+### Lambda In-Flight Operations Panel
+
+```json
+
+{
+  "title": "Lambda Operations In-Flight",
+  "type": "stat",
+  "targets": [{
+    "expr": "sum(nebulaio_lambda_operations_in_flight) by (algorithm)",
+    "legendFormat": "{{algorithm}}"
+  }]
+}
+
+```bash
+
 ## Alerting Rules
 
 ```yaml
@@ -234,6 +324,33 @@ groups:
           severity: warning
         annotations:
           summary: "Cache hit ratio below 50%"
+
+      - alert: LambdaCompressionHighErrorRate
+        expr: |
+          sum(rate(nebulaio_lambda_compression_operations_total{status="error"}[5m])) /
+          sum(rate(nebulaio_lambda_compression_operations_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lambda compression error rate above 5%"
+
+      - alert: LambdaCompressionHighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(nebulaio_lambda_compression_duration_seconds_bucket[5m])) by (le)) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lambda compression P95 latency exceeds 5 seconds"
+
+      - alert: LambdaOperationsBacklog
+        expr: sum(nebulaio_lambda_operations_in_flight) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of in-flight Lambda operations"
 
 ```bash
 

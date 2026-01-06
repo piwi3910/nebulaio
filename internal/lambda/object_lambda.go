@@ -934,7 +934,7 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 		duration := time.Since(startTime)
 		metrics.RecordLambdaCompression(algorithm, "compress", false, duration, 0, 0)
 
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to read input data: %w", err)
 	}
 
 	originalSize := int64(len(data))
@@ -961,7 +961,7 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 			duration := time.Since(startTime)
 			metrics.RecordLambdaCompression(algorithm, "compress", false, duration, originalSize, 0)
 
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("gzip compression failed: %w", err)
 		}
 
 		contentEncoding = compressionAlgGzip
@@ -972,7 +972,7 @@ func (t *CompressTransformer) Transform(ctx context.Context, input io.Reader, pa
 			duration := time.Since(startTime)
 			metrics.RecordLambdaCompression(algorithm, "compress", false, duration, originalSize, 0)
 
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("zstd compression failed: %w", err)
 		}
 
 		contentEncoding = compressionAlgZstd
@@ -1250,7 +1250,7 @@ func (t *DecompressTransformer) transformBufferedWithMetrics(
 		}
 		metrics.RecordLambdaCompression(metricsAlg, "decompress", false, duration, 0, 0)
 
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to read compressed data: %w", err)
 	}
 
 	compressedSize := int64(len(data))
@@ -1290,7 +1290,7 @@ func (t *DecompressTransformer) transformBufferedWithMetrics(
 		duration := time.Since(startTime)
 		metrics.RecordLambdaCompression(detectedAlgorithm, "decompress", false, duration, compressedSize, 0)
 
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("decompression failed: %w", err)
 	}
 
 	decompressedSize := int64(len(result))
