@@ -867,7 +867,7 @@ func (l *S3ModuleLoader) LoadModule(ctx context.Context, bucket, key string) ([]
 	log.Debug().
 		Str("bucket", bucket).
 		Str("key", key).
-		Int("size", len(data)).
+		Int("module_size", len(data)).
 		Msg("Loaded WASM module from S3")
 
 	return data, nil
