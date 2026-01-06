@@ -62,10 +62,10 @@ func (s *CatalogService) writeParquet(w io.Writer, records []InventoryRecord) (i
 		return 0, nil
 	}
 
-	// Convert records to Parquet-compatible format
-	parquetRecords := make([]ParquetInventoryRecord, 0, len(records))
+	// Convert records to Parquet-compatible format (pre-allocated for efficiency)
+	parquetRecords := make([]ParquetInventoryRecord, len(records))
 	for recIdx := range records {
-		parquetRecords = append(parquetRecords, inventoryToParquetRecord(&records[recIdx]))
+		parquetRecords[recIdx] = inventoryToParquetRecord(&records[recIdx])
 	}
 
 	// Write to buffer first to get accurate size.
