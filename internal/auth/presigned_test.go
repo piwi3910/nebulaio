@@ -137,11 +137,11 @@ func TestPresignedURLWithSpecialCharacters(t *testing.T) {
 
 	// Test cases with special characters - start with simpler ones
 	specialKeys := []string{
-		"file-with-dashes.txt",        // dashes are unreserved, should work
-		"file_with_underscores.txt",   // underscores are unreserved, should work
-		"folder/file.txt",             // slashes should not be encoded
-		"path/to/deep/file.txt",       // multiple slashes
-		"file with spaces.txt",        // spaces need encoding
+		"file-with-dashes.txt",      // dashes are unreserved, should work
+		"file_with_underscores.txt", // underscores are unreserved, should work
+		"folder/file.txt",           // slashes should not be encoded
+		"path/to/deep/file.txt",     // multiple slashes
+		"file with spaces.txt",      // spaces need encoding
 	}
 
 	for _, key := range specialKeys {

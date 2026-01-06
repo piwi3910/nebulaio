@@ -41,11 +41,11 @@ const (
 	presignedTestUserID        = "test-user-123"
 	presignedTestAccessKeyID   = "AKIAIOSFODNN7EXAMPLE"
 	presignedTestSecretKey     = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-	presignedDefaultExpiration  = 15 * time.Minute
-	presignedTestContent        = "content"
-	presignedTestContentLength  = int64(len(presignedTestContent)) // Must match presignedTestContent
-	presignedOverMaxExpiration  = 8 * 24 * time.Hour // Exceeds 7-day AWS limit
-	presignedMinimalExpiration  = 1 * time.Second    // For expired URL testing
+	presignedDefaultExpiration = 15 * time.Minute
+	presignedTestContent       = "content"
+	presignedTestContentLength = int64(len(presignedTestContent)) // Must match presignedTestContent
+	presignedOverMaxExpiration = 8 * 24 * time.Hour               // Exceeds 7-day AWS limit
+	presignedMinimalExpiration = 1 * time.Second                  // For expired URL testing
 )
 
 // MockMetadataStore implements metadata.Store for testing.
