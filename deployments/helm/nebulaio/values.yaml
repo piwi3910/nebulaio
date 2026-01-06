@@ -786,6 +786,39 @@ objectLock:
 # AI/ML & High-Performance Features (2025)
 # =============================================================================
 
+# S3 Object Lambda with WASM Runtime
+# Serverless object transformations using WebAssembly
+objectLambda:
+  # -- Enable S3 Object Lambda
+  enabled: false
+
+  # WASM Runtime Configuration
+  wasm:
+    # -- Enable WASM runtime for transformations
+    enabled: true
+    # -- Maximum memory for WASM modules in MB (valid range: 1-4096)
+    # WARNING: WASM has a hard limit of 4GB (4096MB). Values above 4096 are capped.
+    # Memory is allocated per module instance during transformation execution.
+    maxMemoryMB: 256
+    # -- Maximum execution time for WASM functions
+    maxExecutionTime: 30s
+    # -- Maximum input size for transformations (100MB)
+    maxInputSize: 104857600
+    # -- Maximum output size for transformations (100MB)
+    maxOutputSize: 104857600
+    # -- Streaming threshold - objects larger than this are logged (10MB)
+    # Note: Currently processed in-memory; true streaming is a future optimization
+    streamingThreshold: 10485760
+    # -- Directory for WASM module files
+    modulePath: /data/wasm
+    # -- Cache compiled WASM modules
+    cacheEnabled: true
+    # -- Maximum number of compiled modules to cache
+    # WARNING: Memory impact = cacheMaxModules * maxMemoryMB (worst case)
+    # With defaults (100 * 256MB), peak memory could reach 25GB if all modules use max memory.
+    # Adjust based on available memory and expected module diversity.
+    cacheMaxModules: 100
+
 # S3 Express One Zone
 # High-performance S3 with atomic appends for streaming workloads
 s3Express:
