@@ -2,6 +2,7 @@ package lambda
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"errors"
 	"fmt"
@@ -134,12 +135,34 @@ func init() {
 	)
 }
 
+// cacheEntry holds a compiled module and its key for LRU tracking.
+type cacheEntry struct {
+	key    string
+	module wazero.CompiledModule
+}
+
 // WASMRuntime manages WebAssembly module execution for Object Lambda transformations.
 // It provides sandboxed execution with configurable resource limits.
+//
+// # WASM Module Contract
+//
+// WASM modules must export the following functions for full functionality:
+//
+//   - transform(input_ptr i32, input_len i32) -> (output_ptr i32, output_len i32)
+//     The main transformation function that processes input data.
+//
+//   - allocate(size i32) -> (ptr i32)
+//     Allocates memory for input/output buffers. Optional if module handles its own memory.
+//
+//   - deallocate(ptr i32, size i32)
+//     Frees previously allocated memory. Optional if module handles its own memory.
+//
+// Modules without allocate/deallocate will use the simple transformation path
+// where input is passed via stdin and output is read from the function return values.
 type WASMRuntime struct {
 	runtime       wazero.Runtime
-	moduleCache   map[string]wazero.CompiledModule
-	cacheOrder    []string // LRU order tracking: oldest first
+	moduleCache   map[string]*list.Element // Maps cache key to list element for O(1) lookup
+	lruList       *list.List               // Doubly-linked list for O(1) LRU operations
 	moduleLoader  ModuleLoader
 	mu            sync.RWMutex
 	closed        atomic.Bool
@@ -225,8 +248,19 @@ func NewWASMRuntime(ctx context.Context, config *WASMRuntimeConfig) (*WASMRuntim
 	// Calculate memory pages safely (1 page = 64KB, so MB * 16 = pages)
 	// Limit to a safe maximum to prevent overflow
 	memoryPages := config.MaxMemoryMB * WASMPagesPerMB
+	memoryClamped := false
+
 	if memoryPages > WASMMaxMemoryPages {
+		memoryClamped = true
 		memoryPages = WASMMaxMemoryPages
+	}
+
+	// Warn if memory was clamped to WASM maximum
+	if memoryClamped {
+		log.Warn().
+			Int("requested_mb", config.MaxMemoryMB).
+			Int("clamped_mb", WASMMaxMemoryPages/WASMPagesPerMB).
+			Msg("WASM memory limit clamped to maximum 4GB")
 	}
 
 	runtimeConfig := wazero.NewRuntimeConfig().
@@ -246,8 +280,8 @@ func NewWASMRuntime(ctx context.Context, config *WASMRuntimeConfig) (*WASMRuntim
 
 	wasmRuntime := &WASMRuntime{
 		runtime:      runtime,
-		moduleCache:  make(map[string]wazero.CompiledModule),
-		cacheOrder:   make([]string, 0, config.MaxCacheEntries),
+		moduleCache:  make(map[string]*list.Element),
+		lruList:      list.New(),
 		moduleLoader: &DefaultModuleLoader{},
 		config:       config,
 	}
@@ -424,9 +458,10 @@ func (w *WASMRuntime) getOrCompileModule(
 	// Check cache first (with write lock to atomically update LRU order)
 	if w.config.EnableCaching {
 		w.mu.Lock()
-		if cached, ok := w.moduleCache[cacheKey]; ok {
-			// Update LRU order atomically with cache access
-			w.updateCacheOrderLocked(cacheKey)
+		if elem, ok := w.moduleCache[cacheKey]; ok {
+			// Move to front (most recently used) - O(1) operation
+			w.lruList.MoveToFront(elem)
+			entry := elem.Value.(*cacheEntry)
 			w.mu.Unlock()
 			wasmModuleCacheHits.Inc()
 
@@ -435,7 +470,7 @@ func (w *WASMRuntime) getOrCompileModule(
 				Str("key", key).
 				Msg("Using cached WASM module")
 
-			return cached, nil
+			return entry.module, nil
 		}
 		w.mu.Unlock()
 		wasmModuleCacheMisses.Inc()
@@ -446,10 +481,11 @@ func (w *WASMRuntime) getOrCompileModule(
 		// Double-check cache after acquiring singleflight (another goroutine may have cached it)
 		if w.config.EnableCaching {
 			w.mu.RLock()
-			if cached, ok := w.moduleCache[cacheKey]; ok {
+			if elem, ok := w.moduleCache[cacheKey]; ok {
+				entry := elem.Value.(*cacheEntry)
 				w.mu.RUnlock()
 
-				return cached, nil
+				return entry.module, nil
 			}
 			w.mu.RUnlock()
 		}
@@ -485,8 +521,9 @@ func (w *WASMRuntime) getOrCompileModule(
 			// evictIfNeeded uses context.Background() internally to ensure cleanup
 			// completes even if the request context is cancelled
 			w.evictIfNeeded() //nolint:contextcheck // intentionally uses background context for cleanup
-			w.moduleCache[cacheKey] = compiled
-			w.cacheOrder = append(w.cacheOrder, cacheKey)
+			entry := &cacheEntry{key: cacheKey, module: compiled}
+			elem := w.lruList.PushFront(entry)
+			w.moduleCache[cacheKey] = elem
 			wasmModuleCacheSize.Set(float64(len(w.moduleCache)))
 			w.mu.Unlock()
 
@@ -513,53 +550,36 @@ func (w *WASMRuntime) getOrCompileModule(
 	return compiled, nil
 }
 
-// updateCacheOrderLocked moves the accessed key to the end of the LRU order.
-// Must be called with w.mu held.
-func (w *WASMRuntime) updateCacheOrderLocked(cacheKey string) {
-	// Find and remove the key from its current position
-	found := false
-
-	for i, key := range w.cacheOrder {
-		if key == cacheKey {
-			w.cacheOrder = append(w.cacheOrder[:i], w.cacheOrder[i+1:]...)
-			found = true
-
-			break
-		}
-	}
-
-	// Only add to the end if the key was found (avoid duplicates from missing keys)
-	if found {
-		w.cacheOrder = append(w.cacheOrder, cacheKey)
-	}
-}
-
 // evictIfNeeded removes the least recently used module if cache is full.
 // Must be called with w.mu held.
 // Uses context.Background() for cleanup to ensure eviction completes even if
 // the request context is cancelled.
+// Time complexity: O(1) per eviction using doubly-linked list.
 func (w *WASMRuntime) evictIfNeeded() {
 	// Use background context for cleanup operations
 	cleanupCtx := context.Background()
 
-	for len(w.moduleCache) >= w.config.MaxCacheEntries && len(w.cacheOrder) > 0 {
-		// Evict the oldest (least recently used) entry
-		oldestKey := w.cacheOrder[0]
-		w.cacheOrder = w.cacheOrder[1:]
-
-		if module, ok := w.moduleCache[oldestKey]; ok {
-			if err := module.Close(cleanupCtx); err != nil {
-				log.Warn().Err(err).Str("module", oldestKey).Msg("Failed to close evicted WASM module")
-			}
-
-			delete(w.moduleCache, oldestKey)
-			wasmModuleCacheEvictions.Inc()
-
-			log.Debug().
-				Str("module", oldestKey).
-				Int("cache_size", len(w.moduleCache)).
-				Msg("Evicted WASM module from cache")
+	for len(w.moduleCache) >= w.config.MaxCacheEntries && w.lruList.Len() > 0 {
+		// Evict the oldest (least recently used) entry from back of list - O(1)
+		elem := w.lruList.Back()
+		if elem == nil {
+			break
 		}
+
+		entry := elem.Value.(*cacheEntry)
+		w.lruList.Remove(elem)
+		delete(w.moduleCache, entry.key)
+
+		if err := entry.module.Close(cleanupCtx); err != nil {
+			log.Warn().Err(err).Str("module", entry.key).Msg("Failed to close evicted WASM module")
+		}
+
+		wasmModuleCacheEvictions.Inc()
+
+		log.Debug().
+			Str("module", entry.key).
+			Int("cache_size", len(w.moduleCache)).
+			Msg("Evicted WASM module from cache")
 	}
 }
 
@@ -787,14 +807,15 @@ func (w *WASMRuntime) ClearCache(ctx context.Context) {
 	defer w.mu.Unlock()
 
 	// Close all cached compiled modules before clearing
-	for key, module := range w.moduleCache {
-		if err := module.Close(ctx); err != nil {
-			log.Warn().Err(err).Str("module", key).Msg("Failed to close cached WASM module during cache clear")
+	for elem := w.lruList.Front(); elem != nil; elem = elem.Next() {
+		entry := elem.Value.(*cacheEntry)
+		if err := entry.module.Close(ctx); err != nil {
+			log.Warn().Err(err).Str("module", entry.key).Msg("Failed to close cached WASM module during cache clear")
 		}
 	}
 
-	w.moduleCache = make(map[string]wazero.CompiledModule)
-	w.cacheOrder = make([]string, 0, w.config.MaxCacheEntries)
+	w.moduleCache = make(map[string]*list.Element)
+	w.lruList.Init()
 	wasmModuleCacheSize.Set(0)
 
 	log.Info().Msg("WASM module cache cleared")
@@ -815,14 +836,15 @@ func (w *WASMRuntime) Close(ctx context.Context) error {
 	defer w.mu.Unlock()
 
 	// Close all cached compiled modules
-	for key, module := range w.moduleCache {
-		if err := module.Close(ctx); err != nil {
-			log.Warn().Err(err).Str("module", key).Msg("Failed to close cached WASM module")
+	for elem := w.lruList.Front(); elem != nil; elem = elem.Next() {
+		entry := elem.Value.(*cacheEntry)
+		if err := entry.module.Close(ctx); err != nil {
+			log.Warn().Err(err).Str("module", entry.key).Msg("Failed to close cached WASM module")
 		}
 	}
 
 	w.moduleCache = nil
-	w.cacheOrder = nil
+	w.lruList = nil
 
 	// Close the runtime
 	if err := w.runtime.Close(ctx); err != nil {
