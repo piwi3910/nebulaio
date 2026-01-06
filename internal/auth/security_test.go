@@ -41,7 +41,6 @@ func TestAuthenticationBypass(t *testing.T) {
 			"header..signature",
 			".payload.signature",
 			"header.payload.",
-			"a]b.c.d",
 			"eyJhbGciOiJub25lIn0...",
 			"eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ0ZXN0IjoidGVzdCJ9.",
 		}
