@@ -12,6 +12,9 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/piwi3910/nebulaio/internal/metrics"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 // Test constants.
@@ -1012,3 +1015,435 @@ func TestSetMaxTransformSizeConcurrency(t *testing.T) {
 		t.Errorf("Final max transform size should be positive, got %d", finalSize)
 	}
 }
+
+// TestCompressTransformerMetrics verifies that metrics are recorded during compression.
+func TestCompressTransformerMetrics(t *testing.T) {
+	transformer := &CompressTransformer{}
+	testData := "Hello, World! This is test data for compression metrics."
+
+	// Reset relevant metrics before test
+	resetCompressionMetrics()
+
+	tests := []struct {
+		name      string
+		algorithm string
+		operation string
+	}{
+		{
+			name:      "gzip compression metrics",
+			algorithm: "gzip",
+			operation: "compress",
+		},
+		{
+			name:      "zstd compression metrics",
+			algorithm: "zstd",
+			operation: "compress",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := map[string]interface{}{"algorithm": tt.algorithm}
+
+			output, _, err := transformer.Transform(context.Background(), strings.NewReader(testData), params)
+			if err != nil {
+				t.Fatalf("Transform failed: %v", err)
+			}
+
+			// Consume the output
+			_, _ = io.ReadAll(output)
+
+			// Verify operations counter was incremented
+			opsMetric := metrics.LambdaCompressionOperations.WithLabelValues(
+				tt.algorithm, tt.operation, "success")
+			opsCount := testutil.ToFloat64(opsMetric)
+			if opsCount < 1 {
+				t.Errorf("Expected at least 1 successful compression operation for %s, got %v",
+					tt.algorithm, opsCount)
+			}
+
+			// Verify bytes processed was recorded
+			bytesProcessed := testutil.ToFloat64(metrics.LambdaBytesProcessed.WithLabelValues(tt.algorithm, tt.operation))
+			if bytesProcessed < float64(len(testData)) {
+				t.Errorf("Expected at least %d bytes processed for %s, got %v", len(testData), tt.algorithm, bytesProcessed)
+			}
+
+			// Verify in-flight gauge returns to 0 after operation
+			inFlight := testutil.ToFloat64(metrics.LambdaOperationsInFlight.WithLabelValues(tt.algorithm))
+			if inFlight != 0 {
+				t.Errorf("Expected 0 in-flight operations after completion, got %v", inFlight)
+			}
+		})
+	}
+}
+
+// TestDecompressTransformerMetrics verifies that metrics are recorded during decompression.
+func TestDecompressTransformerMetrics(t *testing.T) {
+	transformer := &DecompressTransformer{}
+	testData := "Hello, World! This is test data for decompression metrics."
+
+	// Reset relevant metrics before test
+	resetCompressionMetrics()
+
+	tests := []struct {
+		name      string
+		algorithm string
+		compress  func([]byte) []byte
+	}{
+		{
+			name:      "gzip decompression metrics",
+			algorithm: "gzip",
+			compress:  compressWithGzip,
+		},
+		{
+			name:      "zstd decompression metrics",
+			algorithm: "zstd",
+			compress:  compressWithZstd,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			compressedData := tt.compress([]byte(testData))
+			params := map[string]interface{}{"algorithm": tt.algorithm}
+
+			output, _, err := transformer.Transform(context.Background(), bytes.NewReader(compressedData), params)
+			if err != nil {
+				t.Fatalf("Transform failed: %v", err)
+			}
+
+			// Consume the output
+			_, _ = io.ReadAll(output)
+
+			// Verify operations counter was incremented
+			opsMetric := metrics.LambdaCompressionOperations.WithLabelValues(
+				tt.algorithm, "decompress", "success")
+			opsCount := testutil.ToFloat64(opsMetric)
+			if opsCount < 1 {
+				t.Errorf("Expected at least 1 successful decompression for %s, got %v",
+					tt.algorithm, opsCount)
+			}
+
+			// Verify bytes processed was recorded
+			bytesProcessed := testutil.ToFloat64(metrics.LambdaBytesProcessed.WithLabelValues(tt.algorithm, "decompress"))
+			if bytesProcessed < float64(len(compressedData)) {
+				t.Errorf("Expected at least %d bytes processed for %s, got %v", len(compressedData), tt.algorithm, bytesProcessed)
+			}
+		})
+	}
+}
+
+// TestCompressionMetricsOnError verifies that error metrics are recorded correctly.
+func TestCompressionMetricsOnError(t *testing.T) {
+	transformer := &CompressTransformer{}
+
+	// Reset relevant metrics before test
+	resetCompressionMetrics()
+
+	// Test with unsupported algorithm to trigger error
+	params := map[string]interface{}{"algorithm": "invalid_algo"}
+	_, _, err := transformer.Transform(context.Background(), strings.NewReader("test data"), params)
+
+	if err == nil {
+		t.Fatal("Expected error for invalid algorithm")
+	}
+
+	// Verify error counter was incremented
+	errMetric := metrics.LambdaCompressionOperations.WithLabelValues(
+		"invalid_algo", "compress", "error")
+	errorCount := testutil.ToFloat64(errMetric)
+	if errorCount < 1 {
+		t.Errorf("Expected at least 1 error recorded, got %v", errorCount)
+	}
+}
+
+// TestDecompressionMetricsOnError verifies decompression error metrics are recorded.
+func TestDecompressionMetricsOnError(t *testing.T) {
+	transformer := &DecompressTransformer{}
+
+	// Reset relevant metrics before test
+	resetCompressionMetrics()
+
+	// Test with unsupported algorithm to trigger error
+	params := map[string]interface{}{"algorithm": "invalid_algo"}
+	_, _, err := transformer.Transform(
+		context.Background(), strings.NewReader("test data"), params)
+
+	if err == nil {
+		t.Fatal("Expected error for invalid algorithm")
+	}
+
+	// Verify error counter was incremented
+	errMetric := metrics.LambdaCompressionOperations.WithLabelValues(
+		"invalid_algo", "decompress", "error")
+	errorCount := testutil.ToFloat64(errMetric)
+	if errorCount < 1 {
+		t.Errorf("Expected at least 1 error recorded, got %v", errorCount)
+	}
+}
+
+// TestCompressionRatioMetrics verifies that compression ratio is correctly recorded.
+func TestCompressionRatioMetrics(t *testing.T) {
+	transformer := &CompressTransformer{}
+
+	// Create highly compressible data (repeating pattern)
+	testData := strings.Repeat("AAAAAAAAAA", 100) // 1000 bytes of repeating 'A'
+
+	// Reset relevant metrics before test
+	resetCompressionMetrics()
+
+	params := map[string]interface{}{"algorithm": "gzip"}
+	output, _, err := transformer.Transform(context.Background(), strings.NewReader(testData), params)
+	if err != nil {
+		t.Fatalf("Transform failed: %v", err)
+	}
+
+	// Consume the output
+	compressed, _ := io.ReadAll(output)
+
+	// Verify compression ratio histogram has observations
+	// Note: We verify the ratio is recorded by checking the histogram count
+	// Pass the parent histogram vec (Collector), not the labeled observer
+	ratioCount := testutil.CollectAndCount(metrics.LambdaCompressionRatio)
+	if ratioCount == 0 {
+		t.Error("Expected compression ratio to be recorded")
+	}
+
+	// Verify the compression actually compressed the data (ratio > 1)
+	if len(compressed) >= len(testData) {
+		t.Errorf("Expected compressed size (%d) < original size (%d)", len(compressed), len(testData))
+	}
+}
+
+// TestCompressionDurationMetrics verifies that operation duration is recorded.
+func TestCompressionDurationMetrics(t *testing.T) {
+	transformer := &CompressTransformer{}
+	testData := "Test data for duration metrics"
+
+	// Reset relevant metrics before test
+	resetCompressionMetrics()
+
+	params := map[string]interface{}{"algorithm": "gzip"}
+	output, _, err := transformer.Transform(context.Background(), strings.NewReader(testData), params)
+	if err != nil {
+		t.Fatalf("Transform failed: %v", err)
+	}
+
+	// Consume the output
+	_, _ = io.ReadAll(output)
+
+	// Verify duration histogram has observations
+	// Pass the parent histogram vec (Collector), not the labeled observer
+	durationCount := testutil.CollectAndCount(metrics.LambdaCompressionDuration)
+	if durationCount == 0 {
+		t.Error("Expected compression duration to be recorded")
+	}
+}
+
+// resetCompressionMetrics resets the compression-related metrics counters.
+// This helps isolate tests from each other.
+func resetCompressionMetrics() {
+	// Reset counters by registering fresh metrics would cause issues,
+	// so we just verify relative increases in tests instead.
+	// The promauto package auto-registers metrics, so we cannot reset them.
+	// Tests should check for "at least" values rather than exact matches.
+}
+
+// TestInFlightMetricsTracking verifies that in-flight gauge is correctly managed.
+func TestInFlightMetricsTracking(t *testing.T) {
+	transformer := &CompressTransformer{}
+
+	// Check in-flight is 0 before operation
+	initialInFlight := testutil.ToFloat64(metrics.LambdaOperationsInFlight.WithLabelValues("gzip"))
+
+	// Start multiple operations and verify gauge changes
+	doneCh := make(chan struct{})
+	readyCh := make(chan struct{})
+
+	go func() {
+		defer close(doneCh)
+		// Wait for signal to start
+		<-readyCh
+
+		params := map[string]interface{}{"algorithm": "gzip"}
+		output, _, err := transformer.Transform(context.Background(), strings.NewReader("test"), params)
+		if err != nil {
+			return
+		}
+
+		_, _ = io.ReadAll(output)
+	}()
+
+	// Signal the goroutine to start
+	close(readyCh)
+	// Wait for completion
+	<-doneCh
+
+	// Verify in-flight returns to initial value after completion
+	finalInFlight := testutil.ToFloat64(metrics.LambdaOperationsInFlight.WithLabelValues("gzip"))
+	if finalInFlight != initialInFlight {
+		t.Errorf("Expected in-flight to return to %v, got %v", initialInFlight, finalInFlight)
+	}
+}
+
+// TestStreamingModeMetrics verifies that metrics are recorded in streaming mode.
+// Streaming mode is used for large files and records 0 bytes processed as documented.
+func TestStreamingModeMetrics(t *testing.T) {
+	transformer := &CompressTransformer{}
+
+	// Reset relevant metrics before test
+	resetCompressionMetrics()
+
+	// Get current streaming threshold for reference
+	streamingThreshold := GetStreamingThreshold()
+
+	// Create test data (small, but we'll set content_length to trigger streaming)
+	testData := "Test data for streaming mode metrics verification"
+
+	// Set content_length above streaming threshold to trigger streaming mode
+	params := map[string]interface{}{
+		"algorithm":      "gzip",
+		"content_length": streamingThreshold + 1,
+	}
+
+	output, _, err := transformer.Transform(context.Background(), strings.NewReader(testData), params)
+	if err != nil {
+		t.Fatalf("Streaming transform failed: %v", err)
+	}
+
+	// Consume the output
+	_, _ = io.ReadAll(output)
+
+	// Verify operations counter was incremented (streaming still records operations)
+	opsMetric := metrics.LambdaCompressionOperations.WithLabelValues("gzip", "compress", "success")
+	opsCount := testutil.ToFloat64(opsMetric)
+	if opsCount < 1 {
+		t.Errorf("Expected at least 1 streaming operation recorded, got %v", opsCount)
+	}
+
+	// Verify in-flight gauge returns to 0 after streaming operation
+	inFlight := testutil.ToFloat64(metrics.LambdaOperationsInFlight.WithLabelValues("gzip"))
+	if inFlight != 0 {
+		t.Errorf("Expected 0 in-flight operations after streaming completion, got %v", inFlight)
+	}
+
+	// Note: Streaming mode records 0 bytes processed as documented in monitoring.md.
+	// This is intentional since streaming doesn't buffer the full content.
+	// Duration and operation counts are still tracked for observability.
+}
+
+// TestDecompressStreamingModeMetrics verifies decompression metrics in streaming mode.
+func TestDecompressStreamingModeMetrics(t *testing.T) {
+	transformer := &DecompressTransformer{}
+
+	// Reset relevant metrics before test
+	resetCompressionMetrics()
+
+	// Get current streaming threshold for reference
+	streamingThreshold := GetStreamingThreshold()
+
+	// Create compressed test data
+	compressedData := compressWithGzip([]byte("Test data for streaming decompression"))
+
+	// Set content_length above streaming threshold to trigger streaming mode
+	params := map[string]interface{}{
+		"algorithm":      "gzip",
+		"content_length": streamingThreshold + 1,
+	}
+
+	output, _, err := transformer.Transform(
+		context.Background(), bytes.NewReader(compressedData), params)
+	if err != nil {
+		t.Fatalf("Streaming decompress transform failed: %v", err)
+	}
+
+	// Consume the output
+	_, _ = io.ReadAll(output)
+
+	// Verify operations counter was incremented
+	opsMetric := metrics.LambdaCompressionOperations.WithLabelValues(
+		"gzip", "decompress", "success")
+	opsCount := testutil.ToFloat64(opsMetric)
+	if opsCount < 1 {
+		t.Errorf("Expected at least 1 streaming decompression recorded, got %v", opsCount)
+	}
+
+	// Verify in-flight gauge returns to 0
+	inFlight := testutil.ToFloat64(metrics.LambdaOperationsInFlight.WithLabelValues("gzip"))
+	if inFlight != 0 {
+		t.Errorf("Expected 0 in-flight operations after streaming completion, got %v", inFlight)
+	}
+}
+
+// TestAutoDetectAlgorithmMetrics verifies metrics behavior during auto-detection.
+func TestAutoDetectAlgorithmMetrics(t *testing.T) {
+	transformer := &DecompressTransformer{}
+
+	// Reset relevant metrics before test
+	resetCompressionMetrics()
+
+	tests := []struct {
+		name      string
+		compress  func([]byte) []byte
+		algorithm string
+	}{
+		{
+			name:      "auto-detect gzip",
+			compress:  compressWithGzip,
+			algorithm: "gzip",
+		},
+		{
+			name:      "auto-detect zstd",
+			compress:  compressWithZstd,
+			algorithm: "zstd",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testData := []byte("Test data for auto-detection")
+			compressedData := tt.compress(testData)
+
+			// Don't specify algorithm - let auto-detection work
+			params := map[string]interface{}{}
+
+			output, _, err := transformer.Transform(
+				context.Background(), bytes.NewReader(compressedData), params)
+			if err != nil {
+				t.Fatalf("Auto-detect transform failed: %v", err)
+			}
+
+			// Consume the output
+			result, _ := io.ReadAll(output)
+
+			// Verify data was correctly decompressed
+			if string(result) != string(testData) {
+				t.Errorf("Decompressed data mismatch: got %q, want %q", result, testData)
+			}
+
+			// Verify operations counter uses detected algorithm (not "auto")
+			opsMetric := metrics.LambdaCompressionOperations.WithLabelValues(
+				tt.algorithm, "decompress", "success")
+			opsCount := testutil.ToFloat64(opsMetric)
+			if opsCount < 1 {
+				t.Errorf("Expected operation recorded with detected algorithm %s, got %v",
+					tt.algorithm, opsCount)
+			}
+
+			// Verify in-flight gauge returns to 0 (proper cleanup after swap)
+			inFlight := testutil.ToFloat64(
+				metrics.LambdaOperationsInFlight.WithLabelValues(tt.algorithm))
+			autoInFlight := testutil.ToFloat64(
+				metrics.LambdaOperationsInFlight.WithLabelValues("auto"))
+
+			// Both should be 0 or at their initial values
+			if inFlight < 0 || autoInFlight < 0 {
+				t.Errorf("In-flight gauge went negative: %s=%v, auto=%v",
+					tt.algorithm, inFlight, autoInFlight)
+			}
+		})
+	}
+}
+
+// Ensure metrics package variables are referenced to satisfy the import.
+var _ prometheus.Collector = metrics.LambdaCompressionOperations

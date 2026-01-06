@@ -71,6 +71,67 @@ nebulaio_replication_healthy{destination="..."}                    # Health stat
 
 ```bash
 
+### Lambda Compression Metrics
+
+Metrics for S3 Object Lambda compression and decompression operations:
+
+```bash
+
+nebulaio_lambda_compression_operations_total{algorithm="...",operation="...",status="..."}  # Total operations
+nebulaio_lambda_compression_duration_seconds{algorithm="...",operation="..."}               # Operation duration histogram
+nebulaio_lambda_compression_ratio{algorithm="..."}                                          # Compression ratio (compressed/original)
+nebulaio_lambda_compression_bytes_processed_total{algorithm="...",operation="..."}          # Total bytes processed
+nebulaio_lambda_operations_in_flight{algorithm="..."}                                       # Current in-flight operations
+
+```bash
+
+**Labels:**
+- `algorithm`: Compression algorithm (`gzip`, `zstd`, or `auto` for auto-detection)
+- `operation`: Operation type (`compress` or `decompress`)
+- `status`: Result status (`success` or `error`)
+
+**Compression Ratio Interpretation:**
+- Values closer to 0 indicate better compression (e.g., 0.3 = 70% size reduction)
+- Values closer to 1 indicate poor compression (e.g., 0.9 = 10% size reduction)
+- Buckets: 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
+
+**Streaming Mode Limitations:**
+Large files that exceed the streaming threshold are processed in streaming mode for memory efficiency.
+In streaming mode, the following metrics behaviors apply:
+- `nebulaio_lambda_compression_bytes_processed_total`: Records 0 bytes (streaming doesn't buffer full content)
+- `nebulaio_lambda_compression_ratio`: Not calculated (requires knowing both sizes)
+- `nebulaio_lambda_compression_duration_seconds`: Accurately recorded
+- `nebulaio_lambda_compression_operations_total`: Accurately recorded
+- `nebulaio_lambda_operations_in_flight`: Accurately tracked
+
+For accurate throughput metrics in streaming scenarios, use network-level metrics or S3 request metrics.
+
+**Auto-Detection Algorithm Label:**
+When decompressing without a specified algorithm, the system auto-detects the compression format.
+During auto-detection:
+- The `algorithm="auto"` label is used for in-flight tracking until detection completes
+- Final metrics (operations, duration) use the detected algorithm (e.g., `gzip`, `zstd`)
+- If data is not compressed, no metrics are recorded (operation skipped)
+
+**Example Queries:**
+
+```promql
+# Compression operations rate by algorithm
+rate(nebulaio_lambda_compression_operations_total[5m])
+
+# Average compression ratio
+avg(nebulaio_lambda_compression_ratio) by (algorithm)
+
+# P95 compression latency
+histogram_quantile(0.95, rate(nebulaio_lambda_compression_duration_seconds_bucket[5m]))
+
+# Total bytes compressed per second
+sum(rate(nebulaio_lambda_compression_bytes_processed_total{operation="compress"}[5m]))
+
+# Current in-flight operations
+sum(nebulaio_lambda_operations_in_flight) by (algorithm)
+```
+
 ## Grafana Dashboards
 
 ### Request Rate Panel
@@ -110,6 +171,96 @@ nebulaio_replication_healthy{destination="..."}                    # Health stat
   "title": "Storage Utilization",
   "targets": [{
     "expr": "sum(nebulaio_storage_used_bytes) / sum(nebulaio_storage_capacity_bytes) * 100"
+  }]
+}
+
+```bash
+
+### Lambda Compression Operations Panel
+
+```json
+
+{
+  "title": "Lambda Compression Operations",
+  "type": "timeseries",
+  "targets": [
+    {
+      "expr": "sum(rate(nebulaio_lambda_compression_operations_total{status=\"success\"}[5m])) by (algorithm, operation)",
+      "legendFormat": "{{algorithm}} {{operation}} success"
+    },
+    {
+      "expr": "sum(rate(nebulaio_lambda_compression_operations_total{status=\"error\"}[5m])) by (algorithm, operation)",
+      "legendFormat": "{{algorithm}} {{operation}} error"
+    }
+  ]
+}
+
+```bash
+
+### Lambda Compression Latency Panel
+
+```json
+
+{
+  "title": "Lambda Compression Latency",
+  "type": "timeseries",
+  "targets": [
+    {
+      "expr": "histogram_quantile(0.50, sum(rate(nebulaio_lambda_compression_duration_seconds_bucket[5m])) by (le, algorithm, operation))",
+      "legendFormat": "{{algorithm}} {{operation}} p50"
+    },
+    {
+      "expr": "histogram_quantile(0.95, sum(rate(nebulaio_lambda_compression_duration_seconds_bucket[5m])) by (le, algorithm, operation))",
+      "legendFormat": "{{algorithm}} {{operation}} p95"
+    },
+    {
+      "expr": "histogram_quantile(0.99, sum(rate(nebulaio_lambda_compression_duration_seconds_bucket[5m])) by (le, algorithm, operation))",
+      "legendFormat": "{{algorithm}} {{operation}} p99"
+    }
+  ]
+}
+
+```bash
+
+### Lambda Compression Ratio Panel
+
+```json
+
+{
+  "title": "Average Compression Ratio by Algorithm",
+  "type": "gauge",
+  "targets": [{
+    "expr": "avg(nebulaio_lambda_compression_ratio) by (algorithm)",
+    "legendFormat": "{{algorithm}}"
+  }],
+  "fieldConfig": {
+    "defaults": {
+      "min": 0,
+      "max": 1,
+      "thresholds": {
+        "mode": "absolute",
+        "steps": [
+          {"color": "green", "value": 0},
+          {"color": "yellow", "value": 0.5},
+          {"color": "red", "value": 0.8}
+        ]
+      }
+    }
+  }
+}
+
+```bash
+
+### Lambda In-Flight Operations Panel
+
+```json
+
+{
+  "title": "Lambda Operations In-Flight",
+  "type": "stat",
+  "targets": [{
+    "expr": "sum(nebulaio_lambda_operations_in_flight) by (algorithm)",
+    "legendFormat": "{{algorithm}}"
   }]
 }
 
@@ -173,6 +324,33 @@ groups:
           severity: warning
         annotations:
           summary: "Cache hit ratio below 50%"
+
+      - alert: LambdaCompressionHighErrorRate
+        expr: |
+          sum(rate(nebulaio_lambda_compression_operations_total{status="error"}[5m])) /
+          sum(rate(nebulaio_lambda_compression_operations_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lambda compression error rate above 5%"
+
+      - alert: LambdaCompressionHighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(nebulaio_lambda_compression_duration_seconds_bucket[5m])) by (le)) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lambda compression P95 latency exceeds 5 seconds"
+
+      - alert: LambdaOperationsBacklog
+        expr: sum(nebulaio_lambda_operations_in_flight) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of in-flight Lambda operations"
 
 ```bash
 
