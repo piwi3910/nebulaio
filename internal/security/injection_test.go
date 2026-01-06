@@ -352,6 +352,8 @@ func safeXMLParse(data []byte) (string, error) {
 
 	decoder := xml.NewDecoder(strings.NewReader(string(data)))
 	decoder.Strict = true
+	// Disable entity expansion to prevent XXE attacks
+	decoder.Entity = make(map[string]string)
 
 	err := decoder.Decode(&result)
 	if err != nil {

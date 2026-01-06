@@ -13,9 +13,11 @@ import (
 
 // Test constants for security validation.
 const (
-	testMaxRetries      = 5
-	testLockoutDuration = 15
-	testSessionIDLength = 32
+	testMaxRetries       = 5
+	testLockoutDuration  = 15
+	testSessionIDLength  = 32
+	testSessionCount     = 1000 // Number of sessions to generate for collision testing
+	testPasswordHashCost = 10   // bcrypt cost for test password hashing
 )
 
 // TestAuthenticationBypass tests protection against authentication bypass attempts.
@@ -210,9 +212,8 @@ func TestSessionSecurity(t *testing.T) {
 
 	t.Run("generates cryptographically secure session IDs", func(t *testing.T) {
 		sessions := make(map[string]bool)
-		sessionCount := 1000
 
-		for range sessionCount {
+		for range testSessionCount {
 			sessionID := generateTestSecureSessionID()
 			assert.False(t, sessions[sessionID], "Session ID collision detected")
 			sessions[sessionID] = true

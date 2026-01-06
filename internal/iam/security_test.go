@@ -4,19 +4,23 @@ import (
 	"context"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// Test constants for IP matching.
+// Test constants for IAM security tests.
 const (
-	testIPv4PrefixLen = 10 // Length of "192.168.1." prefix
+	testIPv4PrefixLen  = 10              // Length of "192.168.1." prefix
+	testContextTimeout = 5 * time.Second // Timeout for test contexts to prevent DoS
 )
 
 // TestAuthorizationEnforcement tests that authorization is properly enforced.
 func TestAuthorizationEnforcement(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), testContextTimeout)
+	defer cancel()
+
 	pm := NewPolicyManager(nil)
 
 	// Create a restrictive policy
@@ -51,7 +55,9 @@ func TestAuthorizationEnforcement(t *testing.T) {
 
 // TestExplicitDenyOverridesAllow tests that explicit deny always wins.
 func TestExplicitDenyOverridesAllow(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), testContextTimeout)
+	defer cancel()
+
 	pm := NewPolicyManager(nil)
 
 	// Create a policy with both allow and deny
@@ -87,7 +93,9 @@ func TestExplicitDenyOverridesAllow(t *testing.T) {
 
 // TestWildcardBypassPrevention tests that wildcard patterns cannot be bypassed.
 func TestWildcardBypassPrevention(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), testContextTimeout)
+	defer cancel()
+
 	pm := NewPolicyManager(nil)
 
 	// Create a policy with wildcards
@@ -149,7 +157,9 @@ func TestWildcardBypassPrevention(t *testing.T) {
 
 // TestActionValidation tests that only valid actions are accepted.
 func TestActionValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), testContextTimeout)
+	defer cancel()
+
 	pm := NewPolicyManager(nil)
 
 	t.Run("rejects policies with invalid actions", func(t *testing.T) {
@@ -200,7 +210,9 @@ func TestActionValidation(t *testing.T) {
 
 // TestResourceValidation tests that resources are properly validated.
 func TestResourceValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), testContextTimeout)
+	defer cancel()
+
 	pm := NewPolicyManager(nil)
 
 	t.Run("validates ARN format", func(t *testing.T) {
@@ -256,7 +268,9 @@ func TestResourceValidation(t *testing.T) {
 
 // TestConditionEnforcement tests that conditions are properly enforced.
 func TestConditionEnforcement(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), testContextTimeout)
+	defer cancel()
+
 	pm := NewPolicyManager(nil)
 
 	t.Run("enforces IP address conditions", func(t *testing.T) {
@@ -297,7 +311,9 @@ func TestConditionEnforcement(t *testing.T) {
 
 // TestPrivilegeEscalationPrevention tests prevention of privilege escalation.
 func TestPrivilegeEscalationPrevention(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), testContextTimeout)
+	defer cancel()
+
 	pm := NewPolicyManager(nil)
 
 	t.Run("prevents self-policy modification", func(t *testing.T) {
@@ -352,7 +368,9 @@ func TestPrivilegeEscalationPrevention(t *testing.T) {
 
 // TestPolicyInjectionPrevention tests prevention of policy injection attacks.
 func TestPolicyInjectionPrevention(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), testContextTimeout)
+	defer cancel()
+
 	pm := NewPolicyManager(nil)
 
 	t.Run("rejects policies with malicious content", func(t *testing.T) {
